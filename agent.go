@@ -163,6 +163,11 @@ func (a *Agent) SetParent(parent *Agent) {
 // NewAgentWithDefaults creates a new Agent instance with zero configuration
 // Assumes Ollama (localhost:11434) and Qdrant (localhost:6334) are running
 func NewAgentWithDefaults() (*Agent, error) {
+	// Register default providers first
+	if err := providers.RegisterDefaultProviders(); err != nil {
+		return nil, fmt.Errorf("failed to register providers: %w", err)
+	}
+
 	agent := NewAgent()
 
 	// Configure with sensible defaults for local services
