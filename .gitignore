@@ -49,4 +49,5 @@ configs/openai.yaml
 # Local configuration files (contains API keys)
 local-configs/
 
-hector
+# Hector binary (but not cmd/hector directory)
+/hector
