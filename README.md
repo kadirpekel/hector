@@ -24,10 +24,17 @@ Hector is a modern AI agent framework that makes it easy to build intelligent ag
 
 ## Quick Start
 
-### Zero-Config Startup (Recommended)
+### Install as Go Package
 
 ```bash
-# Install Hector
+# Install Hector as a Go module
+go get github.com/kadirpekel/hector@v1.0.0
+```
+
+### Install CLI Tool
+
+```bash
+# Install Hector CLI
 go install github.com/kadirpekel/hector/cmd/hector@latest
 
 # Start with zero configuration (assumes Ollama + Qdrant running locally)
@@ -71,10 +78,18 @@ package main
 
 import (
     "fmt"
+    "log"
+    
     "github.com/kadirpekel/hector"
+    "github.com/kadirpekel/hector/providers"
 )
 
 func main() {
+    // Register default providers (required)
+    if err := providers.RegisterDefaultProviders(); err != nil {
+        log.Fatal(err)
+    }
+    
     // Zero-config agent (assumes local Ollama + Qdrant)
     agent, err := hector.NewAgentWithDefaults()
     if err != nil {
