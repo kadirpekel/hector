@@ -46,4 +46,7 @@ Thumbs.db
 *private*.yaml
 configs/openai.yaml
 
+# Local configuration files (contains API keys)
+local-configs/
+
 hector

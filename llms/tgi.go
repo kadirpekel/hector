@@ -13,13 +13,13 @@ import (
 
 // TGIConfig holds configuration for the TGI LLM provider
 type TGIConfig struct {
-	Provider    string  `yaml:"provider"`    // Always "tgi"
-	Model       string  `yaml:"model"`       // Model name
-	Host        string  `yaml:"host"`        // Host for TGI
-	APIKey      string  `yaml:"api_key"`     // API key (optional)
-	Temperature float64 `yaml:"temperature"` // Temperature setting
-	MaxTokens   int     `yaml:"max_tokens"`  // Max tokens
-	Timeout     int     `yaml:"timeout"`     // Request timeout in seconds
+	Provider    string  `yaml:"provider" json:"provider"`    // Always "tgi"
+	Model       string  `yaml:"model" json:"model"`       // Model name
+	Host        string  `yaml:"host" json:"host"`        // Host for TGI
+	APIKey      string  `yaml:"api_key" json:"api_key"`     // API key (optional)
+	Temperature float64 `yaml:"temperature" json:"temperature"` // Temperature setting
+	MaxTokens   int     `yaml:"max_tokens" json:"max_tokens"`  // Max tokens
+	Timeout     int     `yaml:"timeout" json:"timeout"`     // Request timeout in seconds
 }
 
 // GetProviderType implements ProviderConfig.GetProviderType

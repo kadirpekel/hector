@@ -18,12 +18,12 @@ import (
 
 // OllamaEmbedderConfig holds configuration for the Ollama embedder provider
 type OllamaEmbedderConfig struct {
-	Provider   string `yaml:"provider"`    // Always "ollama"
-	Model      string `yaml:"model"`       // Model name
-	Host       string `yaml:"host"`        // Host for ollama
-	Dimension  int    `yaml:"dimension"`   // Embedding dimension
-	Timeout    int    `yaml:"timeout"`     // Request timeout in seconds
-	MaxRetries int    `yaml:"max_retries"` // Maximum retry attempts
+	Provider   string `yaml:"provider" json:"provider"`    // Always "ollama"
+	Model      string `yaml:"model" json:"model"`       // Model name
+	Host       string `yaml:"host" json:"host"`        // Host for ollama
+	Dimension  int    `yaml:"dimension" json:"dimension"`   // Embedding dimension
+	Timeout    int    `yaml:"timeout" json:"timeout"`     // Request timeout in seconds
+	MaxRetries int    `yaml:"max_retries" json:"max_retries"` // Maximum retry attempts
 }
 
 // GetProviderType implements ProviderConfig.GetProviderType

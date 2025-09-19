@@ -17,12 +17,12 @@ import (
 
 // OllamaConfig holds configuration for the Ollama LLM provider
 type OllamaConfig struct {
-	Provider    string  `yaml:"provider"`    // Always "ollama"
-	Model       string  `yaml:"model"`       // Model name
-	Host        string  `yaml:"host"`        // Host for ollama
-	Temperature float64 `yaml:"temperature"` // Temperature setting
-	MaxTokens   int     `yaml:"max_tokens"`  // Max tokens
-	Timeout     int     `yaml:"timeout"`     // Request timeout in seconds
+	Provider    string  `yaml:"provider" json:"provider"`    // Always "ollama"
+	Model       string  `yaml:"model" json:"model"`       // Model name
+	Host        string  `yaml:"host" json:"host"`        // Host for ollama
+	Temperature float64 `yaml:"temperature" json:"temperature"` // Temperature setting
+	MaxTokens   int     `yaml:"max_tokens" json:"max_tokens"`  // Max tokens
+	Timeout     int     `yaml:"timeout" json:"timeout"`     // Request timeout in seconds
 }
 
 // GetProviderType implements ProviderConfig.GetProviderType
