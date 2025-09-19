@@ -1,0 +1,219 @@
+# Hector Agent - Nested Reasoning Example
+# Demonstrates nested reasoning with sub-agents
+
+# Agent information
+agent:
+  name: "Hector Nested"
+  description: "AI agent with nested reasoning capabilities"
+
+# LLM Configuration
+llm:
+  name: "ollama"
+  model: "llama3.2"
+  temperature: 0.7
+  max_tokens: 1000
+
+# Memory Configuration
+memory:
+  name: "qdrant"
+  collection: "hector_nested"
+  default_top_k: 5
+  max_results: 10
+
+# Embedder Configuration
+embedder:
+  name: "ollama"
+  model: "nomic-embed-text"
+
+# Search Configuration
+search:
+  max_context_length: 2000
+  context_strategy: "relevance"
+  enable_reranking: false
+
+# MCP Servers
+mcp_servers:
+  - name: "composio"
+    url: "https://apollo.composio.dev/v3/mcp/91f6d171-bd21-4beb-a513-750e8809a5a2/mcp?user_id=hector"
+    description: "Composio MCP server with various tools"
+
+# Global instruction
+instruction: |
+  You are a helpful AI assistant with nested reasoning capabilities.
+
+# Reasoning Configuration (nested approach)
+reasoning:
+  strategy: "state_machine"
+  max_steps: 2
+  enable_retry: true
+  max_retries: 2
+  
+  steps:
+    # Step 1: Analysis Agent (with its own reasoning)
+    - name: "analysis_agent"
+      description: "Analysis agent with nested reasoning"
+      type: "analyze"
+      enabled: true
+      
+      # Nested AgentConfig - This agent has its own reasoning steps!
+      agent_config:
+        agent:
+          name: "Analysis Agent"
+          description: "Specialized analysis agent"
+        
+        llm:
+          name: "ollama"
+          model: "llama3.2"
+          temperature: 0.9  # High creativity for analysis
+          max_tokens: 800
+        
+        memory:
+          name: "qdrant"
+          collection: "analysis_agent"
+          default_top_k: 10
+          max_results: 15
+        
+        instruction: |
+          You are an analysis agent specializing in deep analysis.
+          Break down complex problems into manageable components.
+        
+        # Nested Reasoning Configuration
+        reasoning:
+          strategy: "state_machine"
+          max_steps: 2
+          enable_retry: true
+          
+          steps:
+            # Nested Step 1: Problem Decomposition
+            - name: "problem_decomposition"
+              description: "Break down the problem into components"
+              type: "analyze"
+              enabled: true
+              
+              agent_config:
+                agent:
+                  name: "Problem Decomposition Agent"
+                  description: "Specialized agent for problem decomposition"
+                
+                llm:
+                  name: "ollama"
+                  temperature: 0.3  # Low creativity, high precision
+                  max_tokens: 600
+                
+                instruction: |
+                  You are a problem decomposition specialist. Focus on breaking down
+                  complex problems into clear, manageable components.
+            
+            # Nested Step 2: Solution Planning
+            - name: "solution_planning"
+              description: "Plan solutions for each component"
+              type: "plan"
+              enabled: true
+              
+              agent_config:
+                agent:
+                  name: "Solution Planning Agent"
+                  description: "Specialized agent for solution planning"
+                
+                llm:
+                  name: "ollama"
+                  temperature: 0.5  # Balanced for planning
+                  max_tokens: 700
+                
+                instruction: |
+                  You are a solution planning specialist. Create detailed plans
+                  for addressing each problem component.
+    
+    # Step 2: Execution Agent (with its own reasoning)
+    - name: "execution_agent"
+      description: "Execution agent with nested reasoning"
+      type: "execute"
+      enabled: true
+      
+      # Nested AgentConfig - This agent also has its own reasoning steps!
+      agent_config:
+        agent:
+          name: "Execution Agent"
+          description: "Specialized execution agent"
+        
+        llm:
+          name: "ollama"
+          model: "llama3.2"
+          temperature: 0.1  # Low creativity, high precision
+          max_tokens: 600
+        
+        memory:
+          name: "qdrant"
+          collection: "execution_agent"
+          default_top_k: 3
+          max_results: 5
+        
+        instruction: |
+          You are an execution agent specializing in precise implementation.
+          Execute plans systematically and accurately.
+        
+        # Nested Reasoning Configuration
+        reasoning:
+          strategy: "state_machine"
+          max_steps: 2
+          enable_retry: true
+          
+          steps:
+            # Nested Step 1: Task Execution
+            - name: "task_execution"
+              description: "Execute specific tasks"
+              type: "execute"
+              enabled: true
+              
+              agent_config:
+                agent:
+                  name: "Task Execution Agent"
+                  description: "Specialized agent for task execution"
+                
+                llm:
+                  name: "ollama"
+                  temperature: 0.1  # Maximum precision
+                  max_tokens: 400
+                
+                instruction: |
+                  You are a task execution specialist. Focus on precise,
+                  accurate execution of specific tasks.
+            
+            # Nested Step 2: Quality Assurance
+            - name: "quality_assurance"
+              description: "Verify execution results"
+              type: "validate"
+              enabled: true
+              
+              agent_config:
+                agent:
+                  name: "Quality Assurance Agent"
+                  description: "Specialized agent for quality assurance"
+                
+                llm:
+                  name: "ollama"
+                  temperature: 0.2  # Low creativity, high accuracy
+                  max_tokens: 500
+                
+                instruction: |
+                  You are a quality assurance specialist. Focus on verifying
+                  and validating execution results.
+  
+  # Tool execution settings
+  tool_execution:
+    parallel_execution: false
+    timeout_seconds: 30
+    retry_delay_ms: 1000
+  
+  # Error handling
+  error_handling:
+    strategy: "retry"
+    max_error_analysis: 1
+    enable_learning: false
+  
+  # Context management
+  context:
+    preserve_history: true
+    max_history_steps: 5
+    enable_context_share: true
+    context_window: 3

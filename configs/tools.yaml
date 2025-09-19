@@ -1,0 +1,65 @@
+# Hector Agent - Single Step Agent with Tool Use
+# Simple agent that uses tools for specific tasks
+
+# Agent information
+agent:
+  name: "Hector Tool User"
+  description: "AI agent focused on tool usage and execution"
+
+# LLM Configuration
+llm:
+  name: "ollama"
+  model: "llama3.2"
+  temperature: 0.7
+  max_tokens: 1000
+
+# Memory Configuration
+memory:
+  name: "qdrant"
+  collection: "hector_tools"
+  default_top_k: 5
+  max_results: 10
+
+# Embedder Configuration
+embedder:
+  name: "ollama"
+  model: "nomic-embed-text"
+
+# Search Configuration
+search:
+  max_context_length: 2000
+  context_strategy: "relevance"
+  enable_reranking: false
+
+# MCP Servers (focused on tool usage)
+mcp_servers:
+  - name: "composio"
+    url: "https://apollo.composio.dev/v3/mcp/91f6d171-bd21-4beb-a513-750e8809a5a2/mcp?user_id=hector"
+    description: "Weather, web search, and utility tools"
+
+# Global instruction (tool-focused)
+instruction: |
+  You are a helpful AI assistant that excels at using tools to accomplish tasks.
+  When users ask for information that requires real-time data, web search, or external services,
+  use the available tools to provide accurate and up-to-date information.
+  
+  Always explain what tools you're using and why they're helpful for the user's request.
+
+# Reasoning Configuration (single shot with tool focus)
+reasoning:
+  strategy: "single_shot"
+  max_steps: 1
+  enable_retry: true
+  max_retries: 2
+  
+  # Tool execution settings
+  tool_execution:
+    parallel_execution: false
+    timeout_seconds: 30
+    retry_delay_ms: 1000
+  
+  # Error handling
+  error_handling:
+    strategy: "retry"
+    max_error_analysis: 1
+    enable_learning: false

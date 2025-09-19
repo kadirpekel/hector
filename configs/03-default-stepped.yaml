@@ -1,0 +1,144 @@
+# Hector Agent - Default Stepped Agent
+# Standard multi-step reasoning with default step configurations
+
+# Agent information
+agent:
+  name: "Hector Stepped"
+  description: "AI agent with standard multi-step reasoning"
+
+# LLM Configuration
+llm:
+  name: "ollama"
+  config:
+    model: "llama3.2"
+    temperature: 0.7
+    max_tokens: 1000
+
+# Memory Configuration
+memory:
+  name: "qdrant"
+  config:
+    collection: "hector_stepped"
+    default_top_k: 5
+    max_results: 10
+
+# Embedder Configuration
+embedder:
+  name: "ollama"
+  config:
+    model: "nomic-embed-text"
+
+# Search Configuration
+search:
+  max_context_length: 2000
+  context_strategy: "relevance"
+  enable_reranking: false
+
+# MCP Servers
+mcp_servers:
+  - name: "composio"
+    url: "https://apollo.composio.dev/v3/mcp/91f6d171-bd21-4beb-a513-750e8809a5a2/mcp?user_id=hector"
+    description: "Composio MCP server with various tools"
+
+# Global instruction
+instruction: |
+  You are a helpful AI assistant with multi-step reasoning capabilities.
+
+# Reasoning Configuration (default stepped approach)
+reasoning:
+  strategy: "state_machine"
+  max_steps: 4
+  enable_retry: true
+  max_retries: 2
+  
+  steps:
+    # Step 1: Analysis
+    - name: "analysis"
+      description: "Analyze the user's request and understand requirements"
+      type: "analyze"
+      enabled: true
+      agent_config:
+        instruction: |
+          Analyze the user's request carefully. Understand what they're asking for,
+          identify any implicit requirements, and consider the context.
+          Break down complex requests into key components.
+        llm:
+          name: "ollama"
+          config:
+            temperature: 0.7
+            max_tokens: 500
+      config:
+        focus_on_requirements: true
+    
+    # Step 2: Planning
+    - name: "planning"
+      description: "Create a structured plan for addressing the request"
+      type: "plan"
+      enabled: true
+      agent_config:
+        instruction: |
+          Create a clear, structured plan for addressing the user's request.
+          Identify the steps needed, consider dependencies, and think about
+          potential challenges or edge cases.
+        llm:
+          name: "ollama"
+          config:
+            temperature: 0.5
+            max_tokens: 600
+      config:
+        include_dependencies: true
+    
+    # Step 3: Execution
+    - name: "execution"
+      description: "Execute the plan using available tools and resources"
+      type: "execute"
+      enabled: true
+      agent_config:
+        instruction: |
+          Execute the plan systematically. Use available tools when appropriate,
+          gather necessary information, and work through the steps methodically.
+          If something doesn't work, analyze the issue and adjust the approach.
+        llm:
+          name: "ollama"
+          config:
+            temperature: 0.6
+            max_tokens: 800
+      config:
+        use_tools_when_needed: true
+    
+    # Step 4: Response
+    - name: "response"
+      description: "Synthesize results into a clear, helpful response"
+      type: "respond"
+      enabled: true
+      agent_config:
+        instruction: |
+          Synthesize all the information and results into a clear, helpful,
+          and well-structured response. Make sure to address the user's
+          original request completely and provide relevant context.
+        llm:
+          name: "ollama"
+          config:
+            temperature: 0.7
+            max_tokens: 700
+      config:
+        comprehensive_response: true
+  
+  # Tool execution settings
+  tool_execution:
+    parallel_execution: false
+    timeout_seconds: 30
+    retry_delay_ms: 1500
+  
+  # Error handling
+  error_handling:
+    strategy: "retry"
+    max_error_analysis: 1
+    enable_learning: false
+  
+  # Context management
+  context:
+    preserve_history: true
+    max_history_steps: 6
+    enable_context_share: true
+    context_window: 3
