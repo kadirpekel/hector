@@ -36,15 +36,15 @@ type TGIEmbedderConfig struct {
 
 // TGIEmbedderProviderConfig holds configuration for the TGI embedder provider
 type TGIEmbedderProviderConfig struct {
-	Provider     string `yaml:"provider" json:"provider"`       // Always "tgi"
-	Model        string `yaml:"model" json:"model"`          // Model name
-	Host         string `yaml:"host" json:"host"`           // Host for TGI
-	Dimension    int    `yaml:"dimension" json:"dimension"`      // Embedding dimension
-	Timeout      int    `yaml:"timeout" json:"timeout"`        // Request timeout in seconds
-	WaitForModel bool   `yaml:"wait_for_model" json:"wait_for_model"` // Wait for model to be ready
-	Normalize    bool   `yaml:"normalize" json:"normalize"`      // Normalize vectors
-	Truncate     bool   `yaml:"truncate" json:"truncate"`       // Truncate text
-	MaxLength    int    `yaml:"max_length" json:"max_length"`     // Maximum text length
+	Provider     string `yaml:"provider"`       // Always "tgi"
+	Model        string `yaml:"model"`          // Model name
+	Host         string `yaml:"host"`           // Host for TGI
+	Dimension    int    `yaml:"dimension"`      // Embedding dimension
+	Timeout      int    `yaml:"timeout"`        // Request timeout in seconds
+	WaitForModel bool   `yaml:"wait_for_model"` // Wait for model to be ready
+	Normalize    bool   `yaml:"normalize"`      // Normalize vectors
+	Truncate     bool   `yaml:"truncate"`       // Truncate text
+	MaxLength    int    `yaml:"max_length"`     // Maximum text length
 }
 
 // GetProviderType implements ProviderConfig.GetProviderType

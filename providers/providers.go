@@ -1,7 +1,6 @@
 package providers
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -9,6 +8,7 @@ import (
 	"github.com/kadirpekel/hector/embedders"
 	"github.com/kadirpekel/hector/interfaces"
 	"github.com/kadirpekel/hector/llms"
+	"gopkg.in/yaml.v3"
 )
 
 // ============================================================================
@@ -175,13 +175,13 @@ func CreateLLMProvider(config map[string]interface{}) (llms.LLMProvider, error) 
 
 	newConfig := reflect.New(configType).Interface()
 
-	// Populate the config struct using JSON (built-in)
-	configJSON, err := json.Marshal(config)
+	// Populate the config struct using YAML (more appropriate for our use case)
+	configYAML, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := json.Unmarshal(configJSON, newConfig); err != nil {
+	if err := yaml.Unmarshal(configYAML, newConfig); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
@@ -241,13 +241,13 @@ func CreateDatabaseProvider(config map[string]interface{}) (databases.VectorDB, 
 
 	newConfig := reflect.New(configType).Interface()
 
-	// Populate the config struct using JSON (built-in)
-	configJSON, err := json.Marshal(config)
+	// Populate the config struct using YAML (more appropriate for our use case)
+	configYAML, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := json.Unmarshal(configJSON, newConfig); err != nil {
+	if err := yaml.Unmarshal(configYAML, newConfig); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
@@ -307,13 +307,13 @@ func CreateEmbedderProvider(config map[string]interface{}) (embedders.EmbeddingP
 
 	newConfig := reflect.New(configType).Interface()
 
-	// Populate the config struct using JSON (built-in)
-	configJSON, err := json.Marshal(config)
+	// Populate the config struct using YAML (more appropriate for our use case)
+	configYAML, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := json.Unmarshal(configJSON, newConfig); err != nil {
+	if err := yaml.Unmarshal(configYAML, newConfig); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 

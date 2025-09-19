@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/kadirpekel/hector/databases"
@@ -359,14 +361,14 @@ func (a *Agent) buildEnhancedQuery(query string, toolResults map[string]ToolResu
 
 // ExecuteQueryWithReasoning performs an agent query using the configured reasoning strategy
 func (a *Agent) ExecuteQueryWithReasoning(query string, modelNames ...string) (*AgentResponse, error) {
-	fmt.Printf("ExecuteQueryWithReasoning called with query: %s\n", query)
+	a.verbosePrint("ExecuteQueryWithReasoning called with query: %s\n", query)
 
 	if a.llm == nil {
 		return nil, fmt.Errorf("no LLM provider configured")
 	}
 
-	fmt.Printf("Starting reasoning with strategy: %s\n", a.ReasoningConfig.Strategy)
-	fmt.Printf("Reasoning config: max_steps=%d, enable_retry=%t, steps_count=%d\n",
+	a.verbosePrint("Starting reasoning with strategy: %s\n", a.ReasoningConfig.Strategy)
+	a.verbosePrint("Reasoning config: max_steps=%d, enable_retry=%t, steps_count=%d\n",
 		a.ReasoningConfig.MaxSteps, a.ReasoningConfig.EnableRetry, len(a.ReasoningConfig.Steps))
 
 	// Initialize reasoning context
@@ -386,16 +388,318 @@ func (a *Agent) ExecuteQueryWithReasoning(query string, modelNames ...string) (*
 	// Execute based on reasoning strategy
 	switch a.ReasoningConfig.Strategy {
 	case "single_shot":
-		fmt.Printf("Using single-shot reasoning (no steps)\n")
+		a.verbosePrint("Using single-shot reasoning (no steps)\n")
 		return a.executeSingleShot(reasoningCtx, modelNames...)
 	case "iterative":
 		return a.executeIterative(reasoningCtx, modelNames...)
 	case "state_machine":
 		return a.executeStateMachine(reasoningCtx, modelNames...)
 	default:
-		fmt.Printf("Using default single-shot reasoning\n")
+		a.verbosePrint("Using default single-shot reasoning\n")
 		return a.executeSingleShot(reasoningCtx, modelNames...)
 	}
+}
+
+// ExecuteQueryWithReasoningStreaming performs an agent query using the configured reasoning strategy with streaming
+func (a *Agent) ExecuteQueryWithReasoningStreaming(query string, modelNames ...string) (<-chan string, error) {
+	a.verbosePrint("ExecuteQueryWithReasoningStreaming called with query: %s\n", query)
+
+	if a.llm == nil {
+		return nil, fmt.Errorf("no LLM provider configured")
+	}
+
+	a.verbosePrint("Starting reasoning with strategy: %s\n", a.ReasoningConfig.Strategy)
+	a.verbosePrint("Reasoning config: max_steps=%d, enable_retry=%t, steps_count=%d\n",
+		a.ReasoningConfig.MaxSteps, a.ReasoningConfig.EnableRetry, len(a.ReasoningConfig.Steps))
+
+	// Support streaming for different reasoning strategies
+	switch a.ReasoningConfig.Strategy {
+	case "single_shot":
+		a.verbosePrint("Using single-shot reasoning with streaming (no steps)\n")
+		return a.executeSingleShotStreaming(query, modelNames...)
+	case "state_machine":
+		a.verbosePrint("Using state machine reasoning with streaming (%d steps)\n", len(a.ReasoningConfig.Steps))
+		return a.executeStateMachineStreaming(query, modelNames...)
+	case "iterative":
+		a.verbosePrint("Using iterative reasoning with streaming (max %d steps)\n", a.ReasoningConfig.MaxSteps)
+		return a.executeIterativeStreaming(query, modelNames...)
+	default:
+		// Fall back to single-shot streaming for unknown strategies
+		a.verbosePrint("Unknown strategy '%s', falling back to single-shot streaming\n", a.ReasoningConfig.Strategy)
+		return a.executeSingleShotStreaming(query, modelNames...)
+	}
+}
+
+// executeSingleShotStreaming executes a single-shot query with streaming
+func (a *Agent) executeSingleShotStreaming(query string, modelNames ...string) (<-chan string, error) {
+	return a.ExecuteQueryStreaming(query, modelNames...)
+}
+
+// executeStateMachineStreaming executes state machine reasoning with streaming
+func (a *Agent) executeStateMachineStreaming(query string, modelNames ...string) (<-chan string, error) {
+	responseChan := make(chan string, 100)
+
+	go func() {
+		defer close(responseChan)
+
+		// Initialize reasoning context
+		reasoningCtx := &ReasoningContext{
+			Query:            query,
+			Context:          []string{},
+			AvailableTools:   []ToolInfo{},
+			StepResults:      []ReasoningStepResult{},
+			ExecutionHistory: []string{},
+			ErrorHistory:     []string{},
+			CurrentStep:      0,
+			MaxSteps:         a.ReasoningConfig.MaxSteps,
+			RetryCount:       0,
+			MaxRetries:       a.ReasoningConfig.MaxRetries,
+		}
+
+		a.verbosePrint("Starting reasoning with %d steps...\n", len(a.ReasoningConfig.Steps))
+
+		// Collect all step outputs for final response
+		var allStepOutputs []string
+
+		for i, step := range a.ReasoningConfig.Steps {
+			if !step.Enabled {
+				continue
+			}
+
+			reasoningCtx.CurrentStep++
+			a.verbosePrint("\nStep %d/%d: %s (%s)\n", i+1, len(a.ReasoningConfig.Steps), step.Name, step.Type)
+
+			// Execute step based on streaming mode
+			var stepOutput string
+
+			if a.ReasoningConfig.StreamingMode == "all_steps" {
+				// Stream this step's output
+				stepChan, stepErr := a.executeReasoningStepStreaming(step, reasoningCtx, modelNames...)
+				if stepErr != nil {
+					responseChan <- fmt.Sprintf("Step %d failed: %v\n", i+1, stepErr)
+					break
+				}
+
+				// Collect step output and forward to response channel
+				var stepOutputBuilder strings.Builder
+				for chunk := range stepChan {
+					stepOutputBuilder.WriteString(chunk)
+					responseChan <- chunk
+				}
+				stepOutput = stepOutputBuilder.String()
+			} else {
+				// Execute step without streaming (final_only or none)
+				stepResult := a.executeReasoningStep(step, reasoningCtx, modelNames...)
+				stepOutput = stepResult.Output
+				if !stepResult.Success {
+					responseChan <- fmt.Sprintf("Step %d failed: %s\n", i+1, stepResult.Error)
+					break
+				}
+			}
+
+			// Store step output for final response
+			allStepOutputs = append(allStepOutputs, stepOutput)
+
+			// Create step result for context
+			stepResult := ReasoningStepResult{
+				StepName: step.Name,
+				StepType: step.Type,
+				Output:   stepOutput,
+				Success:  true,
+			}
+			reasoningCtx.StepResults = append(reasoningCtx.StepResults, stepResult)
+
+			a.verbosePrint("Step completed successfully\n")
+
+			// Update context for next step
+			a.updateReasoningContext(step, stepResult, reasoningCtx)
+		}
+
+		// Generate final response if we have step results
+		if len(reasoningCtx.StepResults) > 0 {
+			finalResponse := a.generateFinalResponseFromSteps(reasoningCtx)
+			if finalResponse != "" {
+				if a.ReasoningConfig.StreamingMode == "final_only" {
+					// Stream the final response
+					responseChan <- "\n\nFinal Response: " + finalResponse
+				} else {
+					// For all_steps mode, just add the final response without streaming
+					responseChan <- "\n\nFinal Response: " + finalResponse
+				}
+			}
+		}
+	}()
+
+	return responseChan, nil
+}
+
+// executeIterativeStreaming executes iterative reasoning with streaming
+func (a *Agent) executeIterativeStreaming(query string, modelNames ...string) (<-chan string, error) {
+	responseChan := make(chan string, 100)
+
+	go func() {
+		defer close(responseChan)
+
+		// Initialize reasoning context
+		reasoningCtx := &ReasoningContext{
+			Query:            query,
+			Context:          []string{},
+			AvailableTools:   []ToolInfo{},
+			StepResults:      []ReasoningStepResult{},
+			ExecutionHistory: []string{},
+			ErrorHistory:     []string{},
+			CurrentStep:      0,
+			MaxSteps:         a.ReasoningConfig.MaxSteps,
+			RetryCount:       0,
+			MaxRetries:       a.ReasoningConfig.MaxRetries,
+		}
+
+		a.verbosePrint("Starting iterative reasoning (max %d steps)...\n", reasoningCtx.MaxSteps)
+
+		// Collect all iteration outputs for final response
+		var allIterationOutputs []string
+
+		for step := 0; step < reasoningCtx.MaxSteps; step++ {
+			reasoningCtx.CurrentStep = step
+			a.verbosePrint("\nIteration %d/%d\n", step+1, reasoningCtx.MaxSteps)
+
+			// Execute iteration based on streaming mode
+			var iterationOutput string
+
+			if a.ReasoningConfig.StreamingMode == "all_steps" {
+				// Stream this iteration's output
+				iterationChan, iterErr := a.ExecuteQueryStreaming(reasoningCtx.Query, modelNames...)
+				if iterErr != nil {
+					responseChan <- fmt.Sprintf("Iteration %d failed: %v\n", step+1, iterErr)
+					break
+				}
+
+				// Collect iteration output and forward to response channel
+				var iterationOutputBuilder strings.Builder
+				for chunk := range iterationChan {
+					iterationOutputBuilder.WriteString(chunk)
+					responseChan <- chunk
+				}
+				iterationOutput = iterationOutputBuilder.String()
+			} else {
+				// Execute iteration without streaming (final_only or none)
+				response, iterErr := a.ExecuteQuery(reasoningCtx.Query, modelNames...)
+				if iterErr != nil {
+					responseChan <- fmt.Sprintf("Iteration %d failed: %v\n", step+1, iterErr)
+					break
+				}
+				iterationOutput = response.Answer
+			}
+
+			// Store iteration output for final response
+			allIterationOutputs = append(allIterationOutputs, iterationOutput)
+
+			// Create step result for context
+			stepResult := ReasoningStepResult{
+				StepName: fmt.Sprintf("iteration_%d", step+1),
+				StepType: "execute",
+				Output:   iterationOutput,
+				Success:  true,
+			}
+			reasoningCtx.StepResults = append(reasoningCtx.StepResults, stepResult)
+
+			a.verbosePrint("Iteration completed successfully\n")
+
+			// Check if we should continue (simplified logic)
+			if step < reasoningCtx.MaxSteps-1 {
+				// Update query for next iteration based on previous results
+				reasoningCtx.Query = fmt.Sprintf("Based on the previous response: %s\n\nPlease continue or refine your answer.", iterationOutput)
+			}
+		}
+
+		// Generate final response if we have iteration results
+		if len(reasoningCtx.StepResults) > 0 {
+			finalResponse := a.generateFinalResponseFromSteps(reasoningCtx)
+			if finalResponse != "" {
+				if a.ReasoningConfig.StreamingMode == "final_only" {
+					// Stream the final response
+					responseChan <- "\n\nFinal Response: " + finalResponse
+				} else {
+					// For all_steps mode, just add the final response without streaming
+					responseChan <- "\n\nFinal Response: " + finalResponse
+				}
+			}
+		}
+	}()
+
+	return responseChan, nil
+}
+
+// executeReasoningStepStreaming executes a single reasoning step with streaming
+func (a *Agent) executeReasoningStepStreaming(step ReasoningStep, ctx *ReasoningContext, modelNames ...string) (<-chan string, error) {
+	responseChan := make(chan string, 100)
+
+	go func() {
+		defer close(responseChan)
+
+		// Build step-specific prompt
+		prompt, err := a.buildStepPrompt(step, ctx)
+		if err != nil {
+			responseChan <- fmt.Sprintf("Failed to build step prompt: %v", err)
+			return
+		}
+
+		// Use step-specific LLM config if available, otherwise use default agent
+		llm := a.llm
+		if step.AgentConfig != nil && step.AgentConfig.LLM.Name != "" {
+			// Create a temporary LLM with step-specific config
+			llm = a.createStepLLM(&step.AgentConfig.LLM)
+		}
+
+		// For execution steps, check if tools should be used
+		if step.Type == "execute" && a.mcp != nil && len(a.mcp.ListTools()) > 0 {
+			// Check if the step instruction mentions using tools
+			instruction := ""
+			if step.AgentConfig != nil {
+				instruction = ""
+			}
+			if instruction != "" && strings.Contains(strings.ToLower(instruction), "tool") {
+				// Execute tools generically based on LLM reasoning
+				toolResults := a.executeToolsForQuery(ctx.Query)
+				if len(toolResults) > 0 {
+					// Include tool results in the prompt
+					toolContext := a.buildToolContext(toolResults)
+					prompt = prompt + "\n\nTool Results:\n" + toolContext
+				}
+			}
+		}
+
+		// Stream LLM generation
+		streamChan, err := llm.GenerateStreaming(prompt)
+		if err != nil {
+			responseChan <- fmt.Sprintf("LLM generation failed: %v", err)
+			return
+		}
+
+		// Forward streaming chunks
+		for chunk := range streamChan {
+			responseChan <- chunk
+		}
+	}()
+
+	return responseChan, nil
+}
+
+// generateFinalResponseFromSteps generates a final response based on reasoning step results
+func (a *Agent) generateFinalResponseFromSteps(ctx *ReasoningContext) string {
+	if len(ctx.StepResults) == 0 {
+		return ""
+	}
+
+	// Simple aggregation of step results
+	var result strings.Builder
+	for i, step := range ctx.StepResults {
+		if step.Success {
+			result.WriteString(fmt.Sprintf("Step %d (%s): %s\n", i+1, step.StepName, step.Output))
+		}
+	}
+
+	return result.String()
 }
 
 // executeSingleShot executes a single-shot query (current behavior)
@@ -408,43 +712,43 @@ func (a *Agent) executeIterative(ctx *ReasoningContext, modelNames ...string) (*
 	var lastResponse *AgentResponse
 	var lastError error
 
-	fmt.Printf("Starting iterative reasoning (max %d steps)...\n", ctx.MaxSteps)
+	a.verbosePrint("Starting iterative reasoning (max %d steps)...\n", ctx.MaxSteps)
 
 	for step := 0; step < ctx.MaxSteps; step++ {
 		ctx.CurrentStep = step
 
-		fmt.Printf("\nIteration %d/%d\n", step+1, ctx.MaxSteps)
+		a.verbosePrint("\nIteration %d/%d\n", step+1, ctx.MaxSteps)
 
 		// Execute query
 		response, err := a.ExecuteQuery(ctx.Query, modelNames...)
 		if err != nil {
-			fmt.Printf("Iteration failed: %v\n", err)
+			a.verbosePrint("Iteration failed: %v\n", err)
 			ctx.ErrorHistory = append(ctx.ErrorHistory, err.Error())
 			lastError = err
 
 			// Retry logic
 			if a.ReasoningConfig.EnableRetry && ctx.RetryCount < ctx.MaxRetries {
 				ctx.RetryCount++
-				fmt.Printf("Retrying... (attempt %d/%d)\n", ctx.RetryCount, ctx.MaxRetries)
+				a.verbosePrint("Retrying... (attempt %d/%d)\n", ctx.RetryCount, ctx.MaxRetries)
 				continue
 			}
 			break
 		}
 
-		fmt.Printf("Iteration completed (confidence: %.2f, tokens: %d)\n",
+		a.verbosePrint("Iteration completed (confidence: %.2f, tokens: %d)\n",
 			response.Confidence, response.TokensUsed)
-		fmt.Printf("Response: %s\n", truncateString(response.Answer, 150))
+		a.verbosePrint("Response: %s\n", truncateString(response.Answer, 150))
 
 		lastResponse = response
 
 		// Check if we should continue based on response quality
 		if a.shouldContinueReasoning(response, ctx) {
-			fmt.Printf("Response quality low, continuing to next iteration...\n")
+			a.verbosePrint("Response quality low, continuing to next iteration...\n")
 			// Enhance query based on previous results
 			ctx.Query = a.buildEnhancedQuery(ctx.Query, response.ToolResults)
 			ctx.ExecutionHistory = append(ctx.ExecutionHistory, response.Answer)
 		} else {
-			fmt.Printf("Response quality sufficient, stopping iterations\n")
+			a.verbosePrint("Response quality sufficient, stopping iterations\n")
 			break
 		}
 	}
@@ -460,7 +764,7 @@ func (a *Agent) executeIterative(ctx *ReasoningContext, modelNames ...string) (*
 func (a *Agent) executeStateMachine(ctx *ReasoningContext, modelNames ...string) (*AgentResponse, error) {
 	var finalResponse *AgentResponse
 
-	fmt.Printf("Starting reasoning with %d steps...\n", len(a.ReasoningConfig.Steps))
+	a.verbosePrint("Starting reasoning with %d steps...\n", len(a.ReasoningConfig.Steps))
 
 	for i, step := range a.ReasoningConfig.Steps {
 		if !step.Enabled {
@@ -468,8 +772,8 @@ func (a *Agent) executeStateMachine(ctx *ReasoningContext, modelNames ...string)
 		}
 
 		ctx.CurrentStep++
-		fmt.Printf("\nStep %d/%d: %s (%s)\n", i+1, len(a.ReasoningConfig.Steps), step.Name, step.Type)
-		fmt.Printf("Instruction: %s\n", func() string {
+		a.verbosePrint("\nStep %d/%d: %s (%s)\n", i+1, len(a.ReasoningConfig.Steps), step.Name, step.Type)
+		a.verbosePrint("Instruction: %s\n", func() string {
 			// No instruction field in AgentConfig anymore - use empty string
 			return ""
 		}())
@@ -479,16 +783,16 @@ func (a *Agent) executeStateMachine(ctx *ReasoningContext, modelNames ...string)
 
 		// Display step result
 		if stepResult.Success {
-			fmt.Printf("Step completed successfully (%.2fs, %d tokens)\n",
+			a.verbosePrint("Step completed successfully (%.2fs, %d tokens)\n",
 				stepResult.Duration.Seconds(), stepResult.TokensUsed)
-			fmt.Printf("Output: %s\n", truncateString(stepResult.Output, 200))
+			a.verbosePrint("Output: %s\n", truncateString(stepResult.Output, 200))
 		} else {
-			fmt.Printf("Step failed: %s\n", stepResult.Error)
+			a.verbosePrint("Step failed: %s\n", stepResult.Error)
 			ctx.ErrorHistory = append(ctx.ErrorHistory, stepResult.Error)
 
 			// Handle step failure based on error handling strategy
 			if !a.handleStepFailure(step, stepResult, ctx) {
-				fmt.Printf("Stopping execution due to step failure\n")
+				a.verbosePrint("Stopping execution due to step failure\n")
 				break
 			}
 		}
@@ -498,7 +802,7 @@ func (a *Agent) executeStateMachine(ctx *ReasoningContext, modelNames ...string)
 	}
 
 	// Generate final response
-	fmt.Printf("\nGenerating final response...\n")
+	a.verbosePrint("\nGenerating final response...\n")
 	finalResponse = a.generateFinalResponse(ctx)
 	return finalResponse, nil
 }
@@ -599,6 +903,9 @@ Context: %s
 Please execute this step according to your role and provide a detailed response.`,
 		instruction, step.Name, step.Type, previousResults, ctx.Query, contextStr)
 
+	// Debug: Print the built prompt (commented out for cleaner output)
+	// fmt.Printf("DEBUG: Built prompt for step %s (%s):\n%s\n", step.Name, step.Type, prompt)
+
 	return prompt, nil
 }
 
@@ -654,6 +961,7 @@ func (a *Agent) createStepLLM(config *YAMLProviderConfig) llms.LLMProvider {
 		return a.llm
 	}
 
+	// Debug: Successfully created step-specific LLM
 	return provider
 }
 
@@ -694,22 +1002,22 @@ func (a *Agent) generateFinalResponse(ctx *ReasoningContext) *AgentResponse {
 	var answer strings.Builder
 	var totalTokens int
 
-	fmt.Printf("Reasoning Summary:\n")
-	fmt.Printf("   Steps completed: %d/%d\n", len(ctx.StepResults), ctx.MaxSteps)
-	fmt.Printf("   Errors encountered: %d\n", len(ctx.ErrorHistory))
-	fmt.Printf("   Retries used: %d/%d\n", ctx.RetryCount, ctx.MaxRetries)
+	a.verbosePrint("Reasoning Summary:\n")
+	a.verbosePrint("   Steps completed: %d/%d\n", len(ctx.StepResults), ctx.MaxSteps)
+	a.verbosePrint("   Errors encountered: %d\n", len(ctx.ErrorHistory))
+	a.verbosePrint("   Retries used: %d/%d\n", ctx.RetryCount, ctx.MaxRetries)
 
 	for _, result := range ctx.StepResults {
 		if result.Success {
 			answer.WriteString(fmt.Sprintf("%s: %s\n", result.StepName, result.Output))
 			totalTokens += result.TokensUsed
-			fmt.Printf("   %s: %.2fs, %d tokens\n", result.StepName, result.Duration.Seconds(), result.TokensUsed)
+			a.verbosePrint("   %s: %.2fs, %d tokens\n", result.StepName, result.Duration.Seconds(), result.TokensUsed)
 		} else {
-			fmt.Printf("   %s: %s\n", result.StepName, result.Error)
+			a.verbosePrint("   %s: %s\n", result.StepName, result.Error)
 		}
 	}
 
-	fmt.Printf("   Total tokens used: %d\n", totalTokens)
+	a.verbosePrint("   Total tokens used: %d\n", totalTokens)
 
 	return &AgentResponse{
 		Answer:         answer.String(),
@@ -754,8 +1062,8 @@ func (a *Agent) ExecuteQuery(query string, modelNames ...string) (*AgentResponse
 	// Build enhanced query with conversation context and tool results
 	enhancedQuery := a.buildEnhancedQuery(query, toolResults)
 
-	if enhancedQuery != query {
-		// Generate enhanced response if we have additional context
+	if enhancedQuery != query && a.searchEngine != nil {
+		// Generate enhanced response if we have additional context and search engine
 		prompt, err := BuildPrompt(enhancedQuery, a.searchEngine.ExtractContext(map[string][]SearchResult{a.getDefaultModelName(): agentResponse.Context}, a.searchEngine.GetMaxContextLength()), a.getDefaultModelName(), "You are a helpful AI assistant.", "")
 		if err == nil {
 			enhancedResponse, _, err := a.llm.Generate(prompt)
@@ -798,12 +1106,13 @@ func (a *Agent) ExecuteQueryStreaming(query string, modelNames ...string) (<-cha
 			"model_names": modelNames,
 		})
 
-		// First, try to get context from agent query
-		results, err := a.SearchDocuments(query, a.getDefaultModelName(), a.getDefaultTopK())
+		// First, try to get context from agent query (only if search engine is configured)
 		var context []string
-
-		if err == nil && len(results) > 0 {
-			context = a.searchEngine.ExtractContext(map[string][]SearchResult{a.getDefaultModelName(): results}, a.searchEngine.GetMaxContextLength())
+		if a.searchEngine != nil {
+			results, err := a.SearchDocuments(query, a.getDefaultModelName(), a.getDefaultTopK())
+			if err == nil && len(results) > 0 {
+				context = a.searchEngine.ExtractContext(map[string][]SearchResult{a.getDefaultModelName(): results}, a.searchEngine.GetMaxContextLength())
+			}
 		}
 
 		// Determine which tools to use based on query analysis
@@ -1058,6 +1367,9 @@ func (a *Agent) buildToolContext(toolResults map[string]ToolResult) string {
 
 // getDefaultModelName returns the first available model name, or "document" as fallback
 func (a *Agent) getDefaultModelName() string {
+	if a.searchEngine == nil {
+		return "document" // Fallback when no search engine is configured
+	}
 	modelNames := GetAllModelNames(a.searchEngine.models)
 	if len(modelNames) > 0 {
 		return modelNames[0]
@@ -1085,7 +1397,10 @@ func (a *Agent) Query(query string, modelNames ...string) (*AgentResponse, error
 	// Handle different model name patterns
 	var targetModels []string
 
-	if len(modelNames) == 0 {
+	if a.searchEngine == nil {
+		// No search engine configured - use empty model list
+		targetModels = []string{}
+	} else if len(modelNames) == 0 {
 		// No models specified - search all models (default behavior)
 		targetModels = GetAllModelNames(a.searchEngine.models)
 	} else if len(modelNames) == 1 {
@@ -1102,16 +1417,26 @@ func (a *Agent) Query(query string, modelNames ...string) (*AgentResponse, error
 		targetModels = modelNames
 	}
 
-	// Search specified models
-	allResults, err := a.searchEngine.SearchModels(query, a.getDefaultTopK(), targetModels...)
-	if err != nil {
-		// If search fails, warn user and continue with empty context
-		fmt.Printf("Warning: Search failed: %v. Continuing with empty context.\n", err)
-		allResults = map[string][]SearchResult{}
-	}
+	// Search specified models (only if search engine is configured)
+	var allResults map[string][]SearchResult
+	var context []string
 
-	// Extract context from all models with proper sectioning (empty if no results)
-	context := a.searchEngine.ExtractContext(allResults, a.searchEngine.GetMaxContextLength())
+	if a.searchEngine != nil {
+		var err error
+		allResults, err = a.searchEngine.SearchModels(query, a.getDefaultTopK(), targetModels...)
+		if err != nil {
+			// If search fails, warn user and continue with empty context
+			fmt.Printf("Warning: Search failed: %v. Continuing with empty context.\n", err)
+			allResults = map[string][]SearchResult{}
+		}
+
+		// Extract context from all models with proper sectioning (empty if no results)
+		context = a.searchEngine.ExtractContext(allResults, a.searchEngine.GetMaxContextLength())
+	} else {
+		// No search engine configured - use empty context
+		allResults = map[string][]SearchResult{}
+		context = []string{}
+	}
 
 	// Generate response using LLM with context (empty if no documents found)
 	var answer string
@@ -1193,3 +1518,43 @@ func truncateString(s string, maxLen int) string {
 // ============================================================================
 // HELPER METHODS
 // ============================================================================
+
+// VerboseTemplateData represents the data available in verbose templates
+type VerboseTemplateData struct {
+	Message   string
+	Timestamp time.Time
+	Level     string
+	Source    string
+}
+
+// verbosePrint prints a message only if verbose mode is enabled, using the configured template
+func (a *Agent) verbosePrint(format string, args ...interface{}) {
+	if !a.ReasoningConfig.Verbose {
+		return
+	}
+
+	message := fmt.Sprintf(format, args...)
+
+	// Parse and execute the template
+	tmpl, err := template.New("verbose").Parse(a.ReasoningConfig.VerboseTemplate)
+	if err != nil {
+		// If template parsing fails, fall back to plain message
+		fmt.Printf("%s", message)
+		return
+	}
+
+	// Create template data
+	data := VerboseTemplateData{
+		Message:   message,
+		Timestamp: time.Now(),
+		Level:     "info",
+		Source:    "reasoning",
+	}
+
+	// Execute template
+	err = tmpl.Execute(os.Stdout, data)
+	if err != nil {
+		// If template execution fails, fall back to plain message
+		fmt.Printf("%s", message)
+	}
+}

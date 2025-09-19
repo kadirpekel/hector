@@ -35,6 +35,38 @@ type AgentConfig struct {
 	Reasoning  ReasoningConfig    `yaml:"reasoning"`
 }
 
+// SetDefaults sets default values for AgentConfig
+func (a *AgentConfig) SetDefaults() {
+	// Set default agent info if not specified
+	if a.Agent.Name == "" {
+		a.Agent.Name = "hector-agent"
+	}
+	if a.Agent.Description == "" {
+		a.Agent.Description = "AI agent powered by Hector"
+	}
+
+	// Set default LLM model if not specified
+	if a.LLM.Name != "" && len(a.LLM.Config) > 0 {
+		if _, hasModel := a.LLM.Config["model"]; !hasModel {
+			// Set default model based on provider
+			switch a.LLM.Name {
+			case "openai":
+				a.LLM.Config["model"] = "gpt-4o-mini" // Cheapest OpenAI model
+			case "ollama":
+				a.LLM.Config["model"] = "llama3.2" // Common Ollama model
+			case "tgi":
+				a.LLM.Config["model"] = "microsoft/DialoGPT-medium" // Common TGI model
+			}
+		}
+	}
+
+	// Set defaults for reasoning configuration
+	a.Reasoning.SetDefaults()
+
+	// Set defaults for search configuration
+	a.Search.SetDefaults()
+}
+
 // AgentInfo contains basic agent information
 type AgentInfo struct {
 	Name        string `yaml:"name"`
@@ -107,15 +139,18 @@ func (s *SearchConfig) SetDefaults() {
 
 // ReasoningConfig holds reasoning and execution configuration
 type ReasoningConfig struct {
-	Strategy       string              `yaml:"strategy"`
-	MaxSteps       int                 `yaml:"max_steps"`
-	MaxRetries     int                 `yaml:"max_retries"`
-	EnableRetry    bool                `yaml:"enable_retry"`
-	EnableFeedback bool                `yaml:"enable_feedback"`
-	ToolExecution  ToolExecutionConfig `yaml:"tool_execution"`
-	Steps          []ReasoningStep     `yaml:"steps"`
-	ErrorHandling  ErrorHandlingConfig `yaml:"error_handling"`
-	Context        ContextConfig       `yaml:"context"`
+	Strategy        string              `yaml:"strategy"`
+	MaxSteps        int                 `yaml:"max_steps"`
+	MaxRetries      int                 `yaml:"max_retries"`
+	EnableRetry     bool                `yaml:"enable_retry"`
+	EnableFeedback  bool                `yaml:"enable_feedback"`
+	StreamingMode   string              `yaml:"streaming_mode"`
+	Verbose         bool                `yaml:"verbose"`
+	VerboseTemplate string              `yaml:"verbose_template"` // Template for verbose output formatting
+	ToolExecution   ToolExecutionConfig `yaml:"tool_execution"`
+	Steps           []ReasoningStep     `yaml:"steps"`
+	ErrorHandling   ErrorHandlingConfig `yaml:"error_handling"`
+	Context         ContextConfig       `yaml:"context"`
 }
 
 // SetDefaults sets default values for ReasoningConfig
@@ -129,6 +164,31 @@ func (r *ReasoningConfig) SetDefaults() {
 	if r.MaxRetries == 0 {
 		r.MaxRetries = 2
 	}
+	if r.StreamingMode == "" {
+		// Set default streaming mode based on strategy
+		if r.Strategy == "single_shot" {
+			r.StreamingMode = "all_steps" // Single shot can stream normally
+		} else {
+			r.StreamingMode = "final_only" // Multi-step defaults to final only
+		}
+	}
+	// Verbose defaults to false (clean output by default)
+	// VerboseTemplate defaults to terminal format when verbose is enabled
+	if r.VerboseTemplate == "" {
+		r.VerboseTemplate = "\033[90m{{.Message}}\033[0m" // Default terminal gray
+	}
+
+	// If no steps are specified, create a default step
+	if len(r.Steps) == 0 {
+		r.Steps = []ReasoningStep{
+			{
+				Name:    "main",
+				Type:    "execute",
+				Enabled: true,
+			},
+		}
+	}
+
 	r.ToolExecution.SetDefaults()
 	r.ErrorHandling.SetDefaults()
 	r.Context.SetDefaults()
@@ -163,6 +223,16 @@ type ReasoningStep struct {
 	Enabled     bool                   `yaml:"enabled"`
 	AgentConfig *AgentConfig           `yaml:"agent_config,omitempty"`
 	Config      map[string]interface{} `yaml:"config,omitempty"`
+}
+
+// SetDefaults sets default values for ReasoningStep
+func (r *ReasoningStep) SetDefaults() {
+	if !r.Enabled {
+		r.Enabled = true // Enable steps by default
+	}
+	if r.Type == "" {
+		r.Type = "execute" // Default to execute type
+	}
 }
 
 // ErrorHandlingConfig holds error handling settings
@@ -222,6 +292,9 @@ func LoadAgentFromFile(filename string) (*Agent, error) {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
 
+	// Set defaults for configuration
+	config.SetDefaults()
+
 	// Register default providers
 	if err := providers.RegisterDefaultProviders(); err != nil {
 		return nil, fmt.Errorf("failed to register providers: %w", err)
@@ -235,19 +308,27 @@ func LoadAgentFromFile(filename string) (*Agent, error) {
 func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 	agent := NewAgent()
 
-	// Configure LLM
+	// Configure LLM (required)
 	if err := configureProvider(agent, &config.LLM, "llm"); err != nil {
 		return nil, fmt.Errorf("failed to configure LLM: %w", err)
 	}
 
-	// Configure Database
-	if err := configureProvider(agent, &config.Memory, "database"); err != nil {
-		return nil, fmt.Errorf("failed to configure memory database: %w", err)
+	// Configure Database (optional - only if specified)
+	if config.Memory.Name != "" {
+		if err := configureProvider(agent, &config.Memory, "database"); err != nil {
+			return nil, fmt.Errorf("failed to configure memory database: %w", err)
+		}
+	} else {
+		fmt.Println("No memory configuration specified, skipping memory setup")
 	}
 
-	// Configure Embedder
-	if err := configureProvider(agent, &config.Embedder, "embedder"); err != nil {
-		return nil, fmt.Errorf("failed to configure embedder: %w", err)
+	// Configure Embedder (optional - only if specified)
+	if config.Embedder.Name != "" {
+		if err := configureProvider(agent, &config.Embedder, "embedder"); err != nil {
+			return nil, fmt.Errorf("failed to configure embedder: %w", err)
+		}
+	} else {
+		fmt.Println("No embedder configuration specified, skipping embedder setup")
 	}
 
 	// Configure MCP Servers and discover tools
@@ -255,13 +336,26 @@ func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 		return nil, fmt.Errorf("failed to configure MCP servers: %w", err)
 	}
 
-	// Configure models
-	if err := configureModels(agent, config.Models); err != nil {
-		return nil, fmt.Errorf("failed to configure models: %w", err)
+	// Configure models (only if memory database is configured)
+	if config.Memory.Name != "" {
+		if err := configureModels(agent, config.Models); err != nil {
+			return nil, fmt.Errorf("failed to configure models: %w", err)
+		}
+	} else {
+		fmt.Println("No memory database configured, skipping model setup")
 	}
 
 	// Configure reasoning
 	agent.ReasoningConfig = config.Reasoning
+
+	// Set defaults for reasoning configuration
+	agent.ReasoningConfig.SetDefaults()
+
+	// Set defaults for reasoning steps
+	for i := range agent.ReasoningConfig.Steps {
+		agent.ReasoningConfig.Steps[i].SetDefaults()
+	}
+
 	fmt.Printf("Loaded reasoning config: strategy=%s, max_steps=%d, steps_count=%d\n",
 		config.Reasoning.Strategy, config.Reasoning.MaxSteps, len(config.Reasoning.Steps))
 

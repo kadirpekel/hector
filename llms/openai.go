@@ -1,6 +1,7 @@
 package llms
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -18,13 +19,13 @@ import (
 
 // OpenAIConfig holds configuration for the OpenAI LLM provider
 type OpenAIConfig struct {
-	Provider    string  `yaml:"provider" json:"provider"`    // Always "openai"
-	Model       string  `yaml:"model" json:"model"`       // Model name
-	APIKey      string  `yaml:"api_key" json:"api_key"`     // API key
-	Host        string  `yaml:"host" json:"host"`        // Custom host (optional)
-	Temperature float64 `yaml:"temperature" json:"temperature"` // Temperature setting
-	MaxTokens   int     `yaml:"max_tokens" json:"max_tokens"`  // Max tokens
-	Timeout     int     `yaml:"timeout" json:"timeout"`     // Request timeout in seconds
+	Provider    string  `yaml:"provider"`    // Always "openai"
+	Model       string  `yaml:"model"`       // Model name
+	APIKey      string  `yaml:"api_key"`     // API key
+	Host        string  `yaml:"host"`        // Custom host (optional)
+	Temperature float64 `yaml:"temperature"` // Temperature setting
+	MaxTokens   int     `yaml:"max_tokens"`  // Max tokens
+	Timeout     int     `yaml:"timeout"`     // Request timeout in seconds
 }
 
 // GetProviderType implements ProviderConfig.GetProviderType
@@ -100,11 +101,12 @@ type OpenAIProvider struct {
 
 // OpenAIRequest represents the request payload for OpenAI API
 type OpenAIRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	MaxTokens   int       `json:"max_tokens"`
-	Temperature float64   `json:"temperature"`
-	Stream      bool      `json:"stream"`
+	Model               string    `json:"model"`
+	Messages            []Message `json:"messages"`
+	MaxTokens           int       `json:"max_tokens,omitempty"`            // Legacy parameter
+	MaxCompletionTokens int       `json:"max_completion_tokens,omitempty"` // New parameter
+	Temperature         float64   `json:"temperature"`
+	Stream              bool      `json:"stream"`
 }
 
 // OpenAIResponse represents the response from OpenAI API
@@ -202,13 +204,7 @@ func (p *OpenAIProvider) WithTemperature(temperature float64) *OpenAIProvider {
 
 // Generate generates a response given a pre-built prompt
 func (p *OpenAIProvider) Generate(prompt string) (string, int, error) {
-	request := OpenAIRequest{
-		Model:       p.config.Model,
-		Messages:    []Message{{Role: "user", Content: prompt}},
-		MaxTokens:   p.config.MaxTokens,
-		Temperature: p.config.Temperature,
-		Stream:      false,
-	}
+	request := p.buildRequest(prompt, false)
 
 	response, err := p.makeRequest(request)
 	if err != nil {
@@ -231,13 +227,7 @@ func (p *OpenAIProvider) Generate(prompt string) (string, int, error) {
 
 // GenerateStreaming generates a streaming response given a pre-built prompt
 func (p *OpenAIProvider) GenerateStreaming(prompt string) (<-chan string, error) {
-	request := OpenAIRequest{
-		Model:       p.config.Model,
-		Messages:    []Message{{Role: "user", Content: prompt}},
-		MaxTokens:   p.config.MaxTokens,
-		Temperature: p.config.Temperature,
-		Stream:      true,
-	}
+	request := p.buildRequest(prompt, true)
 
 	responseChan := make(chan string, 100)
 
@@ -256,6 +246,67 @@ func (p *OpenAIProvider) GenerateStreaming(prompt string) (<-chan string, error)
 // GetModelName returns the model name
 func (p *OpenAIProvider) GetModelName() string {
 	return p.config.Model
+}
+
+// buildRequest builds an OpenAI request with appropriate parameters based on model
+func (p *OpenAIProvider) buildRequest(prompt string, stream bool) OpenAIRequest {
+	request := OpenAIRequest{
+		Model:       p.config.Model,
+		Messages:    []Message{{Role: "user", Content: prompt}},
+		Temperature: p.config.Temperature,
+		Stream:      stream,
+	}
+
+	// Use appropriate token parameter based on model
+	if p.isNewerModel() {
+		request.MaxCompletionTokens = p.config.MaxTokens
+	} else {
+		request.MaxTokens = p.config.MaxTokens
+	}
+
+	// Handle temperature restrictions for certain models
+	if p.hasTemperatureRestrictions() {
+		request.Temperature = 1.0 // Default temperature for restricted models
+	}
+
+	return request
+}
+
+// hasTemperatureRestrictions checks if the model has temperature restrictions
+func (p *OpenAIProvider) hasTemperatureRestrictions() bool {
+	// Models that only support default temperature (1.0)
+	restrictedModels := []string{
+		"gpt-5-nano",
+	}
+
+	for _, model := range restrictedModels {
+		if strings.Contains(p.config.Model, model) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isNewerModel checks if the model requires max_completion_tokens instead of max_tokens
+func (p *OpenAIProvider) isNewerModel() bool {
+	// Models that require max_completion_tokens
+	newerModels := []string{
+		"gpt-5-nano",
+		"gpt-5",
+		"gpt-4o",
+		"gpt-4o-mini",
+		"gpt-4-turbo",
+		"gpt-4",
+	}
+
+	for _, model := range newerModels {
+		if strings.Contains(p.config.Model, model) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // GetMaxTokens returns the maximum tokens for generation
@@ -334,14 +385,28 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, responseCha
 		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	decoder := json.NewDecoder(resp.Body)
-	for {
+	// Read streaming response line by line (SSE format)
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Skip empty lines and non-data lines
+		if line == "" || !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		// Extract JSON data after "data: "
+		jsonData := strings.TrimPrefix(line, "data: ")
+
+		// Skip the final "[DONE]" message
+		if jsonData == "[DONE]" {
+			break
+		}
+
+		// Parse JSON response
 		var streamResp OpenAIStreamResponse
-		if err := decoder.Decode(&streamResp); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return fmt.Errorf("failed to decode streaming response: %w", err)
+		if err := json.Unmarshal([]byte(jsonData), &streamResp); err != nil {
+			return fmt.Errorf("failed to decode streaming response: %w, data: %s", err, jsonData)
 		}
 
 		if streamResp.Error != nil {
@@ -353,10 +418,20 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, responseCha
 			if choice.Delta.Content != "" {
 				responseChan <- choice.Delta.Content
 			}
+			// Handle finish_reason to properly terminate stream
 			if choice.FinishReason != "" {
+				// Log the finish reason for debugging
+				if choice.FinishReason != "stop" {
+					fmt.Printf("Stream finished with reason: %s\n", choice.FinishReason)
+				}
 				break
 			}
 		}
+	}
+
+	// Check for scanner errors
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("failed to read streaming response: %w", err)
 	}
 
 	return nil

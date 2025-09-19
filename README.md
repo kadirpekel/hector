@@ -72,8 +72,8 @@ Perfect for teams who want sophisticated AI agents without complex programming.
 # Install Hector CLI
 go install github.com/kadirpekel/hector/cmd/hector@latest
 
-# Run with basic configuration
-hector --config configs/basic.yaml
+# Run with multi-step configuration
+hector --config configs/stepped.yaml
 
 # Or start with minimal setup (requires Ollama + Qdrant)
 hector
@@ -175,10 +175,24 @@ agent:
 ```
 
 ### Available Configurations
-- **basic.yaml** - Simple single-step agent
-- **tools.yaml** - Agent with MCP tool integration
 - **stepped.yaml** - Multi-step reasoning workflow
 - **nested.yaml** - Nested agent hierarchies
+
+### Verbose Output
+Control debug information with template-based formatting:
+
+```yaml
+reasoning:
+  verbose: true
+  verbose_template: "[DEBUG] {{.Message}}"  # Custom format
+```
+
+**Template Variables**: `{{.Message}}`, `{{.Timestamp}}`, `{{.Level}}`, `{{.Source}}`
+
+**Examples**:
+- Terminal: `verbose_template: "\033[90m{{.Message}}\033[0m"` (grayed out)
+- JSON: `verbose_template: '{"level":"{{.Level}}","message":"{{.Message}}","timestamp":"{{.Timestamp}}"}`
+- HTML: `verbose_template: '<div class="log">{{.Message}}</div>'`
 
 ## Programmatic Usage
 

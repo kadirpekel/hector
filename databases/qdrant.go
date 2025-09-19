@@ -16,13 +16,13 @@ import (
 
 // QdrantConfig holds configuration for the Qdrant database provider
 type QdrantConfig struct {
-	Provider string `yaml:"provider" json:"provider"` // Always "qdrant"
-	Host     string `yaml:"host" json:"host"`     // Database host
-	Port     int    `yaml:"port" json:"port"`     // Database port
-	APIKey   string `yaml:"api_key" json:"api_key"`  // API key (optional)
-	Timeout  int    `yaml:"timeout" json:"timeout"`  // Connection timeout in seconds
-	UseTLS   bool   `yaml:"use_tls" json:"use_tls"`  // Use TLS connection
-	Insecure bool   `yaml:"insecure" json:"insecure"` // Allow insecure TLS
+	Provider string `yaml:"provider"` // Always "qdrant"
+	Host     string `yaml:"host"`     // Database host
+	Port     int    `yaml:"port"`     // Database port
+	APIKey   string `yaml:"api_key"`  // API key (optional)
+	Timeout  int    `yaml:"timeout"`  // Connection timeout in seconds
+	UseTLS   bool   `yaml:"use_tls"`  // Use TLS connection
+	Insecure bool   `yaml:"insecure"` // Allow insecure TLS
 }
 
 // SetDefaults sets default values for QdrantConfig
