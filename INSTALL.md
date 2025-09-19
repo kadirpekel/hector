@@ -2,9 +2,39 @@
 
 ## Quick Install
 
+### Option 1: CLI Binary (Ready to Run)
+
 ```bash
-go get github.com/kadirpekel/hector@v1.0.0
+# Install Hector CLI executable - ready to use immediately
+go install github.com/kadirpekel/hector/cmd/hector@latest
+
+# Run interactive chat
+hector
+
+# Run with config
+hector --config config.yaml
 ```
+
+### Option 2: Go Package (For Development)
+
+```bash
+# Install Hector as a Go module for use in your projects
+go get github.com/kadirpekel/hector@v1.0.1
+```
+
+## Installation Methods Explained
+
+### CLI Binary (`go install github.com/kadirpekel/hector/cmd/hector@latest`)
+- **What you get**: A `hector` executable command
+- **Ready to use**: Immediately after installation
+- **Use case**: Interactive chat, CLI usage, quick testing
+- **Example**: `hector` → starts interactive chat
+
+### Go Package (`go get github.com/kadirpekel/hector@v1.0.1`)
+- **What you get**: Hector library for import in Go code
+- **Ready to use**: After importing and writing code
+- **Use case**: Building applications, integrating Hector into projects
+- **Example**: `import "github.com/kadirpekel/hector"`
 
 ## Basic Usage
 

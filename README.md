@@ -24,27 +24,32 @@ Hector is a modern AI agent framework that makes it easy to build intelligent ag
 
 ## Quick Start
 
-### Install as Go Package
+### Option 1: Install CLI Binary (Recommended for Interactive Use)
 
 ```bash
-# Install Hector as a Go module
-go get github.com/kadirpekel/hector@v1.0.0
-```
-
-### Install CLI Tool
-
-```bash
-# Install Hector CLI
+# Install Hector CLI executable
 go install github.com/kadirpekel/hector/cmd/hector@latest
 
-# Start with zero configuration (assumes Ollama + Qdrant running locally)
+# Start interactive chat (zero-config)
 hector
+
+# Or use with specific config
+hector --config configs/basic.yaml
 
 # Output:
 # No config file found. Starting with zero configuration...
 #    Assumes Ollama (localhost:11434) and Qdrant (localhost:6334) are running
 # Agent created with zero configuration
 ```
+
+### Option 2: Install as Go Package (For Development)
+
+```bash
+# Install Hector as a Go module for use in your projects
+go get github.com/kadirpekel/hector@v1.0.1
+```
+
+**Note**: The CLI binary (`hector` command) is ready to run immediately after installation. The Go package requires importing in your code.
 
 **Prerequisites for zero-config:**
 ```bash
