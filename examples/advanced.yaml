@@ -1,0 +1,115 @@
+# Hector Agent - Advanced Example
+# Covers multi-step reasoning, MCP tools, and nested agents
+
+agent:
+  name: "Hector Advanced"
+  description: "Advanced AI agent with multi-step reasoning and tool integration"
+
+llm:
+  name: "openai"
+  api_key: "YOUR_OPENAI_API_KEY_HERE"
+  model: "gpt-4o-mini"
+  temperature: 0.3
+  max_tokens: 1000
+
+memory:
+  name: "qdrant"
+  host: "localhost"
+  port: 6334
+  timeout: 30
+  use_tls: false
+  insecure: false
+
+embedder:
+  name: "ollama"
+  model: "nomic-embed-text"
+  host: "http://localhost:11434"
+  dimension: 768
+  timeout: 30
+  max_retries: 3
+
+search:
+  max_context_length: 2000
+  context_strategy: "relevance"
+  enable_reranking: false
+
+# MCP Servers Configuration (optional - comment out if not using tools)
+mcp_servers:
+  - name: "composio"
+    url: "https://apollo.composio.dev/v3/mcp/..."
+    description: "Weather and web search tools"
+    config:
+      api_key: "YOUR_COMPOSIO_API_KEY_HERE"
+
+models:
+  - name: "document"
+    collection: "documents"
+    default_top_k: 10
+    max_top_k: 100
+
+# Advanced Reasoning with Nested Agents
+reasoning:
+  strategy: "state_machine"
+  max_iterations: 4
+  enable_tools: true
+  context:
+    preserve_history: true
+    max_history_steps: 15
+    enable_context_share: true
+  
+  steps:
+    - name: "research_coordinator"
+      type: "analyze"
+      instruction: "Coordinate research activities and delegate to specialized agents"
+      agent_config:
+        llm:
+          name: "openai"
+          model: "gpt-4o-mini"
+          temperature: 0.2
+          max_tokens: 1000
+        reasoning:
+          strategy: "state_machine"
+          max_iterations: 2
+          enable_tools: true
+          steps:
+            - name: "data_collector"
+              type: "execute"
+              instruction: "Collect data from various sources"
+              agent_config:
+                llm:
+                  name: "openai"
+                  model: "gpt-4o-mini"
+                  temperature: 0.3
+                  max_tokens: 1000
+                reasoning:
+                  strategy: "single_shot"
+                  enable_tools: true
+            
+            - name: "data_analyzer"
+              type: "analyze"
+              instruction: "Analyze collected data for patterns and insights"
+              agent_config:
+                llm:
+                  name: "openai"
+                  model: "gpt-4o-mini"
+                  temperature: 0.2
+                  max_tokens: 1500
+                reasoning:
+                  strategy: "single_shot"
+                  enable_tools: false
+    
+    - name: "synthesis_agent"
+      type: "analyze"
+      instruction: "Synthesize findings from research coordinator into final response"
+      agent_config:
+        llm:
+          name: "openai"
+          model: "gpt-4o-mini"
+          temperature: 0.4
+          max_tokens: 2000
+        reasoning:
+          strategy: "single_shot"
+          enable_tools: false
+  
+  verbose: true
+  verbose_template: "[{{.Level}}] {{.Message}}"

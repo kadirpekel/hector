@@ -1,0 +1,43 @@
+# Hector Agent - Basic Example
+# Covers minimal setup with tool support
+
+agent:
+  name: "Hector Basic"
+  description: "Basic AI agent with tool support"
+
+# LLM Configuration - Choose one:
+# Option 1: OpenAI (replace API key)
+llm:
+  name: "openai"
+  api_key: "YOUR_OPENAI_API_KEY_HERE"
+  model: "gpt-4o-mini"
+  temperature: 0.3
+  max_tokens: 1000
+
+# Option 2: Ollama (uncomment and comment out OpenAI above)
+# llm:
+#   name: "ollama"
+#   model: "llama3.2"
+#   temperature: 0.7
+#   max_tokens: 1000
+
+# MCP Tool Integration
+mcp_servers:
+  - name: "composio"
+    url: "https://apollo.composio.dev/v3/mcp/..."
+    description: "Weather and web search tools"
+    config:
+      api_key: "YOUR_COMPOSIO_API_KEY_HERE"
+
+# Basic document model
+models:
+  - name: "documents"
+    collection: "documents"
+    default_top_k: 10
+    max_top_k: 100
+
+# Enable tool support
+reasoning:
+  strategy: "single_shot"
+  max_iterations: 1
+  enable_tools: true
