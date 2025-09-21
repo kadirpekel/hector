@@ -11,7 +11,7 @@
 
 **Declarative AI Agent Framework**
 
-Hector is a declarative AI agent framework that enables you to build sophisticated multi-step reasoning systems through YAML configuration alone. Define entire agent workflows declaratively—from simple single-step agents to advanced AI-driven dynamic reasoning systems that adapt and evolve in real-time—without writing any code. Hector seamlessly integrates large language models, vector databases, MCP tools, and embedding providers into cohesive reasoning workflows.
+Hector is a declarative AI agent framework built in Go that compiles to a single binary for easy deployment and setup. Define entire agent workflows through YAML configuration alone—from simple single-step agents to advanced AI-driven dynamic reasoning systems that adapt and evolve in real-time—without writing any code. Hector seamlessly integrates large language models, vector databases, MCP tools, and embedding providers into cohesive reasoning workflows.
 
 [![Go Version](https://img.shields.io/badge/Go-1.23+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -21,8 +21,7 @@ Hector is a declarative AI agent framework that enables you to build sophisticat
 
 ## Why Hector?
 
-Hector distinguishes itself through:
-
+- **Single Binary Deployment**: Built in Go and compiles to a single executable for easy distribution and setup
 - **Declarative Configuration**: Define entire agent workflows in YAML without programming
 - **Multi-Step Reasoning**: Sequential task decomposition with specialized sub-agents
 - **Dynamic AI Reasoning**: Pure AI-driven reasoning that adapts and evolves autonomously
@@ -39,7 +38,7 @@ Hector distinguishes itself through:
 - **Embedding Providers**: Multiple embedding models for converting text to vector representations
 - **MCP Tools**: Model Context Protocol integration for external tool access and services
 - **Document Ingestion**: Automated document synchronization from multiple sources
-- **Reasoning Engine**: Four distinct modes (Simple, Multi, Auto, Dynamic) for different complexity levels
+
 
 ## Architecture
 
@@ -115,7 +114,6 @@ Dynamic Mode represents a breakthrough in AI reasoning—it works exactly like h
 
 **How it works**: The AI meta-reasons about its own thinking, creates steps dynamically based on problem analysis, self-reflects and adapts its approach, evolves goals as understanding deepens, and stops when quality is optimal—just like how advanced AI systems naturally think.
 
-**Example reasoning flow**: When tackling a complex problem, the AI first analyzes what type of challenge it is, then creates reasoning steps on-the-fly (research → analyze → synthesize → validate), continuously self-reflects ("Am I on the right track?"), adapts its approach if needed ("I need a different angle"), evolves its understanding of the goal ("This is really about X, not Y"), and stops when it has reached optimal quality rather than following predetermined steps.
 
 Ideal for:
 - Creative problem solving and innovation
@@ -164,81 +162,60 @@ reasoning:
 - **Multi**: Workflow queries requiring structured processing
 - **Dynamic**: Complex, creative, or exploratory queries requiring adaptive reasoning
 
-## Installation
+## Getting Started
 
 ### Prerequisites
 
-**Local Development Setup**:
+**For Local/Default Setup** (optional - only needed if using Ollama/Qdrant):
 ```bash
-# Start Ollama server
+# Start Ollama server (for local LLM)
 ollama serve
 
-# Start Qdrant vector database
+# Start Qdrant vector database (for local vector storage)
 docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
 ```
 
-**Cloud Provider Setup**:
-```bash
-# Configure AWS credentials for S3 support (optional)
-aws configure
-# OR set environment variables
-export AWS_ACCESS_KEY_ID="your-access-key"
-export AWS_SECRET_ACCESS_KEY="your-secret-key"
-export AWS_DEFAULT_REGION="us-east-1"
-```
+**Note**: These are only required if you're using the default local setup. You can also use cloud providers (OpenAI, Qdrant Cloud, etc.) without local dependencies.
 
-### Installation Methods
+### Installation
 
-**Method 1: CLI Binary (Recommended)**
 ```bash
-# Install Hector CLI
+# Install Hector CLI (single binary)
 go install github.com/kadirpekel/hector/cmd/hector@latest
 
 # Verify installation
 hector --version
 ```
 
-**Method 2: Go Package Integration**
+### Quick Start
+
 ```bash
-# Add to your Go project
-go get github.com/kadirpekel/hector@latest
-
-# Import in your code
-import "github.com/kadirpekel/hector"
-```
-
-## Quick Start
-
-### Basic Usage
-
-**Start with Minimal Configuration**:
-```bash
-# Run with minimal auto mode (recommended for beginners)
+# Start with minimal configuration (recommended)
 hector --config examples/auto-mode-minimal.yaml
+
+# Try different modes
+hector --config examples/basic.yaml           # Basic setup with tools
+hector --config examples/advanced.yaml       # Multi-step workflows
+hector --config examples/dynamic-mode.yaml    # AI-driven dynamic reasoning
+hector --config examples/document-ingestion.yaml  # Document synchronization
 ```
 
-**Available Example Configurations**:
+### CLI Commands
+
 ```bash
-# Basic setup with tool support
+# Basic usage
 hector --config examples/basic.yaml
+hector basic  # Using named config
+hector       # Run with defaults
 
-# Advanced multi-step workflow
-hector --config examples/advanced.yaml
-
-# AI-driven dynamic reasoning
-hector --config examples/dynamic-mode.yaml
-
-# Document ingestion setup
-hector --config examples/document-ingestion.yaml
+# Document ingestion commands (within Hector session)
+/list-models                    # List all configured models
+/sync-model documents           # Sync specific model
+/sync-all                       # Sync all models
+/model-status documents         # Check model status
+/search "query" documents       # Search with model selection
 ```
 
-### First Steps
-
-1. **Choose a Configuration**: Start with `auto-mode-minimal.yaml` for basic functionality
-2. **Configure Providers**: Set up your preferred LLM and vector database providers
-3. **Test Basic Queries**: Try simple questions to verify functionality
-4. **Explore Modes**: Experiment with different reasoning strategies
-5. **Add Documents**: Configure document ingestion for knowledge base functionality
 
 ## Configuration Reference
 
@@ -415,47 +392,6 @@ memory:
   api_key: "optional-api-key"  # For Qdrant Cloud
 ```
 
-### CLI Commands Reference
-
-```bash
-# Basic usage with config file
-hector --config examples/basic.yaml
-
-# Using named config (if available in examples directory)
-hector basic
-
-# Run without config (uses defaults)
-hector
-
-# Document ingestion commands (within Hector session)
-/list-models                    # List all configured models
-/sync-model documents           # Sync specific model
-/sync-all                       # Sync all models
-/model-status documents         # Check model status
-/search "query" documents       # Search with model selection
-```
-
-### Configuration Validation
-
-Hector provides comprehensive configuration validation with detailed error messages for:
-
-- **Missing Required Fields**: Identifies missing essential configuration parameters
-- **Invalid Provider Names**: Validates provider names against available options
-- **Incorrect URL Formats**: Ensures proper URL formatting for external services
-- **Invalid Reasoning Strategies**: Validates reasoning strategy configurations
-- **Malformed YAML Syntax**: Provides clear YAML syntax error reporting
-- **Provider-Specific Validation**: Validates provider-specific configuration requirements
-
-### Best Practices
-
-1. **Start Simple**: Begin with `auto-mode-minimal.yaml` for basic functionality
-2. **Use Auto Mode**: Leverage AI-driven strategy selection for optimal performance
-3. **Configure Sources Globally**: Define document sources once, reference across multiple models
-4. **Implement Pattern Matching**: Use specific patterns to avoid ingesting unwanted files
-5. **Secure Credentials**: Store sensitive data like API keys securely in configuration files
-6. **Descriptive Naming**: Use descriptive collection and model names for better organization
-7. **Appropriate Sync Intervals**: Set sync intervals based on document update frequency
-8. **Monitor Performance**: Use verbose logging to monitor agent performance and behavior
 
 ## Document Ingestion
 
@@ -480,8 +416,6 @@ Hector provides comprehensive automated document ingestion capabilities with sup
 | `gdrive` | Google Drive | **Not Supported** | **Limited** |
 
 **Pattern Matching Limitation**: Pattern matching (wildcards like `*.txt`, `**/*.pdf`) is only supported for local filesystems. For S3, MinIO, and Google Drive, you'll need to use local filesystem or implement custom ingestion logic.
-
-**Credential Management**: Credentials can be configured through the config file (`access_key_id`, `secret_access_key`) or via environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) or AWS config files (`~/.aws/credentials`).
 
 ### Pattern Matching Examples
 
@@ -559,34 +493,6 @@ Each ingested document automatically includes comprehensive metadata:
 - **modified**: Last modification timestamp
 - **extension**: File extension
 - **ingested_at**: Ingestion timestamp
-
-## Quick Examples
-
-Hector provides comprehensive example configurations in the `/examples/` directory. Each example demonstrates specific capabilities and use cases:
-
-### Available Examples
-
-- **`basic.yaml`** - Basic setup with tool support and simple reasoning
-- **`auto-mode-minimal.yaml`** - Minimal configuration with intelligent auto mode (recommended for beginners)
-- **`advanced.yaml`** - Multi-step workflows with nested agent hierarchies
-- **`auto-mode.yaml`** - Full auto mode with comprehensive features
-- **`dynamic-mode.yaml`** - AI-driven dynamic reasoning with meta-cognition
-- **`document-ingestion.yaml`** - Automated document synchronization from multiple sources
-
-### Getting Started
-
-```bash
-# Start with minimal auto mode (recommended)
-hector --config examples/auto-mode-minimal.yaml
-
-# Try dynamic reasoning
-hector --config examples/dynamic-mode.yaml
-
-# Set up document ingestion
-hector --config examples/document-ingestion.yaml
-```
-
-For detailed information about each example, see [`/examples/README.md`](examples/README.md).
 
 ## License
 
