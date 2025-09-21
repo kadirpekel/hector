@@ -1,120 +1,138 @@
 # Hector Configuration Examples
 
-This directory contains essential configuration examples that provide maximum coverage of Hector's capabilities with minimal maintenance overhead.
+This directory contains **5 essential examples** that demonstrate Hector's core capabilities with progressive complexity.
+
+## Quick Reference
+
+| Example | Use Case | Complexity | Key Features |
+|---------|----------|------------|--------------|
+| [`minimal.yaml`](#1-minimal) | Getting started | ⭐ | Zero-config, just API key |
+| [`basic.yaml`](#2-basic) | General purpose | ⭐⭐ | Tools, smart reasoning |
+| [`multi-agent.yaml`](#3-multi-agent) | Complex workflows | ⭐⭐⭐ | Specialized agents, inheritance |
+| [`dynamic-reasoning.yaml`](#4-dynamic-reasoning) | Creative problems | ⭐⭐⭐⭐ | AI-driven adaptation |
+| [`document-processing.yaml`](#5-document-processing) | Knowledge management | ⭐⭐⭐ | PDF/Word/Text ingestion |
 
 ## Examples
 
-### 1. `basic.yaml` - Basic Setup with Tools
-**Purpose**: Minimal configuration with tool support
-**Features**: 
-- LLM configuration (OpenAI or Ollama)
-- MCP tool integration
-- Basic document model
-- Tool-enabled reasoning
-**Use Case**: Quick start with tool capabilities, learning, minimal resource usage
+### 1. `minimal.yaml` - Getting Started
+**Perfect for**: First-time users, quick testing, learning basics
+
+```bash
+hector --config examples/minimal.yaml
+```
+
+**What it demonstrates**:
+- Ultra-minimal configuration (just API key)
+- Intelligent defaults for all components
+- Zero-config alternative using local Ollama
+
+**Key insight**: Hector works with minimal configuration thanks to smart provider defaults.
+
+---
+
+### 2. `basic.yaml` - General Purpose Agent
+**Perfect for**: Daily use, tool integration, balanced capabilities
 
 ```bash
 hector --config examples/basic.yaml
 ```
 
-### 2. `auto-mode-minimal.yaml` - Minimal Auto Mode (Recommended)
-**Purpose**: Intelligent strategy selection with minimal configuration
-**Features**: 
-- Auto mode (AI selects optimal strategy)
-- Simple setup with essential components
-- Intelligent query analysis
-- Automatic simple/multi/dynamic selection
-**Use Case**: Beginners, general use, optimal performance without configuration
+**What it demonstrates**:
+- MCP tool integration (weather, web search, etc.)
+- Intelligent reasoning with meta-cognition
+- Document support for knowledge queries
+- Configuration inheritance
+
+**Key insight**: A single configuration handles most use cases with tools and smart reasoning.
+
+---
+
+### 3. `multi-agent.yaml` - Specialized Workflows
+**Perfect for**: Complex analysis, research projects, enterprise applications
 
 ```bash
-hector --config examples/auto-mode-minimal.yaml
+hector --config examples/multi-agent.yaml
 ```
 
-### 3. `advanced.yaml` - Advanced Features
-**Purpose**: Demonstrates complex reasoning and tool integration
-**Features**: 
-- Multi-step reasoning workflows
-- Nested agent hierarchies
-- MCP tool integration
-- Advanced context management
-**Use Case**: Complex problem solving, enterprise applications
+**What it demonstrates**:
+- Multi-step workflows with specialized agents
+- Configuration inheritance and overrides
+- Agent specialization (Research → Analysis → Synthesis)
+- Different LLM settings per agent role
+
+**Key insight**: Each workflow step is a complete agent with its own capabilities and configuration.
+
+---
+
+### 4. `dynamic-reasoning.yaml` - Creative Problem Solving
+**Perfect for**: Open-ended problems, research, strategy, creative tasks
 
 ```bash
-hector --config examples/advanced.yaml
+hector --config examples/dynamic-reasoning.yaml
 ```
 
-### 4. `dynamic-mode.yaml` - Dynamic AI Reasoning (Revolutionary)
-**Purpose**: Pure AI-driven adaptive reasoning
-**Features**: 
-- Meta-reasoning and self-reflection
-- Dynamic step creation
-- Goal evolution
-- Quality-driven decisions
-**Use Case**: Creative problem solving, research, strategy, philosophy
+**What it demonstrates**:
+- AI-driven adaptive reasoning
+- Self-reflection and meta-reasoning
+- Goal evolution during execution
+- Dynamic tool selection
+- Streaming reasoning process
+
+**Key insight**: AI can autonomously adapt its approach and reasoning strategy based on the problem complexity.
+
+**Great for queries like**:
+- "Design a sustainable city of the future"
+- "Create a comprehensive climate action plan"
+- "Develop a novel approach to education reform"
+
+---
+
+### 5. `document-processing.yaml` - Knowledge Management
+**Perfect for**: Document analysis, knowledge bases, research assistance
 
 ```bash
-hector --config examples/dynamic-mode.yaml
+hector --config examples/document-processing.yaml
 ```
 
-### 5. `document-ingestion.yaml` - Document Automation
-**Purpose**: Automated document sync with PDF, Word, and text file support
-**Features**: 
-- Single universal document model
-- PDF text extraction
-- Word (.docx) text extraction
-- Text and Markdown support
-- Pattern matching and exclusions
-**Use Case**: Knowledge base automation, document management
+**What it demonstrates**:
+- Multi-format document ingestion (PDF, Word, Text, Markdown)
+- Local and cloud (S3) document sources
+- Enhanced search and retrieval
+- Document-optimized reasoning
 
-```bash
-hector --config examples/document-ingestion.yaml
-```
+**Key insight**: Hector can automatically process and understand various document formats for intelligent search and analysis.
 
-## Coverage Matrix
+**Usage workflow**:
+1. Configure document paths
+2. Sync documents: `/sync-model documents`
+3. Search: `/search "your query" documents`
 
-| Feature | basic.yaml | advanced.yaml | document-ingestion.yaml |
-|---------|------------|---------------|------------------------|
-| **Minimal Setup** | ✅ | ❌ | ❌ |
-| **Local Ollama** | ✅ | ❌ | ❌ |
-| **MCP Tools** | ✅ | ✅ | ❌ |
-| **Multi-step Reasoning** | ❌ | ✅ | ❌ |
-| **Nested Agents** | ❌ | ✅ | ❌ |
-| **Document Ingestion** | ❌ | ❌ | ✅ |
-| **PDF Support** | ❌ | ❌ | ✅ |
-| **Word Support** | ❌ | ❌ | ✅ |
-| **Text Support** | ❌ | ❌ | ✅ |
+## Configuration Patterns
 
-## Setup Instructions
+### Progressive Complexity
+Each example builds on the previous one:
+- **Minimal** → **Basic**: Adds tools and reasoning
+- **Basic** → **Multi-Agent**: Adds specialized workflow steps
+- **Multi-Agent** → **Dynamic**: Adds AI-driven adaptation
+- **Any** → **Document Processing**: Adds document intelligence
 
-1. **Replace API Keys**: 
-   - Update `YOUR_OPENAI_API_KEY_HERE` with your actual OpenAI API key
-   - Update `YOUR_COMPOSIO_API_KEY_HERE` with your Composio API key (for tool support)
-2. **Adjust Paths**: Modify source paths in `document-ingestion.yaml` to match your environment
-3. **Choose Provider**: In `basic.yaml`, uncomment either OpenAI or Ollama configuration
-4. **Prerequisites**: Ensure Ollama and Qdrant are running for local examples
+### Common Patterns
+- **Root-level inheritance**: All examples use configuration inheritance
+- **Provider defaults**: Minimal explicit configuration, maximum smart defaults
+- **Modular design**: Each component can be independently configured
+- **Tool integration**: MCP protocol for external tool access
 
-## Prerequisites
+## Getting Started
 
-```bash
-# For Ollama examples
-ollama serve
+1. **Start simple**: Begin with `minimal.yaml`
+2. **Add tools**: Move to `basic.yaml` for tool integration
+3. **Scale up**: Use `multi-agent.yaml` for complex workflows
+4. **Go creative**: Try `dynamic-reasoning.yaml` for open-ended problems
+5. **Add documents**: Use `document-processing.yaml` for knowledge work
 
-# For Qdrant
-docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
-```
+## Tips
 
-## CLI Commands
-
-Once running, try these commands:
-
-```bash
-# Document ingestion
-/list-models
-/sync-model documents
-/search "your query" documents
-
-# General
-/help
-/tools
-/quit
-```
+- **API Keys**: Replace `YOUR_*_API_KEY_HERE` with actual keys
+- **Local Setup**: Use `hector` (no config) for local Ollama + Qdrant
+- **Customization**: Mix and match configurations from different examples
+- **Debugging**: Add `verbose: true` to any workflow for detailed output

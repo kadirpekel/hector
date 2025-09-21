@@ -1,0 +1,75 @@
+# Hector Agent - Multi-Agent Example
+# Multi-step workflow with specialized agents
+
+agent:
+  name: "Hector Multi-Agent"
+  description: "Multi-agent system with specialized roles"
+
+# Root-level defaults (inherited by all agents)
+llm:
+  name: "openai"
+  api_key: "YOUR_OPENAI_API_KEY_HERE"
+  model: "gpt-4o"
+
+memory:
+  name: "qdrant"
+
+embedder:
+  name: "ollama"
+
+# Tool Integration
+mcp_servers:
+  - name: "composio"
+    url: "https://apollo.composio.dev/v3/mcp/"
+    description: "Research and analysis tools"
+    config:
+      api_key: "YOUR_COMPOSIO_API_KEY_HERE"
+
+# Multi-Agent Workflow
+workflow:
+  max_steps: 3
+  verbose: true
+  
+  steps:
+    # Research Agent - Gathers information
+    - name: "researcher"
+      type: "analyze"
+      agent_config:
+        agent:
+          name: "Research Agent"
+          description: "Specialized in information gathering and analysis"
+        llm:
+          temperature: 0.3  # Lower temperature for factual research
+        reasoning:
+          max_iterations: 5
+          enable_meta_reasoning: true
+          enable_dynamic_tools: true
+    
+    # Analysis Agent - Processes and evaluates
+    - name: "analyzer"
+      type: "analyze"
+      agent_config:
+        agent:
+          name: "Analysis Agent"
+          description: "Specialized in data analysis and pattern recognition"
+        llm:
+          temperature: 0.2  # Very focused analysis
+          max_tokens: 1500
+        reasoning:
+          max_iterations: 7
+          enable_self_reflection: true
+          quality_threshold: 0.8
+    
+    # Synthesis Agent - Creates final response
+    - name: "synthesizer"
+      type: "execute"
+      agent_config:
+        agent:
+          name: "Synthesis Agent"
+          description: "Combines insights into coherent final response"
+        llm:
+          temperature: 0.6  # More creative for synthesis
+          max_tokens: 2000
+        reasoning:
+          max_iterations: 3
+          enable_meta_reasoning: true

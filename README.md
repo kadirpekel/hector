@@ -84,6 +84,25 @@ Forecast: High 72°F, Low 58°F
 The weather in San Francisco is currently 68°F and partly cloudy...
 ```
 
+## Try the Examples
+
+```bash
+# 1. Minimal setup (just API key)
+hector --config examples/minimal.yaml
+
+# 2. General purpose with tools  
+hector --config examples/basic.yaml
+
+# 3. Multi-agent workflows
+hector --config examples/multi-agent.yaml
+
+# 4. AI-driven reasoning
+hector --config examples/dynamic-reasoning.yaml
+
+# 5. Document processing
+hector --config examples/document-processing.yaml
+```
+
 ## Configuration Examples
 
 ### Minimal Setup
@@ -504,13 +523,15 @@ reasoning:
 
 ## Example Configurations
 
-Explore the [`examples/`](examples/) directory:
+Explore the [`examples/`](examples/) directory with **5 essential configurations**:
 
-- **[`minimal.yaml`](examples/minimal.yaml)** - Just an API key
-- **[`basic.yaml`](examples/basic.yaml)** - Tool integration
-- **[`advanced.yaml`](examples/advanced.yaml)** - Multi-agent workflows
-- **[`dynamic-mode.yaml`](examples/dynamic-mode.yaml)** - AI-driven reasoning
-- **[`document-ingestion.yaml`](examples/document-ingestion.yaml)** - Document processing
+| Example | Use Case | Key Features |
+|---------|----------|--------------|
+| **[`minimal.yaml`](examples/minimal.yaml)** | Getting started | Just an API key, smart defaults |
+| **[`basic.yaml`](examples/basic.yaml)** | General purpose | Tools, intelligent reasoning |
+| **[`multi-agent.yaml`](examples/multi-agent.yaml)** | Complex workflows | Specialized agents, inheritance |
+| **[`dynamic-reasoning.yaml`](examples/dynamic-reasoning.yaml)** | Creative problems | AI-driven adaptation, goal evolution |
+| **[`document-processing.yaml`](examples/document-processing.yaml)** | Knowledge management | PDF/Word/Text ingestion, search |
 
 ## CLI Commands
 
