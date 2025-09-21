@@ -31,6 +31,7 @@ Hector is a **declarative multi-agent AI framework** that lets you build sophist
 - **🧠 Advanced AI Reasoning**: Meta-reasoning, self-reflection, and goal evolution
 - **🔄 Hot-Swappable Providers**: Switch between LLMs, databases, and embedders seamlessly
 - **🛠️ MCP Tool Integration**: Native support for Model Context Protocol tools
+- **🖥️ Command-Line Tools**: Secure shell command execution with natural language interface
 - **📚 Document Intelligence**: Built-in PDF, Word, and text processing
 - **💡 Smart Defaults**: Sensible configurations that just work
 
@@ -82,6 +83,22 @@ Current: 68°F, Partly Cloudy
 Forecast: High 72°F, Low 58°F
 
 The weather in San Francisco is currently 68°F and partly cloudy...
+
+> How many files are in the current directory?
+Processing...
+27
+
+> Show me all Go files in this project
+Processing...
+./agent.go
+./config.go
+./mcp.go
+./native_tools.go
+[... 20 more files ...]
+
+> Count lines in all Go files
+Processing...
+9,233 total lines across 24 Go files
 ```
 
 ## Try the Examples
@@ -102,6 +119,84 @@ hector --config examples/dynamic-reasoning.yaml
 # 5. Document processing
 hector --config examples/document-processing.yaml
 ```
+
+## 🖥️ Command-Line Tools
+
+Hector includes **native command-line tool integration** that lets your AI agents execute shell commands securely. Perfect for file operations, system tasks, and development workflows.
+
+### Quick Demo
+
+```bash
+# Enable command tools in your config
+echo "
+llm:
+  name: openai
+  api_key: sk-your-key-here
+  
+command_tools:
+  allowed_commands: [ls, cat, head, tail, find, grep, wc, git]
+  working_directory: ./
+  max_execution_time_seconds: 30
+" > config.yaml
+
+hector --config config.yaml
+```
+
+**Try these natural language commands:**
+
+```
+> How many files are in this directory?
+→ Executes: ls | wc -l
+→ Result: 27
+
+> Show me the first 5 lines of README.md  
+→ Executes: head -5 README.md
+→ Result: [file content]
+
+> Find all Python files and count their lines
+→ Executes: find . -name "*.py" | xargs wc -l
+→ Result: Line counts per file + total
+
+> What's the git status?
+→ Executes: git status
+→ Result: [git status output]
+
+> Search for "TODO" in all Go files
+→ Executes: grep -r "TODO" --include="*.go" .
+→ Result: [search results]
+```
+
+### Security Features
+
+- **Sandboxed Execution**: Only allowed commands can run
+- **Working Directory Control**: Commands run in specified directory
+- **Timeout Protection**: Automatic termination of long-running commands
+- **Smart Command Parsing**: Handles pipes, redirects, and complex shell operations
+
+### Configuration
+
+```yaml
+command_tools:
+  # Commands the AI can execute
+  allowed_commands:
+    - "cat"      # File reading
+    - "head"     # File preview  
+    - "tail"     # Log monitoring
+    - "ls"       # Directory listing
+    - "find"     # File search
+    - "grep"     # Text search
+    - "wc"       # Counting
+    - "git"      # Version control
+    - "npm"      # Package management
+    - "go"       # Go commands
+    
+  # Security settings
+  working_directory: "./"
+  max_execution_time_seconds: 30
+  enable_sandboxing: true
+```
+
+**The AI naturally chooses the right commands** based on your requests - no rigid rules, just intelligent reasoning!
 
 ## Configuration Examples
 
@@ -160,6 +255,24 @@ models:
           pattern: "**/*.pdf"
         - source: "local_docs"
           pattern: "**/*.docx"
+```
+
+### Command-Line Tools
+```yaml
+llm:
+  name: "openai"
+  api_key: "sk-..."
+
+command_tools:
+  allowed_commands: [ls, cat, head, find, grep, wc, git, npm]
+  working_directory: "./"
+  max_execution_time_seconds: 30
+  enable_sandboxing: true
+
+# Now your AI can execute shell commands naturally:
+# "How many files are here?" → ls | wc -l
+# "Show me package.json" → cat package.json  
+# "Find all Python files" → find . -name "*.py"
 ```
 
 ## Configuration Reference
@@ -285,6 +398,26 @@ mcp_servers:
     description: "Weather and web tools" # Server description
     config:                           # Server-specific config
       api_key: "your-api-key"
+
+# Command-Line Tools Configuration
+command_tools:
+  allowed_commands:                   # Commands the AI can execute
+    - "cat"                           # File reading
+    - "head"                          # File preview
+    - "tail"                          # Log monitoring
+    - "ls"                            # Directory listing
+    - "find"                          # File search
+    - "grep"                          # Text search
+    - "wc"                            # Counting (words, lines, chars)
+    - "pwd"                           # Current directory
+    - "git"                           # Version control
+    - "npm"                           # Node.js package management
+    - "go"                            # Go language commands
+    - "curl"                          # HTTP requests
+    - "wget"                          # File downloads
+  working_directory: "./"             # Command execution directory
+  max_execution_time_seconds: 30      # Timeout for command execution
+  enable_sandboxing: true             # Enable security sandboxing
 ```
 
 ### Configuration Inheritance
