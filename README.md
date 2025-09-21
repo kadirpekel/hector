@@ -11,7 +11,7 @@
 
 **Declarative AI Agent Framework**
 
-Hector is a declarative AI agent framework built in Go that compiles to a single binary for easy deployment and setup. Define entire agent workflows through YAML configuration alone—from simple single-step agents to advanced AI-driven dynamic reasoning systems that adapt and evolve in real-time—without writing any code. Hector seamlessly integrates large language models, vector databases, MCP tools, and embedding providers into cohesive reasoning workflows.
+Hector is a declarative AI agent framework built in Go that compiles to a single binary for easy deployment and setup. It serves as both a **no-code tool for professionals** and an **agent framework for developers**—define entire agent workflows through YAML configuration alone, from simple single-step agents to advanced AI-driven dynamic reasoning systems that adapt and evolve in real-time, without writing any code. Hector seamlessly integrates large language models, vector databases, MCP tools, and embedding providers into cohesive reasoning workflows.
 
 [![Go Version](https://img.shields.io/badge/Go-1.23+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -21,6 +21,7 @@ Hector is a declarative AI agent framework built in Go that compiles to a single
 
 ## Why Hector?
 
+- **Dual-Purpose Design**: No-code tool for professionals and agent framework for developers
 - **Single Binary Deployment**: Built in Go and compiles to a single executable for easy distribution and setup
 - **Declarative Configuration**: Define entire agent workflows in YAML without programming
 - **Multi-Step Reasoning**: Sequential task decomposition with specialized sub-agents
@@ -497,3 +498,41 @@ Each ingested document automatically includes comprehensive metadata:
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+## Contributing 🤝
+
+We welcome contributions! Whether you're fixing bugs, adding features, or improving documentation, your help makes Hector better for everyone.
+
+### Quick Start for Contributors
+- 🐛 **Bug Reports**: Use GitHub Issues with detailed reproduction steps
+- ✨ **Feature Requests**: Open an issue to discuss new ideas
+- 🔧 **Code Contributions**: Fork, branch, and submit a pull request
+- 📚 **Documentation**: Help improve examples and guides
+
+### Development Setup
+```bash
+# Clone and build
+git clone https://github.com/kadirpekel/hector.git
+cd hector
+go build -o hector cmd/hector/main.go
+
+# Run tests
+go test ./...
+```
+
+For more details, see our [Contributing Guidelines](CONTRIBUTING.md) (coming soon).
+
+---
+
+## Community & Support 💬
+
+- 📖 **Documentation**: Check the `/examples/` directory for configuration examples
+- 🐛 **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/kadirpekel/hector/issues)
+- 💡 **Discussions**: Join the conversation in [GitHub Discussions](https://github.com/kadirpekel/hector/discussions)
+- ⭐ **Star**: If you find Hector useful, give it a star!
+
+---
+
+*Built with ❤️ in Go. Making AI agents accessible to everyone.*
