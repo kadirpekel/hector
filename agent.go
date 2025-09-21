@@ -22,14 +22,14 @@ type Agent struct {
 	config         *AgentConfig   // Full agent configuration for access to reasoning config
 
 	// Components with their own configs
-	llm          llms.LLMProvider
-	db           databases.VectorDB
-	embedder     embedders.EmbeddingProvider
-	searchEngine *SearchEngine
-	mcp          *MCPInfrastructure
-	commandTools *CommandToolRegistry // Native command-line tools
-	history      *ConversationHistory
-	memory       *AgentMemory
+	llm             llms.LLMProvider
+	db              databases.VectorDB
+	embedder        embedders.EmbeddingProvider
+	searchEngine    *SearchEngine
+	mcp             *MCPInfrastructure
+	commandExecutor *CommandExecutor // Native command-line tools
+	history         *ConversationHistory
+	memory          *AgentMemory
 
 	// Model and ingestion management
 	modelManager *ModelManager
@@ -98,11 +98,11 @@ func NewAgent() *Agent {
 		},
 
 		// Initialize components
-		mcp:          NewMCPInfrastructure(),
-		commandTools: NewCommandToolRegistry(nil), // Initialize with default security config
-		history:      NewConversationHistory("default"),
-		memory:       NewAgentMemory(),
-		parent:       nil, // No parent by default
+		mcp:             NewMCPInfrastructure(),
+		commandExecutor: NewCommandExecutor(nil), // Initialize with default security config
+		history:         NewConversationHistory("default"),
+		memory:          NewAgentMemory(),
+		parent:          nil, // No parent by default
 	}
 
 	return agent
@@ -577,7 +577,7 @@ func (a *Agent) executeAgentStepStreaming(step WorkflowStep, ctx *WorkflowContex
 		if stepAgent.mcp != nil && len(stepAgent.mcp.ListTools()) > 0 {
 			hasTools = true
 		}
-		if stepAgent.commandTools != nil && len(stepAgent.commandTools.ListTools()) > 0 {
+		if stepAgent.commandExecutor != nil {
 			hasTools = true
 		}
 
@@ -692,7 +692,7 @@ func (a *Agent) executeAgentStep(step WorkflowStep, ctx *WorkflowContext, _ ...s
 	if stepAgent.mcp != nil && len(stepAgent.mcp.ListTools()) > 0 {
 		hasTools = true
 	}
-	if stepAgent.commandTools != nil && len(stepAgent.commandTools.ListTools()) > 0 {
+	if stepAgent.commandExecutor != nil {
 		hasTools = true
 	}
 
@@ -723,12 +723,12 @@ func (a *Agent) createStepAgent(step WorkflowStep) *Agent {
 
 	// Create a new agent with step-specific configuration
 	stepAgent := &Agent{
-		WorkflowConfig: step.AgentConfig.Workflow,
-		parent:         a,              // Set parent for fallback hierarchy
-		commandTools:   a.commandTools, // Inherit command tools from parent
-		mcp:            a.mcp,          // Inherit MCP infrastructure from parent
-		history:        a.history,      // Inherit conversation history from parent
-		memory:         a.memory,       // Inherit memory from parent
+		WorkflowConfig:  step.AgentConfig.Workflow,
+		parent:          a,                 // Set parent for fallback hierarchy
+		commandExecutor: a.commandExecutor, // Inherit command executor from parent
+		mcp:             a.mcp,             // Inherit MCP infrastructure from parent
+		history:         a.history,         // Inherit conversation history from parent
+		memory:          a.memory,          // Inherit memory from parent
 	}
 
 	// Initialize step agent components
@@ -985,11 +985,11 @@ func (a *Agent) ExecuteQueryStreaming(query string, modelNames ...string) (<-cha
 func (a *Agent) executeToolsForQuery(query string) map[string]ToolResult {
 	toolResults := make(map[string]ToolResult)
 
-	// Get available tools from MCP and command tools
+	// Get available tools from MCP and command executor
 	availableTools := a.mcp.ListTools()
-	if a.commandTools != nil {
-		commandTools := a.commandTools.ListTools()
-		availableTools = append(availableTools, commandTools...)
+	if a.commandExecutor != nil {
+		commandTool := a.commandExecutor.GetToolInfo()
+		availableTools = append(availableTools, commandTool)
 	}
 
 	if len(availableTools) == 0 {
@@ -1058,15 +1058,13 @@ func (a *Agent) executeToolWithRetry(originalQuery string, toolName string, para
 	var err error
 
 	// Check if it's a command tool first
-	if a.commandTools != nil {
-		if _, exists := a.commandTools.GetTool(toolName); exists {
-			result, err = a.commandTools.ExecuteTool(context.Background(), toolName, params)
-		} else {
-			// Execute via MCP
-			result, err = a.mcp.ExecuteTool(context.Background(), toolName, params)
-		}
+	if a.commandExecutor != nil && toolName == "execute_command" {
+		// Extract command and working_dir from params
+		command, _ := params["command"].(string)
+		workingDir, _ := params["working_dir"].(string)
+		result, err = a.commandExecutor.Execute(context.Background(), command, workingDir)
 	} else {
-		// Execute via MCP only
+		// Execute via MCP
 		result, err = a.mcp.ExecuteTool(context.Background(), toolName, params)
 	}
 

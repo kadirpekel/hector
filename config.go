@@ -421,7 +421,7 @@ func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 
 	// Configure command tools with custom security settings if provided
 	if config.CommandTools != nil {
-		agent.commandTools = NewCommandToolRegistry(config.CommandTools)
+		agent.commandExecutor = NewCommandExecutor(config.CommandTools)
 	}
 
 	// Ensure workflow has at least one step

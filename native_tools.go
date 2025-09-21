@@ -8,25 +8,7 @@ import (
 	"time"
 )
 
-// ============================================================================
-// COMMAND-LINE TOOL INFRASTRUCTURE
-// ============================================================================
-
-// CommandTool represents a command-line tool that can be executed directly
-type CommandTool interface {
-	Name() string
-	Description() string
-	Parameters() []ToolParameter
-	Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error)
-}
-
-// CommandToolRegistry manages command-line tools
-type CommandToolRegistry struct {
-	tools       map[string]CommandTool
-	permissions *SecurityConfig
-}
-
-// SecurityConfig defines security boundaries for command-line tools
+// SecurityConfig defines security boundaries for command execution
 type SecurityConfig struct {
 	AllowedCommands  []string `yaml:"allowed_commands" json:"allowed_commands"`
 	WorkingDirectory string   `yaml:"working_directory" json:"working_directory"`
@@ -34,224 +16,135 @@ type SecurityConfig struct {
 	EnableSandboxing bool     `yaml:"enable_sandboxing" json:"enable_sandboxing"`
 }
 
-// NewCommandToolRegistry creates a new command-line tool registry
-func NewCommandToolRegistry(permissions *SecurityConfig) *CommandToolRegistry {
-	if permissions == nil {
-		permissions = &SecurityConfig{
+// CommandExecutor handles secure command execution
+type CommandExecutor struct {
+	config *SecurityConfig
+}
+
+// NewCommandExecutor creates a new command executor
+func NewCommandExecutor(config *SecurityConfig) *CommandExecutor {
+	if config == nil {
+		config = &SecurityConfig{
 			AllowedCommands: []string{
-				// File operations
-				"cat", "head", "tail", "less", "more",
-				"ls", "dir", "find", "locate", "which", "whereis",
-				"cp", "mv", "rm", "mkdir", "rmdir", "touch",
-				"chmod", "chown", "stat", "file", "du", "df",
-				// Text processing
-				"grep", "awk", "sed", "sort", "uniq", "cut", "paste",
-				"wc", "tr", "diff", "patch",
-				// System info
-				"pwd", "whoami", "id", "uname", "uptime", "ps", "top",
-				"free", "df", "mount", "env", "printenv",
-				// Development tools
-				"git", "npm", "node", "python", "go", "gcc", "make",
-				"curl", "wget", "ssh", "scp", "rsync",
+				"cat", "head", "tail", "ls", "find", "grep", "wc", "pwd",
+				"git", "npm", "go", "curl", "wget",
 			},
 			WorkingDirectory: "./",
 			MaxExecutionTime: 30,
 			EnableSandboxing: true,
 		}
 	}
-
-	registry := &CommandToolRegistry{
-		tools:       make(map[string]CommandTool),
-		permissions: permissions,
-	}
-
-	// Register default tools
-	registry.registerDefaultTools()
-
-	return registry
+	return &CommandExecutor{config: config}
 }
 
-// registerDefaultTools registers the default set of command-line tools
-func (r *CommandToolRegistry) registerDefaultTools() {
-	// Single unified command execution tool
-	r.RegisterTool(&ExecuteCommandTool{permissions: r.permissions})
-}
-
-// RegisterTool registers a command-line tool
-func (r *CommandToolRegistry) RegisterTool(tool CommandTool) {
-	r.tools[tool.Name()] = tool
-}
-
-// GetTool retrieves a command-line tool by name
-func (r *CommandToolRegistry) GetTool(name string) (CommandTool, bool) {
-	tool, exists := r.tools[name]
-	return tool, exists
-}
-
-// ListTools returns all registered command-line tools
-func (r *CommandToolRegistry) ListTools() []ToolInfo {
-	var tools []ToolInfo
-	for _, tool := range r.tools {
-		tools = append(tools, ToolInfo{
-			Name:        tool.Name(),
-			Description: tool.Description(),
-			Parameters:  tool.Parameters(),
-			ServerURL:   "command", // Mark as command-line tool
-		})
-	}
-	return tools
-}
-
-// ExecuteTool executes a command-line tool
-func (r *CommandToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}) (ToolResult, error) {
-	tool, exists := r.GetTool(toolName)
-	if !exists {
-		return ToolResult{
-			Content:  "",
-			Success:  false,
-			Error:    fmt.Sprintf("command tool %s not found", toolName),
-			ToolName: toolName,
-		}, fmt.Errorf("command tool %s not found", toolName)
-	}
-
-	// Add timeout context if configured
-	if r.permissions.MaxExecutionTime > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(r.permissions.MaxExecutionTime)*time.Second)
-		defer cancel()
-	}
-
-	startTime := time.Now()
-	result, err := tool.Execute(ctx, args)
-	executionTime := time.Since(startTime).Milliseconds()
-
-	if err != nil {
-		return ToolResult{
-			Content:       "",
-			Success:       false,
-			Error:         err.Error(),
-			ToolName:      toolName,
-			ExecutionTime: executionTime,
-		}, err
-	}
-
-	result.ExecutionTime = executionTime
-	return result, nil
-}
-
-// ============================================================================
-// COMMAND LINE TOOLS
-// ============================================================================
-
-// ExecuteCommandTool executes shell commands - unified tool for all command-line operations
-type ExecuteCommandTool struct {
-	permissions *SecurityConfig
-}
-
-func (e *ExecuteCommandTool) Name() string {
-	return "execute_command"
-}
-
-func (e *ExecuteCommandTool) Description() string {
-	return "Execute shell commands for file operations, system tasks, and development workflows. Supports all standard Unix commands like ls, cat, grep, find, git, npm, etc."
-}
-
-func (e *ExecuteCommandTool) Parameters() []ToolParameter {
-	return []ToolParameter{
-		{
-			Name:        "command",
-			Type:        "string",
-			Description: "Full command to execute (e.g., 'ls -la', 'cat file.txt', 'git status')",
-			Required:    true,
-		},
-		{
-			Name:        "working_dir",
-			Type:        "string",
-			Description: "Working directory for the command (optional, defaults to configured directory)",
-			Required:    false,
-		},
-	}
-}
-
-func (e *ExecuteCommandTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
-	command, ok := args["command"].(string)
-	if !ok {
-		return ToolResult{Success: false, Error: "command parameter is required"}, fmt.Errorf("command parameter is required")
-	}
-
-	// Parse command into parts
-	parts := strings.Fields(command)
-	if len(parts) == 0 {
+// Execute runs a command with security checks
+func (e *CommandExecutor) Execute(ctx context.Context, command string, workingDir string) (ToolResult, error) {
+	if command == "" {
 		return ToolResult{Success: false, Error: "empty command"}, fmt.Errorf("empty command")
 	}
 
-	baseCommand := parts[0]
-	cmdArgs := parts[1:]
-
-	// Check if command is allowed
-	if !e.permissions.isCommandAllowed(baseCommand) {
-		return ToolResult{Success: false, Error: "command not allowed"}, fmt.Errorf("command not allowed: %s", baseCommand)
-	}
-
 	// Set working directory
-	workingDir := e.permissions.WorkingDirectory
-	if wdArg, ok := args["working_dir"].(string); ok && wdArg != "" {
-		workingDir = wdArg
+	if workingDir == "" {
+		workingDir = e.config.WorkingDirectory
 	}
 
-	// Create command
-	cmd := exec.CommandContext(ctx, baseCommand, cmdArgs...)
+	// Security check - extract base command for validation
+	baseCmd := e.extractBaseCommand(command)
+	if e.config.EnableSandboxing && !e.isCommandAllowed(baseCmd) {
+		return ToolResult{Success: false, Error: "command not allowed"},
+			fmt.Errorf("command not allowed: %s", baseCmd)
+	}
+
+	// Add timeout if configured
+	if e.config.MaxExecutionTime > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(e.config.MaxExecutionTime)*time.Second)
+		defer cancel()
+	}
+
+	// Always use shell for consistent behavior
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Dir = workingDir
 
-	// Execute command
+	startTime := time.Now()
 	output, err := cmd.CombinedOutput()
+	executionTime := time.Since(startTime).Milliseconds()
 
-	// Create result
 	result := ToolResult{
-		Content:  string(output),
-		Success:  err == nil,
-		ToolName: e.Name(),
+		Content:       string(output),
+		Success:       err == nil,
+		ToolName:      "execute_command",
+		ExecutionTime: executionTime,
 		Metadata: map[string]interface{}{
-			"command":      command,
-			"base_command": baseCommand,
-			"args":         cmdArgs,
-			"working_dir":  workingDir,
+			"command":     command,
+			"working_dir": workingDir,
 		},
 	}
 
 	if err != nil {
 		result.Error = err.Error()
-		// Try to get exit code
 		if exitError, ok := err.(*exec.ExitError); ok {
 			result.Metadata["exit_code"] = exitError.ExitCode()
 		}
-		return result, err
 	}
 
-	// Success case
-	if cmd.ProcessState != nil {
-		result.Metadata["exit_code"] = cmd.ProcessState.ExitCode()
-	}
-
-	return result, nil
+	return result, err
 }
 
-// ============================================================================
-// SECURITY HELPER METHODS
-// ============================================================================
+// extractBaseCommand gets the first command from a complex shell command
+func (e *CommandExecutor) extractBaseCommand(command string) string {
+	// Handle pipes, redirects, etc. - get the first command
+	parts := strings.FieldsFunc(command, func(r rune) bool {
+		return r == '|' || r == '>' || r == '<' || r == ';'
+	})
 
-// isCommandAllowed checks if a command is allowed based on security configuration
-func (s *SecurityConfig) isCommandAllowed(command string) bool {
-	if !s.EnableSandboxing {
+	if len(parts) == 0 {
+		return ""
+	}
+
+	// Get first word of first command
+	firstCmd := strings.TrimSpace(parts[0])
+	cmdParts := strings.Fields(firstCmd)
+	if len(cmdParts) == 0 {
+		return ""
+	}
+
+	return cmdParts[0]
+}
+
+// isCommandAllowed checks if a command is allowed
+func (e *CommandExecutor) isCommandAllowed(command string) bool {
+	if !e.config.EnableSandboxing {
 		return true
 	}
 
-	// Check against allowed commands
-	for _, allowedCmd := range s.AllowedCommands {
-		if command == allowedCmd {
+	for _, allowed := range e.config.AllowedCommands {
+		if command == allowed {
 			return true
 		}
 	}
-
 	return false
+}
+
+// GetToolInfo returns tool information for the LLM
+func (e *CommandExecutor) GetToolInfo() ToolInfo {
+	return ToolInfo{
+		Name:        "execute_command",
+		Description: "Execute shell commands for file operations, system tasks, and development workflows",
+		Parameters: []ToolParameter{
+			{
+				Name:        "command",
+				Type:        "string",
+				Description: "Shell command to execute (supports pipes, redirects, etc.)",
+				Required:    true,
+			},
+			{
+				Name:        "working_dir",
+				Type:        "string",
+				Description: "Working directory (optional)",
+				Required:    false,
+			},
+		},
+		ServerURL: "command",
+	}
 }
