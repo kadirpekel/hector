@@ -23,22 +23,23 @@ const (
 	DefaultEmbedderProvider = "ollama"
 )
 
-// AgentConfig represents the complete agent configuration
+// AgentConfig represents the complete agent configuration (workflow-first architecture)
 type AgentConfig struct {
-	Agent      AgentInfo          `yaml:"agent"`
-	LLM        YAMLProviderConfig `yaml:"llm"`
-	Memory     YAMLProviderConfig `yaml:"memory"`
-	Embedder   YAMLProviderConfig `yaml:"embedder"`
-	Search     SearchConfig       `yaml:"search"`
-	Models     []ModelConfig      `yaml:"models"`
-	MCPServers []MCPServerConfig  `yaml:"mcp_servers"`
-	Reasoning  ReasoningConfig    `yaml:"reasoning"`
+	Agent      AgentInfo               `yaml:"agent"`
+	LLM        YAMLProviderConfig      `yaml:"llm,omitempty"`         // LLM configuration for this agent
+	Memory     YAMLProviderConfig      `yaml:"memory,omitempty"`      // Memory/database configuration
+	Embedder   YAMLProviderConfig      `yaml:"embedder,omitempty"`    // Embedder configuration
+	Search     SearchConfig            `yaml:"search,omitempty"`      // Search configuration
+	Reasoning  *DynamicReasoningConfig `yaml:"reasoning,omitempty"`   // AI reasoning configuration
+	Workflow   WorkflowConfig          `yaml:"workflow,omitempty"`    // Workflow configuration (for multi-step agents)
+	Models     []ModelConfig           `yaml:"models,omitempty"`      // Document models for search
+	MCPServers []MCPServerConfig       `yaml:"mcp_servers,omitempty"` // MCP server configurations
 
-	// New global configurations
-	Sources map[string]SourceConfig `yaml:"sources"`
+	// Global configurations (optional, used as defaults)
+	Sources map[string]SourceConfig `yaml:"sources,omitempty"`
 }
 
-// SetDefaults sets default values for AgentConfig
+// SetDefaults sets default values for AgentConfig (workflow-first architecture)
 func (a *AgentConfig) SetDefaults() {
 	// Set default agent info if not specified
 	if a.Agent.Name == "" {
@@ -63,11 +64,11 @@ func (a *AgentConfig) SetDefaults() {
 		}
 	}
 
-	// Set defaults for reasoning configuration
-	a.Reasoning.SetDefaults()
-
 	// Set defaults for search configuration
 	a.Search.SetDefaults()
+
+	// Set defaults for workflow configuration
+	a.Workflow.SetDefaults()
 }
 
 // AgentInfo contains basic agent information
@@ -172,62 +173,58 @@ func (s *SearchConfig) SetDefaults() {
 	}
 }
 
-// ReasoningConfig holds reasoning and execution configuration
-type ReasoningConfig struct {
-	Strategy        string                  `yaml:"strategy"`
-	MaxSteps        int                     `yaml:"max_steps"`
-	MaxRetries      int                     `yaml:"max_retries"`
-	EnableRetry     bool                    `yaml:"enable_retry"`
-	EnableFeedback  bool                    `yaml:"enable_feedback"`
-	StreamingMode   string                  `yaml:"streaming_mode"`
-	Verbose         bool                    `yaml:"verbose"`
-	VerboseTemplate string                  `yaml:"verbose_template"` // Template for verbose output formatting
-	ToolExecution   ToolExecutionConfig     `yaml:"tool_execution"`
-	Steps           []ReasoningStep         `yaml:"steps"`
-	ErrorHandling   ErrorHandlingConfig     `yaml:"error_handling"`
-	Context         ContextConfig           `yaml:"context"`
-	Dynamic         *DynamicReasoningConfig `yaml:"dynamic,omitempty"` // Dynamic reasoning configuration
+// WorkflowConfig holds agent workflow configuration
+type WorkflowConfig struct {
+	MaxSteps        int                 `yaml:"max_steps"`
+	StreamingMode   string              `yaml:"streaming_mode"`
+	Verbose         bool                `yaml:"verbose"`
+	VerboseTemplate string              `yaml:"verbose_template"` // Template for verbose output formatting
+	ToolExecution   ToolExecutionConfig `yaml:"tool_execution"`
+	Steps           []WorkflowStep      `yaml:"steps"`
+	ErrorHandling   ErrorHandlingConfig `yaml:"error_handling"`
+	Context         ContextConfig       `yaml:"context"`
 }
 
-// SetDefaults sets default values for ReasoningConfig
-func (r *ReasoningConfig) SetDefaults() {
-	if r.Strategy == "" {
-		r.Strategy = "auto" // Auto mode intelligently selects optimal strategy
+// SetDefaults sets default values for WorkflowConfig
+func (w *WorkflowConfig) SetDefaults() {
+	if w.MaxSteps == 0 {
+		w.MaxSteps = 5 // Allow multiple steps by default
 	}
-	if r.MaxSteps == 0 {
-		r.MaxSteps = 1
-	}
-	if r.MaxRetries == 0 {
-		r.MaxRetries = 2
-	}
-	if r.StreamingMode == "" {
-		// Set default streaming mode based on strategy
-		if r.Strategy == "simple" {
-			r.StreamingMode = "all_steps" // Simple mode can stream normally
-		} else {
-			r.StreamingMode = "final_only" // Multi-step modes default to final only
-		}
+	if w.StreamingMode == "" {
+		w.StreamingMode = "all_steps" // Default to streaming all steps
 	}
 	// Verbose defaults to false (clean output by default)
 	// VerboseTemplate defaults to terminal format when verbose is enabled
-	if r.VerboseTemplate == "" {
-		r.VerboseTemplate = "\033[90m{{.Message}}\033[0m" // Default terminal gray
+	if w.VerboseTemplate == "" {
+		w.VerboseTemplate = "\033[90m{{.Message}}\033[0m" // Default terminal gray
 	}
 
-	// If no steps are specified, create a default step
-	if len(r.Steps) == 0 {
-		r.Steps = []ReasoningStep{
+	// If no steps are specified, create a default step with minimal agent config
+	if len(w.Steps) == 0 {
+		w.Steps = []WorkflowStep{
 			{
 				Name:    "main",
 				Type:    "execute",
 				Enabled: true,
+				AgentConfig: &AgentConfig{
+					Agent: AgentInfo{
+						Name:        "main-agent",
+						Description: "Main workflow agent",
+					},
+					// LLM, Memory, Embedder will use defaults if not specified
+				},
 			},
 		}
 	}
 
-	r.ToolExecution.SetDefaults()
-	r.ErrorHandling.SetDefaults()
-	r.Context.SetDefaults()
+	// Set defaults for all workflow steps
+	for i := range w.Steps {
+		w.Steps[i].SetDefaults()
+	}
+
+	w.ToolExecution.SetDefaults()
+	w.ErrorHandling.SetDefaults()
+	w.Context.SetDefaults()
 }
 
 // ToolExecutionConfig holds tool execution specific settings
@@ -252,23 +249,59 @@ func (t *ToolExecutionConfig) SetDefaults() {
 }
 
 // ReasoningStep defines a custom reasoning step
-type ReasoningStep struct {
-	Name        string                 `yaml:"name"`
-	Description string                 `yaml:"description"`
-	Type        string                 `yaml:"type"`
-	Enabled     bool                   `yaml:"enabled"`
-	AgentConfig *AgentConfig           `yaml:"agent_config,omitempty"`
-	Config      map[string]interface{} `yaml:"config,omitempty"`
+// WorkflowStep defines a workflow step with its own agent configuration
+type WorkflowStep struct {
+	Name        string       `yaml:"name"`
+	Description string       `yaml:"description"`
+	Type        string       `yaml:"type"`
+	Enabled     bool         `yaml:"enabled"`
+	AgentConfig *AgentConfig `yaml:"agent_config,omitempty"`
 }
 
-// SetDefaults sets default values for ReasoningStep
-func (r *ReasoningStep) SetDefaults() {
-	if !r.Enabled {
-		r.Enabled = true // Enable steps by default
+// SetDefaults sets default values for WorkflowStep
+func (w *WorkflowStep) SetDefaults() {
+	if !w.Enabled {
+		w.Enabled = true // Enable steps by default
 	}
-	if r.Type == "" {
-		r.Type = "execute" // Default to execute type
+	if w.Type == "" {
+		w.Type = "execute" // Default to execute type
 	}
+
+	// Ensure each step has an AgentConfig
+	if w.AgentConfig == nil {
+		w.AgentConfig = &AgentConfig{
+			Agent: AgentInfo{
+				Name:        w.Name + "-agent",
+				Description: "Agent for " + w.Name + " step",
+			},
+			// LLM, Memory, Embedder will use defaults if not specified
+		}
+	}
+
+	// Set defaults for the step's agent config (but avoid recursion by not calling workflow defaults)
+	if w.AgentConfig.Agent.Name == "" {
+		w.AgentConfig.Agent.Name = w.Name + "-agent"
+	}
+	if w.AgentConfig.Agent.Description == "" {
+		w.AgentConfig.Agent.Description = "Agent for " + w.Name + " step"
+	}
+
+	// Set LLM defaults for step's agent config
+	if w.AgentConfig.LLM.Name != "" && len(w.AgentConfig.LLM.Config) > 0 {
+		if _, hasModel := w.AgentConfig.LLM.Config["model"]; !hasModel {
+			switch w.AgentConfig.LLM.Name {
+			case "openai":
+				w.AgentConfig.LLM.Config["model"] = "gpt-4o-mini"
+			case "ollama":
+				w.AgentConfig.LLM.Config["model"] = "llama3.2"
+			case "tgi":
+				w.AgentConfig.LLM.Config["model"] = "microsoft/DialoGPT-medium"
+			}
+		}
+	}
+
+	// Set search defaults for step's agent config
+	w.AgentConfig.Search.SetDefaults()
 }
 
 // ErrorHandlingConfig holds error handling settings
@@ -373,18 +406,30 @@ func LoadAgentFromFile(filename string) (*Agent, error) {
 	return createAgentFromConfig(&config)
 }
 
-// createAgentFromConfig creates an Agent instance from configuration
+// createAgentFromConfig creates an Agent instance from configuration (workflow-first architecture)
 func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 	agent := NewAgent()
+	agent.config = config // Store full config for access to reasoning settings
 
-	// Configure LLM (required)
-	if err := configureProvider(agent, &config.LLM, "llm"); err != nil {
-		return nil, fmt.Errorf("failed to configure LLM: %w", err)
+	// Ensure workflow has at least one step
+	if len(config.Workflow.Steps) == 0 {
+		return nil, fmt.Errorf("workflow must have at least one step")
 	}
 
-	// Configure Database (use defaults if not specified)
-	if config.Memory.Name != "" {
-		if err := configureProvider(agent, &config.Memory, "database"); err != nil {
+	// Use the first workflow step as the main agent configuration
+	mainStep := config.Workflow.Steps[0]
+	if mainStep.AgentConfig == nil {
+		return nil, fmt.Errorf("first workflow step must have agent_config")
+	}
+
+	// Configure LLM from main step (required)
+	if err := configureProvider(agent, &mainStep.AgentConfig.LLM, "llm"); err != nil {
+		return nil, fmt.Errorf("failed to configure LLM from main step: %w", err)
+	}
+
+	// Configure Database from main step (use defaults if not specified)
+	if mainStep.AgentConfig.Memory.Name != "" {
+		if err := configureProvider(agent, &mainStep.AgentConfig.Memory, "database"); err != nil {
 			return nil, fmt.Errorf("failed to configure memory database: %w", err)
 		}
 	} else {
@@ -405,9 +450,9 @@ func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 		}
 	}
 
-	// Configure Embedder (use defaults if not specified)
-	if config.Embedder.Name != "" {
-		if err := configureProvider(agent, &config.Embedder, "embedder"); err != nil {
+	// Configure Embedder from main step (use defaults if not specified)
+	if mainStep.AgentConfig.Embedder.Name != "" {
+		if err := configureProvider(agent, &mainStep.AgentConfig.Embedder, "embedder"); err != nil {
 			return nil, fmt.Errorf("failed to configure embedder: %w", err)
 		}
 	} else {
@@ -428,37 +473,45 @@ func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 		agent.WithEmbedder(embedder)
 	}
 
-	// Configure MCP Servers and discover tools
-	if err := configureMCPServers(agent, config.MCPServers); err != nil {
+	// Configure MCP Servers from main step and global config
+	mcpServers := config.MCPServers // Global MCP servers
+	if mainStep.AgentConfig.MCPServers != nil {
+		mcpServers = append(mcpServers, mainStep.AgentConfig.MCPServers...)
+	}
+	if err := configureMCPServers(agent, mcpServers); err != nil {
 		return nil, fmt.Errorf("failed to configure MCP servers: %w", err)
 	}
 
-	// Configure models (always configure since we now always have memory database)
-	if err := configureModels(agent, config.Models); err != nil {
+	// Configure models from main step and global config
+	models := config.Models // Global models
+	if mainStep.AgentConfig.Models != nil {
+		models = append(models, mainStep.AgentConfig.Models...)
+	}
+	if err := configureModels(agent, models); err != nil {
 		return nil, fmt.Errorf("failed to configure models: %w", err)
 	}
 
 	// Initialize ModelManager with sources and models
 	if config.Sources != nil {
 		sourceManager := NewSourceManager(config.Sources)
-		agent.modelManager = NewModelManager(config.Models, sourceManager, agent)
+		agent.modelManager = NewModelManager(models, sourceManager, agent)
 		fmt.Printf("Initialized ModelManager with %d sources and %d models\n",
-			len(config.Sources), len(config.Models))
+			len(config.Sources), len(models))
 	}
 
 	// Configure reasoning
-	agent.ReasoningConfig = config.Reasoning
+	agent.WorkflowConfig = config.Workflow
 
 	// Set defaults for reasoning configuration
-	agent.ReasoningConfig.SetDefaults()
+	agent.WorkflowConfig.SetDefaults()
 
 	// Set defaults for reasoning steps
-	for i := range agent.ReasoningConfig.Steps {
-		agent.ReasoningConfig.Steps[i].SetDefaults()
+	for i := range agent.WorkflowConfig.Steps {
+		agent.WorkflowConfig.Steps[i].SetDefaults()
 	}
 
-	fmt.Printf("Loaded reasoning config: strategy=%s, max_steps=%d, steps_count=%d\n",
-		config.Reasoning.Strategy, config.Reasoning.MaxSteps, len(config.Reasoning.Steps))
+	fmt.Printf("Loaded reasoning config: max_steps=%d, steps_count=%d\n",
+		config.Workflow.MaxSteps, len(config.Workflow.Steps))
 
 	return agent, nil
 }

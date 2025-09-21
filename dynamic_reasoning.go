@@ -1465,11 +1465,11 @@ Make the response clear, well-structured, and comprehensive.`,
 	}
 
 	return &AgentResponse{
-		Answer:         answer,
-		Confidence:     d.context.QualityMetrics.OverallQuality,
-		TokensUsed:     totalTokens,
-		ReasoningSteps: d.convertToReasoningStepResults(),
-		Sources:        []string{}, // Dynamic mode doesn't use traditional sources
+		Answer:        answer,
+		Confidence:    d.context.QualityMetrics.OverallQuality,
+		TokensUsed:    totalTokens,
+		WorkflowSteps: d.convertToWorkflowStepResults(),
+		Sources:       []string{}, // Dynamic mode doesn't use traditional sources
 	}, nil
 }
 
@@ -1606,10 +1606,10 @@ func (d *DynamicReasoningEngine) formatContextHistory() string {
 
 // Helper methods for formatting context information
 
-func (d *DynamicReasoningEngine) convertToReasoningStepResults() []ReasoningStepResult {
-	var results []ReasoningStepResult
+func (d *DynamicReasoningEngine) convertToWorkflowStepResults() []WorkflowStepResult {
+	var results []WorkflowStepResult
 	for _, dynamicResult := range d.context.IterationResults {
-		results = append(results, ReasoningStepResult{
+		results = append(results, WorkflowStepResult{
 			StepName:   dynamicResult.StepName,
 			StepType:   dynamicResult.StepType,
 			Output:     dynamicResult.Output,

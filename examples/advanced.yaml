@@ -1,39 +1,11 @@
-# Hector Agent - Advanced Example
+# Hector Agent - Advanced Example (Workflow-First Architecture)
 # Covers multi-step reasoning, MCP tools, and nested agents
 
 agent:
   name: "Hector Advanced"
   description: "Advanced AI agent with multi-step reasoning and tool integration"
 
-llm:
-  name: "openai"
-  api_key: "YOUR_OPENAI_API_KEY_HERE"
-  model: "gpt-4o-mini"
-  temperature: 0.3
-  max_tokens: 1000
-
-memory:
-  name: "qdrant"
-  host: "localhost"
-  port: 6334
-  timeout: 30
-  use_tls: false
-  insecure: false
-
-embedder:
-  name: "ollama"
-  model: "nomic-embed-text"
-  host: "http://localhost:11434"
-  dimension: 768
-  timeout: 30
-  max_retries: 3
-
-search:
-  max_context_length: 2000
-  context_strategy: "relevance"
-  enable_reranking: false
-
-# MCP Servers Configuration (optional - comment out if not using tools)
+# Global MCP Servers Configuration
 mcp_servers:
   - name: "composio"
     url: "https://apollo.composio.dev/v3/mcp/..."
@@ -41,6 +13,7 @@ mcp_servers:
     config:
       api_key: "YOUR_COMPOSIO_API_KEY_HERE"
 
+# Global document models
 models:
   - name: "document"
     collection: "documents"
@@ -48,63 +21,108 @@ models:
     max_top_k: 100
 
 # Advanced Multi-Step Workflow
-reasoning:
-  strategy: "multi"
+workflow:
   max_steps: 4
   verbose: true
   context:
     preserve_history: true
     max_history_steps: 15
     enable_context_share: true
+  verbose_template: "[{{.Level}}] {{.Message}}"
   
   steps:
     - name: "research_coordinator"
       type: "analyze"
-      instruction: "Coordinate research activities and delegate to specialized agents"
+      enabled: true
       agent_config:
+        agent:
+          name: "Research Coordinator"
+          description: "Coordinates research activities and delegates to specialized agents"
         llm:
           name: "openai"
+          api_key: "YOUR_OPENAI_API_KEY_HERE"
           model: "gpt-4o-mini"
           temperature: 0.2
           max_tokens: 1000
+        memory:
+          name: "qdrant"
+          host: "localhost"
+          port: 6334
+          timeout: 30
+          use_tls: false
+          insecure: false
+        embedder:
+          name: "ollama"
+          model: "nomic-embed-text"
+          host: "http://localhost:11434"
+          dimension: 768
+          timeout: 30
+          max_retries: 3
+        search:
+          max_context_length: 2000
+          context_strategy: "relevance"
+          enable_reranking: false
         reasoning:
-          strategy: "multi"
+          max_iterations: 5
+          enable_meta_reasoning: true
+          enable_self_reflection: true
+          enable_dynamic_tools: true
+          quality_threshold: 0.8
+        # Nested workflow for this agent
+        workflow:
           max_steps: 2
           steps:
             - name: "data_collector"
               type: "execute"
-              instruction: "Collect data from various sources"
+              enabled: true
               agent_config:
+                agent:
+                  name: "Data Collector"
+                  description: "Collects data from various sources"
                 llm:
                   name: "openai"
+                  api_key: "YOUR_OPENAI_API_KEY_HERE"
                   model: "gpt-4o-mini"
                   temperature: 0.3
                   max_tokens: 1000
                 reasoning:
-                  strategy: "simple"
+                  max_iterations: 3
+                  enable_dynamic_tools: true
+                  quality_threshold: 0.7
             
             - name: "data_analyzer"
               type: "analyze"
-              instruction: "Analyze collected data for patterns and insights"
+              enabled: true
               agent_config:
+                agent:
+                  name: "Data Analyzer"
+                  description: "Analyzes collected data for patterns and insights"
                 llm:
                   name: "openai"
+                  api_key: "YOUR_OPENAI_API_KEY_HERE"
                   model: "gpt-4o-mini"
                   temperature: 0.2
                   max_tokens: 1500
                 reasoning:
-                  strategy: "simple"
+                  max_iterations: 4
+                  enable_meta_reasoning: true
+                  enable_self_reflection: true
+                  quality_threshold: 0.8
     
     - name: "synthesis_agent"
       type: "analyze"
-      instruction: "Synthesize findings from research coordinator into final response"
+      enabled: true
       agent_config:
+        agent:
+          name: "Synthesis Agent"
+          description: "Synthesizes findings from research coordinator into final response"
         llm:
           name: "openai"
+          api_key: "YOUR_OPENAI_API_KEY_HERE"
           model: "gpt-4o-mini"
           temperature: 0.4
           max_tokens: 2000
         reasoning:
-          strategy: "single"
-  
-  verbose_template: "[{{.Level}}] {{.Message}}"
+          max_iterations: 3
+          enable_meta_reasoning: true
+          quality_threshold: 0.8

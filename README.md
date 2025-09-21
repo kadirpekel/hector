@@ -9,9 +9,9 @@
  ╚═╝  ╚═╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
 ```
 
-**Declarative AI Agent Framework**
+**Workflow-First AI Agent Framework**
 
-Hector is a declarative AI agent framework that enables you to build sophisticated multi-step reasoning systems through YAML configuration alone. Define entire agent workflows declaratively—from simple single-step agents to advanced AI-driven dynamic reasoning systems that adapt and evolve in real-time—without writing any code. Hector seamlessly integrates large language models, vector databases, MCP tools, and embedding providers into cohesive reasoning workflows.
+Hector is a workflow-first AI agent framework that enables you to build sophisticated multi-agent systems through clean, intuitive YAML configuration. Define complete agent workflows declaratively—from simple single-step agents to complex multi-agent systems with advanced AI-driven dynamic reasoning—without any code. Every configuration follows a natural workflow-first structure where each step is a complete agent with its own LLM, memory, reasoning, and tools.
 
 [![Go Version](https://img.shields.io/badge/Go-1.23+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -23,13 +23,23 @@ Hector is a declarative AI agent framework that enables you to build sophisticat
 
 Hector distinguishes itself through:
 
-- **Declarative Configuration**: Define entire agent workflows in YAML without programming
-- **Multi-Step Reasoning**: Sequential task decomposition with specialized sub-agents
-- **Dynamic AI Reasoning**: Pure AI-driven reasoning that adapts and evolves autonomously
+- **Workflow-First Architecture**: Clean, intuitive configuration with no root-level confusion
+- **Complete Agent Steps**: Each workflow step is a full agent with LLM, memory, reasoning, and tools
+- **AI-Driven Reasoning**: Agents automatically choose between simple and dynamic reasoning
+- **Zero Configuration Conflicts**: Only one place to configure each agent - no root vs step confusion
+- **Natural Multi-Agent**: Every execution is multi-agent by default with seamless state flow
+- **Dynamic AI Reasoning**: Sophisticated reasoning with meta-reasoning, self-reflection, and goal evolution
 - **Integrated Ecosystem**: Seamless integration of LLM, vector DB, tools, and embedders
-- **Nested Agent Hierarchies**: Sub-agents with independent reasoning processes
-- **Context-Aware Memory**: Persistent conversation history and document retrieval
 - **Hot-Swappable Providers**: Switch between providers without code changes
+
+### Workflow-First Architecture Benefits
+
+- **Zero Confusion**: Only one place to configure each agent - no root vs step conflicts
+- **Intuitive Structure**: Configuration matches how users think about agent workflows
+- **Complete Agents**: Each step is a full agent with its own LLM, memory, reasoning, and tools
+- **Natural Scaling**: Add more steps easily without architectural changes
+- **Clean Inheritance**: Global configs (models, MCP servers) merge seamlessly with step configs
+- **Production Ready**: Clean, lean codebase with comprehensive testing
 
 ### Core Components
 
@@ -39,7 +49,7 @@ Hector distinguishes itself through:
 - **Embedding Providers**: Multiple embedding models for converting text to vector representations
 - **MCP Tools**: Model Context Protocol integration for external tool access and services
 - **Document Ingestion**: Automated document synchronization from multiple sources
-- **Reasoning Engine**: Four distinct modes (Simple, Multi, Auto, Dynamic) for different complexity levels
+- **Workflow Engine**: Unified execution engine with AI-driven complexity evaluation
 
 ## Architecture
 
@@ -54,8 +64,18 @@ Hector follows a modular architecture with clear separation of concerns:
          └───────────────────────┼───────────────────────┘
                                  │
                     ┌─────────────────┐
-                    │   Agent Core     │
-                    │  (Reasoning)    │
+                    │ Workflow Engine  │
+                    │ (Multi-Agent)   │
+                    └─────────────────┘
+                                 │
+                    ┌─────────────────┐
+                    │  Agent Steps    │
+                    │ (Full Agents)   │
+                    └─────────────────┘
+                                 │
+                    ┌─────────────────┐
+                    │ Dynamic Reasoning│
+                    │ (AI-Driven)     │
                     └─────────────────┘
                                  │
                     ┌─────────────────┐
@@ -64,58 +84,67 @@ Hector follows a modular architecture with clear separation of concerns:
                     └─────────────────┘
 ```
 
-## Reasoning Modes
+## Agent Workflows
 
-Hector supports four distinct reasoning modes, each optimized for different task complexities and requirements:
+Hector uses a unified multi-agent workflow approach where every execution is naturally multi-agent by default. The AI intelligently decides the complexity of reasoning needed for each agent step.
 
-### Simple Mode
-**Purpose**: Direct, single-step execution for straightforward queries
+### Workflow Architecture
 
-Simple Mode provides immediate response generation without multi-step reasoning. Ideal for:
-- Direct question answering
-- Simple calculations and computations
-- Basic information retrieval
-- Quick response generation
+**How it works**: 
+1. **User defines workflow steps** - Each step represents a specialized agent
+2. **Each step = Full agent** - Complete LLM, memory, and reasoning configuration
+3. **AI chooses reasoning complexity** - Simple for direct queries, dynamic for complex problems
+4. **Natural state flow** - Context flows seamlessly between agent steps
 
-**Configuration**:
+### Simple Workflow
+**Purpose**: Single-step execution with intelligent reasoning
+
 ```yaml
-reasoning:
-  strategy: "simple"
+workflow:
   max_steps: 1
   verbose: true
+  # Single step creates one agent that reasons intelligently
 ```
 
-### Multi Mode
-**Purpose**: Structured, sequential workflows with predefined steps
+### Multi-Agent Workflow
+**Purpose**: Structured workflows with specialized agents per step
 
-Multi Mode executes predetermined step sequences with specialized agents for each phase. Ideal for:
+Each step creates a full agent with its own configuration. Perfect for:
 - Structured business processes
 - Sequential data processing pipelines
 - Multi-step validation workflows
-- Predictable task sequences
+- Specialized agent collaboration
 
 **Configuration**:
 ```yaml
-reasoning:
-  strategy: "multi"
+workflow:
   max_steps: 4
+  verbose: true
   steps:
-    - name: "validate"
-      type: "execute"
-    - name: "process"
+    - name: "research_analyst"
       type: "analyze"
-    - name: "approve"
+      agent_config:
+        llm:
+          model: "gpt-4o"
+          temperature: 0.3
+    - name: "synthesis_expert"
       type: "execute"
+      agent_config:
+        llm:
+          model: "gpt-4o-mini"
+          temperature: 0.7
 ```
 
-### Dynamic Mode
-**Purpose**: AI reasoning that mirrors how advanced AI systems actually think
+### Dynamic Reasoning (Internal)
+**Purpose**: Sophisticated AI reasoning within each agent
 
-Dynamic Mode represents a breakthrough in AI reasoning—it works exactly like how sophisticated AI systems naturally reason. Instead of following predetermined steps, the AI creates its own reasoning process in real-time, adapting and evolving its approach as it gains insights. This mirrors the meta-cognitive processes that advanced AI systems use when tackling complex problems.
+Dynamic reasoning represents how advanced AI systems naturally think. Each agent can use dynamic reasoning internally, which:
+- **Meta-reasons** about its own thinking process
+- **Self-reflects** and adapts its approach
+- **Evolves goals** as understanding deepens
+- **Stops intelligently** when quality is optimal
 
-**How it works**: The AI meta-reasons about its own thinking, creates steps dynamically based on problem analysis, self-reflects and adapts its approach, evolves goals as understanding deepens, and stops when quality is optimal—just like how advanced AI systems naturally think.
-
-**Example reasoning flow**: When tackling a complex problem, the AI first analyzes what type of challenge it is, then creates reasoning steps on-the-fly (research → analyze → synthesize → validate), continuously self-reflects ("Am I on the right track?"), adapts its approach if needed ("I need a different angle"), evolves its understanding of the goal ("This is really about X, not Y"), and stops when it has reached optimal quality rather than following predetermined steps.
+**Example reasoning flow**: When an agent tackles a complex problem, it analyzes what type of challenge it is, creates reasoning steps on-the-fly (research → analyze → synthesize → validate), continuously self-reflects ("Am I on the right track?"), adapts its approach if needed ("I need a different angle"), and stops when it has reached optimal quality.
 
 Ideal for:
 - Creative problem solving and innovation
@@ -123,37 +152,41 @@ Ideal for:
 - Strategic planning with evolving requirements
 - Philosophical reasoning and deep analysis
 - Multi-domain knowledge synthesis
-- Problems that require flexible, emergent solutions
+- Problems requiring flexible, emergent solutions
 
-**Configuration**:
+**Per-Agent Reasoning Configuration**:
 ```yaml
-reasoning:
-  strategy: "dynamic"
-  verbose: true
-  dynamic:
-    max_iterations: 15
-    goal_threshold: 0.85
-    adaptation_threshold: 0.3
-    quality_threshold: 0.7
-    enable_self_reflection: true
-    enable_meta_reasoning: true
-    enable_dynamic_tools: true
-    enable_goal_evolution: true
-    streaming_mode: "all_steps"
+workflow:
+  steps:
+    - name: "complex_analyst"
+      type: "analyze"
+      agent_config:
+        reasoning:                            # Per-agent reasoning configuration
+          max_iterations: 15
+          goal_threshold: 0.85
+          adaptation_threshold: 0.3
+          quality_threshold: 0.7
+          enable_self_reflection: true
+          enable_meta_reasoning: true
+          enable_dynamic_tools: true
+        workflow:
+          max_steps: 3
+            enable_goal_evolution: true
+            streaming_mode: "all_steps"
 ```
 
-### Auto Mode (Default)
-**Purpose**: Intelligent strategy selection based on query analysis
+### Intelligent Complexity Selection
+**Purpose**: AI automatically chooses reasoning complexity
 
-Auto Mode analyzes incoming queries and automatically selects the optimal reasoning strategy. Ideal for:
-- Mixed complexity applications
-- Unknown query types
-- General-purpose agent deployments
-- Adaptive workflow requirements
+For each agent step, the AI automatically evaluates whether to use:
+- **Simple reasoning**: Direct LLM calls for straightforward queries
+- **Dynamic reasoning**: Sophisticated multi-iteration reasoning for complex problems
 
-**Configuration**:
+This happens transparently - users just define workflows, and agents reason intelligently.
+
+**Default Configuration**:
 ```yaml
-reasoning:
+workflow:
   strategy: "auto"
   max_steps: 6
   verbose: true
@@ -211,110 +244,142 @@ import "github.com/kadirpekel/hector"
 
 ### Basic Usage
 
-**Start with Minimal Configuration**:
+**Start with Workflow-First Configuration**:
 ```bash
-# Run with minimal auto mode (recommended for beginners)
-hector --config examples/auto-mode-minimal.yaml
+# Run with basic workflow-first setup (recommended for beginners)
+hector --config examples/basic.yaml
 ```
 
 **Available Example Configurations**:
 ```bash
-# Basic setup with tool support
+# Basic workflow-first agent
 hector --config examples/basic.yaml
 
-# Advanced multi-step workflow
+# Advanced multi-agent workflow
 hector --config examples/advanced.yaml
 
-# AI-driven dynamic reasoning
+# Dynamic reasoning workflow
 hector --config examples/dynamic-mode.yaml
 
-# Document ingestion setup
+# Document ingestion workflow
 hector --config examples/document-ingestion.yaml
 ```
 
 ### First Steps
 
-1. **Choose a Configuration**: Start with `auto-mode-minimal.yaml` for basic functionality
-2. **Configure Providers**: Set up your preferred LLM and vector database providers
+1. **Choose a Configuration**: Start with `basic.yaml` for workflow-first functionality
+2. **Configure Your Agent**: Set up LLM, memory, and reasoning in the workflow step
 3. **Test Basic Queries**: Try simple questions to verify functionality
-4. **Explore Modes**: Experiment with different reasoning strategies
+4. **Scale Your Workflow**: Add more steps to create multi-agent workflows
 5. **Add Documents**: Configure document ingestion for knowledge base functionality
 
 ## Configuration Reference
 
-### Core Configuration Structure
+### Workflow-First Configuration Structure
 
 ```yaml
-# Agent Information
+# Agent Information (global)
 agent:
   name: "Agent Name"
   description: "Agent description"
 
-# LLM Provider Configuration (dynamic fields based on provider)
-llm:
-  name: "openai" | "ollama" | "tgi"
-  # OpenAI fields:
-  api_key: "your-api-key"                    # Required for OpenAI
-  model: "gpt-4o-mini"                       # OpenAI model name
-  temperature: 0.7                            # 0.0 to 2.0
-  max_tokens: 2000                           # Maximum response length
-  # Ollama fields:
-  model: "llama3"                            # Ollama model name
-  base_url: "http://localhost:11434"         # Ollama server URL
-  # TGI fields:
-  api_key: "your-api-key"                    # Required for TGI
-  model: "microsoft/DialoGPT-medium"         # TGI model name
-  base_url: "https://api.example.com"        # TGI server URL
+# Global Models (available to all agents)
+models:
+  - name: "documents"
+    collection: "documents"
+    default_top_k: 10
+    max_top_k: 100
 
-# Memory Provider Configuration (Qdrant)
-memory:
-  name: "qdrant"
-  host: "localhost"                          # Qdrant server host
-  port: 6334                                 # Qdrant server port
-  api_key: "optional-api-key"               # For Qdrant Cloud
+# Global MCP Servers (available to all agents)
+mcp_servers:
+  - name: "composio"
+    url: "https://apollo.composio.dev/v3/mcp/"
+    config:
+      api_key: "your-api-key"
 
-# Embedder Provider Configuration (dynamic fields based on provider)
-embedder:
-  name: "ollama" | "openai" | "tgi"
-  # OpenAI fields:
-  api_key: "your-api-key"                    # Required for OpenAI
-  model: "text-embedding-3-small"           # OpenAI embedding model
-  # Ollama fields:
-  model: "nomic-embed-text"                 # Ollama embedding model
-  base_url: "http://localhost:11434"         # Ollama server URL
-  # TGI fields:
-  api_key: "your-api-key"                    # Required for TGI
-  model: "sentence-transformers/all-MiniLM-L6-v2"  # TGI embedding model
-  base_url: "https://api.example.com"        # TGI server URL
-
-# Reasoning Strategy Configuration
-reasoning:
-  strategy: "simple" | "multi" | "auto" | "dynamic"
-  max_steps: 6                               # Maximum reasoning steps
-  max_retries: 2                             # Maximum retry attempts
-  enable_retry: true                          # Enable retry on failure
-  enable_feedback: false                      # Enable feedback collection
-  streaming_mode: "all_steps" | "final_only"  # Streaming configuration
-  verbose: true                               # Enable detailed logging
-  verbose_template: "\033[90m{{.Message}}\033[0m"  # Verbose output template
+# Workflow Configuration (primary structure)
+workflow:
+  max_steps: 5                               # Maximum workflow steps
+  verbose: true                               # Enable verbose output
   
-  # Multi-step configuration
   steps:
-    - name: "step-name"
-      type: "execute" | "analyze" | "synthesize"
-      enabled: true
+    - name: "main_agent"                     # Step name
+      type: "execute"                        # Step type
+      enabled: true                          # Enable this step
+      agent_config:                          # Complete agent configuration
+        agent:
+          name: "Main Agent"
+          description: "Primary agent"
+        
+        # LLM Provider Configuration (per agent)
+        llm:
+          name: "openai" | "ollama" | "tgi"
+          # OpenAI fields:
+          api_key: "your-api-key"            # Required for OpenAI
+          model: "gpt-4o-mini"               # OpenAI model name
+          temperature: 0.7                    # 0.0 to 2.0
+          max_tokens: 2000                   # Maximum response length
+          # Ollama fields:
+          model: "llama3"                    # Ollama model name
+          base_url: "http://localhost:11434" # Ollama server URL
+          # TGI fields:
+          api_key: "your-api-key"            # Required for TGI
+          model: "microsoft/DialoGPT-medium" # TGI model name
+          base_url: "https://api.example.com" # TGI server URL
+        
+        # Memory Provider Configuration (per agent)
+        memory:
+          name: "qdrant"
+          host: "localhost"                  # Qdrant server host
+          port: 6334                         # Qdrant server port
+          api_key: "optional-api-key"       # For Qdrant Cloud
+        
+        # Embedder Provider Configuration (per agent)
+        embedder:
+          name: "ollama" | "openai" | "tgi"
+          # OpenAI fields:
+          api_key: "your-api-key"            # Required for OpenAI
+          model: "text-embedding-3-small"   # OpenAI embedding model
+          # Ollama fields:
+          model: "nomic-embed-text"         # Ollama embedding model
+          base_url: "http://localhost:11434" # Ollama server URL
+          # TGI fields:
+          api_key: "your-api-key"            # Required for TGI
+          model: "sentence-transformers/all-MiniLM-L6-v2" # TGI embedding model
+          base_url: "https://api.example.com" # TGI server URL
+        
+        # AI Reasoning Configuration (per agent)
+        reasoning:
+          max_iterations: 5                  # Maximum reasoning iterations
+          enable_meta_reasoning: true        # Enable meta-reasoning
+          enable_self_reflection: true       # Enable self-reflection
+          enable_dynamic_tools: true         # Enable dynamic tool selection
+          quality_threshold: 0.8             # Quality threshold
+          streaming_mode: "all_steps"        # Streaming mode
+  streaming_mode: "all_steps" | "final_only" | "none"
   
-  # Dynamic mode configuration
-  dynamic:
-    max_iterations: 15                        # Maximum reasoning iterations
-    goal_threshold: 0.85                     # Goal achievement threshold
-    adaptation_threshold: 0.3                # Adaptation trigger threshold
-    quality_threshold: 0.7                   # Minimum quality threshold
-    enable_self_reflection: true             # Enable self-reflection
-    enable_meta_reasoning: true              # Enable meta-reasoning
-    enable_dynamic_tools: true               # Enable dynamic tool selection
-    enable_goal_evolution: true              # Enable goal evolution
-    streaming_mode: "all_steps"             # Streaming configuration
+  # Workflow steps (each creates a full agent)
+  steps:
+    - name: "research_analyst"
+      type: "analyze"
+      enabled: true
+      agent_config:                           # Full agent configuration per step
+        llm:
+          model: "gpt-4o"
+          temperature: 0.3
+        workflow:
+          reasoning:                          # Per-agent reasoning configuration
+            max_iterations: 10
+            enable_meta_reasoning: true
+            enable_self_reflection: true
+            quality_threshold: 0.8
+    - name: "synthesis_expert"
+      type: "execute"
+      enabled: true
+      agent_config:
+        llm:
+          model: "gpt-4o-mini"
+          temperature: 0.7
 
 # MCP Tool Servers
 mcp_servers:
@@ -566,18 +631,20 @@ Hector provides comprehensive example configurations in the `/examples/` directo
 
 ### Available Examples
 
-- **`basic.yaml`** - Basic setup with tool support and simple reasoning
-- **`auto-mode-minimal.yaml`** - Minimal configuration with intelligent auto mode (recommended for beginners)
-- **`advanced.yaml`** - Multi-step workflows with nested agent hierarchies
-- **`auto-mode.yaml`** - Full auto mode with comprehensive features
-- **`dynamic-mode.yaml`** - AI-driven dynamic reasoning with meta-cognition
+- **`basic.yaml`** - Simple single-agent workflow (recommended for beginners)
+- **`advanced.yaml`** - Multi-agent workflows with specialized agents per step
+- **`dynamic-mode.yaml`** - Multi-agent with AI-driven dynamic reasoning and meta-cognition
 - **`document-ingestion.yaml`** - Automated document synchronization from multiple sources
+- **`command-line-tools.yaml`** - Integration with command-line tools via MCP
 
 ### Getting Started
 
 ```bash
-# Start with minimal auto mode (recommended)
-hector --config examples/auto-mode-minimal.yaml
+# Start with basic workflow (recommended)
+hector --config examples/basic.yaml
+
+# Try multi-agent workflow
+hector --config examples/advanced.yaml
 
 # Try dynamic reasoning
 hector --config examples/dynamic-mode.yaml

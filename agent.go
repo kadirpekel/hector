@@ -18,7 +18,8 @@ import (
 // Agent is the main agent system interface - holds only agent-level configs
 type Agent struct {
 	// Agent-level configurations only
-	ReasoningConfig ReasoningConfig // Agent-level reasoning behavior
+	WorkflowConfig WorkflowConfig // Agent-level workflow behavior
+	config         *AgentConfig   // Full agent configuration for access to reasoning config
 
 	// Components with their own configs
 	llm          llms.LLMProvider
@@ -38,42 +39,39 @@ type Agent struct {
 
 // AgentResponse represents an agent query response
 type AgentResponse struct {
-	Answer         string                   `json:"answer"`
-	ToolResults    map[string]ToolResult    `json:"tool_results,omitempty"`
-	Context        []databases.SearchResult `json:"context"`
-	Sources        []string                 `json:"sources"`
-	Confidence     float64                  `json:"confidence"`
-	TokensUsed     int                      `json:"tokens_used"`
-	ReasoningSteps []ReasoningStepResult    `json:"reasoning_steps,omitempty"`
+	Answer        string                   `json:"answer"`
+	ToolResults   map[string]ToolResult    `json:"tool_results,omitempty"`
+	Context       []databases.SearchResult `json:"context"`
+	Sources       []string                 `json:"sources"`
+	Confidence    float64                  `json:"confidence"`
+	TokensUsed    int                      `json:"tokens_used"`
+	WorkflowSteps []WorkflowStepResult     `json:"workflow_steps,omitempty"`
 }
 
-// ReasoningStepResult represents the result of a reasoning step
-type ReasoningStepResult struct {
-	StepName    string                 `json:"step_name"`
-	StepType    string                 `json:"step_type"`
-	Instruction string                 `json:"instruction"`
-	Input       string                 `json:"input"`
-	Output      string                 `json:"output"`
-	LLMConfig   *YAMLProviderConfig    `json:"llm_config,omitempty"`
-	Config      map[string]interface{} `json:"config,omitempty"`
-	Success     bool                   `json:"success"`
-	Error       string                 `json:"error,omitempty"`
-	TokensUsed  int                    `json:"tokens_used"`
-	Duration    time.Duration          `json:"duration"`
+// WorkflowStepResult represents the result of a workflow step
+type WorkflowStepResult struct {
+	StepName    string              `json:"step_name"`
+	StepType    string              `json:"step_type"`
+	Instruction string              `json:"instruction"`
+	Input       string              `json:"input"`
+	Output      string              `json:"output"`
+	LLMConfig   *YAMLProviderConfig `json:"llm_config,omitempty"`
+	Success     bool                `json:"success"`
+	Error       string              `json:"error,omitempty"`
+	TokensUsed  int                 `json:"tokens_used"`
+	Duration    time.Duration       `json:"duration"`
 }
 
-// ReasoningContext holds context for reasoning execution
-type ReasoningContext struct {
+// WorkflowContext holds context for workflow execution
+type WorkflowContext struct {
 	Query            string
 	Context          []string
 	AvailableTools   []ToolInfo
-	StepResults      []ReasoningStepResult
+	StepResults      []WorkflowStepResult
 	ExecutionHistory []string
 	ErrorHistory     []string
 	CurrentStep      int
 	MaxSteps         int
-	RetryCount       int
-	MaxRetries       int
 }
 
 // ============================================================================
@@ -85,10 +83,8 @@ func NewAgent() *Agent {
 	// Create agent with default configurations
 	agent := &Agent{
 		// Initialize agent-level configurations only
-		ReasoningConfig: ReasoningConfig{
-			Strategy:    "simple",
-			MaxSteps:    1,
-			EnableRetry: false,
+		WorkflowConfig: WorkflowConfig{
+			MaxSteps: 1,
 		},
 
 		// Initialize components
@@ -359,10 +355,10 @@ func (a *Agent) buildEnhancedQuery(query string, toolResults map[string]ToolResu
 }
 
 // ============================================================================
-// REASONING ENGINE
+// WORKFLOW ENGINE
 // ============================================================================
 
-// ExecuteQueryWithReasoning performs an agent query using the configured reasoning strategy
+// ExecuteQueryWithReasoning executes the agent workflow
 func (a *Agent) ExecuteQueryWithReasoning(query string, modelNames ...string) (*AgentResponse, error) {
 	a.verbosePrint("ExecuteQueryWithReasoning called with query: %s\n", query)
 
@@ -370,45 +366,28 @@ func (a *Agent) ExecuteQueryWithReasoning(query string, modelNames ...string) (*
 		return nil, fmt.Errorf("no LLM provider configured")
 	}
 
-	a.verbosePrint("Starting reasoning with strategy: %s\n", a.ReasoningConfig.Strategy)
-	a.verbosePrint("Reasoning config: max_steps=%d, enable_retry=%t, steps_count=%d\n",
-		a.ReasoningConfig.MaxSteps, a.ReasoningConfig.EnableRetry, len(a.ReasoningConfig.Steps))
+	a.verbosePrint("Starting agent workflow\n")
+	a.verbosePrint("Workflow config: max_steps=%d, steps_count=%d\n",
+		a.WorkflowConfig.MaxSteps, len(a.WorkflowConfig.Steps))
 
-	// Initialize reasoning context
-	reasoningCtx := &ReasoningContext{
+	// Initialize workflow context
+	workflowCtx := &WorkflowContext{
 		Query:            query,
 		Context:          []string{},
 		AvailableTools:   []ToolInfo{},
-		StepResults:      []ReasoningStepResult{},
+		StepResults:      []WorkflowStepResult{},
 		ExecutionHistory: []string{},
 		ErrorHistory:     []string{},
 		CurrentStep:      0,
-		MaxSteps:         a.ReasoningConfig.MaxSteps,
-		RetryCount:       0,
-		MaxRetries:       a.ReasoningConfig.MaxRetries,
+		MaxSteps:         a.WorkflowConfig.MaxSteps,
 	}
 
-	// Execute based on reasoning strategy
-	switch a.ReasoningConfig.Strategy {
-	case "simple":
-		a.verbosePrint("Using simple mode reasoning\n")
-		return a.executeSimpleMode(reasoningCtx, modelNames...)
-	case "multi":
-		a.verbosePrint("Using multi-step workflow reasoning\n")
-		return a.executeMultiMode(reasoningCtx, modelNames...)
-	case "auto":
-		a.verbosePrint("Using auto mode - selecting optimal strategy\n")
-		return a.executeAutoMode(reasoningCtx, modelNames...)
-	case "dynamic":
-		a.verbosePrint("Using dynamic AI-driven reasoning\n")
-		return a.executeDynamicMode(query, modelNames...)
-	default:
-		a.verbosePrint("Unknown strategy '%s', falling back to simple mode\n", a.ReasoningConfig.Strategy)
-		return a.executeSimpleMode(reasoningCtx, modelNames...)
-	}
+	// Execute the agent workflow
+	a.verbosePrint("Executing agent workflow\n")
+	return a.executeWorkflow(workflowCtx, modelNames...)
 }
 
-// ExecuteQueryWithReasoningStreaming performs an agent query using the configured reasoning strategy with streaming
+// ExecuteQueryWithReasoningStreaming executes the agent workflow with streaming
 func (a *Agent) ExecuteQueryWithReasoningStreaming(query string, modelNames ...string) (<-chan string, error) {
 	a.verbosePrint("ExecuteQueryWithReasoningStreaming called with query: %s\n", query)
 
@@ -416,76 +395,53 @@ func (a *Agent) ExecuteQueryWithReasoningStreaming(query string, modelNames ...s
 		return nil, fmt.Errorf("no LLM provider configured")
 	}
 
-	a.verbosePrint("Starting reasoning with strategy: %s\n", a.ReasoningConfig.Strategy)
-	a.verbosePrint("Reasoning config: max_steps=%d, enable_retry=%t, steps_count=%d\n",
-		a.ReasoningConfig.MaxSteps, a.ReasoningConfig.EnableRetry, len(a.ReasoningConfig.Steps))
+	a.verbosePrint("Starting agent workflow\n")
+	a.verbosePrint("Workflow config: max_steps=%d, steps_count=%d\n",
+		a.WorkflowConfig.MaxSteps, len(a.WorkflowConfig.Steps))
 
-	// Support streaming for different reasoning strategies
-	switch a.ReasoningConfig.Strategy {
-	case "simple":
-		a.verbosePrint("Using simple mode reasoning with streaming\n")
-		return a.executeSimpleModeStreaming(query, modelNames...)
-	case "multi":
-		a.verbosePrint("Using multi-step workflow reasoning with streaming (%d steps)\n", len(a.ReasoningConfig.Steps))
-		return a.executeMultiModeStreaming(query, modelNames...)
-	case "auto":
-		a.verbosePrint("Using auto mode with streaming - selecting optimal strategy\n")
-		return a.executeAutoModeStreaming(query, modelNames...)
-	case "dynamic":
-		a.verbosePrint("Using dynamic AI-driven reasoning with streaming\n")
-		return a.executeDynamicModeStreaming(query, modelNames...)
-	default:
-		// Fall back to simple mode streaming for unknown strategies
-		a.verbosePrint("Unknown strategy '%s', falling back to simple mode streaming\n", a.ReasoningConfig.Strategy)
-		return a.executeSimpleModeStreaming(query, modelNames...)
-	}
+	// Execute the agent workflow with streaming
+	a.verbosePrint("Executing agent workflow with streaming (%d steps)\n", len(a.WorkflowConfig.Steps))
+	return a.executeWorkflowStreaming(query, modelNames...)
 }
 
-// executeSimpleModeStreaming executes a simple mode query with streaming
-func (a *Agent) executeSimpleModeStreaming(query string, modelNames ...string) (<-chan string, error) {
-	return a.ExecuteQueryStreaming(query, modelNames...)
-}
-
-// executeMultiModeStreaming executes multi-step workflow reasoning with streaming
-func (a *Agent) executeMultiModeStreaming(query string, modelNames ...string) (<-chan string, error) {
+// executeWorkflowStreaming executes the agent workflow with streaming
+func (a *Agent) executeWorkflowStreaming(query string, modelNames ...string) (<-chan string, error) {
 	responseChan := make(chan string, 100)
 
 	go func() {
 		defer close(responseChan)
 
 		// Initialize reasoning context
-		reasoningCtx := &ReasoningContext{
+		workflowCtx := &WorkflowContext{
 			Query:            query,
 			Context:          []string{},
 			AvailableTools:   []ToolInfo{},
-			StepResults:      []ReasoningStepResult{},
+			StepResults:      []WorkflowStepResult{},
 			ExecutionHistory: []string{},
 			ErrorHistory:     []string{},
 			CurrentStep:      0,
-			MaxSteps:         a.ReasoningConfig.MaxSteps,
-			RetryCount:       0,
-			MaxRetries:       a.ReasoningConfig.MaxRetries,
+			MaxSteps:         a.WorkflowConfig.MaxSteps,
 		}
 
-		a.verbosePrint("Starting reasoning with %d steps...\n", len(a.ReasoningConfig.Steps))
+		a.verbosePrint("Starting workflow with %d steps...\n", len(a.WorkflowConfig.Steps))
 
 		// Collect all step outputs for final response
 		var allStepOutputs []string
 
-		for i, step := range a.ReasoningConfig.Steps {
+		for i, step := range a.WorkflowConfig.Steps {
 			if !step.Enabled {
 				continue
 			}
 
-			reasoningCtx.CurrentStep++
-			a.verbosePrint("\nStep %d/%d: %s (%s)\n", i+1, len(a.ReasoningConfig.Steps), step.Name, step.Type)
+			workflowCtx.CurrentStep++
+			a.verbosePrint("\nStep %d/%d: %s (%s)\n", i+1, len(a.WorkflowConfig.Steps), step.Name, step.Type)
 
 			// Execute step based on streaming mode
 			var stepOutput string
 
-			if a.ReasoningConfig.StreamingMode == "all_steps" {
+			if a.WorkflowConfig.StreamingMode == "all_steps" {
 				// Stream this step's output
-				stepChan, stepErr := a.executeReasoningStepStreaming(step, reasoningCtx, modelNames...)
+				stepChan, stepErr := a.executeAgentStepStreaming(step, workflowCtx, modelNames...)
 				if stepErr != nil {
 					responseChan <- fmt.Sprintf("Step %d failed: %v\n", i+1, stepErr)
 					break
@@ -500,7 +456,7 @@ func (a *Agent) executeMultiModeStreaming(query string, modelNames ...string) (<
 				stepOutput = stepOutputBuilder.String()
 			} else {
 				// Execute step without streaming (final_only or none)
-				stepResult := a.executeReasoningStep(step, reasoningCtx, modelNames...)
+				stepResult := a.executeAgentStep(step, workflowCtx, modelNames...)
 				stepOutput = stepResult.Output
 				if !stepResult.Success {
 					responseChan <- fmt.Sprintf("Step %d failed: %s\n", i+1, stepResult.Error)
@@ -512,25 +468,25 @@ func (a *Agent) executeMultiModeStreaming(query string, modelNames ...string) (<
 			allStepOutputs = append(allStepOutputs, stepOutput)
 
 			// Create step result for context
-			stepResult := ReasoningStepResult{
+			stepResult := WorkflowStepResult{
 				StepName: step.Name,
 				StepType: step.Type,
 				Output:   stepOutput,
 				Success:  true,
 			}
-			reasoningCtx.StepResults = append(reasoningCtx.StepResults, stepResult)
+			workflowCtx.StepResults = append(workflowCtx.StepResults, stepResult)
 
 			a.verbosePrint("Step completed successfully\n")
 
 			// Update context for next step
-			a.updateReasoningContext(step, stepResult, reasoningCtx)
+			a.updateWorkflowContext(step, stepResult, workflowCtx)
 		}
 
 		// Generate final response if we have step results
-		if len(reasoningCtx.StepResults) > 0 {
-			finalResponse := a.generateFinalResponseFromSteps(reasoningCtx)
+		if len(workflowCtx.StepResults) > 0 {
+			finalResponse := a.generateFinalResponseFromSteps(workflowCtx)
 			if finalResponse != "" {
-				if a.ReasoningConfig.StreamingMode == "final_only" {
+				if a.WorkflowConfig.StreamingMode == "final_only" {
 					// Stream the final response
 					responseChan <- "\n\nFinal Response: " + finalResponse
 				} else {
@@ -544,151 +500,39 @@ func (a *Agent) executeMultiModeStreaming(query string, modelNames ...string) (<
 	return responseChan, nil
 }
 
-// executeIterativeStreaming executes iterative reasoning with streaming
-func (a *Agent) executeIterativeStreaming(query string, modelNames ...string) (<-chan string, error) {
+// executeAgentStepStreaming executes a step by creating a full agent instance with streaming
+func (a *Agent) executeAgentStepStreaming(step WorkflowStep, ctx *WorkflowContext, modelNames ...string) (<-chan string, error) {
 	responseChan := make(chan string, 100)
 
 	go func() {
 		defer close(responseChan)
 
-		// Initialize reasoning context
-		reasoningCtx := &ReasoningContext{
-			Query:            query,
-			Context:          []string{},
-			AvailableTools:   []ToolInfo{},
-			StepResults:      []ReasoningStepResult{},
-			ExecutionHistory: []string{},
-			ErrorHistory:     []string{},
-			CurrentStep:      0,
-			MaxSteps:         a.ReasoningConfig.MaxSteps,
-			RetryCount:       0,
-			MaxRetries:       a.ReasoningConfig.MaxRetries,
+		// Create a full agent for this step if AgentConfig is provided
+		var stepAgent *Agent
+		if step.AgentConfig != nil {
+			stepAgent = a.createStepAgent(step)
+			if stepAgent == nil {
+				responseChan <- fmt.Sprintf("Failed to create step agent for %s\n", step.Name)
+				return
+			}
+		} else {
+			// Use current agent if no specific config
+			stepAgent = a
 		}
 
-		a.verbosePrint("Starting iterative reasoning (max %d steps)...\n", reasoningCtx.MaxSteps)
+		// No prompt needed - using internal reasoning
 
-		// Collect all iteration outputs for final response
-		var allIterationOutputs []string
+		// Tools will be handled internally by the reasoning process
 
-		for step := 0; step < reasoningCtx.MaxSteps; step++ {
-			reasoningCtx.CurrentStep = step
-			a.verbosePrint("\nIteration %d/%d\n", step+1, reasoningCtx.MaxSteps)
-
-			// Execute iteration based on streaming mode
-			var iterationOutput string
-
-			if a.ReasoningConfig.StreamingMode == "all_steps" {
-				// Stream this iteration's output
-				iterationChan, iterErr := a.ExecuteQueryStreaming(reasoningCtx.Query, modelNames...)
-				if iterErr != nil {
-					responseChan <- fmt.Sprintf("Iteration %d failed: %v\n", step+1, iterErr)
-					break
-				}
-
-				// Collect iteration output and forward to response channel
-				var iterationOutputBuilder strings.Builder
-				for chunk := range iterationChan {
-					iterationOutputBuilder.WriteString(chunk)
-					responseChan <- chunk
-				}
-				iterationOutput = iterationOutputBuilder.String()
-			} else {
-				// Execute iteration without streaming (final_only or none)
-				response, iterErr := a.ExecuteQuery(reasoningCtx.Query, modelNames...)
-				if iterErr != nil {
-					responseChan <- fmt.Sprintf("Iteration %d failed: %v\n", step+1, iterErr)
-					break
-				}
-				iterationOutput = response.Answer
-			}
-
-			// Store iteration output for final response
-			allIterationOutputs = append(allIterationOutputs, iterationOutput)
-
-			// Create step result for context
-			stepResult := ReasoningStepResult{
-				StepName: fmt.Sprintf("iteration_%d", step+1),
-				StepType: "execute",
-				Output:   iterationOutput,
-				Success:  true,
-			}
-			reasoningCtx.StepResults = append(reasoningCtx.StepResults, stepResult)
-
-			a.verbosePrint("Iteration completed successfully\n")
-
-			// Check if we should continue (simplified logic)
-			if step < reasoningCtx.MaxSteps-1 {
-				// Update query for next iteration based on previous results
-				reasoningCtx.Query = fmt.Sprintf("Based on the previous response: %s\n\nPlease continue or refine your answer.", iterationOutput)
-			}
-		}
-
-		// Generate final response if we have iteration results
-		if len(reasoningCtx.StepResults) > 0 {
-			finalResponse := a.generateFinalResponseFromSteps(reasoningCtx)
-			if finalResponse != "" {
-				if a.ReasoningConfig.StreamingMode == "final_only" {
-					// Stream the final response
-					responseChan <- "\n\nFinal Response: " + finalResponse
-				} else {
-					// For all_steps mode, just add the final response without streaming
-					responseChan <- "\n\nFinal Response: " + finalResponse
-				}
-			}
-		}
-	}()
-
-	return responseChan, nil
-}
-
-// executeReasoningStepStreaming executes a single reasoning step with streaming
-func (a *Agent) executeReasoningStepStreaming(step ReasoningStep, ctx *ReasoningContext, modelNames ...string) (<-chan string, error) {
-	responseChan := make(chan string, 100)
-
-	go func() {
-		defer close(responseChan)
-
-		// Build step-specific prompt
-		prompt, err := a.buildStepPrompt(step, ctx)
+		// Use step agent's internal reasoning with streaming support
+		streamingChan, err := stepAgent.executeWithInternalReasoningStreaming(ctx.Query, ctx.Context, step)
 		if err != nil {
-			responseChan <- fmt.Sprintf("Failed to build step prompt: %v", err)
+			responseChan <- fmt.Sprintf("Internal reasoning streaming failed: %v", err)
 			return
 		}
 
-		// Use step-specific LLM config if available, otherwise use default agent
-		llm := a.llm
-		if step.AgentConfig != nil && step.AgentConfig.LLM.Name != "" {
-			// Create a temporary LLM with step-specific config
-			llm = a.createStepLLM(&step.AgentConfig.LLM)
-		}
-
-		// For execution steps, check if tools should be used
-		if step.Type == "execute" && a.mcp != nil && len(a.mcp.ListTools()) > 0 {
-			// Check if the step instruction mentions using tools
-			instruction := ""
-			if step.AgentConfig != nil {
-				instruction = ""
-			}
-			if instruction != "" && strings.Contains(strings.ToLower(instruction), "tool") {
-				// Execute tools generically based on LLM reasoning
-				toolResults := a.executeToolsForQuery(ctx.Query)
-				if len(toolResults) > 0 {
-					// Include tool results in the prompt
-					toolContext := a.buildToolContext(toolResults)
-					prompt = prompt + "\n\nTool Results:\n" + toolContext
-				}
-			}
-		}
-
-		// Stream LLM generation
-		streamChan, err := llm.GenerateStreaming(prompt)
-		if err != nil {
-			responseChan <- fmt.Sprintf("LLM generation failed: %v", err)
-			return
-		}
-
-		// Forward streaming chunks
-		for chunk := range streamChan {
+		// Forward streaming chunks from internal reasoning
+		for chunk := range streamingChan {
 			responseChan <- chunk
 		}
 	}()
@@ -697,7 +541,7 @@ func (a *Agent) executeReasoningStepStreaming(step ReasoningStep, ctx *Reasoning
 }
 
 // generateFinalResponseFromSteps generates a final response based on reasoning step results
-func (a *Agent) generateFinalResponseFromSteps(ctx *ReasoningContext) string {
+func (a *Agent) generateFinalResponseFromSteps(ctx *WorkflowContext) string {
 	if len(ctx.StepResults) == 0 {
 		return ""
 	}
@@ -713,83 +557,25 @@ func (a *Agent) generateFinalResponseFromSteps(ctx *ReasoningContext) string {
 	return result.String()
 }
 
-// executeSimpleMode executes a simple mode query
-func (a *Agent) executeSimpleMode(ctx *ReasoningContext, modelNames ...string) (*AgentResponse, error) {
-	return a.ExecuteQuery(ctx.Query, modelNames...)
-}
-
-// executeIterative executes iterative reasoning with retry logic
-func (a *Agent) executeIterative(ctx *ReasoningContext, modelNames ...string) (*AgentResponse, error) {
-	var lastResponse *AgentResponse
-	var lastError error
-
-	a.verbosePrint("Starting iterative reasoning (max %d steps)...\n", ctx.MaxSteps)
-
-	for step := 0; step < ctx.MaxSteps; step++ {
-		ctx.CurrentStep = step
-
-		a.verbosePrint("\nIteration %d/%d\n", step+1, ctx.MaxSteps)
-
-		// Execute query
-		response, err := a.ExecuteQuery(ctx.Query, modelNames...)
-		if err != nil {
-			a.verbosePrint("Iteration failed: %v\n", err)
-			ctx.ErrorHistory = append(ctx.ErrorHistory, err.Error())
-			lastError = err
-
-			// Retry logic
-			if a.ReasoningConfig.EnableRetry && ctx.RetryCount < ctx.MaxRetries {
-				ctx.RetryCount++
-				a.verbosePrint("Retrying... (attempt %d/%d)\n", ctx.RetryCount, ctx.MaxRetries)
-				continue
-			}
-			break
-		}
-
-		a.verbosePrint("Iteration completed (confidence: %.2f, tokens: %d)\n",
-			response.Confidence, response.TokensUsed)
-		a.verbosePrint("Response: %s\n", truncateString(response.Answer, 150))
-
-		lastResponse = response
-
-		// Check if we should continue based on response quality
-		if a.shouldContinueReasoning(response, ctx) {
-			a.verbosePrint("Response quality low, continuing to next iteration...\n")
-			// Enhance query based on previous results
-			ctx.Query = a.buildEnhancedQuery(ctx.Query, response.ToolResults)
-			ctx.ExecutionHistory = append(ctx.ExecutionHistory, response.Answer)
-		} else {
-			a.verbosePrint("Response quality sufficient, stopping iterations\n")
-			break
-		}
-	}
-
-	if lastError != nil && lastResponse == nil {
-		return nil, lastError
-	}
-
-	return lastResponse, nil
-}
-
-// executeMultiMode executes multi-step workflow reasoning
-func (a *Agent) executeMultiMode(ctx *ReasoningContext, modelNames ...string) (*AgentResponse, error) {
+// executeWorkflow executes the agent workflow reasoning
+func (a *Agent) executeWorkflow(ctx *WorkflowContext, modelNames ...string) (*AgentResponse, error) {
 	var finalResponse *AgentResponse
 
-	a.verbosePrint("Starting reasoning with %d steps...\n", len(a.ReasoningConfig.Steps))
+	a.verbosePrint("Starting workflow with %d steps...\n", len(a.WorkflowConfig.Steps))
 
-	for i, step := range a.ReasoningConfig.Steps {
+	for i, step := range a.WorkflowConfig.Steps {
 		if !step.Enabled {
 			continue
 		}
 
 		ctx.CurrentStep++
-		a.verbosePrint("\nStep %d/%d: %s (%s)\n", i+1, len(a.ReasoningConfig.Steps), step.Name, step.Type)
+		a.verbosePrint("\nStep %d/%d: %s (%s)\n", i+1, len(a.WorkflowConfig.Steps), step.Name, step.Type)
 		a.verbosePrint("Instruction: %s\n", func() string {
 			// No instruction field in AgentConfig anymore - use empty string
 			return ""
 		}())
 
-		stepResult := a.executeReasoningStep(step, ctx, modelNames...)
+		stepResult := a.executeAgentStep(step, ctx, modelNames...)
 		ctx.StepResults = append(ctx.StepResults, stepResult)
 
 		// Display step result
@@ -809,7 +595,7 @@ func (a *Agent) executeMultiMode(ctx *ReasoningContext, modelNames ...string) (*
 		}
 
 		// Update context for next step
-		a.updateReasoningContext(step, stepResult, ctx)
+		a.updateWorkflowContext(step, stepResult, ctx)
 	}
 
 	// Generate final response
@@ -818,279 +604,96 @@ func (a *Agent) executeMultiMode(ctx *ReasoningContext, modelNames ...string) (*
 	return finalResponse, nil
 }
 
-// executeAutoMode automatically selects the optimal reasoning strategy based on query analysis
-func (a *Agent) executeAutoMode(ctx *ReasoningContext, modelNames ...string) (*AgentResponse, error) {
-	a.verbosePrint("Analyzing query to select optimal reasoning strategy...\n")
-
-	// Analyze query complexity and characteristics
-	strategy := a.selectOptimalStrategy(ctx.Query)
-	a.verbosePrint("Selected strategy: %s\n", strategy)
-
-	// Execute with selected strategy
-	switch strategy {
-	case "simple":
-		return a.executeSimpleMode(ctx, modelNames...)
-	case "multi":
-		return a.executeMultiMode(ctx, modelNames...)
-	default:
-		a.verbosePrint("Unknown strategy '%s', falling back to simple mode\n", strategy)
-		return a.executeSimpleMode(ctx, modelNames...)
-	}
-}
-
-// executeAutoModeStreaming automatically selects the optimal reasoning strategy with streaming
-func (a *Agent) executeAutoModeStreaming(query string, modelNames ...string) (<-chan string, error) {
-	a.verbosePrint("Analyzing query to select optimal reasoning strategy...\n")
-
-	// Analyze query complexity and characteristics
-	strategy := a.selectOptimalStrategy(query)
-	a.verbosePrint("Selected strategy: %s\n", strategy)
-
-	// Execute with selected strategy
-	switch strategy {
-	case "simple":
-		return a.executeSimpleModeStreaming(query, modelNames...)
-	case "multi":
-		return a.executeMultiModeStreaming(query, modelNames...)
-	default:
-		a.verbosePrint("Unknown strategy '%s', falling back to simple mode\n", strategy)
-		return a.executeSimpleModeStreaming(query, modelNames...)
-	}
-}
-
-// selectOptimalStrategy uses AI to intelligently select the optimal reasoning strategy
-func (a *Agent) selectOptimalStrategy(query string) string {
-	// Use AI to analyze the query and select the best strategy
-	prompt := fmt.Sprintf(`Analyze this query and determine the best reasoning strategy:
-
-Query: "%s"
-
-Available strategies:
-- "simple": For direct, factual questions that need a single response
-- "multi": For complex workflows that need multiple coordinated steps
-- "dynamic": For complex, open-ended problems requiring adaptive reasoning
-
-Consider:
-- Query complexity and scope
-- Whether it needs step-by-step execution or single response
-- Whether it's a single question or requires multiple coordinated actions
-- Whether the problem requires adaptive, creative, or exploratory reasoning
-- Use "dynamic" for: creative problem solving, research, strategy, philosophy, design, innovation
-- Use "multi" for: structured workflows, processes, procedures, step-by-step tasks
-- Use "simple" for: factual questions, calculations, lookups, simple commands
-
-Respond with ONLY the strategy name.`, query)
-
-	response, _, err := a.llm.Generate(prompt)
-	if err != nil {
-		// If AI fails, default to simple as it's most reliable
-		return "simple"
-	}
-
-	// Let AI decide completely - no string matching validation
-	// Just return the AI's response directly
-	return response
-}
-
-// executeDynamicMode executes AI-driven dynamic reasoning
-func (a *Agent) executeDynamicMode(query string, modelNames ...string) (*AgentResponse, error) {
-	if a.ReasoningConfig.Dynamic == nil {
-		// Fallback to auto mode if dynamic config not provided
-		a.verbosePrint("Dynamic config not provided, falling back to auto mode\n")
-		reasoningCtx := &ReasoningContext{
-			Query:            query,
-			Context:          []string{},
-			AvailableTools:   []ToolInfo{},
-			StepResults:      []ReasoningStepResult{},
-			ExecutionHistory: []string{},
-			ErrorHistory:     []string{},
-			CurrentStep:      0,
-			MaxSteps:         a.ReasoningConfig.MaxSteps,
-			RetryCount:       0,
-			MaxRetries:       a.ReasoningConfig.MaxRetries,
-		}
-		return a.executeAutoMode(reasoningCtx, modelNames...)
-	}
-
-	// Create dynamic reasoning engine
-	engine := NewDynamicReasoningEngine(a, a.ReasoningConfig.Dynamic)
-
-	// Search for document context (same as other modes)
-	var context []string
-	if a.searchEngine != nil {
-		results, err := a.SearchDocuments(query, a.getDefaultModelName(), a.getDefaultTopK())
-		if err == nil && len(results) > 0 {
-			context = a.searchEngine.ExtractContext(map[string][]SearchResult{a.getDefaultModelName(): results}, a.searchEngine.GetMaxContextLength())
-		}
-	}
-
-	// Build enhanced query with conversation context (same as other modes)
-	enhancedQuery := a.buildEnhancedQuery(query, map[string]ToolResult{})
-
-	// Execute dynamic reasoning with document context and conversation context
-	return engine.ExecuteDynamicReasoning(enhancedQuery, context, modelNames...)
-}
-
-// executeDynamicModeStreaming executes AI-driven dynamic reasoning with streaming
-func (a *Agent) executeDynamicModeStreaming(query string, modelNames ...string) (<-chan string, error) {
-	if a.ReasoningConfig.Dynamic == nil {
-		// Fallback to simple mode streaming if dynamic config not provided
-		a.verbosePrint("Dynamic config not provided, falling back to simple mode streaming\n")
-		return a.executeSimpleModeStreaming(query, modelNames...)
-	}
-
-	// Create dynamic reasoning engine
-	engine := NewDynamicReasoningEngine(a, a.ReasoningConfig.Dynamic)
-
-	// Search for document context (same as other modes)
-	var context []string
-	if a.searchEngine != nil {
-		results, err := a.SearchDocuments(query, a.getDefaultModelName(), a.getDefaultTopK())
-		if err == nil && len(results) > 0 {
-			context = a.searchEngine.ExtractContext(map[string][]SearchResult{a.getDefaultModelName(): results}, a.searchEngine.GetMaxContextLength())
-		}
-	}
-
-	// Build enhanced query with conversation context (same as other modes)
-	enhancedQuery := a.buildEnhancedQuery(query, map[string]ToolResult{})
-
-	// Execute dynamic reasoning with streaming and conversation context
-	return engine.ExecuteDynamicReasoningStreaming(enhancedQuery, context, modelNames...)
-}
-
-// executeReasoningStep executes a single reasoning step
-func (a *Agent) executeReasoningStep(step ReasoningStep, ctx *ReasoningContext, _ ...string) ReasoningStepResult {
+// executeAgentStep executes a step by creating a full agent instance
+func (a *Agent) executeAgentStep(step WorkflowStep, ctx *WorkflowContext, _ ...string) WorkflowStepResult {
 	startTime := time.Now()
 
-	result := ReasoningStepResult{
+	result := WorkflowStepResult{
 		StepName: step.Name,
 		StepType: step.Type,
-		Instruction: func() string {
-			// No instruction field in AgentConfig anymore - use empty string
-			return ""
-		}(),
-		Input: ctx.Query,
-		LLMConfig: func() *YAMLProviderConfig {
-			if step.AgentConfig != nil {
-				return &step.AgentConfig.LLM
-			}
-			return nil
-		}(),
-		Config:  step.Config,
-		Success: false,
+		Input:    ctx.Query,
+		Success:  false,
 	}
 
-	// Build step-specific prompt
-	prompt, err := a.buildStepPrompt(step, ctx)
-	if err != nil {
-		result.Error = fmt.Sprintf("Failed to build step prompt: %v", err)
-		result.Duration = time.Since(startTime)
-		return result
+	// Create a full agent for this step if AgentConfig is provided
+	var stepAgent *Agent
+	if step.AgentConfig != nil {
+		stepAgent = a.createStepAgent(step)
+		if stepAgent == nil {
+			result.Error = "Failed to create step agent"
+			result.Duration = time.Since(startTime)
+			return result
+		}
+	} else {
+		// Use current agent if no specific config
+		stepAgent = a
 	}
 
-	// Execute step based on type
-	result.Output, result.TokensUsed, err = a.executeStep(step, prompt, ctx)
+	// Execute with step agent using internal reasoning
+	output, tokensUsed, err := stepAgent.executeStepWithDynamicReasoning(step, "", ctx)
 
 	if err != nil {
 		result.Error = err.Error()
 	} else {
 		result.Success = true
+		result.Output = output
+		result.TokensUsed = tokensUsed
 	}
 
 	result.Duration = time.Since(startTime)
 	return result
 }
 
-// buildStepPrompt builds a prompt for a specific reasoning step
-func (a *Agent) buildStepPrompt(step ReasoningStep, ctx *ReasoningContext) (string, error) {
-	// Use step-specific instruction if available
-	instruction := ""
-	if step.AgentConfig != nil {
-		// No instruction field in AgentConfig anymore - use empty string
-		instruction = ""
-	}
-	if instruction == "" {
-		instruction = "You are a helpful AI assistant."
+// createStepAgent creates a full agent instance for a step
+func (a *Agent) createStepAgent(step WorkflowStep) *Agent {
+	if step.AgentConfig == nil {
+		return a // Return current agent if no config
 	}
 
-	// Use step-specific prompt template if available
-	template := ""
-	if step.AgentConfig != nil {
-		// No prompt template field in AgentConfig anymore - use empty string
-		template = ""
-	}
-	if template == "" {
-		template = ""
+	// Create a new agent with step-specific configuration
+	stepAgent := &Agent{
+		WorkflowConfig: step.AgentConfig.Workflow,
+		parent:         a, // Set parent for fallback hierarchy
 	}
 
-	// Build context string
-	contextStr := strings.Join(ctx.Context, "\n")
-	if contextStr == "" {
-		contextStr = "No additional context available."
+	// Initialize step agent components
+	if err := a.initializeStepAgent(stepAgent, step.AgentConfig); err != nil {
+		a.verbosePrint("Failed to initialize step agent: %v\n", err)
+		return nil
 	}
 
-	// Build previous step results
-	previousResults := ""
-	if len(ctx.StepResults) > 0 {
-		previousResults = "Previous Step Results:\n"
-		for _, result := range ctx.StepResults {
-			previousResults += fmt.Sprintf("- %s: %s\n", result.StepName, result.Output)
-		}
-	}
-
-	// Use step-specific template or default
-	if template != "" {
-		return BuildPrompt(ctx.Query, []string{contextStr}, "reasoning", instruction, template)
-	}
-
-	// Default step prompt
-	prompt := fmt.Sprintf(`%s
-
-Step: %s (%s)
-%s
-Query: %s
-Context: %s
-
-Please execute this step according to your role and provide a detailed response.`,
-		instruction, step.Name, step.Type, previousResults, ctx.Query, contextStr)
-
-	// Debug: Print the built prompt (commented out for cleaner output)
-	// fmt.Printf("DEBUG: Built prompt for step %s (%s):\n%s\n", step.Name, step.Type, prompt)
-
-	return prompt, nil
+	return stepAgent
 }
 
-// executeStep executes any reasoning step with optional tool usage
-func (a *Agent) executeStep(step ReasoningStep, prompt string, ctx *ReasoningContext) (string, int, error) {
-	// Use step-specific LLM config if available, otherwise use default agent
-	llm := a.llm
-	if step.AgentConfig != nil && step.AgentConfig.LLM.Name != "" {
-		// Create a temporary LLM with step-specific config
-		llm = a.createStepLLM(&step.AgentConfig.LLM)
+// initializeStepAgent initializes all components of a step agent
+func (a *Agent) initializeStepAgent(stepAgent *Agent, config *AgentConfig) error {
+	// Initialize LLM
+	if config.LLM.Name != "" {
+		llm := a.createStepLLM(&config.LLM)
+		if llm != nil {
+			stepAgent.llm = llm
+		} else {
+			stepAgent.llm = a.llm // Fallback to parent LLM
+		}
+	} else {
+		stepAgent.llm = a.llm // Use parent LLM
 	}
 
-	// For execution steps, check if tools should be used based on step instruction
-	if step.Type == "execute" && a.mcp != nil && len(a.mcp.ListTools()) > 0 {
-		// Check if the step instruction mentions using tools
-		instruction := ""
-		if step.AgentConfig != nil {
-			// No instruction field in AgentConfig anymore - use empty string
-			instruction = ""
-		}
-		if instruction != "" && strings.Contains(strings.ToLower(instruction), "tool") {
-			// Execute tools generically based on LLM reasoning
-			toolResults := a.executeToolsForQuery(ctx.Query)
-			if len(toolResults) > 0 {
-				// Include tool results in the prompt
-				toolContext := a.buildToolContext(toolResults)
-				enhancedPrompt := prompt + "\n\nTool Results:\n" + toolContext
-				return llm.Generate(enhancedPrompt)
-			}
-		}
+	// Initialize Memory (inherit from parent for now)
+	stepAgent.memory = a.memory
+
+	// Initialize MCP (inherit from parent for now)
+	stepAgent.mcp = a.mcp
+
+	// Initialize History (inherit from parent for now)
+	stepAgent.history = a.history
+
+	// Set reasoning config defaults
+	if stepAgent.WorkflowConfig.MaxSteps == 0 {
+		stepAgent.WorkflowConfig.SetDefaults()
 	}
 
-	// Regular LLM generation for all step types
-	return llm.Generate(prompt)
+	return nil
 }
 
 // createStepLLM returns the existing LLM (step-specific config not yet implemented)
@@ -1116,39 +719,21 @@ func (a *Agent) createStepLLM(config *YAMLProviderConfig) llms.LLMProvider {
 	return provider
 }
 
-// shouldContinueReasoning determines if reasoning should continue
-func (a *Agent) shouldContinueReasoning(response *AgentResponse, _ *ReasoningContext) bool {
-	// Simple heuristic - continue if confidence is low or if there were tool errors
-	if response.Confidence < 0.7 {
-		return true
-	}
-
-	if len(response.ToolResults) > 0 {
-		for _, result := range response.ToolResults {
-			if !result.Success {
-				return true
-			}
-		}
-	}
-
+// handleStepFailure handles step failure
+func (a *Agent) handleStepFailure(_ WorkflowStep, _ WorkflowStepResult, ctx *WorkflowContext) bool {
+	// For now, don't continue on step failure - could be enhanced later
 	return false
 }
 
-// handleStepFailure handles step failure with simple retry logic
-func (a *Agent) handleStepFailure(_ ReasoningStep, _ ReasoningStepResult, ctx *ReasoningContext) bool {
-	// Simple retry logic - continue if we haven't exceeded max retries
-	return ctx.RetryCount < ctx.MaxRetries
-}
-
-// updateReasoningContext updates context for next step
-func (a *Agent) updateReasoningContext(_ ReasoningStep, result ReasoningStepResult, ctx *ReasoningContext) {
+// updateWorkflowContext updates context for next step
+func (a *Agent) updateWorkflowContext(_ WorkflowStep, result WorkflowStepResult, ctx *WorkflowContext) {
 	if result.Success {
 		ctx.Context = append(ctx.Context, fmt.Sprintf("%s: %s", result.StepName, result.Output))
 	}
 }
 
 // generateFinalResponse generates the final response from reasoning results
-func (a *Agent) generateFinalResponse(ctx *ReasoningContext) *AgentResponse {
+func (a *Agent) generateFinalResponse(ctx *WorkflowContext) *AgentResponse {
 	// Combine all step results into a final response
 	var answer strings.Builder
 	var totalTokens int
@@ -1156,7 +741,6 @@ func (a *Agent) generateFinalResponse(ctx *ReasoningContext) *AgentResponse {
 	a.verbosePrint("Reasoning Summary:\n")
 	a.verbosePrint("   Steps completed: %d/%d\n", len(ctx.StepResults), ctx.MaxSteps)
 	a.verbosePrint("   Errors encountered: %d\n", len(ctx.ErrorHistory))
-	a.verbosePrint("   Retries used: %d/%d\n", ctx.RetryCount, ctx.MaxRetries)
 
 	for _, result := range ctx.StepResults {
 		if result.Success {
@@ -1171,9 +755,9 @@ func (a *Agent) generateFinalResponse(ctx *ReasoningContext) *AgentResponse {
 	a.verbosePrint("   Total tokens used: %d\n", totalTokens)
 
 	return &AgentResponse{
-		Answer:         answer.String(),
-		TokensUsed:     totalTokens,
-		ReasoningSteps: ctx.StepResults,
+		Answer:        answer.String(),
+		TokensUsed:    totalTokens,
+		WorkflowSteps: ctx.StepResults,
 	}
 }
 
@@ -1705,14 +1289,14 @@ type VerboseTemplateData struct {
 
 // verbosePrint prints a message only if verbose mode is enabled, using the configured template
 func (a *Agent) verbosePrint(format string, args ...interface{}) {
-	if !a.ReasoningConfig.Verbose {
+	if !a.WorkflowConfig.Verbose {
 		return
 	}
 
 	message := fmt.Sprintf(format, args...)
 
 	// Parse and execute the template
-	tmpl, err := template.New("verbose").Parse(a.ReasoningConfig.VerboseTemplate)
+	tmpl, err := template.New("verbose").Parse(a.WorkflowConfig.VerboseTemplate)
 	if err != nil {
 		// If template parsing fails, fall back to plain message
 		fmt.Printf("%s", message)
@@ -1769,4 +1353,249 @@ func (a *Agent) ListModels() []string {
 		return []string{}
 	}
 	return a.modelManager.ListModels()
+}
+
+// ============================================================================
+// AGENT WORKFLOW EXECUTION
+// ============================================================================
+
+// executeStepWithDynamicReasoning executes a step with integrated dynamic reasoning decision
+func (a *Agent) executeStepWithDynamicReasoning(step WorkflowStep, prompt string, ctx *WorkflowContext) (string, int, error) {
+	// Use agent's internal reasoning to decide approach and execute
+	return a.executeWithInternalReasoning(ctx.Query, ctx.Context, step)
+}
+
+// cleanJSONResponse extracts JSON from responses that may contain backticks or other formatting
+func (a *Agent) cleanJSONResponse(response string) string {
+	// Remove markdown code fences if present
+	cleanedResponse := response
+	if strings.Contains(response, "```json") {
+		start := strings.Index(response, "```json")
+		if start != -1 {
+			start += 7 // Skip "```json"
+			end := strings.Index(response[start:], "```")
+			if end != -1 {
+				cleanedResponse = strings.TrimSpace(response[start : start+end])
+			}
+		}
+	} else if strings.Contains(response, "```") {
+		start := strings.Index(response, "```")
+		if start != -1 {
+			start += 3 // Skip "```"
+			end := strings.Index(response[start:], "```")
+			if end != -1 {
+				cleanedResponse = strings.TrimSpace(response[start : start+end])
+			}
+		}
+	}
+
+	// Remove backticks if present (for non-fenced JSON)
+	cleanedResponse = strings.ReplaceAll(cleanedResponse, "`", "")
+
+	// Find JSON object boundaries
+	start := strings.Index(cleanedResponse, "{")
+	end := strings.LastIndex(cleanedResponse, "}")
+
+	if start != -1 && end != -1 && end > start {
+		return cleanedResponse[start : end+1]
+	}
+
+	return cleanedResponse
+}
+
+// executeWithInternalReasoning uses internal dynamic reasoning to process queries
+func (a *Agent) executeWithInternalReasoning(query string, context []string, step WorkflowStep) (string, int, error) {
+	a.verbosePrint("Agent starting internal reasoning for: %s\n", query)
+
+	// First, decide if this needs simple or dynamic reasoning internally
+	needsDynamicReasoning := a.shouldUseDynamicReasoningInternal(query)
+
+	if needsDynamicReasoning {
+		a.verbosePrint("Using advanced internal reasoning\n")
+		return a.executeDynamicInternalReasoning(query, context, step)
+	} else {
+		a.verbosePrint("Using simple internal reasoning\n")
+		return a.executeSimpleInternalReasoning(query, context, step)
+	}
+}
+
+// shouldUseDynamicReasoningInternal decides if query needs dynamic reasoning
+func (a *Agent) shouldUseDynamicReasoningInternal(query string) bool {
+	// Use AI to evaluate query complexity internally
+	prompt := fmt.Sprintf(`Analyze this query and determine if it needs dynamic reasoning:
+
+Query: "%s"
+
+Dynamic reasoning is needed for:
+- Complex analysis or research
+- Creative problem solving
+- Multi-step planning
+- Open-ended exploration
+- Synthesis of multiple concepts
+
+Simple reasoning is sufficient for:
+- Direct factual questions
+- Basic calculations
+- Simple lookups
+- Straightforward commands
+
+Respond with only "dynamic" or "simple".`, query)
+
+	response, _, err := a.llm.Generate(prompt)
+	if err != nil {
+		a.verbosePrint("Failed to evaluate reasoning complexity: %v, defaulting to simple\n", err)
+		return false
+	}
+
+	return strings.ToLower(strings.TrimSpace(response)) == "dynamic"
+}
+
+// executeSimpleInternalReasoning handles simple queries directly
+func (a *Agent) executeSimpleInternalReasoning(query string, context []string, step WorkflowStep) (string, int, error) {
+	// Build simple prompt
+	prompt := fmt.Sprintf("Query: %s\n\nProvide a direct, concise answer.", query)
+
+	// Add context if available
+	if len(context) > 0 {
+		prompt = fmt.Sprintf("Context: %s\n\n%s", strings.Join(context, "; "), prompt)
+	}
+
+	// Execute tools if needed for this step
+	if step.Type == "execute" && a.mcp != nil && len(a.mcp.ListTools()) > 0 {
+		toolResults := a.executeToolsForQuery(query)
+		if len(toolResults) > 0 {
+			toolContext := a.buildToolContext(toolResults)
+			prompt = prompt + "\n\nTool Results:\n" + toolContext
+		}
+	}
+
+	// Generate response
+	return a.llm.Generate(prompt)
+}
+
+// executeDynamicInternalReasoning uses the full dynamic reasoning engine
+func (a *Agent) executeDynamicInternalReasoning(query string, context []string, step WorkflowStep) (string, int, error) {
+	// Create a dynamic reasoning engine for this agent with full configuration
+	dynamicEngine := a.createDynamicEngineForStep(step)
+	if dynamicEngine == nil {
+		a.verbosePrint("Failed to create dynamic engine, falling back to simple reasoning\n")
+		return a.executeSimpleInternalReasoning(query, context, step)
+	}
+
+	// Build enhanced query with document context (like the full dynamic mode)
+	enhancedQuery := a.buildEnhancedQueryForStep(query, step)
+
+	// Execute dynamic reasoning with full capabilities
+	response, err := dynamicEngine.ExecuteDynamicReasoning(enhancedQuery, context)
+	if err != nil {
+		a.verbosePrint("Dynamic reasoning failed: %v, falling back to simple\n", err)
+		return a.executeSimpleInternalReasoning(query, context, step)
+	}
+
+	return response.Answer, response.TokensUsed, nil
+}
+
+// createDynamicEngineForStep creates a dynamic reasoning engine with step-specific configuration
+func (a *Agent) createDynamicEngineForStep(step WorkflowStep) *DynamicReasoningEngine {
+	// Use step-specific dynamic config if available, otherwise create optimized default
+	var dynamicConfig *DynamicReasoningConfig
+
+	if step.AgentConfig != nil && step.AgentConfig.Reasoning != nil {
+		// Use user-configured reasoning settings
+		dynamicConfig = step.AgentConfig.Reasoning
+		a.verbosePrint("Using step-specific reasoning config\n")
+	} else if a.config != nil && a.config.Reasoning != nil {
+		// Use main agent's reasoning configuration
+		dynamicConfig = a.config.Reasoning
+		a.verbosePrint("Using main agent reasoning config\n")
+	} else {
+		// Create optimized config for internal reasoning
+		dynamicConfig = &DynamicReasoningConfig{
+			MaxIterations:        5,                        // Reasonable default for internal reasoning
+			EnableMetaReasoning:  true,                     // Enable meta-reasoning for better decisions
+			EnableSelfReflection: true,                     // Enable self-reflection for quality
+			EnableGoalEvolution:  false,                    // Keep goals stable for individual steps
+			EnableDynamicTools:   true,                     // Enable dynamic tool selection
+			QualityThreshold:     0.7,                      // Quality threshold for iterations
+			AdaptationThreshold:  0.5,                      // When to adapt approach
+			GoalThreshold:        0.8,                      // Goal achievement threshold
+			Verbose:              a.WorkflowConfig.Verbose, // Inherit verbose setting
+			StreamingMode:        "all_steps",              // Enable streaming for better UX
+		}
+		a.verbosePrint("Using default optimized reasoning config\n")
+	}
+
+	// Create and return dynamic reasoning engine
+	return NewDynamicReasoningEngine(a, dynamicConfig)
+}
+
+// executeWithInternalReasoningStreaming uses internal dynamic reasoning with streaming support
+func (a *Agent) executeWithInternalReasoningStreaming(query string, context []string, step WorkflowStep) (<-chan string, error) {
+	a.verbosePrint("Agent starting internal reasoning with streaming for: %s\n", query)
+
+	// First, decide if this needs simple or dynamic reasoning internally
+	needsDynamicReasoning := a.shouldUseDynamicReasoningInternal(query)
+
+	if needsDynamicReasoning {
+		a.verbosePrint("Using advanced internal reasoning with streaming\n")
+		return a.executeDynamicInternalReasoningStreaming(query, context, step)
+	} else {
+		a.verbosePrint("Using simple internal reasoning with streaming\n")
+		return a.executeSimpleInternalReasoningStreaming(query, context, step)
+	}
+}
+
+// executeDynamicInternalReasoningStreaming uses the full dynamic reasoning engine with streaming
+func (a *Agent) executeDynamicInternalReasoningStreaming(query string, context []string, step WorkflowStep) (<-chan string, error) {
+	// Create a dynamic reasoning engine for this agent with full configuration
+	dynamicEngine := a.createDynamicEngineForStep(step)
+	if dynamicEngine == nil {
+		a.verbosePrint("Failed to create dynamic engine, falling back to simple reasoning\n")
+		return a.executeSimpleInternalReasoningStreaming(query, context, step)
+	}
+
+	// Build enhanced query with document context (like the full dynamic mode)
+	enhancedQuery := a.buildEnhancedQueryForStep(query, step)
+
+	// Execute dynamic reasoning with streaming and full capabilities
+	return dynamicEngine.ExecuteDynamicReasoningStreaming(enhancedQuery, context)
+}
+
+// executeSimpleInternalReasoningStreaming handles simple queries with streaming
+func (a *Agent) executeSimpleInternalReasoningStreaming(query string, context []string, step WorkflowStep) (<-chan string, error) {
+	responseChan := make(chan string, 100)
+
+	go func() {
+		defer close(responseChan)
+
+		// Execute simple reasoning (non-streaming) and stream the result
+		response, _, err := a.executeSimpleInternalReasoning(query, context, step)
+		if err != nil {
+			responseChan <- fmt.Sprintf("Simple reasoning failed: %v", err)
+			return
+		}
+
+		// Stream the response
+		responseChan <- response
+	}()
+
+	return responseChan, nil
+}
+
+// buildEnhancedQueryForStep builds enhanced query with document context for step
+func (a *Agent) buildEnhancedQueryForStep(query string, step WorkflowStep) string {
+	// Search for document context if search engine is available
+	var toolResults map[string]ToolResult
+
+	// Execute tools if needed for this step
+	if step.Type == "execute" && a.mcp != nil && len(a.mcp.ListTools()) > 0 {
+		toolResults = a.executeToolsForQuery(query)
+	}
+
+	// Build enhanced query with tool results (similar to buildEnhancedQuery)
+	if len(toolResults) > 0 {
+		return a.buildEnhancedQuery(query, toolResults)
+	}
+
+	return query
 }
