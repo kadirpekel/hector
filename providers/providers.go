@@ -104,8 +104,8 @@ func RegisterDefaultProviders() error {
 	qdrantConfig := &databases.QdrantConfig{
 		Provider: "qdrant",
 		Host:     "localhost",
-		Port:     6334,
-		Timeout:  30,
+		Port:     6334, // Use gRPC port (required by qdrant go-client)
+		Timeout:  5,    // Reduced from 30 to 5 seconds for faster failure
 		UseTLS:   false,
 		Insecure: false,
 	}

@@ -78,11 +78,19 @@ func (se *SearchEngine) ExtractContextWithFallback(allResults map[string][]Searc
 	return se.ExtractContext(allResults, se.GetMaxContextLength())
 }
 
+// validateEmbedder checks if embedder is configured for SearchEngine
+func (se *SearchEngine) validateEmbedder() error {
+	if se.embedder == nil {
+		return fmt.Errorf("no embedder configured")
+	}
+	return nil
+}
+
 // SearchModels performs vector similarity search across specified models
 // If no modelNames provided, searches all models
 func (se *SearchEngine) SearchModels(query string, topKPerModel int, modelNames ...string) (map[string][]SearchResult, error) {
-	if se.embedder == nil {
-		return nil, fmt.Errorf("no embedder configured")
+	if err := se.validateEmbedder(); err != nil {
+		return nil, err
 	}
 
 	// Generate embedding for query once
@@ -130,8 +138,8 @@ func (se *SearchEngine) SearchModels(query string, topKPerModel int, modelNames 
 
 // SearchDocuments performs vector similarity search on a single model
 func (se *SearchEngine) SearchDocuments(query string, modelName string, topK int) ([]SearchResult, error) {
-	if se.embedder == nil {
-		return nil, fmt.Errorf("no embedder configured")
+	if err := se.validateEmbedder(); err != nil {
+		return nil, err
 	}
 
 	config, exists := se.models[modelName]

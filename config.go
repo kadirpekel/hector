@@ -16,6 +16,13 @@ import (
 // YAML CONFIGURATION
 // ============================================================================
 
+// ensureConfigMap ensures the Config map exists and initializes it if nil
+func ensureConfigMap(config *YAMLProviderConfig) {
+	if config.Config == nil {
+		config.Config = make(map[string]interface{})
+	}
+}
+
 // Default provider names
 const (
 	DefaultLLMProvider      = "ollama"
@@ -25,15 +32,16 @@ const (
 
 // AgentConfig represents the complete agent configuration (workflow-first architecture)
 type AgentConfig struct {
-	Agent      AgentInfo               `yaml:"agent"`
-	LLM        YAMLProviderConfig      `yaml:"llm,omitempty"`         // LLM configuration for this agent
-	Memory     YAMLProviderConfig      `yaml:"memory,omitempty"`      // Memory/database configuration
-	Embedder   YAMLProviderConfig      `yaml:"embedder,omitempty"`    // Embedder configuration
-	Search     SearchConfig            `yaml:"search,omitempty"`      // Search configuration
-	Reasoning  *DynamicReasoningConfig `yaml:"reasoning,omitempty"`   // AI reasoning configuration
-	Workflow   WorkflowConfig          `yaml:"workflow,omitempty"`    // Workflow configuration (for multi-step agents)
-	Models     []ModelConfig           `yaml:"models,omitempty"`      // Document models for search
-	MCPServers []MCPServerConfig       `yaml:"mcp_servers,omitempty"` // MCP server configurations
+	Agent        AgentInfo               `yaml:"agent"`
+	LLM          YAMLProviderConfig      `yaml:"llm,omitempty"`           // LLM configuration for this agent
+	Memory       YAMLProviderConfig      `yaml:"memory,omitempty"`        // Memory/database configuration
+	Embedder     YAMLProviderConfig      `yaml:"embedder,omitempty"`      // Embedder configuration
+	Search       SearchConfig            `yaml:"search,omitempty"`        // Search configuration
+	Reasoning    *DynamicReasoningConfig `yaml:"reasoning,omitempty"`     // AI reasoning configuration
+	Workflow     WorkflowConfig          `yaml:"workflow,omitempty"`      // Workflow configuration (for multi-step agents)
+	Models       []ModelConfig           `yaml:"models,omitempty"`        // Document models for search
+	MCPServers   []MCPServerConfig       `yaml:"mcp_servers,omitempty"`   // MCP server configurations
+	CommandTools *SecurityConfig         `yaml:"command_tools,omitempty"` // Command-line tools security configuration
 
 	// Global configurations (optional, used as defaults)
 	Sources map[string]SourceConfig `yaml:"sources,omitempty"`
@@ -411,6 +419,11 @@ func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 	agent := NewAgent()
 	agent.config = config // Store full config for access to reasoning settings
 
+	// Configure command tools with custom security settings if provided
+	if config.CommandTools != nil {
+		agent.commandTools = NewCommandToolRegistry(config.CommandTools)
+	}
+
 	// Ensure workflow has at least one step
 	if len(config.Workflow.Steps) == 0 {
 		// Create a default step if none exist
@@ -443,9 +456,7 @@ func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 		}
 
 		// Ensure Config map exists for provider factory
-		if llmConfig.Config == nil {
-			llmConfig.Config = make(map[string]interface{})
-		}
+		ensureConfigMap(&llmConfig)
 
 		// Add provider name to config map for factory
 		llmConfig.Config["provider"] = llmConfig.Name
@@ -469,9 +480,7 @@ func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 		}
 
 		// Ensure Config map exists for provider factory
-		if memoryConfig.Config == nil {
-			memoryConfig.Config = make(map[string]interface{})
-		}
+		ensureConfigMap(&memoryConfig)
 
 		// Add provider name to config map for factory
 		memoryConfig.Config["provider"] = memoryConfig.Name
@@ -495,9 +504,7 @@ func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 		}
 
 		// Ensure Config map exists for provider factory
-		if embedderConfig.Config == nil {
-			embedderConfig.Config = make(map[string]interface{})
-		}
+		ensureConfigMap(&embedderConfig)
 
 		// Add provider name to config map for factory
 		embedderConfig.Config["provider"] = embedderConfig.Name
@@ -653,9 +660,7 @@ func configureProvider(agent *Agent, config *YAMLProviderConfig, providerType st
 		}
 	}
 
-	if config.Config == nil {
-		config.Config = make(map[string]interface{})
-	}
+	ensureConfigMap(config)
 
 	// Add the provider name to the config map
 	configMap := make(map[string]interface{})

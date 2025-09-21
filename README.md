@@ -51,7 +51,7 @@ docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
 
 **Option A: Zero Configuration**
 ```bash
-# Uses local Ollama + Qdrant with smart defaults
+# Uses local Ollama with smart defaults (minimal mode)
 hector
 ```
 

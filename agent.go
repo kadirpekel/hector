@@ -27,6 +27,7 @@ type Agent struct {
 	embedder     embedders.EmbeddingProvider
 	searchEngine *SearchEngine
 	mcp          *MCPInfrastructure
+	commandTools *CommandToolRegistry // Native command-line tools
 	history      *ConversationHistory
 	memory       *AgentMemory
 
@@ -97,10 +98,11 @@ func NewAgent() *Agent {
 		},
 
 		// Initialize components
-		mcp:     NewMCPInfrastructure(),
-		history: NewConversationHistory("default"),
-		memory:  NewAgentMemory(),
-		parent:  nil, // No parent by default
+		mcp:          NewMCPInfrastructure(),
+		commandTools: NewCommandToolRegistry(nil), // Initialize with default security config
+		history:      NewConversationHistory("default"),
+		memory:       NewAgentMemory(),
+		parent:       nil, // No parent by default
 	}
 
 	return agent
@@ -204,42 +206,27 @@ func (a *Agent) configureWithDefaults() error {
 	}
 	a.WithLLMConfig(llmConfig)
 
-	// Configure Database with defaults
-	dbConfig := YAMLProviderConfig{
-		Name: "qdrant",
-		Config: map[string]interface{}{
-			"host":     "localhost",
-			"port":     6334,
-			"timeout":  30,
-			"use_tls":  false,
-			"insecure": false,
+	// Configure minimal workflow that doesn't try to create nested agents
+	a.WorkflowConfig = WorkflowConfig{
+		MaxSteps:      1,
+		StreamingMode: "all_steps",
+		Verbose:       false,
+		Steps: []WorkflowStep{
+			{
+				Name:        "main",
+				Type:        "execute",
+				Enabled:     true,
+				AgentConfig: nil, // No nested agent config - use the main agent
+			},
 		},
 	}
-	a.WithDatabaseConfig(dbConfig)
 
-	// Configure Embedder with defaults
-	embedderConfig := map[string]interface{}{
-		"provider":    "ollama",
-		"model":       "nomic-embed-text",
-		"host":        "http://localhost:11434",
-		"dimension":   768,
-		"timeout":     30,
-		"max_retries": 3,
-	}
-
-	embedder, err := providers.CreateEmbedderProvider(embedderConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create embedder provider: %w", err)
-	}
-	a.embedder = embedder
-
-	// Configure SearchEngine with defaults
-	searchConfig := SearchConfig{
-		MaxContextLength: 2000,
-		ContextStrategy:  "relevance",
-		EnableReranking:  false,
-	}
-	a.WithSearchConfig(searchConfig)
+	// Skip database configuration by default to avoid hanging
+	// Users can explicitly configure Qdrant in their config files if needed
+	fmt.Println("Running in minimal mode (LLM only).")
+	fmt.Println("For document search and memory features, use a config file with Qdrant:")
+	fmt.Println("  docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant")
+	fmt.Println("  hector --config examples/basic.yaml")
 
 	return nil
 }
@@ -264,11 +251,11 @@ func (a *Agent) WithDatabase(db databases.VectorDB) *Agent {
 // WithEmbedder sets the embedding provider
 func (a *Agent) WithEmbedder(embedder embedders.EmbeddingProvider) *Agent {
 	a.embedder = embedder
-	// Update search engine with new embedder
+	// Update search engine with new embedder only if we have a database
 	if a.searchEngine != nil {
 		a.searchEngine.embedder = embedder
-	} else {
-		// Create search engine if it doesn't exist
+	} else if a.db != nil {
+		// Create search engine only if we have both database and embedder
 		a.searchEngine = NewSearchEngine(a.db, a.embedder, make(map[string]ModelConfig))
 	}
 	return a
@@ -364,6 +351,43 @@ func (a *Agent) buildEnhancedQuery(query string, toolResults map[string]ToolResu
 }
 
 // ============================================================================
+// VALIDATION METHODS
+// ============================================================================
+
+// validateLLM checks if LLM provider is configured
+func (a *Agent) validateLLM() error {
+	if a.llm == nil {
+		return fmt.Errorf("no LLM provider configured")
+	}
+	return nil
+}
+
+// validateEmbedder checks if embedder is configured
+func (a *Agent) validateEmbedder() error {
+	if a.embedder == nil {
+		return fmt.Errorf("no embedder configured")
+	}
+	return nil
+}
+
+// validateModelManager checks if model manager is initialized
+func (a *Agent) validateModelManager() error {
+	if a.modelManager == nil {
+		return fmt.Errorf("ModelManager not initialized")
+	}
+	return nil
+}
+
+// getStepAgent returns the appropriate agent for a workflow step
+// Creates a new step agent if AgentConfig is provided, otherwise returns current agent
+func (a *Agent) getStepAgent(step WorkflowStep) *Agent {
+	if step.AgentConfig != nil {
+		return a.createStepAgent(step)
+	}
+	return a
+}
+
+// ============================================================================
 // WORKFLOW ENGINE
 // ============================================================================
 
@@ -371,8 +395,8 @@ func (a *Agent) buildEnhancedQuery(query string, toolResults map[string]ToolResu
 func (a *Agent) ExecuteQueryWithReasoning(query string, modelNames ...string) (*AgentResponse, error) {
 	a.verbosePrint("ExecuteQueryWithReasoning called with query: %s\n", query)
 
-	if a.llm == nil {
-		return nil, fmt.Errorf("no LLM provider configured")
+	if err := a.validateLLM(); err != nil {
+		return nil, err
 	}
 
 	a.verbosePrint("Starting agent workflow\n")
@@ -411,8 +435,8 @@ func (a *Agent) ExecuteQueryWithReasoning(query string, modelNames ...string) (*
 func (a *Agent) ExecuteQueryWithReasoningStreaming(query string, modelNames ...string) (<-chan string, error) {
 	a.verbosePrint("ExecuteQueryWithReasoningStreaming called with query: %s\n", query)
 
-	if a.llm == nil {
-		return nil, fmt.Errorf("no LLM provider configured")
+	if err := a.validateLLM(); err != nil {
+		return nil, err
 	}
 
 	a.verbosePrint("Starting agent workflow\n")
@@ -433,7 +457,7 @@ func (a *Agent) executeWorkflowStreaming(query string, modelNames ...string) (<-
 
 		// Initialize reasoning context with document search results (like v1)
 		var initialContext []string
-		if a.searchEngine != nil {
+		if a.searchEngine != nil && a.db != nil && a.embedder != nil {
 			// Search for document context using the same approach as v1
 			results, err := a.SearchDocuments(query, a.getDefaultModelName(), a.getDefaultTopK())
 			if err == nil && len(results) > 0 {
@@ -538,25 +562,31 @@ func (a *Agent) executeAgentStepStreaming(step WorkflowStep, ctx *WorkflowContex
 	go func() {
 		defer close(responseChan)
 
-		// Create a full agent for this step if AgentConfig is provided
-		var stepAgent *Agent
-		if step.AgentConfig != nil {
-			stepAgent = a.createStepAgent(step)
-			if stepAgent == nil {
-				responseChan <- fmt.Sprintf("Failed to create step agent for %s\n", step.Name)
-				return
-			}
-		} else {
-			// Use current agent if no specific config
-			stepAgent = a
+		// Get the appropriate agent for this step
+		stepAgent := a.getStepAgent(step)
+		if stepAgent == nil {
+			responseChan <- fmt.Sprintf("Failed to create step agent for %s\n", step.Name)
+			return
 		}
 
-		// No prompt needed - using internal reasoning
+		// Execute tools first if available (core workflow capability)
+		var toolResults map[string]ToolResult
 
-		// Tools will be handled internally by the reasoning process
+		// Check if we have any tools available (MCP or command tools)
+		hasTools := false
+		if stepAgent.mcp != nil && len(stepAgent.mcp.ListTools()) > 0 {
+			hasTools = true
+		}
+		if stepAgent.commandTools != nil && len(stepAgent.commandTools.ListTools()) > 0 {
+			hasTools = true
+		}
 
-		// Use step agent's internal reasoning with streaming support
-		streamingChan, err := stepAgent.executeWithInternalReasoningStreaming(ctx.Query, ctx.Context, step)
+		if hasTools {
+			toolResults = stepAgent.executeToolsForQuery(ctx.Query)
+		}
+
+		// Use step agent's internal reasoning with streaming support, including tool results
+		streamingChan, err := stepAgent.executeWithInternalReasoningStreaming(ctx.Query, ctx.Context, step, toolResults)
 		if err != nil {
 			responseChan <- fmt.Sprintf("Internal reasoning streaming failed: %v", err)
 			return
@@ -646,22 +676,32 @@ func (a *Agent) executeAgentStep(step WorkflowStep, ctx *WorkflowContext, _ ...s
 		Success:  false,
 	}
 
-	// Create a full agent for this step if AgentConfig is provided
-	var stepAgent *Agent
-	if step.AgentConfig != nil {
-		stepAgent = a.createStepAgent(step)
-		if stepAgent == nil {
-			result.Error = "Failed to create step agent"
-			result.Duration = time.Since(startTime)
-			return result
-		}
-	} else {
-		// Use current agent if no specific config
-		stepAgent = a
+	// Get the appropriate agent for this step
+	stepAgent := a.getStepAgent(step)
+	if stepAgent == nil {
+		result.Error = "Failed to create step agent"
+		result.Duration = time.Since(startTime)
+		return result
 	}
 
-	// Execute with step agent using internal reasoning
-	output, tokensUsed, err := stepAgent.executeStepWithDynamicReasoning(step, "", ctx)
+	// Execute tools first if available (core workflow capability)
+	var toolResults map[string]ToolResult
+
+	// Check if we have any tools available (MCP or command tools)
+	hasTools := false
+	if stepAgent.mcp != nil && len(stepAgent.mcp.ListTools()) > 0 {
+		hasTools = true
+	}
+	if stepAgent.commandTools != nil && len(stepAgent.commandTools.ListTools()) > 0 {
+		hasTools = true
+	}
+
+	if hasTools {
+		toolResults = stepAgent.executeToolsForQuery(ctx.Query)
+	}
+
+	// Execute with step agent using internal reasoning, including tool results
+	output, tokensUsed, err := stepAgent.executeStepWithDynamicReasoning(step, "", ctx, toolResults)
 
 	if err != nil {
 		result.Error = err.Error()
@@ -684,7 +724,11 @@ func (a *Agent) createStepAgent(step WorkflowStep) *Agent {
 	// Create a new agent with step-specific configuration
 	stepAgent := &Agent{
 		WorkflowConfig: step.AgentConfig.Workflow,
-		parent:         a, // Set parent for fallback hierarchy
+		parent:         a,              // Set parent for fallback hierarchy
+		commandTools:   a.commandTools, // Inherit command tools from parent
+		mcp:            a.mcp,          // Inherit MCP infrastructure from parent
+		history:        a.history,      // Inherit conversation history from parent
+		memory:         a.memory,       // Inherit memory from parent
 	}
 
 	// Initialize step agent components
@@ -794,8 +838,8 @@ func (a *Agent) generateFinalResponse(ctx *WorkflowContext) *AgentResponse {
 
 // ExecuteQuery performs an agent query with tool usage
 func (a *Agent) ExecuteQuery(query string, modelNames ...string) (*AgentResponse, error) {
-	if a.llm == nil {
-		return nil, fmt.Errorf("no LLM provider configured")
+	if err := a.validateLLM(); err != nil {
+		return nil, err
 	}
 
 	// Add user message to conversation history
@@ -857,8 +901,8 @@ func (a *Agent) ExecuteQuery(query string, modelNames ...string) (*AgentResponse
 
 // ExecuteQueryStreaming performs an agent query with tool usage and streaming response
 func (a *Agent) ExecuteQueryStreaming(query string, modelNames ...string) (<-chan string, error) {
-	if a.llm == nil {
-		return nil, fmt.Errorf("no LLM provider configured")
+	if err := a.validateLLM(); err != nil {
+		return nil, err
 	}
 
 	ch := make(chan string)
@@ -937,12 +981,17 @@ func (a *Agent) ExecuteQueryStreaming(query string, modelNames ...string) (<-cha
 	return ch, nil
 }
 
-// executeToolsForQuery uses LLM reasoning to determine which tools to execute via MCP
+// executeToolsForQuery uses direct mapping for simple commands, LLM reasoning for complex ones
 func (a *Agent) executeToolsForQuery(query string) map[string]ToolResult {
 	toolResults := make(map[string]ToolResult)
 
-	// Get available tools from MCP
+	// Get available tools from MCP and command tools
 	availableTools := a.mcp.ListTools()
+	if a.commandTools != nil {
+		commandTools := a.commandTools.ListTools()
+		availableTools = append(availableTools, commandTools...)
+	}
+
 	if len(availableTools) == 0 {
 		return toolResults
 	}
@@ -950,36 +999,23 @@ func (a *Agent) executeToolsForQuery(query string) map[string]ToolResult {
 	// Create structured tool information for LLM
 	toolInfo := a.createToolInfoForLLM(availableTools)
 
-	// Ask LLM to reason about tool usage
-	toolReasoningPrompt := fmt.Sprintf(`You are an AI assistant that needs to decide which tools to use for a user query.
+	// Ask LLM to reason about tool usage naturally
+	toolReasoningPrompt := fmt.Sprintf(`You have access to these tools and need to decide which ones to use for the user's request.
 
-Available tools:
+USER REQUEST: "%s"
+
+AVAILABLE TOOLS:
 %s
 
-User query: "%s"
+Think about what the user wants and choose the most appropriate tools. If you need to make assumptions about file names or locations, make reasonable guesses - you can always recover if wrong.
 
-Based on the query, determine which tools (if any) would be helpful. Respond with a JSON object containing:
-- "reasoning": Brief explanation of why these tools are needed
-- "tools": Array of tool names to execute
-- "parameters": Object with parameters for each tool
+If the request can be answered with general knowledge alone, use no tools.
 
-IMPORTANT: Use the exact parameter names from the tool schema above. For example, if a tool requires a "location" parameter, use "location" not "city" or "place".
-
-Example response for tool usage:
+Respond with JSON only:
 {
-  "reasoning": "User needs specific functionality",
-  "tools": ["TOOL_NAME"],
-  "parameters": {
-    "TOOL_NAME": {"param1": "value1", "param2": "value2"}
-  }
-}
-
-If no tools are needed, respond with:
-{
-  "reasoning": "Query can be answered with existing knowledge",
-  "tools": [],
-  "parameters": {}
-}`, toolInfo, query)
+  "tools": ["tool_name"],
+  "parameters": {"tool_name": {"param": "value"}}
+}`, query, toolInfo)
 
 	// Get LLM reasoning about tool usage
 	prompt, err := BuildPrompt(toolReasoningPrompt, []string{}, "tool-reasoning", "You are a helpful AI assistant.", "")
@@ -997,7 +1033,7 @@ If no tools are needed, respond with:
 	// Parse LLM response (simplified - in production you'd want proper JSON parsing)
 	toolDecisions := a.parseToolDecisions(reasoningResponse)
 
-	// Execute the recommended tools via MCP
+	// Execute the recommended tools with intelligent retry logic
 	for _, toolName := range toolDecisions.Tools {
 		params := toolDecisions.Parameters[toolName]
 		if params == nil {
@@ -1005,28 +1041,46 @@ If no tools are needed, respond with:
 			params = map[string]interface{}{}
 		}
 
-		// Execute tool via MCP
-
 		// Type assert to map[string]interface{}
 		if paramMap, ok := params.(map[string]interface{}); ok {
-			result, err := a.mcp.ExecuteTool(context.Background(), toolName, paramMap)
-			if err == nil {
-				toolResults[toolName] = result
-			} else {
-				// Tool execution failed, store error result and log it
-				fmt.Printf("Tool execution failed for %s: %v\n", toolName, err)
-				errorResult := ToolResult{
-					Content:  "",
-					Success:  false,
-					Error:    err.Error(),
-					ToolName: toolName,
-				}
-				toolResults[toolName] = errorResult
-			}
+			result := a.executeToolWithRetry(query, toolName, paramMap)
+			toolResults[toolName] = result
 		}
 	}
 
 	return toolResults
+}
+
+// executeToolWithRetry executes tools naturally - just try once and let AI handle failures
+func (a *Agent) executeToolWithRetry(originalQuery string, toolName string, params map[string]interface{}) ToolResult {
+	// Execute the tool
+	var result ToolResult
+	var err error
+
+	// Check if it's a command tool first
+	if a.commandTools != nil {
+		if _, exists := a.commandTools.GetTool(toolName); exists {
+			result, err = a.commandTools.ExecuteTool(context.Background(), toolName, params)
+		} else {
+			// Execute via MCP
+			result, err = a.mcp.ExecuteTool(context.Background(), toolName, params)
+		}
+	} else {
+		// Execute via MCP only
+		result, err = a.mcp.ExecuteTool(context.Background(), toolName, params)
+	}
+
+	// Return the result as-is, let the AI handle any failures naturally
+	if err != nil {
+		return ToolResult{
+			Content:  "",
+			Success:  false,
+			Error:    err.Error(),
+			ToolName: toolName,
+		}
+	}
+
+	return result
 }
 
 // createToolInfoForLLM creates a JSON-formatted string of tool information for LLM consumption
@@ -1062,14 +1116,40 @@ func (a *Agent) parseToolDecisions(response string) ToolDecision {
 		Parameters: make(map[string]interface{}),
 	}
 
-	// Try to parse as JSON first
+	// Clean the response by removing markdown code blocks if present
+	cleanedResponse := response
+
+	// Remove ```json and ``` markers
+	if strings.Contains(response, "```json") {
+		// Extract JSON from markdown code block
+		start := strings.Index(response, "```json")
+		if start != -1 {
+			start += 7 // Skip "```json"
+			end := strings.Index(response[start:], "```")
+			if end != -1 {
+				cleanedResponse = strings.TrimSpace(response[start : start+end])
+			}
+		}
+	} else if strings.Contains(response, "```") {
+		// Handle generic code blocks
+		start := strings.Index(response, "```")
+		if start != -1 {
+			start += 3 // Skip "```"
+			end := strings.Index(response[start:], "```")
+			if end != -1 {
+				cleanedResponse = strings.TrimSpace(response[start : start+end])
+			}
+		}
+	}
+
+	// Try to parse as JSON
 	var jsonResponse struct {
 		Reasoning  string                 `json:"reasoning"`
 		Tools      []string               `json:"tools"`
 		Parameters map[string]interface{} `json:"parameters"`
 	}
 
-	if err := json.Unmarshal([]byte(response), &jsonResponse); err == nil {
+	if err := json.Unmarshal([]byte(cleanedResponse), &jsonResponse); err == nil {
 		// Successfully parsed JSON
 		decision.Reasoning = jsonResponse.Reasoning
 		decision.Tools = jsonResponse.Tools
@@ -1077,7 +1157,7 @@ func (a *Agent) parseToolDecisions(response string) ToolDecision {
 		return decision
 	}
 
-	// If JSON parsing fails, return empty decision
+	// If JSON parsing still fails, return empty decision
 	return decision
 }
 
@@ -1181,8 +1261,8 @@ func (a *Agent) getDefaultTopK() int {
 
 // Query performs a complete agent query
 func (a *Agent) Query(query string, modelNames ...string) (*AgentResponse, error) {
-	if a.llm == nil {
-		return nil, fmt.Errorf("no LLM provider configured")
+	if err := a.validateLLM(); err != nil {
+		return nil, err
 	}
 
 	// Handle different model name patterns
@@ -1268,8 +1348,8 @@ func (a *Agent) SearchDocuments(query string, modelName string, topK int) ([]Sea
 
 // UpsertDocument adds or updates a document in the vector database
 func (a *Agent) UpsertDocument(modelName string, id string, data interface{}) error {
-	if a.embedder == nil {
-		return fmt.Errorf("no embedder configured")
+	if err := a.validateEmbedder(); err != nil {
+		return err
 	}
 
 	config, exists := a.searchEngine.models[modelName]
@@ -1356,24 +1436,24 @@ func (a *Agent) verbosePrint(format string, args ...interface{}) {
 
 // SyncModel syncs documents for a specific model
 func (a *Agent) SyncModel(modelName string) error {
-	if a.modelManager == nil {
-		return fmt.Errorf("ModelManager not initialized")
+	if err := a.validateModelManager(); err != nil {
+		return err
 	}
 	return a.modelManager.SyncModel(modelName)
 }
 
 // SyncAllModels syncs all models that have ingestion configuration
 func (a *Agent) SyncAllModels() error {
-	if a.modelManager == nil {
-		return fmt.Errorf("ModelManager not initialized")
+	if err := a.validateModelManager(); err != nil {
+		return err
 	}
 	return a.modelManager.SyncAllModels()
 }
 
 // GetModelStatus returns the status of a model
 func (a *Agent) GetModelStatus(modelName string) (map[string]interface{}, error) {
-	if a.modelManager == nil {
-		return nil, fmt.Errorf("ModelManager not initialized")
+	if err := a.validateModelManager(); err != nil {
+		return nil, err
 	}
 	return a.modelManager.GetModelStatus(modelName)
 }
@@ -1391,9 +1471,9 @@ func (a *Agent) ListModels() []string {
 // ============================================================================
 
 // executeStepWithDynamicReasoning executes a step with integrated dynamic reasoning decision
-func (a *Agent) executeStepWithDynamicReasoning(step WorkflowStep, prompt string, ctx *WorkflowContext) (string, int, error) {
-	// Use agent's internal reasoning to decide approach and execute
-	return a.executeWithInternalReasoning(ctx.Query, ctx.Context, step)
+func (a *Agent) executeStepWithDynamicReasoning(step WorkflowStep, prompt string, ctx *WorkflowContext, toolResults map[string]ToolResult) (string, int, error) {
+	// Use agent's internal reasoning to decide approach and execute, with tool results
+	return a.executeWithInternalReasoning(ctx.Query, ctx.Context, step, toolResults)
 }
 
 // cleanJSONResponse extracts JSON from responses that may contain backticks or other formatting
@@ -1435,7 +1515,7 @@ func (a *Agent) cleanJSONResponse(response string) string {
 }
 
 // executeWithInternalReasoning uses internal dynamic reasoning to process queries
-func (a *Agent) executeWithInternalReasoning(query string, context []string, step WorkflowStep) (string, int, error) {
+func (a *Agent) executeWithInternalReasoning(query string, context []string, step WorkflowStep, toolResults map[string]ToolResult) (string, int, error) {
 	a.verbosePrint("Agent starting internal reasoning for: %s\n", query)
 
 	// First, decide if this needs simple or dynamic reasoning internally
@@ -1443,61 +1523,75 @@ func (a *Agent) executeWithInternalReasoning(query string, context []string, ste
 
 	if needsDynamicReasoning {
 		a.verbosePrint("Using advanced internal reasoning\n")
-		return a.executeDynamicInternalReasoning(query, context, step)
+		return a.executeDynamicInternalReasoning(query, context, step, toolResults)
 	} else {
 		a.verbosePrint("Using simple internal reasoning\n")
-		return a.executeSimpleInternalReasoning(query, context, step)
+		return a.executeSimpleInternalReasoning(query, context, step, toolResults)
 	}
 }
 
 // shouldUseDynamicReasoningInternal decides if query needs dynamic reasoning
 func (a *Agent) shouldUseDynamicReasoningInternal(query string) bool {
-	// Use AI to evaluate query complexity internally
-	prompt := fmt.Sprintf(`Analyze this query and determine if it needs dynamic reasoning:
+	// Use AI to make this decision, but with a much better prompt
+	prompt := fmt.Sprintf(`You are deciding whether a user query needs simple direct execution or complex dynamic reasoning.
 
-Query: "%s"
+USER QUERY: "%s"
 
-Dynamic reasoning is needed for:
-- Complex analysis or research
+SIMPLE EXECUTION is for:
+- Direct commands (show file, list directory, run command)
+- Factual lookups (what is X, when did Y happen)
+- Basic operations (calculate, convert, format)
+- Single-step tasks
+
+DYNAMIC REASONING is for:
+- Multi-step analysis requiring planning
 - Creative problem solving
-- Multi-step planning
+- Research requiring multiple sources
+- Complex decision making with trade-offs
 - Open-ended exploration
-- Synthesis of multiple concepts
 
-Simple reasoning is sufficient for:
-- Direct factual questions
-- Basic calculations
-- Simple lookups
-- Straightforward commands
-
-Respond with only "dynamic" or "simple".`, query)
+Respond with ONLY one word: "simple" or "dynamic"`, query)
 
 	response, _, err := a.llm.Generate(prompt)
 	if err != nil {
-		a.verbosePrint("Failed to evaluate reasoning complexity: %v, defaulting to simple\n", err)
+		// If LLM fails, default to simple (safer)
 		return false
 	}
 
-	return strings.ToLower(strings.TrimSpace(response)) == "dynamic"
+	response = strings.ToLower(strings.TrimSpace(response))
+	return response == "dynamic"
 }
 
 // executeSimpleInternalReasoning handles simple queries directly
-func (a *Agent) executeSimpleInternalReasoning(query string, context []string, step WorkflowStep) (string, int, error) {
-	// Build simple prompt
-	prompt := fmt.Sprintf("Query: %s\n\nProvide a direct, concise answer.", query)
+func (a *Agent) executeSimpleInternalReasoning(query string, context []string, step WorkflowStep, toolResults map[string]ToolResult) (string, int, error) {
+	// If we have tool results, use them directly for simple queries
+	if len(toolResults) > 0 {
+		// For simple file operations, return the tool output directly
+		for _, result := range toolResults {
+			if result.Success && strings.Contains(result.Content, "\n") {
+				// This looks like file content, return it directly
+				return strings.TrimSpace(result.Content), 0, nil
+			} else if result.Success && result.Content != "" {
+				// Return the tool result with minimal formatting
+				return result.Content, 0, nil
+			}
+		}
+	}
+
+	// Build simple prompt for cases without useful tool results
+	prompt := fmt.Sprintf(`Query: %s
+
+Instructions: Provide a direct, concise answer. If tools were executed, use their results. Do not ask for clarification.`, query)
 
 	// Add context if available
 	if len(context) > 0 {
 		prompt = fmt.Sprintf("Context: %s\n\n%s", strings.Join(context, "; "), prompt)
 	}
 
-	// Execute tools if needed for this step
-	if step.Type == "execute" && a.mcp != nil && len(a.mcp.ListTools()) > 0 {
-		toolResults := a.executeToolsForQuery(query)
-		if len(toolResults) > 0 {
-			toolContext := a.buildToolContext(toolResults)
-			prompt = prompt + "\n\nTool Results:\n" + toolContext
-		}
+	// Add tool results if available
+	if len(toolResults) > 0 {
+		toolContext := a.buildToolContext(toolResults)
+		prompt = prompt + "\n\nTool Results:\n" + toolContext
 	}
 
 	// Generate response
@@ -1505,22 +1599,26 @@ func (a *Agent) executeSimpleInternalReasoning(query string, context []string, s
 }
 
 // executeDynamicInternalReasoning uses the full dynamic reasoning engine
-func (a *Agent) executeDynamicInternalReasoning(query string, context []string, step WorkflowStep) (string, int, error) {
+func (a *Agent) executeDynamicInternalReasoning(query string, context []string, step WorkflowStep, toolResults map[string]ToolResult) (string, int, error) {
 	// Create a dynamic reasoning engine for this agent with full configuration
 	dynamicEngine := a.createDynamicEngineForStep(step)
 	if dynamicEngine == nil {
 		a.verbosePrint("Failed to create dynamic engine, falling back to simple reasoning\n")
-		return a.executeSimpleInternalReasoning(query, context, step)
+		return a.executeSimpleInternalReasoning(query, context, step, toolResults)
 	}
 
-	// Build enhanced query with document context (like the full dynamic mode)
-	enhancedQuery := a.buildEnhancedQueryForStep(query, step)
+	// Build enhanced query with document context and tool results
+	enhancedQuery := query
+	if len(toolResults) > 0 {
+		toolContext := a.buildToolContext(toolResults)
+		enhancedQuery = query + "\n\nTool Results:\n" + toolContext
+	}
 
 	// Execute dynamic reasoning with full capabilities
 	response, err := dynamicEngine.ExecuteDynamicReasoning(enhancedQuery, context)
 	if err != nil {
 		a.verbosePrint("Dynamic reasoning failed: %v, falling back to simple\n", err)
-		return a.executeSimpleInternalReasoning(query, context, step)
+		return a.executeSimpleInternalReasoning(query, context, step, toolResults)
 	}
 
 	return response.Answer, response.TokensUsed, nil
@@ -1561,7 +1659,7 @@ func (a *Agent) createDynamicEngineForStep(step WorkflowStep) *DynamicReasoningE
 }
 
 // executeWithInternalReasoningStreaming uses internal dynamic reasoning with streaming support
-func (a *Agent) executeWithInternalReasoningStreaming(query string, context []string, step WorkflowStep) (<-chan string, error) {
+func (a *Agent) executeWithInternalReasoningStreaming(query string, context []string, step WorkflowStep, toolResults map[string]ToolResult) (<-chan string, error) {
 	a.verbosePrint("Agent starting internal reasoning with streaming for: %s\n", query)
 
 	// First, decide if this needs simple or dynamic reasoning internally
@@ -1569,38 +1667,42 @@ func (a *Agent) executeWithInternalReasoningStreaming(query string, context []st
 
 	if needsDynamicReasoning {
 		a.verbosePrint("Using advanced internal reasoning with streaming\n")
-		return a.executeDynamicInternalReasoningStreaming(query, context, step)
+		return a.executeDynamicInternalReasoningStreaming(query, context, step, toolResults)
 	} else {
 		a.verbosePrint("Using simple internal reasoning with streaming\n")
-		return a.executeSimpleInternalReasoningStreaming(query, context, step)
+		return a.executeSimpleInternalReasoningStreaming(query, context, step, toolResults)
 	}
 }
 
 // executeDynamicInternalReasoningStreaming uses the full dynamic reasoning engine with streaming
-func (a *Agent) executeDynamicInternalReasoningStreaming(query string, context []string, step WorkflowStep) (<-chan string, error) {
+func (a *Agent) executeDynamicInternalReasoningStreaming(query string, context []string, step WorkflowStep, toolResults map[string]ToolResult) (<-chan string, error) {
 	// Create a dynamic reasoning engine for this agent with full configuration
 	dynamicEngine := a.createDynamicEngineForStep(step)
 	if dynamicEngine == nil {
 		a.verbosePrint("Failed to create dynamic engine, falling back to simple reasoning\n")
-		return a.executeSimpleInternalReasoningStreaming(query, context, step)
+		return a.executeSimpleInternalReasoningStreaming(query, context, step, toolResults)
 	}
 
-	// Build enhanced query with document context (like the full dynamic mode)
-	enhancedQuery := a.buildEnhancedQueryForStep(query, step)
+	// Build enhanced query with tool results
+	enhancedQuery := query
+	if len(toolResults) > 0 {
+		toolContext := a.buildToolContext(toolResults)
+		enhancedQuery = query + "\n\nTool Results:\n" + toolContext
+	}
 
 	// Execute dynamic reasoning with streaming and full capabilities
 	return dynamicEngine.ExecuteDynamicReasoningStreaming(enhancedQuery, context)
 }
 
 // executeSimpleInternalReasoningStreaming handles simple queries with streaming
-func (a *Agent) executeSimpleInternalReasoningStreaming(query string, context []string, step WorkflowStep) (<-chan string, error) {
+func (a *Agent) executeSimpleInternalReasoningStreaming(query string, context []string, step WorkflowStep, toolResults map[string]ToolResult) (<-chan string, error) {
 	responseChan := make(chan string, 100)
 
 	go func() {
 		defer close(responseChan)
 
 		// Execute simple reasoning (non-streaming) and stream the result
-		response, _, err := a.executeSimpleInternalReasoning(query, context, step)
+		response, _, err := a.executeSimpleInternalReasoning(query, context, step, toolResults)
 		if err != nil {
 			responseChan <- fmt.Sprintf("Simple reasoning failed: %v", err)
 			return
@@ -1616,17 +1718,6 @@ func (a *Agent) executeSimpleInternalReasoningStreaming(query string, context []
 // buildEnhancedQueryForStep builds enhanced query with document context for step
 func (a *Agent) buildEnhancedQueryForStep(query string, step WorkflowStep) string {
 	// Search for document context if search engine is available
-	var toolResults map[string]ToolResult
-
-	// Execute tools if needed for this step
-	if step.Type == "execute" && a.mcp != nil && len(a.mcp.ListTools()) > 0 {
-		toolResults = a.executeToolsForQuery(query)
-	}
-
-	// Build enhanced query with tool results (similar to buildEnhancedQuery)
-	if len(toolResults) > 0 {
-		return a.buildEnhancedQuery(query, toolResults)
-	}
-
+	// Note: Tool execution is now handled at the workflow level, not here
 	return query
 }

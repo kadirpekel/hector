@@ -1,0 +1,153 @@
+# Example configuration for Hector with command-line tools enabled
+# This demonstrates how to configure native command-line access alongside MCP tools
+
+agent:
+  name: "hector-command-agent"
+  description: "AI agent with command-line and MCP tool access"
+
+# LLM Configuration
+llm:
+  name: "ollama"
+  model: "llama3.2"
+  host: "http://localhost:11434"
+  temperature: 0.7
+  max_tokens: 2000
+  timeout: 60
+
+# Memory/Database Configuration
+memory:
+  name: "qdrant"
+  host: "localhost"
+  port: 6334
+  timeout: 30
+  use_tls: false
+  insecure: false
+
+# Embedder Configuration
+embedder:
+  name: "ollama"
+  model: "nomic-embed-text"
+  host: "http://localhost:11434"
+  dimension: 768
+  timeout: 30
+  max_retries: 3
+
+# Search Configuration
+search:
+  max_context_length: 2000
+  context_strategy: "relevance"
+  enable_reranking: false
+
+# Command-line Tools Configuration
+command_tools:
+  allowed_commands:
+    # File operations
+    - "cat"
+    - "head"
+    - "tail"
+    - "less"
+    - "more"
+    - "ls"
+    - "dir"
+    - "find"
+    - "locate"
+    - "which"
+    - "whereis"
+    - "cp"
+    - "mv"
+    - "rm"
+    - "mkdir"
+    - "rmdir"
+    - "touch"
+    - "chmod"
+    - "chown"
+    - "stat"
+    - "file"
+    - "du"
+    - "df"
+    
+    # Text processing
+    - "grep"
+    - "awk"
+    - "sed"
+    - "sort"
+    - "uniq"
+    - "cut"
+    - "paste"
+    - "wc"
+    - "tr"
+    - "diff"
+    - "patch"
+    
+    # System information
+    - "pwd"
+    - "whoami"
+    - "id"
+    - "uname"
+    - "uptime"
+    - "ps"
+    - "top"
+    - "free"
+    - "mount"
+    - "env"
+    - "printenv"
+    
+    # Development tools
+    - "git"
+    - "npm"
+    - "node"
+    - "python"
+    - "go"
+    - "gcc"
+    - "make"
+    - "curl"
+    - "wget"
+    - "ssh"
+    - "scp"
+    - "rsync"
+  
+  working_directory: "./"
+  max_execution_time_seconds: 30
+  enable_sandboxing: true
+
+# MCP Servers (optional - for external tools)
+mcp_servers:
+  - name: "web-search"
+    url: "http://localhost:8080"
+    description: "Web search capabilities"
+
+# Models for document search
+models:
+  - name: "documents"
+    collection: "documents"
+    description: "General document collection"
+
+# Reasoning Configuration
+reasoning:
+  strategy: "auto"
+  max_steps: 3
+  enable_retry: true
+  max_retries: 2
+  streaming_mode: "all_steps"
+  verbose: true
+  verbose_template: "\033[90m[{{.Timestamp.Format \"15:04:05\"}}] {{.Message}}\033[0m"
+  
+  steps:
+    - name: "analyze"
+      type: "analyze"
+      enabled: true
+    - name: "execute"
+      type: "execute"
+      enabled: true
+    - name: "synthesize"
+      type: "synthesize"
+      enabled: true
+
+# Sources for document ingestion
+sources:
+  local_docs:
+    type: "local"
+    path: "./test-documents"
+    options:
+      recursive: true
+      include_patterns: ["*.txt", "*.md", "*.pdf"]

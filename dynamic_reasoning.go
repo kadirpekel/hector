@@ -133,36 +133,7 @@ func NewDynamicReasoningEngine(agent *Agent, config *DynamicReasoningConfig) *Dy
 	}
 }
 
-// ExecuteUnifiedDynamicReasoning performs AI-driven reasoning with unified step planning
-func (d *DynamicReasoningEngine) ExecuteUnifiedDynamicReasoning(query string, context []string, initialDecision *UnifiedReasoningResponse) (*AgentResponse, error) {
-	d.agent.verbosePrint("Starting unified dynamic reasoning for query: %s\n", query)
-
-	// Initialize context with the AI's initial decision
-	d.initializeUnifiedContext(query, context, initialDecision)
-
-	// Main reasoning loop with AI-driven stopping
-	for d.context.CurrentIteration < d.config.MaxIterations && !d.context.ShouldStop {
-		d.context.CurrentIteration++
-
-		d.agent.verbosePrint("\n=== Unified Iteration %d/%d ===\n",
-			d.context.CurrentIteration, d.config.MaxIterations)
-
-		// Execute current step with AI deciding next action
-		result := d.executeUnifiedStep()
-		d.context.IterationResults = append(d.context.IterationResults, result)
-
-		// AI already decided whether to stop in executeUnifiedStep
-		if d.context.ShouldStop {
-			d.agent.verbosePrint("AI decided to stop: %s\n", d.context.StopReason)
-			break
-		}
-	}
-
-	// Generate final response
-	return d.generateUnifiedFinalResponse()
-}
-
-// ExecuteDynamicReasoning performs AI-driven dynamic reasoning with document and conversation context (LEGACY)
+// ExecuteDynamicReasoning performs AI-driven dynamic reasoning with document and conversation context
 func (d *DynamicReasoningEngine) ExecuteDynamicReasoning(query string, context []string, modelNames ...string) (*AgentResponse, error) {
 	d.agent.verbosePrint("Starting dynamic reasoning for query: %s\n", query)
 
@@ -218,10 +189,8 @@ func (d *DynamicReasoningEngine) ExecuteDynamicReasoning(query string, context [
 		}
 
 		// Step 3: Dynamic step planning
-		nextStep := d.planNextStep()
+		nextStep := d.handleNextStepPlanning()
 		if nextStep == nil {
-			d.context.ShouldStop = true
-			d.context.StopReason = "No more steps planned"
 			break
 		}
 
@@ -326,10 +295,8 @@ func (d *DynamicReasoningEngine) ExecuteDynamicReasoningStreaming(query string, 
 
 			// Step 3: Dynamic step planning
 			ch <- "Planning next step...\n"
-			nextStep := d.planNextStep()
+			nextStep := d.handleNextStepPlanning()
 			if nextStep == nil {
-				d.context.ShouldStop = true
-				d.context.StopReason = "No more steps planned"
 				ch <- "No more steps planned, stopping.\n"
 				break
 			}
@@ -1792,242 +1759,6 @@ func (d *DynamicReasoningEngine) calculateEfficiency() float64 {
 	return totalEfficiency / float64(len(d.context.IterationResults))
 }
 
-// ============================================================================
-// UNIFIED REASONING METHODS
-// ============================================================================
-
-// initializeUnifiedContext initializes context with AI's initial decision
-func (d *DynamicReasoningEngine) initializeUnifiedContext(query string, context []string, initialDecision *UnifiedReasoningResponse) {
-	// Get conversation context from agent
-	conversationContext := ""
-	if d.agent.history != nil {
-		conversationContext = d.agent.history.GetContextForLLM(5)
-	}
-
-	// Get available tools from agent
-	availableTools := []ToolInfo{}
-	if d.agent.mcp != nil {
-		mcpTools := d.agent.mcp.ListTools()
-		for _, tool := range mcpTools {
-			availableTools = append(availableTools, ToolInfo{
-				Name:        tool.Name,
-				Description: tool.Description,
-			})
-		}
-	}
-
-	d.context = &DynamicReasoningContext{
-		Query:                query,
-		OriginalGoal:         initialDecision.Response,
-		CurrentGoal:          initialDecision.Response,
-		GoalEvolutionHistory: []string{initialDecision.Response},
-		IterationResults:     []DynamicIterationResult{},
-		SelfReflections:      []SelfReflection{},
-		MetaReasoning:        []MetaReasoningStep{},
-		AdaptationHistory:    []AdaptationDecision{},
-		QualityMetrics:       QualityMetrics{},
-		CurrentIteration:     0,
-		AvailableTools:       availableTools,
-		DocumentContext:      context,
-		ConversationContext:  conversationContext,
-		ShouldStop:           !initialDecision.Continue,
-		StopReason:           "AI initial decision",
-	}
-}
-
-// executeUnifiedStep executes a step where AI decides everything
-func (d *DynamicReasoningEngine) executeUnifiedStep() DynamicIterationResult {
-	startTime := time.Now()
-
-	// Build comprehensive prompt for AI to handle everything
-	prompt := d.buildUnifiedStepPrompt()
-
-	// Let AI decide what to do and whether to continue
-	response, tokensUsed, err := d.agent.llm.Generate(prompt)
-
-	result := DynamicIterationResult{
-		IterationNumber: d.context.CurrentIteration,
-		StepName:        fmt.Sprintf("unified_step_%d", d.context.CurrentIteration),
-		StepType:        "unified",
-		Input:           d.context.CurrentGoal,
-		TokensUsed:      tokensUsed,
-		Duration:        time.Since(startTime),
-		Success:         err == nil,
-	}
-
-	if err != nil {
-		result.Error = err.Error()
-		result.Output = "Failed to execute unified step"
-		d.context.ShouldStop = true
-		d.context.StopReason = "Execution error"
-		return result
-	}
-
-	// Parse AI's unified response
-	stepDecision, parseErr := d.parseUnifiedStepResponse(response)
-	if parseErr != nil {
-		d.agent.verbosePrint("Failed to parse step response: %v\n", parseErr)
-		result.Output = response // Use raw response as fallback
-		result.QualityScore = 0.7
-		result.Confidence = 0.5
-		d.context.ShouldStop = true
-		d.context.StopReason = "Parse error"
-	} else {
-		result.Output = stepDecision.StepResult
-		result.QualityScore = stepDecision.QualityAssessment
-		result.Confidence = stepDecision.Confidence
-
-		// AI decides whether to continue
-		if stepDecision.NextAction == "stop" {
-			d.context.ShouldStop = true
-			d.context.StopReason = stepDecision.StopReason
-		} else if stepDecision.NextAction == "continue" {
-			// Update goal if AI suggests evolution
-			if stepDecision.NextStepSuggestion != "" {
-				d.context.CurrentGoal = stepDecision.NextStepSuggestion
-			}
-		}
-	}
-
-	return result
-}
-
-// buildUnifiedStepPrompt creates comprehensive prompt for AI-driven step execution
-func (d *DynamicReasoningEngine) buildUnifiedStepPrompt() string {
-	prompt := fmt.Sprintf(`You are an AI performing unified reasoning. Analyze the current situation and decide what to do next.
-
-Original Query: %s
-Current Goal: %s
-Iteration: %d/%d
-
-Context:
-%s
-
-Previous Results:
-%s
-
-Available Tools:
-%s
-
-Your task:
-1. Execute the current reasoning step (analysis, synthesis, research, etc.)
-2. Assess the quality of your work
-3. Decide whether to continue or stop
-
-Respond in this JSON format:
-{
-  "step_result": "your detailed analysis/synthesis/conclusion for this step",
-  "quality_assessment": 0.0-1.0,
-  "confidence": 0.0-1.0,
-  "next_action": "continue" | "stop",
-  "next_step_suggestion": "what to focus on next (if continuing)",
-  "stop_reason": "why you're stopping (if stopping)",
-  "reasoning": "explain your decision-making process"
-}`,
-		d.context.Query,
-		d.context.CurrentGoal,
-		d.context.CurrentIteration,
-		d.config.MaxIterations,
-		strings.Join(d.context.DocumentContext, "\n"),
-		d.formatPreviousResults(),
-		d.formatAvailableTools())
-
-	return prompt
-}
-
-// UnifiedStepResponse represents AI's decision for a unified reasoning step
-type UnifiedStepResponse struct {
-	StepResult         string  `json:"step_result"`
-	QualityAssessment  float64 `json:"quality_assessment"`
-	Confidence         float64 `json:"confidence"`
-	NextAction         string  `json:"next_action"`
-	NextStepSuggestion string  `json:"next_step_suggestion"`
-	StopReason         string  `json:"stop_reason"`
-	Reasoning          string  `json:"reasoning"`
-}
-
-// parseUnifiedStepResponse parses AI's unified step response
-func (d *DynamicReasoningEngine) parseUnifiedStepResponse(response string) (*UnifiedStepResponse, error) {
-	// Clean JSON response
-	cleanedResponse := d.cleanJSONResponse(response)
-
-	var stepDecision UnifiedStepResponse
-	err := json.Unmarshal([]byte(cleanedResponse), &stepDecision)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse unified step response: %w", err)
-	}
-
-	return &stepDecision, nil
-}
-
-// generateUnifiedFinalResponse generates final response from unified reasoning
-func (d *DynamicReasoningEngine) generateUnifiedFinalResponse() (*AgentResponse, error) {
-	if len(d.context.IterationResults) == 0 {
-		return &AgentResponse{
-			Answer:     "No reasoning results available",
-			Confidence: 0.0,
-			TokensUsed: 0,
-		}, nil
-	}
-
-	// Get the final result
-	finalResult := d.context.IterationResults[len(d.context.IterationResults)-1]
-
-	// Calculate total tokens used
-	totalTokens := 0
-	for _, result := range d.context.IterationResults {
-		totalTokens += result.TokensUsed
-	}
-
-	// Calculate average confidence
-	totalConfidence := 0.0
-	for _, result := range d.context.IterationResults {
-		totalConfidence += result.Confidence
-	}
-	averageConfidence := totalConfidence / float64(len(d.context.IterationResults))
-
-	return &AgentResponse{
-		Answer:        finalResult.Output,
-		Confidence:    averageConfidence,
-		TokensUsed:    totalTokens,
-		WorkflowSteps: d.convertToWorkflowSteps(),
-	}, nil
-}
-
-// Helper methods
-func (d *DynamicReasoningEngine) formatPreviousResults() string {
-	if len(d.context.IterationResults) == 0 {
-		return "None"
-	}
-
-	var results []string
-	for _, result := range d.context.IterationResults {
-		results = append(results, fmt.Sprintf("Step %d: %s (Quality: %.2f)",
-			result.IterationNumber, result.Output, result.QualityScore))
-	}
-	return strings.Join(results, "\n")
-}
-
-// formatAvailableTools is already defined earlier in the file
-
-func (d *DynamicReasoningEngine) convertToWorkflowSteps() []WorkflowStepResult {
-	var steps []WorkflowStepResult
-	for _, result := range d.context.IterationResults {
-		steps = append(steps, WorkflowStepResult{
-			StepName:   result.StepName,
-			StepType:   result.StepType,
-			Output:     result.Output,
-			Success:    result.Success,
-			TokensUsed: result.TokensUsed,
-			Duration:   result.Duration,
-			Error:      result.Error,
-		})
-	}
-	return steps
-}
-
-// cleanJSONResponse is already defined earlier in the file
-
 // Helper methods for AI-driven decisions
 func (d *DynamicReasoningEngine) getCurrentApproachDescription() string {
 	if len(d.context.IterationResults) == 0 {
@@ -2052,4 +1783,15 @@ func (d *DynamicReasoningEngine) calculateTotalTokensUsed() int {
 		total += result.TokensUsed
 	}
 	return total
+}
+
+// handleNextStepPlanning plans the next step and handles stopping conditions
+// Returns the next step or nil if no more steps are planned
+func (d *DynamicReasoningEngine) handleNextStepPlanning() *DynamicStep {
+	nextStep := d.planNextStep()
+	if nextStep == nil {
+		d.context.ShouldStop = true
+		d.context.StopReason = "No more steps planned"
+	}
+	return nextStep
 }

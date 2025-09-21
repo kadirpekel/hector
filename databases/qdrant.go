@@ -7,7 +7,6 @@ import (
 
 	"github.com/kadirpekel/hector/interfaces"
 	"github.com/qdrant/go-client/qdrant"
-	"google.golang.org/grpc"
 )
 
 // ============================================================================
@@ -31,10 +30,10 @@ func (c *QdrantConfig) SetDefaults() {
 		c.Host = "localhost"
 	}
 	if c.Port == 0 {
-		c.Port = 6334
+		c.Port = 6334 // Use gRPC port (required by qdrant go-client)
 	}
 	if c.Timeout == 0 {
-		c.Timeout = 30
+		c.Timeout = 30 // Standard timeout
 	}
 	// UseTLS defaults to false (Go zero value)
 	// Insecure defaults to false (Go zero value)
@@ -99,7 +98,7 @@ type qdrantConfig struct {
 func DefaultQdrantConfig() *qdrantConfig {
 	return &qdrantConfig{
 		Host:     "localhost",
-		Port:     6334, // Use gRPC port by default
+		Port:     6334, // Use gRPC port (required by qdrant go-client)
 		Timeout:  30 * time.Second,
 		UseTLS:   false,
 		Insecure: false,
@@ -154,16 +153,12 @@ func withInsecureTLS() qdrantOption {
 
 // newQdrantVectorDBFromConfig creates a new Qdrant vector database from config
 func newQdrantVectorDBFromConfig(config *qdrantConfig) (VectorDB, error) {
-	// Create Qdrant client with additional gRPC options to handle large frames
+	// Create Qdrant client with simple configuration
 	client, err := qdrant.NewClient(&qdrant.Config{
-		Host:                   config.Host,
-		Port:                   config.Port,
-		APIKey:                 config.APIKey,
-		UseTLS:                 config.UseTLS,
-		SkipCompatibilityCheck: true, // Skip version check to avoid connection issues
-		GrpcOptions: []grpc.DialOption{
-			grpc.WithMaxMsgSize(4 * 1024 * 1024), // 4MB max message size
-		},
+		Host:   config.Host,
+		Port:   config.Port,
+		APIKey: config.APIKey,
+		UseTLS: config.UseTLS,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Qdrant client: %w", err)
@@ -213,16 +208,12 @@ func newQdrantVectorDB(opts ...qdrantOption) (VectorDB, error) {
 		opt(config)
 	}
 
-	// Create Qdrant client with additional gRPC options to handle large frames
+	// Create Qdrant client with simple configuration
 	client, err := qdrant.NewClient(&qdrant.Config{
-		Host:                   config.Host,
-		Port:                   config.Port,
-		APIKey:                 config.APIKey,
-		UseTLS:                 config.UseTLS,
-		SkipCompatibilityCheck: true, // Skip version check to avoid connection issues
-		GrpcOptions: []grpc.DialOption{
-			grpc.WithMaxMsgSize(4 * 1024 * 1024), // 4MB max message size
-		},
+		Host:   config.Host,
+		Port:   config.Port,
+		APIKey: config.APIKey,
+		UseTLS: config.UseTLS,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Qdrant client: %w", err)
