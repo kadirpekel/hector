@@ -1,0 +1,19 @@
+# Test Document 1: Artificial Intelligence
+
+Artificial Intelligence (AI) is a branch of computer science that aims to create intelligent machines that can perform tasks that typically require human intelligence. These tasks include learning, reasoning, problem-solving, perception, and language understanding.
+
+## Key Areas of AI:
+
+1. **Machine Learning**: Algorithms that improve through experience
+2. **Natural Language Processing**: Understanding and generating human language
+3. **Computer Vision**: Interpreting visual information
+4. **Robotics**: Creating machines that can interact with the physical world
+
+## Applications:
+
+- Healthcare: Medical diagnosis and treatment planning
+- Transportation: Autonomous vehicles
+- Finance: Fraud detection and algorithmic trading
+- Entertainment: Recommendation systems and game AI
+
+AI continues to evolve rapidly, with new breakthroughs in deep learning, neural networks, and large language models transforming how we interact with technology.

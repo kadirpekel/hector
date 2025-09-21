@@ -1,0 +1,21 @@
+# Hector Agent - Minimal Example
+# Truly minimal configuration with auto mode
+
+agent:
+  name: "Hector Minimal"
+  description: "Minimal AI agent with auto mode"
+
+llm:
+  name: "openai"
+  api_key: "YOUR_OPENAI_API_KEY_HERE"
+  model: "gpt-4o-mini"
+
+memory:
+  name: "qdrant"
+  host: "localhost"
+  port: 6334
+
+# Auto Mode - AI selects optimal strategy automatically
+reasoning:
+  strategy: "auto"
+  verbose: true

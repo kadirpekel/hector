@@ -1,0 +1,28 @@
+# Test Document 3: Space Exploration
+
+Space exploration is the investigation of outer space using astronomy and space technology. It involves the discovery and exploration of celestial structures in outer space by means of evolving and growing space technology.
+
+## History of Space Exploration:
+
+- **1957**: Sputnik 1 - First artificial satellite
+- **1961**: Yuri Gagarin - First human in space
+- **1969**: Apollo 11 - First moon landing
+- **1981**: Space Shuttle program begins
+- **1998**: International Space Station construction begins
+
+## Current Missions:
+
+- **Mars Exploration**: Rovers and orbiters studying the Red Planet
+- **James Webb Space Telescope**: Observing distant galaxies
+- **Commercial Space**: Private companies like SpaceX and Blue Origin
+- **Artemis Program**: Returning humans to the Moon
+
+## Future Goals:
+
+- Human missions to Mars
+- Space tourism and colonization
+- Asteroid mining
+- Search for extraterrestrial life
+- Interstellar travel
+
+Space exploration continues to push the boundaries of human knowledge and technology, inspiring generations to reach for the stars.

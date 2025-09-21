@@ -1,0 +1,65 @@
+# Hector Agent - Document Ingestion Example
+# Simple document ingestion with PDF, Word, and text file support
+
+agent:
+  name: "Document Manager"
+  description: "AI agent with document ingestion capabilities"
+
+llm:
+  name: "openai"
+  api_key: "YOUR_OPENAI_API_KEY_HERE"
+  model: "gpt-4o-mini"
+  temperature: 0.3
+  max_tokens: 1000
+
+memory:
+  name: "qdrant"
+  host: "localhost"
+  port: 6334
+  timeout: 30
+  use_tls: false
+  insecure: false
+
+embedder:
+  name: "ollama"
+  model: "nomic-embed-text"
+  host: "http://localhost:11434"
+  dimension: 768
+  timeout: 30
+  max_retries: 3
+
+search:
+  max_context_length: 2000
+  context_strategy: "relevance"
+  enable_reranking: false
+
+# Global Sources Configuration
+sources:
+  local_docs:
+    type: "local"
+    path: "/path/to/your/documents"
+
+# Single Universal Document Model
+models:
+  - name: "documents"
+    collection: "documents"
+    default_top_k: 10
+    max_top_k: 100
+    
+    # Document ingestion with multiple file types
+    ingestion:
+      auto_sync: false  # Manual sync via CLI
+      sources:
+        - source: "local_docs"
+          pattern: "**/*.pdf"
+        - source: "local_docs"
+          pattern: "**/*.docx"
+        - source: "local_docs"
+          pattern: "**/*.txt"
+        - source: "local_docs"
+          pattern: "**/*.md"
+
+reasoning:
+  strategy: "simple"
+  max_iterations: 1
+  enable_tools: false

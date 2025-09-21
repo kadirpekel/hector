@@ -1,0 +1,28 @@
+# Test Document 2: Climate Change
+
+Climate change refers to long-term shifts in global temperatures and weather patterns. While climate variations are natural, human activities have been the main driver of climate change since the mid-20th century.
+
+## Causes of Climate Change:
+
+1. **Greenhouse Gas Emissions**: Carbon dioxide, methane, and other gases trap heat
+2. **Deforestation**: Reduces the Earth's capacity to absorb CO2
+3. **Industrial Activities**: Manufacturing and energy production
+4. **Transportation**: Cars, planes, and ships burning fossil fuels
+
+## Effects:
+
+- Rising global temperatures
+- Melting ice caps and glaciers
+- Rising sea levels
+- More frequent extreme weather events
+- Changes in precipitation patterns
+
+## Solutions:
+
+- Renewable energy sources (solar, wind, hydro)
+- Energy efficiency improvements
+- Carbon capture and storage
+- Sustainable agriculture and forestry
+- International cooperation and policy changes
+
+Addressing climate change requires immediate action from governments, businesses, and individuals worldwide.

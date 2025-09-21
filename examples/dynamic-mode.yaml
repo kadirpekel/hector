@@ -1,0 +1,72 @@
+# Hector Agent - Dynamic Mode Example
+# Demonstrates AI-driven adaptive reasoning with no deterministic checks
+
+agent:
+  name: "Hector Dynamic"
+  description: "AI agent with fully dynamic, adaptive reasoning - no deterministic patterns"
+
+llm:
+  name: "openai"
+  api_key: "YOUR_OPENAI_API_KEY_HERE"
+  model: "gpt-4o-mini"
+  temperature: 0.7  # Higher temperature for more creative reasoning
+  max_tokens: 2000
+
+memory:
+  name: "qdrant"
+  host: "localhost"
+  port: 6334
+  timeout: 30
+  use_tls: false
+  insecure: false
+
+embedder:
+  name: "ollama"
+  model: "nomic-embed-text"
+  host: "http://localhost:11434"
+  dimension: 768
+  timeout: 30
+  max_retries: 3
+
+search:
+  max_context_length: 3000
+  context_strategy: "relevance"
+  enable_reranking: true
+
+models:
+  - name: "document"
+    collection: "documents"
+    default_top_k: 15
+    max_top_k: 100
+
+# Dynamic Mode - Fully AI-Driven Reasoning
+reasoning:
+  strategy: "dynamic"  # Enable dynamic reasoning mode
+  verbose: true
+  
+  # Dynamic reasoning configuration
+  dynamic:
+    max_iterations: 15  # Allow more iterations for complex problems
+    goal_threshold: 0.85  # AI determines when goal is achieved
+    adaptation_threshold: 0.3  # When to adapt approach
+    quality_threshold: 0.7  # Minimum quality to continue
+    
+    # Enable all AI-driven features
+    enable_self_reflection: true  # AI evaluates its own performance
+    enable_meta_reasoning: true   # AI reasons about reasoning
+    enable_dynamic_tools: true    # AI selects tools dynamically
+    enable_goal_evolution: true    # Goals can evolve during execution
+    
+    streaming_mode: "all_steps"  # Stream all reasoning steps
+    
+    # No deterministic steps defined - AI creates them dynamically
+    # No fixed quality checks - AI evaluates quality
+    # No hard-coded retry logic - AI decides when to retry
+    # No predefined strategies - AI adapts approach in real-time
+
+# Example queries that benefit from dynamic mode:
+# - "Design a novel approach to solve climate change"
+# - "Create a comprehensive business strategy for a startup"
+# - "Analyze the philosophical implications of AI consciousness"
+# - "Develop a creative solution to urban traffic problems"
+# - "Explore alternative approaches to education reform"
