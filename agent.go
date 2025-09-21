@@ -62,6 +62,15 @@ type WorkflowStepResult struct {
 	Duration    time.Duration       `json:"duration"`
 }
 
+// UnifiedReasoningResponse represents the AI's decision on how to handle a query
+type UnifiedReasoningResponse struct {
+	Approach  string   `json:"approach"`   // "direct" or "planning"
+	Response  string   `json:"response"`   // Direct answer or first step description
+	NextSteps []string `json:"next_steps"` // Planned steps (if planning approach)
+	Continue  bool     `json:"continue"`   // Whether to continue reasoning
+	Reasoning string   `json:"reasoning"`  // Why this approach was chosen
+}
+
 // WorkflowContext holds context for workflow execution
 type WorkflowContext struct {
 	Query            string
@@ -370,10 +379,21 @@ func (a *Agent) ExecuteQueryWithReasoning(query string, modelNames ...string) (*
 	a.verbosePrint("Workflow config: max_steps=%d, steps_count=%d\n",
 		a.WorkflowConfig.MaxSteps, len(a.WorkflowConfig.Steps))
 
-	// Initialize workflow context
+	// Initialize workflow context with document search results (like v1)
+	var initialContext []string
+	if a.searchEngine != nil {
+		// Search for document context using the same approach as v1
+		results, err := a.SearchDocuments(query, a.getDefaultModelName(), a.getDefaultTopK())
+		if err == nil && len(results) > 0 {
+			// Extract context from search results
+			contextMap := map[string][]SearchResult{a.getDefaultModelName(): results}
+			initialContext = a.searchEngine.ExtractContext(contextMap, a.searchEngine.GetMaxContextLength())
+		}
+	}
+
 	workflowCtx := &WorkflowContext{
 		Query:            query,
-		Context:          []string{},
+		Context:          initialContext, // Start with document search context like v1
 		AvailableTools:   []ToolInfo{},
 		StepResults:      []WorkflowStepResult{},
 		ExecutionHistory: []string{},
@@ -411,10 +431,21 @@ func (a *Agent) executeWorkflowStreaming(query string, modelNames ...string) (<-
 	go func() {
 		defer close(responseChan)
 
-		// Initialize reasoning context
+		// Initialize reasoning context with document search results (like v1)
+		var initialContext []string
+		if a.searchEngine != nil {
+			// Search for document context using the same approach as v1
+			results, err := a.SearchDocuments(query, a.getDefaultModelName(), a.getDefaultTopK())
+			if err == nil && len(results) > 0 {
+				// Extract context from search results
+				contextMap := map[string][]SearchResult{a.getDefaultModelName(): results}
+				initialContext = a.searchEngine.ExtractContext(contextMap, a.searchEngine.GetMaxContextLength())
+			}
+		}
+
 		workflowCtx := &WorkflowContext{
 			Query:            query,
-			Context:          []string{},
+			Context:          initialContext, // Start with document search context like v1
 			AvailableTools:   []ToolInfo{},
 			StepResults:      []WorkflowStepResult{},
 			ExecutionHistory: []string{},

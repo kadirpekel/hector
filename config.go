@@ -413,23 +413,144 @@ func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 
 	// Ensure workflow has at least one step
 	if len(config.Workflow.Steps) == 0 {
-		return nil, fmt.Errorf("workflow must have at least one step")
+		// Create a default step if none exist
+		config.Workflow.Steps = []WorkflowStep{
+			{
+				Name:    "main_agent",
+				Type:    "execute",
+				Enabled: true,
+			},
+		}
 	}
 
-	// Use the first workflow step as the main agent configuration
+	// Simple inheritance: step-level config or fallback to root-level
 	mainStep := config.Workflow.Steps[0]
-	if mainStep.AgentConfig == nil {
-		return nil, fmt.Errorf("first workflow step must have agent_config")
+
+	// Helper function to get config with fallback - let providers handle their own defaults
+	getLLMConfig := func() YAMLProviderConfig {
+		var llmConfig YAMLProviderConfig
+
+		if mainStep.AgentConfig != nil && mainStep.AgentConfig.LLM.Name != "" {
+			llmConfig = mainStep.AgentConfig.LLM
+		} else {
+			llmConfig = config.LLM
+		}
+
+		// Only set provider name default if completely empty
+		if llmConfig.Name == "" {
+			// Default to Ollama for local-first approach
+			llmConfig.Name = "ollama"
+		}
+
+		// Ensure Config map exists for provider factory
+		if llmConfig.Config == nil {
+			llmConfig.Config = make(map[string]interface{})
+		}
+
+		// Add provider name to config map for factory
+		llmConfig.Config["provider"] = llmConfig.Name
+
+		return llmConfig
 	}
 
-	// Configure LLM from main step (required)
-	if err := configureProvider(agent, &mainStep.AgentConfig.LLM, "llm"); err != nil {
-		return nil, fmt.Errorf("failed to configure LLM from main step: %w", err)
+	getMemoryConfig := func() YAMLProviderConfig {
+		var memoryConfig YAMLProviderConfig
+
+		if mainStep.AgentConfig != nil && mainStep.AgentConfig.Memory.Name != "" {
+			memoryConfig = mainStep.AgentConfig.Memory
+		} else {
+			memoryConfig = config.Memory
+		}
+
+		// Only set provider name default if completely empty
+		if memoryConfig.Name == "" {
+			// Default to Qdrant for local-first approach
+			memoryConfig.Name = "qdrant"
+		}
+
+		// Ensure Config map exists for provider factory
+		if memoryConfig.Config == nil {
+			memoryConfig.Config = make(map[string]interface{})
+		}
+
+		// Add provider name to config map for factory
+		memoryConfig.Config["provider"] = memoryConfig.Name
+
+		return memoryConfig
 	}
 
-	// Configure Database from main step (use defaults if not specified)
-	if mainStep.AgentConfig.Memory.Name != "" {
-		if err := configureProvider(agent, &mainStep.AgentConfig.Memory, "database"); err != nil {
+	getEmbedderConfig := func() YAMLProviderConfig {
+		var embedderConfig YAMLProviderConfig
+
+		if mainStep.AgentConfig != nil && mainStep.AgentConfig.Embedder.Name != "" {
+			embedderConfig = mainStep.AgentConfig.Embedder
+		} else {
+			embedderConfig = config.Embedder
+		}
+
+		// Only set provider name default if completely empty
+		if embedderConfig.Name == "" {
+			// Default to Ollama for local-first approach
+			embedderConfig.Name = "ollama"
+		}
+
+		// Ensure Config map exists for provider factory
+		if embedderConfig.Config == nil {
+			embedderConfig.Config = make(map[string]interface{})
+		}
+
+		// Add provider name to config map for factory
+		embedderConfig.Config["provider"] = embedderConfig.Name
+
+		return embedderConfig
+	}
+
+	getSearchConfig := func() SearchConfig {
+		if mainStep.AgentConfig != nil && (mainStep.AgentConfig.Search.MaxContextLength > 0 || mainStep.AgentConfig.Search.ContextStrategy != "") {
+			return mainStep.AgentConfig.Search
+		}
+		return config.Search
+	}
+
+	getMCPServers := func() []MCPServerConfig {
+		servers := append([]MCPServerConfig{}, config.MCPServers...)
+		if mainStep.AgentConfig != nil && len(mainStep.AgentConfig.MCPServers) > 0 {
+			servers = append(servers, mainStep.AgentConfig.MCPServers...)
+		}
+		return servers
+	}
+
+	getModels := func() []ModelConfig {
+		models := append([]ModelConfig{}, config.Models...)
+		if mainStep.AgentConfig != nil && len(mainStep.AgentConfig.Models) > 0 {
+			models = append(models, mainStep.AgentConfig.Models...)
+		}
+		return models
+	}
+
+	getSources := func() map[string]SourceConfig {
+		sources := make(map[string]SourceConfig)
+		for k, v := range config.Sources {
+			sources[k] = v
+		}
+		if mainStep.AgentConfig != nil && len(mainStep.AgentConfig.Sources) > 0 {
+			for k, v := range mainStep.AgentConfig.Sources {
+				sources[k] = v
+			}
+		}
+		return sources
+	}
+
+	// Configure LLM (required) - let provider handle its own defaults
+	llmConfig := getLLMConfig()
+	if err := configureProviderFromMap(agent, llmConfig.Config, "llm"); err != nil {
+		return nil, fmt.Errorf("failed to configure LLM: %w", err)
+	}
+
+	// Configure Database (use defaults if not specified) - let provider handle its own defaults
+	memoryConfig := getMemoryConfig()
+	if memoryConfig.Name != "" {
+		if err := configureProviderFromMap(agent, memoryConfig.Config, "database"); err != nil {
 			return nil, fmt.Errorf("failed to configure memory database: %w", err)
 		}
 	} else {
@@ -450,9 +571,10 @@ func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 		}
 	}
 
-	// Configure Embedder from main step (use defaults if not specified)
-	if mainStep.AgentConfig.Embedder.Name != "" {
-		if err := configureProvider(agent, &mainStep.AgentConfig.Embedder, "embedder"); err != nil {
+	// Configure Embedder (use defaults if not specified) - let provider handle its own defaults
+	embedderConfig := getEmbedderConfig()
+	if embedderConfig.Name != "" {
+		if err := configureProviderFromMap(agent, embedderConfig.Config, "embedder"); err != nil {
 			return nil, fmt.Errorf("failed to configure embedder: %w", err)
 		}
 	} else {
@@ -473,31 +595,30 @@ func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 		agent.WithEmbedder(embedder)
 	}
 
-	// Configure MCP Servers from main step and global config
-	mcpServers := config.MCPServers // Global MCP servers
-	if mainStep.AgentConfig.MCPServers != nil {
-		mcpServers = append(mcpServers, mainStep.AgentConfig.MCPServers...)
-	}
+	// Configure MCP Servers
+	mcpServers := getMCPServers()
 	if err := configureMCPServers(agent, mcpServers); err != nil {
 		return nil, fmt.Errorf("failed to configure MCP servers: %w", err)
 	}
 
-	// Configure models from main step and global config
-	models := config.Models // Global models
-	if mainStep.AgentConfig.Models != nil {
-		models = append(models, mainStep.AgentConfig.Models...)
-	}
+	// Configure models
+	models := getModels()
 	if err := configureModels(agent, models); err != nil {
 		return nil, fmt.Errorf("failed to configure models: %w", err)
 	}
 
 	// Initialize ModelManager with sources and models
-	if config.Sources != nil {
-		sourceManager := NewSourceManager(config.Sources)
+	sources := getSources()
+	if len(sources) > 0 {
+		sourceManager := NewSourceManager(sources)
 		agent.modelManager = NewModelManager(models, sourceManager, agent)
 		fmt.Printf("Initialized ModelManager with %d sources and %d models\n",
-			len(config.Sources), len(models))
+			len(sources), len(models))
 	}
+
+	// Configure SearchEngine
+	searchConfig := getSearchConfig()
+	agent.WithSearchConfig(searchConfig)
 
 	// Configure reasoning
 	agent.WorkflowConfig = config.Workflow
@@ -568,6 +689,43 @@ func configureProvider(agent *Agent, config *YAMLProviderConfig, providerType st
 		provider, err = providers.CreateEmbedderProvider(configMap)
 		if err != nil {
 			return fmt.Errorf("failed to create embedder provider '%s': %w", config.Name, err)
+		}
+		agent.WithEmbedder(provider.(embedders.EmbeddingProvider))
+
+	default:
+		return fmt.Errorf("unknown provider type: %s", providerType)
+	}
+
+	return nil
+}
+
+// configureProviderFromMap configures a provider for the agent from a config map - lets provider handle defaults
+func configureProviderFromMap(agent *Agent, configMap map[string]interface{}, providerType string) error {
+	var provider interface{}
+	var err error
+
+	switch providerType {
+	case "llm":
+		provider, err = providers.CreateLLMProvider(configMap)
+		if err != nil {
+			providerName := configMap["provider"]
+			return fmt.Errorf("failed to create LLM provider '%s': %w", providerName, err)
+		}
+		agent.WithLLM(provider.(llms.LLMProvider))
+
+	case "database":
+		provider, err = providers.CreateDatabaseProvider(configMap)
+		if err != nil {
+			providerName := configMap["provider"]
+			return fmt.Errorf("failed to create database provider '%s': %w", providerName, err)
+		}
+		agent.WithDatabase(provider.(databases.VectorDB))
+
+	case "embedder":
+		provider, err = providers.CreateEmbedderProvider(configMap)
+		if err != nil {
+			providerName := configMap["provider"]
+			return fmt.Errorf("failed to create embedder provider '%s': %w", providerName, err)
 		}
 		agent.WithEmbedder(provider.(embedders.EmbeddingProvider))
 

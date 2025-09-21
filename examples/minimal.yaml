@@ -1,0 +1,23 @@
+# Hector Agent - Minimal Example
+# Ultra-minimal configuration - providers handle all defaults
+
+# Just specify the LLM provider and API key
+llm:
+  name: "openai"
+  api_key: "YOUR_OPENAI_API_KEY_HERE"
+  # Everything else uses provider defaults:
+  # - model: "gpt-3.5-turbo" 
+  # - temperature: 0.7
+  # - max_tokens: 1000
+  # - host: "https://api.openai.com/v1"
+
+# All other components use local-first defaults:
+# - memory: qdrant (localhost:6334)
+# - embedder: ollama (nomic-embed-text @ localhost:11434)
+# - workflow: single step with reasoning enabled
+
+# That's it! The system will:
+# 1. Create a default workflow with one step
+# 2. Use Qdrant for memory (localhost:6334)
+# 3. Use Ollama for embeddings (nomic-embed-text)
+# 4. Enable AI-driven reasoning by default

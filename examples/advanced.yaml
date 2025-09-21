@@ -1,9 +1,23 @@
-# Hector Agent - Advanced Example (Workflow-First Architecture)
-# Covers multi-step reasoning, MCP tools, and nested agents
+# Hector Agent - Advanced Example
+# Multi-step workflow with step-level overrides and nested agents
 
 agent:
   name: "Hector Advanced"
   description: "Advanced AI agent with multi-step reasoning and tool integration"
+
+# Root-level defaults (inherited by all steps unless overridden)
+llm:
+  name: "openai"
+  api_key: "YOUR_OPENAI_API_KEY_HERE"
+  # Provider will set: model="gpt-3.5-turbo", temperature=0.7, max_tokens=1000
+
+memory:
+  name: "qdrant"
+  # Provider will set: host="localhost", port=6334, timeout=30, etc.
+
+embedder:
+  name: "ollama"
+  # Provider will set: model="nomic-embed-text", host="http://localhost:11434", etc.
 
 # Global MCP Servers Configuration
 mcp_servers:
@@ -17,18 +31,12 @@ mcp_servers:
 models:
   - name: "document"
     collection: "documents"
-    default_top_k: 10
-    max_top_k: 100
+    # Uses system defaults for top_k values
 
 # Advanced Multi-Step Workflow
 workflow:
   max_steps: 4
   verbose: true
-  context:
-    preserve_history: true
-    max_history_steps: 15
-    enable_context_share: true
-  verbose_template: "[{{.Level}}] {{.Message}}"
   
   steps:
     - name: "research_coordinator"
@@ -38,30 +46,11 @@ workflow:
         agent:
           name: "Research Coordinator"
           description: "Coordinates research activities and delegates to specialized agents"
+        # Inherits root-level llm, memory, embedder configs
         llm:
-          name: "openai"
-          api_key: "YOUR_OPENAI_API_KEY_HERE"
-          model: "gpt-4o-mini"
+          # Override just the temperature for this step
           temperature: 0.2
           max_tokens: 1000
-        memory:
-          name: "qdrant"
-          host: "localhost"
-          port: 6334
-          timeout: 30
-          use_tls: false
-          insecure: false
-        embedder:
-          name: "ollama"
-          model: "nomic-embed-text"
-          host: "http://localhost:11434"
-          dimension: 768
-          timeout: 30
-          max_retries: 3
-        search:
-          max_context_length: 2000
-          context_strategy: "relevance"
-          enable_reranking: false
         reasoning:
           max_iterations: 5
           enable_meta_reasoning: true
@@ -79,12 +68,9 @@ workflow:
                 agent:
                   name: "Data Collector"
                   description: "Collects data from various sources"
+                # Inherits parent's LLM config but overrides temperature
                 llm:
-                  name: "openai"
-                  api_key: "YOUR_OPENAI_API_KEY_HERE"
-                  model: "gpt-4o-mini"
                   temperature: 0.3
-                  max_tokens: 1000
                 reasoning:
                   max_iterations: 3
                   enable_dynamic_tools: true
@@ -98,9 +84,6 @@ workflow:
                   name: "Data Analyzer"
                   description: "Analyzes collected data for patterns and insights"
                 llm:
-                  name: "openai"
-                  api_key: "YOUR_OPENAI_API_KEY_HERE"
-                  model: "gpt-4o-mini"
                   temperature: 0.2
                   max_tokens: 1500
                 reasoning:
@@ -117,9 +100,6 @@ workflow:
           name: "Synthesis Agent"
           description: "Synthesizes findings from research coordinator into final response"
         llm:
-          name: "openai"
-          api_key: "YOUR_OPENAI_API_KEY_HERE"
-          model: "gpt-4o-mini"
           temperature: 0.4
           max_tokens: 2000
         reasoning:

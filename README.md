@@ -9,534 +9,380 @@
  ╚═╝  ╚═╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
 ```
 
-**Workflow-First AI Agent Framework**
+**Declarative Multi-Agent AI Framework**
 
-Hector is a workflow-first AI agent framework that enables you to build sophisticated multi-agent systems through clean, intuitive YAML configuration. Define complete agent workflows declaratively—from basic single-step workflows to complex multi-agent systems with advanced AI-driven reasoning—without any code. Every configuration follows a natural workflow-first structure where each step is a complete agent with its own LLM, memory, reasoning, and tools.
-
-[![Go Version](https://img.shields.io/badge/Go-1.23+-blue.svg)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Alpha-orange.svg)](https://github.com/kadirpekel/hector)
 
-> **Alpha Version**: Hector is currently in alpha. Core features are functional, but we're actively exploring and experimenting with the framework. Expect API changes as we refine the approach. Perfect for early adopters who want to experiment with declarative multi-step AI agents.
+> **Alpha Release**: Hector is in active development. Core features are stable, but expect API evolution as we refine the framework. Perfect for early adopters exploring declarative AI agent systems.
 
-## Why Hector?
+## What is Hector?
 
-Hector distinguishes itself through:
+Hector is a **declarative multi-agent AI framework** that lets you build sophisticated AI systems through simple YAML configuration. No code required—just describe what you want, and Hector handles the complexity.
 
-- **Workflow-First Architecture**: Clean, intuitive configuration with no root-level confusion
-- **Complete Agent Steps**: Each workflow step is a full agent with LLM, memory, reasoning, and tools
-- **AI-Driven Reasoning**: Agents automatically choose optimal reasoning complexity
-- **Zero Configuration Conflicts**: Only one place to configure each agent - no root vs step confusion
-- **Natural Multi-Agent**: Every execution is multi-agent by default with seamless state flow
-- **Advanced AI Reasoning**: Sophisticated reasoning with meta-reasoning, self-reflection, and goal evolution
-- **Integrated Ecosystem**: Seamless integration of LLM, vector DB, tools, and embedders
-- **Hot-Swappable Providers**: Switch between providers without code changes
+**Key Philosophy**: Every workflow step is a complete AI agent with its own LLM, memory, reasoning capabilities, and tools. This creates naturally composable, powerful multi-agent systems.
 
-### Workflow-First Architecture Benefits
+### ✨ Core Features
 
-- **Zero Confusion**: Only one place to configure each agent - no root vs step conflicts
-- **Intuitive Structure**: Configuration matches how users think about agent workflows
-- **Complete Agents**: Each step is a full agent with its own LLM, memory, reasoning, and tools
-- **Natural Scaling**: Add more steps easily without architectural changes
-- **Clean Inheritance**: Global configs (models, MCP servers) merge seamlessly with step configs
-- **Production Ready**: Clean, lean codebase with comprehensive testing
-
-### Core Components
-
-- **Agent Core**: Orchestrates reasoning workflows and component coordination
-- **Large Language Models**: OpenAI, Ollama, TGI integration with hot-swappable providers for response generation
-- **Vector Databases**: Qdrant integration for document storage, retrieval, and semantic search
-- **Embedding Providers**: Multiple embedding models for converting text to vector representations
-- **MCP Tools**: Model Context Protocol integration for external tool access and services
-- **Document Ingestion**: Automated document synchronization from multiple sources
-- **Workflow Engine**: Unified execution engine with AI-driven complexity evaluation
-
-## Architecture
-
-Hector follows a modular architecture with clear separation of concerns:
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   LLM Provider  │    │  Vector Database │    │ Embedder Provider│
-│  (OpenAI/Ollama)│    │    (Qdrant)     │    │ (OpenAI/Ollama)  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │ Workflow Engine  │
-                    │ (Multi-Agent)   │
-                    └─────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │  Agent Steps    │
-                    │ (Full Agents)   │
-                    └─────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │ Dynamic Reasoning│
-                    │ (AI-Driven)     │
-                    └─────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │  MCP Tools      │
-                    │  (External)     │
-                    └─────────────────┘
-```
-
-## Agent Workflows
-
-Hector uses a unified multi-agent workflow approach where every execution is naturally multi-agent by default. The AI intelligently decides the complexity of reasoning needed for each agent step.
-
-### Workflow Architecture
-
-**How it works**: 
-1. **User defines workflow steps** - Each step represents a specialized agent
-2. **Each step = Full agent** - Complete LLM, memory, and reasoning configuration
-3. **AI chooses reasoning complexity** - Direct responses for straightforward queries, advanced reasoning for complex problems
-4. **Natural state flow** - Context flows seamlessly between agent steps
-
-### Simple Workflow
-**Purpose**: Single-step execution with intelligent reasoning
-
-```yaml
-workflow:
-  max_steps: 1
-  verbose: true
-  # Single step creates one agent that reasons intelligently
-```
-
-### Multi-Agent Workflow
-**Purpose**: Structured workflows with specialized agents per step
-
-Each step creates a full agent with its own configuration. Perfect for:
-- Structured business processes
-- Sequential data processing pipelines
-- Multi-step validation workflows
-- Specialized agent collaboration
-
-**Configuration**:
-```yaml
-workflow:
-  max_steps: 4
-  verbose: true
-  steps:
-    - name: "research_analyst"
-      type: "analyze"
-      agent_config:
-        llm:
-          model: "gpt-4o"
-          temperature: 0.3
-    - name: "synthesis_expert"
-      type: "execute"
-      agent_config:
-        llm:
-          model: "gpt-4o-mini"
-          temperature: 0.7
-```
-
-### Advanced Reasoning (Internal)
-**Purpose**: Sophisticated AI reasoning within each agent
-
-Advanced reasoning represents how sophisticated AI systems naturally think. Each agent can use advanced reasoning internally, which:
-- **Meta-reasons** about its own thinking process
-- **Self-reflects** and adapts its approach
-- **Evolves goals** as understanding deepens
-- **Stops intelligently** when quality is optimal
-
-**Example reasoning flow**: When an agent tackles a complex problem, it analyzes what type of challenge it is, creates reasoning steps on-the-fly (research → analyze → synthesize → validate), continuously self-reflects ("Am I on the right track?"), adapts its approach if needed ("I need a different angle"), and stops when it has reached optimal quality.
-
-Ideal for:
-- Creative problem solving and innovation
-- Complex research requiring adaptive approaches
-- Strategic planning with evolving requirements
-- Philosophical reasoning and deep analysis
-- Multi-domain knowledge synthesis
-- Problems requiring flexible, emergent solutions
-
-**Per-Agent Reasoning Configuration**:
-```yaml
-workflow:
-  steps:
-    - name: "complex_analyst"
-      type: "analyze"
-      agent_config:
-        reasoning:                            # Per-agent reasoning configuration
-          max_iterations: 15
-          goal_threshold: 0.85
-          adaptation_threshold: 0.3
-          quality_threshold: 0.7
-          enable_self_reflection: true
-          enable_meta_reasoning: true
-          enable_dynamic_tools: true
-        workflow:
-          max_steps: 3
-            enable_goal_evolution: true
-            streaming_mode: "all_steps"
-```
-
-### Intelligent Complexity Selection
-**Purpose**: AI automatically chooses reasoning complexity
-
-For each agent step, the AI automatically evaluates whether to use:
-- **Direct reasoning**: Immediate LLM calls for straightforward queries
-- **Advanced reasoning**: Sophisticated multi-iteration reasoning for complex problems
-
-This happens transparently - users just define workflows, and agents reason intelligently.
-
-## Installation
-
-### Prerequisites
-
-**Local Development Setup**:
-```bash
-# Start Ollama server
-ollama serve
-
-# Start Qdrant vector database
-docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
-```
-
-**Cloud Provider Setup**:
-```bash
-# Configure AWS credentials for S3 support (optional)
-aws configure
-# OR set environment variables
-export AWS_ACCESS_KEY_ID="your-access-key"
-export AWS_SECRET_ACCESS_KEY="your-secret-key"
-export AWS_DEFAULT_REGION="us-east-1"
-```
-
-### Installation Methods
-
-**Method 1: CLI Binary (Recommended)**
-```bash
-# Install Hector CLI
-go install github.com/kadirpekel/hector/cmd/hector@latest
-
-# Verify installation
-hector --version
-```
-
-**Method 2: Go Package Integration**
-```bash
-# Add to your Go project
-go get github.com/kadirpekel/hector@latest
-
-# Import in your code
-import "github.com/kadirpekel/hector"
-```
+- **🔧 Zero-Config Start**: Works out of the box with just an API key
+- **🏗️ Declarative Architecture**: Define complex AI workflows in clean YAML
+- **🤖 True Multi-Agent**: Each step is a full agent with independent capabilities
+- **🧠 Advanced AI Reasoning**: Meta-reasoning, self-reflection, and goal evolution
+- **🔄 Hot-Swappable Providers**: Switch between LLMs, databases, and embedders seamlessly
+- **🛠️ MCP Tool Integration**: Native support for Model Context Protocol tools
+- **📚 Document Intelligence**: Built-in PDF, Word, and text processing
+- **💡 Smart Defaults**: Sensible configurations that just work
 
 ## Quick Start
 
-### Basic Usage
+### 1. Install Hector
 
-**Start with Workflow-First Configuration**:
 ```bash
-# Run with basic workflow-first setup (recommended for beginners)
-hector --config examples/basic.yaml
+# Install the CLI
+go install github.com/kadirpekel/hector/cmd/hector@latest
+
+# For local development (optional)
+ollama serve
+docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
 ```
 
-**Available Example Configurations**:
+### 2. Create Your First Agent
+
+**Option A: Zero Configuration**
 ```bash
-# Basic workflow-first agent
-hector --config examples/basic.yaml
-
-# Advanced multi-agent workflow
-hector --config examples/advanced.yaml
-
-# Advanced reasoning workflow
-hector --config examples/dynamic-mode.yaml
-
-# Document ingestion workflow
-hector --config examples/document-ingestion.yaml
+# Uses local Ollama + Qdrant with smart defaults
+hector
 ```
 
-### First Steps
-
-1. **Choose a Configuration**: Start with `basic.yaml` for workflow-first functionality
-2. **Configure Your Agent**: Set up LLM, memory, and reasoning in the workflow step
-3. **Test Basic Queries**: Try simple questions to verify functionality
-4. **Scale Your Workflow**: Add more steps to create multi-agent workflows
-5. **Add Documents**: Configure document ingestion for knowledge base functionality
-
-## Configuration Reference
-
-### Workflow-First Configuration Structure
-
+**Option B: OpenAI Integration**
 ```yaml
-# Agent Information (global)
-agent:
-  name: "Agent Name"
-  description: "Agent description"
+# config.yaml
+llm:
+  name: "openai"
+  api_key: "sk-your-key-here"
+# Everything else uses intelligent defaults
+```
 
-# Global Models (available to all agents)
-models:
-  - name: "documents"
-    collection: "documents"
-    default_top_k: 10
-    max_top_k: 100
+```bash
+hector --config config.yaml
+```
 
-# Global MCP Servers (available to all agents)
-mcp_servers:
-  - name: "composio"
-    url: "https://apollo.composio.dev/v3/mcp/"
-    config:
-      api_key: "your-api-key"
+### 3. Start Chatting
 
-# Workflow Configuration (primary structure)
+```
+> What's the weather like in San Francisco?
+Processing... 
+
+I'll help you check the weather in San Francisco. Let me use the weather tool to get current conditions.
+
+[Tool: weather_check]
+Location: San Francisco, CA
+Current: 68°F, Partly Cloudy
+Forecast: High 72°F, Low 58°F
+
+The weather in San Francisco is currently 68°F and partly cloudy...
+```
+
+## Configuration Examples
+
+### Minimal Setup
+```yaml
+llm:
+  name: "openai"
+  api_key: "sk-..."
+# That's it! Everything else is handled automatically
+```
+
+### Multi-Agent Workflow
+```yaml
 workflow:
-  max_steps: 5                               # Maximum workflow steps
-  verbose: true                               # Enable verbose output
-  
+  max_steps: 3
   steps:
-    - name: "main_agent"                     # Step name
-      type: "execute"                        # Step type
-      enabled: true                          # Enable this step
-      agent_config:                          # Complete agent configuration
-        agent:
-          name: "Main Agent"
-          description: "Primary agent"
-        
-        # LLM Provider Configuration (per agent)
-        llm:
-          name: "openai" | "ollama" | "tgi"
-          # OpenAI fields:
-          api_key: "your-api-key"            # Required for OpenAI
-          model: "gpt-4o-mini"               # OpenAI model name
-          temperature: 0.7                    # 0.0 to 2.0
-          max_tokens: 2000                   # Maximum response length
-          # Ollama fields:
-          model: "llama3"                    # Ollama model name
-          base_url: "http://localhost:11434" # Ollama server URL
-          # TGI fields:
-          api_key: "your-api-key"            # Required for TGI
-          model: "microsoft/DialoGPT-medium" # TGI model name
-          base_url: "https://api.example.com" # TGI server URL
-        
-        # Memory Provider Configuration (per agent)
-        memory:
-          name: "qdrant"
-          host: "localhost"                  # Qdrant server host
-          port: 6334                         # Qdrant server port
-          api_key: "optional-api-key"       # For Qdrant Cloud
-        
-        # Embedder Provider Configuration (per agent)
-        embedder:
-          name: "ollama" | "openai" | "tgi"
-          # OpenAI fields:
-          api_key: "your-api-key"            # Required for OpenAI
-          model: "text-embedding-3-small"   # OpenAI embedding model
-          # Ollama fields:
-          model: "nomic-embed-text"         # Ollama embedding model
-          base_url: "http://localhost:11434" # Ollama server URL
-          # TGI fields:
-          api_key: "your-api-key"            # Required for TGI
-          model: "sentence-transformers/all-MiniLM-L6-v2" # TGI embedding model
-          base_url: "https://api.example.com" # TGI server URL
-        
-        # AI Reasoning Configuration (per agent)
-        reasoning:
-          max_iterations: 5                  # Maximum reasoning iterations
-          enable_meta_reasoning: true        # Enable meta-reasoning
-          enable_self_reflection: true       # Enable self-reflection
-          enable_dynamic_tools: true         # Enable dynamic tool selection
-          quality_threshold: 0.8             # Quality threshold
-          streaming_mode: "all_steps"        # Streaming mode
-  streaming_mode: "all_steps" | "final_only" | "none"
-  
-  # Workflow steps (each creates a full agent)
-  steps:
-    - name: "research_analyst"
+    - name: "researcher"
       type: "analyze"
-      enabled: true
-      agent_config:                           # Full agent configuration per step
+      agent_config:
         llm:
           model: "gpt-4o"
           temperature: 0.3
-        workflow:
-          reasoning:                          # Per-agent reasoning configuration
-            max_iterations: 10
-            enable_meta_reasoning: true
-            enable_self_reflection: true
-            quality_threshold: 0.8
-    - name: "synthesis_expert"
+        reasoning:
+          enable_meta_reasoning: true
+    
+    - name: "synthesizer"
       type: "execute"
-      enabled: true
       agent_config:
         llm:
           model: "gpt-4o-mini"
           temperature: 0.7
+```
 
-# MCP Tool Servers
-mcp_servers:
-  - name: "server-name"
-    url: "https://api.example.com/mcp"
-    description: "Tool description"
-    config:
-      api_key: "your-api-key"                # Provider-specific config
+### Advanced AI Reasoning
+```yaml
+workflow:
+  steps:
+    - name: "dynamic_agent"
+      agent_config:
+        reasoning:
+          max_iterations: 15
+          enable_self_reflection: true
+          enable_meta_reasoning: true
+          enable_goal_evolution: true
+          streaming_mode: "all_steps"
+```
 
-# Global Document Sources
-sources:
-  source_name:
-    type: "local" | "s3" | "minio" | "gdrive"
-    path: "/path/to/documents" | "bucket-name"
-    region: "us-east-1"                     # For S3/MinIO
-    access_key_id: "access-key"              # AWS/MinIO access key
-    secret_access_key: "secret-key"          # AWS/MinIO secret key
-    credentials:                             # For Google Drive
-      client_id: "client-id"
-      client_secret: "client-secret"
-      refresh_token: "refresh-token"
-    options:                                 # Additional provider options
-      key: "value"
+### Document Processing
+```yaml
+models:
+  - name: "documents"
+    collection: "docs"
+    ingestion:
+      sources:
+        - source: "local_docs"
+          pattern: "**/*.pdf"
+        - source: "local_docs"
+          pattern: "**/*.docx"
+```
+
+## Configuration Reference
+
+### Complete Configuration Schema
+
+```yaml
+# Agent Information
+agent:
+  name: "My Agent"                    # Agent display name
+  description: "Agent description"    # Agent purpose description
+
+# LLM Provider Configuration
+llm:
+  name: "openai"                      # Provider: "openai", "ollama", "tgi"
+  api_key: "sk-..."                   # API key (OpenAI)
+  model: "gpt-4o"                     # Model name
+  host: "https://api.openai.com/v1"   # API endpoint
+  temperature: 0.7                    # Creativity (0.0-1.0)
+  max_tokens: 1000                    # Response length limit
+  timeout: 60                         # Request timeout (seconds)
+
+# Memory/Vector Database Configuration  
+memory:
+  name: "qdrant"                      # Provider: "qdrant"
+  host: "localhost"                   # Database host
+  port: 6334                          # Database port
+  timeout: 30                         # Connection timeout
+  use_tls: false                      # Enable TLS
+  insecure: false                     # Allow insecure connections
+
+# Embedder Configuration
+embedder:
+  name: "ollama"                      # Provider: "ollama", "tgi"
+  model: "nomic-embed-text"           # Embedding model
+  host: "http://localhost:11434"      # Embedder endpoint
+  dimension: 768                      # Vector dimensions
+  timeout: 30                         # Request timeout
+  max_retries: 3                      # Retry attempts
+
+# Search Configuration
+search:
+  max_context_length: 2000            # Max context chars
+  context_strategy: "relevance"       # Strategy: "relevance", "recent"
+  enable_reranking: false             # Enable result reranking
+
+# AI Reasoning Configuration
+reasoning:
+  max_iterations: 15                  # Max reasoning loops
+  goal_threshold: 0.85                # Goal achievement threshold (0.0-1.0)
+  adaptation_threshold: 0.3           # When to adapt approach (0.0-1.0)
+  quality_threshold: 0.7              # Minimum quality threshold (0.0-1.0)
+  enable_self_reflection: true        # AI self-evaluation
+  enable_meta_reasoning: true         # AI reasons about reasoning
+  enable_dynamic_tools: true          # AI selects tools dynamically
+  enable_goal_evolution: true         # Goals can evolve during execution
+  streaming_mode: "all_steps"         # Streaming: "all_steps", "final_only", "none"
+
+# Workflow Configuration
+workflow:
+  max_steps: 3                        # Maximum workflow steps
+  verbose: true                       # Enable verbose output
+  streaming_mode: "all_steps"         # Workflow streaming mode
+  
+  # Tool Execution Settings
+  tool_execution:
+    parallel_execution: false         # Execute tools in parallel
+    timeout_seconds: 30               # Tool timeout
+    retry_delay_ms: 1000             # Retry delay
+    max_concurrent: 3                 # Max concurrent tools
+  
+  # Error Handling
+  error_handling:
+    strategy: "retry"                 # Strategy: "retry", "skip", "abort"
+    max_error_analysis: 1             # Max error analysis attempts
+    error_threshold: 0.5              # Error threshold (0.0-1.0)
+  
+  # Context Management
+  context:
+    preserve_history: true            # Preserve step history
+    max_history_steps: 10             # Max history steps
+    enable_context_share: true        # Share context between steps
+    context_window: 3                 # Context window size
+  
+  # Workflow Steps
+  steps:
+    - name: "step1"                   # Step name
+      type: "analyze"                 # Type: "analyze", "execute", "synthesize"
+      enabled: true                   # Enable this step
+      agent_config:                   # Step-specific agent config
+        # Any agent configuration can be overridden per step
+        llm:
+          model: "gpt-4o"
+          temperature: 0.3
+        reasoning:
+          max_iterations: 5
 
 # Document Models
 models:
-  - name: "model-name"
-    collection: "collection-name"
-    default_top_k: 10                        # Default search results
-    max_top_k: 100                           # Maximum search results
+  - name: "documents"                 # Model name
+    collection: "docs"                # Vector collection name
+    default_top_k: 10                 # Default search results
+    max_top_k: 100                    # Maximum search results
+    
+    # Document Ingestion
     ingestion:
-      auto_sync: true                        # Enable automatic sync
-      sync_interval: "10m"                   # Sync interval
+      auto_sync: false                # Auto-sync documents
       sources:
-        - source: "source_name"              # Reference to global source
-          pattern: "**/*.pdf"                # File pattern
-          exclude_patterns: ["*.tmp", "drafts/*"]  # Exclusion patterns
-        - inline_source:                     # Inline source definition
-            type: "local"
-            path: "/path/to/docs"
+        - source: "local_docs"        # Source name (from sources)
+          pattern: "**/*.pdf"         # File pattern
+          exclude_patterns: ["*.tmp"] # Exclusion patterns
+
+# Global Sources
+sources:
+  local_docs:
+    type: "local"                     # Source type: "local", "s3"
+    path: "/path/to/documents"        # Local path or S3 bucket
+
+# MCP Tool Servers
+mcp_servers:
+  - name: "composio"                  # Server name
+    url: "https://apollo.composio.dev/v3/mcp/" # MCP endpoint
+    description: "Weather and web tools" # Server description
+    config:                           # Server-specific config
+      api_key: "your-api-key"
 ```
 
-### Provider-Specific Configurations
+### Configuration Inheritance
 
-#### OpenAI Configuration
+Hector uses a **hierarchical configuration system** where root-level settings are inherited by workflow steps:
+
 ```yaml
+# Root level - inherited by all steps
 llm:
   name: "openai"
   api_key: "sk-..."
-  model: "gpt-4o-mini"
   temperature: 0.7
-  max_tokens: 2000
 
-embedder:
+workflow:
+  steps:
+    - name: "step1"
+      # Inherits root llm config
+      
+    - name: "step2"
+      agent_config:
+        llm:
+          temperature: 0.2  # Override just temperature
+          # Inherits name, api_key from root
+```
+
+### Provider-Specific Options
+
+#### OpenAI
+```yaml
+llm:
   name: "openai"
-  api_key: "sk-..."
-  model: "text-embedding-3-small"
+  api_key: "sk-..."                   # Required
+  model: "gpt-4o"                     # Default: "gpt-3.5-turbo"
+  host: "https://api.openai.com/v1"   # Default endpoint
+  temperature: 0.7                    # Default: 0.7
+  max_tokens: 1000                    # Default: 1000
+  timeout: 60                         # Default: 60
 ```
 
-#### Ollama Configuration
+#### Ollama
 ```yaml
 llm:
   name: "ollama"
-  model: "llama3"
-  temperature: 0.7
-  max_tokens: 2000
-  base_url: "http://localhost:11434"
+  model: "llama3.2"                   # Default: "llama3.2"
+  host: "http://localhost:11434"      # Default: localhost:11434
+  temperature: 0.7                    # Default: 0.7
+  max_tokens: 1000                    # Default: 1000
+  timeout: 60                         # Default: 60
 
 embedder:
   name: "ollama"
-  model: "nomic-embed-text"
-  base_url: "http://localhost:11434"
+  model: "nomic-embed-text"           # Default: "nomic-embed-text"
+  host: "http://localhost:11434"      # Default: localhost:11434
+  dimension: 768                      # Default: 768
 ```
 
-#### TGI Configuration
-```yaml
-llm:
-  name: "tgi"
-  api_key: "your-api-key"
-  model: "microsoft/DialoGPT-medium"
-  temperature: 0.7
-  max_tokens: 2000
-  base_url: "https://api.example.com"
-
-embedder:
-  name: "tgi"
-  api_key: "your-api-key"
-  model: "sentence-transformers/all-MiniLM-L6-v2"
-  base_url: "https://api.example.com"
-```
-
-#### Qdrant Configuration
+#### Qdrant
 ```yaml
 memory:
   name: "qdrant"
-  host: "localhost"
-  port: 6334
-  api_key: "optional-api-key"  # For Qdrant Cloud
+  host: "localhost"                   # Default: "localhost"
+  port: 6334                          # Default: 6334
+  timeout: 30                         # Default: 30
+  use_tls: false                      # Default: false
+  insecure: false                     # Default: false
 ```
 
-### CLI Commands Reference
+#### TGI (Text Generation Inference)
+```yaml
+llm:
+  name: "tgi"
+  model: "microsoft/DialoGPT-medium"  # Default model
+  host: "http://localhost:8080"       # Default: localhost:8080
+  temperature: 0.7                    # Default: 0.7
+  max_tokens: 1000                    # Default: 1000
+  timeout: 60                         # Default: 60
 
-```bash
-# Basic usage with config file
-hector --config examples/basic.yaml
-
-# Using named config (if available in examples directory)
-hector basic
-
-# Run without config (uses defaults)
-hector
-
-# Document ingestion commands (within Hector session)
-/list-models                    # List all configured models
-/sync-model documents           # Sync specific model
-/sync-all                       # Sync all models
-/model-status documents         # Check model status
-/search "query" documents       # Search with model selection
+embedder:
+  name: "tgi"
+  model: "sentence-transformers/all-MiniLM-L6-v2"
+  host: "http://localhost:8080"       # Default: localhost:8080
+  dimension: 384                      # Default: 384
 ```
 
-### Configuration Validation
+### Reasoning Modes
 
-Hector provides comprehensive configuration validation with detailed error messages for:
+#### Simple Reasoning
+```yaml
+reasoning:
+  max_iterations: 1                   # Single-pass reasoning
+  enable_self_reflection: false
+  enable_meta_reasoning: false
+```
 
-- **Missing Required Fields**: Identifies missing essential configuration parameters
-- **Invalid Provider Names**: Validates provider names against available options
-- **Incorrect URL Formats**: Ensures proper URL formatting for external services
-- **Invalid Reasoning Configurations**: Validates reasoning configuration settings
-- **Malformed YAML Syntax**: Provides clear YAML syntax error reporting
-- **Provider-Specific Validation**: Validates provider-specific configuration requirements
+#### Advanced Reasoning
+```yaml
+reasoning:
+  max_iterations: 10                  # Multi-iteration reasoning
+  enable_self_reflection: true        # AI evaluates its work
+  enable_meta_reasoning: true         # AI reasons about reasoning
+  quality_threshold: 0.8              # High quality threshold
+```
 
-### Best Practices
+#### Dynamic Reasoning
+```yaml
+reasoning:
+  max_iterations: 15                  # Allow complex reasoning
+  enable_self_reflection: true        # Self-evaluation
+  enable_meta_reasoning: true         # Meta-reasoning
+  enable_dynamic_tools: true          # Dynamic tool selection
+  enable_goal_evolution: true         # Evolving goals
+  streaming_mode: "all_steps"         # Stream all reasoning
+```
 
-1. **Start Simple**: Begin with `basic.yaml` for basic functionality
-2. **Use Workflow-First**: Leverage clean, intuitive configuration structure
-3. **Configure Sources Globally**: Define document sources once, reference across multiple models
-4. **Implement Pattern Matching**: Use specific patterns to avoid ingesting unwanted files
-5. **Secure Credentials**: Store sensitive data like API keys securely in configuration files
-6. **Descriptive Naming**: Use descriptive collection and model names for better organization
-7. **Appropriate Sync Intervals**: Set sync intervals based on document update frequency
-8. **Monitor Performance**: Use verbose logging to monitor agent performance and behavior
+### Document Processing
 
-## Document Ingestion
-
-Hector provides comprehensive automated document ingestion capabilities with support for multiple sources and flexible pattern matching. The system enables global source definitions that can be referenced across different models for maximum reusability and efficiency.
-
-### Key Benefits
-
-- **Automated Synchronization**: Maintain up-to-date knowledge bases automatically
-- **Multiple Source Support**: Local directories, S3, MinIO, Google Drive with extensible architecture
-- **Advanced Pattern Matching**: Flexible file filtering with comprehensive wildcard support
-- **Model-Level Control**: Individual models manage their own ingestion strategies
-- **Source Reusability**: Define sources globally, reference anywhere in the system
-- **Exclusion Pattern Support**: Skip unwanted files with sophisticated exclusion patterns
-
-### Supported Source Types
-
-| Type | Description | Pattern Matching | Status |
-|------|-------------|------------------|--------|
-| `local` | Local filesystem directories | **Supported** | **Ready** |
-| `s3` | AWS S3 buckets | **Not Supported** | **Limited** |
-| `minio` | MinIO object storage (S3-compatible) | **Not Supported** | **Limited** |
-| `gdrive` | Google Drive | **Not Supported** | **Limited** |
-
-**Pattern Matching Limitation**: Pattern matching (wildcards like `*.txt`, `**/*.pdf`) is only supported for local filesystems. For S3, MinIO, and Google Drive, you'll need to use local filesystem or implement custom ingestion logic.
-
-**Credential Management**: Credentials can be configured through the config file (`access_key_id`, `secret_access_key`) or via environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) or AWS config files (`~/.aws/credentials`).
-
-### Pattern Matching Examples
-
+#### Local Files
 ```yaml
 sources:
   docs:
@@ -549,99 +395,209 @@ models:
     ingestion:
       sources:
         - source: "docs"
-          pattern: "**/*.pdf"           # All PDF files recursively
-          exclude_patterns: ["*.tmp"]   # Exclude temporary files
-        - source: "docs"
-          pattern: "reports/*.md"       # Markdown files in reports folder
-        - source: "docs"
-          pattern: "*.txt"              # Text files in root directory only
+          pattern: "**/*.{pdf,docx,txt,md}"
+          exclude_patterns: ["*.tmp", ".*"]
 ```
 
-### Source Configuration Examples
-
-#### Local Filesystem
-```yaml
-sources:
-  local_docs:
-    type: "local"
-    path: "/Users/username/Documents"
-```
-
-#### AWS S3
+#### S3 Integration
 ```yaml
 sources:
   s3_docs:
     type: "s3"
-    path: "my-documents-bucket"
+    bucket: "my-documents"
     region: "us-east-1"
-    access_key_id: "AKIAIOSFODNN7EXAMPLE"
-    secret_access_key: "wJalrXUtnFEMI..."
+    access_key: "ACCESS_KEY"
+    secret_key: "SECRET_KEY"
+
+models:
+  - name: "s3_documents"
+    collection: "s3_docs"
+    ingestion:
+      sources:
+        - source: "s3_docs"
+          pattern: "documents/**/*.pdf"
 ```
 
-#### MinIO (S3-Compatible)
+## Supported Providers
+
+### LLM Providers
+- **OpenAI**: GPT-3.5, GPT-4, GPT-4o series
+- **Ollama**: Local models (Llama, Mistral, etc.)
+- **TGI**: Text Generation Inference servers
+
+### Vector Databases
+- **Qdrant**: High-performance vector search
+- More providers coming soon
+
+### Embedders
+- **Ollama**: Local embedding models
+- **TGI**: Transformer-based embeddings
+- **OpenAI**: text-embedding-ada-002 and newer
+
+### Tools (MCP Protocol)
+- **Composio**: 100+ integrated tools (weather, web search, etc.)
+- **Custom MCP Servers**: Build your own tool integrations
+
+## Architecture
+
+Hector's **workflow-first architecture** makes every execution naturally multi-agent:
+
+```
+Query → Agent Step 1 → Agent Step 2 → Agent Step 3 → Response
+         ↓              ↓              ↓
+      [LLM+Memory]   [LLM+Memory]   [LLM+Memory]
+      [Reasoning]    [Reasoning]    [Reasoning]
+      [Tools]        [Tools]        [Tools]
+```
+
+Each step is a complete agent that can:
+- Use different LLM models and settings
+- Maintain independent memory and context
+- Apply specialized reasoning strategies
+- Access different tool sets
+- Make autonomous decisions
+
+## Use Cases
+
+### 🔬 Research & Analysis
 ```yaml
-sources:
-  minio_docs:
-    type: "minio"
-    path: "minio://localhost:9000/documents"
-    access_key_id: "minioadmin"
-    secret_access_key: "minioadmin"
+# Multi-step research pipeline
+workflow:
+  steps:
+    - name: "data_collector"
+      # Specialized for gathering information
+    - name: "analyzer"
+      # Focused on pattern recognition
+    - name: "synthesizer"
+      # Optimized for creating insights
 ```
 
-#### Google Drive
+### 📊 Business Intelligence
 ```yaml
-sources:
-  gdrive_docs:
-    type: "gdrive"
-    path: "/My Drive/Documents"
-    credentials:
-      client_id: "your-client-id"
-      client_secret: "your-client-secret"
-      refresh_token: "your-refresh-token"
+# Document analysis workflow
+models:
+  - name: "reports"
+    ingestion:
+      pattern: "**/*.pdf"
+reasoning:
+  enable_meta_reasoning: true
 ```
 
-### Metadata Extraction
+### 🛠️ Task Automation
+```yaml
+# Tool-heavy automation
+mcp_servers:
+  - name: "composio"
+    url: "https://apollo.composio.dev/v3/mcp/"
+reasoning:
+  enable_dynamic_tools: true
+```
 
-Each ingested document automatically includes comprehensive metadata:
+### 🎯 Creative Problem Solving
+```yaml
+# Dynamic reasoning for open-ended tasks
+reasoning:
+  max_iterations: 15
+  enable_goal_evolution: true
+  enable_self_reflection: true
+```
 
-- **filename**: Original file name
-- **source**: Source name reference
-- **path**: Complete file path
-- **size**: File size in bytes
-- **modified**: Last modification timestamp
-- **extension**: File extension
-- **ingested_at**: Ingestion timestamp
+## Example Configurations
 
-## Quick Examples
+Explore the [`examples/`](examples/) directory:
 
-Hector provides comprehensive example configurations in the `/examples/` directory. Each example demonstrates specific capabilities and use cases:
+- **[`minimal.yaml`](examples/minimal.yaml)** - Just an API key
+- **[`basic.yaml`](examples/basic.yaml)** - Tool integration
+- **[`advanced.yaml`](examples/advanced.yaml)** - Multi-agent workflows
+- **[`dynamic-mode.yaml`](examples/dynamic-mode.yaml)** - AI-driven reasoning
+- **[`document-ingestion.yaml`](examples/document-ingestion.yaml)** - Document processing
 
-### Available Examples
+## CLI Commands
 
-- **`basic.yaml`** - Basic workflow-first setup (recommended for beginners)
-- **`advanced.yaml`** - Multi-agent workflows with specialized agents per step
-- **`dynamic-mode.yaml`** - Multi-agent with AI-driven advanced reasoning and meta-cognition
-- **`document-ingestion.yaml`** - Automated document synchronization from multiple sources
-- **`command-line-tools.yaml`** - Integration with command-line tools via MCP
-
-### Getting Started
-
+### Interactive Mode
 ```bash
-# Start with basic workflow (recommended)
-hector --config examples/basic.yaml
-
-# Try multi-agent workflow
-hector --config examples/advanced.yaml
-
-# Try advanced reasoning
-hector --config examples/dynamic-mode.yaml
-
-# Set up document ingestion
-hector --config examples/document-ingestion.yaml
+hector                           # Zero-config mode
+hector --config config.yaml     # Custom configuration
 ```
 
-For detailed information about each example, see [`/examples/README.md`](examples/README.md).
+### Within Chat Session
+```bash
+/help                           # Show available commands
+/tools                          # List available tools
+/search "query" documents       # Search document collections
+/sync-model documents           # Sync document model
+/list-models                    # Show all models
+```
+
+## Go API
+
+### Basic Usage
+```go
+package main
+
+import (
+    "github.com/kadirpekel/hector"
+    "github.com/kadirpekel/hector/providers"
+)
+
+func main() {
+    // Register providers
+    providers.RegisterDefaultProviders()
+    
+    // Create agent
+    agent, _ := hector.NewAgentWithDefaults()
+    
+    // Execute query
+    response, _ := agent.ExecuteQueryWithReasoning("Hello!")
+    fmt.Println(response.Answer)
+}
+```
+
+### Configuration-Based
+```go
+// Load from YAML
+agent, err := hector.NewAgentFromYAML("config.yaml")
+
+// Streaming responses
+stream, err := agent.ExecuteQueryWithReasoningStreaming("Complex query")
+for chunk := range stream {
+    fmt.Print(chunk)
+}
+```
+
+## What Makes Hector Different?
+
+### 🎯 **Workflow-First Design**
+Unlike other frameworks that bolt multi-agent features onto single-agent architectures, Hector is built from the ground up for multi-agent workflows. Every execution is naturally multi-agent.
+
+### 🧠 **AI-Driven Intelligence**
+Agents don't just follow scripts—they reason about their tasks, reflect on their performance, and adapt their strategies in real-time.
+
+### ⚡ **Zero-Config Philosophy**
+Start with just an API key. Hector provides intelligent defaults for everything else, but gives you full control when you need it.
+
+### 🔧 **True Composability**
+Mix and match LLMs, databases, embedders, and tools. Each agent step can use completely different configurations.
+
+### 📈 **Production Ready**
+Built in Go for performance and reliability. Designed for both experimentation and production deployment.
+
+## Contributing
+
+Hector is in active development. We welcome:
+
+- 🐛 Bug reports and feature requests
+- 📝 Documentation improvements
+- 🔧 Provider implementations
+- 💡 Example configurations
+- 🧪 Testing and feedback
+
+See our [contribution guidelines](CONTRIBUTING.md) for details.
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+**Ready to build intelligent AI systems?** Start with `go install github.com/kadirpekel/hector/cmd/hector@latest` and explore the examples!

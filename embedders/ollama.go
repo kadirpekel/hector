@@ -36,8 +36,30 @@ func (c *OllamaEmbedderConfig) GetProviderName() string {
 	return "ollama"
 }
 
+// SetDefaults sets default values for OllamaEmbedderConfig
+func (c *OllamaEmbedderConfig) SetDefaults() {
+	if c.Model == "" {
+		c.Model = "nomic-embed-text"
+	}
+	if c.Host == "" {
+		c.Host = "http://localhost:11434"
+	}
+	if c.Dimension == 0 {
+		c.Dimension = 768
+	}
+	if c.Timeout == 0 {
+		c.Timeout = 30
+	}
+	if c.MaxRetries == 0 {
+		c.MaxRetries = 3
+	}
+}
+
 // CreateProvider implements ProviderConfig.CreateProvider
 func (c *OllamaEmbedderConfig) CreateProvider() (interface{}, error) {
+	// Set defaults before creating provider
+	c.SetDefaults()
+
 	provider := &OllamaEmbedder{
 		baseURL:   c.Host,
 		model:     c.Model,
@@ -46,23 +68,6 @@ func (c *OllamaEmbedderConfig) CreateProvider() (interface{}, error) {
 			Timeout: time.Duration(c.Timeout) * time.Second,
 		},
 		maxRetries: c.MaxRetries,
-	}
-
-	// Set defaults if not specified
-	if provider.baseURL == "" {
-		provider.baseURL = "http://localhost:11434"
-	}
-	if provider.model == "" {
-		provider.model = "nomic-embed-text"
-	}
-	if provider.dimension == 0 {
-		provider.dimension = 768
-	}
-	if provider.httpClient.Timeout == 0 {
-		provider.httpClient.Timeout = 30 * time.Second
-	}
-	if provider.maxRetries == 0 {
-		provider.maxRetries = 3
 	}
 
 	return provider, nil
