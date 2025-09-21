@@ -11,7 +11,7 @@
 
 **Workflow-First AI Agent Framework**
 
-Hector is a workflow-first AI agent framework that enables you to build sophisticated multi-agent systems through clean, intuitive YAML configuration. Define complete agent workflows declaratively—from simple single-step agents to complex multi-agent systems with advanced AI-driven dynamic reasoning—without any code. Every configuration follows a natural workflow-first structure where each step is a complete agent with its own LLM, memory, reasoning, and tools.
+Hector is a workflow-first AI agent framework that enables you to build sophisticated multi-agent systems through clean, intuitive YAML configuration. Define complete agent workflows declaratively—from basic single-step workflows to complex multi-agent systems with advanced AI-driven reasoning—without any code. Every configuration follows a natural workflow-first structure where each step is a complete agent with its own LLM, memory, reasoning, and tools.
 
 [![Go Version](https://img.shields.io/badge/Go-1.23+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -25,10 +25,10 @@ Hector distinguishes itself through:
 
 - **Workflow-First Architecture**: Clean, intuitive configuration with no root-level confusion
 - **Complete Agent Steps**: Each workflow step is a full agent with LLM, memory, reasoning, and tools
-- **AI-Driven Reasoning**: Agents automatically choose between simple and dynamic reasoning
+- **AI-Driven Reasoning**: Agents automatically choose optimal reasoning complexity
 - **Zero Configuration Conflicts**: Only one place to configure each agent - no root vs step confusion
 - **Natural Multi-Agent**: Every execution is multi-agent by default with seamless state flow
-- **Dynamic AI Reasoning**: Sophisticated reasoning with meta-reasoning, self-reflection, and goal evolution
+- **Advanced AI Reasoning**: Sophisticated reasoning with meta-reasoning, self-reflection, and goal evolution
 - **Integrated Ecosystem**: Seamless integration of LLM, vector DB, tools, and embedders
 - **Hot-Swappable Providers**: Switch between providers without code changes
 
@@ -93,7 +93,7 @@ Hector uses a unified multi-agent workflow approach where every execution is nat
 **How it works**: 
 1. **User defines workflow steps** - Each step represents a specialized agent
 2. **Each step = Full agent** - Complete LLM, memory, and reasoning configuration
-3. **AI chooses reasoning complexity** - Simple for direct queries, dynamic for complex problems
+3. **AI chooses reasoning complexity** - Direct responses for straightforward queries, advanced reasoning for complex problems
 4. **Natural state flow** - Context flows seamlessly between agent steps
 
 ### Simple Workflow
@@ -135,10 +135,10 @@ workflow:
           temperature: 0.7
 ```
 
-### Dynamic Reasoning (Internal)
+### Advanced Reasoning (Internal)
 **Purpose**: Sophisticated AI reasoning within each agent
 
-Dynamic reasoning represents how advanced AI systems naturally think. Each agent can use dynamic reasoning internally, which:
+Advanced reasoning represents how sophisticated AI systems naturally think. Each agent can use advanced reasoning internally, which:
 - **Meta-reasons** about its own thinking process
 - **Self-reflects** and adapts its approach
 - **Evolves goals** as understanding deepens
@@ -179,23 +179,10 @@ workflow:
 **Purpose**: AI automatically chooses reasoning complexity
 
 For each agent step, the AI automatically evaluates whether to use:
-- **Simple reasoning**: Direct LLM calls for straightforward queries
-- **Dynamic reasoning**: Sophisticated multi-iteration reasoning for complex problems
+- **Direct reasoning**: Immediate LLM calls for straightforward queries
+- **Advanced reasoning**: Sophisticated multi-iteration reasoning for complex problems
 
 This happens transparently - users just define workflows, and agents reason intelligently.
-
-**Default Configuration**:
-```yaml
-workflow:
-  strategy: "auto"
-  max_steps: 6
-  verbose: true
-```
-
-**Strategy Selection Logic**:
-- **Simple**: Basic queries requiring direct responses
-- **Multi**: Workflow queries requiring structured processing
-- **Dynamic**: Complex, creative, or exploratory queries requiring adaptive reasoning
 
 ## Installation
 
@@ -258,7 +245,7 @@ hector --config examples/basic.yaml
 # Advanced multi-agent workflow
 hector --config examples/advanced.yaml
 
-# Dynamic reasoning workflow
+# Advanced reasoning workflow
 hector --config examples/dynamic-mode.yaml
 
 # Document ingestion workflow
@@ -507,14 +494,14 @@ Hector provides comprehensive configuration validation with detailed error messa
 - **Missing Required Fields**: Identifies missing essential configuration parameters
 - **Invalid Provider Names**: Validates provider names against available options
 - **Incorrect URL Formats**: Ensures proper URL formatting for external services
-- **Invalid Reasoning Strategies**: Validates reasoning strategy configurations
+- **Invalid Reasoning Configurations**: Validates reasoning configuration settings
 - **Malformed YAML Syntax**: Provides clear YAML syntax error reporting
 - **Provider-Specific Validation**: Validates provider-specific configuration requirements
 
 ### Best Practices
 
-1. **Start Simple**: Begin with `auto-mode-minimal.yaml` for basic functionality
-2. **Use Auto Mode**: Leverage AI-driven strategy selection for optimal performance
+1. **Start Simple**: Begin with `basic.yaml` for basic functionality
+2. **Use Workflow-First**: Leverage clean, intuitive configuration structure
 3. **Configure Sources Globally**: Define document sources once, reference across multiple models
 4. **Implement Pattern Matching**: Use specific patterns to avoid ingesting unwanted files
 5. **Secure Credentials**: Store sensitive data like API keys securely in configuration files
@@ -631,9 +618,9 @@ Hector provides comprehensive example configurations in the `/examples/` directo
 
 ### Available Examples
 
-- **`basic.yaml`** - Simple single-agent workflow (recommended for beginners)
+- **`basic.yaml`** - Basic workflow-first setup (recommended for beginners)
 - **`advanced.yaml`** - Multi-agent workflows with specialized agents per step
-- **`dynamic-mode.yaml`** - Multi-agent with AI-driven dynamic reasoning and meta-cognition
+- **`dynamic-mode.yaml`** - Multi-agent with AI-driven advanced reasoning and meta-cognition
 - **`document-ingestion.yaml`** - Automated document synchronization from multiple sources
 - **`command-line-tools.yaml`** - Integration with command-line tools via MCP
 
@@ -646,7 +633,7 @@ hector --config examples/basic.yaml
 # Try multi-agent workflow
 hector --config examples/advanced.yaml
 
-# Try dynamic reasoning
+# Try advanced reasoning
 hector --config examples/dynamic-mode.yaml
 
 # Set up document ingestion
