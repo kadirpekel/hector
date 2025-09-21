@@ -30,8 +30,7 @@ Hector is a **declarative multi-agent AI framework** that lets you build sophist
 - **🤖 True Multi-Agent**: Each step is a full agent with independent capabilities
 - **🧠 Advanced AI Reasoning**: Meta-reasoning, self-reflection, and goal evolution
 - **🔄 Hot-Swappable Providers**: Switch between LLMs, databases, and embedders seamlessly
-- **🛠️ MCP Tool Integration**: Native support for Model Context Protocol tools
-- **🖥️ Command-Line Tools**: Secure shell command execution with natural language interface
+- **🛠️ Rich Tool Ecosystem**: MCP protocol support + secure command-line integration
 - **📚 Document Intelligence**: Built-in PDF, Word, and text processing
 - **💡 Smart Defaults**: Sensible configurations that just work
 
@@ -72,33 +71,41 @@ hector --config config.yaml
 ### 3. Start Chatting
 
 ```
+> Analyze the sentiment of customer reviews and create a summary report
+Processing...
+
+=== Multi-Agent Analysis ===
+Step 1 (analyzer): Processing 1,247 customer reviews...
+- Positive sentiment: 68% (847 reviews)
+- Negative sentiment: 22% (274 reviews)  
+- Neutral sentiment: 10% (126 reviews)
+
+Step 2 (synthesizer): Creating executive summary...
+- Key themes: Product quality (+), Shipping speed (-), Customer service (+)
+- Recommendations: Improve logistics, maintain quality standards
+
+Final Report: [Generated comprehensive 3-page analysis]
+
 > What's the weather like in San Francisco?
 Processing... 
-
-I'll help you check the weather in San Francisco. Let me use the weather tool to get current conditions.
-
-[Tool: weather_check]
-Location: San Francisco, CA
-Current: 68°F, Partly Cloudy
+Current weather in San Francisco: 68°F, Partly Cloudy
 Forecast: High 72°F, Low 58°F
 
-The weather in San Francisco is currently 68°F and partly cloudy...
-
-> How many files are in the current directory?
+> Help me research AI frameworks and compare their features
 Processing...
-27
 
-> Show me all Go files in this project
-Processing...
-./agent.go
-./config.go
-./mcp.go
-./native_tools.go
-[... 20 more files ...]
+=== Dynamic Research Process ===
+Iteration 1: Gathering framework information...
+Iteration 2: Analyzing capabilities and use cases...
+Iteration 3: Creating comparison matrix...
 
-> Count lines in all Go files
-Processing...
-9,233 total lines across 24 Go files
+Found 12 major AI frameworks. Key differentiators:
+- Declarative vs Imperative approaches
+- Multi-agent vs Single-agent architectures  
+- Tool integration capabilities
+- Configuration complexity
+
+[Detailed comparison table generated]
 ```
 
 ## Try the Examples
@@ -119,84 +126,6 @@ hector --config examples/dynamic-reasoning.yaml
 # 5. Document processing
 hector --config examples/document-processing.yaml
 ```
-
-## 🖥️ Command-Line Tools
-
-Hector includes **native command-line tool integration** that lets your AI agents execute shell commands securely. Perfect for file operations, system tasks, and development workflows.
-
-### Quick Demo
-
-```bash
-# Enable command tools in your config
-echo "
-llm:
-  name: openai
-  api_key: sk-your-key-here
-  
-command_tools:
-  allowed_commands: [ls, cat, head, tail, find, grep, wc, git]
-  working_directory: ./
-  max_execution_time_seconds: 30
-" > config.yaml
-
-hector --config config.yaml
-```
-
-**Try these natural language commands:**
-
-```
-> How many files are in this directory?
-→ Executes: ls | wc -l
-→ Result: 27
-
-> Show me the first 5 lines of README.md  
-→ Executes: head -5 README.md
-→ Result: [file content]
-
-> Find all Python files and count their lines
-→ Executes: find . -name "*.py" | xargs wc -l
-→ Result: Line counts per file + total
-
-> What's the git status?
-→ Executes: git status
-→ Result: [git status output]
-
-> Search for "TODO" in all Go files
-→ Executes: grep -r "TODO" --include="*.go" .
-→ Result: [search results]
-```
-
-### Security Features
-
-- **Sandboxed Execution**: Only allowed commands can run
-- **Working Directory Control**: Commands run in specified directory
-- **Timeout Protection**: Automatic termination of long-running commands
-- **Smart Command Parsing**: Handles pipes, redirects, and complex shell operations
-
-### Configuration
-
-```yaml
-command_tools:
-  # Commands the AI can execute
-  allowed_commands:
-    - "cat"      # File reading
-    - "head"     # File preview  
-    - "tail"     # Log monitoring
-    - "ls"       # Directory listing
-    - "find"     # File search
-    - "grep"     # Text search
-    - "wc"       # Counting
-    - "git"      # Version control
-    - "npm"      # Package management
-    - "go"       # Go commands
-    
-  # Security settings
-  working_directory: "./"
-  max_execution_time_seconds: 30
-  enable_sandboxing: true
-```
-
-**The AI naturally chooses the right commands** based on your requests - no rigid rules, just intelligent reasoning!
 
 ## Configuration Examples
 
@@ -274,6 +203,26 @@ command_tools:
 # "Show me package.json" → cat package.json  
 # "Find all Python files" → find . -name "*.py"
 ```
+
+## 🖥️ Command-Line Tools
+
+Hector agents can execute shell commands securely through natural language. This enables file operations, system tasks, and development workflows.
+
+```yaml
+command_tools:
+  allowed_commands: [ls, cat, head, find, grep, wc, git]
+  working_directory: "./"
+  max_execution_time_seconds: 30
+  enable_sandboxing: true
+```
+
+**Natural Language Examples:**
+- *"How many files are here?"* → `ls | wc -l`
+- *"Show me package.json"* → `cat package.json`  
+- *"Find all Python files"* → `find . -name "*.py"`
+- *"What's the git status?"* → `git status`
+
+**Security**: Sandboxed execution, command allowlists, timeout protection, and working directory control.
 
 ## Configuration Reference
 
