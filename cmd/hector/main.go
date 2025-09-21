@@ -208,18 +208,41 @@ func handleSearchDocuments(agent *hector.Agent, args []string) {
 
 // handleListTools lists available tools from MCP infrastructure
 func handleListTools(agent *hector.Agent) {
+	// Get MCP tools
 	mcp := agent.GetMCP()
-	toolList := mcp.ListTools()
+	mcpTools := mcp.ListTools()
 
-	if len(toolList) == 0 {
+	// Get command-line tools
+	commandTools := agent.GetCommandTools()
+	cmdTools := commandTools.ListTools()
+
+	// Combine all tools
+	allTools := append(mcpTools, cmdTools...)
+
+	if len(allTools) == 0 {
 		fmt.Println("No tools available")
 		return
 	}
 
 	fmt.Println("Available Tools:")
-	for i, tool := range toolList {
-		fmt.Printf("%d. %s - %s\n", i+1, tool.Name, tool.Description)
+
+	// Show MCP tools
+	if len(mcpTools) > 0 {
+		fmt.Println("\nMCP Tools:")
+		for i, tool := range mcpTools {
+			fmt.Printf("  %d. %s - %s (MCP)\n", i+1, tool.Name, tool.Description)
+		}
 	}
+
+	// Show command-line tools
+	if len(cmdTools) > 0 {
+		fmt.Println("\nCommand-line Tools:")
+		for i, tool := range cmdTools {
+			fmt.Printf("  %d. %s - %s (Command)\n", i+1, tool.Name, tool.Description)
+		}
+	}
+
+	fmt.Printf("\nTotal: %d tools available\n", len(allTools))
 }
 
 // handleQuery handles user queries
@@ -267,7 +290,7 @@ func showHelp() {
 	fmt.Println("  /help         - Show this help")
 	fmt.Println("  /add          - Add a document")
 	fmt.Println("  /search       - Search documents")
-	fmt.Println("  /tools        - List available tools")
+	fmt.Println("  /tools        - List available MCP and command-line tools")
 	fmt.Println("  /sync-model   - Sync a specific model")
 	fmt.Println("  /sync-all     - Sync all models")
 	fmt.Println("  /list-models  - List all models")

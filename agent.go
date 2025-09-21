@@ -26,6 +26,7 @@ type Agent struct {
 	embedder     embedders.EmbeddingProvider
 	searchEngine *SearchEngine
 	mcp          *MCPInfrastructure
+	commandTools *CommandToolRegistry // Native command-line tools
 	history      *ConversationHistory
 	memory       *AgentMemory
 
@@ -92,10 +93,11 @@ func NewAgent() *Agent {
 		},
 
 		// Initialize components
-		mcp:     NewMCPInfrastructure(),
-		history: NewConversationHistory("default"),
-		memory:  NewAgentMemory(),
-		parent:  nil, // No parent by default
+		mcp:          NewMCPInfrastructure(),
+		commandTools: NewCommandToolRegistry(nil), // Use default security config
+		history:      NewConversationHistory("default"),
+		memory:       NewAgentMemory(),
+		parent:       nil, // No parent by default
 	}
 
 	return agent
@@ -291,6 +293,12 @@ func (a *Agent) WithMCPServers(servers ...MCPServerConfig) *Agent {
 	return a
 }
 
+// WithCommandToolsConfig configures command-line tools with security settings
+func (a *Agent) WithCommandToolsConfig(config *SecurityConfig) *Agent {
+	a.commandTools = NewCommandToolRegistry(config)
+	return a
+}
+
 // WithInstruction sets the primary instruction/behavior
 func (a *Agent) WithInstruction(instruction string) *Agent {
 	// For now, we'll store this in a simple way
@@ -308,6 +316,11 @@ func (a *Agent) WithPromptTemplate(template string) *Agent {
 // GetMCP returns the MCP infrastructure
 func (a *Agent) GetMCP() *MCPInfrastructure {
 	return a.mcp
+}
+
+// GetCommandTools returns the command-line tool registry
+func (a *Agent) GetCommandTools() *CommandToolRegistry {
+	return a.commandTools
 }
 
 // GetLLM returns the configured LLM provider
@@ -1322,12 +1335,12 @@ func (a *Agent) ExecuteQueryStreaming(query string, modelNames ...string) (<-cha
 	return ch, nil
 }
 
-// executeToolsForQuery uses LLM reasoning to determine which tools to execute via MCP
+// executeToolsForQuery uses LLM reasoning to determine which tools to execute via MCP and command-line
 func (a *Agent) executeToolsForQuery(query string) map[string]ToolResult {
 	toolResults := make(map[string]ToolResult)
 
-	// Get available tools from MCP
-	availableTools := a.mcp.ListTools()
+	// Get available tools from both MCP and command-line
+	availableTools := a.getAllAvailableTools()
 	if len(availableTools) == 0 {
 		return toolResults
 	}
@@ -1382,7 +1395,7 @@ If no tools are needed, respond with:
 	// Parse LLM response (simplified - in production you'd want proper JSON parsing)
 	toolDecisions := a.parseToolDecisions(reasoningResponse)
 
-	// Execute the recommended tools via MCP
+	// Execute the recommended tools via MCP or command-line
 	for _, toolName := range toolDecisions.Tools {
 		params := toolDecisions.Parameters[toolName]
 		if params == nil {
@@ -1390,11 +1403,18 @@ If no tools are needed, respond with:
 			params = map[string]interface{}{}
 		}
 
-		// Execute tool via MCP
-
 		// Type assert to map[string]interface{}
 		if paramMap, ok := params.(map[string]interface{}); ok {
-			result, err := a.mcp.ExecuteTool(context.Background(), toolName, paramMap)
+			var result ToolResult
+			var err error
+
+			// Check if it's a command-line tool or MCP tool
+			if a.isCommandTool(toolName) {
+				result, err = a.commandTools.ExecuteTool(context.Background(), toolName, paramMap)
+			} else {
+				result, err = a.mcp.ExecuteTool(context.Background(), toolName, paramMap)
+			}
+
 			if err == nil {
 				toolResults[toolName] = result
 			} else {
@@ -1539,6 +1559,27 @@ func (a *Agent) buildToolContext(toolResults map[string]ToolResult) string {
 	}
 
 	return strings.Join(contextParts, "\n\n")
+}
+
+// getAllAvailableTools returns all available tools from both MCP and command-line
+func (a *Agent) getAllAvailableTools() []ToolInfo {
+	var allTools []ToolInfo
+
+	// Add MCP tools
+	mcpTools := a.mcp.ListTools()
+	allTools = append(allTools, mcpTools...)
+
+	// Add command-line tools
+	commandTools := a.commandTools.ListTools()
+	allTools = append(allTools, commandTools...)
+
+	return allTools
+}
+
+// isCommandTool checks if a tool name is a command-line tool
+func (a *Agent) isCommandTool(toolName string) bool {
+	_, exists := a.commandTools.GetTool(toolName)
+	return exists
 }
 
 // getDefaultModelName returns the first available model name, or "document" as fallback

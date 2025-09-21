@@ -11,7 +11,21 @@
 
 **Declarative AI Agent Framework**
 
-Hector is a declarative AI agent framework built in Go that compiles to a single binary for easy deployment and setup. It serves as both a **no-code tool for professionals** and an **agent framework for developers**—define entire agent workflows through YAML configuration alone, from simple single-step agents to advanced AI-driven dynamic reasoning systems that adapt and evolve in real-time, without writing any code. Hector seamlessly integrates large language models, vector databases, MCP tools, and embedding providers into cohesive reasoning workflows.
+Hector is a declarative AI agent framework built in Go that compiles to a single binary for easy deployment and setup. It serves as both a **no-code tool for professionals** and an **agent framework for developers**—define entire agent workflows through YAML configuration alone, from simple single-step agents to advanced AI-driven dynamic reasoning systems that adapt and evolve in real-time, without writing any code. Hector seamlessly integrates large language models, vector databases, MCP tools, **native command-line access**, and embedding providers into cohesive reasoning workflows.
+
+## ⚡ Quick Demo
+
+```bash
+# Start Hector
+./hector
+
+# Ask a simple question:
+> how many files are there in the current directory?
+Using tool: execute_command
+You have 42 files in the current directory.
+```
+
+**That's it!** Natural language + command execution in one step.
 
 [![Go Version](https://img.shields.io/badge/Go-1.23+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -27,6 +41,7 @@ Hector is a declarative AI agent framework built in Go that compiles to a single
 - **Multi-Step Reasoning**: Sequential task decomposition with specialized sub-agents
 - **Dynamic AI Reasoning**: Pure AI-driven reasoning that adapts and evolves autonomously
 - **Integrated Ecosystem**: Seamless integration of LLM, vector DB, tools, and embedders
+- **Native Command-Line Tools**: Direct filesystem and shell access for agent workflows
 - **Nested Agent Hierarchies**: Sub-agents with independent reasoning processes
 - **Context-Aware Memory**: Persistent conversation history and document retrieval
 - **Hot-Swappable Providers**: Switch between providers without code changes
@@ -38,6 +53,7 @@ Hector is a declarative AI agent framework built in Go that compiles to a single
 - **Vector Databases**: Qdrant integration for document storage, retrieval, and semantic search
 - **Embedding Providers**: Multiple embedding models for converting text to vector representations
 - **MCP Tools**: Model Context Protocol integration for external tool access and services
+- **Native Command-Line Tools**: Direct filesystem and shell command execution for agent workflows
 - **Document Ingestion**: Automated document synchronization from multiple sources
 
 
@@ -302,6 +318,28 @@ mcp_servers:
     config:
       api_key: "your-api-key"                # Provider-specific config
 
+# Command-Line Tools Configuration
+command_tools:
+  allowed_commands:                          # Whitelist of allowed commands
+    - "ls"                                   # File listing
+    - "cat"                                  # File reading
+    - "grep"                                 # Text search
+    - "find"                                 # File search
+    - "git"                                  # Git operations
+    - "npm"                                  # Node.js package manager
+    - "go"                                   # Go compiler
+    - "python"                               # Python interpreter
+    # ... add more commands as needed
+  working_directory: "./"                    # Default working directory
+  max_execution_time_seconds: 30             # Command timeout
+  enable_sandboxing: true                    # Enable security restrictions
+
+# MCP Servers Configuration
+mcp_servers:
+  - name: "server-name"
+    url: "http://localhost:8080"
+    description: "Server description"
+
 # Global Document Sources
 sources:
   source_name:
@@ -393,6 +431,78 @@ memory:
   api_key: "optional-api-key"  # For Qdrant Cloud
 ```
 
+### Command-Line Tools Configuration
+
+Hector includes native command-line tool integration that allows agents to execute shell commands directly for filesystem operations, development tasks, and system management.
+
+#### Basic Configuration
+```yaml
+command_tools:
+  allowed_commands:                          # Whitelist of allowed commands
+    # File operations
+    - "ls"                                   # List directory contents
+    - "cat"                                  # Read file contents
+    - "head"                                 # Show first lines
+    - "tail"                                 # Show last lines
+    - "find"                                 # Search for files
+    - "grep"                                 # Search in files
+    - "cp"                                   # Copy files
+    - "mv"                                   # Move files
+    - "rm"                                   # Remove files
+    - "mkdir"                                # Create directories
+    - "touch"                                # Create files
+    - "chmod"                                # Change permissions
+    - "stat"                                 # File information
+    
+    # Text processing
+    - "awk"                                  # Text processing
+    - "sed"                                  # Stream editor
+    - "sort"                                 # Sort lines
+    - "uniq"                                 # Remove duplicates
+    - "wc"                                   # Word count
+    
+    # System information
+    - "pwd"                                  # Current directory
+    - "whoami"                               # Current user
+    - "uname"                                # System information
+    - "ps"                                   # Process list
+    - "df"                                   # Disk usage
+    - "free"                                 # Memory usage
+    
+    # Development tools
+    - "git"                                  # Git operations
+    - "npm"                                  # Node.js package manager
+    - "node"                                 # Node.js runtime
+    - "python"                               # Python interpreter
+    - "go"                                   # Go compiler
+    - "gcc"                                  # C compiler
+    - "make"                                 # Build tool
+    
+    # Network tools
+    - "curl"                                 # HTTP client
+    - "wget"                                 # Download tool
+    - "ssh"                                  # SSH client
+    - "scp"                                  # Secure copy
+  
+  working_directory: "./"                    # Default working directory
+  max_execution_time_seconds: 30             # Command timeout (0 = no limit)
+  enable_sandboxing: true                    # Enable security restrictions
+```
+
+#### Security Features
+
+- **Command Whitelist**: Only explicitly allowed commands can be executed
+- **Working Directory**: Commands are restricted to specified directory
+- **Execution Timeout**: Commands are automatically terminated after timeout
+- **Sandboxing**: Additional security restrictions when enabled
+
+#### Example Usage
+
+Command-line tools enable agents to perform filesystem operations, development tasks, and system management as part of their reasoning workflows. The agent automatically selects and executes appropriate commands based on the user's request.
+
+#### Default Configuration
+
+If no `command_tools` section is specified, Hector uses a comprehensive default configuration with common Unix commands enabled and security restrictions active.
 
 ## Document Ingestion
 

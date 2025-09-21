@@ -25,14 +25,15 @@ const (
 
 // AgentConfig represents the complete agent configuration
 type AgentConfig struct {
-	Agent      AgentInfo          `yaml:"agent"`
-	LLM        YAMLProviderConfig `yaml:"llm"`
-	Memory     YAMLProviderConfig `yaml:"memory"`
-	Embedder   YAMLProviderConfig `yaml:"embedder"`
-	Search     SearchConfig       `yaml:"search"`
-	Models     []ModelConfig      `yaml:"models"`
-	MCPServers []MCPServerConfig  `yaml:"mcp_servers"`
-	Reasoning  ReasoningConfig    `yaml:"reasoning"`
+	Agent        AgentInfo          `yaml:"agent"`
+	LLM          YAMLProviderConfig `yaml:"llm"`
+	Memory       YAMLProviderConfig `yaml:"memory"`
+	Embedder     YAMLProviderConfig `yaml:"embedder"`
+	Search       SearchConfig       `yaml:"search"`
+	Models       []ModelConfig      `yaml:"models"`
+	MCPServers   []MCPServerConfig  `yaml:"mcp_servers"`
+	CommandTools *SecurityConfig    `yaml:"command_tools"`
+	Reasoning    ReasoningConfig    `yaml:"reasoning"`
 
 	// New global configurations
 	Sources map[string]SourceConfig `yaml:"sources"`
@@ -68,6 +69,31 @@ func (a *AgentConfig) SetDefaults() {
 
 	// Set defaults for search configuration
 	a.Search.SetDefaults()
+
+	// Set default command tools config
+	if a.CommandTools == nil {
+		a.CommandTools = &SecurityConfig{
+			AllowedCommands: []string{
+				// File operations
+				"cat", "head", "tail", "less", "more",
+				"ls", "dir", "find", "locate", "which", "whereis",
+				"cp", "mv", "rm", "mkdir", "rmdir", "touch",
+				"chmod", "chown", "stat", "file", "du", "df",
+				// Text processing
+				"grep", "awk", "sed", "sort", "uniq", "cut", "paste",
+				"wc", "tr", "diff", "patch",
+				// System info
+				"pwd", "whoami", "id", "uname", "uptime", "ps", "top",
+				"free", "df", "mount", "env", "printenv",
+				// Development tools
+				"git", "npm", "node", "python", "go", "gcc", "make",
+				"curl", "wget", "ssh", "scp", "rsync",
+			},
+			WorkingDirectory: "./",
+			MaxExecutionTime: 30,
+			EnableSandboxing: true,
+		}
+	}
 }
 
 // AgentInfo contains basic agent information
@@ -431,6 +457,12 @@ func createAgentFromConfig(config *AgentConfig) (*Agent, error) {
 	// Configure MCP Servers and discover tools
 	if err := configureMCPServers(agent, config.MCPServers); err != nil {
 		return nil, fmt.Errorf("failed to configure MCP servers: %w", err)
+	}
+
+	// Configure command-line tools
+	if config.CommandTools != nil {
+		agent.WithCommandToolsConfig(config.CommandTools)
+		fmt.Printf("Configured command-line tools with %d allowed commands\n", len(config.CommandTools.AllowedCommands))
 	}
 
 	// Configure models (always configure since we now always have memory database)
