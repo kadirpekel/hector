@@ -186,43 +186,20 @@ models:
           pattern: "**/*.docx"
 ```
 
-### Command-Line Tools
+### Tool Integration
 ```yaml
-llm:
-  name: "openai"
-  api_key: "sk-..."
+# MCP Protocol Tools (external services)
+mcp_servers:
+  - name: "composio"
+    url: "https://apollo.composio.dev/v3/mcp/..."
 
+# Command-Line Tools (local system)  
 command_tools:
-  allowed_commands: [ls, cat, head, find, grep, wc, git, npm]
+  allowed_commands: [ls, cat, head, find, grep, git]
   working_directory: "./"
-  max_execution_time_seconds: 30
-  enable_sandboxing: true
-
-# Now your AI can execute shell commands naturally:
-# "How many files are here?" → ls | wc -l
-# "Show me package.json" → cat package.json  
-# "Find all Python files" → find . -name "*.py"
-```
-
-## 🖥️ Command-Line Tools
-
-Hector agents can execute shell commands securely through natural language. This enables file operations, system tasks, and development workflows.
-
-```yaml
-command_tools:
-  allowed_commands: [ls, cat, head, find, grep, wc, git]
-  working_directory: "./"
-  max_execution_time_seconds: 30
   enable_sandboxing: true
 ```
 
-**Natural Language Examples:**
-- *"How many files are here?"* → `ls | wc -l`
-- *"Show me package.json"* → `cat package.json`  
-- *"Find all Python files"* → `find . -name "*.py"`
-- *"What's the git status?"* → `git status`
-
-**Security**: Sandboxed execution, command allowlists, timeout protection, and working directory control.
 
 ## Configuration Reference
 
@@ -603,69 +580,27 @@ reasoning:
   enable_self_reflection: true
 ```
 
-## Example Configurations
+## Usage
 
-Explore the [`examples/`](examples/) directory with **5 essential configurations**:
-
-| Example | Use Case | Key Features |
-|---------|----------|--------------|
-| **[`minimal.yaml`](examples/minimal.yaml)** | Getting started | Just an API key, smart defaults |
-| **[`basic.yaml`](examples/basic.yaml)** | General purpose | Tools, intelligent reasoning |
-| **[`multi-agent.yaml`](examples/multi-agent.yaml)** | Complex workflows | Specialized agents, inheritance |
-| **[`dynamic-reasoning.yaml`](examples/dynamic-reasoning.yaml)** | Creative problems | AI-driven adaptation, goal evolution |
-| **[`document-processing.yaml`](examples/document-processing.yaml)** | Knowledge management | PDF/Word/Text ingestion, search |
-
-## CLI Commands
-
-### Interactive Mode
+### CLI
 ```bash
-hector                           # Zero-config mode
-hector --config config.yaml     # Custom configuration
+hector                          # Zero-config start
+hector --config config.yaml    # With configuration
+
+# Interactive commands: /help, /tools, /search, /quit
 ```
 
-### Within Chat Session
-```bash
-/help                           # Show available commands
-/tools                          # List available tools
-/search "query" documents       # Search document collections
-/sync-model documents           # Sync document model
-/list-models                    # Show all models
-```
-
-## Go API
-
-### Basic Usage
+### Go API
 ```go
-package main
+import "github.com/kadirpekel/hector"
 
-import (
-    "github.com/kadirpekel/hector"
-    "github.com/kadirpekel/hector/providers"
-)
-
-func main() {
-    // Register providers
-    providers.RegisterDefaultProviders()
-    
-    // Create agent
-    agent, _ := hector.NewAgentWithDefaults()
-    
-    // Execute query
-    response, _ := agent.ExecuteQueryWithReasoning("Hello!")
-    fmt.Println(response.Answer)
-}
-```
-
-### Configuration-Based
-```go
-// Load from YAML
-agent, err := hector.NewAgentFromYAML("config.yaml")
+// From configuration
+agent, _ := hector.NewAgentFromYAML("config.yaml")
+response, _ := agent.ExecuteQueryWithReasoning("Hello!")
 
 // Streaming responses
-stream, err := agent.ExecuteQueryWithReasoningStreaming("Complex query")
-for chunk := range stream {
-    fmt.Print(chunk)
-}
+streamCh, _ := agent.ExecuteQueryWithReasoningStreaming("Analyze...")
+for chunk := range streamCh { fmt.Print(chunk) }
 ```
 
 ## What Makes Hector Different?
