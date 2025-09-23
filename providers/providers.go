@@ -88,18 +88,6 @@ func RegisterDefaultProviders() error {
 		return fmt.Errorf("failed to register OpenAI LLM provider: %w", err)
 	}
 
-	tgiConfig := &llms.TGIConfig{
-		Provider:    "tgi",
-		Model:       "microsoft/DialoGPT-medium", // Set default model for registration
-		Host:        "http://localhost:8080",
-		Temperature: 0.7,
-		MaxTokens:   1000,
-		Timeout:     60,
-	}
-	if err := RegisterProvider(tgiConfig); err != nil {
-		return fmt.Errorf("failed to register TGI LLM provider: %w", err)
-	}
-
 	// Register Database providers
 	qdrantConfig := &databases.QdrantConfig{
 		Provider: "qdrant",
@@ -124,21 +112,6 @@ func RegisterDefaultProviders() error {
 	}
 	if err := RegisterProvider(ollamaEmbedderConfig); err != nil {
 		return fmt.Errorf("failed to register Ollama embedder provider: %w", err)
-	}
-
-	tgiEmbedderConfig := &embedders.TGIEmbedderProviderConfig{
-		Provider:     "tgi",
-		Model:        "sentence-transformers/all-MiniLM-L6-v2",
-		Host:         "http://localhost:8080",
-		Dimension:    384,
-		Timeout:      30,
-		WaitForModel: true,
-		Normalize:    true,
-		Truncate:     true,
-		MaxLength:    512,
-	}
-	if err := RegisterProvider(tgiEmbedderConfig); err != nil {
-		return fmt.Errorf("failed to register TGI embedder provider: %w", err)
 	}
 
 	return nil
@@ -215,7 +188,7 @@ func CreateLLMProvider(config map[string]interface{}) (llms.LLMProvider, error) 
 }
 
 // CreateDatabaseProvider creates a database provider dynamically from config
-func CreateDatabaseProvider(config map[string]interface{}) (databases.VectorDB, error) {
+func CreateDatabaseProvider(config map[string]interface{}) (databases.DatabaseProvider, error) {
 	providerName, ok := config["provider"].(string)
 	if !ok {
 		return nil, fmt.Errorf("provider field is required and must be a string")
@@ -272,16 +245,16 @@ func CreateDatabaseProvider(config map[string]interface{}) (databases.VectorDB, 
 		return nil, fmt.Errorf("failed to create provider %s: %w", providerName, err)
 	}
 
-	dbProvider, ok := provider.(databases.VectorDB)
+	dbProvider, ok := provider.(databases.DatabaseProvider)
 	if !ok {
-		return nil, fmt.Errorf("provider %s does not implement VectorDB interface", providerName)
+		return nil, fmt.Errorf("provider %s does not implement DatabaseProvider interface", providerName)
 	}
 
 	return dbProvider, nil
 }
 
 // CreateEmbedderProvider creates an embedder provider dynamically from config
-func CreateEmbedderProvider(config map[string]interface{}) (embedders.EmbeddingProvider, error) {
+func CreateEmbedderProvider(config map[string]interface{}) (embedders.EmbedderProvider, error) {
 	providerName, ok := config["provider"].(string)
 	if !ok {
 		return nil, fmt.Errorf("provider field is required and must be a string")
@@ -338,9 +311,9 @@ func CreateEmbedderProvider(config map[string]interface{}) (embedders.EmbeddingP
 		return nil, fmt.Errorf("failed to create provider %s: %w", providerName, err)
 	}
 
-	embedderProvider, ok := provider.(embedders.EmbeddingProvider)
+	embedderProvider, ok := provider.(embedders.EmbedderProvider)
 	if !ok {
-		return nil, fmt.Errorf("provider %s does not implement EmbeddingProvider interface", providerName)
+		return nil, fmt.Errorf("provider %s does not implement EmbedderProvider interface", providerName)
 	}
 
 	return embedderProvider, nil

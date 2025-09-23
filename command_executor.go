@@ -8,29 +8,21 @@ import (
 	"time"
 )
 
-// SecurityConfig defines security boundaries for command execution
-type SecurityConfig struct {
-	AllowedCommands  []string `yaml:"allowed_commands" json:"allowed_commands"`
-	WorkingDirectory string   `yaml:"working_directory" json:"working_directory"`
-	MaxExecutionTime int      `yaml:"max_execution_time_seconds" json:"max_execution_time_seconds"`
-	EnableSandboxing bool     `yaml:"enable_sandboxing" json:"enable_sandboxing"`
-}
-
 // CommandExecutor handles secure command execution
 type CommandExecutor struct {
-	config *SecurityConfig
+	config *CommandToolsConfig
 }
 
 // NewCommandExecutor creates a new command executor
-func NewCommandExecutor(config *SecurityConfig) *CommandExecutor {
+func NewCommandExecutor(config *CommandToolsConfig) *CommandExecutor {
 	if config == nil {
-		config = &SecurityConfig{
+		config = &CommandToolsConfig{
 			AllowedCommands: []string{
 				"cat", "head", "tail", "ls", "find", "grep", "wc", "pwd",
 				"git", "npm", "go", "curl", "wget",
 			},
 			WorkingDirectory: "./",
-			MaxExecutionTime: 30,
+			MaxExecutionTime: 30 * time.Second,
 			EnableSandboxing: true,
 		}
 	}
@@ -58,7 +50,7 @@ func (e *CommandExecutor) Execute(ctx context.Context, command string, workingDi
 	// Add timeout if configured
 	if e.config.MaxExecutionTime > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(e.config.MaxExecutionTime)*time.Second)
+		ctx, cancel = context.WithTimeout(ctx, e.config.MaxExecutionTime)
 		defer cancel()
 	}
 

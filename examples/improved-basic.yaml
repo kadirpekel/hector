@@ -1,0 +1,71 @@
+# Hector Agent - Improved Basic Example  
+# Shows the improved configuration structure
+
+name: "Hector Improved"
+description: "AI agent with improved configuration structure"
+
+# LLM Configuration
+llm:
+  name: "openai" 
+  model: "gpt-4o-mini"
+  api_key: "YOUR_OPENAI_API_KEY_HERE"
+  temperature: 0.7
+  max_tokens: 2000
+
+# Database (renamed from Memory - much clearer!)
+database:
+  name: "qdrant"
+  base_url: "http://localhost:6333"
+
+# Embedder for document search
+embedder:
+  name: "ollama"
+  model: "nomic-embed-text"
+  base_url: "http://localhost:11434"
+
+# Component-based prompt configuration
+prompt:
+  system_prompt: "You are Hector, an intelligent AI assistant with access to tools and knowledge bases."
+  instructions: "Be helpful, accurate, and use available context and tools to provide the best responses."
+  include_context: true
+  include_history: true  
+  include_tools: true
+  max_context_length: 4000
+
+# Search Configuration
+search:
+  top_k: 10
+  threshold: 0.7
+  max_context_length: 4000
+  context_strategy: "relevant"
+  enable_reranking: false
+
+# Simple Document Models (no complex ingestion)
+models:
+  - name: "documents"
+    collection: "docs"
+    default_top_k: 10
+    max_top_k: 50
+
+# MCP Tool Servers
+mcp_servers:
+  - name: "composio"
+    url: "https://apollo.composio.dev/v3/mcp/"
+    description: "Weather, web search, and productivity tools"
+
+# Command-line Tools (security config moved here - much better!)
+command_tools:
+  allowed_commands: 
+    - "ls"
+    - "cat"
+    - "head" 
+    - "tail"
+    - "pwd"
+    - "find"
+    - "grep"
+    - "git"
+    - "curl"
+    - "wget"
+  working_directory: "./"
+  max_execution_time: "30s"
+  enable_sandboxing: false

@@ -14,6 +14,14 @@ import (
 // MCP INFRASTRUCTURE - CORE TOOLING MECHANISM
 // ============================================================================
 
+// MCPServerConfig represents MCP server configuration for YAML
+type MCPServerConfig struct {
+	Name        string                 `yaml:"name"`
+	URL         string                 `yaml:"url"`
+	Description string                 `yaml:"description,omitempty"`
+	Config      map[string]interface{} `yaml:"config,omitempty"`
+}
+
 // MCPServer represents an MCP server configuration
 type MCPServer struct {
 	Name        string

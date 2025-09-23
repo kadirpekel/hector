@@ -18,38 +18,85 @@ type SearchResult = databases.SearchResult
 
 // SearchEngine handles search operations across multiple models
 type SearchEngine struct {
-	db       databases.VectorDB
-	embedder embedders.EmbeddingProvider
-	models   map[string]ModelConfig
-	config   SearchConfig // Component's own config
-	parent   *Agent       // Reference to parent for fallback
+	db       databases.DatabaseProvider
+	embedder embedders.EmbedderProvider
+	config   SearchConfig // Complete search configuration including models
 }
 
-// NewSearchEngine creates a new search engine
-func NewSearchEngine(db databases.VectorDB, embedder embedders.EmbeddingProvider, models map[string]ModelConfig) *SearchEngine {
-	return &SearchEngine{
+// NewSearchEngine creates a new search engine with configuration
+func NewSearchEngine(db databases.DatabaseProvider, embedder embedders.EmbedderProvider, config SearchConfig) *SearchEngine {
+	engine := &SearchEngine{
 		db:       db,
 		embedder: embedder,
-		models:   models,
-		config:   SearchConfig{}, // Default config
-		parent:   nil,            // Will be set by Agent
-	}
-}
-
-// NewSearchEngineWithConfig creates a new search engine with specific config
-func NewSearchEngineWithConfig(db databases.VectorDB, embedder embedders.EmbeddingProvider, models map[string]ModelConfig, config SearchConfig) *SearchEngine {
-	return &SearchEngine{
-		db:       db,
-		embedder: embedder,
-		models:   models,
 		config:   config,
-		parent:   nil, // Will be set by Agent
 	}
+
+	// Log configured models
+	if len(config.Models) > 0 {
+		modelNames := make([]string, len(config.Models))
+		for i, model := range config.Models {
+			modelNames[i] = model.Name
+		}
+		fmt.Printf("Configured %d models: %v\n", len(config.Models), modelNames)
+	}
+
+	return engine
 }
 
-// SetParent sets the parent Agent for fallback access
-func (s *SearchEngine) SetParent(parent *Agent) {
-	s.parent = parent
+// getModels returns the model map from config
+func (s *SearchEngine) getModels() map[string]ModelConfig {
+	modelMap := make(map[string]ModelConfig)
+	for _, model := range s.config.Models {
+		// Set defaults if not specified
+		if model.DefaultTopK == 0 {
+			model.DefaultTopK = 10
+		}
+		if model.MaxTopK == 0 {
+			model.MaxTopK = 100
+		}
+		modelMap[model.Name] = model
+	}
+	return modelMap
+}
+
+// GetModelNames returns list of configured model names
+func (s *SearchEngine) GetModelNames() []string {
+	names := make([]string, 0, len(s.config.Models))
+	for _, model := range s.config.Models {
+		names = append(names, model.Name)
+	}
+	return names
+}
+
+// IngestDocument ingests a document into the vector database
+func (s *SearchEngine) IngestDocument(ctx context.Context, docID, content string, metadata map[string]interface{}) error {
+	if s.embedder == nil {
+		return fmt.Errorf("embedder not configured")
+	}
+	if s.db == nil {
+		return fmt.Errorf("database not configured")
+	}
+	if len(s.config.Models) == 0 {
+		return fmt.Errorf("no document models configured")
+	}
+
+	// Use the first model's collection
+	collection := s.config.Models[0].Collection
+
+	// Generate embedding
+	vector, err := s.embedder.Embed(content)
+	if err != nil {
+		return fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	// Add content to metadata
+	if metadata == nil {
+		metadata = make(map[string]interface{})
+	}
+	metadata["content"] = content
+
+	// Upsert into database
+	return s.db.Upsert(ctx, collection, docID, vector, metadata)
 }
 
 // GetMaxContextLength gets max context length with class defaults
@@ -63,7 +110,7 @@ func (s *SearchEngine) GetMaxContextLength() int {
 // GetContextStrategy gets context strategy with class defaults
 func (s *SearchEngine) GetContextStrategy() string {
 	if s.config.ContextStrategy != "" {
-		return s.config.ContextStrategy
+		return string(s.config.ContextStrategy)
 	}
 	return "relevance" // Class default
 }
@@ -93,6 +140,12 @@ func (se *SearchEngine) SearchModels(query string, topKPerModel int, modelNames 
 		return nil, err
 	}
 
+	// Get models - return empty if no models configured
+	models := se.getModels()
+	if len(models) == 0 {
+		return make(map[string][]SearchResult), nil
+	}
+
 	// Generate embedding for query once
 	vector, err := se.embedder.Embed(query)
 	if err != nil {
@@ -102,10 +155,11 @@ func (se *SearchEngine) SearchModels(query string, topKPerModel int, modelNames 
 	results := make(map[string][]SearchResult)
 
 	// Determine which models to search
+
 	var modelsToSearch []string
 	if len(modelNames) == 0 {
 		// No models specified, search all models
-		for modelName := range se.models {
+		for modelName := range models {
 			modelsToSearch = append(modelsToSearch, modelName)
 		}
 	} else {
@@ -115,7 +169,7 @@ func (se *SearchEngine) SearchModels(query string, topKPerModel int, modelNames 
 
 	// Search each model
 	for _, modelName := range modelsToSearch {
-		config, exists := se.models[modelName]
+		config, exists := models[modelName]
 		if !exists {
 			fmt.Printf("Warning: Model %s not found, skipping\n", modelName)
 			continue
@@ -142,7 +196,12 @@ func (se *SearchEngine) SearchDocuments(query string, modelName string, topK int
 		return nil, err
 	}
 
-	config, exists := se.models[modelName]
+	models := se.getModels()
+	if len(models) == 0 {
+		return []SearchResult{}, nil
+	}
+
+	config, exists := models[modelName]
 	if !exists {
 		return nil, fmt.Errorf("model %s not found", modelName)
 	}

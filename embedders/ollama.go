@@ -94,7 +94,7 @@ func (c *OllamaEmbedderConfig) Validate() error {
 // OLLAMA EMBEDDER IMPLEMENTATION
 // ============================================================================
 
-// OllamaEmbedder implements the EmbeddingProvider interface using Ollama
+// OllamaEmbedder implements the EmbedderProvider interface using Ollama
 type OllamaEmbedder struct {
 	baseURL    string
 	model      string

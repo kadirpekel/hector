@@ -63,7 +63,7 @@ func (c *QdrantConfig) CreateProvider() (interface{}, error) {
 		Insecure: c.Insecure,
 	}
 
-	return newQdrantVectorDBFromConfig(config)
+	return newQdrantDatabaseProviderFromConfig(config)
 }
 
 // Validate implements ProviderConfig.Validate
@@ -151,8 +151,8 @@ func withInsecureTLS() qdrantOption {
 	}
 }
 
-// newQdrantVectorDBFromConfig creates a new Qdrant vector database from config
-func newQdrantVectorDBFromConfig(config *qdrantConfig) (VectorDB, error) {
+// newQdrantDatabaseProviderFromConfig creates a new Qdrant vector database from config
+func newQdrantDatabaseProviderFromConfig(config *qdrantConfig) (DatabaseProvider, error) {
 	// Create Qdrant client with simple configuration
 	client, err := qdrant.NewClient(&qdrant.Config{
 		Host:   config.Host,
@@ -164,14 +164,14 @@ func newQdrantVectorDBFromConfig(config *qdrantConfig) (VectorDB, error) {
 		return nil, fmt.Errorf("failed to create Qdrant client: %w", err)
 	}
 
-	return &qdrantVectorDB{
+	return &qdrantDatabaseProvider{
 		client: client,
 		config: config,
 	}, nil
 }
 
-// NewQdrantVectorDB creates a new Qdrant vector database (legacy method)
-func NewQdrantVectorDB() (VectorDB, error) {
+// NewQdrantDatabaseProvider creates a new Qdrant vector database (legacy method)
+func NewQdrantDatabaseProvider() (DatabaseProvider, error) {
 	config := &QdrantConfig{
 		Provider: "qdrant",
 		Host:     "localhost",
@@ -185,24 +185,24 @@ func NewQdrantVectorDB() (VectorDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return provider.(VectorDB), nil
+	return provider.(DatabaseProvider), nil
 }
 
-// NewQdrantVectorDBFromConfig creates a new Qdrant vector database from config
-func NewQdrantVectorDBFromConfig(config *QdrantConfig) (VectorDB, error) {
+// NewQdrantDatabaseProviderFromConfig creates a new Qdrant vector database from config
+func NewQdrantDatabaseProviderFromConfig(config *QdrantConfig) (DatabaseProvider, error) {
 	provider, err := config.CreateProvider()
 	if err != nil {
 		return nil, err
 	}
-	return provider.(VectorDB), nil
+	return provider.(DatabaseProvider), nil
 }
 
 // ============================================================================
 // QDRANT DATABASE IMPLEMENTATION
 // ============================================================================
 
-// newQdrantVectorDB creates a new Qdrant vector database
-func newQdrantVectorDB(opts ...qdrantOption) (VectorDB, error) {
+// newQdrantDatabaseProvider creates a new Qdrant vector database
+func newQdrantDatabaseProvider(opts ...qdrantOption) (DatabaseProvider, error) {
 	config := DefaultQdrantConfig()
 	for _, opt := range opts {
 		opt(config)
@@ -219,20 +219,20 @@ func newQdrantVectorDB(opts ...qdrantOption) (VectorDB, error) {
 		return nil, fmt.Errorf("failed to create Qdrant client: %w", err)
 	}
 
-	return &qdrantVectorDB{
+	return &qdrantDatabaseProvider{
 		client: client,
 		config: config,
 	}, nil
 }
 
-// qdrantVectorDB is a Qdrant vector database implementation
-type qdrantVectorDB struct {
+// qdrantDatabaseProvider is a Qdrant vector database implementation
+type qdrantDatabaseProvider struct {
 	client *qdrant.Client
 	config *qdrantConfig
 }
 
 // Upsert adds or updates a vector in the database
-func (db *qdrantVectorDB) Upsert(ctx context.Context, collection string, id string, vector []float32, metadata map[string]interface{}) error {
+func (db *qdrantDatabaseProvider) Upsert(ctx context.Context, collection string, id string, vector []float32, metadata map[string]interface{}) error {
 	// Check if collection exists, create if it doesn't
 	exists, err := db.client.CollectionExists(ctx, collection)
 	if err != nil {
@@ -283,7 +283,7 @@ func (db *qdrantVectorDB) Upsert(ctx context.Context, collection string, id stri
 }
 
 // Search performs vector similarity search
-func (db *qdrantVectorDB) Search(ctx context.Context, collection string, queryVector []float32, topK int) ([]SearchResult, error) {
+func (db *qdrantDatabaseProvider) Search(ctx context.Context, collection string, queryVector []float32, topK int) ([]SearchResult, error) {
 	// Create search request
 	searchRequest := &qdrant.SearchPoints{
 		CollectionName: collection,
@@ -384,7 +384,7 @@ func (db *qdrantVectorDB) Search(ctx context.Context, collection string, queryVe
 }
 
 // CreateCollection creates a collection if it doesn't exist
-func (db *qdrantVectorDB) CreateCollection(ctx context.Context, collection string, vectorSize uint64) error {
+func (db *qdrantDatabaseProvider) CreateCollection(ctx context.Context, collection string, vectorSize uint64) error {
 	// Check if collection exists
 	exists, err := db.client.CollectionExists(ctx, collection)
 	if err != nil {
@@ -411,14 +411,14 @@ func (db *qdrantVectorDB) CreateCollection(ctx context.Context, collection strin
 }
 
 // Delete removes a document from the database
-func (db *qdrantVectorDB) Delete(ctx context.Context, collection string, id string) error {
+func (db *qdrantDatabaseProvider) Delete(ctx context.Context, collection string, id string) error {
 	// For now, we'll implement a simple delete by ID
 	// This is a simplified implementation - in production you'd want proper error handling
 	return fmt.Errorf("delete operation not yet implemented for Qdrant")
 }
 
 // DeleteCollection removes a collection
-func (db *qdrantVectorDB) DeleteCollection(ctx context.Context, collection string) error {
+func (db *qdrantDatabaseProvider) DeleteCollection(ctx context.Context, collection string) error {
 	err := db.client.DeleteCollection(ctx, collection)
 	if err != nil {
 		return fmt.Errorf("failed to delete collection: %w", err)
@@ -427,6 +427,6 @@ func (db *qdrantVectorDB) DeleteCollection(ctx context.Context, collection strin
 }
 
 // Close closes the Qdrant client
-func (db *qdrantVectorDB) Close() error {
+func (db *qdrantDatabaseProvider) Close() error {
 	return db.client.Close()
 }

@@ -9,7 +9,7 @@
  ╚═╝  ╚═╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
 ```
 
-**Declarative Multi-Agent AI Framework**
+**Declarative AI Agent Framework**
 
 [![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -19,15 +19,15 @@
 
 ## What is Hector?
 
-Hector is a **declarative multi-agent AI framework** that lets you build sophisticated AI systems through simple YAML configuration. No code required—just describe what you want, and Hector handles the complexity.
+Hector is a **declarative AI agent framework** that lets you build sophisticated AI agents through simple YAML configuration. No code required—just describe what you want, and Hector handles the complexity.
 
-**Key Philosophy**: Every workflow step is a complete AI agent with its own LLM, memory, reasoning capabilities, and tools. This creates naturally composable, powerful multi-agent systems.
+**Key Philosophy**: Build powerful AI agents with advanced reasoning, tool integration, and contextual awareness through simple declarative configuration.
 
 ### ✨ Core Features
 
 - **🔧 Zero-Config Start**: Works out of the box with just an API key
-- **🏗️ Declarative Architecture**: Define complex AI workflows in clean YAML
-- **🤖 True Multi-Agent**: Each step is a full agent with independent capabilities
+- **🏗️ Declarative Architecture**: Define AI agents in clean YAML
+- **🤖 Single-Shot Intelligence**: Fast, reliable responses with full context awareness
 - **🧠 Advanced AI Reasoning**: Meta-reasoning, self-reflection, and goal evolution
 - **🔄 Hot-Swappable Providers**: Switch between LLMs, databases, and embedders seamlessly
 - **🛠️ Rich Tool Ecosystem**: MCP protocol support + secure command-line integration
@@ -257,44 +257,6 @@ reasoning:
   enable_goal_evolution: true         # Goals can evolve during execution
   streaming_mode: "all_steps"         # Streaming: "all_steps", "final_only", "none"
 
-# Workflow Configuration
-workflow:
-  max_steps: 3                        # Maximum workflow steps
-  verbose: true                       # Enable verbose output
-  streaming_mode: "all_steps"         # Workflow streaming mode
-  
-  # Tool Execution Settings
-  tool_execution:
-    parallel_execution: false         # Execute tools in parallel
-    timeout_seconds: 30               # Tool timeout
-    retry_delay_ms: 1000             # Retry delay
-    max_concurrent: 3                 # Max concurrent tools
-  
-  # Error Handling
-  error_handling:
-    strategy: "retry"                 # Strategy: "retry", "skip", "abort"
-    max_error_analysis: 1             # Max error analysis attempts
-    error_threshold: 0.5              # Error threshold (0.0-1.0)
-  
-  # Context Management
-  context:
-    preserve_history: true            # Preserve step history
-    max_history_steps: 10             # Max history steps
-    enable_context_share: true        # Share context between steps
-    context_window: 3                 # Context window size
-  
-  # Workflow Steps
-  steps:
-    - name: "step1"                   # Step name
-      type: "analyze"                 # Type: "analyze", "execute", "synthesize"
-      enabled: true                   # Enable this step
-      agent_config:                   # Step-specific agent config
-        # Any agent configuration can be overridden per step
-        llm:
-          model: "gpt-4o"
-          temperature: 0.3
-        reasoning:
-          max_iterations: 5
 
 # Document Models
 models:

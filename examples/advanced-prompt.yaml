@@ -1,0 +1,100 @@
+# Hector Agent - Advanced Prompt Template Example
+# Demonstrates advanced prompt template configuration
+
+name: "Hector Advanced"
+description: "AI agent with advanced prompt templating"
+
+# LLM Configuration
+llm:
+  name: "openai"
+  model: "gpt-4o-mini"
+  api_key: "YOUR_OPENAI_API_KEY_HERE"
+  temperature: 0.7
+  max_tokens: 2000
+
+# Advanced Prompt Configuration
+prompt:
+  # Custom system prompt
+  system_prompt: |
+    You are {name}, {description}.
+    You are an expert in {domain} with {experience_years} years of experience.
+    Your specialty is {specialty}.
+    
+    Always provide:
+    1. Direct answers to questions
+    2. Relevant context when available
+    3. Tool results when applicable
+    4. Source citations when using documents
+
+  # Custom template for responses
+  template: |
+    ## Query Analysis
+    User Query: {query}
+    Domain: {domain}
+    
+    ## Response
+    Based on the available context and my expertise in {specialty}, here is my response:
+    
+    {response_placeholder}
+    
+    ---
+    *Powered by {name} - {description}*
+
+  # Simple instructions
+  instructions: "Provide expert-level responses with clear reasoning and cite sources when available."
+
+  # Custom variables for template
+  variables:
+    domain: "AI and Software Development"
+    experience_years: "10"
+    specialty: "multi-agent systems and AI reasoning"
+
+  # Context settings
+  include_context: true
+  include_history: true
+  include_tools: true
+  max_context_length: 6000
+
+# Search Configuration
+search:
+  top_k: 15
+  threshold: 0.6
+  max_context_length: 6000
+  context_strategy: "relevant"
+  enable_reranking: true
+
+# Document Models for RAG
+models:
+  - name: "technical_docs"
+    collection: "tech_documentation"
+    default_top_k: 10
+    max_top_k: 50
+
+  - name: "research_papers"
+    collection: "research"
+    default_top_k: 5
+    max_top_k: 20
+
+# MCP Tool Servers
+mcp_servers:
+  - name: "composio"
+    url: "https://apollo.composio.dev/v3/mcp/"
+    description: "Weather, web search, and productivity tools"
+
+# Command-line Tools
+command_tools:
+  allowed_commands: 
+    - "ls"
+    - "cat" 
+    - "head"
+    - "tail"
+    - "pwd"
+    - "find"
+    - "grep"
+    - "git"
+    - "curl"
+    - "python"
+    - "node"
+  working_directory: "./"
+  max_execution_time: "60s"
+  enable_sandboxing: false

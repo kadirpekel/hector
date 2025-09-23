@@ -4,8 +4,8 @@ package embedders
 // EMBEDDING PROVIDER INTERFACE
 // ============================================================================
 
-// EmbeddingProvider interface for embedding generation
-type EmbeddingProvider interface {
+// EmbedderProvider interface for embedding generation
+type EmbedderProvider interface {
 	Embed(text string) ([]float32, error)
 	GetDimension() int
 	GetModelName() string

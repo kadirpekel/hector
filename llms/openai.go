@@ -280,7 +280,7 @@ func (p *OpenAIProvider) hasTemperatureRestrictions() bool {
 	}
 
 	for _, model := range restrictedModels {
-		if strings.Contains(p.config.Model, model) {
+		if p.config.Model == model {
 			return true
 		}
 	}
@@ -301,7 +301,7 @@ func (p *OpenAIProvider) isNewerModel() bool {
 	}
 
 	for _, model := range newerModels {
-		if strings.Contains(p.config.Model, model) {
+		if p.config.Model == model {
 			return true
 		}
 	}

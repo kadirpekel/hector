@@ -1,43 +1,59 @@
 # Hector Agent - Basic Example
 # Basic configuration with tools and smart reasoning
 
-agent:
-  name: "Hector Basic"
-  description: "Basic AI agent with tool support and intelligent reasoning"
+name: "Hector Basic"
+description: "Basic AI agent with tool support and intelligent reasoning"
 
 # LLM Configuration
 llm:
   name: "openai"
+  model: "gpt-4o-mini"
   api_key: "YOUR_OPENAI_API_KEY_HERE"
-  model: "gpt-4o-mini"  # Fast and cost-effective
   temperature: 0.7
+  max_tokens: 2000
 
-# Tool Integration via MCP
+# AI Reasoning Configuration
+reasoning:
+  max_iterations: 5
+  enable_meta_reasoning: true
+  enable_self_reflection: false
+  enable_dynamic_tools: true
+  quality_threshold: 0.7
+
+# Search Configuration
+search:
+  top_k: 10
+  threshold: 0.7
+  max_context_length: 4000
+  context_strategy: "relevant"
+  enable_reranking: false
+
+# Document Models for RAG
+models:
+  - name: "document"
+    collection: "documents"
+    default_top_k: 10
+    max_top_k: 50
+
+# MCP Tool Servers
 mcp_servers:
   - name: "composio"
     url: "https://apollo.composio.dev/v3/mcp/"
     description: "Weather, web search, and productivity tools"
-    config:
-      api_key: "YOUR_COMPOSIO_API_KEY_HERE"
 
-# Document Support
-models:
-  - name: "documents"
-    collection: "documents"
-    default_top_k: 5
-
-# Intelligent Reasoning - AI selects optimal strategy
-reasoning:
-  max_iterations: 5
-  enable_meta_reasoning: true
-  enable_dynamic_tools: true
-  quality_threshold: 0.7
-
-# Single-step workflow with inheritance
-workflow:
-  max_steps: 1
-  verbose: true
-  steps:
-    - name: "main"
-      type: "execute"
-      # Inherits all root-level configurations
+# Command-line Tools
+command_tools:
+  allowed_commands: 
+    - "ls"
+    - "cat" 
+    - "head"
+    - "tail"
+    - "pwd"
+    - "find"
+    - "grep"
+    - "git"
+    - "curl"
+    - "wget"
+  working_directory: "./"
+  max_execution_time: "30s"
+  enable_sandboxing: false

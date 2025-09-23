@@ -2,13 +2,13 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/kadirpekel/hector"
 )
 
@@ -50,7 +50,7 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		agent, err = hector.NewAgentFromYAML(configPath)
+		agent, err = hector.LoadAgentFromFile(configPath)
 		if err != nil {
 			fmt.Printf("Failed to load config: %v\n", err)
 			os.Exit(1)
@@ -103,106 +103,13 @@ func handleCommand(agent *hector.Agent, input string) {
 	switch command {
 	case "/help":
 		showHelp()
-	case "/add":
-		handleAddDocument(agent, parts[1:])
-	case "/search":
-		handleSearchDocuments(agent, parts[1:])
 	case "/tools":
 		handleListTools(agent)
-	case "/sync-model":
-		handleSyncModel(agent, parts[1:])
-	case "/sync-all":
-		handleSyncAllModels(agent)
-	case "/list-models":
-		handleListModels(agent)
-	case "/model-status":
-		handleModelStatus(agent, parts[1:])
 	case "/quit", "/exit":
 		fmt.Println("Goodbye!")
 		os.Exit(0)
 	default:
 		fmt.Printf("Unknown command: %s. Type /help for available commands.\n", command)
-	}
-}
-
-// handleAddDocument handles document addition
-func handleAddDocument(agent *hector.Agent, args []string) {
-	if len(args) < 2 {
-		fmt.Println("Usage: /add <title> <content>")
-		return
-	}
-
-	title := args[0]
-	content := strings.Join(args[1:], " ")
-
-	doc := map[string]interface{}{
-		"id":      uuid.New().String(),
-		"title":   title,
-		"content": content,
-		"source":  "manual-input",
-	}
-
-	err := agent.UpsertDocument("document", doc["id"].(string), doc)
-	if err != nil {
-		fmt.Printf("Failed to add document: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Added document: %s\n", title)
-}
-
-// handleSearchDocuments handles document search
-func handleSearchDocuments(agent *hector.Agent, args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: /search <query> [model_name]")
-		return
-	}
-
-	query := strings.Join(args, " ")
-
-	// Determine which model to search
-	modelName := "document" // Default
-	if len(args) > 1 {
-		// If multiple args, last one might be model name
-		models := agent.ListModels()
-		if len(models) > 0 {
-			// Check if last arg is a model name
-			lastArg := args[len(args)-1]
-			for _, model := range models {
-				if model == lastArg {
-					modelName = lastArg
-					query = strings.Join(args[:len(args)-1], " ")
-					break
-				}
-			}
-		}
-	} else {
-		// Use first available model if no model specified
-		models := agent.ListModels()
-		if len(models) > 0 {
-			modelName = models[0]
-		}
-	}
-
-	results, err := agent.SearchDocuments(query, modelName, 5)
-	if err != nil {
-		fmt.Printf("Search failed: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Found %d documents:\n", len(results))
-	for i, result := range results {
-		title := "Unknown"
-		if t, exists := result.Metadata["title"]; exists {
-			if titleStr, ok := t.(string); ok {
-				title = titleStr
-			}
-		} else if filename, exists := result.Metadata["filename"]; exists {
-			if filenameStr, ok := filename.(string); ok {
-				title = filenameStr
-			}
-		}
-		fmt.Printf("  %d. %s (score: %.3f)\n", i+1, title, result.Score)
 	}
 }
 
@@ -222,36 +129,13 @@ func handleListTools(agent *hector.Agent) {
 	}
 }
 
-// handleQuery handles user queries
+// handleQuery handles user queries with simple single-shot responses
 func handleQuery(agent *hector.Agent, query string) {
 	fmt.Print("Processing... ")
 
-	// Try streaming first, fall back to regular if not supported
-	if err := handleStreamingQuery(agent, query); err != nil {
-		handleRegularQuery(agent, query)
-	}
-}
-
-// handleStreamingQuery handles streaming queries
-func handleStreamingQuery(agent *hector.Agent, query string) error {
-	streamCh, err := agent.ExecuteQueryWithReasoningStreaming(query)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println()
-	for chunk := range streamCh {
-		fmt.Print(chunk)
-		// Force flush to ensure real-time output
-		os.Stdout.Sync()
-	}
-	fmt.Println()
-	return nil
-}
-
-// handleRegularQuery handles regular queries
-func handleRegularQuery(agent *hector.Agent, query string) {
-	response, err := agent.ExecuteQueryWithReasoning(query)
+	// Use the simple Query method for single-shot responses
+	ctx := context.Background()
+	response, err := agent.Query(ctx, query)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
@@ -259,19 +143,24 @@ func handleRegularQuery(agent *hector.Agent, query string) {
 
 	fmt.Println()
 	fmt.Println(response.Answer)
+
+	// Show additional info if available
+	if len(response.Context) > 0 {
+		fmt.Printf("\n[Used %d context sources]\n", len(response.Context))
+	}
+	if len(response.ToolResults) > 0 {
+		fmt.Printf("[Used %d tools]\n", len(response.ToolResults))
+	}
+	if response.TokensUsed > 0 {
+		fmt.Printf("[Tokens: %d, Duration: %v]\n", response.TokensUsed, response.Duration)
+	}
 }
 
 // showHelp shows the help message
 func showHelp() {
 	fmt.Println("Commands:")
 	fmt.Println("  /help         - Show this help")
-	fmt.Println("  /add          - Add a document")
-	fmt.Println("  /search       - Search documents")
 	fmt.Println("  /tools        - List available tools")
-	fmt.Println("  /sync-model   - Sync a specific model")
-	fmt.Println("  /sync-all     - Sync all models")
-	fmt.Println("  /list-models  - List all models")
-	fmt.Println("  /model-status - Show model status")
 	fmt.Println("  /quit         - Exit")
 	fmt.Println()
 	fmt.Println("Or just ask questions naturally!")
@@ -313,74 +202,5 @@ func listAvailableConfigs() {
 				fmt.Printf("  %s\n", baseName)
 			}
 		}
-	}
-}
-
-// ============================================================================
-// MODEL SYNC COMMAND HANDLERS
-// ============================================================================
-
-// handleSyncModel handles model synchronization
-func handleSyncModel(agent *hector.Agent, args []string) {
-	if len(args) < 1 {
-		fmt.Println("Usage: /sync-model <model_name>")
-		return
-	}
-
-	modelName := args[0]
-	fmt.Printf("Syncing model '%s'...\n", modelName)
-
-	err := agent.SyncModel(modelName)
-	if err != nil {
-		fmt.Printf("Failed to sync model '%s': %v\n", modelName, err)
-	} else {
-		fmt.Printf("Successfully synced model '%s'\n", modelName)
-	}
-}
-
-// handleSyncAllModels handles syncing all models
-func handleSyncAllModels(agent *hector.Agent) {
-	fmt.Println("Syncing all models...")
-
-	err := agent.SyncAllModels()
-	if err != nil {
-		fmt.Printf("Failed to sync all models: %v\n", err)
-	} else {
-		fmt.Println("Successfully synced all models")
-	}
-}
-
-// handleListModels handles listing all models
-func handleListModels(agent *hector.Agent) {
-	models := agent.ListModels()
-
-	if len(models) == 0 {
-		fmt.Println("No models configured")
-		return
-	}
-
-	fmt.Println("Available models:")
-	for _, model := range models {
-		fmt.Printf("  - %s\n", model)
-	}
-}
-
-// handleModelStatus handles showing model status
-func handleModelStatus(agent *hector.Agent, args []string) {
-	if len(args) < 1 {
-		fmt.Println("Usage: /model-status <model_name>")
-		return
-	}
-
-	modelName := args[0]
-	status, err := agent.GetModelStatus(modelName)
-	if err != nil {
-		fmt.Printf("Failed to get status for model '%s': %v\n", modelName, err)
-		return
-	}
-
-	fmt.Printf("Model Status: %s\n", modelName)
-	for key, value := range status {
-		fmt.Printf("  %s: %v\n", key, value)
 	}
 }

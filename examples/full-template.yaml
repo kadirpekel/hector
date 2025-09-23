@@ -1,0 +1,80 @@
+# Hector Agent - Full Template Example
+# Demonstrates complete prompt template control
+
+name: "Hector Full Template"
+description: "AI agent with complete prompt template control"
+
+# LLM Configuration
+llm:
+  name: "openai"
+  model: "gpt-4o-mini"
+  api_key: "YOUR_OPENAI_API_KEY_HERE"
+  temperature: 0.7
+
+# Database (renamed from Memory for clarity)
+database:
+  name: "qdrant"
+  base_url: "http://localhost:6333"
+
+# Full Template Mode - User has complete control over the prompt
+prompt:
+  full_template: |
+    # {name} - {description}
+    
+    You are an expert AI assistant with the following capabilities:
+    - Access to real-time tools and command execution
+    - Knowledge base search across document collections  
+    - Conversation history awareness
+    
+    ## Available Context
+    
+    ### Document Context
+    {context}
+    
+    ### Tool Results  
+    {tools}
+    
+    ### Recent Conversation
+    {history}
+    
+    ## Current Task
+    
+    **User Query:** {query}
+    
+    **Instructions:** Provide a comprehensive, accurate response. Use the context and tools available to give the best possible answer. Be direct and helpful.
+    
+    **Custom Domain:** {domain}
+    **Expertise Level:** {expertise}
+    
+    ---
+    
+    **Response:**
+
+  # Custom variables for the template
+  variables:
+    domain: "AI and Software Engineering"
+    expertise: "Senior Expert Level"
+
+# Search Configuration  
+search:
+  top_k: 10
+  threshold: 0.7
+  context_strategy: "relevant"
+
+# Simple Document Models
+models:
+  - name: "technical_docs"
+    collection: "tech_docs"
+    default_top_k: 5
+    max_top_k: 20
+
+# Tool Integration
+command_tools:
+  allowed_commands: ["ls", "cat", "head", "pwd", "find", "grep", "git", "curl", "python"]
+  working_directory: "./"
+  max_execution_time: "45s"
+  enable_sandboxing: false
+
+mcp_servers:
+  - name: "composio"
+    url: "https://apollo.composio.dev/v3/mcp/"

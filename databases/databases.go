@@ -8,8 +8,8 @@ import (
 // VECTOR DATABASE INTERFACE
 // ============================================================================
 
-// VectorDB defines the interface for vector database operations
-type VectorDB interface {
+// DatabaseProvider defines the interface for vector database operations
+type DatabaseProvider interface {
 	// Upsert adds or updates a document in the database
 	Upsert(ctx context.Context, collection string, id string, vector []float32, metadata map[string]interface{}) error
 
