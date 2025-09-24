@@ -52,6 +52,17 @@ type SearchConfig struct {
 	EnableReranking  bool            `yaml:"enable_reranking,omitempty"`
 }
 
+// ReasoningConfig represents dynamic reasoning configuration
+type ReasoningConfig struct {
+	MaxIterations        int     `yaml:"max_iterations"`
+	EnableSelfReflection bool    `yaml:"enable_self_reflection"`
+	EnableMetaReasoning  bool    `yaml:"enable_meta_reasoning"`
+	EnableDynamicTools   bool    `yaml:"enable_dynamic_tools"`
+	EnableGoalEvolution  bool    `yaml:"enable_goal_evolution"`
+	QualityThreshold     float64 `yaml:"quality_threshold"`
+	StreamingMode        string  `yaml:"streaming_mode"` // "none", "final", "all_steps"
+}
+
 // ============================================================================
 // AGENT CONFIGURATION
 // ============================================================================
@@ -94,6 +105,9 @@ type AgentConfig struct {
 
 	// Prompt Configuration
 	Prompt PromptConfig `yaml:"prompt,omitempty"`
+
+	// Reasoning Configuration
+	Reasoning ReasoningConfig `yaml:"reasoning,omitempty"`
 
 	// Search Configuration (now includes models)
 	Search SearchConfig `yaml:"search,omitempty"`

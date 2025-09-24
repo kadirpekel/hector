@@ -15,6 +15,8 @@ import (
 func main() {
 	// Parse command line arguments
 	configFile := flag.String("config", "", "YAML configuration file path")
+	dynamicReasoning := flag.Bool("dynamic", false, "Enable dynamic reasoning mode")
+	streaming := flag.Bool("stream", false, "Enable streaming output")
 	flag.Parse()
 
 	// Determine config file to use
@@ -58,14 +60,20 @@ func main() {
 	}
 
 	// Start interactive session
-	startInteractiveChat(agent)
+	startInteractiveChat(agent, *dynamicReasoning, *streaming)
 }
 
 // startInteractiveChat starts the interactive chat interface
-func startInteractiveChat(agent *hector.Agent) {
+func startInteractiveChat(agent *hector.Agent, dynamicReasoning bool, streaming bool) {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	fmt.Println("Hector AI Agent")
+	if dynamicReasoning {
+		fmt.Println("🧠 Dynamic Reasoning Mode Enabled")
+		if streaming {
+			fmt.Println("📡 Streaming Output Enabled")
+		}
+	}
 	fmt.Println("Type /help for commands or ask a question")
 	fmt.Println()
 
@@ -82,17 +90,21 @@ func startInteractiveChat(agent *hector.Agent) {
 
 		// Handle commands
 		if strings.HasPrefix(input, "/") {
-			handleCommand(agent, input)
+			handleCommand(agent, input, dynamicReasoning, streaming)
 			continue
 		}
 
 		// Handle queries
-		handleQuery(agent, input)
+		if dynamicReasoning {
+			handleDynamicQuery(agent, input, streaming)
+		} else {
+			handleQuery(agent, input)
+		}
 	}
 }
 
 // handleCommand handles special commands
-func handleCommand(agent *hector.Agent, input string) {
+func handleCommand(agent *hector.Agent, input string, dynamicReasoning bool, streaming bool) {
 	parts := strings.Fields(input)
 	if len(parts) == 0 {
 		return
@@ -156,12 +168,69 @@ func handleQuery(agent *hector.Agent, query string) {
 	}
 }
 
+// handleDynamicQuery handles user queries with dynamic reasoning
+func handleDynamicQuery(agent *hector.Agent, query string, streaming bool) {
+	ctx := context.Background()
+
+	// Get reasoning config from agent config or use defaults
+	reasoningConfig := hector.ReasoningConfig{
+		MaxIterations:        5,
+		EnableSelfReflection: true,
+		EnableMetaReasoning:  true,
+		EnableDynamicTools:   true,
+		EnableGoalEvolution:  false,
+		QualityThreshold:     0.8,
+		StreamingMode:        "all_steps",
+	}
+
+	if streaming {
+		fmt.Println("🧠 Starting dynamic reasoning...")
+		streamCh, err := agent.ExecuteQueryWithReasoningStreaming(ctx, query, reasoningConfig)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
+
+		for chunk := range streamCh {
+			fmt.Print(chunk)
+		}
+	} else {
+		fmt.Print("🧠 Processing with dynamic reasoning... ")
+
+		response, err := agent.ExecuteQueryWithReasoning(ctx, query, reasoningConfig)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
+
+		fmt.Println()
+		fmt.Println(response.Answer)
+
+		// Show additional info
+		if len(response.Context) > 0 {
+			fmt.Printf("\n[Used %d context sources]\n", len(response.Context))
+		}
+		if len(response.ToolResults) > 0 {
+			fmt.Printf("[Used %d tools]\n", len(response.ToolResults))
+		}
+		if response.TokensUsed > 0 {
+			fmt.Printf("[Tokens: %d, Duration: %v, Confidence: %.2f]\n",
+				response.TokensUsed, response.Duration, response.Confidence)
+		}
+	}
+}
+
 // showHelp shows the help message
 func showHelp() {
 	fmt.Println("Commands:")
 	fmt.Println("  /help         - Show this help")
 	fmt.Println("  /tools        - List available tools")
 	fmt.Println("  /quit         - Exit")
+	fmt.Println()
+	fmt.Println("Command line flags:")
+	fmt.Println("  --dynamic     - Enable dynamic reasoning mode")
+	fmt.Println("  --stream      - Enable streaming output")
+	fmt.Println("  --config      - Specify configuration file")
 	fmt.Println()
 	fmt.Println("Or just ask questions naturally!")
 }
