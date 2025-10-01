@@ -1,0 +1,242 @@
+# Hector - Multi-Agent Workflow Configuration
+# Demonstrates complex workflows with specialized agents
+
+version: "1.0"
+name: "hector-workflow"
+description: "Multi-agent workflow with specialized agents and coordination"
+
+# Global settings
+global:
+  logging:
+    level: "info"
+    format: "json"
+    output: "stdout"
+  performance:
+    max_concurrency: 8
+    timeout: "30m"
+
+# Service configurations (direct access, no providers wrapper)
+llms:
+  ollama-main:
+    type: "ollama"
+    model: "llama3.2"
+    host: "http://localhost:11434"
+    temperature: 0.7
+    max_tokens: 2000
+    timeout: 60
+  
+  ollama-analyst:
+    type: "ollama"
+    model: "llama3.2"
+    host: "http://localhost:11434"
+    temperature: 0.3
+    max_tokens: 1500
+    timeout: 60
+  
+  openai-coordinator:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+    host: "https://api.openai.com/v1"
+    temperature: 0.5
+    max_tokens: 1000
+    timeout: 120
+
+databases:
+  qdrant-main:
+    type: "qdrant"
+    host: "localhost"
+    port: 6333
+    api_key: "${QDRANT_API_KEY:-}"
+    timeout: 30
+
+embedders:
+  ollama-embed:
+    type: "ollama"
+    model: "nomic-embed-text"
+    host: "http://localhost:11434"
+    dimension: 768
+    timeout: 60
+
+# Specialized agents
+agents:
+  research-agent:
+    name: "Research Agent"
+    description: "Specialized in gathering and analyzing information"
+    llm: "ollama-main"
+    database: "qdrant-main"
+    embedder: "ollama-embed"
+    
+    prompt:
+      system_prompt: "You are a research specialist. Your goal is to gather comprehensive information and analyze findings systematically."
+      include_context: true
+      include_history: true
+      include_tools: true
+      max_context_length: 4000
+    
+    reasoning:
+      engine: "dynamic"
+      max_iterations: 5
+      enable_self_reflection: true
+      quality_threshold: 0.8
+    
+    search:
+      models:
+        - name: "research_docs"
+          collection: "research"
+          default_top_k: 15
+          max_top_k: 100
+        - name: "web_content"
+          collection: "web"
+          default_top_k: 15
+          max_top_k: 100
+      top_k: 15
+      threshold: 0.7
+
+  analysis-agent:
+    name: "Analysis Agent"
+    description: "Specialized in data analysis and synthesis"
+    llm: "ollama-analyst"
+    database: "qdrant-main"
+    embedder: "ollama-embed"
+    
+    prompt:
+      system_prompt: "You are an analysis specialist. Your role is to analyze data, identify patterns, and synthesize insights from research findings."
+      include_context: true
+      include_history: true
+      include_tools: true
+      max_context_length: 3000
+    
+    reasoning:
+      engine: "dynamic"
+      max_iterations: 4
+      enable_self_reflection: true
+      quality_threshold: 0.8
+    
+    search:
+      models:
+        - name: "analysis_data"
+          collection: "analysis"
+          default_top_k: 10
+          max_top_k: 50
+      top_k: 10
+      threshold: 0.8
+
+  synthesis-agent:
+    name: "Synthesis Agent"
+    description: "Specialized in creating comprehensive reports and recommendations"
+    llm: "ollama-main"
+    database: "qdrant-main"
+    embedder: "ollama-embed"
+    
+    prompt:
+      system_prompt: "You are a synthesis specialist. Your role is to combine insights from multiple sources and create comprehensive, actionable recommendations."
+      include_context: true
+      include_history: true
+      include_tools: false
+      max_context_length: 5000
+    
+    reasoning:
+      engine: "dynamic"
+      max_iterations: 3
+      enable_self_reflection: true
+      quality_threshold: 0.9
+    
+    search:
+      models:
+        - name: "synthesis_docs"
+          collection: "synthesis"
+          default_top_k: 20
+          max_top_k: 100
+      top_k: 20
+      threshold: 0.6
+
+# Workflow configuration
+workflows:
+  research-analysis-workflow:
+    name: "Research Analysis Workflow"
+    description: "A comprehensive workflow for research, analysis, and synthesis"
+    mode: "dag"
+    
+    agents:
+      - "research-agent"
+      - "analysis-agent"
+      - "synthesis-agent"
+    
+    shared:
+      memory:
+        type: "in-memory"
+      cache:
+        type: "in-memory"
+        ttl: "1h"
+    
+    execution:
+      dag:
+        steps:
+          - name: "research_phase"
+            agent: "research-agent"
+            input: "${user_input}"
+            output: "research_results"
+          
+          - name: "analysis_phase"
+            agent: "analysis-agent"
+            input: "${research_results}"
+            output: "analysis_insights"
+            depends_on: ["research_phase"]
+          
+          - name: "synthesis_phase"
+            agent: "synthesis-agent"
+            input: "${analysis_insights}"
+            output: "final_report"
+            depends_on: ["analysis_phase"]
+    
+    settings:
+      max_concurrency: 2
+      timeout: "20m"
+      retry_policy:
+        max_retries: 3
+        backoff: "5s"
+
+# Tool configuration
+tools:
+  default_repo: "local"
+  repositories:
+    - name: "local"
+      type: "local"
+      description: "Built-in local tools"
+      tools:
+        - name: "command_executor"
+          type: "command"
+          enabled: true
+          config:
+            command_config:
+              allowed_commands: ["ls", "cat", "head", "tail", "pwd", "find", "grep", "git", "curl", "wget", "python", "jq"]
+              working_directory: "./"
+              max_execution_time: "45s"
+              enable_sandboxing: true
+        
+        - name: "web_search"
+          type: "search"
+          enabled: true
+          config:
+            search_config:
+              document_stores: ["web-documents", "research-docs"]
+              default_limit: 15
+              max_limit: 100
+              enabled_search_types: ["content", "file", "function", "struct"]
+
+# Document store configuration
+document_stores:
+  web-documents:
+    name: "Web Documents"
+    source: "directory"
+    path: "./docs/web"
+    include_patterns: ["*.md", "*.txt", "*.html", "*.pdf"]
+    watch_changes: true
+  
+  research-docs:
+    name: "Research Documents"
+    source: "directory"
+    path: "./docs/research"
+    include_patterns: ["*.md", "*.txt", "*.pdf", "*.docx"]
+    watch_changes: true

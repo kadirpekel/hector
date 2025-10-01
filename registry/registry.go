@@ -1,0 +1,100 @@
+package registry
+
+import (
+	"fmt"
+	"sync"
+)
+
+// ============================================================================
+// GENERIC REGISTRY IMPLEMENTATION
+// ============================================================================
+
+// Registry represents a generic registry interface
+type Registry[T any] interface {
+	Register(name string, item T) error
+	Get(name string) (T, bool)
+	List() []T
+	Remove(name string) error
+	Count() int
+	Clear()
+}
+
+// BaseRegistry provides a generic thread-safe registry implementation
+type BaseRegistry[T any] struct {
+	mu    sync.RWMutex
+	items map[string]T
+}
+
+// NewBaseRegistry creates a new base registry
+func NewBaseRegistry[T any]() *BaseRegistry[T] {
+	return &BaseRegistry[T]{
+		items: make(map[string]T),
+	}
+}
+
+// Register adds an item to the registry
+func (r *BaseRegistry[T]) Register(name string, item T) error {
+	if name == "" {
+		return fmt.Errorf("name cannot be empty")
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.items[name]; exists {
+		return fmt.Errorf("item with name '%s' already registered", name)
+	}
+
+	r.items[name] = item
+	return nil
+}
+
+// Get retrieves an item by name
+func (r *BaseRegistry[T]) Get(name string) (T, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	item, exists := r.items[name]
+	return item, exists
+}
+
+// List returns all registered items
+func (r *BaseRegistry[T]) List() []T {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	items := make([]T, 0, len(r.items))
+	for _, item := range r.items {
+		items = append(items, item)
+	}
+	return items
+}
+
+// Remove removes an item from the registry
+func (r *BaseRegistry[T]) Remove(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.items[name]; !exists {
+		return fmt.Errorf("item '%s' not found", name)
+	}
+
+	delete(r.items, name)
+	return nil
+}
+
+// Count returns the number of registered items
+func (r *BaseRegistry[T]) Count() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return len(r.items)
+}
+
+// Clear removes all items from the registry
+func (r *BaseRegistry[T]) Clear() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.items = make(map[string]T)
+}

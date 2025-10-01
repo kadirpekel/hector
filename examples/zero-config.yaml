@@ -1,0 +1,6 @@
+# Zero-Config Example
+# This demonstrates the absolute minimum configuration needed
+# Everything else will be created with sensible defaults
+
+name: "my-assistant"
+description: "A zero-config AI assistant"

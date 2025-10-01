@@ -1,0 +1,124 @@
+# Hector - Basic Configuration
+# General purpose agent with tools and enhanced capabilities
+
+version: "1.0"
+name: "hector-basic"
+description: "Basic Hector configuration with tools and smart reasoning"
+
+# Global settings
+global:
+  logging:
+    level: "info"
+    format: "json"
+    output: "stdout"
+  performance:
+    max_concurrency: 4
+    timeout: "15m"
+
+# Service configurations (direct access, no providers wrapper)
+llms:
+  ollama-main:
+    type: "ollama"
+    model: "llama3.2"
+    host: "http://localhost:11434"
+    temperature: 0.7
+    max_tokens: 2000
+    timeout: 60
+  
+  openai-gpt4:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+    host: "https://api.openai.com/v1"
+    temperature: 0.5
+    max_tokens: 2000
+    timeout: 120
+
+databases:
+  qdrant-main:
+    type: "qdrant"
+    host: "localhost"
+    port: 6333
+    api_key: "${QDRANT_API_KEY:-}"
+    timeout: 30
+
+embedders:
+  ollama-embed:
+    type: "ollama"
+    model: "nomic-embed-text"
+    host: "http://localhost:11434"
+    dimension: 768
+    timeout: 60
+
+# Agent configuration
+agents:
+  main-agent:
+    name: "Basic Agent"
+    description: "A general-purpose AI agent with tools and enhanced reasoning"
+    llm: "ollama-main"
+    database: "qdrant-main"
+    embedder: "ollama-embed"
+    
+    prompt:
+      system_prompt: "You are Hector, an intelligent AI assistant with access to tools and knowledge bases. Be helpful, accurate, and use available context and tools to provide the best responses."
+      include_context: true
+      include_history: true
+      include_tools: true
+      max_context_length: 4000
+    
+    reasoning:
+      engine: "dynamic"
+      max_iterations: 5
+      enable_self_reflection: true
+      quality_threshold: 0.7
+    
+    search:
+      models:
+        - name: "documents"
+          collection: "docs"
+          default_top_k: 10
+          max_top_k: 50
+        - name: "code"
+          collection: "code_docs"
+          default_top_k: 10
+          max_top_k: 50
+      top_k: 10
+      threshold: 0.7
+      max_context_length: 4000
+
+# Tool configuration
+tools:
+  default_repo: "local"
+  repositories:
+    - name: "local"
+      type: "local"
+      description: "Built-in local tools"
+      tools:
+        - name: "command_executor"
+          type: "command"
+          enabled: true
+          config:
+            command_config:
+              allowed_commands: ["ls", "cat", "head", "tail", "pwd", "find", "grep", "git", "curl", "wget", "echo", "date"]
+              working_directory: "./"
+              max_execution_time: "30s"
+              enable_sandboxing: true
+        
+        - name: "web_search"
+          type: "search"
+          enabled: true
+          config:
+            search_config:
+              document_stores: ["web-documents"]
+              default_limit: 10
+              max_limit: 50
+              enabled_search_types: ["content", "file", "function"]
+
+# Document store configuration
+document_stores:
+  web-documents:
+    name: "Web Documents"
+    source: "directory"
+    path: "./docs"
+    include_patterns: ["*.md", "*.txt", "*.html"]
+    watch_changes: true
