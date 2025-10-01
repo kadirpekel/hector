@@ -8,35 +8,35 @@ import (
 )
 
 // ============================================================================
-// REASONING EXTENSION - SELF-RECURSIVE REASONING CAPABILITY
+// CHAIN OF THOUGHT EXTENSION - CHAIN-OF-THOUGHT REASONING CAPABILITY
 // ============================================================================
 
-// ReasoningExtension provides the ability for the LLM to call the reasoning engine itself
-type ReasoningExtension struct {
+// ChainOfThoughtExtension provides the ability for the LLM to call the chain-of-thought reasoning engine
+type ChainOfThoughtExtension struct {
 	reasoningEngine ReasoningEngine
 	services        AgentServices
 }
 
-// NewReasoningExtension creates a new reasoning extension
-func NewReasoningExtension(reasoningEngine ReasoningEngine, services AgentServices) *ReasoningExtension {
-	return &ReasoningExtension{
+// NewChainOfThoughtExtension creates a new chain-of-thought extension
+func NewChainOfThoughtExtension(reasoningEngine ReasoningEngine, services AgentServices) *ChainOfThoughtExtension {
+	return &ChainOfThoughtExtension{
 		reasoningEngine: reasoningEngine,
 		services:        services,
 	}
 }
 
-// CreateExtension creates the reasoning extension definition
-func (re *ReasoningExtension) CreateExtension() ExtensionDefinition {
+// CreateExtension creates the chain-of-thought extension definition
+func (re *ChainOfThoughtExtension) CreateExtension() ExtensionDefinition {
 	return ExtensionDefinition{
-		Name:        "reasoning",
-		Description: "Call the reasoning engine itself to continue thinking about specific aspects of a problem",
+		Name:        "chain-of-thought",
+		Description: "Call the chain-of-thought reasoning engine to continue thinking about specific aspects of a problem",
 		OpenTag:     "REASONING_CALL:",
 		CloseTag:    "",
 		Processor:   re.processReasoningCall,
 		Executor:    re.executeReasoningCall,
-		PromptFormat: `## Reasoning Extension
+		PromptFormat: `## Chain-of-Thought Extension
 
-You can call the reasoning engine itself to think deeper about specific aspects of a problem. This enables recursive reasoning and chain-of-thought analysis.
+You can call the chain-of-thought reasoning engine to think deeper about specific aspects of a problem. This enables recursive reasoning and chain-of-thought analysis.
 
 **Format:**
 REASONING_CALL:
@@ -97,7 +97,7 @@ REASONING_CALL:
 }
 
 // processReasoningCall processes reasoning call content
-func (re *ReasoningExtension) processReasoningCall(content string) (string, string) {
+func (re *ChainOfThoughtExtension) processReasoningCall(content string) (string, string) {
 	// Extract a user-friendly display message
 	if purpose := re.extractPurpose(content); purpose != "" {
 		return fmt.Sprintf("\n🤔 **Deepening Reasoning:** %s", purpose), content
@@ -106,13 +106,13 @@ func (re *ReasoningExtension) processReasoningCall(content string) (string, stri
 	return "\n🤔 **Continuing Reasoning Chain...**", content
 }
 
-// executeReasoningCall executes the reasoning call by calling the reasoning engine itself
-func (re *ReasoningExtension) executeReasoningCall(ctx context.Context, rawData string) (ExtensionResult, error) {
+// executeReasoningCall processes the reasoning call data and returns it for the reasoning engine to handle
+func (re *ChainOfThoughtExtension) executeReasoningCall(ctx context.Context, rawData string) (ExtensionResult, error) {
 	// Parse the reasoning call
 	reasoningCall, err := re.parseReasoningCall(rawData)
 	if err != nil {
 		return ExtensionResult{
-			Name:    "reasoning",
+			Name:    "chain-of-thought",
 			Success: false,
 			Error:   fmt.Sprintf("Failed to parse reasoning call: %v", err),
 		}, nil
@@ -121,45 +121,29 @@ func (re *ReasoningExtension) executeReasoningCall(ctx context.Context, rawData 
 	// Validate the reasoning call
 	if reasoningCall.Query == "" {
 		return ExtensionResult{
-			Name:    "reasoning",
+			Name:    "chain-of-thought",
 			Success: false,
 			Error:   "Reasoning call must include a 'query' field",
 		}, nil
 	}
 
-	// Execute the reasoning engine with the new query
-	// This creates the recursive call - the reasoning engine calls itself
-	outputCh, err := re.reasoningEngine.Execute(ctx, reasoningCall.Query)
-	if err != nil {
-		return ExtensionResult{
-			Name:    "reasoning",
-			Success: false,
-			Error:   fmt.Sprintf("Failed to execute reasoning: %v", err),
-		}, nil
-	}
-
-	// Collect the reasoning output
-	var reasoningOutput strings.Builder
-	for chunk := range outputCh {
-		reasoningOutput.WriteString(chunk)
-	}
-
-	// Return the reasoning result
+	// Return the parsed reasoning call data for the reasoning engine to process
+	// The reasoning engine will decide what to do with this data
 	return ExtensionResult{
-		Name:    "reasoning",
+		Name:    "chain-of-thought",
 		Success: true,
-		Content: reasoningOutput.String(),
+		Content: "", // No content - just metadata for the reasoning engine
 		Metadata: map[string]interface{}{
 			"original_query": reasoningCall.Query,
 			"purpose":        reasoningCall.Purpose,
 			"context":        reasoningCall.Context,
-			"recursive_call": true,
+			"reasoning_call": true,
 		},
 	}, nil
 }
 
 // parseReasoningCall parses the reasoning call JSON
-func (re *ReasoningExtension) parseReasoningCall(rawData string) (*ReasoningCall, error) {
+func (re *ChainOfThoughtExtension) parseReasoningCall(rawData string) (*ReasoningCall, error) {
 	// Try to parse the entire raw data as JSON first
 	rawData = strings.TrimSpace(rawData)
 	if strings.HasPrefix(rawData, "{") {
@@ -186,7 +170,7 @@ func (re *ReasoningExtension) parseReasoningCall(rawData string) (*ReasoningCall
 }
 
 // extractPurpose extracts the purpose from reasoning call JSON
-func (re *ReasoningExtension) extractPurpose(content string) string {
+func (re *ChainOfThoughtExtension) extractPurpose(content string) string {
 	lines := strings.Split(strings.TrimSpace(content), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -202,11 +186,4 @@ func (re *ReasoningExtension) extractPurpose(content string) string {
 		}
 	}
 	return ""
-}
-
-// ReasoningCall represents a parsed reasoning call
-type ReasoningCall struct {
-	Query   string `json:"query"`
-	Purpose string `json:"purpose,omitempty"`
-	Context string `json:"context,omitempty"`
 }

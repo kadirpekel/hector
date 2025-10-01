@@ -7,17 +7,14 @@ description: "AI assistant with advanced recursive reasoning capabilities"
 
 # Reasoning Engine Configuration
 reasoning:
-  engine: "chain-of-thought"  # Use the new chain-of-thought engine
-  max_iterations: 5           # Maximum number of reasoning iterations
+  engine: "chain-of-thought"  # Use the chain-of-thought engine
   enable_streaming: true      # Enable streaming responses
-  enable_self_reflection: true # Enable self-reflection capabilities
-  enable_meta_reasoning: true  # Enable meta-cognitive reasoning
 
 # Prompt Configuration
 prompt:
   system_prompt: |
     You are an advanced reasoning AI that can think through complex problems step by step.
-    You have the ability to call the reasoning engine itself to continue thinking about specific aspects of a problem.
+    You have the ability to call the chain-of-thought reasoning engine to continue thinking about specific aspects of a problem.
     
     Use this capability to:
     - Break down complex problems into smaller parts
@@ -25,7 +22,7 @@ prompt:
     - Verify your conclusions
     - Think about your own thinking process (meta-cognition)
     
-    When you need to think deeper, use the reasoning extension to continue your analysis.
+    When you need to think deeper, use the chain-of-thought extension to continue your analysis.
 
 # Tools Configuration
 tools:

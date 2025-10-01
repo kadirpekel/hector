@@ -24,12 +24,7 @@ func (f *DefaultReasoningEngineFactory) CreateEngine(engineType string, services
 	case "default":
 		return NewDefaultReasoningEngine(services), nil
 	case "chain-of-thought":
-		// Get configuration for chain-of-thought engine
-		config := services.GetConfig()
-		maxIterations := config.MaxIterations
-		loopDetection := true // Default, could be made configurable in the future
-
-		return NewChainOfThoughtReasoningEngine(services, maxIterations, loopDetection), nil
+		return NewChainOfThoughtReasoningEngine(services), nil
 	default:
 		return nil, fmt.Errorf("unsupported reasoning engine type: %s", engineType)
 	}
@@ -87,40 +82,24 @@ func (f *DefaultReasoningEngineFactory) ListAvailableEngines() []ReasoningEngine
 		},
 		{
 			Name:        "chain-of-thought",
-			Description: "Advanced reasoning engine that can recursively call itself to create chains of thought, enabling deep analysis and meta-cognitive reasoning",
+			Description: "Advanced reasoning engine that can recursively call itself to create chains of thought, enabling deep analysis and meta-cognitive reasoning. The LLM decides when to stop reasoning.",
 			Features: []string{
 				"Recursive self-calling capability",
 				"Chain-of-thought reasoning",
-				"Loop detection and prevention",
+				"LLM-controlled stopping",
 				"Meta-cognitive reasoning",
 				"Deep problem decomposition",
 				"Alternative approach exploration",
 				"Reasoning verification",
-				"Configurable iteration limits",
+				"Non-deterministic reasoning flow",
 			},
-			Parameters: []ReasoningParameter{
-				{
-					Name:        "max_iterations",
-					Type:        "int",
-					Description: "Maximum number of reasoning iterations to prevent infinite loops",
-					Required:    false,
-					Default:     5,
-				},
-				{
-					Name:        "loop_detection",
-					Type:        "bool",
-					Description: "Enable loop detection to prevent repetitive reasoning",
-					Required:    false,
-					Default:     true,
-				},
-			},
+			Parameters: []ReasoningParameter{},
 			Examples: []ReasoningExample{
 				{
 					Name:        "Complex Problem Analysis",
 					Description: "Breaking down complex problems into smaller parts",
 					Config: config.ReasoningConfig{
-						Engine:        "chain-of-thought",
-						MaxIterations: 3,
+						Engine: "chain-of-thought",
 					},
 					Query: "What are the implications of implementing a new AI system in our organization?",
 				},
@@ -128,8 +107,7 @@ func (f *DefaultReasoningEngineFactory) ListAvailableEngines() []ReasoningEngine
 					Name:        "Meta-Cognitive Reasoning",
 					Description: "Thinking about thinking and reasoning processes",
 					Config: config.ReasoningConfig{
-						Engine:        "chain-of-thought",
-						MaxIterations: 4,
+						Engine: "chain-of-thought",
 					},
 					Query: "How can I improve my reasoning process for better decision making?",
 				},
@@ -137,8 +115,7 @@ func (f *DefaultReasoningEngineFactory) ListAvailableEngines() []ReasoningEngine
 					Name:        "Alternative Exploration",
 					Description: "Exploring different approaches to a problem",
 					Config: config.ReasoningConfig{
-						Engine:        "chain-of-thought",
-						MaxIterations: 6,
+						Engine: "chain-of-thought",
 					},
 					Query: "What are all the possible ways to solve this technical challenge?",
 				},
