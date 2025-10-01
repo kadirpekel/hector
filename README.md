@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="hector_logo.png" alt="Hector Logo" style="width: auto; height: auto; max-width: none;">
+  <img src="hector_logo.png" alt="Hector Logo" style="width: auto !important; height: auto !important; max-width: none !important; display: inline-block;">
 </div>
 
 [![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://golang.org/)
