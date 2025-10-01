@@ -191,38 +191,49 @@ func (s *DefaultExtensionService) processExtension(response string, ext Extensio
 
 // findMarkerContentEnd finds the end of marker-based content (heuristic for JSON-like content)
 func (s *DefaultExtensionService) findMarkerContentEnd(content string) int {
-	lines := strings.Split(content, "\n")
-	endPos := 0
+	// For reasoning calls, we need to find the complete JSON object
+	// Look for the opening brace and then find the matching closing brace
+	content = strings.TrimSpace(content)
+	if !strings.HasPrefix(content, "{") {
+		return 0
+	}
 
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			// Add the length of the original line (with whitespace) + newline
-			if i < len(lines)-1 {
-				endPos += len(line) + 1 // +1 for newline
-			} else {
-				endPos += len(line) // Last line, no newline
-			}
+	// Count braces to find the end of the JSON object
+	braceCount := 0
+	inString := false
+	escapeNext := false
+
+	for i, char := range content {
+		if escapeNext {
+			escapeNext = false
 			continue
 		}
-		// Stop at first non-JSON line
-		if !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "```") {
-			break
+
+		if char == '\\' {
+			escapeNext = true
+			continue
 		}
-		// Add the length of the original line (with whitespace) + newline
-		if i < len(lines)-1 {
-			endPos += len(line) + 1 // +1 for newline
-		} else {
-			endPos += len(line) // Last line, no newline
+
+		if char == '"' && !escapeNext {
+			inString = !inString
+			continue
+		}
+
+		if !inString {
+			if char == '{' {
+				braceCount++
+			} else if char == '}' {
+				braceCount--
+				if braceCount == 0 {
+					// Found the closing brace
+					return i + 1
+				}
+			}
 		}
 	}
 
-	// Clamp to content length
-	if endPos > len(content) {
-		endPos = len(content)
-	}
-
-	return endPos
+	// If we didn't find a closing brace, return the full content
+	return len(content)
 }
 
 // ExtensionBoundary represents a found extension boundary in the response

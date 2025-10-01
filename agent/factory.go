@@ -78,6 +78,12 @@ func NewReasoningEngineWithServices(agentConfig *config.AgentConfig, componentMa
 		return nil, nil, err
 	}
 
+	// Register reasoning extension if using chain-of-thought engine
+	if agentConfig.Reasoning.Engine == "chain-of-thought" {
+		reasoningExtension := reasoning.NewReasoningExtension(reasoningEngine, agentServices)
+		extensionService.RegisterExtension(reasoningExtension.CreateExtension())
+	}
+
 	return reasoningEngine, agentServices, nil
 }
 
