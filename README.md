@@ -1,15 +1,6 @@
-# Hector
-
-```
- ██╗  ██╗███████╗ ██████╗████████╗ ██████╗ ██████╗ 
- ██║  ██║██╔════╝██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗
- ███████║█████╗  ██║        ██║   ██║   ██║██████╔╝
- ██╔══██║██╔══╝  ██║        ██║   ██║   ██║██╔══██╗
- ██║  ██║███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║
- ╚═╝  ╚═╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
-```
-
-**Declarative AI Agent Framework**
+<div align="center">
+  <img src="hector_logo.png" alt="Hector Logo">
+</div>
 
 [![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -34,12 +25,15 @@
 
 ### Single Agent Capabilities
 
-- **Advanced Reasoning Engines**: Multiple reasoning strategies with clean service-oriented architecture and dependency injection
+- **Two Reasoning Engines**: Choose between fast chain-of-thought or thorough structured-reasoning with visible thinking blocks
+  - **chain-of-thought**: Fast, behavioral-signal-based (best for simple queries)
+  - **structured-reasoning**: Goal-oriented with meta-cognition and quality evaluation (best for complex analysis)
+- **Thinking Mode**: See internal reasoning in grayed-out blocks, just like Claude in Cursor
 - **Generic Extension System**: Pluggable extension framework supporting tools, memory, and custom extensions with streaming support
 - **Optimized Streaming**: Real-time output with intelligent buffering, marker detection, and zero-allocation optimizations
 - **Comprehensive Tool System**: Secure command execution, MCP integration, and extensible tool repositories with sandboxing
 - **Context Management**: Vector search with Qdrant, conversation history, and document stores with automatic indexing
-- **Provider Architecture**: Pluggable LLM (OpenAI, Ollama), database (Qdrant), and embedder providers with zero-config defaults
+- **Provider Architecture**: Pluggable LLM (OpenAI, Anthropic/Claude, Ollama), database (Qdrant), and embedder providers with zero-config defaults
 
 ### Multi-Agent System Capabilities
 
@@ -59,7 +53,42 @@
 
 ## Recent Improvements
 
-### Extension System (v1.0)
+### Dual Reasoning Engines (v2.0) - October 2024
+
+**Two Approaches, One Interface** - Choose the right reasoning strategy for your task:
+
+#### 1. Chain-of-Thought (Fast & Simple)
+- ✅ **Behavioral Stopping**: Tool call = continue, no tool call = stop
+- ✅ **Model Agnostic**: Works with gpt-4o, Claude Sonnet 4.5, gpt-4o-mini, Ollama
+- ✅ **Low Token Usage**: Efficient for simple queries
+- ✅ **Best for**: Quick queries, simple tool use, speed matters
+
+#### 2. Structured Reasoning (Thorough & Transparent)
+- ✅ **Goal Extraction**: Automatically identifies main goal and sub-goals
+- ✅ **Meta-Cognition**: Self-reflection after each tool use
+- ✅ **Progress Tracking**: Shows accomplished vs pending goals
+- ✅ **Quality-Based Stopping**: Confidence scoring (0-100%) and quality gates
+- ✅ **Thinking Mode**: See internal reasoning in grayed-out format (like Claude in Cursor)
+- ✅ **Best for**: Complex analysis, research tasks, when quality > speed
+
+**Thinking Mode Example:**
+```
+[Thinking: Goal identified - get weather and analyze mood impact]
+[Thinking: Sub-goal 1: Check current weather]
+
+I'll check the weather in Berlin...
+
+[Thinking: Reflection: Got weather data. Confidence 70%]
+[Thinking: Still need: Mood analysis]
+
+[Analysis continues...]
+
+[Thinking: Quality check: 95% confident]
+```
+
+See [REASONING_ENGINES.md](REASONING_ENGINES.md) for detailed comparison and usage guide.
+
+### Extension System (v1.1)
 
 **Generic Extension Framework** - A production-ready extension system that enables pluggable capabilities:
 - ✅ **Tools Extension**: Execute commands and integrate external APIs
@@ -71,6 +100,8 @@
 - Streaming support with real-time masking
 - Clean separation of concerns (no tight coupling)
 - Zero-allocation optimizations for production performance
+- Generic utilities for parsing, validation, and field extraction
+- Service-oriented architecture with dependency injection
 
 ### Streaming Optimizations (v1.0)
 
@@ -195,6 +226,9 @@ echo "What is artificial intelligence?" | ./hector --config my-agent.yaml --no-s
 
 # Basic agent with tools
 ./hector --config examples/basic.yaml
+
+# Chain-of-thought reasoning engine
+echo "What are the implications of AI in healthcare?" | ./hector --config examples/chain-of-thought.yaml
 
 # Multi-agent workflow
 echo "Research renewable energy benefits" | ./hector --workflow examples/workflow.yaml
@@ -559,6 +593,24 @@ reasoning:
 - ✅ Conversation history management
 - ✅ Context-aware prompt building
 
+#### Chain-of-Thought Engine
+Advanced recursive reasoning with LLM-controlled stopping:
+
+```yaml
+reasoning:
+  engine: "chain-of-thought"
+  enable_streaming: true
+```
+
+**Features:**
+- ✅ Recursive self-calling capability for deep analysis
+- ✅ LLM-controlled stopping (non-deterministic)
+- ✅ Meta-cognitive reasoning and problem decomposition
+- ✅ Alternative approach exploration
+- ✅ Reasoning verification and validation
+- ✅ Safety mechanism with recursion depth limit
+- ✅ Real-time streaming for recursive calls
+
 ### Tool Configuration
 
 #### Local Tools (Built-in)
@@ -845,8 +897,16 @@ echo "Analyze market trends" | ./hector --workflow examples/advanced.yaml
 
 ### LLM Providers
 
-- **OpenAI**: GPT-4, GPT-4o, GPT-4o-mini, GPT-3.5-turbo
+- **OpenAI**: gpt-4o, gpt-4o-mini, gpt-3.5-turbo
+- **Anthropic**: Claude Sonnet 4.5, Claude Opus 4.1, Claude Sonnet 3.7, Claude Haiku
 - **Ollama**: All supported models (Llama, Mistral, CodeLlama, etc.)
+
+**Model Recommendations:**
+- **Production (best quality)**: gpt-4o or Claude Sonnet 4.5
+- **Cost-effective**: gpt-4o-mini (10-30x cheaper)
+- **Local/offline**: Ollama models
+
+See [MODEL_RECOMMENDATIONS.md](MODEL_RECOMMENDATIONS.md) for detailed comparison.
 
 ### Database Providers
 
@@ -888,7 +948,9 @@ hector/
 │   └── factory.go       # Agent factory with dependency injection
 ├── reasoning/           # Reasoning engines and extensions
 │   ├── default.go       # Default reasoning engine
+│   ├── chain_of_thought.go  # Chain-of-thought reasoning engine
 │   ├── extension_service.go  # Generic extension system
+│   ├── reasoning_extension.go  # Chain-of-thought extension
 │   ├── tool_extension.go     # Tool extension implementation
 │   └── interfaces.go    # Service interfaces
 ├── config/              # Configuration types and loading
@@ -925,6 +987,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Hector** - Declarative AI Agent Framework
-
-*Built with Go for production environments*
+<div align="center">
+  **Hector** - Declarative AI Agent Framework
+  
+  *Built with Go for production environments*
+</div>

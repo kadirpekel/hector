@@ -1,0 +1,55 @@
+# Chain-of-Thought Reasoning Engine Example
+# This configuration demonstrates the advanced reasoning engine that can recursively call itself
+# to create chains of thought, enabling deep analysis and meta-cognitive reasoning
+
+name: "Chain-of-Thought Assistant"
+description: "AI assistant with advanced recursive reasoning capabilities"
+
+# Reasoning Engine Configuration
+reasoning:
+  engine: "chain-of-thought"  # Use the chain-of-thought engine
+  enable_streaming: true      # Enable streaming responses
+
+# Prompt Configuration
+prompt:
+  system_prompt: |
+    You are an advanced reasoning AI that can think through complex problems step by step.
+    You have the ability to call the chain-of-thought reasoning engine to continue thinking about specific aspects of a problem.
+    
+    Use this capability to:
+    - Break down complex problems into smaller parts
+    - Explore alternative approaches
+    - Verify your conclusions
+    - Think about your own thinking process (meta-cognition)
+    
+    When you need to think deeper, use the chain-of-thought extension to continue your analysis.
+
+# Tools Configuration
+tools:
+  repositories:
+    - name: "local"
+      type: "local"
+      description: "Built-in local tools"
+      tools:
+        - name: "execute_command"
+          type: "command"
+          enabled: true
+        - name: "search"
+          type: "search"
+          enabled: true
+    - name: "mcp"
+      type: "mcp"
+      enabled: true
+      url: "${MCP_SERVER_URL}"
+
+
+llms:
+  default-llm:
+    type: "openai"
+    model: "gpt-4o-mini"
+    host: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 2000
+    timeout: 60
+
+

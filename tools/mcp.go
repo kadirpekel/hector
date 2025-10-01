@@ -183,17 +183,54 @@ func (r *MCPToolRepository) discoverToolsFromServer(ctx context.Context) ([]Tool
 						ServerURL:   r.url,
 					}
 
-					// Extract parameters
+					// Extract parameters from JSON Schema (inputSchema)
 					if params, ok := tool["inputSchema"].(map[string]interface{}); ok {
 						if properties, ok := params["properties"].(map[string]interface{}); ok {
 							for paramName, paramData := range properties {
 								if param, ok := paramData.(map[string]interface{}); ok {
-									toolInfo.Parameters = append(toolInfo.Parameters, ToolParameter{
+									toolParam := ToolParameter{
 										Name:        paramName,
 										Type:        getString(param, "type"),
 										Description: getString(param, "description"),
 										Required:    isRequired(params, paramName),
-									})
+									}
+
+									// Extract enum (possible values)
+									if enum, ok := param["enum"].([]interface{}); ok {
+										for _, val := range enum {
+											if strVal, ok := val.(string); ok {
+												toolParam.Enum = append(toolParam.Enum, strVal)
+											}
+										}
+									}
+
+									// Extract default value
+									if defaultVal, ok := param["default"]; ok {
+										toolParam.Default = defaultVal
+									}
+
+									// Extract examples (MCP JSON Schema extension)
+									if examples, ok := param["examples"].([]interface{}); ok {
+										// Add examples to description if not already there
+										if len(examples) > 0 && !strings.Contains(toolParam.Description, "Example") {
+											toolParam.Description += "\nExamples:"
+											for _, ex := range examples {
+												toolParam.Description += fmt.Sprintf("\n  %v", ex)
+											}
+										}
+									}
+
+									// Extract format hint (e.g., "date", "uri", "email")
+									if format := getString(param, "format"); format != "" {
+										toolParam.Description += fmt.Sprintf(" (format: %s)", format)
+									}
+
+									// Extract pattern (regex) if present
+									if pattern := getString(param, "pattern"); pattern != "" {
+										toolParam.Description += fmt.Sprintf(" (pattern: %s)", pattern)
+									}
+
+									toolInfo.Parameters = append(toolInfo.Parameters, toolParam)
 								}
 							}
 						}

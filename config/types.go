@@ -946,6 +946,7 @@ type ReasoningConfig struct {
 	EnableGoalEvolution  bool    `yaml:"enable_goal_evolution"`  // Enable goal evolution
 	EnableDynamicTools   bool    `yaml:"enable_dynamic_tools"`   // Enable dynamic tools
 	ShowDebugInfo        bool    `yaml:"show_debug_info"`        // Show debug info
+	ShowThinking         bool    `yaml:"show_thinking"`          // Show internal reasoning in grayed-out format (Claude-style)
 	EnableStreaming      bool    `yaml:"enable_streaming"`       // Enable streaming
 	QualityThreshold     float64 `yaml:"quality_threshold"`      // Quality threshold
 }

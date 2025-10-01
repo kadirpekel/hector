@@ -54,7 +54,7 @@ agents:
       include_tools: false
     
     reasoning:
-      engine: "dynamic"
+      engine: "chain-of-thought"
       max_iterations: 3
       enable_self_reflection: false
     

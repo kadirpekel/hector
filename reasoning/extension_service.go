@@ -2,6 +2,7 @@ package reasoning
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -54,6 +55,11 @@ type ExtensionService interface {
 
 	// Streaming support - detect extension markers in partial text
 	ContainsMarker(text string) (found bool, markerPos int, markerLen int)
+
+	// Generic utilities for extensions
+	ParseJSON(rawData string, target interface{}) error
+	ExtractField(rawData string, fieldName string) string
+	ValidateRequiredFields(data map[string]interface{}, required []string) error
 }
 
 // ExtensionCall represents an extracted extension call from LLM response
@@ -191,38 +197,49 @@ func (s *DefaultExtensionService) processExtension(response string, ext Extensio
 
 // findMarkerContentEnd finds the end of marker-based content (heuristic for JSON-like content)
 func (s *DefaultExtensionService) findMarkerContentEnd(content string) int {
-	lines := strings.Split(content, "\n")
-	endPos := 0
+	// For reasoning calls, we need to find the complete JSON object
+	// Look for the opening brace and then find the matching closing brace
+	content = strings.TrimSpace(content)
+	if !strings.HasPrefix(content, "{") {
+		return 0
+	}
 
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			// Add the length of the original line (with whitespace) + newline
-			if i < len(lines)-1 {
-				endPos += len(line) + 1 // +1 for newline
-			} else {
-				endPos += len(line) // Last line, no newline
-			}
+	// Count braces to find the end of the JSON object
+	braceCount := 0
+	inString := false
+	escapeNext := false
+
+	for i, char := range content {
+		if escapeNext {
+			escapeNext = false
 			continue
 		}
-		// Stop at first non-JSON line
-		if !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "```") {
-			break
+
+		if char == '\\' {
+			escapeNext = true
+			continue
 		}
-		// Add the length of the original line (with whitespace) + newline
-		if i < len(lines)-1 {
-			endPos += len(line) + 1 // +1 for newline
-		} else {
-			endPos += len(line) // Last line, no newline
+
+		if char == '"' && !escapeNext {
+			inString = !inString
+			continue
+		}
+
+		if !inString {
+			if char == '{' {
+				braceCount++
+			} else if char == '}' {
+				braceCount--
+				if braceCount == 0 {
+					// Found the closing brace
+					return i + 1
+				}
+			}
 		}
 	}
 
-	// Clamp to content length
-	if endPos > len(content) {
-		endPos = len(content)
-	}
-
-	return endPos
+	// If we didn't find a closing brace, return the full content
+	return len(content)
 }
 
 // ExtensionBoundary represents a found extension boundary in the response
@@ -470,4 +487,65 @@ func (s *DefaultExtensionService) ContainsMarker(text string) (found bool, marke
 	}
 
 	return false, -1, 0
+}
+
+// ============================================================================
+// GENERIC UTILITIES FOR EXTENSIONS
+// ============================================================================
+
+// ParseJSON parses JSON from raw data with fallback to line-by-line parsing
+func (s *DefaultExtensionService) ParseJSON(rawData string, target interface{}) error {
+	// Try to parse the entire raw data as JSON first
+	rawData = strings.TrimSpace(rawData)
+	if strings.HasPrefix(rawData, "{") {
+		if err := json.Unmarshal([]byte(rawData), target); err == nil {
+			return nil
+		}
+	}
+
+	// Fallback: try line by line
+	lines := strings.Split(rawData, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "{") {
+			continue
+		}
+
+		if err := json.Unmarshal([]byte(line), target); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("no valid JSON found in raw data")
+}
+
+// ExtractField extracts a specific field from JSON data
+func (s *DefaultExtensionService) ExtractField(rawData string, fieldName string) string {
+	lines := strings.Split(strings.TrimSpace(rawData), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "{") {
+			continue
+		}
+
+		// Create a generic map to extract the field
+		var parsed map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &parsed); err == nil {
+			if value, exists := parsed[fieldName]; exists {
+				if str, ok := value.(string); ok && str != "" {
+					return str
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// ValidateRequiredFields validates that required fields are present in the data
+func (s *DefaultExtensionService) ValidateRequiredFields(data map[string]interface{}, required []string) error {
+	for _, field := range required {
+		if value, exists := data[field]; !exists || value == nil || value == "" {
+			return fmt.Errorf("required field '%s' is missing or empty", field)
+		}
+	}
+	return nil
 }

@@ -75,7 +75,7 @@ agents:
       max_context_length: 4000
     
     reasoning:
-      engine: "dynamic"
+      engine: "chain-of-thought"
       max_iterations: 5
       enable_self_reflection: true
       quality_threshold: 0.8
@@ -108,7 +108,7 @@ agents:
       max_context_length: 3000
     
     reasoning:
-      engine: "dynamic"
+      engine: "chain-of-thought"
       max_iterations: 4
       enable_self_reflection: true
       quality_threshold: 0.8
@@ -137,7 +137,7 @@ agents:
       max_context_length: 5000
     
     reasoning:
-      engine: "dynamic"
+      engine: "chain-of-thought"
       max_iterations: 3
       enable_self_reflection: true
       quality_threshold: 0.9

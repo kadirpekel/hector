@@ -30,7 +30,7 @@ func NewReasoningEngineWithServices(agentConfig *config.AgentConfig, componentMa
 
 	// Create extension service and register tools as native extension
 	extensionService := reasoning.NewExtensionService()
-	toolExtension := reasoning.NewToolExtension(toolRegistry)
+	toolExtension := reasoning.NewToolExtension(toolRegistry, extensionService)
 	extensionService.RegisterExtension(toolExtension.CreateExtension())
 
 	// Create context service - only if document stores are configured
@@ -77,6 +77,9 @@ func NewReasoningEngineWithServices(agentConfig *config.AgentConfig, componentMa
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Chain-of-thought engine uses behavioral signals (tool calls) for continuation
+	// No need for explicit REASONING_CALL extension
 
 	return reasoningEngine, agentServices, nil
 }

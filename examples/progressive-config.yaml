@@ -27,7 +27,7 @@ agents:
     prompt:
       system_prompt: "You are a specialized coding assistant. Focus on providing accurate, well-documented code examples."
     reasoning:
-      engine: "dynamic"
+      engine: "chain-of-thought"
       max_iterations: 5
       enable_self_reflection: true
     # Everything else uses defaults
