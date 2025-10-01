@@ -1,9 +1,5 @@
 <div align="center">
-  <img src="hector_logo.png" alt="Hector Logo" width="200" height="200">
-  
-  # Hector
-  
-  **Declarative AI Agent Framework**
+  <img src="hector_logo.png" alt="Hector Logo">
 </div>
 
 [![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://golang.org/)
