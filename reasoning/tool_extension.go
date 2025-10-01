@@ -2,7 +2,6 @@ package reasoning
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -15,13 +14,15 @@ import (
 
 // ToolExtension provides native tool functionality as an extension
 type ToolExtension struct {
-	toolRegistry *tools.ToolRegistry
+	toolRegistry     *tools.ToolRegistry
+	extensionService ExtensionService
 }
 
 // NewToolExtension creates a new native tool extension
-func NewToolExtension(toolRegistry *tools.ToolRegistry) *ToolExtension {
+func NewToolExtension(toolRegistry *tools.ToolRegistry, extensionService ExtensionService) *ToolExtension {
 	return &ToolExtension{
-		toolRegistry: toolRegistry,
+		toolRegistry:     toolRegistry,
+		extensionService: extensionService,
 	}
 }
 
@@ -80,7 +81,7 @@ Examples:
 
 // processToolCall processes tool call content (extracts label for user display)
 func (te *ToolExtension) processToolCall(content string) (string, string) {
-	if label := te.extractToolLabel(content); label != "" {
+	if label := te.extensionService.ExtractField(content, "label"); label != "" {
 		return "\n" + label, content
 	}
 	return "\n🔧 Executing tool...", content
@@ -88,13 +89,24 @@ func (te *ToolExtension) processToolCall(content string) (string, string) {
 
 // executeToolCall executes the tool call directly with tool registry
 func (te *ToolExtension) executeToolCall(ctx context.Context, rawData string) (ExtensionResult, error) {
-	// Parse tool call JSON
-	toolCall, err := te.parseToolCall(rawData)
-	if err != nil {
+	// Parse tool call JSON using extension service
+	var toolCall ParsedToolCall
+	if err := te.extensionService.ParseJSON(rawData, &toolCall); err != nil {
 		return ExtensionResult{
 			Name:    "tools",
 			Success: false,
 			Error:   fmt.Sprintf("Failed to parse tool call: %v", err),
+		}, nil
+	}
+
+	// Validate required fields using extension service
+	if err := te.extensionService.ValidateRequiredFields(map[string]interface{}{
+		"tool": toolCall.Tool,
+	}, []string{"tool"}); err != nil {
+		return ExtensionResult{
+			Name:    "tools",
+			Success: false,
+			Error:   err.Error(),
 		}, nil
 	}
 
@@ -123,42 +135,6 @@ func (te *ToolExtension) executeToolCall(ctx context.Context, rawData string) (E
 			"execution_time": toolResult.ExecutionTime,
 		},
 	}, nil
-}
-
-// parseToolCall parses tool call JSON
-func (te *ToolExtension) parseToolCall(rawData string) (*ParsedToolCall, error) {
-	lines := strings.Split(strings.TrimSpace(rawData), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "{") {
-			continue
-		}
-
-		var parsed ParsedToolCall
-		if err := json.Unmarshal([]byte(line), &parsed); err == nil && parsed.Tool != "" {
-			return &parsed, nil
-		}
-	}
-	return nil, fmt.Errorf("no valid tool call JSON found")
-}
-
-// extractToolLabel extracts label from tool call JSON
-func (te *ToolExtension) extractToolLabel(content string) string {
-	lines := strings.Split(strings.TrimSpace(content), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "{") {
-			continue
-		}
-
-		var parsed struct {
-			Label string `json:"label,omitempty"`
-		}
-		if err := json.Unmarshal([]byte(line), &parsed); err == nil && parsed.Label != "" {
-			return parsed.Label
-		}
-	}
-	return ""
 }
 
 // ParsedToolCall represents a parsed tool call

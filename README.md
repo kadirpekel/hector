@@ -1,15 +1,10 @@
-# Hector
-
-```
- ██╗  ██╗███████╗ ██████╗████████╗ ██████╗ ██████╗ 
- ██║  ██║██╔════╝██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗
- ███████║█████╗  ██║        ██║   ██║   ██║██████╔╝
- ██╔══██║██╔══╝  ██║        ██║   ██║   ██║██╔══██╗
- ██║  ██║███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║
- ╚═╝  ╚═╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
-```
-
-**Declarative AI Agent Framework**
+<div align="center">
+  <img src="hector_logo.png" alt="Hector Logo" width="200" height="200">
+  
+  # Hector
+  
+  **Declarative AI Agent Framework**
+</div>
 
 [![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -59,10 +54,11 @@
 
 ## Recent Improvements
 
-### Extension System (v1.0)
+### Extension System (v1.1)
 
 **Generic Extension Framework** - A production-ready extension system that enables pluggable capabilities:
 - ✅ **Tools Extension**: Execute commands and integrate external APIs
+- ✅ **Chain-of-Thought Extension**: Advanced recursive reasoning with LLM-controlled stopping
 - ✅ **Memory Extension**: Coming soon - store and recall facts across conversations
 - ✅ **Custom Extensions**: Add domain-specific capabilities with minimal code
 
@@ -71,6 +67,8 @@
 - Streaming support with real-time masking
 - Clean separation of concerns (no tight coupling)
 - Zero-allocation optimizations for production performance
+- Generic utilities for parsing, validation, and field extraction
+- Service-oriented architecture with dependency injection
 
 ### Streaming Optimizations (v1.0)
 
@@ -195,6 +193,9 @@ echo "What is artificial intelligence?" | ./hector --config my-agent.yaml --no-s
 
 # Basic agent with tools
 ./hector --config examples/basic.yaml
+
+# Chain-of-thought reasoning engine
+echo "What are the implications of AI in healthcare?" | ./hector --config examples/chain-of-thought.yaml
 
 # Multi-agent workflow
 echo "Research renewable energy benefits" | ./hector --workflow examples/workflow.yaml
@@ -528,6 +529,24 @@ tools:
       type: "local"
 ```
 
+**Chain-of-Thought Extension** (`REASONING_CALL:`)
+```yaml
+# Automatically enabled when using chain-of-thought reasoning engine
+reasoning:
+  engine: "chain-of-thought"
+```
+
+**Usage Example:**
+```yaml
+# The LLM can trigger recursive reasoning calls
+REASONING_CALL:
+{
+  "query": "What are the potential risks of this approach?",
+  "purpose": "Need to analyze potential downsides before proceeding",
+  "context": "This is part of a larger decision-making process"
+}
+```
+
 #### Creating Custom Extensions
 
 Extensions can be added for any capability:
@@ -558,6 +577,24 @@ reasoning:
 - ✅ Real-time streaming with marker masking
 - ✅ Conversation history management
 - ✅ Context-aware prompt building
+
+#### Chain-of-Thought Engine
+Advanced recursive reasoning with LLM-controlled stopping:
+
+```yaml
+reasoning:
+  engine: "chain-of-thought"
+  enable_streaming: true
+```
+
+**Features:**
+- ✅ Recursive self-calling capability for deep analysis
+- ✅ LLM-controlled stopping (non-deterministic)
+- ✅ Meta-cognitive reasoning and problem decomposition
+- ✅ Alternative approach exploration
+- ✅ Reasoning verification and validation
+- ✅ Safety mechanism with recursion depth limit
+- ✅ Real-time streaming for recursive calls
 
 ### Tool Configuration
 
@@ -888,7 +925,9 @@ hector/
 │   └── factory.go       # Agent factory with dependency injection
 ├── reasoning/           # Reasoning engines and extensions
 │   ├── default.go       # Default reasoning engine
+│   ├── chain_of_thought.go  # Chain-of-thought reasoning engine
 │   ├── extension_service.go  # Generic extension system
+│   ├── reasoning_extension.go  # Chain-of-thought extension
 │   ├── tool_extension.go     # Tool extension implementation
 │   └── interfaces.go    # Service interfaces
 ├── config/              # Configuration types and loading
@@ -925,6 +964,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Hector** - Declarative AI Agent Framework
-
-*Built with Go for production environments*
+<div align="center">
+  **Hector** - Declarative AI Agent Framework
+  
+  *Built with Go for production environments*
+</div>

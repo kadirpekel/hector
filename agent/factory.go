@@ -30,7 +30,7 @@ func NewReasoningEngineWithServices(agentConfig *config.AgentConfig, componentMa
 
 	// Create extension service and register tools as native extension
 	extensionService := reasoning.NewExtensionService()
-	toolExtension := reasoning.NewToolExtension(toolRegistry)
+	toolExtension := reasoning.NewToolExtension(toolRegistry, extensionService)
 	extensionService.RegisterExtension(toolExtension.CreateExtension())
 
 	// Create context service - only if document stores are configured

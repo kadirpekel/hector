@@ -2,9 +2,7 @@ package reasoning
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
 )
 
 // ============================================================================
@@ -13,15 +11,17 @@ import (
 
 // ChainOfThoughtExtension provides the ability for the LLM to call the chain-of-thought reasoning engine
 type ChainOfThoughtExtension struct {
-	reasoningEngine ReasoningEngine
-	services        AgentServices
+	reasoningEngine  ReasoningEngine
+	services         AgentServices
+	extensionService ExtensionService
 }
 
 // NewChainOfThoughtExtension creates a new chain-of-thought extension
 func NewChainOfThoughtExtension(reasoningEngine ReasoningEngine, services AgentServices) *ChainOfThoughtExtension {
 	return &ChainOfThoughtExtension{
-		reasoningEngine: reasoningEngine,
-		services:        services,
+		reasoningEngine:  reasoningEngine,
+		services:         services,
+		extensionService: services.Extensions(),
 	}
 }
 
@@ -98,8 +98,8 @@ REASONING_CALL:
 
 // processReasoningCall processes reasoning call content
 func (re *ChainOfThoughtExtension) processReasoningCall(content string) (string, string) {
-	// Extract a user-friendly display message
-	if purpose := re.extractPurpose(content); purpose != "" {
+	// Extract a user-friendly display message using extension service
+	if purpose := re.extensionService.ExtractField(content, "purpose"); purpose != "" {
 		return fmt.Sprintf("\n🤔 **Deepening Reasoning:** %s", purpose), content
 	}
 
@@ -108,9 +108,9 @@ func (re *ChainOfThoughtExtension) processReasoningCall(content string) (string,
 
 // executeReasoningCall processes the reasoning call data and returns it for the reasoning engine to handle
 func (re *ChainOfThoughtExtension) executeReasoningCall(ctx context.Context, rawData string) (ExtensionResult, error) {
-	// Parse the reasoning call
-	reasoningCall, err := re.parseReasoningCall(rawData)
-	if err != nil {
+	// Parse the reasoning call using extension service
+	var reasoningCall ReasoningCall
+	if err := re.extensionService.ParseJSON(rawData, &reasoningCall); err != nil {
 		return ExtensionResult{
 			Name:    "chain-of-thought",
 			Success: false,
@@ -118,12 +118,14 @@ func (re *ChainOfThoughtExtension) executeReasoningCall(ctx context.Context, raw
 		}, nil
 	}
 
-	// Validate the reasoning call
-	if reasoningCall.Query == "" {
+	// Validate the reasoning call using extension service
+	if err := re.extensionService.ValidateRequiredFields(map[string]interface{}{
+		"query": reasoningCall.Query,
+	}, []string{"query"}); err != nil {
 		return ExtensionResult{
 			Name:    "chain-of-thought",
 			Success: false,
-			Error:   "Reasoning call must include a 'query' field",
+			Error:   err.Error(),
 		}, nil
 	}
 
@@ -140,50 +142,4 @@ func (re *ChainOfThoughtExtension) executeReasoningCall(ctx context.Context, raw
 			"reasoning_call": true,
 		},
 	}, nil
-}
-
-// parseReasoningCall parses the reasoning call JSON
-func (re *ChainOfThoughtExtension) parseReasoningCall(rawData string) (*ReasoningCall, error) {
-	// Try to parse the entire raw data as JSON first
-	rawData = strings.TrimSpace(rawData)
-	if strings.HasPrefix(rawData, "{") {
-		var parsed ReasoningCall
-		if err := json.Unmarshal([]byte(rawData), &parsed); err == nil && parsed.Query != "" {
-			return &parsed, nil
-		}
-	}
-
-	// Fallback: try line by line
-	lines := strings.Split(rawData, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "{") {
-			continue
-		}
-
-		var parsed ReasoningCall
-		if err := json.Unmarshal([]byte(line), &parsed); err == nil && parsed.Query != "" {
-			return &parsed, nil
-		}
-	}
-	return nil, fmt.Errorf("no valid reasoning call JSON found")
-}
-
-// extractPurpose extracts the purpose from reasoning call JSON
-func (re *ChainOfThoughtExtension) extractPurpose(content string) string {
-	lines := strings.Split(strings.TrimSpace(content), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "{") {
-			continue
-		}
-
-		var parsed struct {
-			Purpose string `json:"purpose,omitempty"`
-		}
-		if err := json.Unmarshal([]byte(line), &parsed); err == nil && parsed.Purpose != "" {
-			return parsed.Purpose
-		}
-	}
-	return ""
 }
