@@ -40,13 +40,11 @@ agents:
 - [Core Philosophy](#core-philosophy)
 - [Features](#features)
 - [Quick Start](#quick-start)
-- [Multi-Agent Teams](#multi-agent-teams) ⭐ NEW
+- [Multi-Agent Teams](#multi-agent-teams)
 - [Architecture](#architecture)
 - [Configuration](#configuration)
-- [Examples](#examples)
 - [CLI Reference](#cli-reference)
 - [Supported Providers](#supported-providers)
-- [Performance](#performance) ⭐ NEW
 - [License](#license)
 
 ## Core Philosophy
@@ -91,7 +89,7 @@ Simple things are simple, complex things are possible. Start with 5 lines of YAM
   - Zero-allocation optimizations
   - User-friendly masking (no raw JSON)
 
-### Multi-Agent Team Capabilities ⭐ NEW
+### Multi-Agent Team Capabilities
 
 - **Real-Time Streaming**: Watch agents work in real-time with progress tracking
 - **Two Execution Modes**:
@@ -99,7 +97,6 @@ Simple things are simple, complex things are possible. Start with 5 lines of YAM
   - **Autonomous Mode**: AI-driven task planning and dynamic collaboration
 - **Specialized Agents**: Each agent has its own LLM, reasoning strategy, and tools
 - **Live Progress Tracking**: See which agent is running, completion percentage, real-time output
-- **Production-Grade Performance**: Linear O(n) scaling, minimal memory footprint (<40KB for 20 agents)
 - **Event-Based Architecture**: Stream workflow events (start, progress, output, complete)
 
 ### Universal Features
@@ -254,9 +251,9 @@ agents:
 
 ## Multi-Agent Teams
 
-### Real-Time Streaming Multi-Agent Workflows ⭐ NEW
+### Real-Time Streaming Multi-Agent Workflows
 
-Hector now features **world-class multi-agent orchestration** with real-time streaming, live progress tracking, and production-grade performance.
+Hector features multi-agent orchestration with real-time streaming and live progress tracking.
 
 #### See It In Action
 
@@ -384,25 +381,6 @@ Event Types:
 - **Monitoring**: Track execution in production
 - **Cancellation**: Stop workflows mid-execution
 
-#### Performance Characteristics
-
-Tested and benchmarked on Apple M2:
-
-| Agents | Execution Time | Memory | Status |
-|--------|----------------|--------|--------|
-| 1 | 303ms | 13.4 KB | ✅ |
-| 2 | 606ms | 14.0 KB | ✅ |
-| 5 | 1.51s | 15.8 KB | ✅ |
-| 10 | 3.03s | 21.3 KB | ✅ |
-| 20 | 6.06s | 35.3 KB | ✅ |
-
-**Key Findings**:
-- **Perfect Linear Scaling**: O(n) - Predictable performance
-- **Low Memory**: ~1.1 KB per agent overhead
-- **No Bottlenecks**: Workflow engine adds <1% overhead vs real LLM execution
-- **DAG = Autonomous**: Both modes have identical performance
-
-See [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) for comprehensive performance analysis.
 
 #### Quick Start - Multi-Agent Workflow
 
@@ -495,7 +473,7 @@ YAML Config → Validation → Component Registry → Agent Runtime
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Multi-Agent Workflow Architecture ⭐ NEW
+### Multi-Agent Workflow Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -683,32 +661,7 @@ See [CONFIGURATION.md](CONFIGURATION.md) for complete reference with all options
 
 > 📖 **For detailed examples documentation, see [examples/README.md](examples/README.md)**
 
-### Available Examples
-
-| Example | Description | Use Case |
-|---------|-------------|----------|
-| [zero-config.yaml](examples/zero-config.yaml) | Zero configuration | Quick start |
-| [minimal.yaml](examples/minimal.yaml) | Minimal setup | Production single agent |
-| [basic.yaml](examples/basic.yaml) | With tools & search | General purpose |
-| [chain-of-thought.yaml](examples/chain-of-thought.yaml) | Fast reasoning | Speed matters |
-| [reasoning-comparison.yaml](examples/reasoning-comparison.yaml) | Compare engines | Learn differences |
-| [workflow.yaml](examples/workflow.yaml) | Multi-agent DAG | Structured workflows |
-| [advanced.yaml](examples/advanced.yaml) | Enterprise | Complex systems |
-
-### Quick Example
-
-```bash
-# Try the basic example
-./hector --config examples/basic.yaml
-
-# Try chain-of-thought reasoning
-./hector --config examples/chain-of-thought.yaml
-
-# Try multi-agent workflow
-echo "Research renewable energy" | ./hector --workflow examples/workflow.yaml
-```
-
-See [examples/README.md](examples/README.md) for detailed descriptions, configuration breakdowns, and usage instructions for each example.
+Example configurations are available in the `examples/` directory, covering everything from minimal setups to complex multi-agent workflows.
 
 ---
 
@@ -805,39 +758,6 @@ llms:
 
 ---
 
-## Performance
-
-### Multi-Agent Workflow Benchmarks
-
-Comprehensive testing on Apple M2 (ARM64):
-
-**Scaling Performance**:
-```
-Time = n × 300ms (perfect linear O(n))
-Memory = 13KB + (n × 1.1KB)
-
-1 agent:   303ms,  13.4 KB  ✅
-10 agents: 3.03s,  21.3 KB  ✅
-20 agents: 6.06s,  35.3 KB  ✅
-```
-
-**Key Metrics**:
-- ✅ **Perfect Linear Scaling** - No exponential slowdown
-- ✅ **Low Memory** - Only 1.1 KB per agent overhead
-- ✅ **Event Throughput** - 23 events/sec
-- ✅ **Negligible Overhead** - <1% vs real LLM execution time
-
-**Production Reality**:
-- Simple agent (5s): Workflow overhead = 6%
-- Complex agent (30s): Workflow overhead = 1%
-- Deep analysis (120s): Workflow overhead = 0.25%
-
-**Workflow overhead is negligible in production!**
-
-See [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) for detailed performance analysis with comprehensive test results.
-
----
-
 ## Why Hector?
 
 ### Declarative = Maintainable
@@ -849,19 +769,16 @@ See [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) for detailed performance analys
 ### Built Right
 
 - ✅ Real-time streaming for single and multi-agent workflows
-- ✅ Production-grade performance (perfect O(n) scaling)
 - ✅ Sandboxed tool execution
-- ✅ Minimal memory footprint
-- ✅ Clean architecture (SOLID principles, 9.5/10 score)
+- ✅ Clean architecture (SOLID principles)
 - ✅ Service-oriented design with dependency injection
 
-### World-Class Multi-Agent
+### Multi-Agent Support
 
 - ✅ Real-time event streaming
 - ✅ Live progress tracking
 - ✅ DAG and Autonomous execution modes
-- ✅ Perfect linear scaling
-- ✅ Production-tested and benchmarked
+- ✅ Efficient linear scaling
 
 ### Extensible
 
