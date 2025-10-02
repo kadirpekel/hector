@@ -156,7 +156,7 @@ func executeWorkflowMode(hectorConfig *config.Config, workflowName string, debug
 
 	printWorkflowHeader(workflow, debugMode)
 
-	team := createTeamFromWorkflow(workflow, componentManager)
+	team := createTeamFromWorkflow(workflow, hectorConfig, componentManager)
 
 	initializeTeam(team, debugMode)
 
@@ -258,8 +258,8 @@ func selectWorkflow(hectorConfig *config.Config, workflowName string) *config.Wo
 }
 
 // createTeamFromWorkflow creates a team from workflow configuration
-func createTeamFromWorkflow(workflow *config.WorkflowConfig, componentManager *component.ComponentManager) *team.Team {
-	teamInstance, err := team.NewTeam(workflow, componentManager)
+func createTeamFromWorkflow(workflow *config.WorkflowConfig, globalConfig *config.Config, componentManager *component.ComponentManager) *team.Team {
+	teamInstance, err := team.NewTeam(workflow, globalConfig, componentManager)
 	if err != nil {
 		fatalf("Error creating team: %v", err)
 	}

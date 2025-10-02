@@ -252,6 +252,7 @@ type Team struct {
 
 	// Configuration
 	workflow         *config.WorkflowConfig
+	globalConfig     *config.Config // Global configuration with all agents, LLMs, etc.
 	componentManager *component.ComponentManager
 
 	// State Management
@@ -263,9 +264,12 @@ type Team struct {
 }
 
 // NewTeam creates a new team using services - FOLLOWING AGENT PATTERN
-func NewTeam(workflowConfig *config.WorkflowConfig, componentManager *component.ComponentManager) (*Team, error) {
+func NewTeam(workflowConfig *config.WorkflowConfig, globalConfig *config.Config, componentManager *component.ComponentManager) (*Team, error) {
 	if workflowConfig == nil {
 		return nil, NewTeamError("Team", "NewTeam", "workflow cannot be nil", nil)
+	}
+	if globalConfig == nil {
+		return nil, NewTeamError("Team", "NewTeam", "global config cannot be nil", nil)
 	}
 	if componentManager == nil {
 		return nil, NewTeamError("Team", "NewTeam", "component manager cannot be nil", nil)
@@ -275,6 +279,7 @@ func NewTeam(workflowConfig *config.WorkflowConfig, componentManager *component.
 		name:             workflowConfig.Name,
 		description:      workflowConfig.Description,
 		workflow:         workflowConfig,
+		globalConfig:     globalConfig,
 		componentManager: componentManager,
 		status:           WorkflowStatusPending,
 		errors:           make([]error, 0),
@@ -329,8 +334,16 @@ func (t *Team) Initialize(ctx context.Context) error {
 			continue // Skip empty agent names
 		}
 
-		// Create agent configuration with proper defaults
-		agentConfig := t.createDefaultAgentConfig(agentName)
+		// Use agent configuration from global config
+		var agentConfig *config.AgentConfig
+		if cfg, exists := t.globalConfig.Agents[agentName]; exists {
+			// Found agent in global config - use it
+			agentConfig = &cfg
+		} else {
+			// Agent not found in config - create default
+			return NewTeamError("Team", "Initialize",
+				fmt.Sprintf("agent '%s' not found in configuration", agentName), nil)
+		}
 
 		// Create and register agent using agent service
 		_, err := t.agentService.CreateAndRegisterAgent(agentName, agentConfig)

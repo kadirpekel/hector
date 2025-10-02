@@ -109,7 +109,17 @@ func (c *LLMProviderConfig) SetDefaults() {
 		c.Model = "llama3.2" // Popular, well-supported model
 	}
 	if c.Host == "" {
-		c.Host = "http://localhost:11434"
+		// Set default host based on provider type
+		switch c.Type {
+		case "openai":
+			c.Host = "https://api.openai.com/v1"
+		case "anthropic":
+			c.Host = "https://api.anthropic.com"
+		case "ollama":
+			c.Host = "http://localhost:11434"
+		default:
+			c.Host = "http://localhost:11434" // Fallback to Ollama
+		}
 	}
 	if c.Temperature == 0 {
 		c.Temperature = 0.7
