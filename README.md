@@ -55,8 +55,8 @@ Define your AI system's behavior, not its implementation. Focus on what you want
 ### 2. **Composable by Design**
 Mix and match LLM providers, reasoning engines, tools, and agents like building blocks. Everything is pluggable.
 
-### 3. **Production-First**
-Built for real-world deployments with streaming, error handling, monitoring, and zero-downtime updates.
+### 3. **Streaming-First**
+Real-time output with intelligent buffering, marker detection, and optimized response handling.
 
 ### 4. **Complexity Hidden, Power Exposed**
 Simple things are simple, complex things are possible. Start with 5 lines of YAML, scale to enterprise workflows.
@@ -106,53 +106,51 @@ Simple things are simple, complex things are possible. Start with 5 lines of YAM
 
 ---
 
-## Recent Improvements
+## See It In Action
 
-### Dual Reasoning Engines
+Here's Hector's **structured reasoning** engine with **thinking mode** enabled:
 
-**Two approaches, one interface** - Choose the right reasoning strategy for your task:
+**Query:** "What is 2+2 and why is it important in mathematics?"
 
-#### 1. Chain-of-Thought (Fast & Simple)
-- Behavioral stopping: Tool call = continue, no tool call = stop
-- Model agnostic: Works with GPT-4, Claude, Ollama
-- Low token usage: Efficient for simple queries
-- **Best for**: Quick queries, simple tool use, speed matters
+**Output:**
+```bash
+# Internal reasoning
+[Thinking: Goal identified: Answer the question about 2+2 and explain its significance]
+[Thinking:   Sub-goal 1: Calculate the sum of 2+2]
+[Thinking:   Sub-goal 2: Research and describe the role of basic arithmetic]
+[Thinking:   Sub-goal 3: Explain foundational importance]
 
-#### 2. Structured Reasoning (Thorough & Transparent)
-- Goal extraction: Automatically identifies main goal and sub-goals
-- Meta-cognition: Self-reflection after each tool use
-- Progress tracking: Shows accomplished vs pending goals
-- Quality-based stopping: Confidence scoring (0-100%)
-- **Thinking Mode**: See internal reasoning in grayed-out format
-- **Best for**: Complex analysis, research tasks, quality > speed
+[Thinking: Iteration 1/10: reasoning]
 
-**Thinking Mode Example:**
+# Agent response
+To address your query, I will first calculate 2+2 and then explain its significance.
+
+The sum of 2+2 is 4.
+
+Role of Basic Arithmetic in Mathematics:
+Basic arithmetic operations form the foundation of mathematics. Understanding these
+operations is crucial because:
+
+- Foundation for Advanced Topics: Mastery of basic arithmetic is essential for
+  learning algebra, geometry, and calculus.
+- Everyday Applications: Used in budgeting, shopping, cooking - making it practical.
+- Problem Solving: Develops logical thinking valuable in academic and real-world scenarios.
+
+# Quality check
+[Thinking: Quality check: 100% confident]
+[Thinking:   Decision: Ready to answer - comprehensively addressed main goal and sub-goals]
 ```
-[Thinking: Goal identified - analyze weather impact on mood]
-[Thinking: Sub-goal 1: Get current weather data]
 
-I'll check the weather in Berlin...
+Notice:
+- ✅ `[Thinking: ...]` blocks show internal reasoning (appear dimmed in terminal)
+- ✅ Goal extraction and sub-goal tracking
+- ✅ Confidence-based stopping (100% = done)
+- ✅ Meta-cognitive reflection throughout
 
-[Thinking: Reflection: Got weather data. Confidence 70%]
-[Thinking: Still need: Research mood correlations]
-
-[Analysis continues...]
-
-[Thinking: Quality check: 95% confident - ready to answer]
+**Try it yourself:**
+```bash
+./hector --config local-configs/structured-reasoning.yaml
 ```
-
-### Generic Extension System
-
-**Pluggable capabilities beyond tools:**
-- Tools extension: Execute commands, integrate APIs
-- Memory extension: Store and recall facts (coming soon)
-- Custom extensions: Add domain-specific capabilities
-
-**Architecture:**
-- Marker-based detection for reliable parsing
-- Streaming support with real-time masking
-- Zero-allocation optimizations
-- Clean separation of concerns
 
 ---
 
@@ -561,13 +559,13 @@ llms:
 **Add reasoning?** Declare it, don't code it.
 **Multi-agent workflow?** Define steps, Hector orchestrates.
 
-### Production-Ready
+### Built Right
 
 - ✅ Streaming with zero-allocation optimizations
-- ✅ Error handling and retry policies
-- ✅ Monitoring and logging
 - ✅ Sandboxed tool execution
 - ✅ Configurable concurrency limits
+- ✅ Clean architecture (SOLID principles)
+- ✅ Service-oriented design
 
 ### Extensible
 
