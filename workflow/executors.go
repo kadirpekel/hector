@@ -35,8 +35,8 @@ func NewDAGExecutor(config config.WorkflowConfig) WorkflowExecutor {
 	}
 }
 
-// Execute runs the DAG workflow using AgentServices abstraction
-func (e *DAGExecutor) Execute(ctx context.Context, request *WorkflowRequest) (*WorkflowResult, error) {
+// ExecuteStreaming runs the DAG workflow with real-time event streaming
+func (e *DAGExecutor) ExecuteStreaming(ctx context.Context, request *WorkflowRequest) (<-chan WorkflowEvent, error) {
 	if request == nil {
 		return nil, fmt.Errorf("workflow request cannot be nil")
 	}
@@ -49,47 +49,100 @@ func (e *DAGExecutor) Execute(ctx context.Context, request *WorkflowRequest) (*W
 		return nil, fmt.Errorf("agent services cannot be nil")
 	}
 
-	// Create execution context
-	execCtx := NewExecutionContext(request)
-	execCtx.SetStatus(StatusExecuting)
+	eventCh := make(chan WorkflowEvent, 100)
 
-	startTime := time.Now()
+	go func() {
+		defer close(eventCh)
 
-	// Example DAG execution using AgentServices abstraction
-	results := make(map[string]*AgentResult)
+		// Create execution context
+		execCtx := NewExecutionContext(request)
+		execCtx.SetStatus(StatusExecuting)
 
-	// Get available agents from the abstract service
-	availableAgents := request.AgentServices.GetAvailableAgents()
-	if len(availableAgents) == 0 {
-		return nil, fmt.Errorf("no agents available for execution")
-	}
+		startTime := time.Now()
+		results := make(map[string]*AgentResult)
 
-	// Execute agents sequentially for now (proper DAG logic would handle dependencies)
-	for _, agentName := range request.Workflow.Agents {
-		if !request.AgentServices.IsAgentAvailable(agentName) {
-			return nil, fmt.Errorf("agent %s is not available", agentName)
+		// Get available agents
+		availableAgents := request.AgentServices.GetAvailableAgents()
+		if len(availableAgents) == 0 {
+			eventCh <- WorkflowEvent{
+				Timestamp: time.Now(),
+				EventType: EventAgentError,
+				Content:   "No agents available for execution",
+			}
+			return
 		}
 
-		// Execute agent using the abstract service
-		result, err := request.AgentServices.ExecuteAgent(ctx, agentName, request.Input)
-		if err != nil {
-			return nil, fmt.Errorf("failed to execute agent %s: %w", agentName, err)
+		totalSteps := len(request.Workflow.Agents)
+		completedSteps := 0
+
+		// Execute agents sequentially (proper DAG would handle dependencies)
+		for i, agentName := range request.Workflow.Agents {
+			if !request.AgentServices.IsAgentAvailable(agentName) {
+				eventCh <- WorkflowEvent{
+					Timestamp: time.Now(),
+					EventType: EventAgentError,
+					AgentName: agentName,
+					Content:   fmt.Sprintf("Agent %s is not available", agentName),
+				}
+				continue
+			}
+
+			// Send progress event
+			eventCh <- WorkflowEvent{
+				Timestamp: time.Now(),
+				EventType: EventProgress,
+				StepName:  agentName,
+				Content:   fmt.Sprintf("Step %d/%d: %s", i+1, totalSteps, agentName),
+				Progress: &WorkflowProgress{
+					TotalSteps:      totalSteps,
+					CompletedSteps:  completedSteps,
+					CurrentStep:     agentName,
+					PercentComplete: float64(completedSteps) / float64(totalSteps) * 100,
+				},
+			}
+
+			// Execute agent with streaming
+			result, err := request.AgentServices.ExecuteAgentStreaming(ctx, agentName, request.Input, eventCh)
+			if err != nil {
+				eventCh <- WorkflowEvent{
+					Timestamp: time.Now(),
+					EventType: EventAgentError,
+					AgentName: agentName,
+					Content:   fmt.Sprintf("Failed to execute agent: %v", err),
+				}
+				continue
+			}
+
+			results[agentName] = result
+			execCtx.SetResult(agentName, result)
+			completedSteps++
 		}
 
-		results[agentName] = result
-	}
+		// Create final workflow result
+		workflowResult := CreateWorkflowResult(
+			request.Workflow,
+			WorkflowStatusCompleted,
+			results,
+			execCtx.GetAllSharedState(),
+			time.Since(startTime),
+			execCtx.GetErrors(),
+		)
 
-	// Create final workflow result
-	workflowResult := CreateWorkflowResult(
-		request.Workflow,
-		WorkflowStatusCompleted,
-		results,
-		execCtx.GetAllSharedState(),
-		time.Since(startTime),
-		execCtx.GetErrors(),
-	)
+		// Send final completion event
+		eventCh <- WorkflowEvent{
+			Timestamp: time.Now(),
+			EventType: EventWorkflowEnd,
+			Content:   workflowResult.FinalOutput,
+			Metadata: map[string]string{
+				"status":         string(workflowResult.Status),
+				"execution_time": workflowResult.ExecutionTime.String(),
+				"total_tokens":   fmt.Sprintf("%d", workflowResult.TotalTokens),
+				"steps_executed": fmt.Sprintf("%d", workflowResult.StepsExecuted),
+			},
+		}
+	}()
 
-	return workflowResult, nil
+	return eventCh, nil
 }
 
 // CanHandle returns true if this executor can handle the given workflow
@@ -124,8 +177,8 @@ func NewAutonomousExecutor(config config.WorkflowConfig) WorkflowExecutor {
 	}
 }
 
-// Execute runs the autonomous workflow using AgentServices abstraction
-func (e *AutonomousExecutor) Execute(ctx context.Context, request *WorkflowRequest) (*WorkflowResult, error) {
+// ExecuteStreaming runs the autonomous workflow with real-time event streaming
+func (e *AutonomousExecutor) ExecuteStreaming(ctx context.Context, request *WorkflowRequest) (<-chan WorkflowEvent, error) {
 	if request == nil {
 		return nil, fmt.Errorf("workflow request cannot be nil")
 	}
@@ -138,59 +191,98 @@ func (e *AutonomousExecutor) Execute(ctx context.Context, request *WorkflowReque
 		return nil, fmt.Errorf("agent services cannot be nil")
 	}
 
-	// Create execution context
-	execCtx := NewExecutionContext(request)
-	execCtx.SetStatus(StatusExecuting)
+	eventCh := make(chan WorkflowEvent, 100)
 
-	startTime := time.Now()
+	go func() {
+		defer close(eventCh)
 
-	// Example autonomous execution using AgentServices abstraction
-	results := make(map[string]*AgentResult)
+		// Create execution context
+		execCtx := NewExecutionContext(request)
+		execCtx.SetStatus(StatusExecuting)
 
-	// Get available agents and their capabilities
-	availableAgents := request.AgentServices.GetAvailableAgents()
-	if len(availableAgents) == 0 {
-		return nil, fmt.Errorf("no agents available for autonomous execution")
-	}
+		startTime := time.Now()
+		results := make(map[string]*AgentResult)
 
-	// Autonomous logic: dynamically select and execute agents based on capabilities
-	// For now, execute all available agents (real implementation would use planning)
-	for _, agentName := range availableAgents {
-		capabilities, err := request.AgentServices.GetAgentCapabilities(agentName)
-		if err != nil {
-			continue // Skip agents we can't get capabilities for
-		}
-
-		// Simple capability check - execute agents with "general" capability
-		hasGeneralCapability := false
-		for _, cap := range capabilities {
-			if cap == "general" {
-				hasGeneralCapability = true
-				break
+		// Get available agents and their capabilities
+		availableAgents := request.AgentServices.GetAvailableAgents()
+		if len(availableAgents) == 0 {
+			eventCh <- WorkflowEvent{
+				Timestamp: time.Now(),
+				EventType: EventAgentError,
+				Content:   "No agents available for autonomous execution",
 			}
+			return
 		}
 
-		if hasGeneralCapability {
-			result, err := request.AgentServices.ExecuteAgent(ctx, agentName, request.Input)
+		// Send planning event
+		eventCh <- WorkflowEvent{
+			Timestamp: time.Now(),
+			EventType: EventProgress,
+			Content:   fmt.Sprintf("Autonomous planning: analyzing %d available agents", len(availableAgents)),
+		}
+
+		executedCount := 0
+
+		// Autonomous logic: dynamically select and execute agents based on capabilities
+		for _, agentName := range availableAgents {
+			capabilities, err := request.AgentServices.GetAgentCapabilities(agentName)
 			if err != nil {
-				// In autonomous mode, continue with other agents on failure
-				continue
+				continue // Skip agents we can't get capabilities for
 			}
-			results[agentName] = result
+
+			// Simple capability check - execute agents with "general" capability
+			hasGeneralCapability := false
+			for _, cap := range capabilities {
+				if cap == "general" {
+					hasGeneralCapability = true
+					break
+				}
+			}
+
+			if hasGeneralCapability {
+				// Execute agent with streaming
+				result, err := request.AgentServices.ExecuteAgentStreaming(ctx, agentName, request.Input, eventCh)
+				if err != nil {
+					// In autonomous mode, log but continue with other agents
+					eventCh <- WorkflowEvent{
+						Timestamp: time.Now(),
+						EventType: EventAgentError,
+						AgentName: agentName,
+						Content:   fmt.Sprintf("Agent failed (continuing): %v", err),
+					}
+					continue
+				}
+				results[agentName] = result
+				execCtx.SetResult(agentName, result)
+				executedCount++
+			}
 		}
-	}
 
-	// Create final workflow result
-	workflowResult := CreateWorkflowResult(
-		request.Workflow,
-		WorkflowStatusCompleted,
-		results,
-		execCtx.GetAllSharedState(),
-		time.Since(startTime),
-		execCtx.GetErrors(),
-	)
+		// Create final workflow result
+		workflowResult := CreateWorkflowResult(
+			request.Workflow,
+			WorkflowStatusCompleted,
+			results,
+			execCtx.GetAllSharedState(),
+			time.Since(startTime),
+			execCtx.GetErrors(),
+		)
 
-	return workflowResult, nil
+		// Send final completion event
+		eventCh <- WorkflowEvent{
+			Timestamp: time.Now(),
+			EventType: EventWorkflowEnd,
+			Content:   fmt.Sprintf("Autonomous execution completed: %d agents executed\n%s", executedCount, workflowResult.FinalOutput),
+			Metadata: map[string]string{
+				"status":          string(workflowResult.Status),
+				"execution_time":  workflowResult.ExecutionTime.String(),
+				"total_tokens":    fmt.Sprintf("%d", workflowResult.TotalTokens),
+				"agents_executed": fmt.Sprintf("%d", executedCount),
+			},
+		}
+	}()
+
+	return eventCh, nil
 }
 
 // CanHandle returns true if this executor can handle the given workflow

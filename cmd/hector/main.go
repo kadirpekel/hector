@@ -14,6 +14,7 @@ import (
 	"github.com/kadirpekel/hector/config"
 	"github.com/kadirpekel/hector/reasoning"
 	"github.com/kadirpekel/hector/team"
+	"github.com/kadirpekel/hector/workflow"
 )
 
 // ============================================================================
@@ -305,25 +306,52 @@ func getUserInput() string {
 	return input
 }
 
-// executeWorkflowAndPrintResults executes workflow and prints results
+// executeWorkflowAndPrintResults executes workflow with streaming and prints results
 func executeWorkflowAndPrintResults(teamInstance *team.Team, input string, debugMode bool) {
 	fmt.Printf("🚀 Executing workflow with input: %s\n", input)
 	fmt.Println(strings.Repeat("-", 60))
 
 	ctx := context.Background()
-	result, err := teamInstance.Execute(ctx, input)
-
-	fmt.Println(strings.Repeat("-", 60))
+	eventCh, err := teamInstance.ExecuteStreaming(ctx, input)
 
 	if err != nil {
-		fmt.Printf("❌ Workflow failed: %v\n", err)
-		if debugMode && result != nil {
-			printWorkflowDebugInfo(result)
-		}
+		fmt.Printf("❌ Workflow failed to start: %v\n", err)
 		os.Exit(1)
 	}
 
-	printWorkflowResults(result, debugMode)
+	// Stream workflow events in real-time
+	for event := range eventCh {
+		switch event.EventType {
+		case workflow.EventWorkflowStart:
+			fmt.Printf("\n%s\n", event.Content)
+		case workflow.EventAgentStart:
+			fmt.Printf("\n%s\n", event.Content)
+		case workflow.EventAgentOutput:
+			fmt.Print(event.Content)
+		case workflow.EventAgentComplete:
+			fmt.Printf("\n%s\n", event.Content)
+		case workflow.EventProgress:
+			if debugMode && event.Progress != nil {
+				fmt.Printf("\n📊 Progress: %.1f%% (%d/%d steps)\n",
+					event.Progress.PercentComplete,
+					event.Progress.CompletedSteps,
+					event.Progress.TotalSteps)
+			}
+		case workflow.EventAgentError:
+			fmt.Printf("\n❌ Error: %s\n", event.Content)
+		case workflow.EventWorkflowEnd:
+			fmt.Println(strings.Repeat("-", 60))
+			fmt.Printf("\n%s\n", event.Content)
+			if debugMode && event.Metadata != nil {
+				fmt.Println("\nWorkflow Metadata:")
+				for k, v := range event.Metadata {
+					fmt.Printf("  %s: %s\n", k, v)
+				}
+			}
+		}
+	}
+
+	fmt.Println()
 }
 
 // ============================================================================

@@ -90,3 +90,57 @@ func NewReasoningEngine(agentConfig *config.AgentConfig, componentManager *compo
 	reasoningEngine, _, err := NewReasoningEngineWithServices(agentConfig, componentManager)
 	return reasoningEngine, err
 }
+
+// ============================================================================
+// AGENT FACTORY - SINGLE SOURCE OF TRUTH FOR AGENT CREATION
+// ============================================================================
+
+// AgentFactory creates and configures agent instances
+type AgentFactory struct {
+	componentManager *component.ComponentManager
+}
+
+// NewAgentFactory creates a new agent factory
+func NewAgentFactory(componentManager *component.ComponentManager) *AgentFactory {
+	if componentManager == nil {
+		return nil
+	}
+	return &AgentFactory{
+		componentManager: componentManager,
+	}
+}
+
+// CreateAgent creates a new agent with the given configuration
+func (f *AgentFactory) CreateAgent(agentConfig *config.AgentConfig) (*Agent, error) {
+	if agentConfig == nil {
+		return nil, fmt.Errorf("agent config cannot be nil")
+	}
+
+	// Single place for agent creation logic - delegates to NewAgent
+	return NewAgent(agentConfig, f.componentManager)
+}
+
+// CreateAgentWithServices creates an agent with pre-configured services (for testing)
+func (f *AgentFactory) CreateAgentWithServices(agentConfig *config.AgentConfig, services reasoning.AgentServices) (*Agent, error) {
+	if agentConfig == nil {
+		return nil, fmt.Errorf("agent config cannot be nil")
+	}
+	if services == nil {
+		return nil, fmt.Errorf("agent services cannot be nil")
+	}
+
+	// Create reasoning engine with provided services
+	reasoningFactory := reasoning.NewReasoningEngineFactory()
+	reasoningEngine, err := reasoningFactory.CreateEngine(agentConfig.Reasoning.Engine, services)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create reasoning engine: %w", err)
+	}
+
+	// Create agent
+	return &Agent{
+		name:            agentConfig.Name,
+		description:     agentConfig.Description,
+		config:          agentConfig,
+		reasoningEngine: reasoningEngine,
+	}, nil
+}

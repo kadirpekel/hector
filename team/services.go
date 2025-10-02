@@ -3,6 +3,7 @@ package team
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	hectoragent "github.com/kadirpekel/hector/agent"
@@ -29,17 +30,32 @@ func NewTeamWorkflowService(registry workflow.WorkflowRegistryService, factory w
 	}
 }
 
-// ExecuteWorkflow executes a workflow using the appropriate executor
-func (s *TeamWorkflowService) ExecuteWorkflow(ctx context.Context, request *workflow.WorkflowRequest) (*workflow.WorkflowResult, error) {
+// ExecuteWorkflowStreaming executes a workflow with streaming using the appropriate executor
+func (s *TeamWorkflowService) ExecuteWorkflowStreaming(ctx context.Context, request *workflow.WorkflowRequest) (<-chan workflow.WorkflowEvent, error) {
 	if request == nil {
-		return nil, NewTeamError("TeamWorkflowService", "ExecuteWorkflow", "request cannot be nil", nil)
+		errCh := make(chan workflow.WorkflowEvent, 1)
+		errCh <- workflow.WorkflowEvent{
+			Timestamp: time.Now(),
+			EventType: workflow.EventAgentError,
+			Content:   "Request cannot be nil",
+		}
+		close(errCh)
+		return errCh, NewTeamError("TeamWorkflowService", "ExecuteWorkflowStreaming", "request cannot be nil", nil)
 	}
 
-	// Cast to concrete registry type to access ExecuteWorkflow method
+	// Cast to concrete registry type to access ExecuteWorkflowStreaming method
 	if registry, ok := s.workflowRegistry.(*workflow.WorkflowExecutorRegistry); ok {
-		return registry.ExecuteWorkflow(ctx, request)
+		return registry.ExecuteWorkflowStreaming(ctx, request)
 	}
-	return nil, NewTeamError("TeamWorkflowService", "ExecuteWorkflow", "invalid registry type", nil)
+
+	errCh := make(chan workflow.WorkflowEvent, 1)
+	errCh <- workflow.WorkflowEvent{
+		Timestamp: time.Now(),
+		EventType: workflow.EventAgentError,
+		Content:   "Invalid registry type",
+	}
+	close(errCh)
+	return errCh, NewTeamError("TeamWorkflowService", "ExecuteWorkflowStreaming", "invalid registry type", nil)
 }
 
 // GetSupportedModes returns supported workflow execution modes
@@ -68,19 +84,19 @@ func (s *TeamWorkflowService) CanHandle(workflowConfig *config.WorkflowConfig) b
 
 // TeamAgentService handles agent management for teams and provides workflow abstraction
 type TeamAgentService struct {
-	agentRegistry    *hectoragent.AgentRegistry
-	componentManager *component.ComponentManager
+	agentRegistry *hectoragent.AgentRegistry
+	agentFactory  *hectoragent.AgentFactory // Use factory for agent creation
 }
 
 // NewTeamAgentService creates a new team agent service
 func NewTeamAgentService(componentManager *component.ComponentManager) *TeamAgentService {
 	return &TeamAgentService{
-		agentRegistry:    hectoragent.NewAgentRegistry(),
-		componentManager: componentManager,
+		agentRegistry: hectoragent.NewAgentRegistry(),
+		agentFactory:  hectoragent.NewAgentFactory(componentManager), // Initialize factory
 	}
 }
 
-// CreateAndRegisterAgent creates and registers an agent
+// CreateAndRegisterAgent creates and registers an agent using the agent factory
 func (s *TeamAgentService) CreateAndRegisterAgent(agentName string, agentConfig *config.AgentConfig) (*hectoragent.Agent, error) {
 	if agentName == "" {
 		return nil, NewTeamError("TeamAgentService", "CreateAndRegisterAgent", "agent name cannot be empty", nil)
@@ -89,8 +105,8 @@ func (s *TeamAgentService) CreateAndRegisterAgent(agentName string, agentConfig 
 		return nil, NewTeamError("TeamAgentService", "CreateAndRegisterAgent", "agent config cannot be nil", nil)
 	}
 
-	// Create agent instance using component manager
-	agent, err := hectoragent.NewAgent(agentConfig, s.componentManager)
+	// Use factory to create agent - NO DUPLICATION!
+	agent, err := s.agentFactory.CreateAgent(agentConfig)
 	if err != nil {
 		return nil, NewTeamError("TeamAgentService", "CreateAndRegisterAgent",
 			fmt.Sprintf("failed to create agent instance for %s", agentName), err)
@@ -131,38 +147,74 @@ func (s *TeamAgentService) getDefaultCapabilities() []string {
 // WORKFLOW.AGENTSERVICES INTERFACE IMPLEMENTATION
 // ============================================================================
 
-// ExecuteAgent executes an agent with the given input and returns the result
-func (s *TeamAgentService) ExecuteAgent(ctx context.Context, agentName string, input string) (*workflow.AgentResult, error) {
+// ExecuteAgentStreaming executes an agent with streaming output
+func (s *TeamAgentService) ExecuteAgentStreaming(ctx context.Context, agentName string, input string, eventCh chan<- workflow.WorkflowEvent) (*workflow.AgentResult, error) {
 	agent, err := s.GetAgent(agentName)
 	if err != nil {
-		return nil, NewTeamError("TeamAgentService", "ExecuteAgent",
+		return nil, NewTeamError("TeamAgentService", "ExecuteAgentStreaming",
 			fmt.Sprintf("failed to get agent %s", agentName), err)
 	}
 
-	// Execute the agent query
-	response, err := agent.Query(ctx, input)
-	if err != nil {
-		return nil, NewTeamError("TeamAgentService", "ExecuteAgent",
-			fmt.Sprintf("failed to execute agent %s", agentName), err)
+	// Send agent start event
+	eventCh <- workflow.WorkflowEvent{
+		Timestamp: time.Now(),
+		EventType: workflow.EventAgentStart,
+		AgentName: agentName,
+		Content:   fmt.Sprintf("🤖 Starting agent: %s", agentName),
 	}
 
-	// Convert reasoning response to workflow agent result
+	startTime := time.Now()
+
+	// Stream agent's response
+	responseCh, err := agent.QueryStreaming(ctx, input)
+	if err != nil {
+		eventCh <- workflow.WorkflowEvent{
+			Timestamp: time.Now(),
+			EventType: workflow.EventAgentError,
+			AgentName: agentName,
+			Content:   fmt.Sprintf("❌ Agent failed: %v", err),
+		}
+		return nil, NewTeamError("TeamAgentService", "ExecuteAgentStreaming",
+			fmt.Sprintf("failed to stream agent %s", agentName), err)
+	}
+
+	var fullResponse strings.Builder
+	for chunk := range responseCh {
+		fullResponse.WriteString(chunk)
+
+		// Forward agent output to workflow event stream
+		eventCh <- workflow.WorkflowEvent{
+			Timestamp: time.Now(),
+			EventType: workflow.EventAgentOutput,
+			AgentName: agentName,
+			Content:   chunk,
+		}
+	}
+
+	duration := time.Since(startTime)
+
+	// Send agent complete event
+	eventCh <- workflow.WorkflowEvent{
+		Timestamp: time.Now(),
+		EventType: workflow.EventAgentComplete,
+		AgentName: agentName,
+		Content:   fmt.Sprintf("✅ Agent %s completed in %.2fs", agentName, duration.Seconds()),
+		Metadata: map[string]string{
+			"duration": duration.String(),
+		},
+	}
+
+	// Create result
 	result := &workflow.AgentResult{
 		AgentName:  agentName,
-		StepName:   agentName, // Use agent name as step name for now
-		Result:     response.Answer,
+		StepName:   agentName,
+		Result:     fullResponse.String(),
 		Success:    true,
-		Duration:   response.Duration,
-		TokensUsed: response.TokensUsed,
+		Duration:   duration,
+		Timestamp:  time.Now(),
 		Artifacts:  make(map[string]workflow.Artifact),
 		Metadata:   make(map[string]string),
-		Timestamp:  time.Now(),
-		Confidence: response.Confidence,
-	}
-
-	// Convert context search results to metadata
-	if len(response.Sources) > 0 {
-		result.Metadata["sources"] = fmt.Sprintf("%v", response.Sources)
+		Confidence: 1.0,
 	}
 
 	return result, nil

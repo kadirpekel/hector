@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/kadirpekel/hector/config"
 	"github.com/kadirpekel/hector/registry"
@@ -113,14 +114,28 @@ func (r *WorkflowExecutorRegistry) CreateExecutor(executorType string, workflowC
 	return executor, nil
 }
 
-// ExecuteWorkflow finds a suitable executor and runs the workflow - NO INTERFACE{}!
-func (r *WorkflowExecutorRegistry) ExecuteWorkflow(ctx context.Context, request *WorkflowRequest) (*WorkflowResult, error) {
+// ExecuteWorkflowStreaming finds a suitable executor and runs the workflow with streaming
+func (r *WorkflowExecutorRegistry) ExecuteWorkflowStreaming(ctx context.Context, request *WorkflowRequest) (<-chan WorkflowEvent, error) {
 	if request == nil {
-		return nil, NewWorkflowExecutionError("WorkflowExecutorRegistry", "ExecuteWorkflow", "request cannot be nil", nil)
+		errCh := make(chan WorkflowEvent, 1)
+		errCh <- WorkflowEvent{
+			Timestamp: time.Now(),
+			EventType: EventAgentError,
+			Content:   "Request cannot be nil",
+		}
+		close(errCh)
+		return errCh, NewWorkflowExecutionError("WorkflowExecutorRegistry", "ExecuteWorkflowStreaming", "request cannot be nil", nil)
 	}
 
 	if request.Workflow == nil {
-		return nil, NewWorkflowExecutionError("WorkflowExecutorRegistry", "ExecuteWorkflow", "workflow config cannot be nil", nil)
+		errCh := make(chan WorkflowEvent, 1)
+		errCh <- WorkflowEvent{
+			Timestamp: time.Now(),
+			EventType: EventAgentError,
+			Content:   "Workflow config cannot be nil",
+		}
+		close(errCh)
+		return errCh, NewWorkflowExecutionError("WorkflowExecutorRegistry", "ExecuteWorkflowStreaming", "workflow config cannot be nil", nil)
 	}
 
 	r.mu.RLock()
@@ -129,10 +144,18 @@ func (r *WorkflowExecutorRegistry) ExecuteWorkflow(ctx context.Context, request 
 	list := r.List()
 	for _, executor := range list {
 		if executor.CanHandle(request.Workflow) {
-			return executor.Execute(ctx, request)
+			return executor.ExecuteStreaming(ctx, request)
 		}
 	}
-	return nil, NewWorkflowExecutionError("WorkflowExecutorRegistry", "ExecuteWorkflow",
+
+	errCh := make(chan WorkflowEvent, 1)
+	errCh <- WorkflowEvent{
+		Timestamp: time.Now(),
+		EventType: EventAgentError,
+		Content:   fmt.Sprintf("No suitable executor found for workflow mode '%s'", request.Workflow.Mode),
+	}
+	close(errCh)
+	return errCh, NewWorkflowExecutionError("WorkflowExecutorRegistry", "ExecuteWorkflowStreaming",
 		fmt.Sprintf("no suitable executor found for workflow mode '%s'", request.Workflow.Mode), nil)
 }
 

@@ -12,7 +12,7 @@ import (
 
 // WorkflowExecutionService defines workflow execution capabilities
 type WorkflowExecutionService interface {
-	ExecuteWorkflow(ctx context.Context, request *WorkflowRequest) (*WorkflowResult, error)
+	ExecuteWorkflowStreaming(ctx context.Context, request *WorkflowRequest) (<-chan WorkflowEvent, error)
 	GetSupportedModes() []string
 	CanHandle(workflow *config.WorkflowConfig) bool
 }
@@ -45,8 +45,8 @@ type WorkflowExecutor interface {
 	// GetType returns the executor type for identification
 	GetType() string
 
-	// Execute runs the workflow with the given request - CONCRETE TYPES!
-	Execute(ctx context.Context, request *WorkflowRequest) (*WorkflowResult, error)
+	// ExecuteStreaming runs the workflow with real-time event streaming
+	ExecuteStreaming(ctx context.Context, request *WorkflowRequest) (<-chan WorkflowEvent, error)
 
 	// CanHandle returns true if this executor can handle the given workflow
 	CanHandle(workflow *config.WorkflowConfig) bool

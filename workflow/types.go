@@ -61,8 +61,8 @@ type WorkflowRequest struct {
 
 // AgentServices provides abstract access to agent capabilities for workflow executors
 type AgentServices interface {
-	// ExecuteAgent executes an agent with the given input and returns the result
-	ExecuteAgent(ctx context.Context, agentName string, input string) (*AgentResult, error)
+	// ExecuteAgentStreaming executes an agent with streaming output
+	ExecuteAgentStreaming(ctx context.Context, agentName string, input string, eventCh chan<- WorkflowEvent) (*AgentResult, error)
 
 	// GetAvailableAgents returns the list of available agent names
 	GetAvailableAgents() []string
@@ -122,4 +122,43 @@ type AgentResult struct {
 	Metadata   map[string]string   `json:"metadata,omitempty"`
 	Timestamp  time.Time           `json:"timestamp"`
 	Confidence float64             `json:"confidence"`
+}
+
+// ============================================================================
+// WORKFLOW EVENT TYPES FOR STREAMING
+// ============================================================================
+
+// WorkflowEvent represents a real-time event during workflow execution
+type WorkflowEvent struct {
+	Timestamp time.Time         `json:"timestamp"`
+	EventType WorkflowEventType `json:"event_type"`
+	AgentName string            `json:"agent_name,omitempty"`
+	StepName  string            `json:"step_name,omitempty"`
+	Content   string            `json:"content"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
+	Progress  *WorkflowProgress `json:"progress,omitempty"`
+}
+
+// WorkflowEventType categorizes workflow events
+type WorkflowEventType string
+
+const (
+	EventWorkflowStart WorkflowEventType = "workflow_start"
+	EventWorkflowEnd   WorkflowEventType = "workflow_end"
+	EventAgentStart    WorkflowEventType = "agent_start"
+	EventAgentThinking WorkflowEventType = "agent_thinking"
+	EventAgentOutput   WorkflowEventType = "agent_output"
+	EventAgentComplete WorkflowEventType = "agent_complete"
+	EventAgentError    WorkflowEventType = "agent_error"
+	EventStepStart     WorkflowEventType = "step_start"
+	EventStepComplete  WorkflowEventType = "step_complete"
+	EventProgress      WorkflowEventType = "progress"
+)
+
+// WorkflowProgress tracks workflow execution progress
+type WorkflowProgress struct {
+	TotalSteps      int     `json:"total_steps"`
+	CompletedSteps  int     `json:"completed_steps"`
+	CurrentStep     string  `json:"current_step"`
+	PercentComplete float64 `json:"percent_complete"`
 }

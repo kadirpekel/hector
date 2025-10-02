@@ -372,18 +372,86 @@ func (t *Team) getDefaultCapabilities() []string {
 	return []string{"general", "reasoning", "search", "tools"}
 }
 
-// Execute runs the workflow using workflow service - FOLLOWING AGENT PATTERN
-func (t *Team) Execute(ctx context.Context, input string) (*WorkflowResult, error) {
+// ExecuteStreaming runs the workflow with real-time event streaming
+func (t *Team) ExecuteStreaming(ctx context.Context, input string) (<-chan workflow.WorkflowEvent, error) {
 	if input == "" {
-		return nil, NewTeamError("Team", "Execute", "input cannot be empty", nil)
+		errCh := make(chan workflow.WorkflowEvent, 1)
+		errCh <- workflow.WorkflowEvent{
+			Timestamp: time.Now(),
+			EventType: workflow.EventAgentError,
+			Content:   "Input cannot be empty",
+		}
+		close(errCh)
+		return errCh, NewTeamError("Team", "ExecuteStreaming", "input cannot be empty", nil)
 	}
 
-	t.mu.Lock()
-	t.status = WorkflowStatusRunning
-	t.startTime = time.Now()
-	t.mu.Unlock()
+	eventCh := make(chan workflow.WorkflowEvent, 100)
 
-	defer func() {
+	go func() {
+		defer close(eventCh)
+
+		t.mu.Lock()
+		t.status = WorkflowStatusRunning
+		t.startTime = time.Now()
+		t.mu.Unlock()
+
+		// Send workflow start event
+		eventCh <- workflow.WorkflowEvent{
+			Timestamp: time.Now(),
+			EventType: workflow.EventWorkflowStart,
+			Content:   fmt.Sprintf("🚀 Starting workflow: %s", t.workflow.Name),
+			Metadata: map[string]string{
+				"workflow_name": t.workflow.Name,
+				"mode":          string(t.workflow.Mode),
+			},
+		}
+
+		// Set initial context
+		if err := t.coordinationService.SetContext("user_input", input, "system"); err != nil {
+			eventCh <- workflow.WorkflowEvent{
+				Timestamp: time.Now(),
+				EventType: workflow.EventAgentError,
+				Content:   fmt.Sprintf("Failed to set context: %v", err),
+			}
+			return
+		}
+
+		// Create workflow request
+		request := &workflow.WorkflowRequest{
+			Workflow:      t.workflow,
+			AgentServices: t.agentService,
+			Input:         input,
+			Context: workflow.WorkflowContext{
+				Variables: make(map[string]string),
+				Metadata:  make(map[string]string),
+				Artifacts: make(map[string]workflow.Artifact),
+			},
+		}
+
+		// Execute workflow with streaming
+		workflowEventCh, err := t.workflowService.ExecuteWorkflowStreaming(ctx, request)
+		if err != nil {
+			t.mu.Lock()
+			t.status = WorkflowStatusFailed
+			t.mu.Unlock()
+
+			eventCh <- workflow.WorkflowEvent{
+				Timestamp: time.Now(),
+				EventType: workflow.EventWorkflowEnd,
+				Content:   fmt.Sprintf("❌ Workflow failed: %v", err),
+				Metadata: map[string]string{
+					"status": "failed",
+					"error":  err.Error(),
+				},
+			}
+			return
+		}
+
+		// Forward all workflow events
+		for event := range workflowEventCh {
+			eventCh <- event
+		}
+
 		t.mu.Lock()
 		t.endTime = time.Now()
 		if t.status == WorkflowStatusRunning {
@@ -392,36 +460,7 @@ func (t *Team) Execute(ctx context.Context, input string) (*WorkflowResult, erro
 		t.mu.Unlock()
 	}()
 
-	// Set initial context using coordination service
-	if err := t.coordinationService.SetContext("user_input", input, "system"); err != nil {
-		return nil, NewTeamError("Team", "Execute", "failed to set user input", err)
-	}
-	if err := t.coordinationService.SetContext("workflow_name", t.workflow.Name, "system"); err != nil {
-		return nil, NewTeamError("Team", "Execute", "failed to set workflow name", err)
-	}
-
-	// Create workflow request with agent services abstraction
-	request := &workflow.WorkflowRequest{
-		Workflow:      t.workflow,
-		AgentServices: t.agentService, // Pass agent service as abstraction
-		Input:         input,
-		Context: workflow.WorkflowContext{
-			Variables: make(map[string]string),
-			Metadata:  make(map[string]string),
-			Artifacts: make(map[string]workflow.Artifact),
-		},
-	}
-
-	// Execute workflow using workflow service
-	result, err := t.workflowService.ExecuteWorkflow(ctx, request)
-	if err != nil {
-		t.mu.Lock()
-		t.status = WorkflowStatusFailed
-		t.mu.Unlock()
-		return nil, NewTeamError("Team", "Execute", "workflow execution failed", err)
-	}
-
-	return result, nil
+	return eventCh, nil
 }
 
 // GetStatus returns the current workflow status
