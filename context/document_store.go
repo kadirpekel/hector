@@ -658,11 +658,13 @@ func (ds *DocumentStore) Search(ctx context.Context, query string, limit int) ([
 	}
 
 	// Filter results to only include documents from this store
+	// Use metadata filtering since IDs are UUIDs (not prefixed)
 	var storeResults []databases.SearchResult
-	storePrefix := ds.name + ":"
 	for _, result := range results {
-		if strings.HasPrefix(result.ID, storePrefix) {
-			storeResults = append(storeResults, result)
+		if result.Metadata != nil {
+			if storeName, ok := result.Metadata["store_name"].(string); ok && storeName == ds.name {
+				storeResults = append(storeResults, result)
+			}
 		}
 	}
 
@@ -1089,24 +1091,24 @@ func InitializeDocumentStoresFromConfig(configs []config.DocumentStoreConfig, se
 
 		// Register the store
 		RegisterDocumentStore(store)
+		fmt.Printf("   📁 Document store '%s' registered for: %s\n", config.Name, config.Path)
 
-		// Start indexing in background
-		go func(s *DocumentStore, name string) {
-			if err := s.StartIndexing(); err != nil {
-				fmt.Printf("Warning: Failed to index document store %s: %v\n", name, err)
-				return
-			}
+		// Start indexing SYNCHRONOUSLY (wait for completion)
+		if err := store.StartIndexing(); err != nil {
+			fmt.Printf("Warning: Failed to index document store %s: %v\n", config.Name, err)
+			continue
+		}
 
-			// Start file watching if enabled
-			if s.config.WatchChanges {
+		// Start file watching in background (after indexing completes)
+		if store.config.WatchChanges {
+			go func(s *DocumentStore, name string) {
 				if err := s.StartWatching(); err != nil {
 					fmt.Printf("Warning: Failed to start file watching for %s: %v\n", name, err)
 				}
-			}
-		}(store, config.Name)
-
-		fmt.Printf("   📁 Document store '%s' registered for: %s\n", config.Name, config.Path)
+			}(store, config.Name)
+		}
 	}
 
+	fmt.Printf("\n✅ All document stores indexed and ready!\n\n")
 	return nil
 }

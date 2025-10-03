@@ -269,10 +269,11 @@ func (t *SearchTool) searchInStore(ctx context.Context, store *hectorcontext.Doc
 		}
 
 		// Get content from metadata or use empty string
+		// Return more content (2000 chars) so agents have enough context
 		content := ""
 		if result.Metadata != nil {
 			if c, ok := result.Metadata["content"].(string); ok {
-				content = c[:minInt(len(c), 200)] // First 200 chars as preview
+				content = c[:minInt(len(c), 2000)] // First 2000 chars for better context
 			}
 		}
 

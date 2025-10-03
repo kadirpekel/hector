@@ -1,0 +1,458 @@
+version: "1.0"
+name: "hector-dev"
+description: "Hector's self-development and autonomous improvement system"
+
+# ============================================================================
+# HECTOR DEVELOPS HECTOR
+# ============================================================================
+# This workflow enables Hector to autonomously improve itself through:
+# 1. Code analysis and improvement identification
+# 2. Implementation of changes
+# 3. Comprehensive testing and benchmarking
+# 4. Learning from past improvements
+# 5. Automated commits with detailed KPI tracking
+# ============================================================================
+
+global:
+  logging:
+    level: "info"
+  performance:
+    max_concurrency: 1
+    timeout: "30m"
+
+# LLM Configuration - Specialized per agent role
+llms:
+  # Deep analysis & reasoning - Best for complex tasks
+  analyzer-llm:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.3  # Low temp for focused analysis
+    max_tokens: 4000
+    timeout: 180
+  
+  # Architecture design - Best reasoning model
+  architect-llm:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.4  # Slightly higher for design creativity
+    max_tokens: 3000
+    timeout: 150
+  
+  # Code implementation - Claude excels at code generation
+  implementer-llm:
+    type: "anthropic"
+    model: "claude-sonnet-4-5-20250929"  # Latest Sonnet 4.5 - best for agents/coding
+    api_key: "${ANTHROPIC_API_KEY}"
+    host: "https://api.anthropic.com"
+    temperature: 0.2  # Very low for precise code
+    max_tokens: 4000
+    timeout: 180
+  
+  # Testing & validation - Fast model for efficiency
+  tester-llm:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.1  # Lowest for deterministic testing
+    max_tokens: 2000
+    timeout: 120
+  
+  # Review & quality - High reasoning capability
+  reviewer-llm:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.3  # Low for consistent judgment
+    max_tokens: 3000
+    timeout: 150
+  
+  # Git operations - Fast model for simple tasks
+  git-llm:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.1  # Lowest for precise git operations
+    max_tokens: 1500
+    timeout: 60
+
+# Database & Embedder Configuration for code search
+databases:
+  qdrant:
+    type: "qdrant"
+    host: "localhost"
+    port: 6334
+    timeout: 30
+
+embedders:
+  ollama:
+    type: "ollama"
+    model: "nomic-embed-text"
+    host: "http://localhost:11434"
+    dimension: 768
+    timeout: 30
+
+# Document Stores - Code indexing
+document_stores:
+  hector-code:
+    name: "hector-code"
+    type: "code"
+    description: "Hector codebase indexed for semantic search"
+    path: "."
+    include_patterns:
+      - "*.go"
+    exclude_patterns:
+      - "*_test.go"
+      - "vendor/*"
+    max_file_size: 1048576
+    watch_changes: false
+
+# Agent Definitions - Specialized Development Team
+agents:
+  # Agent 1: Code Analyzer - Identifies improvement opportunities
+  code-analyzer:
+    name: "Code Analyzer"
+    description: "Analyzes codebase for improvement opportunities in reasoning, performance, efficiency, and quality"
+    llm: "analyzer-llm"  # GPT-4o for deep analysis
+    database: "qdrant"
+    embedder: "ollama"
+    document_stores:
+      - "hector-code"
+    
+    prompt:
+      system_prompt: |
+        You are an expert code analyst specializing in Go and AI systems. Your role:
+        
+        1. Analyze the Hector codebase for improvement opportunities
+        2. Focus on these categories:
+           - Reasoning: Better prompt engineering, reasoning strategies
+           - Performance: Speed optimizations, memory usage
+           - Efficiency: Token usage reduction, cost optimization
+           - Architecture: Code structure, maintainability
+           - Quality: Bug fixes, test coverage, documentation
+        
+        3. Review past improvement history to avoid repeating failures
+        4. Identify high-impact, low-risk improvements
+        5. Propose specific, measurable changes
+        
+        When analyzing:
+        - Use search tool to find relevant files (returns 2000 chars per result)
+        - If you need full file contents, use execute_command with "cat <filepath>"
+        - Check git history for context
+        - Review current KPIs and benchmarks
+        - Consider test coverage and stability
+        
+        Output format:
+        ```
+        Category: [reasoning|performance|efficiency|architecture|quality]
+        Priority: [high|medium|low]
+        Impact: [Estimated KPI improvements]
+        Risk: [low|medium|high]
+        Description: [Detailed description]
+        Files: [List of files to modify]
+        Approach: [Step-by-step implementation plan]
+        ```
+      include_tools: true
+      include_context: false
+      include_history: true
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 10
+
+  # Agent 2: Architect - Designs improvement strategy
+  architect:
+    name: "Architect"
+    description: "Reviews analysis and designs detailed implementation strategy"
+    llm: "architect-llm"  # GPT-4o for reasoning & design
+    
+    prompt:
+      system_prompt: |
+        You are a software architect specializing in AI systems. Your role:
+        
+        1. Review the analyzer's proposed improvement
+        2. Validate the approach and identify potential issues
+        3. Design a detailed implementation plan
+        4. Ensure changes maintain backward compatibility (when needed)
+        5. Plan for testing and validation
+        
+        Consider:
+        - Code architecture and design patterns
+        - Impact on existing functionality
+        - Test requirements
+        - Performance implications
+        - Error handling and edge cases
+        
+        Output format:
+        ```
+        Validation: [approved|needs_revision|rejected]
+        Refinements: [Any changes to the proposal]
+        Implementation Steps:
+          1. [Step-by-step plan]
+          2. ...
+        Testing Plan:
+          - [Test cases to add/update]
+        Rollback Plan:
+          - [How to revert if issues arise]
+        ```
+      include_tools: true
+      include_context: false
+      include_history: true
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 8
+
+  # Agent 3: Implementer - Writes the code
+  implementer:
+    name: "Implementer"
+    description: "Implements the approved changes with high quality"
+    llm: "implementer-llm"  # Claude Sonnet for precise code generation
+    database: "qdrant"
+    embedder: "ollama"
+    document_stores:
+      - "hector-code"
+    
+    prompt:
+      system_prompt: |
+        You are an expert Go developer specializing in AI systems. Your role:
+        
+        1. Implement the architect's approved plan
+        2. Write clean, idiomatic Go code
+        3. Follow existing code style and patterns
+        4. Add comprehensive comments
+        5. Ensure error handling is robust
+        
+        Best practices:
+        - Keep functions focused and testable
+        - Use meaningful variable names
+        - Add godoc comments for public APIs
+        - Follow SOLID principles
+        - Minimize complexity
+        
+        Use tools to:
+        - Search for relevant code patterns (returns 2000 chars per result)
+        - Read full files with execute_command "cat <filepath>" when needed
+        - Make precise edits
+        - Run tests after changes
+        - Verify compilation
+        
+        Output: Direct code modifications using available tools
+      include_tools: true
+      include_context: false
+      include_history: true
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 15
+
+  # Agent 4: Tester - Runs tests and benchmarks
+  tester:
+    name: "Tester"
+    description: "Validates changes through comprehensive testing and benchmarking"
+    llm: "tester-llm"  # GPT-4o-mini for fast, efficient testing
+    
+    prompt:
+      system_prompt: |
+        You are a QA engineer specializing in Go and AI systems. Your role:
+        
+        1. Run all existing tests to ensure no regressions
+        2. Execute comprehensive benchmarks
+        3. Measure KPIs (functional, performance, efficiency, quality)
+        4. Compare before/after metrics
+        5. Identify any issues or regressions
+        
+        Testing checklist:
+        - Unit tests: go test ./...
+        - Benchmarks: go test -bench=. -benchmem
+        - Coverage: go test -cover
+        - Lint: golangci-lint run
+        - Build: go build
+        
+        Use the dev package tools to:
+        - Run benchmark suite
+        - Collect KPI metrics
+        - Compare with baseline
+        
+        Output format:
+        ```
+        Tests: [PASS|FAIL] (X/Y passing)
+        Benchmarks: [Summary of results]
+        KPI Comparison:
+          Before: [Key metrics]
+          After: [Key metrics]
+          Improvement: [+X%]
+        Verdict: [APPROVED|NEEDS_WORK|REJECTED]
+        Issues: [Any problems found]
+        ```
+      include_tools: true
+      include_context: false
+      include_history: true
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 12
+
+  # Agent 5: Reviewer - Final quality check
+  reviewer:
+    name: "Reviewer"
+    description: "Performs final code review and quality assessment"
+    llm: "reviewer-llm"  # GPT-4o for high-quality judgment
+    
+    prompt:
+      system_prompt: |
+        You are a senior code reviewer specializing in AI systems. Your role:
+        
+        1. Review all changes for quality and correctness
+        2. Check test results and KPI improvements
+        3. Verify the improvement meets objectives
+        4. Assess overall risk and impact
+        5. Make final go/no-go decision
+        
+        Review criteria:
+        - Code quality and maintainability
+        - Test coverage and reliability
+        - Performance improvements
+        - No regressions
+        - Documentation completeness
+        
+        Decision criteria:
+        - Tests must pass
+        - KPI improvement > 5%
+        - No critical regressions
+        - Code quality maintained
+        
+        Output format:
+        ```
+        Review: [APPROVED|CONDITIONAL|REJECTED]
+        Score: [X/100]
+        Strengths: [What's good]
+        Concerns: [Any issues]
+        Recommendation: [commit|revise|discard]
+        Commit Message: [If approved, draft commit message]
+        ```
+      include_tools: true
+      include_context: false
+      include_history: true
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 8
+
+  # Agent 6: Git Manager - Handles commits and branches
+  git-manager:
+    name: "Git Manager"
+    description: "Creates branches, commits changes with detailed KPI tracking"
+    llm: "git-llm"  # GPT-4o-mini for simple git operations
+    
+    prompt:
+      system_prompt: |
+        You are a git operations specialist. Your role:
+        
+        1. Create appropriate dev branch for the improvement
+        2. Stage all changes
+        3. Create detailed commit message with KPI data
+        4. Push to branch for human review
+        
+        Branch naming: dev/{category}-{timestamp}
+        Categories: reasoning, performance, efficiency, architecture, quality
+        
+        Commit message format:
+        ```
+        [hector-dev] {Title}
+        
+        Category: {category}
+        {Description}
+        
+        KPI Improvements:
+          • metric: +X%
+        
+        Overall Score: X/100
+        
+        Key Metrics:
+          • Tests: X/Y passing
+          • Avg Response Time: Xms
+          • Token Efficiency: X.XX
+        
+        Files Modified:
+          • file1
+          • file2
+        
+        ✅ All tests passing
+        ```
+        
+        Use git tools to create branch and commit.
+      include_tools: true
+      include_context: false
+      include_history: true
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 5
+
+# Workflow Definition - Sequential execution for self-development
+workflows:
+  self-improvement:
+    name: "Self-Improvement Workflow"
+    description: "Autonomous improvement cycle: Analyze → Design → Implement → Test → Review → Commit"
+    mode: "dag"
+    
+    agents:
+      - "code-analyzer"
+      - "architect"
+      - "implementer"
+      - "tester"
+      - "reviewer"
+      - "git-manager"
+    
+    settings:
+      max_concurrency: 1  # Sequential execution
+      timeout: "25m"
+
+# Tool Configuration
+tools:
+  default_repo: "local"
+  
+  repositories:
+    - name: "local"
+      type: "local"
+      description: "Local development tools"
+      tools:
+        - name: "command_executor"
+          type: "command"
+          enabled: true
+          config:
+            command_config:
+              allowed_commands:
+                # File operations
+                - "ls"
+                - "cat"
+                - "grep"
+                - "find"
+                - "head"
+                - "tail"
+                - "wc"
+                # Git operations
+                - "git"
+                # Go operations
+                - "go"
+                - "gofmt"
+                - "golangci-lint"
+                - "gocyclo"
+                # Build and test
+                - "make"
+                - "pwd"
+                - "date"
+              working_directory: "./"
+              max_execution_time: "120s"
+              enable_sandboxing: true
+        
+        - name: "file_search"
+          type: "search"
+          enabled: true
+          config:
+            search_config:
+              default_limit: 20
+              max_limit: 100
+

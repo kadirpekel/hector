@@ -76,9 +76,11 @@ Tool call format:
 TOOL_CALLS:
 {"tool": "TOOL_NAME", "params": {"param1": "value1"}, "label": "📝 Description", "display_direct": true/false}
 
-Format rules:
-- NO markdown formatting around tool calls
-- Write TOOL_CALLS: on its own line, follow with JSON
+Format rules (CRITICAL):
+- NO markdown code blocks around JSON
+- NO special formatting or wrapping
+- Write TOOL_CALLS: on its own line
+- Follow immediately with RAW JSON only
 - "display_direct" and "label" are TOP LEVEL fields, not inside "params"
 
 display_direct:

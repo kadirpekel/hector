@@ -12,6 +12,7 @@ import (
 	"github.com/kadirpekel/hector/agent"
 	"github.com/kadirpekel/hector/component"
 	"github.com/kadirpekel/hector/config"
+	hectorcontext "github.com/kadirpekel/hector/context"
 	"github.com/kadirpekel/hector/reasoning"
 	"github.com/kadirpekel/hector/team"
 	"github.com/kadirpekel/hector/workflow"
@@ -53,7 +54,88 @@ func main() {
 		fatalf("Component initialization failed: %v", err)
 	}
 
+	// Initialize document stores if configured
+	if err := initializeDocumentStores(hectorConfig, componentManager); err != nil {
+		fatalf("Document store initialization failed: %v", err)
+	}
+
 	routeExecution(args, hectorConfig, componentManager)
+}
+
+// ============================================================================
+// DOCUMENT STORE INITIALIZATION
+// ============================================================================
+
+// initializeDocumentStores initializes document stores from configuration
+func initializeDocumentStores(hectorConfig *config.Config, componentManager *component.ComponentManager) error {
+	if len(hectorConfig.DocumentStores) == 0 {
+		return nil // No document stores configured
+	}
+
+	fmt.Printf("\n🔍 Initializing document stores...\n")
+
+	// Find a database and embedder to use for document stores
+	// Look for agents that have document stores configured to get their db/embedder
+	var dbName, embedderName string
+	for _, agentConfig := range hectorConfig.Agents {
+		if len(agentConfig.DocumentStores) > 0 {
+			dbName = agentConfig.Database
+			embedderName = agentConfig.Embedder
+			break
+		}
+	}
+
+	// Fallback to defaults if not found
+	if dbName == "" {
+		// Try to find any configured database
+		for name := range hectorConfig.Databases {
+			dbName = name
+			break
+		}
+	}
+	if embedderName == "" {
+		// Try to find any configured embedder
+		for name := range hectorConfig.Embedders {
+			embedderName = name
+			break
+		}
+	}
+
+	if dbName == "" || embedderName == "" {
+		return fmt.Errorf("document stores require a database and embedder to be configured")
+	}
+
+	// Get database and embedder from component manager
+	db, err := componentManager.GetDatabase(dbName)
+	if err != nil {
+		return fmt.Errorf("failed to get database '%s': %w", dbName, err)
+	}
+
+	embedder, err := componentManager.GetEmbedder(embedderName)
+	if err != nil {
+		return fmt.Errorf("failed to get embedder '%s': %w", embedderName, err)
+	}
+
+	// Create search engine with default config
+	searchConfig := config.SearchConfig{}
+	searchConfig.SetDefaults()
+	searchEngine, err := hectorcontext.NewSearchEngine(db, embedder, searchConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create search engine: %w", err)
+	}
+
+	// Convert document stores map to slice
+	docStores := make([]config.DocumentStoreConfig, 0, len(hectorConfig.DocumentStores))
+	for _, storeConfig := range hectorConfig.DocumentStores {
+		docStores = append(docStores, storeConfig)
+	}
+
+	// Initialize document stores (this indexes synchronously and waits for completion)
+	err = hectorcontext.InitializeDocumentStoresFromConfig(docStores, searchEngine)
+	if err != nil {
+		return fmt.Errorf("failed to initialize document stores: %w", err)
+	}
+	return nil
 }
 
 // ============================================================================

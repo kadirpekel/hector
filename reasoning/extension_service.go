@@ -495,8 +495,22 @@ func (s *DefaultExtensionService) ContainsMarker(text string) (found bool, marke
 
 // ParseJSON parses JSON from raw data with fallback to line-by-line parsing
 func (s *DefaultExtensionService) ParseJSON(rawData string, target interface{}) error {
-	// Try to parse the entire raw data as JSON first
+	// Clean up the raw data: strip markdown code fences if present
 	rawData = strings.TrimSpace(rawData)
+
+	// Remove markdown code fences (```json ... ``` or ``` ... ```)
+	if strings.HasPrefix(rawData, "```") {
+		// Find the first newline after opening fence
+		firstNewline := strings.Index(rawData, "\n")
+		if firstNewline != -1 {
+			rawData = rawData[firstNewline+1:]
+		}
+		// Remove closing fence
+		rawData = strings.TrimSuffix(strings.TrimSpace(rawData), "```")
+		rawData = strings.TrimSpace(rawData)
+	}
+
+	// Try to parse the entire raw data as JSON first
 	if strings.HasPrefix(rawData, "{") {
 		if err := json.Unmarshal([]byte(rawData), target); err == nil {
 			return nil
