@@ -72,8 +72,6 @@ func initializeDocumentStores(hectorConfig *config.Config, componentManager *com
 		return nil // No document stores configured
 	}
 
-	fmt.Printf("\n🔍 Initializing document stores...\n")
-
 	// Find a database and embedder to use for document stores
 	// Look for agents that have document stores configured to get their db/embedder
 	var dbName, embedderName string
@@ -353,6 +351,15 @@ func initializeTeam(teamInstance *team.Team, debugMode bool) {
 	ctx := context.Background()
 	if err := teamInstance.Initialize(ctx); err != nil {
 		fatalf("Failed to initialize team: %v", err)
+	}
+
+	// Check for any errors during initialization
+	if errors := teamInstance.GetErrors(); len(errors) > 0 {
+		fmt.Println("⚠️  Errors during team initialization:")
+		for _, err := range errors {
+			fmt.Printf("   - %v\n", err)
+		}
+		fatalf("Team initialization had %d error(s)", len(errors))
 	}
 
 	if debugMode {
