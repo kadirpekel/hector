@@ -18,12 +18,13 @@ type ToolInfo struct {
 
 // ToolParameter represents a tool parameter definition
 type ToolParameter struct {
-	Name        string      `json:"name"`
-	Type        string      `json:"type"`
-	Description string      `json:"description"`
-	Required    bool        `json:"required"`
-	Default     interface{} `json:"default,omitempty"`
-	Enum        []string    `json:"enum,omitempty"`
+	Name        string                 `json:"name"`
+	Type        string                 `json:"type"`
+	Description string                 `json:"description"`
+	Required    bool                   `json:"required"`
+	Default     interface{}            `json:"default,omitempty"`
+	Enum        []string               `json:"enum,omitempty"`
+	Items       map[string]interface{} `json:"items,omitempty"` // For array types
 }
 
 // ToolCall represents a standardized tool call
@@ -37,7 +38,7 @@ type ToolCall struct {
 type ToolResult struct {
 	Success       bool                   `json:"success"`
 	Content       string                 `json:"content,omitempty"`
-	Output        interface{}            `json:"output,omitempty"` // For reasonings package compatibility
+	Output        interface{}            `json:"output,omitempty"` // Generic output field
 	Error         string                 `json:"error,omitempty"`
 	ToolName      string                 `json:"tool_name"`
 	ExecutionTime time.Duration          `json:"execution_time,omitempty"`

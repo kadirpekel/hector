@@ -666,6 +666,61 @@ func (c *SearchToolConfig) SetDefaults() {
 	}
 }
 
+// FileWriterConfig represents file writer tool configuration
+type FileWriterConfig struct {
+	MaxFileSize       int      `yaml:"max_file_size"`
+	AllowedExtensions []string `yaml:"allowed_extensions"`
+	BackupOnOverwrite bool     `yaml:"backup_on_overwrite"`
+	WorkingDirectory  string   `yaml:"working_directory"`
+}
+
+// Validate implements Config.Validate for FileWriterConfig
+func (c *FileWriterConfig) Validate() error {
+	if c.MaxFileSize < 0 {
+		return fmt.Errorf("max_file_size must be non-negative")
+	}
+	return nil
+}
+
+// SetDefaults implements Config.SetDefaults for FileWriterConfig
+func (c *FileWriterConfig) SetDefaults() {
+	if c.MaxFileSize == 0 {
+		c.MaxFileSize = 1048576 // 1MB default
+	}
+	if len(c.AllowedExtensions) == 0 {
+		c.AllowedExtensions = []string{".go", ".yaml", ".md", ".json", ".txt", ".sh"}
+	}
+	if c.WorkingDirectory == "" {
+		c.WorkingDirectory = "./"
+	}
+}
+
+// SearchReplaceConfig represents search/replace tool configuration
+type SearchReplaceConfig struct {
+	MaxReplacements  int    `yaml:"max_replacements"`
+	ShowDiff         bool   `yaml:"show_diff"`
+	CreateBackup     bool   `yaml:"create_backup"`
+	WorkingDirectory string `yaml:"working_directory"`
+}
+
+// Validate implements Config.Validate for SearchReplaceConfig
+func (c *SearchReplaceConfig) Validate() error {
+	if c.MaxReplacements < 0 {
+		return fmt.Errorf("max_replacements must be non-negative")
+	}
+	return nil
+}
+
+// SetDefaults implements Config.SetDefaults for SearchReplaceConfig
+func (c *SearchReplaceConfig) SetDefaults() {
+	if c.MaxReplacements == 0 {
+		c.MaxReplacements = 100
+	}
+	if c.WorkingDirectory == "" {
+		c.WorkingDirectory = "./"
+	}
+}
+
 // ToolConfigs represents tool configurations
 type ToolConfigs struct {
 	DefaultRepo  string           `yaml:"default_repo,omitempty"` // Default repository
@@ -712,7 +767,7 @@ func (c *ToolConfigs) SetDefaults() {
 						Enabled: true,
 						Config: map[string]interface{}{
 							"command_config": map[string]interface{}{
-								"allowed_commands":   []string{"ls", "cat", "head", "tail", "pwd", "find", "grep", "git", "curl", "wget", "echo", "date", "wc"},
+								"allowed_commands":   []string{"ls", "cat", "head", "tail", "pwd", "pwd", "find", "grep", "git", "curl", "wget", "echo", "date", "wc"},
 								"working_directory":  "./",
 								"max_execution_time": "30s",
 								"enable_sandboxing":  true,
@@ -732,6 +787,21 @@ func (c *ToolConfigs) SetDefaults() {
 								"enabled_search_types": []string{"content", "file", "function"},
 							},
 						},
+					},
+					{
+						Name:    "file_writer",
+						Type:    "file_writer",
+						Enabled: true,
+					},
+					{
+						Name:    "search_replace",
+						Type:    "search_replace",
+						Enabled: true,
+					},
+					{
+						Name:    "todo_write",
+						Type:    "todo",
+						Enabled: true,
 					},
 				},
 			},
@@ -904,15 +974,24 @@ func (c *DocumentStoreConfig) SetDefaults() {
 
 // PromptConfig represents prompt configuration
 type PromptConfig struct {
-	SystemPrompt     string            `yaml:"system_prompt"`      // System prompt
-	Instructions     string            `yaml:"instructions"`       // Instructions
-	FullTemplate     string            `yaml:"full_template"`      // Full template
-	Template         string            `yaml:"template"`           // Template
-	Variables        map[string]string `yaml:"variables"`          // Template variables
-	IncludeContext   bool              `yaml:"include_context"`    // Include context
-	IncludeHistory   bool              `yaml:"include_history"`    // Include history
-	IncludeTools     bool              `yaml:"include_tools"`      // Include tools
-	MaxContextLength int               `yaml:"max_context_length"` // Max context length
+	// Slot-based customization (preferred)
+	// Note: We use map[string]string for YAML compatibility
+	// Agent will convert to reasoning.PromptSlots
+	PromptSlots map[string]string `yaml:"prompt_slots"` // Override strategy's prompt slots
+
+	// Alternative: Full prompt override
+	SystemPrompt        string            `yaml:"system_prompt"`        // Full system prompt override (bypasses slots)
+	Instructions        string            `yaml:"instructions"`         // Instructions
+	FullTemplate        string            `yaml:"full_template"`        // Full template
+	Template            string            `yaml:"template"`             // Template
+	Variables           map[string]string `yaml:"variables"`            // Template variables
+	IncludeContext      bool              `yaml:"include_context"`      // Include context
+	IncludeHistory      bool              `yaml:"include_history"`      // Include history
+	MaxHistoryMessages  int               `yaml:"max_history_messages"` // Max history messages to include (default: 10)
+	EnableSummarization bool              `yaml:"enable_summarization"` // Enable LLM-based history summarization
+	SummarizeThreshold  float64           `yaml:"summarize_threshold"`  // Percentage (0.0-1.0) to trigger summarization (default: 0.8)
+	IncludeTools        bool              `yaml:"include_tools"`        // Include tools
+	MaxContextLength    int               `yaml:"max_context_length"`   // Max context length
 }
 
 // Validate implements Config.Validate for PromptConfig
@@ -931,16 +1010,9 @@ func (c *PromptConfig) SetDefaults() {
 	if c.MaxContextLength == 0 {
 		c.MaxContextLength = 4000
 	}
-	// Zero-config: Enable useful features by default
-	if !c.IncludeContext {
-		c.IncludeContext = true
-	}
-	if !c.IncludeHistory {
-		c.IncludeHistory = true
-	}
-	if !c.IncludeTools {
-		c.IncludeTools = true
-	}
+	// NOTE: Boolean flags (IncludeContext, IncludeHistory, IncludeTools) default to false
+	// Users must explicitly enable them in YAML if desired
+	// This allows explicit false values to work correctly
 }
 
 // ============================================================================

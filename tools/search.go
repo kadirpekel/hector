@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/kadirpekel/hector/config"
@@ -33,12 +34,14 @@ type DocumentSearchResult struct {
 	StoreName  string            `json:"store_name"`
 	FilePath   string            `json:"file_path"`
 	Title      string            `json:"title"`
-	Content    string            `json:"content"`  // Relevant content snippet
-	Type       string            `json:"type"`     // Document type
-	Language   string            `json:"language"` // Programming language
-	Score      float64           `json:"score"`    // Relevance score
-	LineNumber int               `json:"line_number,omitempty"`
-	MatchType  string            `json:"match_type"` // "title", "content", "function", "struct"
+	Content    string            `json:"content"`               // Relevant content snippet
+	Type       string            `json:"type"`                  // Document type
+	Language   string            `json:"language"`              // Programming language
+	Score      float64           `json:"score"`                 // Relevance score
+	StartLine  int               `json:"start_line,omitempty"`  // Start line of chunk
+	EndLine    int               `json:"end_line,omitempty"`    // End line of chunk
+	LineNumber int               `json:"line_number,omitempty"` // Legacy field for backwards compatibility
+	MatchType  string            `json:"match_type"`            // "title", "content", "function", "struct"
 	Metadata   map[string]string `json:"metadata"`
 }
 
@@ -186,12 +189,12 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 	for _, storeName := range storesToSearch {
 		store, exists := hectorcontext.GetDocumentStoreFromRegistry(storeName)
 		if !exists {
-			fmt.Printf("Warning: Store %s not found in registry\n", storeName)
+			fmt.Printf("⚠️  Store %s not found in registry\n", storeName)
 			continue
 		}
 		results, err := t.searchInStore(ctx, store, storeName, req)
 		if err != nil {
-			fmt.Printf("Warning: Search in store %s failed: %v\n", storeName, err)
+			fmt.Printf("❌ Search in store %s failed: %v\n", storeName, err)
 			continue
 		}
 
@@ -268,12 +271,52 @@ func (t *SearchTool) searchInStore(ctx context.Context, store *hectorcontext.Doc
 			continue
 		}
 
-		// Get content from metadata or use empty string
-		// Return more content (2000 chars) so agents have enough context
+		// Extract line numbers from metadata
+		startLine := 0
+		endLine := 0
+		if result.Metadata != nil {
+			if sl, ok := result.Metadata["start_line"].(float64); ok {
+				startLine = int(sl)
+			}
+			if el, ok := result.Metadata["end_line"].(float64); ok {
+				endLine = int(el)
+			}
+		}
+
+		// Get content from metadata and format with prominent line numbers
 		content := ""
 		if result.Metadata != nil {
 			if c, ok := result.Metadata["content"].(string); ok {
-				content = c[:minInt(len(c), 2000)] // First 2000 chars for better context
+				rawContent := c
+				wasTruncated := false
+
+				// Truncate if too long
+				if len(rawContent) > 2000 {
+					rawContent = rawContent[:2000]
+					wasTruncated = true
+				}
+
+				// Format with prominent line number header
+				if startLine > 0 && endLine > 0 {
+					header := fmt.Sprintf("📄 %s (lines %d-%d)\n%s",
+						filePath,
+						startLine,
+						endLine,
+						strings.Repeat("-", 60))
+
+					if wasTruncated {
+						content = fmt.Sprintf("%s\n%s\n\n⚠️  TRUNCATED - Use: sed -n \"%d,%dp\" %s",
+							header,
+							rawContent,
+							startLine,
+							endLine,
+							filePath)
+					} else {
+						content = fmt.Sprintf("%s\n%s", header, rawContent)
+					}
+				} else {
+					content = rawContent
+				}
 			}
 		}
 
@@ -286,6 +329,8 @@ func (t *SearchTool) searchInStore(ctx context.Context, store *hectorcontext.Doc
 			Type:       docType,
 			Language:   language,
 			Score:      float64(result.Score),
+			StartLine:  startLine,
+			EndLine:    endLine,
 			MatchType:  req.Type,
 			Metadata:   make(map[string]string),
 		}
@@ -422,6 +467,9 @@ func (t *SearchTool) GetInfo() ToolInfo {
 				Type:        "array",
 				Description: "Document stores to search (empty = all)",
 				Required:    false,
+				Items: map[string]interface{}{
+					"type": "string",
+				},
 			},
 			{
 				Name:        "language",
@@ -448,7 +496,7 @@ func (t *SearchTool) GetName() string {
 
 // GetDescription returns the tool description
 func (t *SearchTool) GetDescription() string {
-	return "Search across configured document stores for files, content, functions, or structs"
+	return "Search across configured document stores for files, content, functions, or structs using semantic search. Results include line numbers for precise code references."
 }
 
 // Execute executes the search tool with structured arguments (Tool interface)

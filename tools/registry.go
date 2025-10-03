@@ -123,8 +123,6 @@ func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 	r.Clear()
 
 	for repoName, repo := range repositories {
-		fmt.Printf("Discovering tools from repository: %s (%s)\n", repoName, repo.GetType())
-
 		if err := repo.DiscoverTools(ctx); err != nil {
 			fmt.Printf("Warning: Failed to discover tools from %s: %v\n", repoName, err)
 			continue
@@ -157,8 +155,6 @@ func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 			}
 		}
 	}
-
-	fmt.Printf("Discovered %d tools total\n", r.Count())
 	return nil
 }
 
@@ -186,8 +182,6 @@ func (r *ToolRegistry) initializeFromConfig(toolConfig *config.ToolConfigs) erro
 		if err := r.RegisterRepository(repo); err != nil {
 			return fmt.Errorf("failed to register repository '%s': %w", repoConfig.Name, err)
 		}
-
-		fmt.Printf("Created and registered tool repository: %s (%s)\n", repoConfig.Name, repoConfig.Type)
 	}
 
 	// After creating all repositories, discover tools from them

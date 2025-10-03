@@ -384,6 +384,7 @@ func (ds *DocumentStore) isGitRepository(path string) bool {
 }
 
 // indexDocument indexes a single document into vector database with enhanced processing
+// Now uses chunking to split large files into smaller, semantically meaningful pieces
 func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 	// Read file content
 	content, err := os.ReadFile(path)
@@ -402,15 +403,94 @@ func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 	// Prepare metadata for vector database
 	metadata := ds.prepareVectorMetadata(doc)
 
-	// Ingest into vector database with timeout
+	// Chunk the content for better semantic search
+	chunks := ds.chunkContent(doc.Content, 800) // ~800 chars per chunk
+
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultIndexingTimeout)
 	defer cancel()
 
-	if err := ds.searchEngine.IngestDocument(ctx, doc.ID, doc.Content, metadata); err != nil {
-		return NewDocumentStoreError(ds.name, "indexDocument", "failed to ingest document", path, err)
+	// Index each chunk separately with line number tracking
+	for i, chunk := range chunks {
+		// Generate a proper UUID for each chunk
+		chunkKey := fmt.Sprintf("%s:chunk:%d", relPath, i)
+		hash := md5.Sum([]byte(fmt.Sprintf("%s:%s", ds.name, chunkKey)))
+		chunkID := uuid.NewMD5(uuid.Nil, hash[:]).String()
+
+		// Add chunk-specific metadata with line numbers
+		chunkMetadata := make(map[string]interface{})
+		for k, v := range metadata {
+			chunkMetadata[k] = v
+		}
+		chunkMetadata["chunk_index"] = i
+		chunkMetadata["chunk_total"] = len(chunks)
+		chunkMetadata["start_line"] = chunk.StartLine
+		chunkMetadata["end_line"] = chunk.EndLine
+		chunkMetadata["content"] = chunk.Content // Store chunk content in metadata for retrieval
+
+		if err := ds.searchEngine.IngestDocument(ctx, chunkID, chunk.Content, chunkMetadata); err != nil {
+			return NewDocumentStoreError(ds.name, "indexDocument", "failed to ingest chunk", path, err)
+		}
 	}
 
 	return nil
+}
+
+// ContentChunk represents a chunk of content with line number tracking
+type ContentChunk struct {
+	Content   string
+	StartLine int
+	EndLine   int
+}
+
+// chunkContent splits content into smaller chunks for better semantic search
+// Now tracks line numbers for precise code references
+func (ds *DocumentStore) chunkContent(content string, targetSize int) []ContentChunk {
+	lines := strings.Split(content, "\n")
+	totalLines := len(lines)
+
+	// If content is small, return as single chunk
+	if len(content) <= targetSize {
+		return []ContentChunk{{
+			Content:   content,
+			StartLine: 1,
+			EndLine:   totalLines,
+		}}
+	}
+
+	var chunks []ContentChunk
+	var currentChunk strings.Builder
+	chunkStartLine := 1
+	currentLine := 1
+
+	for _, line := range lines {
+		// If adding this line would exceed target size, save current chunk
+		if currentChunk.Len() > 0 && currentChunk.Len()+len(line)+1 > targetSize {
+			chunks = append(chunks, ContentChunk{
+				Content:   currentChunk.String(),
+				StartLine: chunkStartLine,
+				EndLine:   currentLine - 1,
+			})
+			currentChunk.Reset()
+			chunkStartLine = currentLine
+		}
+
+		if currentChunk.Len() > 0 {
+			currentChunk.WriteString("\n")
+		}
+		currentChunk.WriteString(line)
+		currentLine++
+	}
+
+	// Add the last chunk if not empty
+	if currentChunk.Len() > 0 {
+		chunks = append(chunks, ContentChunk{
+			Content:   currentChunk.String(),
+			StartLine: chunkStartLine,
+			EndLine:   totalLines,
+		})
+	}
+
+	return chunks
 }
 
 // ============================================================================
@@ -794,7 +874,7 @@ func (ds *DocumentStore) StartWatching() error {
 	ds.status.IsWatching = true
 	ds.mu.Unlock()
 
-	fmt.Printf("👁️  Starting file watching for store '%s'...\n", ds.name)
+	// File watching started (verbose logging removed)
 
 	// Set up file watching
 	if err := ds.setupFileWatching(); err != nil {
@@ -808,7 +888,7 @@ func (ds *DocumentStore) StartWatching() error {
 	go ds.processUpdates()
 	go ds.watchFileEvents()
 
-	fmt.Printf("✅ File watching enabled for store '%s'\n", ds.name)
+	// File watching enabled (verbose logging removed)
 	return nil
 }
 
@@ -1080,8 +1160,6 @@ func InitializeDocumentStoresFromConfig(configs []config.DocumentStoreConfig, se
 		return nil
 	}
 
-	fmt.Printf("🔍 Initializing %d document stores...\n", len(configs))
-
 	for _, config := range configs {
 		store, err := NewDocumentStore(&config, searchEngine)
 		if err != nil {
@@ -1091,7 +1169,6 @@ func InitializeDocumentStoresFromConfig(configs []config.DocumentStoreConfig, se
 
 		// Register the store
 		RegisterDocumentStore(store)
-		fmt.Printf("   📁 Document store '%s' registered for: %s\n", config.Name, config.Path)
 
 		// Start indexing SYNCHRONOUSLY (wait for completion)
 		if err := store.StartIndexing(); err != nil {
@@ -1109,6 +1186,5 @@ func InitializeDocumentStoresFromConfig(configs []config.DocumentStoreConfig, se
 		}
 	}
 
-	fmt.Printf("\n✅ All document stores indexed and ready!\n\n")
 	return nil
 }

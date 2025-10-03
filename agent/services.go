@@ -4,17 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"text/template"
 
+	"github.com/kadirpekel/hector/config"
 	hectorcontext "github.com/kadirpekel/hector/context"
 	"github.com/kadirpekel/hector/databases"
 	"github.com/kadirpekel/hector/llms"
 	"github.com/kadirpekel/hector/reasoning"
-)
-
-const (
-	streamBufferSize = 15
-	fallbackLabel    = "\n🔧 Working on it..."
+	"github.com/kadirpekel/hector/tools"
 )
 
 // ============================================================================
@@ -97,201 +93,172 @@ func (s *DefaultContextService) ExtractSources(context []databases.SearchResult)
 
 // DefaultPromptService implements reasoning.PromptService using composable parts
 type DefaultPromptService struct {
-	// No dependencies - uses dependency injection through method parameters
+	promptConfig   config.PromptConfig
+	contextService reasoning.ContextService
+	historyService reasoning.HistoryService
 }
 
 // NewPromptService creates a new prompt service
-func NewPromptService() reasoning.PromptService {
-	return &DefaultPromptService{}
+func NewPromptService(
+	promptConfig config.PromptConfig,
+	contextService reasoning.ContextService,
+	historyService reasoning.HistoryService,
+) reasoning.PromptService {
+	return &DefaultPromptService{
+		promptConfig:   promptConfig,
+		contextService: contextService,
+		historyService: historyService,
+	}
 }
 
-// BuildDefaultPromptData creates standard PromptData with common fields populated (extensionResults optional)
-func (s *DefaultPromptService) BuildDefaultPromptData(ctx context.Context, query string, contextService reasoning.ContextService, historyService reasoning.HistoryService, extensionService reasoning.ExtensionService, extensionResults ...map[string]reasoning.ExtensionResult) (reasoning.PromptData, error) {
-	// Gather context (document search)
-	context, err := contextService.SearchContext(ctx, query)
-	if err != nil {
-		// Log warning but continue - context search failure shouldn't stop reasoning
-		fmt.Printf("Warning: Could not search context: %v\n", err)
-		context = []databases.SearchResult{}
+// BuildMessages builds a message array for multi-turn conversations with slot-based prompts
+// Parameters:
+//   - ctx: Context
+//   - query: The current user query
+//   - slots: Prompt slots (merged from strategy + user config)
+//   - currentToolConversation: Messages from the current tool-calling loop
+func (s *DefaultPromptService) BuildMessages(
+	ctx context.Context,
+	query string,
+	slots reasoning.PromptSlots,
+	currentToolConversation []llms.Message,
+	additionalContext string,
+) ([]llms.Message, error) {
+	messages := make([]llms.Message, 0)
+
+	// Compose system prompt from slots (if provided) or use config
+	var systemPrompt string
+	if !slots.IsEmpty() {
+		systemPrompt = s.composeSystemPromptFromSlots(slots)
+	} else if s.promptConfig.SystemPrompt != "" {
+		// Fallback to config's system_prompt if no slots provided
+		systemPrompt = s.promptConfig.SystemPrompt
 	}
 
-	// Get conversation history
-	history := historyService.GetRecentHistory(5)
-
-	// Get available extensions
-	availableExtensions := extensionService.GetAvailableExtensions()
-
-	// Handle optional extension results
-	var finalExtensionResults map[string]reasoning.ExtensionResult
-	if len(extensionResults) > 0 && extensionResults[0] != nil {
-		finalExtensionResults = extensionResults[0] // Use first provided extension results
+	if systemPrompt != "" {
+		messages = append(messages, llms.Message{
+			Role:    "system",
+			Content: systemPrompt,
+		})
 	}
 
-	// Build standard prompt data with optional extension results
-	return reasoning.PromptData{
-		Query:            query,
-		Context:          context,
-		Extensions:       availableExtensions,
-		ExtensionService: extensionService, // Include extension service for formatting
-		History:          history,
-		ExtensionResults: finalExtensionResults, // Include extension results if provided
-	}, nil
-}
-
-// formatPromptData formats PromptData into template-ready map with all standard fields
-func (s *DefaultPromptService) formatPromptData(data reasoning.PromptData) map[string]interface{} {
-	templateData := map[string]interface{}{
-		"Query": data.Query,
+	// ⭐ INJECT STRATEGY-SPECIFIC CONTEXT (e.g., todos, goals)
+	if additionalContext != "" {
+		messages = append(messages, llms.Message{
+			Role:    "system",
+			Content: additionalContext,
+		})
 	}
 
-	// Format context if present
-	if len(data.Context) > 0 {
-		var contextFormatted strings.Builder
-		contextFormatted.WriteString("Relevant context from documents:\n")
-		for i, doc := range data.Context {
-			if i >= 5 { // Limit to 5 docs for readability
-				break
+	// Add context if enabled
+	if s.promptConfig.IncludeContext && s.contextService != nil {
+		contextResults, err := s.contextService.SearchContext(ctx, query)
+		if err == nil && len(contextResults) > 0 {
+			var contextText strings.Builder
+			contextText.WriteString("Relevant context from documents:\n")
+			for i, doc := range contextResults {
+				if i >= 5 {
+					break
+				}
+				content := doc.Content
+				if len(content) > 500 {
+					content = content[:500] + "..."
+				}
+				contextText.WriteString(fmt.Sprintf("- %s\n", content))
 			}
-			content := doc.Content
-			if len(content) > 500 { // Reasonable content limit
-				content = content[:500] + "..."
-			}
-			contextFormatted.WriteString(fmt.Sprintf("- Document %d: %s\n", i+1, content))
+			messages = append(messages, llms.Message{
+				Role:    "system",
+				Content: contextText.String(),
+			})
 		}
-		templateData["ContextFormatted"] = contextFormatted.String()
-	} else {
-		templateData["ContextFormatted"] = ""
 	}
 
-	// Format extensions if present
-	if len(data.Extensions) > 0 {
-		// Use the extension service's built-in formatting
-		extensionsFormatted := data.ExtensionService.FormatForPrompt()
-		templateData["Extensions"] = extensionsFormatted
-	} else {
-		templateData["Extensions"] = ""
-	}
-
-	// Format extension results if present
-	if len(data.ExtensionResults) > 0 {
-		var extensionResultsFormatted strings.Builder
-		extensionResultsFormatted.WriteString("IMPORTANT: The following extensions have ALREADY been executed for this query:\n")
-
-		for name, result := range data.ExtensionResults {
-			if result.Success {
-				extensionResultsFormatted.WriteString(fmt.Sprintf("✅ %s executed successfully. Output:\n%s\n\n", name, result.Content))
-			} else {
-				extensionResultsFormatted.WriteString(fmt.Sprintf("❌ %s failed with error: %s\n\n", name, result.Error))
-			}
+	// Add conversation history from HistoryService if enabled
+	if s.promptConfig.IncludeHistory && s.historyService != nil {
+		// Fetch history from HistoryService
+		maxHistory := 10 // Default
+		if s.promptConfig.MaxHistoryMessages > 0 {
+			maxHistory = s.promptConfig.MaxHistoryMessages
 		}
 
-		extensionResultsFormatted.WriteString("Based on these extension execution results, provide a direct response to the user. DO NOT re-execute the same extensions.\n")
-		templateData["ExtensionResults"] = extensionResultsFormatted.String()
-	} else {
-		templateData["ExtensionResults"] = ""
-	}
+		historyMsgs := s.historyService.GetRecentHistory(maxHistory)
 
-	// Format history if present
-	if len(data.History) > 0 {
-		var historyFormatted strings.Builder
-		historyFormatted.WriteString("Recent conversation history:\n")
-		for _, msg := range data.History {
-			historyFormatted.WriteString(fmt.Sprintf("- %s: %s\n", msg.Role, msg.Content))
+		// Convert to llms.Message format
+		for _, histMsg := range historyMsgs {
+			messages = append(messages, llms.Message{
+				Role:    histMsg.Role,
+				Content: histMsg.Content,
+			})
 		}
-		templateData["History"] = historyFormatted.String()
-	} else {
-		templateData["History"] = ""
 	}
 
-	return templateData
+	// Add current user query if not already in history
+	// (History might already have it if we're in a follow-up iteration)
+	needsUserQuery := true
+	if len(messages) > 0 {
+		lastMsg := messages[len(messages)-1]
+		if lastMsg.Role == "user" && lastMsg.Content == query {
+			needsUserQuery = false
+		}
+	}
+
+	if needsUserQuery {
+		messages = append(messages, llms.Message{
+			Role:    "user",
+			Content: query,
+		})
+	}
+
+	// Add current tool conversation (assistant responses + tool results from this query)
+	messages = append(messages, currentToolConversation...)
+
+	return messages, nil
 }
 
-// BuildPromptFromParts builds a prompt using composable parts with map (RECOMMENDED)
-func (s *DefaultPromptService) BuildPromptFromParts(templateParts map[string]string, data reasoning.PromptData) (string, error) {
-	// Extract template parts with sensible defaults
-	systemPrompt := templateParts["system"]
-	if systemPrompt == "" {
-		systemPrompt = "You are a helpful AI assistant."
+// composeSystemPromptFromSlots composes a system prompt from slot values
+// This is the standard template that all strategies use
+func (s *DefaultPromptService) composeSystemPromptFromSlots(slots reasoning.PromptSlots) string {
+	var prompt strings.Builder
+
+	// System role
+	if slots.SystemRole != "" {
+		prompt.WriteString(slots.SystemRole)
+		prompt.WriteString("\n\n")
 	}
 
-	instructions := templateParts["instructions"]
-	if instructions == "" {
-		instructions = "Provide a helpful and accurate response based on the available context and extensions."
+	// Reasoning instructions
+	if slots.ReasoningInstructions != "" {
+		prompt.WriteString(slots.ReasoningInstructions)
+		prompt.WriteString("\n\n")
 	}
 
-	outputFormat := templateParts["output"]
-	if outputFormat == "" {
-		outputFormat = "Response:"
+	// Tool usage
+	if slots.ToolUsage != "" {
+		prompt.WriteString("<tool_usage>\n")
+		prompt.WriteString(slots.ToolUsage)
+		prompt.WriteString("\n</tool_usage>\n\n")
 	}
 
-	// Build the backbone template with customizable parts
-	backboneTemplate := `{{.SystemPrompt}}
-
-{{.History}}
-
-{{.ContextFormatted}}
-
-{{.Extensions}}
-
-{{.ExtensionResults}}
-
-{{.Instructions}}
-
-User query: {{.Query}}
-
-{{.OutputFormat}}`
-
-	// Get formatted data using helper method
-	templateData := s.formatPromptData(data)
-
-	// Add the custom parts
-	templateData["SystemPrompt"] = systemPrompt
-	templateData["Instructions"] = instructions
-	templateData["OutputFormat"] = outputFormat
-
-	// Parse and execute the backbone template
-	tmpl, err := template.New("backbone").Parse(backboneTemplate)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse backbone template: %w", err)
+	// Output format
+	if slots.OutputFormat != "" {
+		prompt.WriteString("<output_format>\n")
+		prompt.WriteString(slots.OutputFormat)
+		prompt.WriteString("\n</output_format>\n\n")
 	}
 
-	var buf strings.Builder
-	if err := tmpl.Execute(&buf, templateData); err != nil {
-		return "", fmt.Errorf("backbone template execution failed: %w", err)
+	// Communication style
+	if slots.CommunicationStyle != "" {
+		prompt.WriteString("<communication>\n")
+		prompt.WriteString(slots.CommunicationStyle)
+		prompt.WriteString("\n</communication>\n\n")
 	}
 
-	return buf.String(), nil
-}
-
-// BuildPromptWithServices builds a prompt with template parts and auto-populated data (CONVENIENCE)
-func (s *DefaultPromptService) BuildPromptWithServices(ctx context.Context, query string, templateParts map[string]string, contextService reasoning.ContextService, historyService reasoning.HistoryService, extensionService reasoning.ExtensionService) (string, error) {
-	// Step 1: Build default prompt data automatically
-	data, err := s.BuildDefaultPromptData(ctx, query, contextService, historyService, extensionService)
-	if err != nil {
-		return "", fmt.Errorf("failed to build default prompt data: %w", err)
+	// Additional instructions
+	if slots.Additional != "" {
+		prompt.WriteString(slots.Additional)
 	}
 
-	// Step 2: Use the consolidated BuildPromptFromParts method
-	return s.BuildPromptFromParts(templateParts, data)
-}
-
-// BuildDefaultPrompt builds a prompt with default template parts and auto-populated data (SHORTCUT)
-func (s *DefaultPromptService) BuildDefaultPrompt(ctx context.Context, query string, contextService reasoning.ContextService, historyService reasoning.HistoryService, extensionService reasoning.ExtensionService, extensionResults ...map[string]reasoning.ExtensionResult) (string, error) {
-	// Step 1: Build default prompt data with optional extension results
-	data, err := s.BuildDefaultPromptData(ctx, query, contextService, historyService, extensionService, extensionResults...)
-	if err != nil {
-		return "", fmt.Errorf("failed to build default prompt data: %w", err)
-	}
-
-	// Step 2: Use default template parts
-	defaultTemplateParts := map[string]string{
-		"system":       "You are a helpful AI assistant.",
-		"instructions": "Provide a helpful and accurate response. First give a natural response to the user, then use available extensions if you need to gather additional information or perform tasks.",
-		"output":       "Response:",
-	}
-
-	// Step 3: Build prompt with default parts
-	return s.BuildPromptFromParts(defaultTemplateParts, data)
+	return strings.TrimSpace(prompt.String())
 }
 
 // ============================================================================
@@ -300,217 +267,47 @@ func (s *DefaultPromptService) BuildDefaultPrompt(ctx context.Context, query str
 
 // DefaultLLMService implements reasoning.LLMService
 type DefaultLLMService struct {
-	llmProvider          llms.LLMProvider
-	lastRawResponse      string // Store last raw response for extension parsing
-	extensionService     reasoning.ExtensionService
-	lastExtensionCalls   []reasoning.ExtensionCall
-	lastExtensionResults map[string]reasoning.ExtensionResult
+	llmProvider llms.LLMProvider
 }
 
 // NewLLMService creates a new LLM service
 func NewLLMService(llmProvider llms.LLMProvider) reasoning.LLMService {
 	return &DefaultLLMService{
-		llmProvider:          llmProvider,
-		extensionService:     reasoning.NewExtensionService(), // Will be set later via SetExtensionService
-		lastExtensionResults: make(map[string]reasoning.ExtensionResult),
+		llmProvider: llmProvider,
 	}
 }
 
-// NewLLMServiceWithExtensions creates a new LLM service with extension service
-func NewLLMServiceWithExtensions(llmProvider llms.LLMProvider, extensionService reasoning.ExtensionService) reasoning.LLMService {
-	return &DefaultLLMService{
-		llmProvider:          llmProvider,
-		extensionService:     extensionService,
-		lastExtensionResults: make(map[string]reasoning.ExtensionResult),
-	}
+// Generate implements reasoning.LLMService
+func (s *DefaultLLMService) Generate(messages []llms.Message, tools []llms.ToolDefinition) (string, []llms.ToolCall, int, error) {
+	return s.llmProvider.Generate(messages, tools)
 }
 
-// GenerateLLM implements reasoning.LLMService with extension processing
-func (s *DefaultLLMService) GenerateLLM(prompt string) (string, int, error) {
-	if s.llmProvider == nil {
-		return "", 0, fmt.Errorf("LLM provider not available")
-	}
-
-	// Get raw response from LLM provider
-	rawResponse, tokens, err := s.llmProvider.Generate(prompt)
+// GenerateStreaming implements reasoning.LLMService
+func (s *DefaultLLMService) GenerateStreaming(messages []llms.Message, tools []llms.ToolDefinition, outputCh chan<- string) ([]llms.ToolCall, int, error) {
+	streamCh, err := s.llmProvider.GenerateStreaming(messages, tools)
 	if err != nil {
-		return "", tokens, err
+		return nil, 0, err
 	}
 
-	// Store raw response for extension parsing
-	s.lastRawResponse = rawResponse
+	var toolCalls []llms.ToolCall
+	var tokens int
 
-	// Process extensions through extension service
-	maskedResponse, extensionCalls := s.extensionService.ProcessResponse(rawResponse)
-	s.lastExtensionCalls = extensionCalls
-
-	return maskedResponse, tokens, nil
-}
-
-// StreamingBuffers manages streaming with extension call masking
-type StreamingBuffers struct {
-	inputBuffer     strings.Builder // Raw LLM stream
-	streamedLength  int             // Length of content already streamed (avoids String() calls)
-	inExtensionCall bool            // Currently inside an extension call
-	maxMarkerLength int             // Cached max marker length (computed once)
-}
-
-// GenerateLLMStreaming implements reasoning.LLMService with extension call masking
-func (s *DefaultLLMService) GenerateLLMStreaming(prompt string) (<-chan string, error) {
-	if s.llmProvider == nil {
-		return nil, fmt.Errorf("LLM provider not available")
-	}
-
-	rawStreamCh, err := s.llmProvider.GenerateStreaming(prompt)
-	if err != nil {
-		return nil, err
-	}
-
-	outputCh := make(chan string, 10)
-
-	go func() {
-		defer close(outputCh)
-
-		// Initialize buffers with cached max marker length
-		buffers := &StreamingBuffers{
-			maxMarkerLength: s.getMaxMarkerLength(),
-		}
-
-		// Process raw LLM stream preserving original chunks
-		for chunk := range rawStreamCh {
-			buffers.inputBuffer.WriteString(chunk)
-			s.processChunk(buffers, outputCh)
-		}
-
-		// Final processing
-		s.finalizeStreaming(buffers, outputCh)
-	}()
-
-	return outputCh, nil
-}
-
-// processChunk processes streaming content with extension marker detection
-func (s *DefaultLLMService) processChunk(buffers *StreamingBuffers, outputCh chan<- string) {
-	// If we're already in an extension call, don't stream anything
-	if buffers.inExtensionCall {
-		return
-	}
-
-	// Get accumulated content length without string allocation
-	totalLength := buffers.inputBuffer.Len()
-
-	// Delegate marker detection to extension service (decoupled)
-	if s.extensionService != nil {
-		// Only convert to string for marker detection
-		fullContent := buffers.inputBuffer.String()
-		found, markerPos, _ := s.extensionService.ContainsMarker(fullContent)
-
-		if found {
-			// Found marker - stream everything before it
-			if markerPos > buffers.streamedLength {
-				newContent := fullContent[buffers.streamedLength:markerPos]
-				outputCh <- newContent
-				buffers.streamedLength = markerPos
+	for chunk := range streamCh {
+		switch chunk.Type {
+		case "text":
+			outputCh <- chunk.Text
+		case "tool_call":
+			if chunk.ToolCall != nil {
+				toolCalls = append(toolCalls, *chunk.ToolCall)
 			}
-			buffers.inExtensionCall = true
-			return
+		case "done":
+			tokens = chunk.Tokens
+		case "error":
+			return toolCalls, tokens, chunk.Error
 		}
 	}
 
-	// No marker found yet - use cached buffer size to prevent streaming partial markers
-	bufferSize := buffers.maxMarkerLength
-	if totalLength <= bufferSize {
-		// Content is smaller than buffer, don't stream anything yet
-		return
-	}
-
-	// Stream everything except the last bufferSize characters
-	safeLength := totalLength - bufferSize
-	if safeLength > buffers.streamedLength {
-		// Only convert to string for the slice we need
-		fullContent := buffers.inputBuffer.String()
-		newContent := fullContent[buffers.streamedLength:safeLength]
-		outputCh <- newContent
-		buffers.streamedLength = safeLength
-	}
-}
-
-// getMaxMarkerLength returns the length of the longest registered marker
-func (s *DefaultLLMService) getMaxMarkerLength() int {
-	if s.extensionService == nil {
-		return streamBufferSize
-	}
-
-	maxLen := streamBufferSize
-	for _, ext := range s.extensionService.GetAvailableExtensions() {
-		if len(ext.OpenTag) > maxLen {
-			maxLen = len(ext.OpenTag)
-		}
-	}
-	return maxLen
-}
-
-// extractLabelFromExtensions extracts the label from already-parsed extension calls
-func (s *DefaultLLMService) extractLabelFromExtensions(extensionCalls []reasoning.ExtensionCall) string {
-	if len(extensionCalls) > 0 {
-		return extensionCalls[0].UserDisplay
-	}
-	return fallbackLabel
-}
-
-// finalizeStreaming handles final processing
-func (s *DefaultLLMService) finalizeStreaming(buffers *StreamingBuffers, outputCh chan<- string) {
-	// Get complete response once
-	fullResponse := buffers.inputBuffer.String()
-
-	// Store raw response and process extensions (single call)
-	s.lastRawResponse = fullResponse
-	_, extensionCalls := s.extensionService.ProcessResponse(fullResponse)
-	s.lastExtensionCalls = extensionCalls
-
-	// If we're not in an extension call, stream any remaining buffered content
-	if !buffers.inExtensionCall {
-		totalLength := len(fullResponse)
-		if totalLength > buffers.streamedLength {
-			remainingContent := fullResponse[buffers.streamedLength:]
-			outputCh <- remainingContent
-		}
-		return
-	}
-
-	// Extract and display label from already-parsed extension calls
-	label := s.extractLabelFromExtensions(extensionCalls)
-	if label != "" {
-		outputCh <- label
-	}
-}
-
-// GetLastRawResponse returns the last raw response from streaming
-func (s *DefaultLLMService) GetLastRawResponse() string {
-	return s.lastRawResponse
-}
-
-// SetExtensionService sets the extension service for processing
-func (s *DefaultLLMService) SetExtensionService(service reasoning.ExtensionService) {
-	s.extensionService = service
-}
-
-// GetExtensionCalls returns the extension calls from the last response
-func (s *DefaultLLMService) GetExtensionCalls() []reasoning.ExtensionCall {
-	return s.lastExtensionCalls
-}
-
-// GetExtensionResults returns the extension results from the last execution
-func (s *DefaultLLMService) GetExtensionResults() map[string]reasoning.ExtensionResult {
-	return s.lastExtensionResults
-}
-
-// ExecuteExtensions executes extension calls and stores results
-// NOTE: This method is deprecated - extensions should be executed by the reasoning engine
-func (s *DefaultLLMService) ExecuteExtensions(ctx context.Context) error {
-	// Extensions are now executed by the reasoning engine, not the LLM service
-	// This method is kept for interface compatibility but does nothing
-	return nil
+	return toolCalls, tokens, nil
 }
 
 // ============================================================================
@@ -544,7 +341,7 @@ func (s *DefaultHistoryService) AddToHistory(role, content string, metadata map[
 
 	s.history = append(s.history, message)
 
-	// Trim history if it exceeds max size
+	// Simple FIFO truncation
 	if len(s.history) > s.maxSize {
 		s.history = s.history[len(s.history)-s.maxSize:]
 	}
@@ -570,4 +367,107 @@ func (s *DefaultHistoryService) GetRecentHistory(count int) []hectorcontext.Conv
 // ClearHistory implements reasoning.HistoryService
 func (s *DefaultHistoryService) ClearHistory() {
 	s.history = make([]hectorcontext.ConversationMessage, 0)
+}
+
+// ============================================================================
+// OLD IMPLEMENTATIONS REMOVED - Using message-based implementations above
+// ============================================================================
+
+// ============================================================================
+// TOOL SERVICE
+// ============================================================================
+
+// DefaultToolService implements reasoning.ToolService
+type DefaultToolService struct {
+	toolRegistry *tools.ToolRegistry
+}
+
+// NewToolService creates a new tool service
+func NewToolService(toolRegistry *tools.ToolRegistry) reasoning.ToolService {
+	return &DefaultToolService{
+		toolRegistry: toolRegistry,
+	}
+}
+
+// ExecuteToolCall executes a single tool call and returns the result
+func (s *DefaultToolService) ExecuteToolCall(ctx context.Context, toolCall llms.ToolCall) (string, error) {
+	if s.toolRegistry == nil {
+		return "", fmt.Errorf("tool registry not available")
+	}
+
+	result, err := s.toolRegistry.ExecuteTool(ctx, toolCall.Name, toolCall.Arguments)
+	if err != nil {
+		return "", fmt.Errorf("tool execution failed: %w", err)
+	}
+
+	if !result.Success {
+		return "", fmt.Errorf("tool failed: %s", result.Error)
+	}
+
+	return result.Content, nil
+}
+
+// GetAvailableTools returns all available tools
+func (s *DefaultToolService) GetAvailableTools() []llms.ToolDefinition {
+	if s.toolRegistry == nil {
+		return []llms.ToolDefinition{}
+	}
+
+	allToolInfos := s.toolRegistry.ListTools()
+	result := make([]llms.ToolDefinition, 0, len(allToolInfos))
+
+	for _, toolInfo := range allToolInfos {
+		result = append(result, convertToolInfoToToolDefinition(toolInfo))
+	}
+
+	return result
+}
+
+// convertToolInfoToToolDefinition converts from tools.ToolInfo to llms.ToolDefinition
+func convertToolInfoToToolDefinition(info tools.ToolInfo) llms.ToolDefinition {
+	// Convert parameters to JSON Schema
+	schema := map[string]interface{}{
+		"type":       "object",
+		"properties": make(map[string]interface{}),
+		"required":   []string{},
+	}
+
+	properties := schema["properties"].(map[string]interface{})
+	required := []string{}
+
+	for _, param := range info.Parameters {
+		propSchema := map[string]interface{}{
+			"type":        param.Type,
+			"description": param.Description,
+		}
+
+		// Add items for array types (required by OpenAI)
+		if param.Type == "array" && param.Items != nil {
+			propSchema["items"] = param.Items
+		}
+
+		properties[param.Name] = propSchema
+
+		if param.Required {
+			required = append(required, param.Name)
+		}
+
+		// Add enum if present
+		if len(param.Enum) > 0 {
+			propSchema["enum"] = param.Enum
+		}
+
+		// Add default if present
+		if param.Default != nil {
+			propSchema["default"] = param.Default
+		}
+	}
+
+	schema["required"] = required
+
+	return llms.ToolDefinition{
+		Name:        info.Name,
+		Description: info.Description,
+		Parameters:  schema,
+	}
 }

@@ -52,6 +52,12 @@ func NewLocalToolRepositoryWithConfig(repoConfig config.ToolRepository) (*LocalT
 			tool, err = NewCommandToolWithConfig(toolDef)
 		case "search":
 			tool, err = NewSearchToolWithConfig(toolDef)
+		case "file_writer":
+			tool, err = NewFileWriterToolWithConfig(toolDef)
+		case "search_replace":
+			tool, err = NewSearchReplaceToolWithConfig(toolDef)
+		case "todo":
+			tool = NewTodoTool()
 		default:
 			fmt.Printf("Warning: Unknown local tool type '%s' for tool '%s', skipping\n", toolDef.Type, toolDef.Name)
 			continue
@@ -94,7 +100,7 @@ func (r *LocalToolRepository) RegisterTool(tool Tool) error {
 	}
 
 	r.tools[name] = tool
-	fmt.Printf("Registered local tool: %s - %s\n", name, tool.GetDescription())
+	// Quietly register tool (verbose logging removed for cleaner output)
 	return nil
 }
 
@@ -104,7 +110,7 @@ func (r *LocalToolRepository) DiscoverTools(ctx context.Context) error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	fmt.Printf("Local repository %s has %d pre-registered tools\n", r.name, len(r.tools))
+	// Tools are pre-registered, discovery is a no-op for local repository
 	return nil
 }
 

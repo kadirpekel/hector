@@ -264,7 +264,7 @@ type ConversationMessage struct {
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// GetRecentConversationMessages returns the last N messages as ConversationMessage for interface compatibility
+// GetRecentConversationMessages returns the last N messages as ConversationMessage
 func (ch *ConversationHistory) GetRecentConversationMessages(n int) []ConversationMessage {
 	messages := ch.GetRecentMessages(n)
 	result := make([]ConversationMessage, len(messages))

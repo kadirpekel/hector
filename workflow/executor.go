@@ -222,13 +222,16 @@ func CombineResults(results map[string]*AgentResult) string {
 		return "No results"
 	}
 
-	output := ""
-	for stepName, result := range results {
+	// Results are already streamed in real-time, no need to repeat them
+	// Just return a simple completion message
+	successCount := 0
+	for _, result := range results {
 		if result.Success {
-			output += fmt.Sprintf("Step '%s': %s\n", stepName, result.Result)
+			successCount++
 		}
 	}
-	return output
+
+	return fmt.Sprintf("Workflow completed: %d/%d agents succeeded", successCount, len(results))
 }
 
 // CombineErrors combines multiple errors into a single error message

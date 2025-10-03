@@ -14,29 +14,29 @@ import (
 )
 
 // ============================================================================
-// OPENAI PROVIDER CONFIGURATION
+// OPENAI PROVIDER - CONSOLIDATED (Function Calling Only)
 // ============================================================================
 
-// OpenAIProvider uses the new LLMProviderConfig from config/types.go
-
-// ============================================================================
-// OPENAI PROVIDER IMPLEMENTATION
-// ============================================================================
-
-// OpenAIProvider implements LLMProvider for OpenAI API
+// OpenAIProvider implements LLMProvider for OpenAI API with native function calling
 type OpenAIProvider struct {
-	config *config.LLMProviderConfig // Hold the config object
-	client *http.Client              // HTTP client for requests
+	config *config.LLMProviderConfig
+	client *http.Client
 }
+
+// ============================================================================
+// REQUEST/RESPONSE TYPES
+// ============================================================================
 
 // OpenAIRequest represents the request payload for OpenAI API
 type OpenAIRequest struct {
-	Model               string    `json:"model"`
-	Messages            []Message `json:"messages"`
-	MaxTokens           int       `json:"max_tokens,omitempty"`            // Legacy parameter
-	MaxCompletionTokens int       `json:"max_completion_tokens,omitempty"` // New parameter
-	Temperature         float64   `json:"temperature"`
-	Stream              bool      `json:"stream"`
+	Model               string          `json:"model"`
+	Messages            []OpenAIMessage `json:"messages"`
+	MaxTokens           int             `json:"max_tokens,omitempty"`
+	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"`
+	Temperature         float64         `json:"temperature"`
+	Stream              bool            `json:"stream"`
+	Tools               []OpenAITool    `json:"tools,omitempty"`       // Function calling
+	ToolChoice          string          `json:"tool_choice,omitempty"` // "auto", "required", "none"
 }
 
 // OpenAIResponse represents the response from OpenAI API
@@ -49,19 +49,22 @@ type OpenAIResponse struct {
 // OpenAIStreamResponse represents streaming response chunks
 type OpenAIStreamResponse struct {
 	Choices []StreamChoice `json:"choices"`
+	Usage   *Usage         `json:"usage,omitempty"` // Token usage (may be included in final chunks)
 	Error   *Error         `json:"error,omitempty"`
 }
 
-// Message represents a message in the conversation
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+// OpenAIMessage represents a message in OpenAI's format
+type OpenAIMessage struct {
+	Role       string           `json:"role"`
+	Content    string           `json:"content,omitempty"`
+	ToolCalls  []OpenAIToolCall `json:"tool_calls,omitempty"`   // Tool calls from assistant
+	ToolCallID string           `json:"tool_call_id,omitempty"` // Tool result reference
 }
 
 // Choice represents a response choice
 type Choice struct {
-	Message      Message `json:"message"`
-	FinishReason string  `json:"finish_reason"`
+	Message      OpenAIMessage `json:"message"`
+	FinishReason string        `json:"finish_reason"`
 }
 
 // StreamChoice represents a streaming response choice
@@ -70,9 +73,10 @@ type StreamChoice struct {
 	FinishReason string `json:"finish_reason"`
 }
 
-// Delta represents incremental content in streaming
+// Delta represents incremental content in streaming (including tool calls)
 type Delta struct {
-	Content string `json:"content"`
+	Content   string           `json:"content,omitempty"`
+	ToolCalls []OpenAIToolCall `json:"tool_calls,omitempty"`
 }
 
 // Usage represents token usage information
@@ -89,9 +93,43 @@ type Error struct {
 	Code    string `json:"code"`
 }
 
+// ============================================================================
+// FUNCTION CALLING TYPES
+// ============================================================================
+
+// OpenAITool represents a tool definition in OpenAI format
+type OpenAITool struct {
+	Type     string             `json:"type"` // Always "function"
+	Function OpenAIToolFunction `json:"function"`
+}
+
+// OpenAIToolFunction represents the function details
+type OpenAIToolFunction struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Parameters  map[string]interface{} `json:"parameters"` // JSON Schema
+}
+
+// OpenAIToolCall represents a tool call in the response
+type OpenAIToolCall struct {
+	ID       string             `json:"id"`
+	Type     string             `json:"type"` // Always "function"
+	Function OpenAIFunctionCall `json:"function"`
+}
+
+// OpenAIFunctionCall represents the function being called
+type OpenAIFunctionCall struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"` // JSON string
+}
+
+// ============================================================================
+// CONSTRUCTORS
+// ============================================================================
+
 // NewOpenAIProvider creates a new OpenAI provider
 func NewOpenAIProvider(apiKey string, model string) *OpenAIProvider {
-	config := &config.LLMProviderConfig{
+	cfg := &config.LLMProviderConfig{
 		Type:        "openai",
 		Model:       model,
 		APIKey:      apiKey,
@@ -101,145 +139,85 @@ func NewOpenAIProvider(apiKey string, model string) *OpenAIProvider {
 		Timeout:     60,
 	}
 
-	provider, _ := NewOpenAIProviderFromConfig(config)
+	provider, _ := NewOpenAIProviderFromConfig(cfg)
 	return provider
 }
 
 // NewOpenAIProviderFromConfig creates a new OpenAI provider from config
-func NewOpenAIProviderFromConfig(config *config.LLMProviderConfig) (*OpenAIProvider, error) {
-	config.SetDefaults()
-	if err := config.Validate(); err != nil {
+func NewOpenAIProviderFromConfig(cfg *config.LLMProviderConfig) (*OpenAIProvider, error) {
+	cfg.SetDefaults()
+	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 	return &OpenAIProvider{
-		config: config,
-		client: &http.Client{Timeout: time.Duration(config.Timeout) * time.Second},
+		config: cfg,
+		client: &http.Client{Timeout: time.Duration(cfg.Timeout) * time.Second},
 	}, nil
 }
 
-// WithBaseURL sets a custom base URL (useful for proxies or local servers)
-func (p *OpenAIProvider) WithBaseURL(baseURL string) *OpenAIProvider {
-	p.config.Host = strings.TrimSuffix(baseURL, "/")
-	return p
-}
+// ============================================================================
+// INTERFACE IMPLEMENTATION
+// ============================================================================
 
-// WithMaxTokens sets the maximum tokens for generation
-func (p *OpenAIProvider) WithMaxTokens(maxTokens int) *OpenAIProvider {
-	p.config.MaxTokens = maxTokens
-	return p
-}
-
-// WithTemperature sets the temperature for generation
-func (p *OpenAIProvider) WithTemperature(temperature float64) *OpenAIProvider {
-	p.config.Temperature = temperature
-	return p
-}
-
-// Generate generates a response given a pre-built prompt
-func (p *OpenAIProvider) Generate(prompt string) (string, int, error) {
-	request := p.buildRequest(prompt, false)
+// Generate generates a response with native function calling
+func (p *OpenAIProvider) Generate(messages []Message, tools []ToolDefinition) (string, []ToolCall, int, error) {
+	request := p.buildRequest(messages, false, tools)
 
 	response, err := p.makeRequest(request)
 	if err != nil {
-		return "", 0, err
+		return "", nil, 0, err
 	}
 
 	if response.Error != nil {
-		return "", 0, fmt.Errorf("OpenAI API error: %s", response.Error.Message)
+		return "", nil, 0, fmt.Errorf("OpenAI API error: %s", response.Error.Message)
 	}
 
 	if len(response.Choices) == 0 {
-		return "", 0, fmt.Errorf("no response choices returned")
+		return "", nil, 0, fmt.Errorf("no response choices returned")
 	}
 
-	content := response.Choices[0].Message.Content
+	choice := response.Choices[0]
 	tokensUsed := response.Usage.TotalTokens
 
-	return content, tokensUsed, nil
+	// Extract text content (may be empty if only tool calls)
+	text := choice.Message.Content
+
+	// Check if model wants to call tools
+	var toolCalls []ToolCall
+	if len(choice.Message.ToolCalls) > 0 {
+		toolCalls, err = parseToolCalls(choice.Message.ToolCalls)
+		if err != nil {
+			return text, nil, tokensUsed, err
+		}
+	}
+
+	// Return both text and tool calls (both can be present)
+	return text, toolCalls, tokensUsed, nil
 }
 
-// GenerateStreaming generates a streaming response given a pre-built prompt
-func (p *OpenAIProvider) GenerateStreaming(prompt string) (<-chan string, error) {
-	request := p.buildRequest(prompt, true)
+// GenerateStreaming generates a streaming response with function calling
+func (p *OpenAIProvider) GenerateStreaming(messages []Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
+	request := p.buildRequest(messages, true, tools)
 
-	responseChan := make(chan string, 100)
+	outputCh := make(chan StreamChunk, 100)
 
 	go func() {
-		defer close(responseChan)
+		defer close(outputCh)
 
-		err := p.makeStreamingRequest(request, responseChan)
-		if err != nil {
-			responseChan <- fmt.Sprintf("Error: %v", err)
+		if err := p.makeStreamingRequest(request, outputCh); err != nil {
+			outputCh <- StreamChunk{
+				Type:  "error",
+				Error: err,
+			}
 		}
 	}()
 
-	return responseChan, nil
+	return outputCh, nil
 }
 
 // GetModelName returns the model name
 func (p *OpenAIProvider) GetModelName() string {
 	return p.config.Model
-}
-
-// buildRequest builds an OpenAI request with appropriate parameters based on model
-func (p *OpenAIProvider) buildRequest(prompt string, stream bool) OpenAIRequest {
-	request := OpenAIRequest{
-		Model:       p.config.Model,
-		Messages:    []Message{{Role: "user", Content: prompt}},
-		Temperature: p.config.Temperature,
-		Stream:      stream,
-	}
-
-	// Use appropriate token parameter based on model
-	if p.isNewerModel() {
-		request.MaxCompletionTokens = p.config.MaxTokens
-	} else {
-		request.MaxTokens = p.config.MaxTokens
-	}
-
-	// Handle temperature restrictions for certain models
-	if p.hasTemperatureRestrictions() {
-		request.Temperature = 1.0 // Default temperature for restricted models
-	}
-
-	return request
-}
-
-// hasTemperatureRestrictions checks if the model has temperature restrictions
-func (p *OpenAIProvider) hasTemperatureRestrictions() bool {
-	// Models that only support default temperature (1.0)
-	restrictedModels := []string{
-		"gpt-5-nano",
-	}
-
-	for _, model := range restrictedModels {
-		if p.config.Model == model {
-			return true
-		}
-	}
-
-	return false
-}
-
-// isNewerModel checks if the model requires max_completion_tokens instead of max_tokens
-func (p *OpenAIProvider) isNewerModel() bool {
-	// Models that require max_completion_tokens
-	newerModels := []string{
-		"gpt-5-nano",
-		"gpt-5",
-		"gpt-4o",
-		"gpt-4o-mini",
-		"gpt-4-turbo",
-		"gpt-4",
-	}
-
-	for _, model := range newerModels {
-		if p.config.Model == model {
-			return true
-		}
-	}
-
-	return false
 }
 
 // GetMaxTokens returns the maximum tokens for generation
@@ -252,22 +230,119 @@ func (p *OpenAIProvider) GetTemperature() float64 {
 	return p.config.Temperature
 }
 
-// Close closes the provider
+// Close closes the provider and releases resources
 func (p *OpenAIProvider) Close() error {
-	// OpenAI provider doesn't need explicit cleanup
 	return nil
 }
 
-// makeRequest makes a non-streaming request to OpenAI API
+// ============================================================================
+// INTERNAL HELPERS
+// ============================================================================
+
+// buildRequest builds an OpenAI request
+func (p *OpenAIProvider) buildRequest(messages []Message, stream bool, tools []ToolDefinition) OpenAIRequest {
+	// Convert universal Message to OpenAI-specific message format
+	openaiMessages := make([]OpenAIMessage, len(messages))
+	for i, msg := range messages {
+		openaiMsg := OpenAIMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+
+		// Handle tool calls (from assistant)
+		if len(msg.ToolCalls) > 0 {
+			openaiMsg.ToolCalls = make([]OpenAIToolCall, len(msg.ToolCalls))
+			for j, tc := range msg.ToolCalls {
+				openaiMsg.ToolCalls[j] = OpenAIToolCall{
+					ID:   tc.ID,
+					Type: "function",
+					Function: OpenAIFunctionCall{
+						Name:      tc.Name,
+						Arguments: tc.RawArgs,
+					},
+				}
+			}
+		}
+
+		// Handle tool results (role: "tool")
+		if msg.ToolCallID != "" {
+			openaiMsg.ToolCallID = msg.ToolCallID
+		}
+
+		openaiMessages[i] = openaiMsg
+	}
+
+	request := OpenAIRequest{
+		Model:       p.config.Model,
+		Messages:    openaiMessages,
+		Temperature: p.config.Temperature,
+		Stream:      stream,
+	}
+
+	// Set max tokens based on model (o1 models use max_completion_tokens)
+	if strings.HasPrefix(p.config.Model, "o1-") || strings.HasPrefix(p.config.Model, "o3-") {
+		request.MaxCompletionTokens = p.config.MaxTokens
+	} else {
+		request.MaxTokens = p.config.MaxTokens
+	}
+
+	// Add tools if provided
+	if len(tools) > 0 {
+		request.Tools = convertToOpenAITools(tools)
+		request.ToolChoice = "auto" // Let model decide
+	}
+
+	return request
+}
+
+// convertToOpenAITools converts common ToolDefinition to OpenAI format
+func convertToOpenAITools(tools []ToolDefinition) []OpenAITool {
+	result := make([]OpenAITool, len(tools))
+	for i, tool := range tools {
+		result[i] = OpenAITool{
+			Type: "function",
+			Function: OpenAIToolFunction{
+				Name:        tool.Name,
+				Description: tool.Description,
+				Parameters:  tool.Parameters,
+			},
+		}
+	}
+	return result
+}
+
+// parseToolCalls extracts tool calls from OpenAI response
+func parseToolCalls(openaiToolCalls []OpenAIToolCall) ([]ToolCall, error) {
+	result := make([]ToolCall, len(openaiToolCalls))
+
+	for i, tc := range openaiToolCalls {
+		// Parse arguments JSON string into map
+		var args map[string]interface{}
+		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+			return nil, fmt.Errorf("failed to parse tool arguments: %w", err)
+		}
+
+		result[i] = ToolCall{
+			ID:        tc.ID,
+			Name:      tc.Function.Name,
+			Arguments: args,
+			RawArgs:   tc.Function.Arguments,
+		}
+	}
+
+	return result, nil
+}
+
+// makeRequest makes a non-streaming request to OpenAI
 func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, error) {
-	jsonData, err := json.Marshal(request)
+	requestBody, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", p.config.Host+"/chat/completions", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", p.config.Host+"/chat/completions", bytes.NewBuffer(requestBody))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -275,33 +350,37 @@ func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, er
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var response OpenAIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
 	return &response, nil
 }
 
-// makeStreamingRequest makes a streaming request to OpenAI API
-func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, responseChan chan<- string) error {
-	jsonData, err := json.Marshal(request)
+// makeStreamingRequest handles streaming responses with function calling
+func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh chan<- StreamChunk) error {
+	requestBody, err := json.Marshal(request)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", p.config.Host+"/chat/completions", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", p.config.Host+"/chat/completions", bytes.NewBuffer(requestBody))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -309,7 +388,7 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, responseCha
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to make request: %w", err)
+		return fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -318,50 +397,118 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, responseCha
 		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Read streaming response line by line (SSE format)
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := scanner.Text()
+	reader := bufio.NewReader(resp.Body)
+	// Map to accumulate tool calls by index (OpenAI uses index for streaming)
+	toolCallsMap := make(map[int]*OpenAIToolCall)
+	totalTokens := 0
 
-		// Skip empty lines and non-data lines
-		if line == "" || !strings.HasPrefix(line, "data: ") {
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("failed to read stream: %w", err)
+		}
+
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
 			continue
 		}
 
-		// Extract JSON data after "data: "
-		jsonData := strings.TrimPrefix(line, "data: ")
+		// Skip "data: " prefix
+		if !bytes.HasPrefix(line, []byte("data: ")) {
+			continue
+		}
+		line = line[6:]
 
-		// Skip the final "[DONE]" message
-		if jsonData == "[DONE]" {
+		// Check for stream end
+		if bytes.Equal(line, []byte("[DONE]")) {
 			break
 		}
 
-		// Parse JSON response
 		var streamResp OpenAIStreamResponse
-		if err := json.Unmarshal([]byte(jsonData), &streamResp); err != nil {
-			return fmt.Errorf("failed to decode streaming response: %w, data: %s", err, jsonData)
+		if err := json.Unmarshal(line, &streamResp); err != nil {
+			continue // Skip malformed chunks
 		}
 
 		if streamResp.Error != nil {
-			return fmt.Errorf("OpenAI API error: %s", streamResp.Error.Message)
+			return fmt.Errorf("API error: %s", streamResp.Error.Message)
 		}
 
-		if len(streamResp.Choices) > 0 {
-			choice := streamResp.Choices[0]
-			if choice.Delta.Content != "" {
-				responseChan <- choice.Delta.Content
+		// Extract token usage if available (some models include it)
+		if streamResp.Usage != nil {
+			totalTokens = streamResp.Usage.TotalTokens
+		}
+
+		if len(streamResp.Choices) == 0 {
+			continue
+		}
+
+		choice := streamResp.Choices[0]
+
+		// Handle text content
+		if choice.Delta.Content != "" {
+			outputCh <- StreamChunk{
+				Type: "text",
+				Text: choice.Delta.Content,
 			}
-			// Handle finish_reason to properly terminate stream
-			if choice.FinishReason != "" {
-				// Stream finished
-				break
+		}
+
+		// Handle tool calls (accumulated by index across chunks)
+		for _, deltaCall := range choice.Delta.ToolCalls {
+			// OpenAI uses index to identify which tool call this chunk belongs to
+			// We need to get the index from the streaming tool call
+			// For now, accumulate by merging into existing tool calls
+			if deltaCall.ID != "" {
+				// First chunk with full tool call structure
+				toolCallsMap[len(toolCallsMap)] = &OpenAIToolCall{
+					ID:       deltaCall.ID,
+					Type:     deltaCall.Type,
+					Function: deltaCall.Function,
+				}
+			} else {
+				// Subsequent chunks with incremental arguments
+				// Append to the last tool call
+				if len(toolCallsMap) > 0 {
+					lastIdx := len(toolCallsMap) - 1
+					if toolCall, exists := toolCallsMap[lastIdx]; exists {
+						toolCall.Function.Arguments += deltaCall.Function.Arguments
+					}
+				}
 			}
+		}
+
+		// Check for completion
+		if choice.FinishReason == "stop" || choice.FinishReason == "tool_calls" {
+			// Convert map to slice for final processing
+			var accumulatedToolCalls []OpenAIToolCall
+			for i := 0; i < len(toolCallsMap); i++ {
+				if toolCall, exists := toolCallsMap[i]; exists {
+					accumulatedToolCalls = append(accumulatedToolCalls, *toolCall)
+				}
+			}
+
+			// Send accumulated tool calls if any
+			if len(accumulatedToolCalls) > 0 {
+				toolCalls, err := parseToolCalls(accumulatedToolCalls)
+				if err == nil {
+					for _, tc := range toolCalls {
+						outputCh <- StreamChunk{
+							Type:     "tool_call",
+							ToolCall: &tc,
+						}
+					}
+				}
+			}
+			break
 		}
 	}
 
-	// Check for scanner errors
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("failed to read streaming response: %w", err)
+	// Send completion signal with token count
+	outputCh <- StreamChunk{
+		Type:   "done",
+		Tokens: totalTokens,
 	}
 
 	return nil

@@ -397,9 +397,6 @@ func getUserInput() string {
 
 // executeWorkflowAndPrintResults executes workflow with streaming and prints results
 func executeWorkflowAndPrintResults(teamInstance *team.Team, input string, debugMode bool) {
-	fmt.Printf("🚀 Executing workflow with input: %s\n", input)
-	fmt.Println(strings.Repeat("-", 60))
-
 	ctx := context.Background()
 	eventCh, err := teamInstance.ExecuteStreaming(ctx, input)
 
@@ -488,16 +485,8 @@ func printAgentInfo(agentConfig *config.AgentConfig, hectorConfig *config.Config
 
 // printWorkflowHeader prints workflow header information
 func printWorkflowHeader(workflow *config.WorkflowConfig, debugMode bool) {
-	fmt.Printf("🤖 Starting Multi-Agent Workflow: %s\n", workflow.Name)
-	fmt.Println(strings.Repeat("=", 60))
-
-	if debugMode {
-		fmt.Printf("📋 Workflow: %s\n", workflow.Name)
-		fmt.Printf("📝 Description: %s\n", workflow.Description)
-		fmt.Printf("⚙️  Mode: %s\n", workflow.Mode)
-		fmt.Printf("👥 Agents: %d types\n", len(workflow.Agents))
-		fmt.Println()
-	}
+	// Header is now printed by the workflow itself (team/team.go)
+	// Removed duplicate header to clean up output
 }
 
 // printWorkflowResults prints workflow execution results

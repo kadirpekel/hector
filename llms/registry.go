@@ -12,13 +12,21 @@ import (
 // LLM REGISTRY
 // ============================================================================
 
-// LLMProvider interface for language model generation
+// LLMProvider interface for language model generation with native function calling
+// All providers MUST support native function calling - no legacy text-based extraction
 type LLMProvider interface {
-	// Generate generates a response given a pre-built prompt
-	Generate(prompt string) (string, int, error)
+	// Generate generates a response with native function calling support
+	// Takes a conversation history as an array of messages (proper multi-turn support)
+	// Returns: text content, tool calls, tokens used, error
+	// - text: The LLM's text response (may be empty if only tool calls)
+	// - toolCalls: Structured tool calls from the LLM (may be empty if only text)
+	// - tokens: Total tokens used
+	Generate(messages []Message, tools []ToolDefinition) (text string, toolCalls []ToolCall, tokens int, err error)
 
-	// GenerateStreaming generates a streaming response given a pre-built prompt
-	GenerateStreaming(prompt string) (<-chan string, error)
+	// GenerateStreaming generates a streaming response with function calling
+	// Takes a conversation history as an array of messages (proper multi-turn support)
+	// Returns a channel that streams text chunks and eventually tool calls
+	GenerateStreaming(messages []Message, tools []ToolDefinition) (<-chan StreamChunk, error)
 
 	// GetModelName returns the model name
 	GetModelName() string
@@ -76,14 +84,12 @@ func (r *LLMRegistry) CreateLLMFromConfig(name string, config *config.LLMProvide
 	var err error
 
 	switch config.Type {
-	case "ollama":
-		provider, err = NewOllamaProviderFromConfig(config)
 	case "openai":
 		provider, err = NewOpenAIProviderFromConfig(config)
 	case "anthropic":
 		provider, err = NewAnthropicProviderFromConfig(config)
 	default:
-		return nil, fmt.Errorf("unsupported LLM type: %s (supported: ollama, openai, anthropic)", config.Type)
+		return nil, fmt.Errorf("unsupported LLM type: %s (supported: openai, anthropic - native function calling required)", config.Type)
 	}
 
 	if err != nil {

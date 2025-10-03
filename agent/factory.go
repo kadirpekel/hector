@@ -9,29 +9,24 @@ import (
 	"github.com/kadirpekel/hector/reasoning"
 )
 
-// NewReasoningEngineWithServices creates a reasoning engine with all dependencies wired up
-// Returns both the reasoning engine and the agent services for compatibility
-func NewReasoningEngineWithServices(agentConfig *config.AgentConfig, componentManager *component.ComponentManager) (reasoning.ReasoningEngine, reasoning.AgentServices, error) {
+// NewAgentServicesWithConfig creates agent services with all dependencies wired up
+// Returns the configured agent services
+func NewAgentServices(agentConfig *config.AgentConfig, componentManager *component.ComponentManager) (reasoning.AgentServices, error) {
 	if agentConfig == nil {
-		return nil, nil, fmt.Errorf("agent config cannot be nil")
+		return nil, fmt.Errorf("agent config cannot be nil")
 	}
 	if componentManager == nil {
-		return nil, nil, fmt.Errorf("component manager cannot be nil")
+		return nil, fmt.Errorf("component manager cannot be nil")
 	}
 
 	// Initialize LLM
 	llm, err := componentManager.GetLLM(agentConfig.LLM)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get LLM '%s': %w", agentConfig.LLM, err)
+		return nil, fmt.Errorf("failed to get LLM '%s': %w", agentConfig.LLM, err)
 	}
 
 	// Initialize services
 	toolRegistry := componentManager.GetToolRegistry()
-
-	// Create extension service and register tools as native extension
-	extensionService := reasoning.NewExtensionService()
-	toolExtension := reasoning.NewToolExtension(toolRegistry, extensionService)
-	extensionService.RegisterExtension(toolExtension.CreateExtension())
 
 	// Create context service - only if document stores are configured
 	var contextService reasoning.ContextService
@@ -39,17 +34,17 @@ func NewReasoningEngineWithServices(agentConfig *config.AgentConfig, componentMa
 		// Get database and embedder for search engine
 		db, err := componentManager.GetDatabase(agentConfig.Database)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get database '%s': %w", agentConfig.Database, err)
+			return nil, fmt.Errorf("failed to get database '%s': %w", agentConfig.Database, err)
 		}
 
 		embedder, err := componentManager.GetEmbedder(agentConfig.Embedder)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get embedder '%s': %w", agentConfig.Embedder, err)
+			return nil, fmt.Errorf("failed to get embedder '%s': %w", agentConfig.Embedder, err)
 		}
 
 		searchEngine, err := hectorcontext.NewSearchEngine(db, embedder, agentConfig.Search)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create search engine: %w", err)
+			return nil, fmt.Errorf("failed to create search engine: %w", err)
 		}
 		contextService = NewContextService(searchEngine)
 	} else {
@@ -57,38 +52,32 @@ func NewReasoningEngineWithServices(agentConfig *config.AgentConfig, componentMa
 		contextService = NewNoOpContextService()
 	}
 
-	llmService := NewLLMServiceWithExtensions(llm, extensionService)
-	promptService := NewPromptService()
-	historyService := NewHistoryService(10) // Max 10 history items
+	// Create services (order matters due to dependencies)
+	llmService := NewLLMService(llm)
+	toolService := NewToolService(toolRegistry)
+
+	// Create history service
+	maxHistory := 10
+	if agentConfig.Prompt.MaxHistoryMessages > 0 {
+		maxHistory = agentConfig.Prompt.MaxHistoryMessages
+	}
+	historyService := NewHistoryService(maxHistory)
+
+	// contextService already created above based on document store availability
+	promptService := NewPromptService(agentConfig.Prompt, contextService, historyService)
 
 	// Create agent services for dependency injection
+	// Note: promptService already has contextService and historyService as dependencies
 	agentServices := reasoning.NewAgentServices(
 		agentConfig.Reasoning,
 		llmService,
+		toolService,
 		contextService,
-		extensionService,
 		promptService,
 		historyService,
 	)
 
-	// Create reasoning engine
-	reasoningFactory := reasoning.NewReasoningEngineFactory()
-	reasoningEngine, err := reasoningFactory.CreateEngine(agentConfig.Reasoning.Engine, agentServices)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Chain-of-thought engine uses behavioral signals (tool calls) for continuation
-	// No need for explicit REASONING_CALL extension
-
-	return reasoningEngine, agentServices, nil
-}
-
-// NewReasoningEngine creates a reasoning engine with all dependencies wired up
-// This replaces the bloated Agent struct with a simple factory function
-func NewReasoningEngine(agentConfig *config.AgentConfig, componentManager *component.ComponentManager) (reasoning.ReasoningEngine, error) {
-	reasoningEngine, _, err := NewReasoningEngineWithServices(agentConfig, componentManager)
-	return reasoningEngine, err
+	return agentServices, nil
 }
 
 // ============================================================================
@@ -129,18 +118,11 @@ func (f *AgentFactory) CreateAgentWithServices(agentConfig *config.AgentConfig, 
 		return nil, fmt.Errorf("agent services cannot be nil")
 	}
 
-	// Create reasoning engine with provided services
-	reasoningFactory := reasoning.NewReasoningEngineFactory()
-	reasoningEngine, err := reasoningFactory.CreateEngine(agentConfig.Reasoning.Engine, services)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create reasoning engine: %w", err)
-	}
-
-	// Create agent
+	// Create agent with provided services
 	return &Agent{
-		name:            agentConfig.Name,
-		description:     agentConfig.Description,
-		config:          agentConfig,
-		reasoningEngine: reasoningEngine,
+		name:        agentConfig.Name,
+		description: agentConfig.Description,
+		config:      agentConfig,
+		services:    services,
 	}, nil
 }

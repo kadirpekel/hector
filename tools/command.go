@@ -228,5 +228,5 @@ func (t *CommandTool) GetName() string {
 
 // GetDescription returns the tool description
 func (t *CommandTool) GetDescription() string {
-	return "Execute shell commands for file operations, system tasks, and development workflows"
+	return "Execute shell commands for file operations, system tasks, and development workflows. Use 'sed -n \"START,ENDp\" FILE' to read specific line ranges."
 }
