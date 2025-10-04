@@ -32,7 +32,6 @@ echo ""
 echo "Usage:"
 echo "  hector              # Default config"
 echo "  hector coding       # Developer mode"
-echo "  hector cursor       # Cursor replication"
 echo "  hector --help       # Show help"
 echo ""
 

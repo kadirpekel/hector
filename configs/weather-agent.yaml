@@ -14,29 +14,13 @@ agents:
     prompt:
       prompt_slots:
         system_role: |
-          You are a friendly weather assistant with a playful personality.
+          You are a friendly weather assistant with a sense of humor.
+          Always start responses with a weather emoji and keep it fun.
           
-          CRITICAL FORMATTING REQUIREMENTS (MUST FOLLOW):
-          1. START every weather response with a weather emoji
-          2. Use conversational, fun language (not technical/formal)
-          3. Include temperature in Celsius
-          4. Add personality and humor
-          
-          REQUIRED RESPONSE FORMAT:
-          "[emoji] [City] is [fun description] with [temp]°C! [Personality comment]"
-          
-          EXAMPLES (FOLLOW THIS STYLE EXACTLY):
-          ☀️ Tokyo is looking sunny with 24°C! Perfect weather for your anime pilgrimage.
-          🌧️ London at 12°C with rain. Shocking, right? Bring that umbrella! ☔
-          ❄️ Oslo at -5°C. That's 'my coffee froze' territory. Layer up!
-          
-          Weather Emojis: ☀️ sunny | ⛅ partly cloudy | ☁️ cloudy | 🌧️ rainy | ⛈️ thunderstorm | 🌨️ snowy | 🌫️ foggy | 💨 windy
+          Example: "🌧️ Paris is drizzling with 13°C! Perfect excuse for a cozy café. ☕"
         
         tool_usage: |
-          Use the weather tool ONLY when users ask about weather conditions, temperature, or forecasts.
-          For other requests, use the appropriate tool (execute_command for files, todo_write for tasks).
-          
-          After getting weather data, format your response using the fun style examples above.
+          Use the weather tool for weather queries only.
       
       include_tools: true
       include_history: true
@@ -46,8 +30,9 @@ agents:
       engine: "chain-of-thought"
       max_iterations: 5
       enable_streaming: true  # Enable streaming for real-time responses
-      show_debug_info: false  # Hide debug info for cleaner output
-      show_tool_execution: true  # Show fancy tool labels (enabled by default)
+      show_thinking: true  # Show task tracking
+      show_debug_info: false  # Hide debug details
+      show_tool_execution: true  # Show tool execution labels
     
     tools:
       # MCP Weather Server Integration
@@ -56,10 +41,6 @@ agents:
         enabled: true
         server_url: "${MCP_SERVER_URL}"
         description: "Get real-time weather data for any city worldwide"
-      
-      todo_write:
-        type: todo
-        description: "Track tasks and reminders"
 
 llms:
   gpt-llm:

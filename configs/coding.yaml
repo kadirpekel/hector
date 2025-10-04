@@ -11,7 +11,7 @@ agents:
     prompt:
       # Full system prompt override (matches Cursor's approach)
       system_prompt: |
-        You are an AI coding assistant, powered by Claude Sonnet 3.7. You operate in Cursor.
+        You are an AI coding assistant.
         
         You are pair programming with a USER to solve their coding task. Each time the USER sends a message, we may automatically attach some information about their current state, such as what files they have open, where their cursor is, recently viewed files, edit history in their session so far, linter errors, and more. This information may or may not be relevant to the coding task, it is up for you to decide.
         
@@ -62,7 +62,8 @@ agents:
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 10
-      show_debug_info: true
+      show_debug_info: false
+      show_thinking: true
       enable_streaming: true
     
     document_stores:

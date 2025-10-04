@@ -93,7 +93,27 @@ tools:
 ```bash
 # Then use it (requires running MCP server)
 hector --config configs/weather-agent.yaml
-> "What's the weather in Tokyo? 🌂"
+> "Check weather in Paris and Tokyo, compare them, then recommend best city. 
+   Create a task list and complete step-by-step."
+
+📋 Tasks Created:
+  1. ⏳ Check Paris weather
+  2. ⏳ Check Tokyo weather  
+  3. ⏳ Compare results
+  4. ⏳ Give recommendation
+
+🔧 Calling tools... ✅✅
+
+📋 Tasks Updated:
+  1. ✅ Check Paris weather       → Done
+  2. ✅ Check Tokyo weather       → Done
+  3. 🔄 Compare results           → Working...
+  4. ⏳ Give recommendation
+
+🌥️ Paris: 10°C, broken clouds
+☁️ Tokyo: 20°C, overcast, humid
+
+→ Recommendation: Tokyo has warmer weather, better for outdoor activities!
 ```
 
 **The power**: Hector adapts through configuration. Built-in tools work immediately, external tools connect via MCP protocol.

@@ -155,8 +155,35 @@ func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) stri
 		return ""
 	}
 
+	// Display todos to user if thinking is enabled
+	if state.ShowThinking && state.OutputChannel != nil {
+		s.displayTodos(todos, state.OutputChannel)
+	}
+
 	// Format todos for LLM context
 	return tools.FormatTodosForContext(todos)
+}
+
+// displayTodos shows the current todo list to the user
+func (s *ChainOfThoughtStrategy) displayTodos(todos []tools.TodoItem, outputCh chan<- string) {
+	outputCh <- "\n\033[90m📋 **Current Tasks:**\n"
+	for i, todo := range todos {
+		var status string
+		switch todo.Status {
+		case "pending":
+			status = "⏳"
+		case "in_progress":
+			status = "🔄"
+		case "completed":
+			status = "✅"
+		case "cancelled":
+			status = "❌"
+		default:
+			status = "○"
+		}
+		outputCh <- fmt.Sprintf("  %d. %s %s\n", i+1, status, todo.Content)
+	}
+	outputCh <- "\033[0m\n"
 }
 
 // getTodoTool retrieves the todo_write tool (guaranteed to exist due to GetRequiredTools)
