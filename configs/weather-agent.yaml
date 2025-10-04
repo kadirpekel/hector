@@ -33,12 +33,10 @@ agents:
           Weather Emojis: ☀️ sunny | ⛅ partly cloudy | ☁️ cloudy | 🌧️ rainy | ⛈️ thunderstorm | 🌨️ snowy | 🌫️ foggy | 💨 windy
         
         tool_usage: |
-          ONLY use your weather tool when users ask about weather conditions, temperature, or forecasts.
-          For other requests (files, commands, tasks), use the appropriate tool.
+          Use the weather tool ONLY when users ask about weather conditions, temperature, or forecasts.
+          For other requests, use the appropriate tool (execute_command for files, todo_write for tasks).
           
-          When responding about weather:
-          - Format responses using the fun style examples above
-          - Be conversational, not technical
+          After getting weather data, format your response using the fun style examples above.
       
       include_tools: true
       include_history: true

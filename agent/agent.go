@@ -191,7 +191,7 @@ func (a *Agent) execute(
 			}
 
 			// Track text for history
-			if text != "" && text != "[response was streamed]" {
+			if text != "" {
 				state.AssistantResponse.WriteString(text)
 			}
 
@@ -203,8 +203,7 @@ func (a *Agent) execute(
 			// Execute tools if any
 			var results []reasoning.ToolResult
 			if len(toolCalls) > 0 {
-				// Pass the LLM's text as context for tool labels (it often explains what it's doing)
-				results = a.executeTools(ctx, toolCalls, text, outputCh, cfg)
+				results = a.executeTools(ctx, toolCalls, outputCh, cfg)
 
 				// Core protocol: Add assistant message + tool results to conversation
 				// This is the OpenAI/Anthropic function calling protocol (not strategy-specific)
@@ -270,12 +269,12 @@ func (a *Agent) callLLM(
 	llm := a.services.LLM()
 
 	if cfg.EnableStreaming {
-		// Streaming mode
+		// Streaming mode - text goes directly to output channel
 		toolCalls, tokens, err := llm.GenerateStreaming(messages, toolDefs, outputCh)
 		if err != nil {
 			return "", nil, 0, err
 		}
-		return "[response was streamed]", toolCalls, tokens, nil
+		return "", toolCalls, tokens, nil
 	}
 
 	// Non-streaming mode
@@ -292,12 +291,10 @@ func (a *Agent) callLLM(
 	return text, toolCalls, tokens, nil
 }
 
-// executeTools executes all tool calls
 // executeTools executes all tool calls sequentially
 func (a *Agent) executeTools(
 	ctx context.Context,
 	toolCalls []llms.ToolCall,
-	llmText string,
 	outputCh chan<- string,
 	cfg config.ReasoningConfig,
 ) []reasoning.ToolResult {
@@ -313,20 +310,9 @@ func (a *Agent) executeTools(
 		default:
 		}
 
-		// Show tool execution label (conversational, enabled by default)
+		// Show tool execution label (generic, enabled by default)
 		if cfg.ShowToolExecution {
-			// Use the LLM's natural text as the label (it often explains what it's doing)
-			// If multiple tool calls, or no text, use a simple fallback
-			var label string
-			// Skip if text is streaming placeholder or empty
-			if llmText != "" && llmText != "[response was streamed]" && len(toolCalls) == 1 {
-				// Single tool call with accompanying text - use it as the label
-				label = a.extractToolLabelFromText(llmText, toolCall)
-			} else {
-				// Multiple tools, streaming, or no text - generate a simple descriptive label
-				label = a.generateSimpleToolLabel(toolCall)
-			}
-
+			label := a.generateSimpleToolLabel(toolCall)
 			if i == 0 {
 				outputCh <- fmt.Sprintf("\n%s", label) // First tool, add newline before
 			} else {
@@ -360,70 +346,9 @@ func (a *Agent) executeTools(
 	return results
 }
 
-// extractToolLabelFromText extracts a conversational label from the LLM's text
-// The LLM often says something like "Let me check the weather..." before calling tools
-func (a *Agent) extractToolLabelFromText(text string, toolCall llms.ToolCall) string {
-	// Clean up the text
-	text = strings.TrimSpace(text)
-
-	// If text is too long, truncate it (keep it conversational and concise)
-	if len(text) > 100 {
-		// Find a good breaking point (sentence end)
-		if idx := strings.Index(text[80:], "."); idx != -1 {
-			text = text[:80+idx+1]
-		} else {
-			text = text[:100] + "..."
-		}
-	}
-
-	// Use generic tool emoji - let the LLM provide context/personality
-	// No keyword matching, no deterministic logic
-	emoji := "🔧"
-
-	// Format the label
-	return fmt.Sprintf("%s %s", emoji, text)
-}
-
-// generateSimpleToolLabel generates a simple descriptive label when no LLM text is available
-// Uses generic emoji and tool name - no keyword matching or deterministic logic
+// generateSimpleToolLabel generates a generic tool execution label
 func (a *Agent) generateSimpleToolLabel(toolCall llms.ToolCall) string {
-	// Generic tool emoji - no keyword matching
-	emoji := "🔧"
-
-	// Simple label: just the tool name
-	// The LLM is responsible for providing context and personality via its text response
-	return fmt.Sprintf("%s Calling %s...", emoji, toolCall.Name)
-}
-
-// Helper functions for string manipulation
-func splitString(s, sep string) []string {
-	if s == "" {
-		return []string{}
-	}
-	result := []string{}
-	current := ""
-	for i := 0; i < len(s); i++ {
-		if i+len(sep) <= len(s) && s[i:i+len(sep)] == sep {
-			if current != "" {
-				result = append(result, current)
-				current = ""
-			}
-			i += len(sep) - 1
-		} else {
-			current += string(s[i])
-		}
-	}
-	if current != "" {
-		result = append(result, current)
-	}
-	return result
-}
-
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
+	return "🔧 Executing tool..."
 }
 
 // saveToHistory saves the conversation to history service
