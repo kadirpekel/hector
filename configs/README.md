@@ -182,11 +182,10 @@ For detailed configuration options, see: [CONFIGURATION.md](../CONFIGURATION.md)
   - ✅ General-purpose for most use cases
   - ✅ No external dependencies required
   
-- **For multi-agent workflows**: See `configs/research-pipeline-workflow.yaml`
+- **For multi-agent workflows**: See `configs/multi-agent-workflow.yaml`
   - 🟢 Safe (Tier 1)
-  - ✅ Automatic orchestration with DAG execution
-  - ✅ Context sharing and dependency management
-  - 💡 Starting point for complex automation pipelines
+  - ✅ Shows agent coordination patterns
+  - 💡 Starting point for complex automation
   
 - **For development**: Use `hector coding`
   - 🟡 Enables file editing (Tier 2)

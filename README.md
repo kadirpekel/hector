@@ -60,13 +60,60 @@ hector
 echo "List all Go files in the current directory and count them" | hector
 ```
 
-**Try a coding task:**
+**Try something more powerful:**
 ```bash
 hector coding
-> "Create a simple HTTP server in Go with a health check endpoint"
+> "Create a REST API in Go with /users endpoint and error handling"
 ```
 
-**See it in action:** Hector will use tools (execute commands, write files) to complete the task with real-time streaming output.
+Hector will:
+1. 🔍 Search your codebase to understand the context
+2. 📝 Create multiple files (main.go, handlers.go, etc.)
+3. ✅ Write idiomatic code following best practices
+4. 📊 Stream its reasoning process in real-time
+
+**What makes `hector coding` different?**
+- **File Operations**: Creates, modifies, and refactors files automatically
+- **Semantic Search**: Understands your codebase (powered by Qdrant + Ollama embeddings)
+- **Smart Tools**: Uses git, go commands, file editing—all sandboxed
+- **Context-Aware**: Learns from existing code patterns
+
+**Want the full Cursor experience?**
+```bash
+hector cursor
+> "Refactor the auth module to use JWT tokens"
+```
+
+Get Cursor/Claude-like capabilities with maximum context windows, aggressive tool usage, and optimized prompts for pair programming. Perfect for developers who want the familiar Cursor workflow in a self-hosted, configuration-driven setup.
+
+**Flexible Workspace Setup:**
+
+Hector's configuration system enables powerful workspace patterns:
+
+```bash
+# Individual project workspaces
+my-project/
+  ├── hector.yaml          # Project-specific config
+  └── src/
+
+# Multi-tenant shared configs
+my-workspace/
+  ├── configs/
+  │   ├── team-coding.yaml  # Shared team standards
+  │   ├── security.yaml     # Security review config
+  │   └── docs.yaml         # Documentation generation
+  └── projects/
+
+# Use from anywhere
+cd my-project && hector              # Uses local hector.yaml
+cd my-workspace && hector team-coding  # Uses configs/team-coding.yaml
+```
+
+**Use cases:**
+- **Per-Project**: Each project has its own `hector.yaml` with custom tools, prompts, and LLM settings
+- **Team Standards**: Share configs across team members via Git (coding standards, linting rules)
+- **Multi-Persona**: Switch between different modes (coding, review, docs) with simple commands
+- **Client-Specific**: Maintain separate configs for different clients or environments
 
 ---
 
