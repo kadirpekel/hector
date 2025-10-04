@@ -42,30 +42,14 @@ func NewSearchReplaceTool(cfg *config.SearchReplaceConfig) *SearchReplaceTool {
 	return &SearchReplaceTool{config: cfg}
 }
 
-// NewSearchReplaceToolWithConfig creates from ToolDefinition
-func NewSearchReplaceToolWithConfig(toolDef config.ToolDefinition) (*SearchReplaceTool, error) {
-	cfg := &config.SearchReplaceConfig{}
-
-	if toolDef.Config != nil {
-		if maxRepl, ok := toolDef.Config["max_replacements"].(int); ok {
-			cfg.MaxReplacements = maxRepl
-		} else if maxRepl, ok := toolDef.Config["max_replacements"].(float64); ok {
-			cfg.MaxReplacements = int(maxRepl)
-		}
-
-		if showDiff, ok := toolDef.Config["show_diff"].(bool); ok {
-			cfg.ShowDiff = showDiff
-		}
-
-		if backup, ok := toolDef.Config["create_backup"].(bool); ok {
-			cfg.CreateBackup = backup
-		}
-
-		if wd, ok := toolDef.Config["working_directory"].(string); ok {
-			cfg.WorkingDirectory = wd
-		}
+// NewSearchReplaceToolWithConfig creates from ToolConfig
+func NewSearchReplaceToolWithConfig(name string, toolConfig config.ToolConfig) (*SearchReplaceTool, error) {
+	cfg := &config.SearchReplaceConfig{
+		MaxReplacements:  toolConfig.MaxReplacements,
+		WorkingDirectory: toolConfig.WorkingDirectory,
 	}
 
+	cfg.SetDefaults()
 	return NewSearchReplaceTool(cfg), nil
 }
 

@@ -9,84 +9,84 @@ import (
 )
 
 // ============================================================================
-// LOCAL - BUILT-IN TOOL REPOSITORY
+// LOCAL - BUILT-IN TOOL SOURCE
 // ============================================================================
 
-// LocalToolRepository manages built-in/local tools
-type LocalToolRepository struct {
+// LocalToolSource manages built-in/local tools
+type LocalToolSource struct {
 	name  string
 	tools map[string]Tool
 	mu    sync.RWMutex
 }
 
-// NewLocalToolRepository creates a new local tool repository
-func NewLocalToolRepository(name string) *LocalToolRepository {
+// NewLocalToolSource creates a new local tool source
+func NewLocalToolSource(name string) *LocalToolSource {
 	if name == "" {
 		name = "local"
 	}
 
-	return &LocalToolRepository{
+	return &LocalToolSource{
 		name:  name,
 		tools: make(map[string]Tool),
 	}
 }
 
-// NewLocalToolRepositoryWithConfig creates a new local tool repository from configuration
-func NewLocalToolRepositoryWithConfig(repoConfig config.ToolRepository) (*LocalToolRepository, error) {
-	repo := &LocalToolRepository{
-		name:  repoConfig.Name,
+// NewLocalToolSourceWithConfig creates a new local tool source from configuration
+func NewLocalToolSourceWithConfig(toolConfigs map[string]config.ToolConfig) (*LocalToolSource, error) {
+	source := &LocalToolSource{
+		name:  "local",
 		tools: make(map[string]Tool),
 	}
 
 	// Register tools defined in the configuration
-	for _, toolDef := range repoConfig.Tools {
-		if !toolDef.Enabled {
+	for toolName, toolConfig := range toolConfigs {
+		if !toolConfig.Enabled {
 			continue
 		}
 
 		var tool Tool
 		var err error
 
-		switch toolDef.Type {
+		switch toolConfig.Type {
 		case "command":
-			tool, err = NewCommandToolWithConfig(toolDef)
+			tool, err = NewCommandToolWithConfig(toolName, toolConfig)
 		case "search":
-			tool, err = NewSearchToolWithConfig(toolDef)
+			tool, err = NewSearchToolWithConfig(toolName, toolConfig)
 		case "file_writer":
-			tool, err = NewFileWriterToolWithConfig(toolDef)
+			tool, err = NewFileWriterToolWithConfig(toolName, toolConfig)
 		case "search_replace":
-			tool, err = NewSearchReplaceToolWithConfig(toolDef)
+			tool, err = NewSearchReplaceToolWithConfig(toolName, toolConfig)
 		case "todo":
 			tool = NewTodoTool()
 		default:
-			fmt.Printf("Warning: Unknown local tool type '%s' for tool '%s', skipping\n", toolDef.Type, toolDef.Name)
+			fmt.Printf("Warning: Unknown local tool type '%s' for tool '%s', skipping\n", toolConfig.Type, toolName)
 			continue
 		}
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to create tool '%s': %w", toolDef.Name, err)
+			return nil, fmt.Errorf("failed to create tool '%s': %w", toolName, err)
 		}
 
-		if err := repo.RegisterTool(tool); err != nil {
-			return nil, fmt.Errorf("failed to register tool '%s': %w", toolDef.Name, err)
+		if err := source.RegisterTool(tool); err != nil {
+			return nil, fmt.Errorf("failed to register tool '%s': %w", toolName, err)
 		}
 	}
 
-	return repo, nil
+	return source, nil
 }
 
-// GetName returns the repository name
-func (r *LocalToolRepository) GetName() string {
+// GetName returns the source name
+func (r *LocalToolSource) GetName() string {
 	return r.name
 }
 
-// GetType returns the repository type
-func (r *LocalToolRepository) GetType() string {
+// GetType returns the source type
+func (r *LocalToolSource) GetType() string {
 	return "local"
 }
 
-// RegisterTool adds a tool to the local repository
-func (r *LocalToolRepository) RegisterTool(tool Tool) error {
+// RegisterTool adds a tool to the local source
+func (r *LocalToolSource) RegisterTool(tool Tool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -96,7 +96,7 @@ func (r *LocalToolRepository) RegisterTool(tool Tool) error {
 	}
 
 	if _, exists := r.tools[name]; exists {
-		return fmt.Errorf("tool %s already registered in repository %s", name, r.name)
+		return fmt.Errorf("tool %s already registered in source %s", name, r.name)
 	}
 
 	r.tools[name] = tool
@@ -104,18 +104,18 @@ func (r *LocalToolRepository) RegisterTool(tool Tool) error {
 	return nil
 }
 
-// DiscoverTools discovers tools (for local repository, this is a no-op since tools are pre-registered)
-func (r *LocalToolRepository) DiscoverTools(ctx context.Context) error {
+// DiscoverTools discovers tools (for local source, this is a no-op since tools are pre-registered)
+func (r *LocalToolSource) DiscoverTools(ctx context.Context) error {
 	// Local tools are registered manually, so discovery is immediate
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	// Tools are pre-registered, discovery is a no-op for local repository
+	// Tools are pre-registered, discovery is a no-op for local source
 	return nil
 }
 
-// ListTools returns all tools in this repository
-func (r *LocalToolRepository) ListTools() []ToolInfo {
+// ListTools returns all tools in this source
+func (r *LocalToolSource) ListTools() []ToolInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -131,7 +131,7 @@ func (r *LocalToolRepository) ListTools() []ToolInfo {
 }
 
 // GetTool retrieves a specific tool by name
-func (r *LocalToolRepository) GetTool(name string) (Tool, bool) {
+func (r *LocalToolSource) GetTool(name string) (Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -139,13 +139,13 @@ func (r *LocalToolRepository) GetTool(name string) (Tool, bool) {
 	return tool, exists
 }
 
-// RemoveTool removes a tool from the repository
-func (r *LocalToolRepository) RemoveTool(name string) error {
+// RemoveTool removes a tool from the source
+func (r *LocalToolSource) RemoveTool(name string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if _, exists := r.tools[name]; !exists {
-		return fmt.Errorf("tool %s not found in repository %s", name, r.name)
+		return fmt.Errorf("tool %s not found in source %s", name, r.name)
 	}
 
 	delete(r.tools, name)

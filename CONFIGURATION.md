@@ -260,38 +260,33 @@ No configuration needed! Default tools are automatically registered:
 
 ```yaml
 tools:
-  default_repo: "local"  # Default repository name
+  execute_command:
+    type: command
+    allowed_commands: ["ls", "cat", "grep", "find", "git", "go", "npm"]
+    working_directory: "./"
+    max_execution_time: "30s"
+    enable_sandboxing: true
   
-  repositories:
-    - name: "local"
-      type: "local"
-      description: "Built-in tools"
-      
-      tools:
-        - name: "execute_command"
-          type: "command"
-          enabled: true
-          config:
-            allowed_commands: ["ls", "cat", "grep", "find", "git"]
-            working_directory: "./"
-            max_execution_time: "30s"
-            enable_sandboxing: true
-        
-        - name: "file_writer"
-          type: "file_writer"
-          enabled: true
-        
-        - name: "search_replace"
-          type: "search_replace"
-          enabled: true
-        
-        - name: "search"
-          type: "search"
-          enabled: true
-        
-        - name: "todo_write"
-          type: "todo"
-          enabled: true
+  file_writer:
+    type: file_writer
+    max_file_size: 1048576
+    allowed_extensions: [".go", ".py", ".js", ".ts", ".md"]
+    working_directory: "./"
+  
+  search_replace:
+    type: search_replace
+    max_replacements: 100
+    working_directory: "./"
+  
+  search:
+    type: search
+    document_stores: ["codebase"]
+    default_limit: 10
+    max_limit: 50
+    max_results: 100
+  
+  todo_write:
+    type: todo
 ```
 
 ### Available Tools
@@ -427,12 +422,10 @@ agents:
 3. **Limit Tool Access**
    ```yaml
    tools:
-     repositories:
-       - tools:
-           - name: "execute_command"
-             enabled: true
-           - name: "search"
-             enabled: false  # Disable expensive tools
+     execute_command:
+       type: command
+       allowed_commands: ["ls", "cat", "pwd"]  # Only safe commands
+     # Don't include expensive tools like 'search' if not needed
    ```
 
 ### Security
@@ -440,12 +433,11 @@ agents:
 1. **Sandbox Commands**
    ```yaml
    tools:
-     repositories:
-       - tools:
-           - name: "execute_command"
-             config:
-               allowed_commands: ["ls", "cat", "grep"]  # Whitelist only
-               enable_sandboxing: true
+     execute_command:
+       type: command
+       allowed_commands: ["ls", "cat", "grep"]  # Whitelist only
+       enable_sandboxing: true
+       max_execution_time: "30s"
    ```
 
 2. **Environment Variables for Secrets**
@@ -505,11 +497,11 @@ llms:
 
 ### Recommended (Production)
 
-See [assistant.yaml](assistant.yaml) in the repository.
+See [hector.yaml](hector.yaml) for the default configuration.
 
 ### With Semantic Search
 
-See examples in [examples/](examples/) directory.
+See examples in [configs/](configs/) directory.
 
 ---
 
@@ -616,7 +608,7 @@ agents:
 - [README.md](README.md) - Main documentation
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System design
 - [LICENSE.md](LICENSE.md) - Licensing information
-- [Examples](examples/) - Sample configurations
+- [Examples](configs/) - Sample configurations
 
 ---
 

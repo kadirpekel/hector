@@ -50,34 +50,25 @@ func NewCommandTool(commandConfig *config.CommandToolsConfig) *CommandTool {
 	return &CommandTool{config: commandConfig}
 }
 
-// NewCommandToolWithConfig creates a command tool from a ToolDefinition configuration
-func NewCommandToolWithConfig(toolDef config.ToolDefinition) (*CommandTool, error) {
-	// Convert the generic config map to CommandToolsConfig
-	var commandConfig *config.CommandToolsConfig
-	if toolDef.Config != nil {
-		commandConfig = &config.CommandToolsConfig{}
-		// Map the common fields from map[string]interface{}
-		if allowedCommands, ok := toolDef.Config["allowed_commands"].([]interface{}); ok {
-			commands := make([]string, len(allowedCommands))
-			for i, cmd := range allowedCommands {
-				if cmdStr, ok := cmd.(string); ok {
-					commands[i] = cmdStr
-				}
-			}
-			commandConfig.AllowedCommands = commands
-		}
-		if workDir, ok := toolDef.Config["working_directory"].(string); ok {
-			commandConfig.WorkingDirectory = workDir
-		}
-		if enableSandbox, ok := toolDef.Config["enable_sandboxing"].(bool); ok {
-			commandConfig.EnableSandboxing = enableSandbox
-		}
+// NewCommandToolWithConfig creates a command tool from a ToolConfig configuration
+func NewCommandToolWithConfig(name string, toolConfig config.ToolConfig) (*CommandTool, error) {
+	// Build CommandToolsConfig from flat ToolConfig structure
+	commandConfig := &config.CommandToolsConfig{
+		AllowedCommands:  toolConfig.AllowedCommands,
+		WorkingDirectory: toolConfig.WorkingDirectory,
+		EnableSandboxing: toolConfig.EnableSandboxing,
 	}
 
-	// Apply defaults if config is nil
-	if commandConfig == nil {
-		commandConfig = &config.CommandToolsConfig{}
+	// Parse MaxExecutionTime
+	if toolConfig.MaxExecutionTime != "" {
+		duration, err := time.ParseDuration(toolConfig.MaxExecutionTime)
+		if err != nil {
+			return nil, fmt.Errorf("invalid max_execution_time: %w", err)
+		}
+		commandConfig.MaxExecutionTime = duration
 	}
+
+	// Apply defaults
 	commandConfig.SetDefaults()
 
 	return NewCommandTool(commandConfig), nil

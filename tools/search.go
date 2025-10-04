@@ -40,7 +40,7 @@ type DocumentSearchResult struct {
 	Score      float64           `json:"score"`                 // Relevance score
 	StartLine  int               `json:"start_line,omitempty"`  // Start line of chunk
 	EndLine    int               `json:"end_line,omitempty"`    // End line of chunk
-	LineNumber int               `json:"line_number,omitempty"` // Legacy field for backwards compatibility
+	LineNumber int               `json:"line_number,omitempty"` // Line number in the source file
 	MatchType  string            `json:"match_type"`            // "title", "content", "function", "struct"
 	Metadata   map[string]string `json:"metadata"`
 }
@@ -84,46 +84,18 @@ func NewSearchTool(searchConfig *config.SearchToolConfig) *SearchTool {
 	}
 }
 
-// NewSearchToolWithConfig creates a search tool from a ToolDefinition configuration
-func NewSearchToolWithConfig(toolDef config.ToolDefinition) (*SearchTool, error) {
-	// Convert the generic config map to SearchToolConfig
-	var searchConfig *config.SearchToolConfig
-	if toolDef.Config != nil {
-		searchConfig = &config.SearchToolConfig{}
-		// Map the common fields from map[string]interface{}
-		if docStores, ok := toolDef.Config["document_stores"].([]interface{}); ok {
-			stores := make([]string, len(docStores))
-			for i, store := range docStores {
-				if storeStr, ok := store.(string); ok {
-					stores[i] = storeStr
-				}
-			}
-			searchConfig.DocumentStores = stores
-		}
-		if defaultLimit, ok := toolDef.Config["default_limit"].(int); ok {
-			searchConfig.DefaultLimit = defaultLimit
-		}
-		if maxLimit, ok := toolDef.Config["max_limit"].(int); ok {
-			searchConfig.MaxLimit = maxLimit
-		}
-		if maxResults, ok := toolDef.Config["max_results"].(int); ok {
-			searchConfig.MaxResults = maxResults
-		}
-		if enabledTypes, ok := toolDef.Config["enabled_search_types"].([]interface{}); ok {
-			types := make([]string, len(enabledTypes))
-			for i, typ := range enabledTypes {
-				if typStr, ok := typ.(string); ok {
-					types[i] = typStr
-				}
-			}
-			searchConfig.EnabledSearchTypes = types
-		}
+// NewSearchToolWithConfig creates a search tool from a ToolConfig configuration
+func NewSearchToolWithConfig(name string, toolConfig config.ToolConfig) (*SearchTool, error) {
+	// Build SearchToolConfig from flat ToolConfig structure
+	searchConfig := &config.SearchToolConfig{
+		DocumentStores:     toolConfig.DocumentStores,
+		DefaultLimit:       toolConfig.DefaultLimit,
+		MaxLimit:           toolConfig.MaxLimit,
+		MaxResults:         toolConfig.MaxResults,
+		EnabledSearchTypes: toolConfig.EnabledSearchTypes,
 	}
 
-	// Apply defaults if config is nil
-	if searchConfig == nil {
-		searchConfig = &config.SearchToolConfig{}
-	}
+	// Apply defaults
 	searchConfig.SetDefaults()
 
 	return NewSearchTool(searchConfig), nil
@@ -560,8 +532,8 @@ func (t *SearchTool) Execute(ctx context.Context, args map[string]interface{}) (
 		ToolName:      "search",
 		ExecutionTime: time.Since(start),
 		Metadata: map[string]interface{}{
-			"repository": "local",
-			"tool_type":  "search",
+			"source":    "local",
+			"tool_type": "search",
 		},
 	}, nil
 }

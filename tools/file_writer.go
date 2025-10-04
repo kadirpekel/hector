@@ -45,41 +45,15 @@ func NewFileWriterTool(cfg *config.FileWriterConfig) *FileWriterTool {
 	return &FileWriterTool{config: cfg}
 }
 
-// NewFileWriterToolWithConfig creates a file writer tool from a ToolDefinition configuration
-func NewFileWriterToolWithConfig(toolDef config.ToolDefinition) (*FileWriterTool, error) {
-	cfg := &config.FileWriterConfig{}
-
-	if toolDef.Config != nil {
-		// Extract max_file_size
-		if maxSize, ok := toolDef.Config["max_file_size"].(int); ok {
-			cfg.MaxFileSize = maxSize
-		} else if maxSize, ok := toolDef.Config["max_file_size"].(float64); ok {
-			cfg.MaxFileSize = int(maxSize)
-		}
-
-		// Extract allowed_extensions
-		if exts, ok := toolDef.Config["allowed_extensions"].([]interface{}); ok {
-			cfg.AllowedExtensions = make([]string, len(exts))
-			for i, ext := range exts {
-				if extStr, ok := ext.(string); ok {
-					cfg.AllowedExtensions[i] = extStr
-				}
-			}
-		} else if exts, ok := toolDef.Config["allowed_extensions"].([]string); ok {
-			cfg.AllowedExtensions = exts
-		}
-
-		// Extract backup_on_overwrite
-		if backup, ok := toolDef.Config["backup_on_overwrite"].(bool); ok {
-			cfg.BackupOnOverwrite = backup
-		}
-
-		// Extract working_directory
-		if wd, ok := toolDef.Config["working_directory"].(string); ok {
-			cfg.WorkingDirectory = wd
-		}
+// NewFileWriterToolWithConfig creates a file writer tool from a ToolConfig configuration
+func NewFileWriterToolWithConfig(name string, toolConfig config.ToolConfig) (*FileWriterTool, error) {
+	cfg := &config.FileWriterConfig{
+		MaxFileSize:       int(toolConfig.MaxFileSize),
+		AllowedExtensions: toolConfig.AllowedExtensions,
+		WorkingDirectory:  toolConfig.WorkingDirectory,
 	}
 
+	cfg.SetDefaults()
 	return NewFileWriterTool(cfg), nil
 }
 

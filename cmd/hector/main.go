@@ -42,6 +42,14 @@ const (
 // ============================================================================
 
 func main() {
+	// Load environment variables from .env files at startup (always, regardless of config path)
+	if err := config.LoadEnvFiles(); err != nil {
+		// .env file not found is OK, only fail on actual read/parse errors
+		if !os.IsNotExist(err) {
+			fatalf("Failed to load environment files: %v", err)
+		}
+	}
+
 	args := parseCommandLineArgs()
 
 	hectorConfig, err := loadConfiguration(args)
@@ -162,6 +170,7 @@ func loadConfiguration(args *CLIArgs) (*config.Config, error) {
 
 	if configPath == "" {
 		// Use default configuration with built-in defaults
+		// (.env already loaded in main())
 		hectorConfig := &config.Config{}
 		hectorConfig.SetDefaults()
 		return hectorConfig, nil

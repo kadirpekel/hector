@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -102,11 +103,19 @@ func (c *LLMProviderConfig) Validate() error {
 // SetDefaults implements Config.SetDefaults for LLMProviderConfig
 func (c *LLMProviderConfig) SetDefaults() {
 	// Zero-config: Set default type and model if not specified
+	// Default to OpenAI (requires OPENAI_API_KEY environment variable)
 	if c.Type == "" {
-		c.Type = "ollama"
+		c.Type = "openai"
 	}
 	if c.Model == "" {
-		c.Model = "llama3.2" // Popular, well-supported model
+		switch c.Type {
+		case "openai":
+			c.Model = "gpt-4o"
+		case "anthropic":
+			c.Model = "claude-3-7-sonnet-latest"
+		default:
+			c.Model = "gpt-4o"
+		}
 	}
 	if c.Host == "" {
 		// Set default host based on provider type
@@ -115,20 +124,32 @@ func (c *LLMProviderConfig) SetDefaults() {
 			c.Host = "https://api.openai.com/v1"
 		case "anthropic":
 			c.Host = "https://api.anthropic.com"
-		case "ollama":
-			c.Host = "http://localhost:11434"
 		default:
-			c.Host = "http://localhost:11434" // Fallback to Ollama
+			c.Host = "https://api.openai.com/v1"
 		}
 	}
 	if c.Temperature == 0 {
 		c.Temperature = 0.7
 	}
 	if c.MaxTokens == 0 {
-		c.MaxTokens = 2000
+		c.MaxTokens = 8000
 	}
 	if c.Timeout == 0 {
 		c.Timeout = 60
+	}
+	if c.APIKey == "" {
+		// Try to get API key from environment based on provider type
+		// Note: Don't use "${VAR}" syntax here because SetDefaults runs AFTER env expansion
+		switch c.Type {
+		case "openai":
+			if key := os.Getenv("OPENAI_API_KEY"); key != "" {
+				c.APIKey = key
+			}
+		case "anthropic":
+			if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+				c.APIKey = key
+			}
+		}
 	}
 }
 
@@ -213,8 +234,9 @@ func (c *EmbedderProviderConfig) Validate() error {
 // SetDefaults implements Config.SetDefaults for EmbedderProviderConfig
 func (c *EmbedderProviderConfig) SetDefaults() {
 	// Zero-config: Set default type, model, and host if not specified
+	// Note: Embedders are optional and only needed for semantic search
 	if c.Type == "" {
-		c.Type = "ollama"
+		c.Type = "ollama" // Ollama is fine for embedders (no function calling needed)
 	}
 	if c.Model == "" {
 		c.Model = "nomic-embed-text" // Good general-purpose embedder
@@ -723,192 +745,145 @@ func (c *SearchReplaceConfig) SetDefaults() {
 
 // ToolConfigs represents tool configurations
 type ToolConfigs struct {
-	DefaultRepo  string           `yaml:"default_repo,omitempty"` // Default repository
-	Repositories []ToolRepository `yaml:"repositories,omitempty"` // Tool repositories
+	Tools map[string]ToolConfig `yaml:"tools,omitempty"` // Tool configurations (map for easy override)
 }
 
 // Validate implements Config.Validate for ToolConfigs
 func (c *ToolConfigs) Validate() error {
-	repoNames := make(map[string]bool)
-	for i, repo := range c.Repositories {
-		if err := repo.Validate(); err != nil {
-			return fmt.Errorf("repository %d validation failed: %w", i, err)
+	for name, tool := range c.Tools {
+		if err := tool.Validate(); err != nil {
+			return fmt.Errorf("tool '%s' validation failed: %w", name, err)
 		}
-
-		// Check for duplicate repository names
-		if repoNames[repo.Name] {
-			return fmt.Errorf("duplicate repository name: %s", repo.Name)
-		}
-		repoNames[repo.Name] = true
 	}
-
-	// Validate default repository
-	if c.DefaultRepo != "" && !repoNames[c.DefaultRepo] {
-		return fmt.Errorf("default_repo %s not found in repositories", c.DefaultRepo)
-	}
-
 	return nil
 }
 
 // SetDefaults implements Config.SetDefaults for ToolConfigs
 func (c *ToolConfigs) SetDefaults() {
-	// Zero-config: Create default local tool repository if none exist
-	if len(c.Repositories) == 0 {
-		c.DefaultRepo = "local"
-		c.Repositories = []ToolRepository{
-			{
-				Name:        "local",
-				Type:        "local",
-				Description: "Built-in local tools",
-				Tools: []ToolDefinition{
-					{
-						Name:    "execute_command",
-						Type:    "command",
-						Enabled: true,
-						Config: map[string]interface{}{
-							"command_config": map[string]interface{}{
-								"allowed_commands":   []string{"ls", "cat", "head", "tail", "pwd", "pwd", "find", "grep", "git", "curl", "wget", "echo", "date", "wc"},
-								"working_directory":  "./",
-								"max_execution_time": "30s",
-								"enable_sandboxing":  true,
-							},
-						},
-					},
-					{
-						Name:    "search",
-						Type:    "search",
-						Enabled: true,
-						Config: map[string]interface{}{
-							"search_config": map[string]interface{}{
-								"document_stores":      []string{"default-docs"},
-								"default_limit":        10,
-								"max_limit":            50,
-								"max_results":          100,
-								"enabled_search_types": []string{"content", "file", "function"},
-							},
-						},
-					},
-					{
-						Name:    "file_writer",
-						Type:    "file_writer",
-						Enabled: true,
-					},
-					{
-						Name:    "search_replace",
-						Type:    "search_replace",
-						Enabled: true,
-					},
-					{
-						Name:    "todo_write",
-						Type:    "todo",
-						Enabled: true,
-					},
-				},
+	// Zero-config: Create default safe tools (Tier 1)
+	// For file editing tools (file_writer, search_replace), users must explicitly enable them
+	if len(c.Tools) == 0 {
+		c.Tools = map[string]ToolConfig{
+			"execute_command": {
+				Type:             "command",
+				AllowedCommands:  []string{"ls", "cat", "head", "tail", "pwd", "find", "grep", "wc", "date", "echo", "tree", "du", "df"},
+				WorkingDirectory: "./",
+				MaxExecutionTime: "30s",
+				EnableSandboxing: true,
 			},
+			"todo_write": {
+				Type: "todo",
+			},
+			// NOTE: file_writer, search_replace are NOT included in safe defaults
+			// Users must explicitly enable them via configuration for security
 		}
 	}
 
-	for i := range c.Repositories {
-		c.Repositories[i].SetDefaults()
+	// Set defaults for each tool
+	for name, tool := range c.Tools {
+		tool.SetDefaults()
+		c.Tools[name] = tool
 	}
 }
 
-// ToolRepository represents a tool repository
-type ToolRepository struct {
-	Name        string                 `yaml:"name"`        // Repository name
-	Type        string                 `yaml:"type"`        // Repository type
-	Description string                 `yaml:"description"` // Repository description
-	Config      map[string]interface{} `yaml:"config"`      // Repository-specific config
-	URL         string                 `yaml:"url"`         // Repository URL (for MCP)
-	PluginPath  string                 `yaml:"plugin_path"` // Plugin path (for plugins)
-	Tools       []ToolDefinition       `yaml:"tools"`       // Tool definitions
+// ToolConfig represents a single tool configuration
+type ToolConfig struct {
+	Type        string `yaml:"type"`                  // Tool type: "command", "file_writer", "search_replace", "todo", etc.
+	Enabled     bool   `yaml:"enabled,omitempty"`     // Tool enabled (default: true)
+	Description string `yaml:"description,omitempty"` // Tool description
+
+	// Command tool fields
+	AllowedCommands  []string `yaml:"allowed_commands,omitempty"`   // Allowed commands
+	WorkingDirectory string   `yaml:"working_directory,omitempty"`  // Working directory
+	MaxExecutionTime string   `yaml:"max_execution_time,omitempty"` // Max execution time
+	EnableSandboxing bool     `yaml:"enable_sandboxing,omitempty"`  // Enable sandboxing
+
+	// File writer tool fields
+	MaxFileSize       int64    `yaml:"max_file_size,omitempty"`      // Max file size in bytes
+	AllowedExtensions []string `yaml:"allowed_extensions,omitempty"` // Allowed file extensions
+	ForbiddenPaths    []string `yaml:"forbidden_paths,omitempty"`    // Forbidden paths
+
+	// Search replace tool fields
+	MaxReplacements int  `yaml:"max_replacements,omitempty"` // Max replacements per operation
+	BackupEnabled   bool `yaml:"backup_enabled,omitempty"`   // Enable file backups
+
+	// Search tool fields
+	DocumentStores     []string `yaml:"document_stores,omitempty"`      // Document stores to search
+	DefaultLimit       int      `yaml:"default_limit,omitempty"`        // Default result limit
+	MaxLimit           int      `yaml:"max_limit,omitempty"`            // Maximum result limit
+	MaxResults         int      `yaml:"max_results,omitempty"`          // Maximum total results
+	EnabledSearchTypes []string `yaml:"enabled_search_types,omitempty"` // Enabled search types
+
+	// Generic config for extensibility (for custom/future tools)
+	Config map[string]interface{} `yaml:"config,omitempty"` // Additional tool-specific config
 }
 
-// Validate implements Config.Validate for ToolRepository
-func (c *ToolRepository) Validate() error {
-	if c.Name == "" {
-		return fmt.Errorf("name is required")
-	}
+// Validate implements Config.Validate for ToolConfig
+func (c *ToolConfig) Validate() error {
 	if c.Type == "" {
 		return fmt.Errorf("type is required")
 	}
 
-	// Validate repository type
+	// Type-specific validation
 	switch c.Type {
-	case "local":
-		return c.validateLocalRepository()
-	case "mcp":
-		return c.validateMCPRepository()
-	case "plugin":
-		return c.validatePluginRepository()
+	case "command":
+		if len(c.AllowedCommands) == 0 {
+			return fmt.Errorf("allowed_commands is required for command tool")
+		}
+	case "file_writer":
+		// Optional validation
+	case "search_replace":
+		// Optional validation
+	case "search":
+		if len(c.DocumentStores) == 0 {
+			return fmt.Errorf("document_stores is required for search tool")
+		}
+	case "todo":
+		// No specific validation needed
 	default:
-		return fmt.Errorf("unknown repository type: %s", c.Type)
+		// Allow unknown types for extensibility
 	}
-}
 
-// SetDefaults implements Config.SetDefaults for ToolRepository
-func (c *ToolRepository) SetDefaults() {
-	for i := range c.Tools {
-		c.Tools[i].SetDefaults()
-	}
-}
-
-// validateLocalRepository validates local repository configuration
-func (c *ToolRepository) validateLocalRepository() error {
-	toolNames := make(map[string]bool)
-	for i, tool := range c.Tools {
-		if err := tool.Validate(); err != nil {
-			return fmt.Errorf("tool %d validation failed: %w", i, err)
-		}
-
-		// Check for duplicate tool names
-		if toolNames[tool.Name] {
-			return fmt.Errorf("duplicate tool name: %s", tool.Name)
-		}
-		toolNames[tool.Name] = true
-	}
 	return nil
 }
 
-// validateMCPRepository validates MCP repository configuration
-func (c *ToolRepository) validateMCPRepository() error {
-	if c.URL == "" {
-		return fmt.Errorf("url is required for MCP repository")
-	}
-	return nil
-}
-
-// validatePluginRepository validates plugin repository configuration
-func (c *ToolRepository) validatePluginRepository() error {
-	if c.PluginPath == "" {
-		return fmt.Errorf("plugin_path is required for plugin repository")
-	}
-	return nil
-}
-
-// ToolDefinition represents a tool definition
-type ToolDefinition struct {
-	Name    string                 `yaml:"name"`    // Tool name
-	Type    string                 `yaml:"type"`    // Tool type
-	Enabled bool                   `yaml:"enabled"` // Tool enabled
-	Config  map[string]interface{} `yaml:"config"`  // Tool-specific config
-}
-
-// Validate implements Config.Validate for ToolDefinition
-func (c *ToolDefinition) Validate() error {
-	if c.Name == "" {
-		return fmt.Errorf("name is required")
-	}
-	if c.Type == "" {
-		return fmt.Errorf("type is required")
-	}
-	return nil
-}
-
-// SetDefaults implements Config.SetDefaults for ToolDefinition
-func (c *ToolDefinition) SetDefaults() {
+// SetDefaults implements Config.SetDefaults for ToolConfig
+func (c *ToolConfig) SetDefaults() {
+	// Default enabled to true
 	if !c.Enabled {
 		c.Enabled = true
+	}
+
+	// Type-specific defaults
+	switch c.Type {
+	case "command":
+		if c.WorkingDirectory == "" {
+			c.WorkingDirectory = "./"
+		}
+		if c.MaxExecutionTime == "" {
+			c.MaxExecutionTime = "30s"
+		}
+	case "file_writer":
+		if c.MaxFileSize == 0 {
+			c.MaxFileSize = 1048576 // 1MB
+		}
+	case "search_replace":
+		if c.MaxReplacements == 0 {
+			c.MaxReplacements = 100
+		}
+		if c.WorkingDirectory == "" {
+			c.WorkingDirectory = "./"
+		}
+	case "search":
+		if c.DefaultLimit == 0 {
+			c.DefaultLimit = 10
+		}
+		if c.MaxLimit == 0 {
+			c.MaxLimit = 50
+		}
+		if c.MaxResults == 0 {
+			c.MaxResults = 100
+		}
 	}
 }
 

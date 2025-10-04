@@ -9,12 +9,10 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/kadirpekel/hector/config"
 )
 
-// MCPToolRepository manages tools from a single MCP server
-type MCPToolRepository struct {
+// MCPToolSource manages tools from a single MCP server
+type MCPToolSource struct {
 	name        string
 	url         string
 	description string
@@ -26,7 +24,7 @@ type MCPToolRepository struct {
 // MCPTool represents an MCP tool that implements the Tool interface
 type MCPTool struct {
 	toolInfo   ToolInfo
-	repository *MCPToolRepository
+	source *MCPToolSource
 }
 
 // Request represents an MCP request
@@ -57,13 +55,13 @@ type CallParams struct {
 	Arguments map[string]interface{} `json:"arguments"`
 }
 
-// NewMCPToolRepository creates a new MCP tool repository for a single server
-func NewMCPToolRepository(name, url, description string) *MCPToolRepository {
+// NewMCPToolSource creates a new MCP tool source for a single server
+func NewMCPToolSource(name, url, description string) *MCPToolSource {
 	if name == "" {
 		name = "mcp"
 	}
 
-	return &MCPToolRepository{
+	return &MCPToolSource{
 		name:        name,
 		url:         url,
 		description: description,
@@ -74,16 +72,17 @@ func NewMCPToolRepository(name, url, description string) *MCPToolRepository {
 	}
 }
 
-// NewMCPToolRepositoryWithConfig creates a new MCP tool repository from configuration
-func NewMCPToolRepositoryWithConfig(repoConfig config.ToolRepository) (*MCPToolRepository, error) {
-	if repoConfig.URL == "" {
-		return nil, fmt.Errorf("URL is required for MCP repository")
+// NewMCPToolSourceWithConfig creates a new MCP tool source from configuration
+// Note: MCP repositories are not used in the new simplified config structure
+func NewMCPToolSourceWithConfig(url string) (*MCPToolSource, error) {
+	if url == "" {
+		return nil, fmt.Errorf("URL is required for MCP source")
 	}
 
-	return &MCPToolRepository{
-		name:        repoConfig.Name,
-		url:         repoConfig.URL,
-		description: repoConfig.Description,
+	return &MCPToolSource{
+		name:        "mcp",
+		url:         url,
+		description: "",
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -91,18 +90,18 @@ func NewMCPToolRepositoryWithConfig(repoConfig config.ToolRepository) (*MCPToolR
 	}, nil
 }
 
-// GetName returns the repository name
-func (r *MCPToolRepository) GetName() string {
+// GetName returns the source name
+func (r *MCPToolSource) GetName() string {
 	return r.name
 }
 
-// GetType returns the repository type
-func (r *MCPToolRepository) GetType() string {
+// GetType returns the source type
+func (r *MCPToolSource) GetType() string {
 	return "mcp"
 }
 
 // DiscoverTools discovers tools from the configured MCP server
-func (r *MCPToolRepository) DiscoverTools(ctx context.Context) error {
+func (r *MCPToolSource) DiscoverTools(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -110,7 +109,7 @@ func (r *MCPToolRepository) DiscoverTools(ctx context.Context) error {
 	r.tools = make(map[string]Tool)
 
 	if r.url == "" {
-		return fmt.Errorf("MCP server URL not configured for repository %s", r.name)
+		return fmt.Errorf("MCP server URL not configured for source %s", r.name)
 	}
 
 	fmt.Printf("Discovering tools from MCP server: %s (%s)\n", r.name, r.url)
@@ -125,24 +124,24 @@ func (r *MCPToolRepository) DiscoverTools(ctx context.Context) error {
 	for _, toolInfo := range tools {
 		tool := &MCPTool{
 			toolInfo:   toolInfo,
-			repository: r,
+			source: r,
 		}
 		r.tools[toolInfo.Name] = tool
 	}
 
-	fmt.Printf("MCP repository %s discovered %d tools\n", r.name, len(r.tools))
+	fmt.Printf("MCP source %s discovered %d tools\n", r.name, len(r.tools))
 	return nil
 }
 
-// ListTools returns all tools in this repository
-func (r *MCPToolRepository) ListTools() []ToolInfo {
+// ListTools returns all tools in this source
+func (r *MCPToolSource) ListTools() []ToolInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	var tools []ToolInfo
 	for _, tool := range r.tools {
 		info := tool.GetInfo()
-		// Mark with repository name as source
+		// Mark with source name as source
 		info.ServerURL = r.name
 		tools = append(tools, info)
 	}
@@ -151,7 +150,7 @@ func (r *MCPToolRepository) ListTools() []ToolInfo {
 }
 
 // GetTool retrieves a specific tool by name
-func (r *MCPToolRepository) GetTool(name string) (Tool, bool) {
+func (r *MCPToolSource) GetTool(name string) (Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -160,7 +159,7 @@ func (r *MCPToolRepository) GetTool(name string) (Tool, bool) {
 }
 
 // discoverToolsFromServer discovers tools from the MCP server
-func (r *MCPToolRepository) discoverToolsFromServer(ctx context.Context) ([]ToolInfo, error) {
+func (r *MCPToolSource) discoverToolsFromServer(ctx context.Context) ([]ToolInfo, error) {
 	response, err := r.makeRequest(ctx, "tools/list", map[string]interface{}{})
 	if err != nil {
 		return nil, err
@@ -246,7 +245,7 @@ func (r *MCPToolRepository) discoverToolsFromServer(ctx context.Context) ([]Tool
 }
 
 // makeRequest makes an HTTP request to the MCP server and parses the response
-func (r *MCPToolRepository) makeRequest(ctx context.Context, method string, params interface{}) (*Response, error) {
+func (r *MCPToolSource) makeRequest(ctx context.Context, method string, params interface{}) (*Response, error) {
 	// Build MCP request
 	request := Request{
 		JSONRPC: "2.0",
@@ -334,7 +333,7 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 		Arguments: args,
 	}
 
-	response, err := t.repository.makeRequest(ctx, "tools/call", params)
+	response, err := t.source.makeRequest(ctx, "tools/call", params)
 	if err != nil {
 		return ToolResult{
 			Content:       "",
@@ -343,9 +342,9 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 			ToolName:      t.toolInfo.Name,
 			ExecutionTime: time.Since(start),
 			Metadata: map[string]interface{}{
-				"repository": t.repository.name,
+				"source": t.source.name,
 				"tool_type":  "remote",
-				"server_url": t.repository.url,
+				"server_url": t.source.url,
 			},
 		}, err
 	}
@@ -360,9 +359,9 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 			ToolName:      t.toolInfo.Name,
 			ExecutionTime: time.Since(start),
 			Metadata: map[string]interface{}{
-				"repository": t.repository.name,
+				"source": t.source.name,
 				"tool_type":  "remote",
-				"server_url": t.repository.url,
+				"server_url": t.source.url,
 			},
 		}, err
 	}
@@ -376,9 +375,9 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 		ToolName:      t.toolInfo.Name,
 		ExecutionTime: time.Since(start),
 		Metadata: map[string]interface{}{
-			"repository": t.repository.name,
+			"source": t.source.name,
 			"tool_type":  "remote",
-			"server_url": t.repository.url,
+			"server_url": t.source.url,
 		},
 	}
 

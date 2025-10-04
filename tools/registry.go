@@ -17,8 +17,8 @@ import (
 // ToolEntry represents a complete tool entry with all metadata
 type ToolEntry struct {
 	Tool           Tool           `json:"tool"`
-	Repository     ToolRepository `json:"repository"`
-	RepositoryType string         `json:"repository_type"`
+	Source     ToolSource `json:"source"`
+	SourceType string         `json:"source_type"`
 	Name           string         `json:"name"`
 }
 
@@ -75,35 +75,35 @@ func NewToolRegistryWithConfig(toolConfig *config.ToolConfigs) (*ToolRegistry, e
 	return registry, nil
 }
 
-// RegisterRepository adds a tool repository to the registry
-func (r *ToolRegistry) RegisterRepository(repository ToolRepository) error {
-	name := repository.GetName()
+// RegisterSource adds a tool source to the registry
+func (r *ToolRegistry) RegisterSource(source ToolSource) error {
+	name := source.GetName()
 	if name == "" {
-		return NewToolRegistryError("ToolRegistry", "RegisterRepository", "repository name cannot be empty", nil)
+		return NewToolRegistryError("ToolRegistry", "RegisterSource", "source name cannot be empty", nil)
 	}
 
-	// Discover tools from the repository
-	if err := repository.DiscoverTools(context.Background()); err != nil {
-		return NewToolRegistryError("ToolRegistry", "RegisterRepository",
-			fmt.Sprintf("failed to discover tools from repository %s", name), err)
+	// Discover tools from the source
+	if err := source.DiscoverTools(context.Background()); err != nil {
+		return NewToolRegistryError("ToolRegistry", "RegisterSource",
+			fmt.Sprintf("failed to discover tools from source %s", name), err)
 	}
 
-	// Register each tool from the repository
-	for _, toolInfo := range repository.ListTools() {
-		tool, exists := repository.GetTool(toolInfo.Name)
+	// Register each tool from the source
+	for _, toolInfo := range source.ListTools() {
+		tool, exists := source.GetTool(toolInfo.Name)
 		if !exists {
 			continue
 		}
 
 		entry := ToolEntry{
 			Tool:           tool,
-			Repository:     repository,
-			RepositoryType: repository.GetType(),
+			Source:     source,
+			SourceType: source.GetType(),
 			Name:           toolInfo.Name,
 		}
 
 		if err := r.Register(toolInfo.Name, entry); err != nil {
-			return NewToolRegistryError("ToolRegistry", "RegisterRepository",
+			return NewToolRegistryError("ToolRegistry", "RegisterSource",
 				fmt.Sprintf("failed to register tool %s", toolInfo.Name), err)
 		}
 	}
@@ -114,9 +114,9 @@ func (r *ToolRegistry) RegisterRepository(repository ToolRepository) error {
 // DiscoverAllTools discovers tools from all registered repositories
 func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 	// Get all repositories from entries BEFORE clearing
-	repositories := make(map[string]ToolRepository)
+	repositories := make(map[string]ToolSource)
 	for _, entry := range r.List() {
-		repositories[entry.Repository.GetName()] = entry.Repository
+		repositories[entry.Source.GetName()] = entry.Source
 	}
 
 	// Clear existing tools after getting repositories
@@ -128,7 +128,7 @@ func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 			continue
 		}
 
-		// Register tools from this repository
+		// Register tools from this source
 		for _, toolInfo := range repo.ListTools() {
 			tool, exists := repo.GetTool(toolInfo.Name)
 			if !exists {
@@ -144,8 +144,8 @@ func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 
 			entry := ToolEntry{
 				Tool:           tool,
-				Repository:     repo,
-				RepositoryType: repo.GetType(),
+				Source:     repo,
+				SourceType: repo.GetType(),
 				Name:           toolInfo.Name,
 			}
 
@@ -160,34 +160,17 @@ func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 
 // initializeFromConfig initializes the tool registry with configuration
 func (r *ToolRegistry) initializeFromConfig(toolConfig *config.ToolConfigs) error {
-	// Process each repository configuration
-	for _, repoConfig := range toolConfig.Repositories {
-		var repo ToolRepository
-		var err error
-
-		switch repoConfig.Type {
-		case "local":
-			repo, err = NewLocalToolRepositoryWithConfig(repoConfig)
-		case "mcp":
-			repo, err = NewMCPToolRepositoryWithConfig(repoConfig)
-		default:
-			return fmt.Errorf("unsupported repository type: %s", repoConfig.Type)
-		}
-
+	// Create local source with all configured tools
+	if len(toolConfig.Tools) > 0 {
+		repo, err := NewLocalToolSourceWithConfig(toolConfig.Tools)
 		if err != nil {
-			return fmt.Errorf("failed to create %s repository '%s': %w", repoConfig.Type, repoConfig.Name, err)
+			return fmt.Errorf("failed to create local tool source: %w", err)
 		}
 
-		// Register the repository
-		if err := r.RegisterRepository(repo); err != nil {
-			return fmt.Errorf("failed to register repository '%s': %w", repoConfig.Name, err)
+		// Register the source
+		if err := r.RegisterSource(repo); err != nil {
+			return fmt.Errorf("failed to register local source: %w", err)
 		}
-	}
-
-	// After creating all repositories, discover tools from them
-	ctx := context.Background()
-	if err := r.DiscoverAllTools(ctx); err != nil {
-		return fmt.Errorf("failed to discover tools: %w", err)
 	}
 
 	return nil
@@ -208,8 +191,8 @@ func (r *ToolRegistry) ListTools() []ToolInfo {
 	var tools []ToolInfo
 	for _, entry := range r.List() {
 		info := entry.Tool.GetInfo()
-		// Add repository source to metadata
-		info.ServerURL = entry.Repository.GetName()
+		// Add source source to metadata
+		info.ServerURL = entry.Source.GetName()
 		tools = append(tools, info)
 	}
 
@@ -221,13 +204,13 @@ func (r *ToolRegistry) ListTools() []ToolInfo {
 	return tools
 }
 
-// ListToolsByRepository returns tools grouped by repository
-func (r *ToolRegistry) ListToolsByRepository() map[string][]ToolInfo {
+// ListToolsBySource returns tools grouped by source
+func (r *ToolRegistry) ListToolsBySource() map[string][]ToolInfo {
 	result := make(map[string][]ToolInfo)
 
-	// Group tools by repository
+	// Group tools by source
 	for _, entry := range r.List() {
-		repoName := entry.Repository.GetName()
+		repoName := entry.Source.GetName()
 		if result[repoName] == nil {
 			result[repoName] = make([]ToolInfo, 0)
 		}
@@ -252,23 +235,23 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	return tool.Execute(ctx, args)
 }
 
-// GetToolSource returns the repository name that provides a specific tool
+// GetToolSource returns the source name that provides a specific tool
 func (r *ToolRegistry) GetToolSource(toolName string) (string, error) {
 	entry, exists := r.Get(toolName)
 	if !exists {
 		return "", NewToolRegistryError("ToolRegistry", "GetToolSource",
 			fmt.Sprintf("tool %s not found", toolName), nil)
 	}
-	return entry.Repository.GetName(), nil
+	return entry.Source.GetName(), nil
 }
 
-// RemoveRepository removes a repository and all its tools
-func (r *ToolRegistry) RemoveRepository(repositoryName string) error {
-	// Remove all tools from this repository
+// RemoveSource removes a source and all its tools
+func (r *ToolRegistry) RemoveSource(sourceName string) error {
+	// Remove all tools from this source
 	for _, entry := range r.List() {
-		if entry.Repository.GetName() == repositoryName {
+		if entry.Source.GetName() == sourceName {
 			if err := r.Remove(entry.Name); err != nil {
-				return NewToolRegistryError("ToolRegistry", "RemoveRepository",
+				return NewToolRegistryError("ToolRegistry", "RemoveSource",
 					fmt.Sprintf("failed to remove tool %s", entry.Name), err)
 			}
 		}

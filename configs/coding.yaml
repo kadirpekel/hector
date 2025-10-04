@@ -1,0 +1,157 @@
+# Coding Assistant - Specialized for software development tasks
+# Uses Claude Sonnet 3.7 with aggressive tool usage and semantic search
+
+agents:
+  assistant:
+    name: "Coding Assistant"
+    description: "AI pair programmer with codebase access and file editing capabilities"
+    
+    llm: "claude-llm"
+    
+    prompt:
+      prompt_slots:
+        system_role: |
+          You are an AI coding assistant, powered by Claude Sonnet 3.7.
+          You are pair programming with a developer to solve coding tasks.
+        
+        reasoning_instructions: |
+          Your main goal is to follow the user's instructions carefully.
+          By default, IMPLEMENT changes rather than only suggesting them.
+          Use tools to discover information - don't ask the user to run commands.
+          Be THOROUGH when gathering information. Make sure you have the FULL picture.
+          TRACE every symbol back to its definitions and usages to fully understand it.
+        
+        tool_usage: |
+          CRITICAL RULE: ACT IMMEDIATELY, DON'T ANNOUNCE.
+          
+          When user requests something:
+          ❌ WRONG: "I'll help you find..." or "Let me search for..."
+          ✅ RIGHT: Immediately call the tool, no preamble
+          
+          Tool selection priority:
+          1. "show/find/list" code → execute_command (grep/find/cat) INSTANTLY
+          2. "create file" → file_writer tool INSTANTLY
+          3. "change/modify/update file" → search_replace tool INSTANTLY
+          4. Multi-step tasks (3+ steps) → todo_write tool FIRST, then execute
+          
+          Rules:
+          - NO asking for clarification if you can infer the intent
+          - NO explaining what you're about to do
+          - DO execute tools immediately
+          - DO explain results after execution
+          - USE file_writer and search_replace for file operations
+          - ALWAYS create todos for complex tasks (3+ steps) BEFORE starting work
+        
+        output_format: |
+          Provide clear, accurate, and complete code solutions.
+          Be direct and concise. Show code examples when helpful.
+        
+        communication_style: |
+          Use backticks to format file, directory, function, and class names.
+          Use markdown code blocks for code snippets.
+          Generally refrain from using emojis unless extremely informative.
+        
+        additional: |
+          <task_management>
+          For tasks with 3+ steps:
+          1. Use todo_write (merge=false) to create initial task list
+          2. Update todos as you progress (merge=true)
+          3. Mark tasks complete (status="completed") after finishing
+          4. Add new tasks if needed (merge=true)
+          
+          Example flow for "Create a REST API with tests":
+          Step 1: todo_write([{id:1, content:"Create API server file", status:"in_progress"}, ...])
+          Step 2: Work on task, call file_writer/search_replace
+          Step 3: todo_write([{id:1, status:"completed"}], merge=true)
+          Step 4: Move to next task
+          </task_management>
+          
+          Best practices:
+          - Write clean, idiomatic code following language conventions
+          - Never generate extremely long hashes or binary code
+          - Fix any linter errors you introduce
+          - Prefer high-quality, general-purpose solutions
+          - Add helpful comments for complex logic
+      
+      include_tools: true
+      include_context: true
+      include_history: true
+      max_history_messages: 10
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 10
+      show_debug_info: true
+      enable_streaming: true
+    
+    # Semantic search for codebase understanding
+    document_stores:
+      - "codebase"
+    database: "qdrant"
+    embedder: "embedder"
+
+# LLM Configuration
+llms:
+  claude-llm:
+    type: "anthropic"
+    model: "claude-3-7-sonnet-latest"
+    api_key: "${ANTHROPIC_API_KEY}"
+    temperature: 0.1
+    max_tokens: 16000
+    timeout: 60
+
+# Vector database for semantic code search
+databases:
+  qdrant:
+    type: "qdrant"
+    host: "localhost"
+    port: 6334
+    collection_name: "docs"
+
+# Embedder for semantic search
+embedders:
+  embedder:
+    type: "ollama"
+    model: "nomic-embed-text"
+    host: "http://localhost:11434"
+
+# Document store for codebase indexing
+document_stores:
+  codebase:
+    name: "codebase"
+    path: "."
+    source: "directory"
+    include_patterns: ["*.go", "*.py", "*.js", "*.ts", "*.java", "*.cpp", "*.c", "*.h", "*.rs", "*.md"]
+    exclude_patterns: ["vendor/**", ".git/**", "**/testdata/**", "node_modules/**", "target/**", "build/**"]
+    max_file_size: 1048576
+    watch_changes: false
+    database: "qdrant"
+    embedder: "embedder"
+
+# Tools - Developer Mode (Tier 2) - Clean, flat structure!
+# ⚠️  INCLUDES FILE EDITING TOOLS - Use with caution!
+tools:
+  execute_command:
+    type: command
+    allowed_commands: ["ls", "cat", "head", "tail", "pwd", "find", "grep", "wc", "date", "echo", "tree", 
+                      "git", "go", "npm", "python", "cargo", "make", "curl", "wget"]
+    working_directory: "./"
+    max_execution_time: "60s"
+    enable_sandboxing: true
+  
+  file_writer:
+    type: file_writer
+    description: "Create or overwrite files"
+    max_file_size: 1048576  # 1MB
+    allowed_extensions: [".go", ".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".rs", ".yaml", ".yml", ".json", ".md", ".txt", ".sh"]
+    working_directory: "./"
+  
+  search_replace:
+    type: search_replace
+    description: "Edit files by replacing exact text matches"
+    max_replacements: 100
+    working_directory: "./"
+  
+  todo_write:
+    type: todo
+    description: "Manage task lists for complex workflows"

@@ -13,7 +13,7 @@ type ToolInfo struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Parameters  []ToolParameter `json:"parameters,omitempty"`
-	ServerURL   string          `json:"server_url,omitempty"` // Source repository identifier
+	ServerURL   string          `json:"server_url,omitempty"` // Source identifier
 }
 
 // ToolParameter represents a tool parameter definition
@@ -60,18 +60,18 @@ type Tool interface {
 	GetDescription() string
 }
 
-// ToolRepository represents a source of tools (local, MCP server, plugins, etc.)
-type ToolRepository interface {
-	// GetName returns the repository name
+// ToolSource represents a source of tools (local, MCP server, plugins, etc.)
+type ToolSource interface {
+	// GetName returns the source name
 	GetName() string
 
-	// GetType returns the repository type (local, mcp, plugin, etc.)
+	// GetType returns the source type (local, mcp, plugin, etc.)
 	GetType() string
 
-	// DiscoverTools discovers and registers tools from this repository
+	// DiscoverTools discovers and registers tools from this source
 	DiscoverTools(ctx context.Context) error
 
-	// ListTools returns all tools available in this repository
+	// ListTools returns all tools available in this source
 	ListTools() []ToolInfo
 
 	// GetTool retrieves a specific tool by name

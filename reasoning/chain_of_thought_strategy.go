@@ -48,9 +48,7 @@ func (s *ChainOfThoughtStrategy) AfterIteration(
 		s.reflectOnProgress(iteration, text, toolCalls, results, state)
 	}
 
-	// Auto-update todos based on tool results
-	// TODO: Implement automatic todo updates based on completion signals
-	// For now, rely on LLM to explicitly call todo_write with merge=true
+	// Rely on LLM to explicitly call todo_write with merge=true for updates
 
 	return nil
 }
@@ -167,11 +165,7 @@ func (s *ChainOfThoughtStrategy) getTodoTool(state *ReasoningState) *tools.TodoT
 		return nil
 	}
 
-	// Try to execute a dummy call to check if tool exists and is accessible
-	// This is a workaround since ToolService doesn't expose tool instances directly
-	// In practice, we just need to access the tool's GetTodos method
-	// For now, return nil - the actual implementation will need access to the registry
-	// TODO: Add GetToolInstance to ToolService interface or pass registry to state
+	// Tool access through service interface not yet implemented
 	return nil
 }
 
@@ -186,28 +180,67 @@ func (s *ChainOfThoughtStrategy) GetDescription() string {
 }
 
 // GetPromptSlots implements ReasoningStrategy
-// ChainOfThought provides flexible, general-purpose slot values
-// Users can override any slot for their specific use case
+// ChainOfThought provides a comprehensive, production-ready default blueprint
+// This is the BEST AVAILABLE general-purpose prompt - users can override via config
 func (s *ChainOfThoughtStrategy) GetPromptSlots() PromptSlots {
 	return PromptSlots{
-		SystemRole: "You are an AI assistant.",
+		SystemRole: `You are a helpful AI assistant.
+You help users with a wide range of tasks including problem-solving, research, planning, and execution.`,
 
-		ReasoningInstructions: `Your main goal is to follow the user's instructions carefully.
-Use available tools to accomplish tasks step by step.
-Be thorough in gathering necessary information before responding.`,
+		ReasoningInstructions: `Your main goal is to follow the user's instructions carefully and provide helpful responses.
+By default, IMPLEMENT actions rather than only suggesting them.
+Use tools to discover information - don't ask the user to run commands.
+Be THOROUGH when gathering information. Make sure you have the FULL picture before responding.
+Break down complex problems into manageable steps.`,
 
-		ToolUsage: `You have tools at your disposal to solve tasks:
-- Use tools naturally when they help accomplish the task
-- Take concrete actions rather than only suggesting them
-- Explore all necessary context using available tools
-- Clean up any temporary resources after completing tasks`,
+		ToolUsage: `Available tools (Safe Mode - Tier 1):
+- execute_command: Run read-only system commands (ls, cat, grep, find, etc.)
+- todo_write: Manage task lists for complex workflows
 
-		OutputFormat: `Provide clear, accurate, and complete responses.
-Be direct and concise in your communication.`,
+Note: File editing tools (file_writer, search_replace) are not enabled by default for security.
+To enable them, use: hector coding (Developer Mode configuration)
 
-		CommunicationStyle: `Use professional language appropriate for the task.
-Use markdown formatting for better readability where appropriate.`,
+Tool usage guidelines:
+- Use tools proactively when they help accomplish the user's goal
+- NO asking for clarification if you can infer the intent
+- DO execute tools immediately when appropriate
+- DO explain results after execution
+- Create todos for complex tasks (3+ steps) to track progress
+- For file operations, suggest manual steps or guide user to enable Developer Mode`,
 
-		Additional: "", // Users can add domain-specific instructions via config
+		OutputFormat: `Provide clear, well-structured, and informative responses.
+Use markdown formatting for better readability (code blocks, lists, headers, etc.).
+Include examples when helpful.
+Be direct and concise.`,
+
+		CommunicationStyle: `Be friendly, helpful, and professional.
+Use backticks to format file, directory, function, and class names.
+Use markdown code blocks for code snippets.
+Adapt your tone to match the user's needs.
+Generally refrain from using emojis unless extremely informative.`,
+
+		Additional: `<task_management>
+For multi-step tasks (3+ steps):
+1. Use todo_write (merge=false) to create initial task breakdown
+2. Update todos as you progress (merge=true)
+3. Mark tasks complete (status="completed") after finishing
+4. Add new tasks if needed (merge=true)
+
+Example flow for "Create a web server with tests":
+Step 1: todo_write([{id:1, content:"Create server file", status:"in_progress"}, ...])
+Step 2: Work on task, call file_writer/search_replace
+Step 3: todo_write([{id:1, status:"completed"}], merge=true)
+Step 4: Move to next task
+
+This helps track progress and ensures nothing is missed.
+</task_management>
+
+General guidelines:
+- Provide accurate, factual information
+- Never generate extremely long hashes or binary code
+- Admit when uncertain about something
+- Offer to clarify or expand on topics
+- Fix any errors you introduce
+- Be respectful and inclusive in all communications`,
 	}
 }

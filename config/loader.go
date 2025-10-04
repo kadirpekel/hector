@@ -16,10 +16,7 @@ import (
 // loadConfigFromBytes is the core implementation that handles YAML parsing,
 // environment variable expansion, defaults, and validation
 func loadConfigFromBytes(data []byte, config ConfigInterface) error {
-	// Load environment variables from .env files
-	if err := LoadEnvFiles(); err != nil {
-		return fmt.Errorf("failed to load environment files: %w", err)
-	}
+	// Note: .env files should be loaded before calling this function (typically in main())
 
 	// Parse YAML into generic structure for environment variable expansion
 	var rawConfig interface{}

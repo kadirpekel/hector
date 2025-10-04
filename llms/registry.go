@@ -13,7 +13,7 @@ import (
 // ============================================================================
 
 // LLMProvider interface for language model generation with native function calling
-// All providers MUST support native function calling - no legacy text-based extraction
+// All providers must support native function calling
 type LLMProvider interface {
 	// Generate generates a response with native function calling support
 	// Takes a conversation history as an array of messages (proper multi-turn support)

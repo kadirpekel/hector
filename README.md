@@ -50,13 +50,13 @@ go build -o hector cmd/hector/main.go
 export ANTHROPIC_API_KEY="your-key-here"
 
 # Run
-./hector --config assistant.yaml
+hector
 ```
 
 ### First Query
 
 ```bash
-echo "Create a hello.go file with package main" | ./hector --config assistant.yaml
+echo "Create a hello.go file with package main" | hector coding
 ```
 
 ---
