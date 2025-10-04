@@ -10,7 +10,48 @@ The default `hector.yaml` is **already optimized for general-purpose use** with 
 
 ## Available Presets
 
-### 1. Coding (`coding.yaml`) - 🟡 Tier 2: Developer Mode
+### 1. Research Pipeline Workflow (`research-pipeline-workflow.yaml`) - 🟢 Tier 1: Safe
+
+**Purpose**: Demonstrates **automated multi-agent orchestration** for complex workflows
+
+**⚡ Key Feature**: Shows Hector's **Team + Workflow system** with DAG execution, dependency management, and automatic context sharing
+
+**Features**:
+- **3 Specialized Agents** (auto-orchestrated):
+  - 🔍 Researcher (GPT-4o, temp 0.3): Information gathering
+  - 📊 Analyst (Claude Sonnet, temp 0.5): Data analysis
+  - ✍️  Writer (GPT-4o, temp 0.7): Report synthesis
+- **DAG Workflow Execution**:
+  - Dependency-based execution (analyst waits for researcher)
+  - Context sharing via variables (`${research_data}`)
+  - Automatic progress tracking and streaming
+  - Error recovery with retries
+- **Single Command**: All agents execute automatically
+
+**Use Cases**:
+- Complex multi-step automation
+- Specialized role-based processing
+- Data pipeline orchestration
+- Report generation workflows
+
+**Usage**:
+```bash
+# Automatic orchestration - single command
+hector --config configs/research-pipeline-workflow.yaml --workflow research_pipeline
+> "Research AI agent frameworks and market adoption in 2024"
+
+# Hector automatically:
+# 1. Executes researcher agent
+# 2. Passes output to analyst (waits for completion)
+# 3. Combines both outputs for writer
+# 4. Returns final report
+
+# Manual single-agent mode (for testing):
+hector --config configs/research-pipeline-workflow.yaml --agent researcher
+> "Research AI agent frameworks"
+```
+
+### 2. Coding (`coding.yaml`) - 🟡 Tier 2: Developer Mode
 
 **Purpose**: Specialized AI pair programmer for software development tasks
 
@@ -48,7 +89,7 @@ hector --config configs/coding.yaml
 # Prerequisites: Set ANTHROPIC_API_KEY, run Qdrant (optional) and Ollama (optional)
 ```
 
-### 2. Cursor (`cursor.yaml`) - 🟡 Tier 2: Advanced
+### 3. Cursor (`cursor.yaml`) - 🟡 Tier 2: Advanced
 
 **Purpose**: Full Cursor/Claude-like experience with advanced features
 
@@ -121,16 +162,18 @@ For detailed configuration options, see: [CONFIGURATION.md](../CONFIGURATION.md)
 
 ## Comparison
 
-| Feature | Default (Root) | Coding Assistant | Cursor Replication |
-|---------|----------------|------------------|--------------------|
-| **LLM** | OpenAI GPT-4o | Claude 3.7 Sonnet | Claude 3.7 Sonnet |
-| **Security Tier** | 🟢 Tier 1 (Safe) | 🟡 Tier 2 (Dev) | 🟡 Tier 2 (Advanced) |
-| **File Editing** | ❌ No | ✅ Yes | ✅ Yes |
-| **Semantic Search** | ❌ Optional | ✅ Yes | ✅ Yes |
-| **Temperature** | 0.7 (balanced) | 0.1 (precise) | 0.1 (precise) |
-| **Max Tokens** | 8,000 | 16,000 | 16,000 |
-| **Tool Behavior** | Balanced | Aggressive | Aggressive |
-| **Use Case** | General purpose | Software development | Full Cursor replication |
+| Feature | Default (Root) | Research Pipeline | Coding | Cursor |
+|---------|----------------|-------------------|--------|--------|
+| **LLM** | OpenAI GPT-4o | Mixed (GPT+Claude) | Claude 3.7 | Claude 3.7 |
+| **Security Tier** | 🟢 Safe | 🟢 Safe | 🟡 Dev | 🟡 Advanced |
+| **File Editing** | ❌ No | ❌ No | ✅ Yes | ✅ Yes |
+| **Semantic Search** | ❌ Optional | ❌ No | ✅ Yes | ✅ Yes |
+| **Workflow Mode** | ❌ Single Agent | ✅ DAG (3 agents) | ❌ Single | ❌ Single |
+| **Orchestration** | Manual | **Automatic** | Manual | Manual |
+| **Context Sharing** | ❌ No | ✅ Yes (`${vars}`) | ❌ No | ❌ No |
+| **Temperature** | 0.7 (balanced) | 0.3-0.7 (per role) | 0.1 (precise) | 0.1 (precise) |
+| **Max Tokens** | 8,000 | 8,000-16,000 | 16,000 | 16,000 |
+| **Use Case** | General purpose | **Automated workflows** | Dev tasks | Cursor clone |
 
 ## Tips
 
@@ -138,6 +181,12 @@ For detailed configuration options, see: [CONFIGURATION.md](../CONFIGURATION.md)
   - ✅ Zero-config ready with safe defaults
   - ✅ General-purpose for most use cases
   - ✅ No external dependencies required
+  
+- **For multi-agent workflows**: See `configs/research-pipeline-workflow.yaml`
+  - 🟢 Safe (Tier 1)
+  - ✅ Automatic orchestration with DAG execution
+  - ✅ Context sharing and dependency management
+  - 💡 Starting point for complex automation pipelines
   
 - **For development**: Use `hector coding`
   - 🟡 Enables file editing (Tier 2)

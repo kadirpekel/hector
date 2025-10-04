@@ -1,0 +1,197 @@
+# Research Pipeline - Multi-Agent Workflow with Orchestration
+# Uses Hector's Team + Workflow system for automated agent coordination
+#
+# This demonstrates:
+# - DAG execution mode (dependency-based orchestration)
+# - Multiple specialized agents working automatically
+# - Context sharing between workflow steps
+# - Automatic progress tracking and error handling
+
+version: "1.0"
+name: "research-pipeline"
+
+# Define specialized agents
+agents:
+  researcher:
+    name: "Research Agent"
+    description: "Information gathering specialist"
+    llm: "researcher-llm"
+    
+    prompt:
+      prompt_slots:
+        system_role: |
+          You are a research specialist focused on gathering comprehensive information.
+          Your role: Collect relevant data, facts, and sources on given topics.
+          Output format: Structured research report with sources and key findings.
+        
+        tool_usage: |
+          Use available tools to search for information and document findings.
+      
+      include_tools: true
+      include_history: true
+      max_history_messages: 15
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 8
+      enable_streaming: true
+  
+  analyst:
+    name: "Analysis Agent"
+    description: "Data analysis and pattern recognition expert"
+    llm: "analyst-llm"
+    
+    prompt:
+      prompt_slots:
+        system_role: |
+          You are a data analyst specializing in pattern recognition and insight extraction.
+          Your role: Process research findings and identify key insights, trends, and patterns.
+          Output format: Structured analysis with insights, patterns, and recommendations.
+        
+        reasoning_instructions: |
+          Approach analysis systematically:
+          1. Validate data quality from research
+          2. Identify patterns and correlations
+          3. Extract actionable insights
+          4. Note limitations and gaps
+      
+      include_tools: true
+      include_history: true
+      max_history_messages: 15
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 8
+      enable_streaming: true
+  
+  writer:
+    name: "Writing Agent"
+    description: "Report synthesis and documentation specialist"
+    llm: "writer-llm"
+    
+    prompt:
+      prompt_slots:
+        system_role: |
+          You are a professional writer specializing in clear, actionable reports.
+          Your role: Transform research and analysis into well-structured documents.
+          Output format: Executive report with summary, findings, recommendations, and sources.
+        
+        communication_style: |
+          - Clear, concise language
+          - Professional tone
+          - Well-organized structure
+          - Action-oriented recommendations
+      
+      include_tools: true
+      include_history: true
+      max_history_messages: 15
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 8
+      enable_streaming: true
+
+# Workflow orchestration - Automated execution
+workflows:
+  research_pipeline:
+    name: "Research Analysis Pipeline"
+    description: "Automated research → analysis → report workflow"
+    mode: "dag"  # Directed Acyclic Graph execution
+    
+    # Agent execution order (automatically orchestrated)
+    agents:
+      - researcher
+      - analyst
+      - writer
+    
+    # DAG execution with dependencies and context flow
+    execution:
+      dag:
+        steps:
+          - name: "gather_research"
+            agent: "researcher"
+            input: "${user_input}"  # From workflow input
+            output: "research_data"  # Stored in workflow context
+            timeout: 5m
+          
+          - name: "analyze_findings"
+            agent: "analyst"
+            input: "Analyze the following research: ${research_data}"
+            output: "analysis_results"
+            depends_on:
+              - gather_research  # Wait for research to complete
+            timeout: 5m
+          
+          - name: "create_report"
+            agent: "writer"
+            input: "Create executive report from research (${research_data}) and analysis (${analysis_results})"
+            output: "final_report"
+            depends_on:
+              - gather_research
+              - analyze_findings  # Wait for both to complete
+            timeout: 5m
+    
+    # Workflow settings
+    settings:
+      max_retries: 2
+      retry_delay: "10s"
+      continue_on_error: false
+      collect_metrics: true
+
+# LLM Configuration - Different models for different roles
+llms:
+  researcher-llm:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.3  # Lower for factual gathering
+    max_tokens: 8000
+  
+  analyst-llm:
+    type: "anthropic"
+    model: "claude-3-7-sonnet-latest"
+    api_key: "${ANTHROPIC_API_KEY}"
+    temperature: 0.5  # Medium for analytical thinking
+    max_tokens: 16000
+  
+  writer-llm:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7  # Higher for creative writing
+    max_tokens: 12000
+
+# Shared tools across all agents
+tools:
+  execute_command:
+    type: command
+    allowed_commands: ["ls", "cat", "grep", "find", "wc", "head", "tail"]
+    working_directory: "./"
+    max_execution_time: "30s"
+    enable_sandboxing: true
+  
+  file_writer:
+    type: file_writer
+    max_file_size: 2097152  # 2MB for reports
+    working_directory: "./"
+  
+  todo_write:
+    type: todo
+
+# Usage:
+# ------
+# Automatic orchestration (workflow executes all agents):
+#   hector --config configs/research-pipeline-workflow.yaml --workflow research_pipeline
+#   > "Research AI agent frameworks and their market adoption in 2024"
+#
+# Manual single-agent mode (for testing):
+#   hector --config configs/research-pipeline-workflow.yaml --agent researcher
+#   > "Research AI agent frameworks"
+#
+# Workflow features:
+# - Automatic agent coordination (DAG executor handles dependencies)
+# - Context sharing (each step's output becomes input for dependent steps)
+# - Progress tracking (real-time events from team orchestration)
+# - Error handling (retries, rollback, failure recovery)
+# - Streaming output (see each agent's work in real-time)
+

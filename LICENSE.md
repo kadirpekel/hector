@@ -33,7 +33,7 @@ See [GNU AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.en.html) for full terms
 If you wish to use Hector for commercial purposes, you must obtain a commercial license.
 
 **To obtain a commercial license:**
-1. Contact: [Your Email or Contact Information]
+1. Contact: [GitHub Issues](https://github.com/kadirpekel/hector/issues) with label "commercial-license"
 2. Describe your intended use case
 3. We'll provide pricing and licensing terms
 
@@ -82,9 +82,7 @@ All rights reserved except as explicitly granted by the licenses above.
 ## Contact
 
 For commercial licensing inquiries:
-- **Email**: [your-email@example.com]
-- **Website**: [your-website.com]
-- **GitHub**: https://github.com/kadirpekel/hector
+- **GitHub Issues**: https://github.com/kadirpekel/hector/issues (label: "commercial-license")
 
 For questions about the AGPL-3.0 license:
 - See the [GNU AGPL-3.0 FAQ](https://www.gnu.org/licenses/gpl-faq.html)

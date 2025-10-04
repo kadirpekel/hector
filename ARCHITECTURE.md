@@ -6,6 +6,8 @@
 
 ## System Overview
 
+### Single Agent Architecture
+
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                   USER INTERFACE                        │
@@ -50,11 +52,125 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
+### Multi-Agent Orchestration Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   USER INTERFACE                        │
+│          (CLI with --workflow flag)                     │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────────┐
+│                      TEAM                               │
+│  • Manages workflow lifecycle                           │
+│  • Coordinates multiple agents                          │
+│  • Shares context between agents                        │
+│  • Streams events from all agents                       │
+│                                                         │
+│  Services:                                              │
+│  ├─ TeamWorkflowService (executor management)          │
+│  ├─ TeamAgentService (agent lifecycle)                 │
+│  └─ TeamCoordinationService (context sharing)          │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────────┐
+│              WORKFLOW EXECUTOR                          │
+│                                                         │
+│  DAG Executor:                                          │
+│  • Dependency-based execution                           │
+│  • Parallel step execution                              │
+│  • Context passing (${variables})                       │
+│  • Progress tracking                                    │
+│                                                         │
+│  Autonomous Executor (Experimental):                    │
+│  • Self-organizing workflows                            │
+│  • Dynamic agent selection                              │
+│  • Adaptive coordination                                │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+         ┌─────────────┼─────────────┐
+         │             │             │
+         ▼             ▼             ▼
+    ┌────────┐    ┌────────┐    ┌────────┐
+    │ Agent  │    │ Agent  │    │ Agent  │
+    │   1    │    │   2    │    │   3    │
+    └────┬───┘    └────┬───┘    └────┬───┘
+         │             │             │
+         └─────────────┼─────────────┘
+                       │
+                 Shared Context
+              (Variables, Artifacts)
+```
+
 ---
 
 ## Core Components
 
-### 1. Agent (`agent/agent.go`)
+### 1. Team (`team/team.go`)
+
+**Responsibility:** Multi-agent workflow orchestration
+
+**Key Methods:**
+- `ExecuteStreaming(input)` - Execute workflow with streaming
+- `GetStatus()` - Get workflow status
+- `GetSharedState()` - Access shared context
+- `GetAgent(name)` - Retrieve specific agent
+
+**Services:**
+```go
+type Team struct {
+	workflowService     *TeamWorkflowService
+	agentService        *TeamAgentService
+	coordinationService *TeamCoordinationService
+}
+```
+
+**TeamWorkflowService:**
+- Manages workflow executors (DAG, Autonomous)
+- Routes to appropriate executor based on mode
+- Handles workflow streaming events
+
+**TeamAgentService:**
+- Creates and manages agent instances
+- Provides agent capabilities query
+- Handles agent lifecycle
+
+**TeamCoordinationService:**
+- Manages shared state across agents
+- Context variable storage
+- Inter-agent communication
+
+### 2. Workflow Executors (`workflow/`)
+
+**DAGExecutor (`workflow/executors.go`):**
+```go
+type DAGExecutor struct {
+	name   string
+	config *config.DAGExecution
+}
+```
+
+**Capabilities:**
+- Dependency resolution (`depends_on` field)
+- Variable substitution (`${variable_name}`)
+- Parallel execution of independent steps
+- Progress tracking
+- Error recovery with retries
+
+**Execution Flow:**
+1. Parse workflow steps and dependencies
+2. Build dependency graph
+3. Execute steps when dependencies satisfied
+4. Pass outputs as inputs to dependent steps
+5. Stream events for each step
+
+**AutonomousExecutor (Experimental):**
+- Dynamic workflow planning
+- Self-organizing agent selection
+- Adaptive goal pursuit
+- Real-time coordination
+
+### 3. Agent (`agent/agent.go`)
 
 **Responsibility:** Orchestrate the reasoning loop
 
@@ -273,8 +389,21 @@ LLM streams to channel              │
 
 ## Module Responsibilities
 
+### `team/`
+- Multi-agent orchestration
+- Workflow coordination
+- Context sharing between agents
+- Team services (workflow, agent, coordination)
+
+### `workflow/`
+- Workflow executors (DAG, Autonomous)
+- Dependency management
+- Variable substitution
+- Streaming events
+- Executor registry and factory
+
 ### `agent/`
-- Orchestration
+- Single-agent orchestration
 - Tool execution with dynamic labels
 - History management
 - Grayed-out debug output
@@ -295,9 +424,11 @@ LLM streams to channel              │
 - Tool implementations
 - Tool registry
 - Local tools (execute_command, file_writer, etc.)
+- MCP tool integration (foundation)
 
 ### `config/`
 - Configuration types
+- Workflow configuration
 - Validation
 - Defaults
 
@@ -542,22 +673,140 @@ func TestRealLLM(t *testing.T) {
 
 ---
 
+## Multi-Agent Workflow Execution
+
+### DAG Workflow Example
+
+**Configuration:**
+```yaml
+workflows:
+  research_pipeline:
+    mode: "dag"
+    execution:
+      dag:
+        steps:
+          - name: "research"
+            agent: "researcher"
+            input: "${user_input}"
+            output: "research_data"
+          
+          - name: "analyze"
+            agent: "analyst"
+            input: "Analyze: ${research_data}"
+            depends_on: [research]
+            output: "analysis"
+          
+          - name: "report"
+            agent: "writer"
+            input: "Report: ${research_data}, ${analysis}"
+            depends_on: [research, analyze]
+```
+
+**Execution Steps:**
+1. **Step 1**: Researcher executes with user input
+2. **Context Storage**: `research_data = researcher_output`
+3. **Step 2**: Analyst waits for researcher, then executes
+4. **Context Storage**: `analysis = analyst_output`
+5. **Step 3**: Writer waits for both, then executes with both outputs
+6. **Final Output**: Writer's response
+
+**Variable Substitution:**
+```go
+// Template: "Analyze: ${research_data}"
+// Resolution: workflowContext.Variables["research_data"]
+// Result: "Analyze: [actual researcher output]"
+```
+
+### Event Streaming
+
+**Event Types:**
+```go
+const (
+	EventWorkflowStart  WorkflowEventType = "workflow_start"
+	EventWorkflowEnd    WorkflowEventType = "workflow_end"
+	EventAgentStart     WorkflowEventType = "agent_start"
+	EventAgentThinking  WorkflowEventType = "agent_thinking"
+	EventAgentOutput    WorkflowEventType = "agent_output"
+	EventAgentComplete  WorkflowEventType = "agent_complete"
+	EventAgentError     WorkflowEventType = "agent_error"
+	EventStepStart      WorkflowEventType = "step_start"
+	EventStepComplete   WorkflowEventType = "step_complete"
+	EventProgress       WorkflowEventType = "progress"
+)
+```
+
+**Event Flow:**
+```
+Team.ExecuteStreaming()
+    │
+    ├─► EventWorkflowStart
+    │
+    ├─► EventStepStart (research)
+    │   ├─► EventAgentStart (researcher)
+    │   ├─► EventAgentThinking
+    │   ├─► EventAgentOutput
+    │   └─► EventAgentComplete
+    │
+    ├─► EventStepComplete (research)
+    │
+    ├─► EventStepStart (analyze)
+    │   └─► ... (analyst events)
+    │
+    ├─► EventStepComplete (analyze)
+    │
+    ├─► EventStepStart (report)
+    │   └─► ... (writer events)
+    │
+    ├─► EventStepComplete (report)
+    │
+    └─► EventWorkflowEnd
+```
+
+### Context Sharing
+
+**Shared State:**
+```go
+type SharedState struct {
+	Variables map[string]string
+	History   []AgentInteraction
+	Artifacts map[string]Artifact
+}
+```
+
+**Usage:**
+```go
+// Agent 1 stores data
+coordinationService.SetContext("research_data", output, "researcher")
+
+// Agent 2 retrieves data
+input := coordinationService.GetContext("research_data")
+```
+
+**Benefits:**
+- Agents can build on each other's work
+- No manual data passing required
+- Full audit trail of context changes
+
+---
+
 ## Future Enhancements
 
 ### Short Term
-- Parallel tool execution
-- Auto-todo creation improvements
-- Context window smart truncation
+- Production-ready DAG executor testing
+- Autonomous mode improvements
+- Better error recovery in workflows
 
 ### Medium Term
-- Linter integration
-- Multi-file batch operations
-- Advanced error recovery
+- Conditional workflow steps (if/else)
+- Loop constructs (for-each agent)
+- Workflow templates and reuse
+- MCP tool examples and documentation
 
 ### Long Term
-- Multi-agent workflows
-- Custom reasoning strategies
-- Plugin system
+- Visual workflow designer
+- Workflow marketplace
+- Advanced reasoning strategies (ToT, Reflexion)
+- Plugin system for custom executors
 
 ---
 

@@ -1,163 +1,282 @@
-# Hector - Self-Hosted AI Coding Assistant
+# Hector
 
-**Production-ready AI coding assistant with 81% Cursor parity**
+```
+██╗  ██╗███████╗ ██████╗████████╗ ██████╗ ██████╗ 
+██║  ██║██╔════╝██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗
+███████║█████╗  ██║        ██║   ██║   ██║██████╔╝
+██╔══██║██╔══╝  ██║        ██║   ██║   ██║██╔══██╗
+██║  ██║███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║
+╚═╝  ╚═╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
+```
 
-[![License](https://img.shields.io/badge/license-AGPL--3.0%20%2F%20Commercial-blue)](./LICENSE.md)
-[![Go Version](https://img.shields.io/badge/go-1.21%2B-blue)](https://go.dev/)
-[![Status](https://img.shields.io/badge/status-production--ready-green)](.)
+**A Declarative AI Agent Framework**
 
-Hector is a declarative AI agent framework focused on practical coding assistance. Self-hosted, extensible, and honest about its capabilities.
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
+[![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://golang.org/)
+[![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/kadirpekel/hector)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 
----
+> ⚠️ **Alpha Stage**: Core features are stable, but APIs may change. Production use at your own discretion.
 
-## ✨ What Makes Hector Special
-
-### 🏠 Self-Hosted & Private
-- Full control over your data and infrastructure
-- No cloud dependencies for sensitive code
-- Works completely offline (with local LLMs)
-
-### 🔧 Production-Ready Core Features
-- **File Operations**: Create and modify files with 95%+ accuracy
-- **Dynamic Tool Labels**: Emoji-based execution indicators
-- **Self-Reflection**: See the AI's thinking process
-- **Streaming**: Real-time output for immediate feedback
-- **Rate Limiting**: Auto-handled with exponential backoff
-- **Multi-Provider**: OpenAI & Anthropic support
-
-### 📊 Honest Assessment
-- **81% Cursor parity** (CLI-focused)
-- **Excellent** for file operations and basic coding tasks
-- **Good** for general coding assistance
-- **Not as good** for complex multi-file refactoring
-- **By design**: No IDE integration (CLI-first)
+**📚 Documentation:**
+- [Configuration Reference](CONFIGURATION.md) - Complete YAML options and examples
+- [Architecture Guide](ARCHITECTURE.md) - System design, patterns, and multi-agent orchestration
+- [Example Configs](configs/) - Ready-to-use templates (coding, workflows, etc.)
 
 ---
 
-## 🚀 Quick Start
+## What is Hector?
 
-### Installation
+Hector is a **declarative framework** for building AI agents and multi-agent systems. Define agent behavior, workflows, and tool integrations through YAML configuration—no coding required for most use cases.
+
+**Design Philosophy:**
+- **Configuration over Code**: YAML defines system behavior
+- **Composable Architecture**: Mix LLMs, tools, reasoning strategies, and workflows
+- **Version Control**: Git-trackable configurations with interaction history
+- **Extensible by Design**: Plugin system for custom tools, strategies, and providers
+
+---
+
+## Quick Start
 
 ```bash
-# Clone repository
+# Clone and build
 git clone https://github.com/kadirpekel/hector
 cd hector
-
-# Build
 go build -o hector cmd/hector/main.go
 
-# Set API key
-export ANTHROPIC_API_KEY="your-key-here"
+# Optional: Add to PATH
+./install.sh
 
-# Run
+# Set API key
+export OPENAI_API_KEY="sk-..."
+
+# Run with default config
 hector
 ```
 
-### First Query
-
+**Try your first query:**
 ```bash
-echo "Create a hello.go file with package main" | hector coding
+echo "List all Go files in the current directory and count them" | hector
 ```
 
----
-
-## 🎯 What Works Really Well
-
-### ✅ File Operations (95%+)
+**Try a coding task:**
 ```bash
-# Create files
-echo "Create calculator.go with an Add function" | ./hector
-
-# Modify files
-echo "Add a Subtract function to calculator.go" | ./hector
-
-# Multi-file projects
-echo "Create an HTTP server with /health endpoint" | ./hector
+hector coding
+> "Create a simple HTTP server in Go with a health check endpoint"
 ```
 
-### ✅ User Experience (95%+)
-- **Dynamic Labels**: "📝 Creating file `main.go`"
-- **Self-Reflection**: Grayed-out thinking process
-- **Progress Tracking**: Iteration counts, token usage
-- **Streaming**: Real-time output
-
-### ✅ Tool Execution (95%+)
-- Command execution with safety sandboxing
-- Search across codebase (with document store)
-- Todo management (manual, not automatic)
+**See it in action:** Hector will use tools (execute commands, write files) to complete the task with real-time streaming output.
 
 ---
 
-## ⚠️ What Has Limitations
+## Core Capabilities
 
-### Compared to Cursor
+### 🛠️ Extensive Tool System
 
-| Feature | Cursor | Hector | Gap |
-|---------|--------|--------|-----|
-| File operations | 100% | 95% | Small |
-| Speed | Fast | 1.5x slower | Moderate |
-| Auto-todos | Reliable | Manual | Large |
-| Multi-file awareness | Implicit | Via search | Moderate |
-| IDE integration | Yes | No (by design) | N/A |
+**Built-in Tools:**
+- `execute_command`: Sandboxed shell execution
+- `file_writer`: Create and modify files
+- `search_replace`: Precise text replacement
+- `search`: Semantic codebase search (requires vector DB)
+- `todo_write`: Task management and tracking
 
-**Overall: 81% parity** - Very good for CLI use cases
+**MCP Protocol Integration:**
 
----
+Connect to external tool servers via the [Model Context Protocol](https://modelcontextprotocol.io/). This gives your agents access to:
+- **Development**: GitHub, GitLab, Jira, Linear integrations
+- **Data**: Databases, REST APIs, file systems
+- **Cloud**: AWS, GCP, Azure operations
+- **Communication**: Slack, Discord, email
+- **Custom**: Your own MCP-compatible servers
 
-## 📖 Documentation
-
-- [**Configuration Guide**](./CONFIGURATION.md) - All config options explained
-- [**Architecture**](./ARCHITECTURE.md) - System design and patterns
-- [**Gap Analysis**](./HECTOR_VS_CURSOR_GAP_ANALYSIS.md) - Honest comparison with Cursor
-- [**Benchmark Results**](./BRUTAL_HONEST_RESULTS.md) - Real testing results
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────┐
-│   Agent     │  ← Orchestrates reasoning loop
-└──────┬──────┘
-       │
-       ├─► LLM Service (OpenAI/Anthropic)
-       ├─► Tool Service (File ops, commands, search)
-       ├─► Context Service (Semantic search)
-       ├─► Prompt Service (Builds messages)
-       └─► History Service (Conversation tracking)
+Configure MCP tools in YAML:
+```yaml
+tools:
+  github:
+    type: mcp
+    server_url: "http://localhost:3000"
+    description: "GitHub operations (issues, PRs, repos)"
 ```
 
-**Key Design Principles**:
-- **Strategy Pattern**: Pluggable reasoning engines
-- **Dependency Injection**: Clean service boundaries
-- **Interface-Based**: Easy to extend and test
+**Why MCP matters:** Hector becomes infinitely extensible—new capabilities without code changes. Tap into a growing ecosystem of tools.
 
----
+**Configuration Presets (Security Profiles):**
 
-## 🔧 Configuration
+Hector provides example configurations with different tool access levels:
+- **Safe Mode** (`hector.yaml`): Read-only commands + task management
+- **Developer Mode** (`configs/coding.yaml`): File editing + expanded commands
+- **Custom**: Define your own tool permissions
+
+*Note: Tool permissions are configured via YAML, not enforced at the framework level. Review and customize tool access for your use case.*
+
+### 🤝 Multi-Agent Systems
+
+Configure multiple specialized agents working together:
 
 ```yaml
-version: "1.0"
-name: "my-assistant"
+agents:
+  researcher:
+    name: "Research Agent"
+    llm: "gpt-4o"
+    prompt:
+      prompt_slots:
+        system_role: "Information gathering specialist"
+  
+  analyst:
+    name: "Analysis Agent"
+    llm: "claude-3-7-sonnet"
+    prompt:
+      prompt_slots:
+        system_role: "Data analysis expert"
+```
 
+**Workflow Orchestration (In Development):**
+- **DAG Execution**: Dependency-based coordination
+- **Context Sharing**: Pass data between agents
+- **Progress Tracking**: Real-time workflow events
+- **Error Recovery**: Retries and rollback
+
+[See example →](configs/research-pipeline-workflow.yaml)
+
+### 🧠 Pluggable Reasoning Strategies
+
+**Chain-of-Thought (Production):**
+- Iterative problem solving
+- Dynamic tool usage
+- Self-reflection and replanning
+
+**Future Strategies:**
+- Tree-of-Thought
+- Reflexion
+- Multi-step planning
+
+Define in config:
+```yaml
+reasoning:
+  engine: "chain-of-thought"
+  max_iterations: 10
+  enable_streaming: true
+```
+
+### 🔌 LLM Provider Flexibility
+
+Switch providers via configuration:
+
+```yaml
+llms:
+  main:
+    type: "anthropic"
+    model: "claude-3-7-sonnet-latest"
+    temperature: 0.7
+```
+
+**Supported:**
+- OpenAI (GPT-4o, GPT-4, etc.)
+- Anthropic (Claude 3.7 Sonnet, etc.)
+- Extensible: Add custom providers
+
+### 🔍 Semantic Search
+
+Index codebases for intelligent search:
+
+```yaml
+document_stores:
+  codebase:
+    path: "."
+    include_patterns: ["*.go", "*.py", "*.js"]
+    database: "qdrant"
+    embedder: "ollama"
+```
+
+**Requires:** Qdrant (vector DB) + Ollama (embeddings)
+
+### 📝 Prompt Engineering via Slots
+
+Customize agent behavior without full prompt rewrites:
+
+```yaml
+prompt:
+  prompt_slots:
+    system_role: "Expert software architect"
+    tool_usage: "Proactively use search and file tools"
+    reasoning_instructions: "Break complex tasks into steps"
+    communication_style: "Concise, technical, actionable"
+```
+
+**Three levels of customization:**
+1. Strategy defaults (built-in)
+2. Partial override via `prompt_slots`
+3. Full override via `system_prompt`
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  YAML Configuration Layer                       │
+│   (Agents, Workflows, Tools, LLMs, Prompt Slots, Security)     │
+└────────────────────────────┬────────────────────────────────────┘
+                             ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                      Hector Engine Core                         │
+│                                                                 │
+│  ┌──────────────┐    ┌─────────────────┐   ┌───────────────┐  │
+│  │    Agent     │ ←→ │    Strategy     │   │   Workflow    │  │
+│  │ Orchestrator │    │ (Chain-of-      │   │   Executors   │  │
+│  │              │    │  Thought, etc)  │   │  (DAG, Auto)  │  │
+│  └──────┬───────┘    └─────────────────┘   └───────┬───────┘  │
+│         │                                           │          │
+│         ├─────► LLM Service (OpenAI, Anthropic)    │          │
+│         ├─────► Tool Service (Local, MCP)          │          │
+│         ├─────► Context Service (Search, History)  │          │
+│         └─────► Prompt Service (Slots, Templates) ◄┘          │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │              Multi-Agent Orchestration                   │  │
+│  │  Team System → Workflow Registry → Executor Selection   │  │
+│  │  Context Sharing → Dependency Management → Streaming    │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                             ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                  External Integrations                          │
+│  LLM APIs │ MCP Servers │ Vector DBs │ Tool Plugins │ Custom   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key Patterns:**
+- **Strategy Pattern**: Pluggable reasoning engines
+- **Service-Oriented**: Clean boundaries for testing and extension
+- **Interface-Based**: Extend without modifying core
+- **Event-Driven**: Streaming execution with real-time events
+
+**Component Responsibilities:**
+- **Agent**: Orchestrates reasoning loop, coordinates services
+- **Strategy**: Implements reasoning approach (CoT, ToT, etc.)
+- **Workflow**: Multi-agent coordination and dependency management
+- **Services**: Isolated concerns (LLM, tools, context, prompts)
+
+---
+
+## Configuration Example
+
+**Basic Single Agent:**
+```yaml
 agents:
   assistant:
+    name: "Development Assistant"
     llm: "main-llm"
     
     prompt:
       prompt_slots:
-        system_role: "You are a helpful coding assistant"
-        reasoning_instructions: "Think step-by-step"
-        tool_usage: "Use tools when appropriate"
-      
-      include_tools: true
-      include_history: true
-      max_history_messages: 10
+        system_role: "Expert software development assistant"
+        tool_usage: "Use file editing and search proactively"
     
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 10
-      show_debug_info: true
       enable_streaming: true
 
 llms:
@@ -165,183 +284,200 @@ llms:
     type: "anthropic"
     model: "claude-3-7-sonnet-latest"
     api_key: "${ANTHROPIC_API_KEY}"
-    max_tokens: 16000
+    temperature: 0.7
+
+tools:
+  execute_command:
+    type: command
+    allowed_commands: ["ls", "cat", "grep"]
+  
+  file_writer:
+    type: file_writer
 ```
 
-See [CONFIGURATION.md](./CONFIGURATION.md) for complete reference.
+**Multi-Agent Workflow:**
+```yaml
+workflows:
+  research_pipeline:
+    mode: "dag"
+    execution:
+      dag:
+        steps:
+          - name: "research"
+            agent: "researcher"
+            input: "${user_input}"
+            output: "research_data"
+          
+          - name: "analyze"
+            agent: "analyst"
+            input: "Analyze: ${research_data}"
+            depends_on: [research]
+            output: "analysis"
+          
+          - name: "report"
+            agent: "writer"
+            input: "Report: ${research_data}, ${analysis}"
+            depends_on: [research, analyze]
+```
+
+[Full configuration reference →](CONFIGURATION.md)
 
 ---
 
-## 🎨 Example: Create a Web Server
+## Use Cases
+
+**1. Development Assistance**
+File operations, code search, refactoring, testing—all via natural language.
+
+**2. Automated Workflows**
+Multi-agent pipelines (research → analysis → reporting) with dependency management.
+
+**3. Data Processing**
+ETL pipelines with different LLMs per stage and automatic orchestration.
+
+**4. API Orchestration**
+Connect to external systems via MCP, coordinate multiple API calls.
+
+**5. Custom Automation**
+Build domain-specific agents with your own tools and strategies.
+
+---
+
+## Extensibility
+
+### Add Custom Tools
+
+```go
+type MyTool struct{}
+
+func (t *MyTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
+    // Your implementation
+    return ToolResult{Success: true, Content: "Done"}, nil
+}
+
+func (t *MyTool) GetDefinition() ToolDefinition {
+    return ToolDefinition{
+        Name: "my_tool",
+        Description: "Does something useful",
+        Parameters: []ParameterDefinition{
+            {Name: "input", Type: "string", Description: "Input data", Required: true},
+        },
+    }
+}
+```
+
+### Add Reasoning Strategies
+
+```go
+type CustomStrategy struct{}
+
+func (s *CustomStrategy) PrepareIteration(state *ReasoningState) error {
+    // Your reasoning logic
+    return nil
+}
+
+func (s *CustomStrategy) GetPromptSlots() map[string]string {
+    return map[string]string{
+        "reasoning_instructions": "Your custom approach...",
+    }
+}
+```
+
+### Add LLM Providers
+
+```go
+type CustomProvider struct{}
+
+func (p *CustomProvider) Generate(messages []Message, tools []ToolDefinition) (string, []ToolCall, int, error) {
+    // Your provider implementation
+}
+```
+
+**All extensions are hot-pluggable via configuration.**
+
+---
+
+## What Works Today
+
+**Production-Ready:**
+- ✅ Single-agent execution with streaming
+- ✅ File creation and modification  
+- ✅ Sandboxed command execution
+- ✅ LLM provider flexibility (OpenAI, Anthropic)
+- ✅ Semantic search (Qdrant + Ollama)
+- ✅ Tool system (built-in + MCP protocol foundation)
+- ✅ Prompt customization via slots
+
+**Experimental:**
+- 🧪 Multi-agent workflow orchestration (DAG executor implemented, needs production validation)
+- 🧪 Autonomous workflow mode (research prototype)
+
+**Not Yet Available:**
+- ❌ Web UI (CLI only)
+- ❌ Visual workflow designer
+- ❌ Additional LLM providers (extensible, contributions welcome)
+
+---
+
+## Installation
+
+### From Source
+```bash
+git clone https://github.com/kadirpekel/hector
+cd hector
+go build -o hector cmd/hector/main.go
+./install.sh  # Optional: adds to PATH
+```
+
+### Requirements
+- Go 1.21+
+- LLM API access (OpenAI or Anthropic)
+- Optional: Qdrant + Ollama (semantic search)
+- Optional: MCP servers (external tools)
+
+### Configuration Files
+
+Hector looks for configuration in this order:
+1. `--config` flag (explicit path)
+2. `hector.yaml` in current directory
+3. Zero-config mode (safe defaults with `OPENAI_API_KEY` from env)
+
+### Pre-built Configs
 
 ```bash
-echo "Create an HTTP server in server.go with /health and /users endpoints" | ./hector
-```
+# General-purpose (default)
+hector
 
-**Output**:
-```
-🔍 Chain-of-Thought
-📊 Max iterations: 10
+# Development assistant (file editing, semantic search)
+hector coding
 
-🤔 Iteration 1/10
-I'll create an HTTP server with the requested endpoints.
+# Cursor-like experience
+hector --config configs/cursor.yaml
 
-🔧 Executing 1 tool call(s)
-  📝 Creating file `server.go`
-    ✅ Success
-
-💭 Self-Reflection:
-  - Tools executed: write_file
-  - Success/Fail: 1/0
-  - ✅ All tools succeeded - making progress
-
-✅ Reasoning complete
-⏱️  Total time: 3.2s | Tokens: 215 | Iterations: 2
+# Multi-agent workflow (experimental)
+hector --config configs/research-pipeline-workflow.yaml --workflow research_pipeline
 ```
 
 ---
 
-## 🤝 Use Cases
+## License
 
-### ✅ Perfect For
-- **Self-hosted deployments** - Privacy and control
-- **CLI-based workflows** - Terminal power users
-- **File creation/modification** - High accuracy
-- **Learning & experimentation** - Open source, extensible
+**AGPL-3.0 for Personal Use** | **Commercial License Required**
 
-### ⚠️ Consider Cursor Instead For
-- **IDE integration** - Native VS Code support
-- **Maximum speed** - 1.5x faster than Hector
-- **Implicit workspace understanding** - No config needed
-- **Complex multi-file refactoring** - Better intelligence
+Hector is dual-licensed:
+- **Personal/Non-Commercial**: Free under AGPL-3.0 (hobbyists, education, research, open-source)
+- **Commercial Use**: Requires a commercial license (for-profit companies, SaaS, enterprise)
 
----
+**What's Commercial?**
+- Using Hector at a for-profit company
+- Building commercial products/services with Hector
+- Any use that generates revenue
 
-## 📦 Features in Detail
-
-### Native Function Calling
-- OpenAI & Anthropic tool use APIs
-- Structured tool calls, not text parsing
-- Streaming tool execution
-
-### File Operations
-- `file_writer`: Create new files
-- `search_replace`: Precise text replacement
-- Safety features: backups, validation
-
-### Semantic Search (Optional)
-```yaml
-document_stores:
-  - name: "docs"
-    path: "./"
-    patterns: ["*.go", "*.md"]
-
-databases:
-  qdrant:
-    type: "qdrant"
-    host: "localhost"
-    port: 6334
-
-embedders:
-  default:
-    type: "ollama"
-    model: "nomic-embed-text"
-```
-
-### Tool Management
-- Manual todo tracking (not automatic)
-- Progress indicators
-- Self-reflection after each iteration
+See [LICENSE.md](LICENSE.md) for full terms and commercial licensing inquiries.
 
 ---
 
-## 🧪 Testing & Quality
+## Links
 
-### What We Tested
-1. ✅ File creation: 100% success (3/3)
-2. ✅ Dynamic labels: 100% success (3/3)
-3. ✅ Self-reflection: 100% success (3/3)
-4. ❌ Auto-todos: 0% success (removed)
-5. ❌ Parallel execution: Never triggered (removed)
-
-**See**: [BRUTAL_HONEST_RESULTS.md](./BRUTAL_HONEST_RESULTS.md) for full test results
-
----
-
-## 🚧 What We Removed
-
-### Features That Didn't Work
-1. **Parallel Tool Execution** - LLMs reason sequentially by nature
-2. **History Summarization** - Doesn't work in CLI mode
-3. **Automatic Todo Creation** - LLMs ignore "mandatory" prompts
-
-**Why We Removed Them**: Better to be honest than to claim features that don't work.
-
----
-
-## 📈 Roadmap
-
-### Working Now (v1.0)
-- ✅ File operations
-- ✅ Dynamic labels
-- ✅ Self-reflection
-- ✅ Streaming
-- ✅ Rate limiting
-
-### Possible Future
-- Server/REPL mode (for history persistence)
-- VS Code extension
-- More LLM providers
-- Advanced refactoring tools
-
-**Focus**: Solid, reliable features over flashy claims
-
----
-
-## 🤔 FAQ
-
-**Q: Is Hector better than Cursor?**  
-A: For CLI use and self-hosting: yes. For IDE integration and speed: no. Hector is 81% Cursor parity, focused on different use cases.
-
-**Q: Why 81% and not 92%?**  
-A: We tested it. Removed features that didn't work. Being honest about limitations.
-
-**Q: Does it work offline?**  
-A: With local LLMs (Ollama): yes. With OpenAI/Anthropic: needs internet.
-
-**Q: Is it production-ready?**  
-A: Yes, for realistic expectations. Excellent file operations, good coding assistance, honest about what doesn't work.
-
----
-
-## 📄 License
-
-**Dual Licensed:**
-- **AGPL-3.0**: Free for non-commercial use
-- **Commercial**: Requires separate license
-
-See [LICENSE.md](./LICENSE.md) for details.
-
----
-
-## 🙏 Acknowledgments
-
-- **Cursor** - For pioneering AI-first coding
-- **Claude/OpenAI** - For excellent AI capabilities
-- **Go Community** - For tools and libraries
-- **Early Adopters** - For honest feedback
-
----
-
-## 📬 Contact
-
-- **Issues**: https://github.com/kadirpekel/hector/issues
-- **Discussions**: https://github.com/kadirpekel/hector/discussions
-- **Commercial**: [Add your email here]
-
----
-
-**Built with honesty, designed for reality.** 🔧
-
-**Hector: 81% Cursor parity, 100% self-hosted control.**
-
+- **GitHub**: [kadirpekel/hector](https://github.com/kadirpekel/hector)
+- **Issues**: [Report bugs or request features](https://github.com/kadirpekel/hector/issues)
