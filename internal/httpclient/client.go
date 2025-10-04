@@ -121,9 +121,18 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 			return resp, err
 		}
 
-		// Exhausted retries
+		// Exhausted retries - return typed error with retry information
 		if attempt >= c.maxRetries {
-			return resp, err
+			// Calculate next retry delay for agent-level retry
+			nextDelay := c.calculateDelay(strategy, attempt, retryInfo)
+
+			retryErr := &RetryableError{
+				StatusCode: resp.StatusCode,
+				Message:    fmt.Sprintf("max HTTP retries (%d) exceeded", c.maxRetries),
+				RetryAfter: nextDelay,
+				Err:        err,
+			}
+			return resp, retryErr
 		}
 
 		// Determine retry delay based on strategy
@@ -139,7 +148,13 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("max retries exceeded after %d attempts", c.maxRetries)
+	// Should not reach here, but if we do, return generic error
+	return nil, &RetryableError{
+		StatusCode: 0,
+		Message:    fmt.Sprintf("max retries exceeded after %d attempts", c.maxRetries),
+		RetryAfter: c.baseDelay * 2, // Suggest waiting
+		Err:        fmt.Errorf("max retries exceeded"),
+	}
 }
 
 // attemptRequest makes a single HTTP request attempt

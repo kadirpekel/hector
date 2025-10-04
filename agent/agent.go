@@ -2,12 +2,14 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/kadirpekel/hector/component"
 	"github.com/kadirpekel/hector/config"
+	"github.com/kadirpekel/hector/internal/httpclient"
 	"github.com/kadirpekel/hector/llms"
 	"github.com/kadirpekel/hector/reasoning"
 )
@@ -199,11 +201,45 @@ func (a *Agent) execute(
 				return
 			}
 
-			// Call LLM
+			// Call LLM with agent-level retry for transient errors
 			text, toolCalls, tokens, err := a.callLLM(ctx, messages, toolDefs, outputCh, cfg)
 			if err != nil {
-				outputCh <- fmt.Sprintf("Error: %v\n", err)
-				return
+				// Check if error is a typed RetryableError
+				var retryErr *httpclient.RetryableError
+				if errors.As(err, &retryErr) {
+					// Use the exact retry time from the error
+					waitTime := retryErr.RetryAfter
+					if waitTime == 0 {
+						waitTime = 120 * time.Second // Fallback if not specified
+					}
+
+					outputCh <- fmt.Sprintf("⏳ Rate limit exceeded (HTTP %d). Waiting %v before retry...\n",
+						retryErr.StatusCode, waitTime.Round(time.Second))
+					time.Sleep(waitTime)
+
+					// Retry once at agent level
+					text, toolCalls, tokens, err = a.callLLM(ctx, messages, toolDefs, outputCh, cfg)
+					if err != nil {
+						outputCh <- fmt.Sprintf("❌ LLM still unavailable after retry: %v\n", err)
+						return
+					}
+					outputCh <- "✅ Retry successful, continuing...\n"
+				} else if a.isRetryableError(err) {
+					// Legacy fallback for non-typed errors
+					outputCh <- fmt.Sprintf("⏳ Transient error (rate limit or server issue). Waiting 2 minutes before retry...\n")
+					time.Sleep(120 * time.Second)
+
+					text, toolCalls, tokens, err = a.callLLM(ctx, messages, toolDefs, outputCh, cfg)
+					if err != nil {
+						outputCh <- fmt.Sprintf("❌ LLM still unavailable after retry: %v\n", err)
+						return
+					}
+					outputCh <- "✅ Retry successful, continuing...\n"
+				} else {
+					// Fatal error (auth, invalid request, etc.) - stop immediately
+					outputCh <- fmt.Sprintf("❌ Fatal error: %v\n", err)
+					return
+				}
 			}
 
 			state.TotalTokens += tokens
@@ -279,6 +315,35 @@ func (a *Agent) execute(
 // ============================================================================
 // HELPER METHODS - ORCHESTRATION UTILITIES
 // ============================================================================
+
+// isRetryableError checks if an error is transient and worth retrying
+func (a *Agent) isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := err.Error()
+
+	// Check for HTTP status codes indicating transient issues
+	retryablePatterns := []string{
+		"429", // Too Many Requests (rate limit)
+		"500", // Internal Server Error
+		"502", // Bad Gateway
+		"503", // Service Unavailable
+		"504", // Gateway Timeout
+		"rate limit",
+		"rate_limit",
+		"timeout",
+	}
+
+	for _, pattern := range retryablePatterns {
+		if strings.Contains(strings.ToLower(errStr), pattern) {
+			return true
+		}
+	}
+
+	return false
+}
 
 // callLLM calls the LLM service (streaming or non-streaming)
 func (a *Agent) callLLM(
