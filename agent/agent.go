@@ -203,7 +203,8 @@ func (a *Agent) execute(
 			// Execute tools if any
 			var results []reasoning.ToolResult
 			if len(toolCalls) > 0 {
-				results = a.executeTools(ctx, toolCalls, outputCh, cfg)
+				// Pass the LLM's text as context for tool labels (it often explains what it's doing)
+				results = a.executeTools(ctx, toolCalls, text, outputCh, cfg)
 
 				// Core protocol: Add assistant message + tool results to conversation
 				// This is the OpenAI/Anthropic function calling protocol (not strategy-specific)
@@ -296,18 +297,15 @@ func (a *Agent) callLLM(
 func (a *Agent) executeTools(
 	ctx context.Context,
 	toolCalls []llms.ToolCall,
+	llmText string,
 	outputCh chan<- string,
 	cfg config.ReasoningConfig,
 ) []reasoning.ToolResult {
 	tools := a.services.Tools()
 
-	if cfg.ShowDebugInfo {
-		outputCh <- fmt.Sprintf("\n🔧 **Executing %d tool call(s)**\n", len(toolCalls))
-	}
-
 	results := make([]reasoning.ToolResult, 0, len(toolCalls))
 
-	for _, toolCall := range toolCalls {
+	for i, toolCall := range toolCalls {
 		// Check cancellation before each tool
 		select {
 		case <-ctx.Done():
@@ -315,10 +313,25 @@ func (a *Agent) executeTools(
 		default:
 		}
 
-		if cfg.ShowDebugInfo {
-			// Generate dynamic label with emoji based on tool type
-			label := a.generateToolLabel(toolCall)
-			outputCh <- fmt.Sprintf("  %s\n", label)
+		// Show tool execution label (conversational, enabled by default)
+		if cfg.ShowToolExecution {
+			// Use the LLM's natural text as the label (it often explains what it's doing)
+			// If multiple tool calls, or no text, use a simple fallback
+			var label string
+			// Skip if text is streaming placeholder or empty
+			if llmText != "" && llmText != "[response was streamed]" && len(toolCalls) == 1 {
+				// Single tool call with accompanying text - use it as the label
+				label = a.extractToolLabelFromText(llmText, toolCall)
+			} else {
+				// Multiple tools, streaming, or no text - generate a simple descriptive label
+				label = a.generateSimpleToolLabel(toolCall)
+			}
+
+			if i == 0 {
+				outputCh <- fmt.Sprintf("\n%s", label) // First tool, add newline before
+			} else {
+				outputCh <- label // Subsequent tools
+			}
 		}
 
 		// Execute tool
@@ -326,12 +339,12 @@ func (a *Agent) executeTools(
 		resultContent := result
 		if err != nil {
 			resultContent = fmt.Sprintf("Error: %v", err)
-			if cfg.ShowDebugInfo {
-				outputCh <- fmt.Sprintf("    ❌ Error: %v\n", err)
+			if cfg.ShowToolExecution {
+				outputCh <- fmt.Sprintf(" ❌\n")
 			}
 		} else {
-			if cfg.ShowDebugInfo {
-				outputCh <- fmt.Sprintf("    ✅ Success\n")
+			if cfg.ShowToolExecution {
+				outputCh <- fmt.Sprintf(" ✅\n")
 			}
 		}
 
@@ -347,58 +360,39 @@ func (a *Agent) executeTools(
 	return results
 }
 
-// generateToolLabel creates a descriptive label with emoji for tool execution
-func (a *Agent) generateToolLabel(toolCall llms.ToolCall) string {
-	emoji := "🔧"
-	description := ""
+// extractToolLabelFromText extracts a conversational label from the LLM's text
+// The LLM often says something like "Let me check the weather..." before calling tools
+func (a *Agent) extractToolLabelFromText(text string, toolCall llms.ToolCall) string {
+	// Clean up the text
+	text = strings.TrimSpace(text)
 
-	// Select emoji and generate description based on tool type
-	switch toolCall.Name {
-	case "execute_command":
-		emoji = "💻"
-		if cmd, ok := toolCall.Arguments["command"].(string); ok {
-			// Extract first word of command for description
-			parts := splitString(cmd, " ")
-			if len(parts) > 0 {
-				description = fmt.Sprintf("Running `%s`", parts[0])
-			} else {
-				description = "Executing command"
-			}
-		}
-	case "write_file", "file_writer":
-		emoji = "📝"
-		if path, ok := toolCall.Arguments["path"].(string); ok {
-			description = fmt.Sprintf("Creating file `%s`", path)
+	// If text is too long, truncate it (keep it conversational and concise)
+	if len(text) > 100 {
+		// Find a good breaking point (sentence end)
+		if idx := strings.Index(text[80:], "."); idx != -1 {
+			text = text[:80+idx+1]
 		} else {
-			description = "Writing file"
+			text = text[:100] + "..."
 		}
-	case "search_replace":
-		emoji = "✏️"
-		if file, ok := toolCall.Arguments["file_path"].(string); ok {
-			description = fmt.Sprintf("Modifying `%s`", file)
-		} else {
-			description = "Replacing text in file"
-		}
-	case "search":
-		emoji = "🔍"
-		if query, ok := toolCall.Arguments["query"].(string); ok {
-			description = fmt.Sprintf("Searching for \"%s\"", truncateString(query, 40))
-		} else {
-			description = "Searching codebase"
-		}
-	case "todo_write":
-		emoji = "📋"
-		if merge, ok := toolCall.Arguments["merge"].(bool); ok && merge {
-			description = "Updating task list"
-		} else {
-			description = "Creating task list"
-		}
-	default:
-		emoji = "🔧"
-		description = fmt.Sprintf("Calling %s", toolCall.Name)
 	}
 
-	return fmt.Sprintf("%s %s", emoji, description)
+	// Use generic tool emoji - let the LLM provide context/personality
+	// No keyword matching, no deterministic logic
+	emoji := "🔧"
+
+	// Format the label
+	return fmt.Sprintf("%s %s", emoji, text)
+}
+
+// generateSimpleToolLabel generates a simple descriptive label when no LLM text is available
+// Uses generic emoji and tool name - no keyword matching or deterministic logic
+func (a *Agent) generateSimpleToolLabel(toolCall llms.ToolCall) string {
+	// Generic tool emoji - no keyword matching
+	emoji := "🔧"
+
+	// Simple label: just the tool name
+	// The LLM is responsible for providing context and personality via its text response
+	return fmt.Sprintf("%s Calling %s...", emoji, toolCall.Name)
 }
 
 // Helper functions for string manipulation

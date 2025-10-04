@@ -9,7 +9,7 @@
 ╚═╝  ╚═╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
 ```
 
-**A Declarative AI Agent Framework**
+**Declarative AI Agent Platform**
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
 [![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://golang.org/)
@@ -27,13 +27,14 @@
 
 ## What is Hector?
 
-Hector is a **declarative framework** for building AI agents and multi-agent systems. Define agent behavior, workflows, and tool integrations through YAML configuration—no coding required for most use cases.
+Hector is an **AI agent** you configure, not code. It's a complete agentic system that adapts to any task through declarative YAML configuration—from weather queries to complex workflows.
 
-**Design Philosophy:**
-- **Configuration over Code**: YAML defines system behavior
-- **Composable Architecture**: Mix LLMs, tools, reasoning strategies, and workflows
-- **Version Control**: Git-trackable configurations with interaction history
-- **Extensible by Design**: Plugin system for custom tools, strategies, and providers
+**What makes Hector different:**
+- **Hector IS the agent**: You configure what it knows and can do, it handles the rest
+- **Declarative configuration**: Define capabilities in YAML, no programming required
+- **Domain-agnostic**: Same agent, infinite personas (research, support, development, analysis)
+- **Extensible platform**: Connect tools, LLMs, and data sources through configuration
+- **Self-hosted intelligence**: Your agent, your data, your control
 
 ---
 
@@ -44,69 +45,95 @@ Hector is a **declarative framework** for building AI agents and multi-agent sys
 git clone https://github.com/kadirpekel/hector
 cd hector
 go build -o hector cmd/hector/main.go
+./install.sh  # Optional: adds to PATH
 
-# Optional: Add to PATH
-./install.sh
+# Configure your agent
+cp .env.example .env
+# Add your OPENAI_API_KEY to .env
 
-# Set API key
-export OPENAI_API_KEY="sk-..."
-
-# Run with default config
+# Talk to Hector
 hector
 ```
 
-**Try your first query:**
-```bash
-echo "List all Go files in the current directory and count them" | hector
-```
+**See Hector in action:**
 
-**Try something more powerful:**
 ```bash
+# General knowledge (works immediately)
+echo "Explain quantum computing like I'm five" | hector
+
+# Task management (built-in tool)
+echo "Create a todo list for planning a weekend trip to Paris" | hector
+
+# Software development
 hector coding
-> "Create a REST API in Go with /users endpoint and error handling"
+> "Create a REST API with JWT authentication"
+
+# Research & analysis
+echo "What are the top 3 trends in AI agents for 2024?" | hector
 ```
 
-Hector will:
-1. 🔍 Search your codebase to understand the context
-2. 📝 Create multiple files (main.go, handlers.go, etc.)
-3. ✅ Write idiomatic code following best practices
-4. 📊 Stream its reasoning process in real-time
+**Same agent, different capabilities** through configuration.
 
-**What you get with `hector coding`:**
-- **Full Cursor/Claude Experience**: Maximum context, aggressive tool usage, optimized prompts
-- **File Operations**: Creates, modifies, and refactors files automatically  
-- **Semantic Search**: Understands your codebase (Qdrant + Ollama embeddings)
-- **Smart Tools**: git, go, npm, file editing—all sandboxed
-- **Context-Aware**: Learns from your existing code patterns and project structure
+**Connect external tools via MCP** (when you have an MCP server running):
 
-**Flexible Workspace Setup:**
-
-Hector's configuration system enables powerful workspace patterns:
+```yaml
+# configs/weather-agent.yaml (example)
+agents:
+  weather_assistant:
+    llm: "gpt-4o"
+    prompt:
+      system_role: "Friendly weather assistant with humor"
+    
+tools:
+  weather:
+    type: mcp
+    server_url: "${MCP_WEATHER_SERVER}"  # Your MCP server
+```
 
 ```bash
-# Individual project workspaces
-my-project/
-  ├── hector.yaml          # Project-specific config
-  └── src/
+# Then use it (requires running MCP server)
+hector --config configs/weather-agent.yaml
+> "What's the weather in Tokyo? 🌂"
+```
 
-# Multi-tenant shared configs
-my-workspace/
+**The power**: Hector adapts through configuration. Built-in tools work immediately, external tools connect via MCP protocol.
+
+**Note**: The weather-agent config demonstrates MCP integration. You'll need a running MCP weather server to use it. See [Model Context Protocol](https://modelcontextprotocol.io/) for server examples.
+
+**Configure Hector per workspace:**
+
+Point Hector at different configs to change its entire personality and capabilities:
+
+```bash
+# Individual workspaces (any domain)
+research-project/
+  ├── hector.yaml          # Research assistant config
+  └── data/
+
+writing-workspace/
+  ├── hector.yaml          # Content creation config
+  └── drafts/
+
+# Multi-tenant shared configs (teams/orgs)
+company-workspace/
   ├── configs/
-  │   ├── team-coding.yaml  # Shared team standards
-  │   ├── security.yaml     # Security review config
-  │   └── docs.yaml         # Documentation generation
+  │   ├── support.yaml     # Customer support agent
+  │   ├── research.yaml    # Research analyst
+  │   ├── writer.yaml      # Content writer
+  │   └── developer.yaml   # Software development
   └── projects/
 
 # Use from anywhere
-cd my-project && hector              # Uses local hector.yaml
-cd my-workspace && hector team-coding  # Uses configs/team-coding.yaml
+cd research-project && hector           # Research mode
+cd company-workspace && hector support  # Support mode
+cd company-workspace && hector developer # Development mode
 ```
 
 **Use cases:**
-- **Per-Project**: Each project has its own `hector.yaml` with custom tools, prompts, and LLM settings
-- **Team Standards**: Share configs across team members via Git (coding standards, linting rules)
-- **Multi-Persona**: Switch between different modes (coding, review, docs) with simple commands
-- **Client-Specific**: Maintain separate configs for different clients or environments
+- **Domain-Specific**: Configure agents for research, writing, support, development, etc.
+- **Team Workflows**: Share persona configs across team (research standards, writing style, support protocols)
+- **Multi-Persona**: Switch contexts easily (researcher, writer, analyst, developer)
+- **Client/Project Separation**: Different configs per client, project, or environment
 
 ---
 
@@ -121,25 +148,33 @@ cd my-workspace && hector team-coding  # Uses configs/team-coding.yaml
 - `search`: Semantic codebase search (requires vector DB)
 - `todo_write`: Task management and tracking
 
-**MCP Protocol Integration:**
+**MCP Protocol - Connect External Tools:**
 
-Connect to external tool servers via the [Model Context Protocol](https://modelcontextprotocol.io/). This gives your agents access to:
-- **Development**: GitHub, GitLab, Jira, Linear integrations
-- **Data**: Databases, REST APIs, file systems
-- **Cloud**: AWS, GCP, Azure operations
-- **Communication**: Slack, Discord, email
-- **Custom**: Your own MCP-compatible servers
+Hector can connect to external tool servers using the [Model Context Protocol](https://modelcontextprotocol.io/). Want weather data? GitHub access? Custom APIs? Point Hector at an MCP server:
 
-Configure MCP tools in YAML:
 ```yaml
+# configs/weather-agent.yaml (example pattern)
 tools:
-  github:
+  weather:
     type: mcp
-    server_url: "http://localhost:3000"
-    description: "GitHub operations (issues, PRs, repos)"
+    server_url: "${MCP_WEATHER_SERVER}"  # Your MCP server
 ```
 
-**Why MCP matters:** Hector becomes infinitely extensible—new capabilities without code changes. Tap into a growing ecosystem of tools.
+```bash
+# .env
+MCP_WEATHER_SERVER=http://localhost:3000  # Your running MCP server
+```
+
+**Note**: MCP integration requires running MCP servers. The weather-agent example shows the pattern—you'll need to set up MCP servers for your specific tools.
+
+**What you can connect:**
+- **Data & APIs**: Weather services, news feeds, databases, REST APIs
+- **Development**: GitHub, GitLab, Jira, CI/CD systems
+- **Cloud**: AWS, GCP, Azure management tools
+- **Communication**: Slack, Discord, email integrations
+- **Custom**: Your own domain-specific MCP servers
+
+**The power**: Pure declarative extension. Configure once, Hector gains abilities—no code changes, no rebuilds.
 
 **Configuration Presets (Security Profiles):**
 
@@ -150,9 +185,9 @@ Hector provides example configurations with different tool access levels:
 
 *Note: Tool permissions are configured via YAML, not enforced at the framework level. Review and customize tool access for your use case.*
 
-### 🤝 Multi-Agent Systems
+### 🤝 Multi-Agent Orchestration
 
-Configure multiple specialized agents working together:
+**Hector can split itself into specialized sub-agents** that coordinate on complex tasks:
 
 ```yaml
 agents:
@@ -366,20 +401,22 @@ workflows:
 
 ## Use Cases
 
-**1. Development Assistance**
-File operations, code search, refactoring, testing—all via natural language.
+### General Purpose
+- **Research Assistants**: Information gathering, fact-checking, literature review
+- **Content Creation**: Blog posts, documentation, technical writing, marketing copy
+- **Data Analysis**: CSV processing, pattern recognition, insights extraction, reporting
+- **Customer Support**: Automated responses, ticket triage, FAQ generation
+- **Education**: Tutoring, concept explanation, quiz generation, study guides
 
-**2. Automated Workflows**
-Multi-agent pipelines (research → analysis → reporting) with dependency management.
+### Technical/Development
+- **Coding Assistance**: Code generation, refactoring, debugging (via `hector coding`)
+- **DevOps Automation**: Infrastructure scripts, deployment automation, monitoring
+- **API Integration**: Connect external services via MCP protocol, workflow orchestration
 
-**3. Data Processing**
-ETL pipelines with different LLMs per stage and automatic orchestration.
-
-**4. API Orchestration**
-Connect to external systems via MCP, coordinate multiple API calls.
-
-**5. Custom Automation**
-Build domain-specific agents with your own tools and strategies.
+### Enterprise Workflows
+- **Multi-Agent Pipelines**: Research → Analysis → Reporting with specialized agents
+- **Document Processing**: Extract, transform, summarize large document collections
+- **Compliance & Audit**: Policy checking, automated reporting, audit trail generation
 
 ---
 

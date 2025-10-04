@@ -423,6 +423,16 @@ func (s *DefaultToolService) GetAvailableTools() []llms.ToolDefinition {
 	return result
 }
 
+// GetTool implements reasoning.ToolService
+// Allows strategies to access specific tools directly (e.g., TodoTool for task tracking)
+func (s *DefaultToolService) GetTool(name string) (interface{}, error) {
+	if s.toolRegistry == nil {
+		return nil, fmt.Errorf("tool registry not available")
+	}
+
+	return s.toolRegistry.GetTool(name)
+}
+
 // convertToolInfoToToolDefinition converts from tools.ToolInfo to llms.ToolDefinition
 func convertToolInfoToToolDefinition(info tools.ToolInfo) llms.ToolDefinition {
 	// Convert parameters to JSON Schema

@@ -16,10 +16,10 @@ import (
 
 // ToolEntry represents a complete tool entry with all metadata
 type ToolEntry struct {
-	Tool           Tool           `json:"tool"`
+	Tool       Tool       `json:"tool"`
 	Source     ToolSource `json:"source"`
-	SourceType string         `json:"source_type"`
-	Name           string         `json:"name"`
+	SourceType string     `json:"source_type"`
+	Name       string     `json:"name"`
 }
 
 // ToolRegistryError represents a tool registry error
@@ -96,10 +96,10 @@ func (r *ToolRegistry) RegisterSource(source ToolSource) error {
 		}
 
 		entry := ToolEntry{
-			Tool:           tool,
+			Tool:       tool,
 			Source:     source,
 			SourceType: source.GetType(),
-			Name:           toolInfo.Name,
+			Name:       toolInfo.Name,
 		}
 
 		if err := r.Register(toolInfo.Name, entry); err != nil {
@@ -143,10 +143,10 @@ func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 			}
 
 			entry := ToolEntry{
-				Tool:           tool,
+				Tool:       tool,
 				Source:     repo,
 				SourceType: repo.GetType(),
-				Name:           toolInfo.Name,
+				Name:       toolInfo.Name,
 			}
 
 			if err := r.Register(toolInfo.Name, entry); err != nil {
@@ -160,16 +160,50 @@ func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 
 // initializeFromConfig initializes the tool registry with configuration
 func (r *ToolRegistry) initializeFromConfig(toolConfig *config.ToolConfigs) error {
-	// Create local source with all configured tools
-	if len(toolConfig.Tools) > 0 {
-		repo, err := NewLocalToolSourceWithConfig(toolConfig.Tools)
+	// Separate MCP tools from local tools
+	localTools := make(map[string]config.ToolConfig)
+	mcpTools := make(map[string]config.ToolConfig)
+
+	for name, tool := range toolConfig.Tools {
+		if tool.Type == "mcp" {
+			mcpTools[name] = tool
+		} else {
+			localTools[name] = tool
+		}
+	}
+
+	// Create and register local tool source with non-MCP tools
+	if len(localTools) > 0 {
+		repo, err := NewLocalToolSourceWithConfig(localTools)
 		if err != nil {
 			return fmt.Errorf("failed to create local tool source: %w", err)
 		}
 
-		// Register the source
 		if err := r.RegisterSource(repo); err != nil {
 			return fmt.Errorf("failed to register local source: %w", err)
+		}
+	}
+
+	// Create and register MCP tool sources (each MCP server is a separate source)
+	for toolName, toolConfig := range mcpTools {
+		if !toolConfig.Enabled {
+			continue
+		}
+
+		// Get server URL from config
+		serverURL := toolConfig.ServerURL
+		if serverURL == "" {
+			fmt.Printf("Warning: MCP tool '%s' missing server_url, skipping\n", toolName)
+			continue
+		}
+
+		// Create MCP source
+		mcpSource := NewMCPToolSource(toolName, serverURL, toolConfig.Description)
+
+		// Register the MCP source (RegisterSource will discover tools automatically)
+		if err := r.RegisterSource(mcpSource); err != nil {
+			fmt.Printf("Warning: Failed to register MCP source '%s': %v\n", toolName, err)
+			continue
 		}
 	}
 

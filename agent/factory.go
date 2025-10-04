@@ -7,6 +7,7 @@ import (
 	"github.com/kadirpekel/hector/config"
 	hectorcontext "github.com/kadirpekel/hector/context"
 	"github.com/kadirpekel/hector/reasoning"
+	"github.com/kadirpekel/hector/tools"
 )
 
 // NewAgentServicesWithConfig creates agent services with all dependencies wired up
@@ -27,6 +28,48 @@ func NewAgentServices(agentConfig *config.AgentConfig, componentManager *compone
 
 	// Initialize services
 	toolRegistry := componentManager.GetToolRegistry()
+
+	// Create the strategy early to check for required tools
+	strategy, err := reasoning.CreateStrategy(agentConfig.Reasoning.Engine, agentConfig.Reasoning)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create reasoning strategy: %w", err)
+	}
+
+	// Auto-register strategy-required tools (e.g., todo_write for ChainOfThought)
+	requiredTools := strategy.GetRequiredTools()
+	for _, reqTool := range requiredTools {
+		// Check if tool already exists
+		if _, err := toolRegistry.GetTool(reqTool.Name); err == nil {
+			// Tool already exists, skip
+			continue
+		}
+
+		// Tool doesn't exist - auto-create if requested
+		if reqTool.AutoCreate {
+			if err := registerRequiredTool(toolRegistry, reqTool); err != nil {
+				return nil, fmt.Errorf("failed to register required tool '%s': %w", reqTool.Name, err)
+			}
+			fmt.Printf("Info: Auto-registered strategy-required tool '%s' (%s)\n", reqTool.Name, reqTool.Description)
+		}
+	}
+
+	// Register agent-specific tools if any are defined
+	if len(agentConfig.Tools.Tools) > 0 {
+		// Create a temporary tool registry with agent-specific tools
+		agentToolRegistry, err := tools.NewToolRegistryWithConfig(&agentConfig.Tools)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create agent tool registry: %w", err)
+		}
+
+		// Merge agent tools into the main registry
+		for _, tool := range agentToolRegistry.ListTools() {
+			entry, _ := agentToolRegistry.Get(tool.Name)
+			if err := toolRegistry.Register(tool.Name, entry); err != nil {
+				// Skip if tool already exists globally
+				fmt.Printf("Info: Agent tool '%s' conflicts with global tool, using global\n", tool.Name)
+			}
+		}
+	}
 
 	// Create context service - only if document stores are configured
 	var contextService reasoning.ContextService
@@ -78,6 +121,42 @@ func NewAgentServices(agentConfig *config.AgentConfig, componentManager *compone
 	)
 
 	return agentServices, nil
+}
+
+// registerRequiredTool creates and registers a required tool in the registry
+func registerRequiredTool(registry *tools.ToolRegistry, reqTool reasoning.RequiredTool) error {
+	// Create a local tool source for the required tool
+	localSource := tools.NewLocalToolSource("strategy-required")
+
+	// Create the tool based on type
+	var tool tools.Tool
+	switch reqTool.Type {
+	case "todo":
+		tool = tools.NewTodoTool()
+	case "command":
+		// Create a basic command tool with safe defaults
+		cmdTool, err := tools.NewCommandToolWithConfig(reqTool.Name, config.ToolConfig{
+			Type:             "command",
+			AllowedCommands:  []string{"ls", "cat", "pwd", "echo"},
+			WorkingDirectory: "./",
+			MaxExecutionTime: "30s",
+			EnableSandboxing: true,
+		})
+		if err != nil {
+			return err
+		}
+		tool = cmdTool
+	default:
+		return fmt.Errorf("unsupported required tool type: %s", reqTool.Type)
+	}
+
+	// Register the tool in the local source
+	if err := localSource.RegisterTool(tool); err != nil {
+		return err
+	}
+
+	// Register the source in the registry
+	return registry.RegisterSource(localSource)
 }
 
 // ============================================================================

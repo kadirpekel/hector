@@ -743,9 +743,10 @@ func (c *SearchReplaceConfig) SetDefaults() {
 	}
 }
 
-// ToolConfigs represents tool configurations
+// ToolConfigs represents tool configuration
+// The Tools field is marked with `,inline` to flatten the YAML structure
 type ToolConfigs struct {
-	Tools map[string]ToolConfig `yaml:"tools,omitempty"` // Tool configurations (map for easy override)
+	Tools map[string]ToolConfig `yaml:",inline"` // Tool configurations (map for easy override, inline to avoid double-nesting)
 }
 
 // Validate implements Config.Validate for ToolConfigs
@@ -760,7 +761,12 @@ func (c *ToolConfigs) Validate() error {
 
 // SetDefaults implements Config.SetDefaults for ToolConfigs
 func (c *ToolConfigs) SetDefaults() {
-	// Zero-config: Create default safe tools (Tier 1)
+	// Initialize the tools map if it's nil
+	if c.Tools == nil {
+		c.Tools = make(map[string]ToolConfig)
+	}
+
+	// Zero-config: Create default safe tools (Tier 1) ONLY if no tools are configured
 	// For file editing tools (file_writer, search_replace), users must explicitly enable them
 	if len(c.Tools) == 0 {
 		c.Tools = map[string]ToolConfig{
@@ -814,6 +820,9 @@ type ToolConfig struct {
 	MaxResults         int      `yaml:"max_results,omitempty"`          // Maximum total results
 	EnabledSearchTypes []string `yaml:"enabled_search_types,omitempty"` // Enabled search types
 
+	// MCP tool fields
+	ServerURL string `yaml:"server_url,omitempty"` // MCP server URL
+
 	// Generic config for extensibility (for custom/future tools)
 	Config map[string]interface{} `yaml:"config,omitempty"` // Additional tool-specific config
 }
@@ -849,10 +858,12 @@ func (c *ToolConfig) Validate() error {
 
 // SetDefaults implements Config.SetDefaults for ToolConfig
 func (c *ToolConfig) SetDefaults() {
-	// Default enabled to true
-	if !c.Enabled {
-		c.Enabled = true
-	}
+	// Enabled is explicitly false, so check for zero value and set to true
+	// Note: Go's zero value for bool is false, so we can't distinguish between
+	// unset (default) and explicitly set to false in the YAML
+	// We'll assume if it's false, it was unset (unless explicitly "enabled: false")
+	// For now, we'll keep it simple: tools are enabled by default
+	c.Enabled = true
 
 	// Type-specific defaults
 	switch c.Type {
@@ -979,9 +990,9 @@ func (c *PromptConfig) Validate() error {
 
 // SetDefaults implements Config.SetDefaults for PromptConfig
 func (c *PromptConfig) SetDefaults() {
-	if c.SystemPrompt == "" {
-		c.SystemPrompt = "You are a helpful AI assistant. Use available tools and context to provide accurate, helpful responses."
-	}
+	// DO NOT set a default SystemPrompt - leave it empty to allow slot-based prompts
+	// If both SystemPrompt and prompt_slots are empty, strategies will provide default slots
+
 	if c.MaxContextLength == 0 {
 		c.MaxContextLength = 4000
 	}
@@ -1002,7 +1013,8 @@ type ReasoningConfig struct {
 	EnableMetaReasoning  bool    `yaml:"enable_meta_reasoning"`  // Enable meta-reasoning
 	EnableGoalEvolution  bool    `yaml:"enable_goal_evolution"`  // Enable goal evolution
 	EnableDynamicTools   bool    `yaml:"enable_dynamic_tools"`   // Enable dynamic tools
-	ShowDebugInfo        bool    `yaml:"show_debug_info"`        // Show debug info
+	ShowDebugInfo        bool    `yaml:"show_debug_info"`        // Show debug info (iteration counts, tokens, etc.)
+	ShowToolExecution    bool    `yaml:"show_tool_execution"`    // Show tool execution labels (enabled by default for better UX)
 	ShowThinking         bool    `yaml:"show_thinking"`          // Show internal reasoning in grayed-out format (Claude-style)
 	EnableStreaming      bool    `yaml:"enable_streaming"`       // Enable streaming
 	QualityThreshold     float64 `yaml:"quality_threshold"`      // Quality threshold
@@ -1034,9 +1046,11 @@ func (c *ReasoningConfig) SetDefaults() {
 		c.QualityThreshold = 0.7
 	}
 	// EnableStreaming defaults to true for better UX in zero-config mode
+	// ShowToolExecution defaults to true - tool execution should be visible, not debug info
 	// Note: Go's zero value for bool is false, so we need to explicitly set it
-	// In YAML configs, users can explicitly set enable_streaming: false if needed
+	// In YAML configs, users can explicitly set these to false if needed
 	c.EnableStreaming = true
+	c.ShowToolExecution = true
 }
 
 // ============================================================================

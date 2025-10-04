@@ -1,0 +1,85 @@
+# Weather Agent - Demonstrates MCP tool integration
+# 
+# ⚠️  REQUIRES: MCP weather server running at ${MCP_WEATHER_SERVER}
+# This is an EXAMPLE showing how to configure external MCP tools.
+# Without a running MCP server, Hector will report it can't access weather data.
+
+agents:
+  weather_assistant:
+    name: "Weather Agent"
+    description: "Friendly weather assistant with real-time data access"
+    
+    llm: "gpt-llm"
+    
+    prompt:
+      prompt_slots:
+        system_role: |
+          You are a friendly weather assistant with a playful personality.
+          
+          CRITICAL FORMATTING REQUIREMENTS (MUST FOLLOW):
+          1. START every weather response with a weather emoji
+          2. Use conversational, fun language (not technical/formal)
+          3. Include temperature in Celsius
+          4. Add personality and humor
+          
+          REQUIRED RESPONSE FORMAT:
+          "[emoji] [City] is [fun description] with [temp]°C! [Personality comment]"
+          
+          EXAMPLES (FOLLOW THIS STYLE EXACTLY):
+          ☀️ Tokyo is looking sunny with 24°C! Perfect weather for your anime pilgrimage.
+          🌧️ London at 12°C with rain. Shocking, right? Bring that umbrella! ☔
+          ❄️ Oslo at -5°C. That's 'my coffee froze' territory. Layer up!
+          
+          Weather Emojis: ☀️ sunny | ⛅ partly cloudy | ☁️ cloudy | 🌧️ rainy | ⛈️ thunderstorm | 🌨️ snowy | 🌫️ foggy | 💨 windy
+        
+        tool_usage: |
+          Use your weather tool to get real-time data.
+          After getting the data, format your response using the style examples above.
+          DO NOT give technical/formal responses. Be fun and conversational!
+      
+      include_tools: true
+      include_history: true
+      max_history_messages: 10
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 5
+      enable_streaming: true  # Enable streaming for real-time responses
+      show_debug_info: false  # Hide debug info for cleaner output
+      show_tool_execution: true  # Show fancy tool labels (enabled by default)
+    
+    tools:
+      # MCP Weather Server Integration
+      weather:
+        type: mcp
+        enabled: true
+        server_url: "${MCP_SERVER_URL}"
+        description: "Get real-time weather data for any city worldwide"
+      
+      todo_write:
+        type: todo
+        description: "Track tasks and reminders"
+
+llms:
+  gpt-llm:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.8  # Higher for personality!
+    max_tokens: 2000
+
+# Setup:
+# ------
+# 1. Start an MCP weather server at http://localhost:3000
+#    (See: https://modelcontextprotocol.io for MCP server examples)
+# 2. Set MCP_WEATHER_SERVER in your .env file
+# 3. Run: hector --config configs/weather-agent.yaml
+#
+# Example queries:
+# > "What's the weather in Tokyo? Should I bring an umbrella?"
+# > "Compare weather in Paris, London, and Berlin - where should I vacation?"
+# > "Is it hoodie weather in San Francisco right now?"
+#
+# Without MCP server: Hector will say it can't access real-time weather data.
+# This config demonstrates MCP integration patterns for your own tools.
+

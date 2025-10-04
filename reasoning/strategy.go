@@ -37,11 +37,24 @@ type ReasoningStrategy interface {
 	// Agent merges these with user config, PromptService renders them
 	GetPromptSlots() PromptSlots
 
+	// GetRequiredTools returns tools that this strategy depends on
+	// These tools will be automatically registered when the strategy is used
+	// Ensures strategies always have their dependencies available
+	GetRequiredTools() []RequiredTool
+
 	// GetName returns the strategy name
 	GetName() string
 
 	// GetDescription returns a human-readable description
 	GetDescription() string
+}
+
+// RequiredTool specifies a tool that a strategy requires
+type RequiredTool struct {
+	Name        string // Tool name (e.g., "todo_write")
+	Type        string // Tool type (e.g., "todo", "command")
+	Description string // Why this tool is required
+	AutoCreate  bool   // If true, create the tool automatically if not configured
 }
 
 // ToolResult represents the result of executing a tool

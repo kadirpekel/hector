@@ -159,14 +159,25 @@ func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) stri
 	return tools.FormatTodosForContext(todos)
 }
 
-// getTodoTool retrieves the todo_write tool if available
+// getTodoTool retrieves the todo_write tool (guaranteed to exist due to GetRequiredTools)
 func (s *ChainOfThoughtStrategy) getTodoTool(state *ReasoningState) *tools.TodoTool {
 	if state.Services == nil || state.Services.Tools() == nil {
 		return nil
 	}
 
-	// Tool access through service interface not yet implemented
-	return nil
+	// Get the todo tool from the tool service
+	tool, err := state.Services.Tools().GetTool("todo_write")
+	if err != nil {
+		return nil
+	}
+
+	// Type assert to TodoTool
+	todoTool, ok := tool.(*tools.TodoTool)
+	if !ok {
+		return nil
+	}
+
+	return todoTool
 }
 
 // GetName implements ReasoningStrategy
@@ -177,6 +188,19 @@ func (s *ChainOfThoughtStrategy) GetName() string {
 // GetDescription implements ReasoningStrategy
 func (s *ChainOfThoughtStrategy) GetDescription() string {
 	return "Iterative reasoning with native LLM function calling (OpenAI, Anthropic)"
+}
+
+// GetRequiredTools implements ReasoningStrategy
+// ChainOfThought requires todo_write for systematic task management
+func (s *ChainOfThoughtStrategy) GetRequiredTools() []RequiredTool {
+	return []RequiredTool{
+		{
+			Name:        "todo_write",
+			Type:        "todo",
+			Description: "Required for systematic task tracking in complex multi-step workflows",
+			AutoCreate:  true, // Always create if not configured
+		},
+	}
 }
 
 // GetPromptSlots implements ReasoningStrategy

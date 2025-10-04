@@ -51,6 +51,10 @@ type ToolService interface {
 
 	// GetAvailableTools returns all available tools as ToolDefinition
 	GetAvailableTools() []llms.ToolDefinition
+
+	// GetTool retrieves a specific tool by name (for strategy direct access)
+	// Strategies can use this to access tool internals (e.g., TodoTool for task tracking)
+	GetTool(name string) (interface{}, error)
 }
 
 // ContextService defines context and search capabilities

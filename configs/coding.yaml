@@ -55,7 +55,7 @@ agents:
         </task_management>
       
       include_tools: true
-      include_context: true
+      include_context: false
       include_history: true
       max_history_messages: 10
     
