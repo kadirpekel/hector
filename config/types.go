@@ -270,7 +270,8 @@ type AgentConfig struct {
 	Prompt         PromptConfig    `yaml:"prompt"`          // Prompt configuration
 	Reasoning      ReasoningConfig `yaml:"reasoning"`       // Reasoning configuration
 	Search         SearchConfig    `yaml:"search"`          // Search configuration
-	Tools          ToolConfigs     `yaml:"tools"`           // Tool configuration
+	// Note: Tools are global resources (defined at config root level)
+	// All agents share the same tool registry
 }
 
 // Validate implements Config.Validate for AgentConfig
@@ -299,9 +300,6 @@ func (c *AgentConfig) Validate() error {
 	if err := c.Search.Validate(); err != nil {
 		return fmt.Errorf("search configuration validation failed: %w", err)
 	}
-	if err := c.Tools.Validate(); err != nil {
-		return fmt.Errorf("tools configuration validation failed: %w", err)
-	}
 	return nil
 }
 
@@ -322,7 +320,6 @@ func (c *AgentConfig) SetDefaults() {
 	c.Prompt.SetDefaults()
 	c.Reasoning.SetDefaults()
 	c.Search.SetDefaults()
-	c.Tools.SetDefaults()
 }
 
 // ============================================================================

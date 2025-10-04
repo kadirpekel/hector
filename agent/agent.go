@@ -97,6 +97,14 @@ func (a *Agent) QueryStreaming(ctx context.Context, query string) (<-chan string
 	return a.execute(ctx, query, strategy)
 }
 
+// ClearHistory clears the conversation history
+func (a *Agent) ClearHistory() {
+	history := a.services.History()
+	if history != nil {
+		history.ClearHistory()
+	}
+}
+
 // ============================================================================
 // REASONING LOOP - THE CORE ORCHESTRATION LOGIC
 // This is what was in Orchestrator.Execute()
@@ -117,6 +125,17 @@ func (a *Agent) execute(
 		cfg := a.services.GetConfig()
 		state := reasoning.NewReasoningState()
 		state.Query = input // Original user query for strategies
+
+		// Restore conversation history from HistoryService (interactive mode)
+		historyService := a.services.History()
+		if historyService != nil {
+			// Get recent history and restore to conversation
+			recentHistory := historyService.GetRecentHistory(cfg.MaxIterations * 10) // Get plenty of history
+			if len(recentHistory) > 0 {
+				state.Conversation = append(state.Conversation, recentHistory...)
+			}
+		}
+
 		state.OutputChannel = outputCh
 		state.ShowThinking = cfg.ShowThinking
 		state.ShowDebugInfo = cfg.ShowDebugInfo
@@ -242,7 +261,7 @@ func (a *Agent) execute(
 			}
 		}
 
-		// Save to history
+		// Save to history (this now saves full llms.Message objects)
 		a.saveToHistory(input, state, strategy, startTime)
 
 		if cfg.ShowDebugInfo {
@@ -269,7 +288,7 @@ func (a *Agent) callLLM(
 	llm := a.services.LLM()
 
 	if cfg.EnableStreaming {
-		// Streaming mode - text goes directly to output channel
+		// Streaming mode - tool names shown in real-time during streaming
 		toolCalls, tokens, err := llm.GenerateStreaming(messages, toolDefs, outputCh)
 		if err != nil {
 			return "", nil, 0, err
@@ -288,7 +307,46 @@ func (a *Agent) callLLM(
 		outputCh <- text
 	}
 
+	// Show tool names immediately (simulate streaming behavior for consistency)
+	if len(toolCalls) > 0 && cfg.ShowToolExecution {
+		outputCh <- "\n"
+		for _, tc := range toolCalls {
+			// Import formatToolLabel from services (or create inline)
+			label := formatToolLabelForAgent(tc.Name, tc.Arguments)
+			outputCh <- fmt.Sprintf("🔧 %s", label)
+		}
+	}
+
 	return text, toolCalls, tokens, nil
+}
+
+// formatToolLabelForAgent creates a concise label for non-streaming mode
+func formatToolLabelForAgent(toolName string, args map[string]interface{}) string {
+	switch toolName {
+	case "execute_command":
+		if cmd, ok := args["command"].(string); ok {
+			if len(cmd) > 60 {
+				return fmt.Sprintf("%s: %s...", toolName, cmd[:57])
+			}
+			return fmt.Sprintf("%s: %s", toolName, cmd)
+		}
+	case "write_file", "search_replace":
+		if path, ok := args["path"].(string); ok {
+			return fmt.Sprintf("%s: %s", toolName, path)
+		}
+	case "search":
+		if query, ok := args["query"].(string); ok {
+			if len(query) > 40 {
+				return fmt.Sprintf("%s: %s...", toolName, query[:37])
+			}
+			return fmt.Sprintf("%s: %s", toolName, query)
+		}
+	case "todo_write":
+		if todos, ok := args["todos"].([]interface{}); ok {
+			return fmt.Sprintf("%s: %d tasks", toolName, len(todos))
+		}
+	}
+	return toolName
 }
 
 // executeTools executes all tool calls sequentially
@@ -302,7 +360,7 @@ func (a *Agent) executeTools(
 
 	results := make([]reasoning.ToolResult, 0, len(toolCalls))
 
-	for i, toolCall := range toolCalls {
+	for _, toolCall := range toolCalls {
 		// Check cancellation before each tool
 		select {
 		case <-ctx.Done():
@@ -310,15 +368,8 @@ func (a *Agent) executeTools(
 		default:
 		}
 
-		// Show tool execution label (generic, enabled by default)
-		if cfg.ShowToolExecution {
-			label := a.generateSimpleToolLabel(toolCall)
-			if i == 0 {
-				outputCh <- fmt.Sprintf("\n%s", label) // First tool, add newline before
-			} else {
-				outputCh <- label // Subsequent tools
-			}
-		}
+		// Tool name already shown during streaming (for both OpenAI and Anthropic)
+		// We just show the execution status here
 
 		// Execute tool
 		result, err := tools.ExecuteToolCall(ctx, toolCall)
@@ -326,11 +377,11 @@ func (a *Agent) executeTools(
 		if err != nil {
 			resultContent = fmt.Sprintf("Error: %v", err)
 			if cfg.ShowToolExecution {
-				outputCh <- fmt.Sprintf(" ❌\n")
+				outputCh <- fmt.Sprintf(" ❌\n") // Append status to previously shown tool name
 			}
 		} else {
 			if cfg.ShowToolExecution {
-				outputCh <- fmt.Sprintf(" ✅\n")
+				outputCh <- fmt.Sprintf(" ✅\n") // Append status to previously shown tool name
 			}
 		}
 
@@ -346,11 +397,6 @@ func (a *Agent) executeTools(
 	return results
 }
 
-// generateSimpleToolLabel generates a generic tool execution label
-func (a *Agent) generateSimpleToolLabel(toolCall llms.ToolCall) string {
-	return "🔧 Executing tool..."
-}
-
 // saveToHistory saves the conversation to history service
 func (a *Agent) saveToHistory(
 	input string,
@@ -359,29 +405,17 @@ func (a *Agent) saveToHistory(
 	startTime time.Time,
 ) {
 	history := a.services.History()
+	if history == nil {
+		return
+	}
 
-	// Add user query
-	history.AddToHistory("user", input, nil)
+	// Clear previous history and save the entire conversation
+	// This ensures HistoryService has the complete conversation state
+	history.ClearHistory()
 
-	// Add assistant response with metadata
-	if state.AssistantResponse.Len() > 0 {
-		metadata := map[string]interface{}{
-			"reasoning_strategy": strategy.GetName(),
-			"iterations":         state.Iteration,
-			"total_tokens":       state.TotalTokens,
-			"duration":           time.Since(startTime).String(),
-		}
-
-		// Include tool calls if any were made
-		if len(state.FirstIterationToolCalls) > 0 {
-			toolNames := make([]string, len(state.FirstIterationToolCalls))
-			for i, tc := range state.FirstIterationToolCalls {
-				toolNames[i] = tc.Name
-			}
-			metadata["tools_used"] = toolNames
-		}
-
-		history.AddToHistory("assistant", state.AssistantResponse.String(), metadata)
+	// Save all messages from the conversation (includes tool calls, tool results, etc.)
+	for _, msg := range state.Conversation {
+		history.AddToHistory(msg)
 	}
 }
 

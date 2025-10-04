@@ -376,7 +376,6 @@ func (t *Team) createDefaultAgentConfig(agentName string) *config.AgentConfig {
 		Search: config.SearchConfig{
 			TopK: 10,
 		},
-		Tools: config.ToolConfigs{},
 	}
 }
 

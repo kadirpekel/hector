@@ -183,13 +183,8 @@ func (s *DefaultPromptService) BuildMessages(
 
 		historyMsgs := s.historyService.GetRecentHistory(maxHistory)
 
-		// Convert to llms.Message format
-		for _, histMsg := range historyMsgs {
-			messages = append(messages, llms.Message{
-				Role:    histMsg.Role,
-				Content: histMsg.Content,
-			})
-		}
+		// Already in llms.Message format - append directly
+		messages = append(messages, historyMsgs...)
 	}
 
 	// Add current user query if not already in history
@@ -291,6 +286,7 @@ func (s *DefaultLLMService) GenerateStreaming(messages []llms.Message, tools []l
 
 	var toolCalls []llms.ToolCall
 	var tokens int
+	var toolCallsDisplayed bool // Track if we've shown any tool calls
 
 	for chunk := range streamCh {
 		switch chunk.Type {
@@ -298,6 +294,17 @@ func (s *DefaultLLMService) GenerateStreaming(messages []llms.Message, tools []l
 			outputCh <- chunk.Text
 		case "tool_call":
 			if chunk.ToolCall != nil {
+				// Show tool call immediately (Anthropic advantage!)
+				// This gives Cursor-like real-time feedback
+				if !toolCallsDisplayed {
+					outputCh <- "\n" // Newline before first tool
+					toolCallsDisplayed = true
+				}
+
+				// Format tool label with key arguments for better context
+				label := formatToolLabel(chunk.ToolCall.Name, chunk.ToolCall.Arguments)
+				outputCh <- fmt.Sprintf("🔧 %s", label)
+
 				toolCalls = append(toolCalls, *chunk.ToolCall)
 			}
 		case "done":
@@ -310,13 +317,46 @@ func (s *DefaultLLMService) GenerateStreaming(messages []llms.Message, tools []l
 	return toolCalls, tokens, nil
 }
 
+// formatToolLabel creates a concise, informative label for tool execution
+// Shows tool name + key arguments to give user context
+func formatToolLabel(toolName string, args map[string]interface{}) string {
+	switch toolName {
+	case "execute_command":
+		if cmd, ok := args["command"].(string); ok {
+			// Truncate long commands
+			if len(cmd) > 60 {
+				return fmt.Sprintf("%s: %s...", toolName, cmd[:57])
+			}
+			return fmt.Sprintf("%s: %s", toolName, cmd)
+		}
+	case "write_file", "search_replace":
+		if path, ok := args["path"].(string); ok {
+			return fmt.Sprintf("%s: %s", toolName, path)
+		}
+	case "search":
+		if query, ok := args["query"].(string); ok {
+			if len(query) > 40 {
+				return fmt.Sprintf("%s: %s...", toolName, query[:37])
+			}
+			return fmt.Sprintf("%s: %s", toolName, query)
+		}
+	case "todo_write":
+		if todos, ok := args["todos"].([]interface{}); ok {
+			return fmt.Sprintf("%s: %d tasks", toolName, len(todos))
+		}
+	}
+
+	// Default: just tool name
+	return toolName
+}
+
 // ============================================================================
 // HISTORY SERVICE
 // ============================================================================
 
 // DefaultHistoryService implements reasoning.HistoryService
 type DefaultHistoryService struct {
-	history []hectorcontext.ConversationMessage
+	history []llms.Message
 	maxSize int
 }
 
@@ -326,20 +366,14 @@ func NewHistoryService(maxSize int) reasoning.HistoryService {
 		maxSize = 10 // Default max size
 	}
 	return &DefaultHistoryService{
-		history: make([]hectorcontext.ConversationMessage, 0),
+		history: make([]llms.Message, 0),
 		maxSize: maxSize,
 	}
 }
 
 // AddToHistory implements reasoning.HistoryService
-func (s *DefaultHistoryService) AddToHistory(role, content string, metadata map[string]interface{}) {
-	message := hectorcontext.ConversationMessage{
-		Role:     role,
-		Content:  content,
-		Metadata: metadata,
-	}
-
-	s.history = append(s.history, message)
+func (s *DefaultHistoryService) AddToHistory(msg llms.Message) {
+	s.history = append(s.history, msg)
 
 	// Simple FIFO truncation
 	if len(s.history) > s.maxSize {
@@ -348,9 +382,9 @@ func (s *DefaultHistoryService) AddToHistory(role, content string, metadata map[
 }
 
 // GetRecentHistory implements reasoning.HistoryService
-func (s *DefaultHistoryService) GetRecentHistory(count int) []hectorcontext.ConversationMessage {
+func (s *DefaultHistoryService) GetRecentHistory(count int) []llms.Message {
 	if count <= 0 || len(s.history) == 0 {
-		return []hectorcontext.ConversationMessage{}
+		return []llms.Message{}
 	}
 
 	start := len(s.history) - count
@@ -359,14 +393,14 @@ func (s *DefaultHistoryService) GetRecentHistory(count int) []hectorcontext.Conv
 	}
 
 	// Return a copy to prevent external modification
-	result := make([]hectorcontext.ConversationMessage, len(s.history[start:]))
+	result := make([]llms.Message, len(s.history[start:]))
 	copy(result, s.history[start:])
 	return result
 }
 
 // ClearHistory implements reasoning.HistoryService
 func (s *DefaultHistoryService) ClearHistory() {
-	s.history = make([]hectorcontext.ConversationMessage, 0)
+	s.history = make([]llms.Message, 0)
 }
 
 // ============================================================================

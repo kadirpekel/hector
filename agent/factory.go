@@ -53,24 +53,6 @@ func NewAgentServices(agentConfig *config.AgentConfig, componentManager *compone
 		}
 	}
 
-	// Register agent-specific tools if any are defined
-	if len(agentConfig.Tools.Tools) > 0 {
-		// Create a temporary tool registry with agent-specific tools
-		agentToolRegistry, err := tools.NewToolRegistryWithConfig(&agentConfig.Tools)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create agent tool registry: %w", err)
-		}
-
-		// Merge agent tools into the main registry
-		for _, tool := range agentToolRegistry.ListTools() {
-			entry, _ := agentToolRegistry.Get(tool.Name)
-			if err := toolRegistry.Register(tool.Name, entry); err != nil {
-				// Skip if tool already exists globally
-				fmt.Printf("Info: Agent tool '%s' conflicts with global tool, using global\n", tool.Name)
-			}
-		}
-	}
-
 	// Create context service - only if document stores are configured
 	var contextService reasoning.ContextService
 	if len(agentConfig.DocumentStores) > 0 {

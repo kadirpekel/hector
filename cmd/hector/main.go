@@ -295,6 +295,9 @@ func handleCommand(agentInstance *agent.Agent, input string) {
 	switch command {
 	case "/help":
 		showHelp()
+	case "/clear", "/reset":
+		agentInstance.ClearHistory()
+		fmt.Println("💭 Conversation history cleared.")
 	case "/quit", "/exit":
 		fmt.Println("Goodbye!")
 		os.Exit(0)
@@ -587,6 +590,7 @@ func printWorkflowDebugInfo(result *team.WorkflowResult) {
 func showHelp() {
 	fmt.Println("Commands:")
 	fmt.Println("  /help         - Show this help")
+	fmt.Println("  /clear        - Clear conversation history")
 	fmt.Println("  /quit         - Exit")
 	fmt.Println()
 	fmt.Println("Command line flags:")

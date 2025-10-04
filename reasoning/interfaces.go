@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/kadirpekel/hector/config"
-	hectorcontext "github.com/kadirpekel/hector/context"
 	"github.com/kadirpekel/hector/databases"
 	"github.com/kadirpekel/hector/llms"
 	"github.com/kadirpekel/hector/tools"
@@ -77,8 +76,9 @@ type PromptService interface {
 
 // HistoryService defines history management capabilities
 type HistoryService interface {
-	GetRecentHistory(count int) []hectorcontext.ConversationMessage
-	AddToHistory(role, content string, metadata map[string]interface{})
+	GetRecentHistory(count int) []llms.Message
+	AddToHistory(msg llms.Message)
+	ClearHistory()
 }
 
 // ============================================================================
