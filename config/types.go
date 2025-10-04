@@ -1033,8 +1033,10 @@ func (c *ReasoningConfig) SetDefaults() {
 	if c.QualityThreshold == 0 {
 		c.QualityThreshold = 0.7
 	}
-	// Note: EnableStreaming defaults to false, only set to true if not explicitly configured
-	// This allows the YAML config to control the streaming behavior
+	// EnableStreaming defaults to true for better UX in zero-config mode
+	// Note: Go's zero value for bool is false, so we need to explicitly set it
+	// In YAML configs, users can explicitly set enable_streaming: false if needed
+	c.EnableStreaming = true
 }
 
 // ============================================================================

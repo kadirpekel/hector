@@ -72,19 +72,12 @@ Hector will:
 3. ✅ Write idiomatic code following best practices
 4. 📊 Stream its reasoning process in real-time
 
-**What makes `hector coding` different?**
-- **File Operations**: Creates, modifies, and refactors files automatically
-- **Semantic Search**: Understands your codebase (powered by Qdrant + Ollama embeddings)
-- **Smart Tools**: Uses git, go commands, file editing—all sandboxed
-- **Context-Aware**: Learns from existing code patterns
-
-**Want the full Cursor experience?**
-```bash
-hector cursor
-> "Refactor the auth module to use JWT tokens"
-```
-
-Get Cursor/Claude-like capabilities with maximum context windows, aggressive tool usage, and optimized prompts for pair programming. Perfect for developers who want the familiar Cursor workflow in a self-hosted, configuration-driven setup.
+**What you get with `hector coding`:**
+- **Full Cursor/Claude Experience**: Maximum context, aggressive tool usage, optimized prompts
+- **File Operations**: Creates, modifies, and refactors files automatically  
+- **Semantic Search**: Understands your codebase (Qdrant + Ollama embeddings)
+- **Smart Tools**: git, go, npm, file editing—all sandboxed
+- **Context-Aware**: Learns from your existing code patterns and project structure
 
 **Flexible Workspace Setup:**
 
@@ -495,11 +488,8 @@ Hector looks for configuration in this order:
 # General-purpose (default)
 hector
 
-# Development assistant (file editing, semantic search)
+# Development assistant (Cursor-like experience with full capabilities)
 hector coding
-
-# Cursor-like experience
-hector --config configs/cursor.yaml
 
 # Multi-agent workflow (experimental)
 hector --config configs/research-pipeline-workflow.yaml --workflow research_pipeline

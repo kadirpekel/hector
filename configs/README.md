@@ -51,28 +51,32 @@ hector --config configs/research-pipeline-workflow.yaml --agent researcher
 > "Research AI agent frameworks"
 ```
 
-### 2. Coding (`coding.yaml`) - 🟡 Tier 2: Developer Mode
+### 2. Coding Assistant (`coding.yaml`) - 🟡 Tier 2: Developer Mode
 
-**Purpose**: Specialized AI pair programmer for software development tasks
+**Purpose**: Complete Cursor/Claude-like experience for professional development
 
-**⚠️  Security Notice**: This configuration includes **file editing tools** (file_writer, search_replace). Only use in trusted environments with proper backups.
+**⚠️  Security Notice**: This configuration includes **file editing tools** and aggressive tool usage. Only use in trusted environments with proper backups.
 
 **Features**:
 - **LLM**: Claude Sonnet 3.7 (Anthropic)
-- **Tools**: Full developer toolkit including:
-  - 🔧 `execute_command` (full command set: git, go, npm, etc.)
+- **Experience**: Full Cursor/Claude capabilities with maximum context windows
+- **Tools**: Complete developer toolkit:
+  - 🔧 `execute_command` (git, go, npm, docker, etc.)
   - ✏️  `file_writer` (create/overwrite files)
-  - 📝 `search_replace` (edit files)
+  - 📝 `search_replace` (precise editing)
   - ✅ `todo_write` (task management)
-- **Semantic Search**: Enabled with Qdrant + Ollama embeddings for codebase understanding
-- **Prompt**: Optimized for coding tasks, file operations, and technical problem-solving
+- **Semantic Search**: Enabled with Qdrant + Ollama for deep codebase understanding
+- **Prompt**: Optimized system prompt matching Cursor's pair programming behavior
 - **Temperature**: 0.1 (precise, deterministic)
+- **Max Iterations**: 10 (allows complex multi-step tasks)
+- **Max Tokens**: 16,000 (large context)
 
 **Use Cases**:
-- Code generation and refactoring
+- Professional pair programming (Cursor-like workflow)
+- Complex multi-file refactoring
+- Code generation with context awareness
 - Bug fixing and debugging
-- Codebase exploration and analysis
-- Multi-file project creation
+- Architecture changes and migrations
 - Code review and improvement
 
 **Usage**:
@@ -81,33 +85,16 @@ hector --config configs/research-pipeline-workflow.yaml --agent researcher
 hector coding
 
 # Single query
-echo "Create a REST API in Go with /health endpoint" | hector coding
+echo "Refactor the auth module to use JWT tokens" | hector coding
 
 # Or use explicit path
 hector --config configs/coding.yaml
 
-# Prerequisites: Set ANTHROPIC_API_KEY, run Qdrant (optional) and Ollama (optional)
+# Prerequisites: 
+# - ANTHROPIC_API_KEY (required)
+# - Qdrant + Ollama (optional, for semantic search)
 ```
 
-### 3. Cursor (`cursor.yaml`) - 🟡 Tier 2: Advanced
-
-**Purpose**: Full Cursor/Claude-like experience with advanced features
-
-**⚠️  Security Notice**: This configuration includes **file editing tools** and aggressive tool usage. Only use in trusted environments.
-
-**Features**:
-- **LLM**: Claude Sonnet 3.7 (Anthropic)
-- **Tools**: Full toolkit including file editing
-- **Semantic Search**: Enabled
-- **Prompt**: Complete system prompt matching Cursor's behavior
-- **Temperature**: 0.1 (precise)
-- All advanced features enabled
-- Maximum context and iteration limits
-
-**Use Cases**:
-- Exact Cursor/Claude replication
-- Maximum capability testing
-- Advanced development workflows
 
 ## Quick Start
 
@@ -162,18 +149,19 @@ For detailed configuration options, see: [CONFIGURATION.md](../CONFIGURATION.md)
 
 ## Comparison
 
-| Feature | Default (Root) | Research Pipeline | Coding | Cursor |
-|---------|----------------|-------------------|--------|--------|
-| **LLM** | OpenAI GPT-4o | Mixed (GPT+Claude) | Claude 3.7 | Claude 3.7 |
-| **Security Tier** | 🟢 Safe | 🟢 Safe | 🟡 Dev | 🟡 Advanced |
-| **File Editing** | ❌ No | ❌ No | ✅ Yes | ✅ Yes |
-| **Semantic Search** | ❌ Optional | ❌ No | ✅ Yes | ✅ Yes |
-| **Workflow Mode** | ❌ Single Agent | ✅ DAG (3 agents) | ❌ Single | ❌ Single |
-| **Orchestration** | Manual | **Automatic** | Manual | Manual |
-| **Context Sharing** | ❌ No | ✅ Yes (`${vars}`) | ❌ No | ❌ No |
-| **Temperature** | 0.7 (balanced) | 0.3-0.7 (per role) | 0.1 (precise) | 0.1 (precise) |
-| **Max Tokens** | 8,000 | 8,000-16,000 | 16,000 | 16,000 |
-| **Use Case** | General purpose | **Automated workflows** | Dev tasks | Cursor clone |
+| Feature | Default (Root) | Research Pipeline | Coding |
+|---------|----------------|-------------------|--------|
+| **LLM** | OpenAI GPT-4o | Mixed (GPT+Claude) | Claude 3.7 |
+| **Security Tier** | 🟢 Safe | 🟢 Safe | 🟡 Developer |
+| **File Editing** | ❌ No | ❌ No | ✅ Yes |
+| **Semantic Search** | ❌ Optional | ❌ No | ✅ Yes |
+| **Workflow Mode** | ❌ Single Agent | ✅ DAG (3 agents) | ❌ Single |
+| **Orchestration** | Manual | **Automatic** | Manual |
+| **Context Sharing** | ❌ No | ✅ Yes (`${vars}`) | ❌ No |
+| **Temperature** | 0.7 (balanced) | 0.3-0.7 (per role) | 0.1 (precise) |
+| **Max Tokens** | 8,000 | 8,000-16,000 | 16,000 |
+| **Max Iterations** | 5 | Varies | 10 |
+| **Use Case** | General purpose | **Automated workflows** | **Pro development** |
 
 ## Tips
 
@@ -188,14 +176,10 @@ For detailed configuration options, see: [CONFIGURATION.md](../CONFIGURATION.md)
   - 💡 Starting point for complex automation
   
 - **For development**: Use `hector coding`
-  - 🟡 Enables file editing (Tier 2)
+  - 🟡 Full developer capabilities (Tier 2)
+  - ✅ Cursor/Claude-like experience
   - ✅ Semantic search for codebase understanding
   - ⚠️  Only in trusted environments
-  
-- **For Cursor experience**: Use `hector cursor`
-  - 🟡 Full capabilities (Tier 2)
-  - ✅ Exact Cursor/Claude behavior
-  - ⚠️  Advanced users only
   
 - **For production**: Start with default, customize via `prompt_slots`
 
