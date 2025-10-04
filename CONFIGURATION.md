@@ -53,7 +53,7 @@ agents:
     
     reasoning:
       engine: "chain-of-thought"
-      max_iterations: 10
+      # max_iterations: 100  # Safety valve only - LLM naturally terminates
       show_debug_info: true
       enable_streaming: true
 
@@ -112,7 +112,7 @@ agents:
     
     reasoning:            # Reasoning engine configuration
       engine: string                 # "chain-of-thought" (only supported)
-      max_iterations: int            # Max reasoning iterations
+      max_iterations: int            # Safety valve only (default: 100, rarely hit)
       show_debug_info: bool          # Show detailed output
       enable_streaming: bool         # Enable streaming mode
     
@@ -181,11 +181,16 @@ agents:
 agents:
   assistant:
     reasoning:
-      engine: "chain-of-thought"  # Only supported engine
-      max_iterations: 10          # 1-50 recommended
-      show_debug_info: true       # Show thinking/reflection
-      enable_streaming: true      # Real-time output
+      engine: "chain-of-thought"   # Only supported engine
+      # max_iterations: 100        # Optional safety valve (default: 100)
+      show_debug_info: true        # Show thinking/reflection
+      enable_streaming: true       # Real-time output
 ```
+
+**Philosophy:**
+- **Trust the LLM** - Loops naturally terminate when no more tool calls
+- `max_iterations` is a safety valve only, not an artificial constraint
+- Matches Cursor's approach: continue until work is done
 
 **Engine Options:**
 - `chain-of-thought` - Fast, iterative reasoning (Cursor-like)
@@ -213,6 +218,8 @@ llms:
     temperature: 0.1                    # 0.0-1.0
     max_tokens: 16000                   # Max response tokens
     timeout: 60                         # Request timeout (seconds)
+    max_retries: 5                      # Rate limit retry attempts (default: 5)
+    retry_delay: 2                      # Base delay in seconds (default: 2, exponential backoff)
 ```
 
 **Supported Models:**
@@ -222,7 +229,9 @@ llms:
 
 **Rate Limits:**
 - Handled automatically with exponential backoff
-- 3 retries with 2s, 4s, 8s delays
+- Default: 5 retries with 2s, 4s, 8s, 16s, 32s delays (total: ~62s)
+- Configurable via `max_retries` and `retry_delay`
+- Supports "trust the LLM" philosophy (up to 100 iterations)
 
 ### OpenAI
 
@@ -236,6 +245,8 @@ llms:
     temperature: 0.1
     max_tokens: 16000
     timeout: 60
+    max_retries: 5                      # Rate limit retry attempts (default: 5)
+    retry_delay: 2                      # Base delay in seconds (default: 2, exponential backoff)
 ```
 
 **Supported Models:**
@@ -396,11 +407,13 @@ agents:
      max_history_messages: 5-10  # Balance context vs cost
    ```
 
-3. **Iteration Limits**
+3. **Safety Valve** (Optional)
    ```yaml
    reasoning:
-     max_iterations: 5-10  # Prevent infinite loops
+     max_iterations: 100  # Safety only, rarely needed
    ```
+   
+   **Note:** Default is 100. Lower only if you need strict guarantees.
 
 ### Cost Optimization
 
@@ -471,11 +484,13 @@ agents:
      enable_streaming: false  # Easier to debug
    ```
 
-3. **Start with High Iteration Limit**
+3. **Trust the LLM to Terminate**
    ```yaml
    reasoning:
-     max_iterations: 20  # See full reasoning process
+     # max_iterations: 100  # Default is fine - LLM stops naturally
    ```
+   
+   **Philosophy:** Like Cursor, Hector trusts the LLM to complete tasks without artificial limits.
 
 ---
 
@@ -533,7 +548,17 @@ export OLLAMA_HOST="http://localhost:11434"
 
 **Problem:** API returns 429 errors
 
-**Solution:** Hector automatically retries with exponential backoff. If persistent:
+**Solution:** Hector automatically retries with exponential backoff (default: 5 attempts, up to 62s). If persistent:
+
+**Increase retry aggressiveness:**
+```yaml
+llms:
+  main-llm:
+    max_retries: 7        # More attempts (2s, 4s, 8s, 16s, 32s, 64s, 128s)
+    retry_delay: 3        # Longer waits (3s, 6s, 12s, 24s, 48s)
+```
+
+**Reduce request frequency:**
 - Reduce `max_tokens`
 - Decrease `max_history_messages`
 - Disable `include_context`

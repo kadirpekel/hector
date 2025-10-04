@@ -72,6 +72,8 @@ type LLMProviderConfig struct {
 	Temperature float64 `yaml:"temperature"` // Temperature setting
 	MaxTokens   int     `yaml:"max_tokens"`  // Max tokens
 	Timeout     int     `yaml:"timeout"`     // Request timeout in seconds
+	MaxRetries  int     `yaml:"max_retries"` // Max retry attempts for rate limits (default: 5)
+	RetryDelay  int     `yaml:"retry_delay"` // Base retry delay in seconds (default: 2, exponential backoff)
 }
 
 // Validate implements Config.Validate for LLMProviderConfig
@@ -96,6 +98,12 @@ func (c *LLMProviderConfig) Validate() error {
 	}
 	if c.Timeout < 0 {
 		return fmt.Errorf("timeout must be non-negative")
+	}
+	if c.MaxRetries < 0 {
+		return fmt.Errorf("max_retries must be non-negative")
+	}
+	if c.RetryDelay < 0 {
+		return fmt.Errorf("retry_delay must be non-negative")
 	}
 	return nil
 }
@@ -136,6 +144,17 @@ func (c *LLMProviderConfig) SetDefaults() {
 	}
 	if c.Timeout == 0 {
 		c.Timeout = 60
+	}
+	if c.MaxRetries == 0 {
+		// Aggressive retry strategy to support "trust the LLM" philosophy
+		// With 5 retries and exponential backoff (2s, 4s, 8s, 16s, 32s):
+		// - Total max wait: ~62 seconds
+		// - Supports up to 100 iterations without premature failure
+		c.MaxRetries = 5
+	}
+	if c.RetryDelay == 0 {
+		// Base delay for exponential backoff (2^attempt * RetryDelay)
+		c.RetryDelay = 2
 	}
 	if c.APIKey == "" {
 		// Try to get API key from environment based on provider type
@@ -1005,7 +1024,7 @@ func (c *PromptConfig) SetDefaults() {
 // ReasoningConfig represents reasoning configuration
 type ReasoningConfig struct {
 	Engine               string  `yaml:"engine"`                 // Reasoning engine
-	MaxIterations        int     `yaml:"max_iterations"`         // Max iterations
+	MaxIterations        int     `yaml:"max_iterations"`         // Max iterations (safety valve, default: 100)
 	EnableSelfReflection bool    `yaml:"enable_self_reflection"` // Enable self-reflection
 	EnableMetaReasoning  bool    `yaml:"enable_meta_reasoning"`  // Enable meta-reasoning
 	EnableGoalEvolution  bool    `yaml:"enable_goal_evolution"`  // Enable goal evolution
@@ -1037,7 +1056,9 @@ func (c *ReasoningConfig) SetDefaults() {
 		c.Engine = "default" // Simple, fast reasoning for zero-config
 	}
 	if c.MaxIterations == 0 {
-		c.MaxIterations = 3
+		// High limit as safety valve only - trust the LLM to naturally terminate
+		// (matches Cursor's philosophy: loop until no more tool calls)
+		c.MaxIterations = 100
 	}
 	if c.QualityThreshold == 0 {
 		c.QualityThreshold = 0.7

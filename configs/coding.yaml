@@ -61,7 +61,7 @@ agents:
     
     reasoning:
       engine: "chain-of-thought"
-      max_iterations: 10
+      # max_iterations: 100  # Safety valve only - LLM naturally terminates when done
       show_debug_info: false
       show_thinking: true
       enable_streaming: true

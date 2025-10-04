@@ -162,6 +162,9 @@ func (a *Agent) execute(
 		}
 
 		// Main reasoning loop
+		// Philosophy: Trust the LLM to naturally terminate (like Cursor)
+		// Loop continues while there are tool calls to execute
+		// maxIterations is a safety valve only, rarely hit
 		for state.Iteration < maxIterations {
 			state.Iteration++
 
