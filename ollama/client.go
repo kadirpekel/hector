@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/kadirpekel/hector/internal/httpclient"
 )
 
 // ============================================================================
@@ -17,7 +19,7 @@ import (
 // Client provides a shared HTTP client for Ollama API interactions
 type Client struct {
 	baseURL    string
-	httpClient *http.Client
+	httpClient *httpclient.Client
 }
 
 // NewClient creates a new Ollama client
@@ -28,9 +30,13 @@ func NewClient(baseURL string) *Client {
 
 	return &Client{
 		baseURL: baseURL,
-		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
-		},
+		httpClient: httpclient.New(
+			httpclient.WithHTTPClient(&http.Client{
+				Timeout: 60 * time.Second,
+			}),
+			httpclient.WithMaxRetries(3),
+			httpclient.WithBaseDelay(2*time.Second),
+		),
 	}
 }
 
@@ -42,9 +48,13 @@ func NewClientWithTimeout(baseURL string, timeout time.Duration) *Client {
 
 	return &Client{
 		baseURL: baseURL,
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		httpClient: httpclient.New(
+			httpclient.WithHTTPClient(&http.Client{
+				Timeout: timeout,
+			}),
+			httpclient.WithMaxRetries(3),
+			httpclient.WithBaseDelay(2*time.Second),
+		),
 	}
 }
 

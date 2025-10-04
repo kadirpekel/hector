@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/kadirpekel/hector/config"
+	"github.com/kadirpekel/hector/internal/httpclient"
 )
 
 // ============================================================================
@@ -20,8 +20,8 @@ import (
 
 // AnthropicProvider implements LLMProvider for Anthropic Claude API
 type AnthropicProvider struct {
-	config *config.LLMProviderConfig
-	client *http.Client
+	config     *config.LLMProviderConfig
+	httpClient *httpclient.Client
 }
 
 // AnthropicRequest represents the request payload for Anthropic API
@@ -112,12 +112,8 @@ func NewAnthropicProvider(apiKey string, model string) *AnthropicProvider {
 		Timeout:     120,
 	}
 
-	return &AnthropicProvider{
-		config: config,
-		client: &http.Client{
-			Timeout: time.Duration(config.Timeout) * time.Second,
-		},
-	}
+	provider, _ := NewAnthropicProviderFromConfig(config)
+	return provider
 }
 
 // NewAnthropicProviderFromConfig creates a new Anthropic provider from config
@@ -132,9 +128,14 @@ func NewAnthropicProviderFromConfig(cfg *config.LLMProviderConfig) (*AnthropicPr
 
 	return &AnthropicProvider{
 		config: cfg,
-		client: &http.Client{
-			Timeout: time.Duration(cfg.Timeout) * time.Second,
-		},
+		httpClient: httpclient.New(
+			httpclient.WithHTTPClient(&http.Client{
+				Timeout: time.Duration(cfg.Timeout) * time.Second,
+			}),
+			httpclient.WithMaxRetries(cfg.MaxRetries),
+			httpclient.WithBaseDelay(time.Duration(cfg.RetryDelay)*time.Second),
+			httpclient.WithHeaderParser(httpclient.ParseAnthropicRateLimitHeaders),
+		),
 	}, nil
 }
 
@@ -304,232 +305,41 @@ func (p *AnthropicProvider) buildRequest(messages []Message, stream bool, tools 
 	return request
 }
 
-// RetryStrategy represents the retry approach for different error types
-type RetryStrategy int
-
-const (
-	NoRetry           RetryStrategy = iota
-	ConservativeRetry               // Quick retry for server errors (max 2 attempts)
-	SmartRetry                      // Header-driven retry for rate limits
-)
-
-// getRetryStrategy determines the retry strategy based on HTTP status code
-func getRetryStrategy(statusCode int) RetryStrategy {
-	switch statusCode {
-	case http.StatusTooManyRequests, // 429 - Rate limit with headers
-		http.StatusServiceUnavailable: // 503 - May have Retry-After
-		return SmartRetry
-	case http.StatusRequestTimeout, // 408 - Network timeout
-		http.StatusInternalServerError, // 500 - Server error
-		http.StatusBadGateway,          // 502 - Gateway issue
-		http.StatusGatewayTimeout:      // 504 - Gateway timeout
-		return ConservativeRetry
-	default:
-		return NoRetry
-	}
-}
-
-// RateLimitInfo contains rate limit information from response headers
-type RateLimitInfo struct {
-	RetryAfter            time.Duration
-	ResetTime             int64
-	RequestsRemaining     int
-	InputTokensRemaining  int
-	OutputTokensRemaining int
-	TokensRemaining       int // For OpenAI (combined tokens)
-}
-
-// makeRequest makes a non-streaming request to Anthropic API with smart retry logic
+// makeRequest makes a non-streaming request to Anthropic API using the generic HTTP client
 func (p *AnthropicProvider) makeRequest(request AnthropicRequest) (*AnthropicResponse, error) {
-	maxRetries := p.config.MaxRetries
-	baseDelay := time.Duration(p.config.RetryDelay) * time.Second
-
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		response, strategy, err, retryInfo := p.attemptRequestWithHeaders(request)
-
-		// No retry - fail immediately
-		if strategy == NoRetry {
-			return response, err
-		}
-
-		// Success or error after exhausting retries
-		if err == nil || attempt >= maxRetries {
-			return response, err
-		}
-
-		// Determine retry delay based on strategy
-		var delay time.Duration
-		var maxAttempts int
-
-		switch strategy {
-		case SmartRetry:
-			// Header-driven retry for rate limits (use full retry budget)
-			maxAttempts = maxRetries
-
-			if retryInfo.RetryAfter > 0 {
-				delay = retryInfo.RetryAfter
-				fmt.Printf("⏳ Rate limited. Provider suggests retry in %v (attempt %d/%d)\n",
-					delay, attempt+1, maxAttempts)
-			} else if retryInfo.ResetTime > 0 {
-				delay = time.Until(time.Unix(retryInfo.ResetTime, 0))
-				if delay < 0 {
-					delay = baseDelay
-				}
-				fmt.Printf("⏳ Rate limited. Retry at reset time in %v (attempt %d/%d)\n",
-					delay, attempt+1, maxAttempts)
-			} else {
-				// Fallback to exponential backoff with jitter
-				exponentialDelay := time.Duration(math.Pow(2, float64(attempt))) * baseDelay
-				jitter := time.Duration(float64(exponentialDelay) * 0.1)
-				delay = exponentialDelay + jitter
-				fmt.Printf("⏳ Rate limited. Retrying in %v (attempt %d/%d)\n",
-					delay, attempt+1, maxAttempts)
-			}
-
-		case ConservativeRetry:
-			// Conservative retry for server errors (max 2 attempts, short delays)
-			maxAttempts = 2
-			if attempt >= maxAttempts {
-				return response, err
-			}
-
-			delay = time.Duration(2+attempt) * time.Second // 2s, 3s
-			fmt.Printf("⚠️  Server error. Quick retry in %v (attempt %d/%d)\n",
-				delay, attempt+1, maxAttempts)
-		}
-
-		time.Sleep(delay)
-	}
-
-	return nil, fmt.Errorf("max retries exceeded after %d attempts", maxRetries)
-}
-
-// attemptRequestWithHeaders makes a request and extracts retry-related headers
-func (p *AnthropicProvider) attemptRequestWithHeaders(request AnthropicRequest) (*AnthropicResponse, RetryStrategy, error, RateLimitInfo) {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
-		return nil, NoRetry, fmt.Errorf("failed to marshal request: %w", err), RateLimitInfo{}
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	req, err := http.NewRequest("POST", p.config.Host+"/v1/messages", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, NoRetry, fmt.Errorf("failed to create request: %w", err), RateLimitInfo{}
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", p.config.APIKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := p.client.Do(req)
+	// Use generic HTTP client with smart retry
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, NoRetry, fmt.Errorf("failed to make request: %w", err), RateLimitInfo{}
+		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 
-	// Extract rate limit headers
-	retryInfo := extractAnthropicRateLimitHeaders(resp.Header)
-
-	// Determine retry strategy
-	strategy := getRetryStrategy(resp.StatusCode)
-
 	if resp.StatusCode != http.StatusOK {
-		return nil, strategy, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)), retryInfo
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var response AnthropicResponse
 	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, NoRetry, fmt.Errorf("failed to decode response: %w", err), RateLimitInfo{}
+		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return &response, NoRetry, nil, retryInfo
-}
-
-// extractAnthropicRateLimitHeaders extracts Anthropic rate limit information
-func extractAnthropicRateLimitHeaders(headers http.Header) RateLimitInfo {
-	info := RateLimitInfo{}
-
-	// Retry-After (seconds)
-	if retryAfter := headers.Get("retry-after"); retryAfter != "" {
-		if seconds, err := time.ParseDuration(retryAfter + "s"); err == nil {
-			info.RetryAfter = seconds
-		}
-	}
-
-	// Parse reset time (RFC 3339 format)
-	if resetStr := headers.Get("anthropic-ratelimit-requests-reset"); resetStr != "" {
-		if resetTime, err := time.Parse(time.RFC3339, resetStr); err == nil {
-			info.ResetTime = resetTime.Unix()
-		}
-	}
-
-	// Parse remaining counts
-	if remaining := headers.Get("anthropic-ratelimit-requests-remaining"); remaining != "" {
-		fmt.Sscanf(remaining, "%d", &info.RequestsRemaining)
-	}
-	if remaining := headers.Get("anthropic-ratelimit-input-tokens-remaining"); remaining != "" {
-		fmt.Sscanf(remaining, "%d", &info.InputTokensRemaining)
-	}
-	if remaining := headers.Get("anthropic-ratelimit-output-tokens-remaining"); remaining != "" {
-		fmt.Sscanf(remaining, "%d", &info.OutputTokensRemaining)
-	}
-
-	return info
-}
-
-// attemptRequest makes a single HTTP request attempt
-func (p *AnthropicProvider) attemptRequest(request AnthropicRequest) (*AnthropicResponse, bool, error) {
-	jsonData, err := json.Marshal(request)
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", p.config.Host+"/v1/messages", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", p.config.APIKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to make request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	// Determine if error is retryable
-	shouldRetry := isRetryableError(resp.StatusCode)
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, shouldRetry, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var response AnthropicResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, false, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &response, false, nil
-}
-
-// isRetryableError determines if an HTTP status code is retryable
-func isRetryableError(statusCode int) bool {
-	switch statusCode {
-	case http.StatusRequestTimeout, // 408
-		http.StatusTooManyRequests,     // 429
-		http.StatusInternalServerError, // 500
-		http.StatusBadGateway,          // 502
-		http.StatusServiceUnavailable,  // 503
-		http.StatusGatewayTimeout:      // 504
-		return true
-	default:
-		return false
-	}
+	return &response, nil
 }
 
 // makeStreamingRequest makes a streaming request to Anthropic API
@@ -552,7 +362,9 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 		req.Header.Set("anthropic-beta", "fine-grained-tool-streaming-2025-05-14")
 	}
 
-	resp, err := p.client.Do(req)
+	// For streaming, we need the underlying HTTP client (not the retry wrapper)
+	httpClient := &http.Client{Timeout: time.Duration(p.config.Timeout) * time.Second}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to make request: %w", err)
 	}

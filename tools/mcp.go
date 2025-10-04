@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kadirpekel/hector/internal/httpclient"
 )
 
 // MCPToolSource manages tools from a single MCP server
@@ -16,7 +18,7 @@ type MCPToolSource struct {
 	name        string
 	url         string
 	description string
-	client      *http.Client
+	httpClient  *httpclient.Client
 	tools       map[string]Tool
 	mu          sync.RWMutex
 }
@@ -65,9 +67,13 @@ func NewMCPToolSource(name, url, description string) *MCPToolSource {
 		name:        name,
 		url:         url,
 		description: description,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		httpClient: httpclient.New(
+			httpclient.WithHTTPClient(&http.Client{
+				Timeout: 30 * time.Second,
+			}),
+			httpclient.WithMaxRetries(3),
+			httpclient.WithBaseDelay(2*time.Second),
+		),
 		tools: make(map[string]Tool),
 	}
 }
@@ -83,9 +89,13 @@ func NewMCPToolSourceWithConfig(url string) (*MCPToolSource, error) {
 		name:        "mcp",
 		url:         url,
 		description: "",
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		httpClient: httpclient.New(
+			httpclient.WithHTTPClient(&http.Client{
+				Timeout: 30 * time.Second,
+			}),
+			httpclient.WithMaxRetries(3),
+			httpclient.WithBaseDelay(2*time.Second),
+		),
 		tools: make(map[string]Tool),
 	}, nil
 }
@@ -270,7 +280,7 @@ func (r *MCPToolSource) makeRequest(ctx context.Context, method string, params i
 	req.Header.Set("Accept", "application/json, text/event-stream")
 
 	// Execute request
-	httpResp, err := r.client.Do(req)
+	httpResp, err := r.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %v", err)
 	}

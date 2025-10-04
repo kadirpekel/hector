@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -151,9 +150,17 @@ func NewOpenAIProviderFromConfig(cfg *config.LLMProviderConfig) (*OpenAIProvider
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+
 	return &OpenAIProvider{
 		config: cfg,
-		client: &http.Client{Timeout: time.Duration(cfg.Timeout) * time.Second},
+		httpClient: httpclient.New(
+			httpclient.WithHTTPClient(&http.Client{
+				Timeout: time.Duration(cfg.Timeout) * time.Second,
+			}),
+			httpclient.WithMaxRetries(cfg.MaxRetries),
+			httpclient.WithBaseDelay(time.Duration(cfg.RetryDelay)*time.Second),
+			httpclient.WithHeaderParser(httpclient.ParseOpenAIRateLimitHeaders),
+		),
 	}, nil
 }
 
@@ -335,187 +342,43 @@ func parseToolCalls(openaiToolCalls []OpenAIToolCall) ([]ToolCall, error) {
 	return result, nil
 }
 
-// makeRequest makes a non-streaming request to OpenAI with smart three-tier retry logic
+// makeRequest makes a non-streaming request to OpenAI using the generic HTTP client
 func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, error) {
-	maxRetries := p.config.MaxRetries
-	baseDelay := time.Duration(p.config.RetryDelay) * time.Second
-
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		response, strategy, err, retryInfo := p.attemptRequestWithHeaders(request)
-
-		// No retry - fail immediately
-		if strategy == NoRetry {
-			return response, err
-		}
-
-		// Success or error after exhausting retries
-		if err == nil || attempt >= maxRetries {
-			return response, err
-		}
-
-		// Determine retry delay based on strategy
-		var delay time.Duration
-		var maxAttempts int
-
-		switch strategy {
-		case SmartRetry:
-			// Header-driven retry for rate limits (use full retry budget)
-			maxAttempts = maxRetries
-
-			if retryInfo.RetryAfter > 0 {
-				delay = retryInfo.RetryAfter
-				fmt.Printf("⏳ Rate limited. Provider suggests retry in %v (attempt %d/%d)\n",
-					delay, attempt+1, maxAttempts)
-			} else if retryInfo.ResetTime > 0 {
-				delay = time.Until(time.Unix(retryInfo.ResetTime, 0))
-				if delay < 0 {
-					delay = baseDelay
-				}
-				fmt.Printf("⏳ Rate limited. Retry at reset time in %v (attempt %d/%d)\n",
-					delay, attempt+1, maxAttempts)
-			} else {
-				// Fallback to exponential backoff with jitter
-				exponentialDelay := time.Duration(math.Pow(2, float64(attempt))) * baseDelay
-				jitter := time.Duration(float64(exponentialDelay) * 0.1)
-				delay = exponentialDelay + jitter
-				fmt.Printf("⏳ Rate limited. Retrying in %v (attempt %d/%d)\n",
-					delay, attempt+1, maxAttempts)
-			}
-
-		case ConservativeRetry:
-			// Conservative retry for server errors (max 2 attempts, short delays)
-			maxAttempts = 2
-			if attempt >= maxAttempts {
-				return response, err
-			}
-
-			delay = time.Duration(2+attempt) * time.Second // 2s, 3s
-			fmt.Printf("⚠️  Server error. Quick retry in %v (attempt %d/%d)\n",
-				delay, attempt+1, maxAttempts)
-		}
-
-		time.Sleep(delay)
-	}
-
-	return nil, fmt.Errorf("max retries exceeded after %d attempts", maxRetries)
-}
-
-// attemptRequestWithHeaders makes a request and extracts retry-related headers
-func (p *OpenAIProvider) attemptRequestWithHeaders(request OpenAIRequest) (*OpenAIResponse, RetryStrategy, error, RateLimitInfo) {
 	requestBody, err := json.Marshal(request)
 	if err != nil {
-		return nil, NoRetry, fmt.Errorf("failed to marshal request: %w", err), RateLimitInfo{}
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	req, err := http.NewRequest("POST", p.config.Host+"/chat/completions", bytes.NewBuffer(requestBody))
 	if err != nil {
-		return nil, NoRetry, fmt.Errorf("failed to create HTTP request: %w", err), RateLimitInfo{}
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
 
-	resp, err := p.client.Do(req)
+	// Use generic HTTP client with smart retry
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, NoRetry, fmt.Errorf("HTTP request failed: %w", err), RateLimitInfo{}
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, NoRetry, fmt.Errorf("failed to read response: %w", err), RateLimitInfo{}
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Extract rate limit headers
-	retryInfo := extractOpenAIRateLimitHeaders(resp.Header)
-
-	// Determine retry strategy
-	strategy := getRetryStrategy(resp.StatusCode)
-
 	if resp.StatusCode != http.StatusOK {
-		return nil, strategy, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body)), retryInfo
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var response OpenAIResponse
 	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, NoRetry, fmt.Errorf("failed to unmarshal response: %w", err), RateLimitInfo{}
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	return &response, NoRetry, nil, retryInfo
-}
-
-// extractOpenAIRateLimitHeaders extracts OpenAI rate limit information
-func extractOpenAIRateLimitHeaders(headers http.Header) RateLimitInfo {
-	info := RateLimitInfo{}
-
-	// Retry-After (seconds)
-	if retryAfter := headers.Get("Retry-After"); retryAfter != "" {
-		if seconds, err := time.ParseDuration(retryAfter + "s"); err == nil {
-			info.RetryAfter = seconds
-		}
-	}
-
-	// Parse reset time (Unix timestamp in seconds)
-	if resetStr := headers.Get("x-ratelimit-reset-requests"); resetStr != "" {
-		var resetTime int64
-		fmt.Sscanf(resetStr, "%d", &resetTime)
-		info.ResetTime = resetTime
-	} else if resetStr := headers.Get("x-ratelimit-reset-tokens"); resetStr != "" {
-		var resetTime int64
-		fmt.Sscanf(resetStr, "%d", &resetTime)
-		info.ResetTime = resetTime
-	}
-
-	// Parse remaining counts
-	if remaining := headers.Get("x-ratelimit-remaining-requests"); remaining != "" {
-		fmt.Sscanf(remaining, "%d", &info.RequestsRemaining)
-	}
-	if remaining := headers.Get("x-ratelimit-remaining-tokens"); remaining != "" {
-		fmt.Sscanf(remaining, "%d", &info.TokensRemaining)
-	}
-
-	return info
-}
-
-// attemptRequest makes a single HTTP request attempt
-func (p *OpenAIProvider) attemptRequest(request OpenAIRequest) (*OpenAIResponse, bool, error) {
-	requestBody, err := json.Marshal(request)
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", p.config.Host+"/chat/completions", bytes.NewBuffer(requestBody))
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to create HTTP request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return nil, false, fmt.Errorf("HTTP request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	// Determine if error is retryable based on status code
-	shouldRetry := isRetryableError(resp.StatusCode)
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, shouldRetry, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var response OpenAIResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, false, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
-
-	return &response, false, nil
+	return &response, nil
 }
 
 // makeStreamingRequest handles streaming responses with function calling
@@ -533,7 +396,9 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
 
-	resp, err := p.client.Do(req)
+	// For streaming, we need the underlying HTTP client (not the retry wrapper)
+	httpClient := &http.Client{Timeout: time.Duration(p.config.Timeout) * time.Second}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
