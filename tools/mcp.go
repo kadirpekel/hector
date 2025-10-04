@@ -23,8 +23,8 @@ type MCPToolSource struct {
 
 // MCPTool represents an MCP tool that implements the Tool interface
 type MCPTool struct {
-	toolInfo   ToolInfo
-	source *MCPToolSource
+	toolInfo ToolInfo
+	source   *MCPToolSource
 }
 
 // Request represents an MCP request
@@ -123,8 +123,8 @@ func (r *MCPToolSource) DiscoverTools(ctx context.Context) error {
 	// Create tools for discovered tools
 	for _, toolInfo := range tools {
 		tool := &MCPTool{
-			toolInfo:   toolInfo,
-			source: r,
+			toolInfo: toolInfo,
+			source:   r,
 		}
 		r.tools[toolInfo.Name] = tool
 	}
@@ -342,7 +342,7 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 			ToolName:      t.toolInfo.Name,
 			ExecutionTime: time.Since(start),
 			Metadata: map[string]interface{}{
-				"source": t.source.name,
+				"source":     t.source.name,
 				"tool_type":  "remote",
 				"server_url": t.source.url,
 			},
@@ -359,7 +359,7 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 			ToolName:      t.toolInfo.Name,
 			ExecutionTime: time.Since(start),
 			Metadata: map[string]interface{}{
-				"source": t.source.name,
+				"source":     t.source.name,
 				"tool_type":  "remote",
 				"server_url": t.source.url,
 			},
@@ -375,7 +375,7 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 		ToolName:      t.toolInfo.Name,
 		ExecutionTime: time.Since(start),
 		Metadata: map[string]interface{}{
-			"source": t.source.name,
+			"source":     t.source.name,
 			"tool_type":  "remote",
 			"server_url": t.source.url,
 		},
