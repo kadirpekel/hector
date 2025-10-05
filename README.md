@@ -20,6 +20,7 @@
 **Quick Links:**
 - [Quick Start](#quick-start) - Get running in 5 minutes
 - [Building Agents](docs/AGENTS.md) - **Core guide** for single agents
+- [Tools & Extensions](docs/TOOLS.md) - MCP, built-in tools, plugins
 - [A2A Server](#a2a-server-mode) - Host agents via A2A protocol
 - [Multi-Agent Orchestration](#multi-agent-orchestration) - Coordinate multiple agents
 - [External Agents](docs/EXTERNAL_AGENTS.md) - Use remote A2A agents
@@ -221,6 +222,7 @@ curl -X POST http://localhost:8080/agents/assistant/tasks \
 - **Prompt Customization** - 6-slot system for fine control (role, reasoning, tools, output, style)
 - **Reasoning Strategies** - Chain-of-thought (default) or supervisor (for orchestration)
 - **Built-in Tools** - Command execution, file ops, search, todos
+- **MCP Protocol** - Connect to 150+ apps (Composio, Mem0, Browserbase, custom servers)
 - **RAG Support** - Semantic search with document stores (Qdrant)
 - **Multi-Turn Sessions** - Conversation history and context management
 - **Real-Time Streaming** - Token-by-token output via WebSocket

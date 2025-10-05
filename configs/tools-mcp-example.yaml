@@ -1,0 +1,266 @@
+# MCP Tools Integration Example
+# Demonstrates connecting to MCP servers for extended capabilities
+
+# Global configuration
+global:
+  log_level: "info"
+  server:
+    address: "0.0.0.0"
+    port: 8080
+
+# LLM provider
+llms:
+  gpt-4o:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 4000
+
+# Tool configuration - Mix of built-in and MCP
+tools:
+  # ============================================================================
+  # BUILT-IN TOOLS
+  # ============================================================================
+  
+  execute_command:
+    type: "command"
+    enabled: true
+    allowed_commands:
+      - "cat"
+      - "ls"
+      - "grep"
+      - "git"
+    max_execution_time: "30s"
+  
+  file_writer:
+    type: "file_writer"
+    enabled: true
+    allowed_extensions: [".txt", ".md", ".yaml", ".json"]
+    max_file_size: 10485760  # 10MB
+  
+  search:
+    type: "search"
+    enabled: true
+    document_stores: ["knowledge_base"]
+  
+  todo:
+    type: "todo"
+    enabled: true
+  
+  # ============================================================================
+  # MCP SERVERS - External Tool Integrations
+  # ============================================================================
+  
+  # Composio - 150+ app integrations (GitHub, Slack, Gmail, Jira, etc.)
+  composio:
+    type: "mcp"
+    enabled: true
+    server_url: "https://api.composio.dev/mcp"
+    description: "Composio - Enterprise app integrations"
+    # Get API key from: https://composio.dev
+    # Provides tools like:
+    #   - github_create_issue, github_create_pr
+    #   - slack_send_message, slack_create_channel
+    #   - gmail_send_email, gmail_search_emails
+    #   - jira_create_ticket, jira_update_ticket
+    #   - and 146+ more...
+  
+  # Mem0 - Agent memory and personalization
+  mem0:
+    type: "mcp"
+    enabled: true
+    server_url: "https://api.mem0.ai/mcp"
+    description: "Mem0 - Persistent agent memory"
+    # Get API key from: https://mem0.ai
+    # Provides tools like:
+    #   - mem0_store: Store user preferences and facts
+    #   - mem0_recall: Retrieve relevant memories
+    #   - mem0_search: Search memory by query
+  
+  # Custom MCP Server - Your own tools
+  custom_business_tools:
+    type: "mcp"
+    enabled: false  # Enable when your server is running
+    server_url: "http://localhost:3000/mcp"
+    description: "Custom business logic and integrations"
+    # Example: Run your own MCP server for:
+    #   - Internal API calls
+    #   - Database queries
+    #   - Custom calculations
+    #   - Business workflows
+
+# Document stores (for search tool)
+document_stores:
+  knowledge_base:
+    type: "qdrant"
+    url: "http://localhost:6333"
+    collection: "company_knowledge"
+
+# ============================================================================
+# AGENTS USING TOOLS
+# ============================================================================
+
+agents:
+  # Agent with built-in tools only
+  file_assistant:
+    name: "File Assistant"
+    description: "Helps with file operations and searches"
+    llm: "gpt-4o"
+    document_stores: ["knowledge_base"]
+    
+    prompt:
+      system_role: |
+        You are a helpful assistant that manages files and searches documentation.
+      
+      tool_usage: |
+        Available tools:
+        - execute_command: Run safe commands (cat, ls, grep, git)
+        - file_writer: Create or modify files
+        - search: Search documentation
+        - todo: Track tasks
+  
+  # Agent with MCP integrations
+  integration_agent:
+    name: "Integration Agent"
+    description: "Connects to external services via MCP"
+    llm: "gpt-4o"
+    
+    prompt:
+      system_role: |
+        You are an integration specialist who can interact with
+        external services like GitHub, Slack, and email.
+      
+      tool_usage: |
+        Available integrations (via Composio):
+        
+        GitHub:
+          - github_create_issue: Create issues
+          - github_create_pr: Create pull requests
+          - github_comment: Add comments
+        
+        Slack:
+          - slack_send_message: Post messages
+          - slack_create_channel: Create channels
+        
+        Email:
+          - gmail_send_email: Send emails
+          - gmail_search_emails: Search inbox
+        
+        Use these tools to automate workflows!
+  
+  # Agent with memory (Mem0)
+  personal_assistant:
+    name: "Personal Assistant"
+    description: "Remembers user preferences and context"
+    llm: "gpt-4o"
+    
+    prompt:
+      system_role: |
+        You are a personal assistant who remembers user preferences,
+        past conversations, and important facts.
+      
+      tool_usage: |
+        Memory tools (via Mem0):
+        
+        - mem0_store: Save information
+          Example: User prefers Python over JavaScript
+        
+        - mem0_recall: Retrieve memories
+          Example: What programming language does user prefer?
+        
+        - mem0_search: Search all memories
+          Example: Find all facts about user's projects
+        
+        Always store important preferences and recall them
+        to provide personalized assistance!
+  
+  # Orchestrator using all tools
+  super_agent:
+    name: "Super Agent"
+    description: "Orchestrates tasks using all available tools"
+    llm: "gpt-4o"
+    document_stores: ["knowledge_base"]
+    
+    reasoning:
+      engine: "supervisor"
+      max_iterations: 20
+    
+    prompt:
+      system_role: |
+        You are a powerful orchestrator with access to:
+        - File operations (local system)
+        - Documentation search (knowledge base)
+        - External integrations (GitHub, Slack, Email)
+        - Memory system (Mem0)
+        
+        You coordinate complex workflows by:
+        1. Breaking down tasks
+        2. Using appropriate tools
+        3. Integrating results
+      
+      tool_usage: |
+        Tool selection strategy:
+        
+        For file operations:
+          → Use built-in tools (execute_command, file_writer)
+        
+        For external services:
+          → Use Composio tools (GitHub, Slack, Email)
+        
+        For user context:
+          → Use Mem0 tools (store, recall, search)
+        
+        For information lookup:
+          → Use search tool (documentation)
+        
+        Always choose the most appropriate tool for each task!
+
+# ============================================================================
+# QUICK START
+# ============================================================================
+#
+# 1. Install dependencies:
+#    - Qdrant: docker run -p 6333:6333 qdrant/qdrant
+#
+# 2. Set environment variables:
+#    export OPENAI_API_KEY="sk-..."
+#    export COMPOSIO_API_KEY="..."  # Optional, if using Composio
+#    export MEM0_API_KEY="..."      # Optional, if using Mem0
+#
+# 3. Start Hector:
+#    ./hector serve --config configs/tools-mcp-example.yaml
+#
+# 4. Test agents:
+#    ./hector chat file_assistant
+#    ./hector chat integration_agent
+#    ./hector chat personal_assistant
+#
+# 5. Example queries:
+#    - "List all files in this directory" (file_assistant)
+#    - "Create a GitHub issue for the bug" (integration_agent)
+#    - "Remember that I prefer Go over Python" (personal_assistant)
+#
+# ============================================================================
+# BUILDING CUSTOM MCP SERVERS
+# ============================================================================
+#
+# Python example:
+#   pip install mcp
+#   # Create server.py with MCP tools
+#   python server.py
+#
+# TypeScript example:
+#   npm install @modelcontextprotocol/sdk
+#   # Create server.ts with MCP tools
+#   node server.ts
+#
+# Then add to Hector:
+#   tools:
+#     my_tools:
+#       type: "mcp"
+#       enabled: true
+#       server_url: "http://localhost:3000"
+#
+# See docs/TOOLS.md for complete examples!
+# ============================================================================

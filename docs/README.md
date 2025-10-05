@@ -17,6 +17,9 @@ Get up and running in 5 minutes. Install, configure, and start using Hector.
 ### [Building Agents](AGENTS.md) ← Start Here
 Complete guide to building single agents: prompts, tools, RAG, sessions, streaming, and more.
 
+### [Tools & Extensions](TOOLS.md)
+Comprehensive guide to Hector's tool system: built-in tools, MCP protocol, gRPC plugins, and custom integrations.
+
 ### [Architecture](ARCHITECTURE.md)
 System design, A2A protocol implementation, sessions, orchestration patterns, and core components.
 
@@ -50,6 +53,12 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 
 **Get started quickly**
 → [Quick Start](QUICK_START.md)
+
+**Add tools & integrations**
+→ [Tools & Extensions Guide](TOOLS.md)
+
+**Connect to 150+ apps (MCP)**
+→ [Tools - MCP Integration](TOOLS.md#mcp-integration)
 
 **Customize prompts and tools**
 → [Building Agents Guide](AGENTS.md)
@@ -85,6 +94,7 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 | Document | Purpose |
 |----------|---------|
 | [Building Agents](AGENTS.md) | Complete single-agent guide (Start here) |
+| [Tools & Extensions](TOOLS.md) | Built-in tools, MCP, plugins |
 | [Quick Start](QUICK_START.md) | Get started in 5 minutes |
 | [Architecture](ARCHITECTURE.md) | System design, sessions, orchestration |
 | [Configuration](CONFIGURATION.md) | Complete config reference |
