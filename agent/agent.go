@@ -356,17 +356,6 @@ func (a *Agent) execute(
 						return
 					}
 					outputCh <- "✅ Retry successful, continuing...\n"
-				} else if a.isRetryableError(err) {
-					// Legacy fallback for non-typed errors
-					outputCh <- fmt.Sprintf("⏳ Transient error (rate limit or server issue). Waiting 2 minutes before retry...\n")
-					time.Sleep(120 * time.Second)
-
-					text, toolCalls, tokens, err = a.callLLM(ctx, messages, toolDefs, outputCh, cfg)
-					if err != nil {
-						outputCh <- fmt.Sprintf("❌ LLM still unavailable after retry: %v\n", err)
-						return
-					}
-					outputCh <- "✅ Retry successful, continuing...\n"
 				} else {
 					// Fatal error (auth, invalid request, etc.) - stop immediately
 					outputCh <- fmt.Sprintf("❌ Fatal error: %v\n", err)
@@ -380,7 +369,7 @@ func (a *Agent) execute(
 				outputCh <- fmt.Sprintf("\033[90m📝 Tokens used: %d (total: %d)\033[0m\n", tokens, state.TotalTokens)
 			}
 
-			// Track text for history
+			// Accumulate assistant response text across iterations
 			if text != "" {
 				state.AssistantResponse.WriteString(text)
 			}
@@ -394,7 +383,7 @@ func (a *Agent) execute(
 			var results []reasoning.ToolResult
 			if len(toolCalls) > 0 {
 				// IMPORTANT: Add assistant message WITH tool_calls BEFORE adding tool results
-				// OpenAI requires tool messages to have a preceding assistant message with tool_calls
+				// This is required by OpenAI/Anthropic for proper tool calling round-trip
 				assistantMsg := llms.Message{
 					Role:      "assistant",
 					Content:   text,
@@ -522,21 +511,73 @@ func (a *Agent) callLLM(
 		outputCh <- text
 	}
 
-	// Show tool names immediately (simulate streaming behavior for consistency)
-	if len(toolCalls) > 0 && cfg.ShowToolExecution {
-		outputCh <- "\n"
-		for _, tc := range toolCalls {
-			// Import formatToolLabel from services (or create inline)
-			label := formatToolLabelForAgent(tc.Name, tc.Arguments)
-			outputCh <- fmt.Sprintf("🔧 %s", label)
-		}
-	}
+	// Note: Tool labels are NOT shown here in non-streaming mode
+	// They will be shown by executeTools() when tools are actually executed
+	// This creates a consistent "tool name + status" display pattern
 
 	return text, toolCalls, tokens, nil
 }
 
-// formatToolLabelForAgent creates a concise label for non-streaming mode
-func formatToolLabelForAgent(toolName string, args map[string]interface{}) string {
+// executeTools executes all tool calls sequentially
+func (a *Agent) executeTools(
+	ctx context.Context,
+	toolCalls []llms.ToolCall,
+	outputCh chan<- string,
+	cfg config.ReasoningConfig,
+) []reasoning.ToolResult {
+	tools := a.services.Tools()
+
+	results := make([]reasoning.ToolResult, 0, len(toolCalls))
+
+	// Add newline before tools section (once, before all tools)
+	if len(toolCalls) > 0 && cfg.ShowToolExecution {
+		outputCh <- "\n"
+	}
+
+	for _, toolCall := range toolCalls {
+		// Check cancellation before each tool
+		select {
+		case <-ctx.Done():
+			return results
+		default:
+		}
+
+		// Show tool label before execution (both streaming and non-streaming)
+		// This ensures clean "🔧 tool ✅" pairing for each tool
+		if cfg.ShowToolExecution {
+			label := formatToolLabel(toolCall.Name, toolCall.Arguments)
+			outputCh <- fmt.Sprintf("🔧 %s", label)
+		}
+
+		// Execute tool
+		result, err := tools.ExecuteToolCall(ctx, toolCall)
+		resultContent := result
+		if err != nil {
+			resultContent = fmt.Sprintf("Error: %v", err)
+			if cfg.ShowToolExecution {
+				outputCh <- fmt.Sprintf(" ❌\n")
+			}
+		} else {
+			if cfg.ShowToolExecution {
+				outputCh <- fmt.Sprintf(" ✅\n")
+			}
+		}
+
+		results = append(results, reasoning.ToolResult{
+			ToolCall:   toolCall,
+			Content:    resultContent,
+			Error:      err,
+			ToolCallID: toolCall.ID,
+			ToolName:   toolCall.Name,
+		})
+	}
+
+	return results
+}
+
+// formatToolLabel creates a concise label for tool execution
+// Shared logic for both streaming and non-streaming modes
+func formatToolLabel(toolName string, args map[string]interface{}) string {
 	switch toolName {
 	case "execute_command":
 		if cmd, ok := args["command"].(string); ok {
@@ -562,54 +603,6 @@ func formatToolLabelForAgent(toolName string, args map[string]interface{}) strin
 		}
 	}
 	return toolName
-}
-
-// executeTools executes all tool calls sequentially
-func (a *Agent) executeTools(
-	ctx context.Context,
-	toolCalls []llms.ToolCall,
-	outputCh chan<- string,
-	cfg config.ReasoningConfig,
-) []reasoning.ToolResult {
-	tools := a.services.Tools()
-
-	results := make([]reasoning.ToolResult, 0, len(toolCalls))
-
-	for _, toolCall := range toolCalls {
-		// Check cancellation before each tool
-		select {
-		case <-ctx.Done():
-			return results
-		default:
-		}
-
-		// Tool name already shown during streaming (for both OpenAI and Anthropic)
-		// We just show the execution status here
-
-		// Execute tool
-		result, err := tools.ExecuteToolCall(ctx, toolCall)
-		resultContent := result
-		if err != nil {
-			resultContent = fmt.Sprintf("Error: %v", err)
-			if cfg.ShowToolExecution {
-				outputCh <- fmt.Sprintf(" ❌\n") // Append status to previously shown tool name
-			}
-		} else {
-			if cfg.ShowToolExecution {
-				outputCh <- fmt.Sprintf(" ✅\n") // Append status to previously shown tool name
-			}
-		}
-
-		results = append(results, reasoning.ToolResult{
-			ToolCall:   toolCall,
-			Content:    resultContent,
-			Error:      err,
-			ToolCallID: toolCall.ID,
-			ToolName:   toolCall.Name,
-		})
-	}
-
-	return results
 }
 
 // saveToHistory saves the conversation to history service
@@ -645,12 +638,12 @@ func (a *Agent) saveToHistory(
 	// Add assistant's final response to conversation (if not already added via tool calls)
 	finalResponse := state.AssistantResponse.String()
 	if finalResponse != "" {
-		// Check if the last message is already an assistant message with this content
-		// (it would have been added if there were tool calls)
+		// Check if the last message is already an assistant message
+		// (it would have been added in-loop if there were tool calls in the final iteration)
 		lastIsAssistant := len(state.Conversation) > 0 && state.Conversation[len(state.Conversation)-1].Role == "assistant"
 
 		if !lastIsAssistant {
-			// No tool calls in final iteration, add the final response
+			// Final iteration had no tool calls - add the response message here
 			assistantMsg := llms.Message{
 				Role:    "assistant",
 				Content: finalResponse,
@@ -668,8 +661,19 @@ func (a *Agent) saveToHistory(
 	existingCount := len(existingHistory)
 
 	// Save only the new messages (those added during this execution)
+	// Filter out tool messages and messages with empty content
+	// Session history is for user/assistant conversation only
 	for i := existingCount; i < len(state.Conversation); i++ {
-		history.AddToHistory(sessionID, state.Conversation[i])
+		msg := state.Conversation[i]
+
+		// Only save user/assistant messages with content
+		if msg.Role == "user" || msg.Role == "assistant" {
+			// Skip messages with empty content (e.g., when LLM calls tool without preamble)
+			if msg.Content != "" {
+				history.AddToHistory(sessionID, msg)
+			}
+		}
+		// Skip system and tool messages - they're for LLM API, not user history
 	}
 }
 

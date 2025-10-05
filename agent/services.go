@@ -281,6 +281,7 @@ func NewLLMService(llmProvider llms.LLMProvider) reasoning.LLMService {
 }
 
 // Generate implements reasoning.LLMService
+// Note: Non-streaming mode doesn't show tool labels in real-time (they're shown after execution)
 func (s *DefaultLLMService) Generate(messages []llms.Message, tools []llms.ToolDefinition) (string, []llms.ToolCall, int, error) {
 	return s.llmProvider.Generate(messages, tools)
 }
@@ -294,7 +295,6 @@ func (s *DefaultLLMService) GenerateStreaming(messages []llms.Message, tools []l
 
 	var toolCalls []llms.ToolCall
 	var tokens int
-	var toolCallsDisplayed bool // Track if we've shown any tool calls
 
 	for chunk := range streamCh {
 		switch chunk.Type {
@@ -302,17 +302,9 @@ func (s *DefaultLLMService) GenerateStreaming(messages []llms.Message, tools []l
 			outputCh <- chunk.Text
 		case "tool_call":
 			if chunk.ToolCall != nil {
-				// Show tool call immediately (Anthropic advantage!)
-				// This gives Cursor-like real-time feedback
-				if !toolCallsDisplayed {
-					outputCh <- "\n" // Newline before first tool
-					toolCallsDisplayed = true
-				}
-
-				// Format tool label with key arguments for better context
-				label := formatToolLabel(chunk.ToolCall.Name, chunk.ToolCall.Arguments)
-				outputCh <- fmt.Sprintf("🔧 %s", label)
-
+				// Accumulate tool calls silently
+				// Tool labels and formatting will be handled entirely by executeTools()
+				// to ensure clean, consistent "🔧 label ✅" pairing
 				toolCalls = append(toolCalls, *chunk.ToolCall)
 			}
 		case "done":
@@ -323,39 +315,6 @@ func (s *DefaultLLMService) GenerateStreaming(messages []llms.Message, tools []l
 	}
 
 	return toolCalls, tokens, nil
-}
-
-// formatToolLabel creates a concise, informative label for tool execution
-// Shows tool name + key arguments to give user context
-func formatToolLabel(toolName string, args map[string]interface{}) string {
-	switch toolName {
-	case "execute_command":
-		if cmd, ok := args["command"].(string); ok {
-			// Truncate long commands
-			if len(cmd) > 60 {
-				return fmt.Sprintf("%s: %s...", toolName, cmd[:57])
-			}
-			return fmt.Sprintf("%s: %s", toolName, cmd)
-		}
-	case "write_file", "search_replace":
-		if path, ok := args["path"].(string); ok {
-			return fmt.Sprintf("%s: %s", toolName, path)
-		}
-	case "search":
-		if query, ok := args["query"].(string); ok {
-			if len(query) > 40 {
-				return fmt.Sprintf("%s: %s...", toolName, query[:37])
-			}
-			return fmt.Sprintf("%s: %s", toolName, query)
-		}
-	case "todo_write":
-		if todos, ok := args["todos"].([]interface{}); ok {
-			return fmt.Sprintf("%s: %d tasks", toolName, len(todos))
-		}
-	}
-
-	// Default: just tool name
-	return toolName
 }
 
 // ============================================================================

@@ -9,7 +9,7 @@ agents:
     description: "Friendly weather assistant with real-time data access"
     
     llm: "gpt-llm"
-    tools: ["weather_mcp"]  # Reference global tool by name
+    tools: ["WEATHERMAP_WEATHER"]  # Actual tool name from MCP server
     
     prompt:
       prompt_slots:
@@ -18,9 +18,6 @@ agents:
           Always start responses with a weather emoji and keep it fun.
           
           Example: "🌧️ Paris is drizzling with 13°C! Perfect excuse for a cozy café. ☕"
-        
-        tool_usage: |
-          Use the weather tool for weather queries only.
       
       include_tools: true
       include_history: true
@@ -43,6 +40,9 @@ llms:
     type: "openai"
     model: "gpt-4o"
     api_key: "${OPENAI_API_KEY}"
+    # type: "anthropic"
+    # model: "claude-3-7-sonnet-latest"
+    # api_key: "${ANTHROPIC_API_KEY}"
     temperature: 0.8  # Higher for personality!
     max_tokens: 2000
 
