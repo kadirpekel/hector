@@ -19,60 +19,114 @@
 
 **📚 Quick Links:**
 - [Quick Start](#-quick-start) - Get running in 5 minutes
+- [Building Agents](docs/AGENTS.md) - **Core guide** for single agents
 - [A2A Server](#-a2a-server-mode) - Host agents via A2A protocol
 - [Multi-Agent Orchestration](#-multi-agent-orchestration) - Coordinate multiple agents
 - [External Agents](docs/EXTERNAL_AGENTS.md) - Use remote A2A agents
 - [Authentication](docs/AUTHENTICATION.md) - Secure with JWT validation
-- [Architecture](docs/ARCHITECTURE.md) - System design
 - [Documentation](docs/) - Complete documentation
 
 ---
 
 ## 🌟 **What is Hector?**
 
-Hector is a **pure A2A-native declarative AI agent platform** that enables you to:
+Hector is a **declarative AI agent platform** that lets you build powerful agents in pure YAML.
 
-- **📝 Define agents in YAML** - Native AND external agents, zero code required
-- **🌐 Serve via A2A protocol** - Industry-standard agent communication
-- **🤖 Deploy single or multi-agent systems** - From simple assistants to complex workflows
-- **🔗 Orchestrate with LLM-driven delegation** - Agents coordinate intelligently
-- **🔌 Integrate external agents** - Connect to any A2A agent via URL in your config
-- **🌍 Agent Ecosystem Ready** - Interoperate within organizations or the broader agent internet
-- **🔒 Visibility Control** - Fine-grained control over agent exposure (public/internal/private)
-- **🛡️ Enterprise Authentication** - JWT validation with any OAuth2/OIDC provider (Auth0, Keycloak, etc.)
+### **Core Capabilities**
+
+**🎯 Build Sophisticated Agents Without Code**
+- **📝 Pure YAML configuration** - Define complete agents declaratively
+- **🎨 Prompt customization** - Slot-based system for fine control
+- **🧠 Reasoning strategies** - Chain-of-thought or supervisor
+- **🔧 Built-in tools** - Search, file ops, commands, todos
+- **📚 RAG support** - Semantic search with document stores
+- **🔌 Plugin system** - Extend with custom LLMs, databases, tools
+- **💬 Multi-turn sessions** - Conversation history and context
+- **📡 Real-time streaming** - Token-by-token output
+
+**🌐 A2A Protocol Native**
+- **🤝 Serve via A2A** - Industry-standard agent communication
+- **🌍 External agents** - Connect to remote A2A agents via URL
+- **🔗 Multi-agent orchestration** - LLM-driven delegation
+- **🌏 Agent ecosystem ready** - Interoperate across organizations
+
+**🏢 Enterprise Features**
+- **🛡️ JWT authentication** - OAuth2/OIDC provider support
+- **🔒 Visibility control** - Public, internal, or private agents
+- **📊 Production ready** - Sessions, streaming, error handling
 
 ### **How Hector is Different**
 
-Unlike frameworks like **LangChain**, **AutoGen**, or **CrewAI** that require writing Python code to define agents, Hector uses **pure YAML configuration**:
+Unlike frameworks like **LangChain**, **AutoGen**, or **CrewAI** that require writing Python/code, Hector uses **pure YAML**:
 
+**Single Agent Example:**
 ```yaml
-# Define your ENTIRE multi-agent system in one YAML file
 agents:
-  # Native agent (runs locally)
-  assistant:
-    name: "Customer Support Agent"
-    llm: "gpt-4o"
+  coding_assistant:
+    name: "Coding Assistant"
+    llm: "claude-3-5-sonnet"
+    
+    # Customize behavior with slot-based prompts
+    prompt:
+      system_role: |
+        You are an expert software engineer who writes
+        clean, maintainable code.
+      
+      reasoning_instructions: |
+        1. Understand requirements fully
+        2. Consider edge cases
+        3. Write clean, testable code
+        4. Explain your decisions
+    
+    # Built-in RAG support
+    document_stores:
+      - "codebase_docs"
+    
+    # Reasoning strategy
     reasoning:
       engine: "chain-of-thought"
-    tools:
-      - search
-      - database
+      enable_streaming: true
+
+# LLM configuration
+llms:
+  claude-3-5-sonnet:
+    type: "anthropic"
+    model: "claude-3-5-sonnet-20241022"
+    api_key: "${ANTHROPIC_API_KEY}"
+```
+
+**Multi-Agent Example:**
+```yaml
+agents:
+  # Native agents
+  researcher:
+    llm: "gpt-4o"
+    document_stores: ["research_db"]
+  
+  analyst:
+    llm: "gpt-4o"
   
   # External A2A agent (just provide URL!)
   partner_specialist:
     type: "a2a"
     url: "https://partner-ai.com/agents/specialist"
-    # That's it! No code, no API integration - pure interoperability
+  
+  # Orchestrator coordinates them all
+  orchestrator:
+    llm: "gpt-4o"
+    reasoning:
+      engine: "supervisor"
+    # Uses agent_call tool to delegate
 ```
 
 **Key Differentiators:**
-- ✅ **Declarative** - YAML configuration for native AND external agents, zero code required
-- ✅ **A2A-Native** - 100% protocol compliance enables universal interoperability
-- ✅ **External Agent Integration** - Connect to any A2A agent via URL in your YAML
-- ✅ **Multi-Agent** - Built-in orchestration via `agent_call` tool across all agents
-- ✅ **Agent Internet Ready** - Participate in the emerging agent ecosystem
-- ✅ **Enterprise Interoperability** - Integrate partner/vendor agents declaratively
-- ✅ **Enterprise Security** - JWT authentication with any OAuth2/OIDC provider
+- ✅ **100% Declarative** - Complete agents in YAML, zero code
+- ✅ **Powerful Single Agents** - Prompts, tools, RAG, streaming out of the box
+- ✅ **A2A-Native** - 100% protocol compliance for interoperability
+- ✅ **External Agent Integration** - Connect to remote agents via URL
+- ✅ **Multi-Agent Orchestration** - LLM-driven coordination
+- ✅ **Plugin Extensibility** - Add custom LLMs, databases, tools
+- ✅ **Enterprise Ready** - Auth, sessions, streaming, production-grade
 
 ---
 
@@ -90,70 +144,107 @@ go build -o hector ./cmd/hector
 ./install.sh
 ```
 
-### Start A2A Server
+### 2. Create Your First Agent
+
+Create a simple configuration file:
+
+```yaml
+# my-agent.yaml
+agents:
+  assistant:
+    name: "My Assistant"
+    llm: "gpt-4o"
+    
+    # Customize the agent's behavior
+    prompt:
+      system_role: |
+        You are a helpful assistant who explains concepts
+        clearly and concisely.
+      
+      reasoning_instructions: |
+        Break down complex topics into simple terms.
+        Use examples when helpful.
+
+# LLM configuration
+llms:
+  gpt-4o:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+```
+
+### 3. Start the Server
 
 ```bash
-# 1. Set API key
+# Set API key
 export OPENAI_API_KEY="sk-..."
 
-# 2. Start server hosting multiple agents
-./hector serve --config configs/a2a-server.yaml
+# Start server
+./hector serve --config my-agent.yaml
 
-# Expected output:
-# 🚀 Starting Hector A2A Server...
+# Output:
+# 🚀 A2A Server starting on 0.0.0.0:8080
 # 📋 Registering agents...
-#   ✅ Competitor Analysis Agent (competitor_analyst)
-#   ✅ Customer Support Agent (customer_support)
+#   ✅ assistant (visibility: public)
 # 🌐 A2A Server ready!
-# 📡 Agent directory: http://localhost:8080/agents
 ```
 
-### Test with CLI
+### 4. Chat with Your Agent
 
 ```bash
-# List available agents
-./hector list
-
-# Get agent details
-./hector info competitor_analyst
-
-# Execute a task
-./hector call competitor_analyst "Analyze top AI agent frameworks"
-
 # Interactive chat
-./hector chat competitor_analyst
+./hector chat assistant
+
+# Or call via HTTP
+curl -X POST http://localhost:8080/agents/assistant/tasks \
+  -d '{"input":{"type":"text/plain","content":"Explain AI agents"}}'
 ```
 
-**That's it!** You now have an A2A server running with multiple agents.
+**That's it!** You now have a working AI agent with:
+- ✅ Custom prompts  
+- ✅ Tool access (built-in)  
+- ✅ Streaming support  
+- ✅ A2A protocol compliance  
+
+**Next Steps:**
+- 📖 [Building Agents Guide](docs/AGENTS.md) - Learn about prompts, RAG, tools, sessions
+- 🌐 [Multi-Agent Orchestration](#-multi-agent-orchestration) - Coordinate multiple agents
+- 🔒 [Authentication](docs/AUTHENTICATION.md) - Secure your agents
 
 ---
 
 ## ✨ **Features**
 
-### Core Platform
+### Single Agent Capabilities
+- **📝 Declarative YAML** - Complete agents without code
+- **🎨 Prompt Customization** - 6-slot system for fine control (role, reasoning, tools, output, style)
+- **🧠 Reasoning Strategies** - Chain-of-thought (default) or supervisor (for orchestration)
+- **🔧 Built-in Tools** - Command execution, file ops, search, todos
+- **📚 RAG Support** - Semantic search with document stores (Qdrant)
+- **💬 Multi-Turn Sessions** - Conversation history and context management
+- **📡 Real-Time Streaming** - Token-by-token output via WebSocket
+- **🔌 Plugin System** - Extend with custom LLMs, databases, tools (gRPC)
+
+### Multi-Agent & A2A
 - **🎯 Pure A2A Protocol** - 100% compliant with [A2A specification](https://a2a-protocol.org)
-- **📝 Declarative YAML** - Define agents without writing code
-- **🔌 Plugin System** - Extend with gRPC plugins for LLMs, databases, tools
-- **💬 Multi-Turn Sessions** - Maintain conversation context across interactions
-- **📡 Real-Time Streaming** - WebSocket streaming for live output
-
-### Multi-Agent System
-- **🤖 Native Agents** - Run agents locally with full tooling support
+- **🤖 Native Agents** - Run agents locally with full capabilities
 - **🌐 External Agents** - Connect to remote A2A agents via URL
-- **🔗 Orchestration** - LLM-driven agent delegation via `agent_call` tool
-- **🎭 Multiple Strategies** - Chain-of-thought or supervisor reasoning
+- **🔗 Orchestration** - LLM-driven delegation via `agent_call` tool
+- **🌍 Agent Ecosystem** - Interoperate across organizations
 
-### Enterprise Features
-- **🛡️ JWT Authentication** - Validate tokens from any OAuth2/OIDC provider
+### Enterprise & Production
+- **🛡️ JWT Authentication** - OAuth2/OIDC provider support (Auth0, Keycloak, etc.)
 - **🔒 Visibility Control** - Public, internal, or private agent exposure
-- **🔐 Secure by Design** - Industry-standard security practices
-- **📊 Production Ready** - Sessions, streaming, error handling
+- **🔐 Secure Tools** - Command whitelisting, path restrictions, sandboxing
+- **📊 Production Ready** - Error handling, logging, monitoring
 
 ### Developer Experience
 - **🚀 Quick Start** - Running in 5 minutes
-- **📖 Comprehensive Docs** - Architecture, config, examples
+- **📖 Comprehensive Docs** - Guides for single agents, multi-agent, config
 - **🧪 Testing Tools** - Automated test scripts included
 - **🐛 Debug Mode** - Detailed logging and tracing
+- **💻 CLI & API** - Use via command-line or HTTP/WebSocket
 
 ---
 
@@ -204,7 +295,7 @@ Instead of hard-coded workflows, Hector uses:
 ```yaml
 agents:
   orchestrator:
-    tools:
+tools:
       - agent_call  # Enable orchestration
     reasoning:
       engine: "supervisor"  # Optimized for delegation

@@ -1,0 +1,1073 @@
+# Building AI Agents with Hector
+
+**Declarative, Powerful, Production-Ready**
+
+## Overview
+
+Hector's core strength is making it incredibly easy to build sophisticated AI agents **without writing code**. Define everything in YAML, and Hector handles the complex orchestration, tool integration, context management, and streaming.
+
+**What makes Hector's agents powerful:**
+- ✅ **100% Declarative** - Pure YAML, zero code
+- ✅ **Prompt Customization** - Slot-based system for fine control
+- ✅ **Reasoning Strategies** - Chain-of-thought or supervisor
+- ✅ **Built-in Tools** - Search, file ops, commands, todos
+- ✅ **Plugin Extensibility** - Add custom LLMs, databases, tools
+- ✅ **Real-Time Streaming** - Token-by-token output
+- ✅ **Multi-Turn Sessions** - Conversation history & context
+- ✅ **Document Stores** - Semantic search with RAG
+- ✅ **Production Ready** - Error handling, logging, monitoring
+
+---
+
+## Quick Example
+
+```yaml
+agents:
+  coding_assistant:
+    name: "Coding Assistant"
+    description: "Helps write, debug, and review code"
+    
+    # LLM Configuration
+    llm: "gpt-4o"
+    
+    # Prompt Customization
+    prompt:
+      system_role: |
+        You are an expert software engineer who writes clean,
+        maintainable code and explains your reasoning clearly.
+      
+      reasoning_instructions: |
+        1. Understand the requirement fully
+        2. Consider edge cases
+        3. Write clean, testable code
+        4. Explain your decisions
+      
+      tool_usage: |
+        Use file_writer to create/update files
+        Use execute_command to run tests
+        Use search to find relevant documentation
+    
+    # Reasoning Strategy
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 15
+      enable_streaming: true
+    
+    # Document Stores (RAG)
+    document_stores:
+      - "codebase_docs"
+
+# LLM Provider
+llms:
+  gpt-4o:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 4000
+```
+
+**That's it!** Start the server and you have a production-ready coding assistant with RAG, tools, and streaming.
+
+---
+
+## Table of Contents
+
+- [Agent Anatomy](#agent-anatomy)
+- [Prompt Customization](#prompt-customization)
+- [Reasoning Strategies](#reasoning-strategies)
+- [Built-in Tools](#built-in-tools)
+- [Document Stores & RAG](#document-stores--rag)
+- [Sessions & Streaming](#sessions--streaming)
+- [Plugin System](#plugin-system)
+- [Real-World Examples](#real-world-examples)
+- [Best Practices](#best-practices)
+
+---
+
+## Agent Anatomy
+
+Every Hector agent consists of:
+
+```yaml
+agents:
+  my_agent:
+    # Identity
+    name: "Agent Name"
+    description: "What this agent does"
+    visibility: "public"  # public, internal, private
+    
+    # Core Components
+    llm: "llm-id"                    # Which LLM to use
+    prompt: { }                      # Prompt customization
+    reasoning: { }                   # Reasoning strategy
+    document_stores: []              # RAG data sources
+    
+    # Search Configuration (optional)
+    search:
+      enabled: true
+      result_limit: 10
+```
+
+### 1. **LLM (Required)**
+
+The language model powering your agent:
+
+```yaml
+# Agent definition
+agents:
+  my_agent:
+    llm: "claude-3-5-sonnet"
+
+# LLM provider definition
+llms:
+  claude-3-5-sonnet:
+    type: "anthropic"
+    model: "claude-3-5-sonnet-20241022"
+    api_key: "${ANTHROPIC_API_KEY}"
+    max_tokens: 8000
+    temperature: 0.7
+```
+
+**Supported Providers:**
+- OpenAI (GPT-4o, GPT-4, GPT-3.5)
+- Anthropic (Claude 3.5 Sonnet, Claude 3 Opus/Haiku)
+- Custom via gRPC plugins
+
+### 2. **Prompt (Optional but Recommended)**
+
+Fine-tune your agent's behavior:
+
+```yaml
+prompt:
+  system_role: |
+    You are a [role description]
+  
+  reasoning_instructions: |
+    How to approach problems
+  
+  tool_usage: |
+    How to use available tools
+  
+  output_format: |
+    How to structure responses
+  
+  communication_style: |
+    Tone and formatting preferences
+```
+
+### 3. **Reasoning (Optional)**
+
+Control how your agent thinks:
+
+```yaml
+reasoning:
+  engine: "chain-of-thought"  # or "supervisor"
+  max_iterations: 10          # How many reasoning cycles
+  enable_streaming: true      # Real-time output
+```
+
+### 4. **Document Stores (Optional)**
+
+Enable RAG (Retrieval-Augmented Generation):
+
+```yaml
+document_stores:
+  - "company_docs"
+  - "product_specs"
+```
+
+---
+
+## Prompt Customization
+
+Hector uses a **slot-based prompt system** that gives you fine-grained control without losing the benefits of built-in reasoning.
+
+### Slot System
+
+**6 predefined slots:**
+
+| Slot | Purpose | Example |
+|------|---------|---------|
+| `system_role` | Define agent identity | "You are a Python expert" |
+| `reasoning_instructions` | How to think | "Use step-by-step reasoning" |
+| `tool_usage` | How to use tools | "Use search for documentation" |
+| `output_format` | Response structure | "Use markdown formatting" |
+| `communication_style` | Tone & style | "Be concise and technical" |
+| `additional` | Custom instructions | Domain-specific rules |
+
+### Basic Customization
+
+```yaml
+prompt:
+  system_role: |
+    You are a customer support agent for TechCorp.
+    You are empathetic, patient, and solution-oriented.
+  
+  communication_style: |
+    - Use friendly, professional language
+    - Show empathy for customer frustrations
+    - Provide actionable solutions
+    - End with "Is there anything else I can help with?"
+```
+
+### Advanced Customization
+
+```yaml
+prompt:
+  system_role: |
+    You are a senior code reviewer with 10+ years of experience.
+    You focus on maintainability, performance, and security.
+  
+  reasoning_instructions: |
+    For each code review:
+    1. Check for security vulnerabilities
+    2. Assess code maintainability
+    3. Look for performance issues
+    4. Suggest specific improvements
+    5. Provide code examples for fixes
+  
+  tool_usage: |
+    - Use search to find similar patterns in the codebase
+    - Use execute_command to run linters/tests
+    - Use file_writer only if explicitly asked to fix code
+  
+  output_format: |
+    Structure reviews as:
+    ## Security
+    [findings]
+    
+    ## Maintainability
+    [findings]
+    
+    ## Performance
+    [findings]
+    
+    ## Recommendations
+    [specific changes with code examples]
+```
+
+### Domain-Specific Agents
+
+**Research Agent:**
+```yaml
+prompt:
+  system_role: |
+    You are a research analyst who synthesizes information
+    from multiple sources into clear, actionable insights.
+  
+  reasoning_instructions: |
+    1. Break down research questions into searchable topics
+    2. Use search tool to gather information
+    3. Cross-reference multiple sources
+    4. Identify patterns and contradictions
+    5. Synthesize findings into structured insights
+```
+
+**Debugging Agent:**
+```yaml
+prompt:
+  system_role: |
+    You are a debugging expert who finds root causes quickly.
+  
+  reasoning_instructions: |
+    1. Reproduce the issue (use execute_command)
+    2. Form hypotheses about the cause
+    3. Test each hypothesis systematically
+    4. Find root cause, not just symptoms
+    5. Suggest preventive measures
+```
+
+---
+
+## Reasoning Strategies
+
+Hector provides two built-in reasoning strategies:
+
+### 1. Chain-of-Thought (Default)
+
+**Best for:** Single-agent tasks, general problem-solving
+
+**How it works:**
+- Agent thinks step-by-step
+- Can use tools at any point
+- Automatically decides when task is complete
+- Fast and cost-effective
+
+**Configuration:**
+```yaml
+reasoning:
+  engine: "chain-of-thought"
+  max_iterations: 10
+  enable_streaming: true
+```
+
+**Characteristics:**
+- ✅ One LLM call per iteration
+- ✅ Implicit planning
+- ✅ Tool execution with automatic continuation
+- ✅ Natural conversation flow
+- ✅ Fast response times
+
+**Use cases:**
+- Coding assistants
+- Research agents
+- Customer support
+- Content creation
+- General Q&A
+
+### 2. Supervisor (For Orchestration)
+
+**Best for:** Multi-agent coordination
+
+**How it works:**
+- Specialized prompts for task decomposition
+- Guides agent selection and delegation
+- Helps synthesize results from multiple agents
+- Works with `agent_call` tool
+
+**Configuration:**
+```yaml
+reasoning:
+  engine: "supervisor"
+  max_iterations: 20  # More iterations for complex orchestration
+  enable_streaming: true
+```
+
+**Characteristics:**
+- ✅ Task decomposition guidance
+- ✅ Agent delegation patterns
+- ✅ Result synthesis support
+- ✅ Based on chain-of-thought with orchestration enhancements
+
+**Use cases:**
+- Multi-agent workflows
+- Complex research pipelines
+- Cross-functional tasks
+- Hierarchical processing
+
+See [Multi-Agent Orchestration](ARCHITECTURE.md#orchestrator-pattern) for details.
+
+---
+
+## Built-in Tools
+
+Hector agents have access to powerful built-in tools:
+
+### 1. **execute_command**
+
+Run shell commands securely:
+
+```yaml
+# Default configuration (secure whitelist)
+tools:
+  execute_command:
+    type: "command"
+    enabled: true
+    allowed_commands:
+      - "cat"
+      - "ls"
+      - "grep"
+      - "git"
+      - "npm"
+      - "go"
+    max_execution_time: "30s"
+```
+
+**Agent usage:**
+```
+User: What files are in this directory?
+Agent: Let me check...
+Tool: execute_command(command="ls -la")
+Agent: Here are the files: [lists files]
+```
+
+### 2. **search**
+
+Semantic search across document stores:
+
+```yaml
+# Automatic if document_stores configured
+document_stores:
+  codebase_docs:
+    type: "qdrant"
+    collection: "my_codebase"
+```
+
+**Agent usage:**
+```
+User: How do I use the authentication module?
+Agent: Let me search the documentation...
+Tool: search(query="authentication module usage", stores=["codebase_docs"])
+Agent: Based on the docs, here's how to use it: [explains]
+```
+
+### 3. **file_writer**
+
+Create and modify files:
+
+```yaml
+tools:
+  file_writer:
+    type: "file_writer"
+    enabled: true
+    allowed_paths:
+      - "./src/"
+      - "./docs/"
+    max_file_size: "10MB"
+```
+
+**Agent usage:**
+```
+User: Create a README file
+Agent: I'll create that for you...
+Tool: file_writer(path="README.md", content="# Project Title...")
+Agent: Created README.md with [description]
+```
+
+### 4. **search_replace**
+
+Find and replace in files:
+
+```yaml
+tools:
+  search_replace:
+    type: "search_replace"
+    enabled: true
+```
+
+**Agent usage:**
+```
+User: Rename the function getUserData to fetchUserData
+Agent: I'll update that...
+Tool: search_replace(file="api.js", old="getUserData", new="fetchUserData")
+Agent: Renamed in api.js
+```
+
+### 5. **todo_write**
+
+Task management and tracking:
+
+```yaml
+tools:
+  todo:
+    type: "todo"
+    enabled: true
+```
+
+**Agent usage:**
+```
+Agent: Breaking this down into steps...
+Tool: todo_write(tasks=[
+  {id: "1", content: "Research options", status: "in_progress"},
+  {id: "2", content: "Compare solutions", status: "pending"},
+  {id: "3", content: "Write recommendation", status: "pending"}
+])
+```
+
+### Tool Security
+
+**Built-in safety features:**
+- Command whitelisting
+- Path restrictions
+- Execution timeouts
+- Size limits
+- Sandboxing options
+
+**Configure per agent:**
+```yaml
+agents:
+  safe_agent:
+    # Only has read-only tools
+    # (Hector auto-filters based on tool config)
+```
+
+---
+
+## Document Stores & RAG
+
+Enable Retrieval-Augmented Generation (RAG) to give your agents domain knowledge.
+
+### Setup
+
+**1. Define Document Store:**
+```yaml
+document_stores:
+  company_knowledge:
+    type: "qdrant"
+    url: "http://localhost:6333"
+    collection: "company_docs"
+    
+  api_docs:
+    type: "qdrant"
+    url: "http://localhost:6333"
+    collection: "api_reference"
+```
+
+**2. Link to Agent:**
+```yaml
+agents:
+  support_agent:
+    llm: "gpt-4o"
+    document_stores:
+      - "company_knowledge"
+      - "api_docs"
+    
+    search:
+      enabled: true
+      result_limit: 10
+```
+
+**3. Agent automatically uses search:**
+```
+User: How do I reset my password?
+Agent: Let me check our documentation...
+[Automatic search in company_knowledge and api_docs]
+Agent: Here's how to reset your password: [answer with citations]
+```
+
+### How It Works
+
+1. **Agent receives question**
+2. **Automatically decides if search needed**
+3. **Semantic search across document stores**
+4. **Retrieves relevant chunks**
+5. **Synthesizes answer with context**
+6. **Cites sources**
+
+### Best Practices
+
+**Organize by domain:**
+```yaml
+document_stores:
+  product_specs:     # Product features and specs
+  api_reference:     # API documentation
+  troubleshooting:   # Common issues and solutions
+  company_policies:  # HR, legal, compliance
+```
+
+**Configure search behavior:**
+```yaml
+search:
+  enabled: true
+  result_limit: 10      # Balance between context and cost
+  min_similarity: 0.7   # Filter low-relevance results
+```
+
+**Prompt guidance:**
+```yaml
+prompt:
+  tool_usage: |
+    Use search when:
+    - User asks about specific features/docs
+    - You need factual information
+    - You should cite sources
+    
+    Don't search for:
+    - General coding questions
+    - Basic troubleshooting
+    - Opinion-based queries
+```
+
+---
+
+## Sessions & Streaming
+
+### Multi-Turn Sessions
+
+Enable conversation context and history:
+
+**Create session:**
+```bash
+curl -X POST http://localhost:8080/sessions \
+  -d '{"agentId": "support_agent"}'
+# Response: {"sessionId": "550e8400-..."}
+```
+
+**Chat in session:**
+```bash
+# Message 1
+curl -X POST http://localhost:8080/sessions/550e8400-.../tasks \
+  -d '{"input":{"type":"text/plain","content":"My name is Alice"}}'
+
+# Message 2 (agent remembers Alice)
+curl -X POST http://localhost:8080/sessions/550e8400-.../tasks \
+  -d '{"input":{"type":"text/plain","content":"What is my name?"}}'
+# Response: "Your name is Alice"
+```
+
+**Benefits:**
+- ✅ Conversation history maintained
+- ✅ Context across multiple turns
+- ✅ Personalized responses
+- ✅ Follow-up questions work naturally
+
+### Real-Time Streaming
+
+Get token-by-token output via WebSocket:
+
+```javascript
+const ws = new WebSocket('ws://localhost:8080/agents/my_agent/stream');
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    taskId: 'task-1',
+    input: {type: 'text/plain', content: 'Explain quantum computing'}
+  }));
+};
+
+ws.onmessage = (event) => {
+  const chunk = JSON.parse(event.data);
+  console.log(chunk.content);  // Token-by-token output
+  
+  if (chunk.final) {
+    console.log('Complete!');
+    ws.close();
+  }
+};
+```
+
+**Benefits:**
+- ✅ Immediate feedback to users
+- ✅ Better UX for long responses
+- ✅ Cancel long-running tasks
+- ✅ Progress indicators
+
+**Configure:**
+```yaml
+reasoning:
+  enable_streaming: true  # Enable streaming output
+```
+
+---
+
+## Plugin System
+
+Extend Hector with custom LLMs, databases, or tools via gRPC plugins.
+
+### Plugin Types
+
+**1. LLM Plugins** - Add custom language models
+**2. Database Plugins** - Add custom vector databases
+**3. Tool Plugins** - Add custom tools/capabilities
+
+### Example: Custom LLM Plugin
+
+```yaml
+# Configuration
+plugins:
+  llm_providers:
+    my_custom_llm:
+      type: "grpc"
+      path: "./plugins/my-llm-plugin"
+      enabled: true
+
+# Use in agent
+llms:
+  custom:
+    type: "plugin:my_custom_llm"
+    model: "custom-model-v1"
+
+agents:
+  my_agent:
+    llm: "custom"
+```
+
+**Plugin interface:**
+- gRPC-based for performance
+- Language-agnostic (Go, Python, Rust, etc.)
+- Hot-reload support
+- Sandboxed execution
+
+See [Architecture - Plugin System](ARCHITECTURE.md#extension-points) for implementation details.
+
+---
+
+## Real-World Examples
+
+### Example 1: Research Agent
+
+```yaml
+agents:
+  researcher:
+    name: "Research Analyst"
+    description: "Conducts comprehensive research and analysis"
+    llm: "gpt-4o"
+    
+    prompt:
+      system_role: |
+        You are a thorough research analyst who synthesizes
+        information from multiple sources into clear insights.
+      
+      reasoning_instructions: |
+        1. Break down research question into sub-topics
+        2. Use search to gather information from multiple sources
+        3. Cross-reference and verify findings
+        4. Identify patterns and contradictions
+        5. Synthesize into structured, actionable insights
+      
+      output_format: |
+        Structure research as:
+        ## Executive Summary
+        ## Key Findings
+        ## Detailed Analysis
+        ## Recommendations
+        ## Sources
+    
+    document_stores:
+      - "company_research"
+      - "market_data"
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 15
+
+llms:
+  gpt-4o:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.3  # Lower for factual research
+    max_tokens: 8000
+```
+
+### Example 2: Coding Assistant
+
+```yaml
+agents:
+  code_helper:
+    name: "Coding Assistant"
+    description: "Helps write, debug, and review code"
+    llm: "claude-3-5-sonnet"
+    
+    prompt:
+      system_role: |
+        You are an expert software engineer who writes clean,
+        maintainable, well-tested code.
+      
+      reasoning_instructions: |
+        1. Understand requirements fully before coding
+        2. Consider edge cases and error handling
+        3. Write clean, self-documenting code
+        4. Include comments for complex logic
+        5. Suggest tests for new code
+      
+      tool_usage: |
+        - Use search to find similar patterns in codebase
+        - Use file_writer to create/update files
+        - Use execute_command to run tests/linters
+        - Use search_replace for refactoring
+    
+    document_stores:
+      - "codebase_index"
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 20
+      enable_streaming: true
+
+llms:
+  claude-3-5-sonnet:
+    type: "anthropic"
+    model: "claude-3-5-sonnet-20241022"
+    api_key: "${ANTHROPIC_API_KEY}"
+    max_tokens: 8000
+```
+
+### Example 3: Customer Support
+
+```yaml
+agents:
+  support:
+    name: "Customer Support Agent"
+    description: "Helps customers with questions and issues"
+    llm: "gpt-4o-mini"  # Cost-effective for support
+    
+    prompt:
+      system_role: |
+        You are a friendly, patient customer support agent
+        for TechCorp. You prioritize customer satisfaction.
+      
+      reasoning_instructions: |
+        1. Listen carefully to the customer's issue
+        2. Ask clarifying questions if needed
+        3. Search knowledge base for solutions
+        4. Provide clear, step-by-step guidance
+        5. Verify the issue is resolved
+        6. Document the interaction
+      
+      communication_style: |
+        - Be warm and empathetic
+        - Use simple, non-technical language
+        - Provide actionable steps
+        - Follow up to ensure satisfaction
+        - End with: "Is there anything else I can help with?"
+    
+    document_stores:
+      - "faq"
+      - "troubleshooting_guides"
+      - "product_documentation"
+    
+    search:
+      enabled: true
+      result_limit: 5
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 10
+      enable_streaming: true  # Better UX
+
+llms:
+  gpt-4o-mini:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 2000
+```
+
+---
+
+## Best Practices
+
+### 1. **Start Simple, Add Complexity**
+
+```yaml
+# ✅ Start with minimal config
+agents:
+  my_agent:
+    name: "My Agent"
+    llm: "gpt-4o"
+    prompt:
+      system_role: "You are a helpful assistant"
+
+# ❌ Don't over-configure initially
+```
+
+### 2. **Use Appropriate Models**
+
+```yaml
+# Customer support (cost-effective)
+support_agent:
+  llm: "gpt-4o-mini"
+
+# Complex reasoning (more capable)
+analyst:
+  llm: "gpt-4o"
+
+# Code generation (specialized)
+coder:
+  llm: "claude-3-5-sonnet"
+```
+
+### 3. **Tune Temperature by Task**
+
+```yaml
+# Factual/research (low temperature)
+researcher:
+  llm: "gpt-4o"
+  # In llm config:
+  temperature: 0.3
+
+# Creative writing (higher temperature)
+writer:
+  llm: "gpt-4o"
+  # In llm config:
+  temperature: 0.9
+```
+
+### 4. **Organize Document Stores**
+
+```yaml
+# ✅ Separate by domain
+document_stores:
+  product_docs:    # Product features
+  api_reference:   # API docs
+  troubleshooting: # Solutions
+
+# ❌ Don't dump everything in one store
+```
+
+### 5. **Set Appropriate Limits**
+
+```yaml
+reasoning:
+  max_iterations: 10      # Enough for most tasks
+  enable_streaming: true  # Better UX
+
+search:
+  result_limit: 10        # Balance context vs cost
+```
+
+### 6. **Use Slot Prompts Wisely**
+
+```yaml
+# ✅ Clear, specific instructions
+prompt:
+  system_role: |
+    You are a Python expert specializing in data analysis.
+  
+  reasoning_instructions: |
+    1. Analyze data requirements
+    2. Choose appropriate libraries
+    3. Write clean, documented code
+    4. Suggest visualizations
+
+# ❌ Vague or overly complex
+```
+
+### 7. **Enable Streaming for Long Tasks**
+
+```yaml
+# ✅ For tasks that take time
+coding_agent:
+  reasoning:
+    enable_streaming: true
+
+# Provides immediate feedback
+```
+
+### 8. **Test with Progressive Complexity**
+
+```
+1. Simple query → Verify basic functionality
+2. Tool usage → Verify tool integration
+3. RAG query → Verify document search
+4. Multi-turn → Verify session management
+5. Complex task → Verify full capabilities
+```
+
+---
+
+## Performance Optimization
+
+### Cost Optimization
+
+**1. Use appropriate models:**
+```yaml
+# Quick tasks
+quick_agent:
+  llm: "gpt-4o-mini"  # $0.15/1M tokens
+
+# Complex reasoning
+smart_agent:
+  llm: "gpt-4o"  # $2.50/1M tokens
+```
+
+**2. Limit max_tokens:**
+```yaml
+llms:
+  cost_effective:
+    max_tokens: 2000  # Shorter responses = lower cost
+```
+
+**3. Tune max_iterations:**
+```yaml
+reasoning:
+  max_iterations: 5  # Stop earlier if appropriate
+```
+
+### Speed Optimization
+
+**1. Enable streaming:**
+```yaml
+reasoning:
+  enable_streaming: true  # Immediate user feedback
+```
+
+**2. Reduce RAG results:**
+```yaml
+search:
+  result_limit: 5  # Faster retrieval, less context
+```
+
+**3. Use local models (via plugins):**
+```yaml
+# For privacy-sensitive or high-volume use cases
+llms:
+  local:
+    type: "plugin:ollama"
+    model: "llama3:8b"
+```
+
+---
+
+## Troubleshooting
+
+### Agent Not Using Tools
+
+**Problem:** Agent responds without using available tools.
+
+**Solutions:**
+```yaml
+# 1. Add explicit tool guidance
+prompt:
+  tool_usage: |
+    ALWAYS use search when asked about [specific topics]
+    Use file_writer when asked to create files
+
+# 2. Provide examples in prompt
+  reasoning_instructions: |
+    Example: If user asks "What's in file X?"
+    Action: execute_command(command="cat X")
+```
+
+### RAG Not Working
+
+**Problem:** Agent not finding relevant documents.
+
+**Solutions:**
+```yaml
+# 1. Check document store is linked
+agents:
+  my_agent:
+    document_stores:
+      - "my_store"  # Must be defined
+
+# 2. Lower similarity threshold
+search:
+  min_similarity: 0.6  # More lenient matching
+
+# 3. Add search guidance
+prompt:
+  tool_usage: |
+    Search documentation when users ask about:
+    - Features
+    - How-to questions
+    - Troubleshooting
+```
+
+### Streaming Issues
+
+**Problem:** Streaming not working or choppy.
+
+**Solutions:**
+```yaml
+# 1. Ensure enabled in config
+reasoning:
+  enable_streaming: true
+
+# 2. Use WebSocket (not HTTP)
+# ws://localhost:8080/agents/my_agent/stream
+```
+
+---
+
+## Summary
+
+Hector makes building powerful AI agents simple:
+
+✅ **Declarative** - Pure YAML configuration  
+✅ **Customizable** - Slot-based prompt system  
+✅ **Powerful** - Built-in tools, RAG, streaming  
+✅ **Extensible** - Plugin system for custom needs  
+✅ **Production-Ready** - Sessions, error handling, monitoring  
+
+**Next Steps:**
+- [Quick Start](QUICK_START.md) - Get your first agent running
+- [Configuration Reference](CONFIGURATION.md) - All options explained
+- [Architecture](ARCHITECTURE.md) - How it works under the hood
+- [Multi-Agent Orchestration](ARCHITECTURE.md#orchestrator-pattern) - Scale to multiple agents
+
+**Start building your agent now! 🚀**
+

@@ -14,8 +14,11 @@ Get up and running in 5 minutes. Install, configure, and start using Hector.
 
 ## 📖 **Core Documentation**
 
+### [Building Agents](AGENTS.md) ⭐
+**Start here!** Complete guide to building single agents: prompts, tools, RAG, sessions, streaming, and more.
+
 ### [Architecture](ARCHITECTURE.md)
-System design, A2A protocol implementation, and core components.
+System design, A2A protocol implementation, sessions, orchestration patterns, and core components.
 
 ### [Configuration](CONFIGURATION.md)
 Complete configuration reference with examples and all available options.
@@ -33,29 +36,47 @@ How to integrate external A2A agents with Hector. Discover, register, and orches
 ### [Multi-Agent Orchestration](ARCHITECTURE.md#orchestrator-pattern)
 Multi-agent orchestration patterns. Use the `agent_call` tool to coordinate multiple agents for complex tasks.
 
+### [Authentication](AUTHENTICATION.md)
+Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (Auth0, Keycloak, etc.).
+
 ---
 
 ## 🎯 **Quick Navigation**
 
 ### I want to...
 
+**Build my first agent**
+→ [Building Agents Guide](AGENTS.md) ⭐
+
 **Get started quickly**
 → [Quick Start](QUICK_START.md)
 
+**Customize prompts and tools**
+→ [Building Agents Guide](AGENTS.md)
+
+**Add RAG/semantic search**
+→ [Building Agents - RAG Section](AGENTS.md#document-stores--rag)
+
+**Use sessions & streaming**
+→ [Building Agents - Sessions](AGENTS.md#sessions--streaming)
+
 **Configure an agent**
 → [Configuration Reference](CONFIGURATION.md)
+
+**Orchestrate multiple agents**
+→ [Orchestration Patterns](ARCHITECTURE.md#orchestrator-pattern)
+
+**Use external agents**
+→ [External Agents](EXTERNAL_AGENTS.md)
+
+**Secure with authentication**
+→ [Authentication](AUTHENTICATION.md)
 
 **Use the CLI**
 → [CLI Guide](CLI_GUIDE.md)
 
 **Understand the system**
 → [Architecture](ARCHITECTURE.md)
-
-**Use external agents**
-→ [External Agents](EXTERNAL_AGENTS.md)
-
-**Orchestrate multiple agents**
-→ [Orchestration Patterns](ARCHITECTURE.md#orchestrator-pattern)
 
 ---
 
@@ -68,7 +89,7 @@ Multi-agent orchestration patterns. Use the `agent_call` tool to coordinate mult
 | [Configuration](CONFIGURATION.md) | Complete config reference |
 | [CLI Guide](CLI_GUIDE.md) | Command-line interface |
 | [External Agents](EXTERNAL_AGENTS.md) | External A2A agent integration |
-| [Orchestrator Guide](ARCHITECTURE.md#orchestrator-pattern) | Multi-agent orchestration |
+| [Multi-Agent Orchestration](ARCHITECTURE.md#orchestrator-pattern) | Multi-agent orchestration |
 
 ---
 
@@ -82,10 +103,11 @@ Multi-agent orchestration patterns. Use the `agent_call` tool to coordinate mult
 
 ## 💡 **Tips**
 
-- Start with [Quick Start](QUICK_START.md) if you're new
+- Start with [Building Agents](AGENTS.md) to understand core capabilities ⭐
+- Use [Quick Start](QUICK_START.md) for a 5-minute setup
 - Check [Configuration](CONFIGURATION.md) for all YAML options
+- Learn [orchestration patterns](ARCHITECTURE.md#orchestrator-pattern) for multi-agent systems
 - See [External Agents](EXTERNAL_AGENTS.md) for integration examples
-- Use [Architecture](ARCHITECTURE.md#orchestrator-pattern) for orchestration patterns
 - Secure with [Authentication](AUTHENTICATION.md) for enterprise deployments
 
 ---
