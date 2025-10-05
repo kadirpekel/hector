@@ -300,7 +300,7 @@ func (c *Client) DeleteSession(ctx context.Context, sessionURL string) error {
 }
 
 // ExecuteTaskInSession executes a task within a session context
-func (c *Client) ExecuteTaskInSession(ctx context.Context, sessionURL string, input string) (*TaskResponse, error) {
+func (c *Client) ExecuteTaskInSession(ctx context.Context, sessionURL string, input string, agentCard *AgentCard) (*TaskResponse, error) {
 	taskReq := &TaskRequest{
 		TaskID: uuid.New().String(),
 		Input: TaskInput{
@@ -342,34 +342,53 @@ func (c *Client) ExecuteTaskInSession(ctx context.Context, sessionURL string, in
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// If task is running asynchronously, poll for completion
+	// If task is running asynchronously, poll for completion using the status endpoint
 	if taskResp.Status == TaskStatusRunning || taskResp.Status == TaskStatusPending {
-		// The status URL should be in the agent card, but we can construct it
-		// Format: http://localhost:8080/agents/{agentId}/tasks/{taskId}
-		// But we're in a session context, so let's try the task endpoint
-		// For now, just wait and poll the same endpoint (not ideal but works)
-		ticker := time.NewTicker(1 * time.Second)
+		// Use the agent card's status endpoint
+		// Status URL format: http://localhost:8080/agents/{agentId}/tasks/{taskId}
+		statusURL := agentCard.Endpoints.Status
+		statusURL = strings.ReplaceAll(statusURL, "{taskId}", taskResp.TaskID)
+
+		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 
-		timeout := time.After(30 * time.Second)
+		timeout := time.After(60 * time.Second)
 
 		for {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			case <-timeout:
-				// Return what we have (might still be running)
-				return &taskResp, nil
+				return nil, fmt.Errorf("task timed out after 60s")
 			case <-ticker.C:
-				// For session tasks, we don't have a direct status endpoint
-				// Just return the initial response
-				// The agent should complete quickly enough
-				if taskResp.Status == TaskStatusCompleted || taskResp.Status == TaskStatusFailed {
-					return &taskResp, nil
+				// Poll for task status
+				statusReq, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+				if err != nil {
+					continue
 				}
-				// In real implementation, we'd poll a status endpoint
-				// For now, assume it completes quickly
-				return &taskResp, nil
+
+				c.setAuthHeaders(statusReq)
+
+				statusResp, err := c.httpClient.Do(statusReq)
+				if err != nil {
+					continue
+				}
+
+				if statusResp.StatusCode == http.StatusOK {
+					var updatedResp TaskResponse
+					if err := json.NewDecoder(statusResp.Body).Decode(&updatedResp); err != nil {
+						statusResp.Body.Close()
+						continue
+					}
+					statusResp.Body.Close()
+
+					if updatedResp.Status == TaskStatusCompleted || updatedResp.Status == TaskStatusFailed {
+						return &updatedResp, nil
+					}
+					// Task still running, continue polling
+				} else {
+					statusResp.Body.Close()
+				}
 			}
 		}
 	}

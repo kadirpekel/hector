@@ -198,6 +198,9 @@ func executeChatCommand(agentURL string, token string) error {
 
 	fmt.Printf("🔗 Session: %s\n\n", session.SessionID[:8]+"...")
 
+	// Store agent card for status polling
+	agentCard := card
+
 	// Ensure session cleanup on exit
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -258,7 +261,7 @@ func executeChatCommand(agentURL string, token string) error {
 		}
 
 		// Execute task within session context
-		result, err := client.ExecuteTaskInSession(context.Background(), sessionURL+"/"+session.SessionID, input)
+		result, err := client.ExecuteTaskInSession(context.Background(), sessionURL+"/"+session.SessionID, input, agentCard)
 		if err != nil {
 			fmt.Printf("❌ Error: %v\n", err)
 			continue
