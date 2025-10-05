@@ -1,0 +1,185 @@
+# Agent Visibility Example
+# Demonstrates how to control which agents are exposed via A2A public discovery
+
+global:
+  a2a_server:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8080
+
+agents:
+  # ============================================================================
+  # PUBLIC AGENTS - Discoverable and callable by anyone
+  # ============================================================================
+  
+  customer_support:
+    visibility: "public"  # or omit - defaults to public
+    name: "Customer Support Agent"
+    description: "Handles customer inquiries"
+    llm: "main-llm"
+    reasoning:
+      engine: "chain-of-thought"
+    prompt:
+      system_role: |
+        You are a customer support agent. Help users with their questions.
+  
+  # ============================================================================
+  # INTERNAL AGENTS - Not discoverable, but callable if you know the ID
+  # Use case: Shared services within organization, but not advertised publicly
+  # ============================================================================
+  
+  data_processor:
+    visibility: "internal"
+    name: "Data Processor"
+    description: "Internal data processing service"
+    llm: "main-llm"
+    tools:
+      - execute_command
+    reasoning:
+      engine: "chain-of-thought"
+    prompt:
+      system_role: |
+        You process data and generate reports. Internal use only.
+  
+  # ============================================================================
+  # PRIVATE AGENTS - Only accessible by local orchestrators
+  # Use case: Helper agents that should never be called externally
+  # ============================================================================
+  
+  research_helper:
+    visibility: "private"
+    name: "Research Helper"
+    description: "Internal research assistant"
+    llm: "main-llm"
+    tools:
+      - search
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 5
+    prompt:
+      system_role: |
+        You gather research information. Used only by orchestrators.
+  
+  analyst_helper:
+    visibility: "private"
+    name: "Analyst Helper"
+    description: "Internal analysis assistant"
+    llm: "main-llm"
+    tools:
+      - execute_command
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 5
+    prompt:
+      system_role: |
+        You analyze data. Used only by orchestrators.
+  
+  # ============================================================================
+  # ORCHESTRATOR - Uses private helper agents
+  # ============================================================================
+  
+  smart_assistant:
+    visibility: "public"  # Orchestrator is public
+    name: "Smart Assistant"
+    description: "Orchestrates multiple specialized agents"
+    llm: "main-llm"
+    tools:
+      - agent_call  # Can call ALL agents (including private ones)
+    reasoning:
+      engine: "supervisor"
+      max_iterations: 20
+    prompt:
+      system_role: |
+        You are a smart assistant that coordinates multiple specialized agents.
+        
+        AVAILABLE AGENTS:
+        - research_helper (private): Gathers information
+        - analyst_helper (private): Analyzes data
+        - data_processor (internal): Processes data
+        
+        Use agent_call to delegate tasks to these agents.
+        Note: Helper agents are private - only you can call them!
+
+# ============================================================================
+# LLM CONFIGURATION
+# ============================================================================
+
+llms:
+  main-llm:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 4000
+
+# ============================================================================
+# TOOLS CONFIGURATION
+# ============================================================================
+
+tools:
+  execute_command:
+    type: command
+    allowed_commands: ["curl", "echo", "cat"]
+    working_directory: "."
+  
+  search:
+    type: search
+    max_results: 5
+
+# ============================================================================
+# HOW VISIBILITY WORKS
+# ============================================================================
+
+# PUBLIC (default):
+#   - Listed in GET /agents (discoverable)
+#   - GET /agents/{id} returns agent card
+#   - POST /agents/{id}/tasks executes tasks
+#   - Use case: Public-facing agents, APIs
+
+# INTERNAL:
+#   - NOT listed in GET /agents (not discoverable)
+#   - GET /agents/{id} returns agent card (if you know the ID)
+#   - POST /agents/{id}/tasks executes tasks
+#   - Use case: Shared services within organization
+
+# PRIVATE:
+#   - NOT listed in GET /agents (not discoverable)
+#   - GET /agents/{id} returns 404 (not accessible externally)
+#   - POST /agents/{id}/tasks returns 404 (not accessible externally)
+#   - Only callable by local orchestrators via agent_call tool
+#   - Use case: Helper agents, internal components
+
+# ============================================================================
+# TESTING
+# ============================================================================
+
+# Start server:
+#   $ hector serve --config configs/visibility-example.yaml
+
+# List public agents (only shows customer_support and smart_assistant):
+#   $ hector list
+
+# Call public agent (works):
+#   $ hector call customer_support "Help me"
+
+# Call internal agent (works if you know the ID):
+#   $ hector call data_processor "Process data"
+
+# Call private agent (fails - not accessible externally):
+#   $ hector call research_helper "Research topic"
+#   # Returns: Agent not found
+
+# Call orchestrator (works, and it can use private agents):
+#   $ hector call smart_assistant "Research and analyze AI trends"
+#   # The orchestrator internally calls research_helper and analyst_helper
+
+# ============================================================================
+# SECURITY BENEFITS
+# ============================================================================
+
+# ✅ Internal APIs hidden from public discovery
+# ✅ Helper agents protected from direct external access
+# ✅ Orchestration patterns remain secure
+# ✅ Fine-grained access control
+# ✅ Defense in depth - agents can't be enumerated
+

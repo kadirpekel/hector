@@ -19,15 +19,16 @@ import (
 
 // Server implements the A2A protocol server
 type Server struct {
-	host       string
-	port       int
-	baseURL    string
-	agents     map[string]Agent // Pure A2A Agent interface
-	agentCards map[string]*AgentCard
-	sessions   map[string]*Session
-	tasks      map[string]*TaskResponse
-	mu         sync.RWMutex
-	httpServer *http.Server
+	host            string
+	port            int
+	baseURL         string
+	agents          map[string]Agent // Pure A2A Agent interface
+	agentCards      map[string]*AgentCard
+	agentVisibility map[string]string // Agent visibility: "public", "internal", "private"
+	sessions        map[string]*Session
+	tasks           map[string]*TaskResponse
+	mu              sync.RWMutex
+	httpServer      *http.Server
 }
 
 // ServerConfig contains configuration for the A2A server
@@ -45,13 +46,14 @@ func NewServer(cfg *ServerConfig) *Server {
 	}
 
 	return &Server{
-		host:       cfg.Host,
-		port:       cfg.Port,
-		baseURL:    baseURL,
-		agents:     make(map[string]Agent),
-		agentCards: make(map[string]*AgentCard),
-		sessions:   make(map[string]*Session),
-		tasks:      make(map[string]*TaskResponse),
+		host:            cfg.Host,
+		port:            cfg.Port,
+		baseURL:         baseURL,
+		agents:          make(map[string]Agent),
+		agentCards:      make(map[string]*AgentCard),
+		agentVisibility: make(map[string]string),
+		sessions:        make(map[string]*Session),
+		tasks:           make(map[string]*TaskResponse),
 	}
 }
 
@@ -59,11 +61,29 @@ func NewServer(cfg *ServerConfig) *Server {
 // AGENT REGISTRATION
 // ============================================================================
 
-// RegisterAgent registers an A2A-compliant agent
+// RegisterAgent registers an A2A-compliant agent with visibility control
 // The agent must implement the pure A2A Agent interface
-func (s *Server) RegisterAgent(agentID string, agent Agent) error {
+//
+// Visibility levels:
+// - "public" (default): Discoverable via /agents and callable via API
+// - "internal": Not discoverable, but callable via API if you know the agent ID
+// - "private": Only callable by local orchestrators, not via external API
+func (s *Server) RegisterAgent(agentID string, agent Agent, visibility string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Normalize visibility (default to public)
+	if visibility == "" {
+		visibility = "public"
+	}
+
+	// Validate visibility
+	switch visibility {
+	case "public", "internal", "private":
+		// Valid
+	default:
+		return fmt.Errorf("invalid visibility '%s' (must be 'public', 'internal', or 'private')", visibility)
+	}
 
 	// Get the agent's card directly (pure A2A protocol)
 	card := agent.GetAgentCard()
@@ -78,6 +98,7 @@ func (s *Server) RegisterAgent(agentID string, agent Agent) error {
 
 	s.agents[agentID] = agent
 	s.agentCards[agentID] = card
+	s.agentVisibility[agentID] = visibility
 
 	return nil
 }
@@ -122,7 +143,8 @@ func (s *Server) Stop(ctx context.Context) error {
 // HTTP HANDLERS
 // ============================================================================
 
-// handleListAgents returns the directory of all available agents
+// handleListAgents returns the directory of all publicly discoverable agents
+// Only agents with visibility="public" are listed here
 func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -132,9 +154,13 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Only include agents with visibility="public"
 	agents := make([]AgentCard, 0, len(s.agentCards))
-	for _, card := range s.agentCards {
-		agents = append(agents, *card)
+	for agentID, card := range s.agentCards {
+		visibility := s.agentVisibility[agentID]
+		if visibility == "public" {
+			agents = append(agents, *card)
+		}
 	}
 
 	directory := AgentDirectory{
@@ -178,6 +204,7 @@ func (s *Server) handleAgentRoutes(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetAgentCard returns an agent's card
+// Private agents return 404 (not accessible via external API)
 func (s *Server) handleGetAgentCard(w http.ResponseWriter, r *http.Request, agentID string) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -186,6 +213,7 @@ func (s *Server) handleGetAgentCard(w http.ResponseWriter, r *http.Request, agen
 
 	s.mu.RLock()
 	card, exists := s.agentCards[agentID]
+	visibility := s.agentVisibility[agentID]
 	s.mu.RUnlock()
 
 	if !exists {
@@ -193,23 +221,38 @@ func (s *Server) handleGetAgentCard(w http.ResponseWriter, r *http.Request, agen
 		return
 	}
 
+	// Private agents are not accessible via external API
+	if visibility == "private" {
+		http.Error(w, "Agent not found", http.StatusNotFound) // Don't reveal existence
+		return
+	}
+
+	// Public and internal agents can return their card
 	respondJSON(w, http.StatusOK, card)
 }
 
 // handleExecuteTask executes a task on an agent
+// Private agents cannot be called via external API
 func (s *Server) handleExecuteTask(w http.ResponseWriter, r *http.Request, agentID string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Get agent
+	// Get agent and check visibility
 	s.mu.RLock()
 	agent, exists := s.agents[agentID]
+	visibility := s.agentVisibility[agentID]
 	s.mu.RUnlock()
 
 	if !exists {
 		http.Error(w, "Agent not found", http.StatusNotFound)
+		return
+	}
+
+	// Private agents cannot be called via external API (only by local orchestrators)
+	if visibility == "private" {
+		http.Error(w, "Agent not found", http.StatusNotFound) // Don't reveal existence
 		return
 	}
 

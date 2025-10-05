@@ -285,7 +285,8 @@ func executeServeCommand(args *CLIArgs) {
 		}
 
 		// Register in A2A server (both native and external agents)
-		if err := server.RegisterAgent(agentID, agentInstance); err != nil {
+		// Pass visibility to control public exposure
+		if err := server.RegisterAgent(agentID, agentInstance, agentConfig.Visibility); err != nil {
 			fmt.Printf("❌ Failed to register agent '%s': %v\n", agentID, err)
 			continue
 		}
@@ -295,12 +296,16 @@ func executeServeCommand(args *CLIArgs) {
 			fmt.Printf("⚠️  Failed to register agent '%s' in orchestration registry: %v\n", agentID, err)
 		}
 
-		// Show registration confirmation
+		// Show registration confirmation with visibility
 		agentTypeLabel := "native"
 		if agentConfig.Type == "a2a" {
 			agentTypeLabel = "external"
 		}
-		fmt.Printf("  ✅ %s (%s) [%s]\n", agentConfig.Name, agentID, agentTypeLabel)
+		visibilityLabel := agentConfig.Visibility
+		if visibilityLabel == "" {
+			visibilityLabel = "public"
+		}
+		fmt.Printf("  ✅ %s (%s) [%s, %s]\n", agentConfig.Name, agentID, agentTypeLabel, visibilityLabel)
 
 		if args.Debug {
 			if agentConfig.Type == "a2a" {

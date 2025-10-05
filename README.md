@@ -37,6 +37,7 @@ Hector is a **pure A2A-native declarative AI agent platform** that enables you t
 - **🔗 Orchestrate with LLM-driven delegation** - Agents coordinate intelligently
 - **🔌 Integrate external agents** - Connect to any A2A agent via URL in your config
 - **🌍 Agent Ecosystem Ready** - Interoperate within organizations or the broader agent internet
+- **🔒 Visibility Control** - Fine-grained control over agent exposure (public/internal/private)
 
 ### **How Hector is Different**
 

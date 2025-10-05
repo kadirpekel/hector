@@ -104,6 +104,7 @@ agents:
   <agent-name>:
     name: string           # Display name
     description: string    # Agent description (optional)
+    visibility: string     # Agent visibility: "public" (default), "internal", or "private"
     llm: string           # Reference to LLM config
     
     prompt:               # Prompt configuration

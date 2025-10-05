@@ -417,6 +417,12 @@ type AgentConfig struct {
 	Name        string `yaml:"name"`        // Agent name
 	Description string `yaml:"description"` // Agent description
 
+	// Visibility control
+	// - "public" (default): Discoverable via /agents and callable
+	// - "internal": Not discoverable, but callable if you know the agent ID
+	// - "private": Only callable by local orchestrators, not via external API
+	Visibility string `yaml:"visibility,omitempty"` // Agent visibility: "public" (default), "internal", or "private"
+
 	// External A2A agent fields (when type="a2a")
 	URL string `yaml:"url,omitempty"` // A2A agent URL (e.g., "https://server.com/agents/specialist")
 
@@ -441,6 +447,19 @@ func (c *AgentConfig) Validate() error {
 	// Normalize type
 	if c.Type == "" {
 		c.Type = "native"
+	}
+
+	// Normalize visibility
+	if c.Visibility == "" {
+		c.Visibility = "public"
+	}
+
+	// Validate visibility
+	switch c.Visibility {
+	case "public", "internal", "private":
+		// Valid
+	default:
+		return fmt.Errorf("invalid visibility '%s' (must be 'public', 'internal', or 'private')", c.Visibility)
 	}
 
 	// Validate based on agent type
@@ -492,6 +511,11 @@ func (c *AgentConfig) SetDefaults() {
 	// Default to native agent if not specified
 	if c.Type == "" {
 		c.Type = "native"
+	}
+
+	// Default visibility
+	if c.Visibility == "" {
+		c.Visibility = "public"
 	}
 
 	// Set defaults based on agent type
