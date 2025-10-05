@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/kadirpekel/hector/a2a"
 )
@@ -177,8 +178,32 @@ func executeChatCommand(agentURL string, token string) error {
 	fmt.Println("  /info - Show agent information")
 	fmt.Println()
 
-	// TODO: Implement proper session management
-	// For now, each message is independent
+	// Create session for multi-turn conversation
+	sessionReq := &a2a.SessionRequest{
+		AgentID: card.AgentID,
+		Metadata: map[string]string{
+			"client": "hector-cli",
+		},
+	}
+
+	// Determine session endpoint from agent card or default
+	sessionURL := strings.TrimSuffix(card.Endpoints.Task, "/tasks")
+	sessionURL = strings.TrimSuffix(sessionURL, fmt.Sprintf("/agents/%s", card.AgentID))
+	sessionURL = sessionURL + "/sessions"
+
+	session, err := client.CreateSession(context.Background(), sessionURL, sessionReq)
+	if err != nil {
+		return fmt.Errorf("failed to create session: %w", err)
+	}
+
+	fmt.Printf("🔗 Session: %s\n\n", session.SessionID[:8]+"...")
+
+	// Ensure session cleanup on exit
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		client.DeleteSession(ctx, sessionURL+"/"+session.SessionID)
+	}()
 
 	scanner := os.Stdin
 	reader := bufio.NewReader(scanner)
@@ -207,11 +232,24 @@ func executeChatCommand(agentURL string, token string) error {
 				fmt.Println("Goodbye!")
 				return nil
 			case "/clear":
-				fmt.Println("💭 Note: Session management not yet implemented")
+				// Create new session (clears history)
+				newSession, err := client.CreateSession(context.Background(), sessionURL, sessionReq)
+				if err != nil {
+					fmt.Printf("❌ Failed to clear history: %v\n", err)
+					continue
+				}
+				// Delete old session
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				client.DeleteSession(ctx, sessionURL+"/"+session.SessionID)
+				cancel()
+				// Use new session
+				session = newSession
+				fmt.Printf("💭 Conversation history cleared (new session: %s)\n\n", session.SessionID[:8]+"...")
 				continue
 			case "/info":
 				fmt.Printf("\n🤖 %s\n", card.Name)
-				fmt.Printf("   %s\n\n", card.Description)
+				fmt.Printf("   %s\n", card.Description)
+				fmt.Printf("   Session: %s\n\n", session.SessionID)
 				continue
 			default:
 				fmt.Printf("Unknown command: %s\n", input)
@@ -219,8 +257,8 @@ func executeChatCommand(agentURL string, token string) error {
 			}
 		}
 
-		// Execute task via A2A
-		result, err := client.ExecuteTask(context.Background(), card, input, nil)
+		// Execute task within session context
+		result, err := client.ExecuteTaskInSession(context.Background(), sessionURL+"/"+session.SessionID, input)
 		if err != nil {
 			fmt.Printf("❌ Error: %v\n", err)
 			continue
