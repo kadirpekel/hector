@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 )
 
 // ============================================================================
@@ -421,6 +422,75 @@ func (c *Client) setAuthHeaders(req *http.Request) {
 		}
 	}
 }
+
+// ============================================================================
+// STREAMING CLIENT
+// ============================================================================
+
+// ExecuteTaskStreamingInSession executes a task in a session with real-time streaming output
+func (c *Client) ExecuteTaskStreamingInSession(ctx context.Context, sessionURL string, input string, outputCh chan<- string) (*TaskResponse, error) {
+	wsURL := strings.Replace(sessionURL, "http://", "ws://", 1)
+	wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
+	wsURL = wsURL + "/stream"
+
+	dialer := websocket.DefaultDialer
+	conn, _, err := dialer.DialContext(ctx, wsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to WebSocket: %w", err)
+	}
+	defer conn.Close()
+
+	taskReq := TaskRequest{
+		Input: TaskInput{
+			Type:    "text/plain",
+			Content: input,
+		},
+	}
+
+	if err := conn.WriteJSON(taskReq); err != nil {
+		return nil, fmt.Errorf("failed to send task request: %w", err)
+	}
+
+	var finalResponse *TaskResponse
+	for {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				break
+			}
+			return nil, fmt.Errorf("failed to read message: %w", err)
+		}
+
+		var chunk StreamChunk
+		if err := json.Unmarshal(message, &chunk); err != nil {
+			continue
+		}
+
+		if chunk.Final {
+			finalResponse = &TaskResponse{
+				TaskID:    chunk.TaskID,
+				Status:    TaskStatusCompleted,
+				StartedAt: chunk.Timestamp,
+				EndedAt:   chunk.Timestamp,
+			}
+			break
+		}
+
+		if content, ok := chunk.Content.(string); ok && content != "" {
+			outputCh <- content
+		}
+	}
+
+	if finalResponse == nil {
+		return nil, fmt.Errorf("no final response received")
+	}
+
+	return finalResponse, nil
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
 
 // ExtractOutputText extracts text content from task output
 func ExtractOutputText(output *TaskOutput) string {

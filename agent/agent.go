@@ -54,11 +54,11 @@ func NewAgent(agentConfig *config.AgentConfig, componentMgr interface{}) (*Agent
 // PUBLIC API - PURE A2A METHODS ONLY
 // ============================================================================
 
-// ClearHistory clears the conversation history
-func (a *Agent) ClearHistory() {
+// ClearHistory clears the conversation history for a specific session
+func (a *Agent) ClearHistory(sessionID string) {
 	history := a.services.History()
 	if history != nil {
-		history.ClearHistory()
+		history.ClearHistory(sessionID)
 	}
 }
 
@@ -104,6 +104,17 @@ func (a *Agent) ExecuteTask(ctx context.Context, request *a2a.TaskRequest) (*a2a
 
 	// Extract input from A2A TaskRequest
 	input := extractInputText(request.Input)
+
+	// Extract sessionID from A2A request context (if present)
+	sessionID := ""
+	if request.Context != nil {
+		sessionID = request.Context.SessionID
+	}
+
+	// Pass sessionID via context for downstream services
+	if sessionID != "" {
+		ctx = context.WithValue(ctx, "sessionID", sessionID)
+	}
 
 	// Create strategy based on config
 	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
@@ -165,6 +176,17 @@ func (a *Agent) ExecuteTask(ctx context.Context, request *a2a.TaskRequest) (*a2a
 
 // ExecuteTaskStreaming implements a2a.Agent.ExecuteTaskStreaming
 func (a *Agent) ExecuteTaskStreaming(ctx context.Context, request *a2a.TaskRequest) (<-chan *a2a.StreamChunk, error) {
+	// Extract sessionID from A2A request context (if present)
+	sessionID := ""
+	if request.Context != nil {
+		sessionID = request.Context.SessionID
+	}
+
+	// Pass sessionID via context for downstream services
+	if sessionID != "" {
+		ctx = context.WithValue(ctx, "sessionID", sessionID)
+	}
+
 	// Extract input from A2A TaskRequest
 	input := extractInputText(request.Input)
 
@@ -233,8 +255,16 @@ func (a *Agent) execute(
 		// Restore conversation history from HistoryService (interactive mode)
 		historyService := a.services.History()
 		if historyService != nil {
+			// Extract sessionID from context
+			sessionID := ""
+			if sessionIDValue := ctx.Value("sessionID"); sessionIDValue != nil {
+				if sid, ok := sessionIDValue.(string); ok {
+					sessionID = sid
+				}
+			}
+
 			// Get recent history and restore to conversation
-			recentHistory := historyService.GetRecentHistory(cfg.MaxIterations * 10) // Get plenty of history
+			recentHistory := historyService.GetRecentHistory(sessionID, cfg.MaxIterations*10) // Get plenty of history
 			if len(recentHistory) > 0 {
 				state.Conversation = append(state.Conversation, recentHistory...)
 			}
@@ -363,16 +393,16 @@ func (a *Agent) execute(
 			// Execute tools if any
 			var results []reasoning.ToolResult
 			if len(toolCalls) > 0 {
-				results = a.executeTools(ctx, toolCalls, outputCh, cfg)
-
-				// Core protocol: Add assistant message + tool results to conversation
-				// This is the OpenAI/Anthropic function calling protocol (not strategy-specific)
+				// IMPORTANT: Add assistant message WITH tool_calls BEFORE adding tool results
+				// OpenAI requires tool messages to have a preceding assistant message with tool_calls
 				assistantMsg := llms.Message{
 					Role:      "assistant",
 					Content:   text,
 					ToolCalls: toolCalls,
 				}
 				state.Conversation = append(state.Conversation, assistantMsg)
+
+				results = a.executeTools(ctx, toolCalls, outputCh, cfg)
 
 				// Add tool results to conversation
 				for _, result := range results {
@@ -403,7 +433,7 @@ func (a *Agent) execute(
 		}
 
 		// Save to history (this now saves full llms.Message objects)
-		a.saveToHistory(input, state, strategy, startTime)
+		a.saveToHistory(ctx, input, state, strategy, startTime)
 
 		if cfg.ShowDebugInfo {
 			outputCh <- fmt.Sprintf("\033[90m\n⏱️  Total time: %v | Tokens: %d | Iterations: %d\033[0m\n",
@@ -458,12 +488,27 @@ func (a *Agent) callLLM(
 	llm := a.services.LLM()
 
 	if cfg.EnableStreaming {
-		// Streaming mode - tool names shown in real-time during streaming
-		toolCalls, tokens, err := llm.GenerateStreaming(messages, toolDefs, outputCh)
+		// Streaming mode - capture streamed text for history
+		var streamedText strings.Builder
+		wrappedCh := make(chan string, 100)
+
+		// Goroutine to capture and forward streamed text
+		go func() {
+			for chunk := range wrappedCh {
+				streamedText.WriteString(chunk)
+				outputCh <- chunk
+			}
+		}()
+
+		toolCalls, tokens, err := llm.GenerateStreaming(messages, toolDefs, wrappedCh)
+		close(wrappedCh)
+
 		if err != nil {
 			return "", nil, 0, err
 		}
-		return "", toolCalls, tokens, nil
+
+		// Return the accumulated streamed text for history
+		return streamedText.String(), toolCalls, tokens, nil
 	}
 
 	// Non-streaming mode
@@ -569,6 +614,7 @@ func (a *Agent) executeTools(
 
 // saveToHistory saves the conversation to history service
 func (a *Agent) saveToHistory(
+	ctx context.Context,
 	input string,
 	state *reasoning.ReasoningState,
 	strategy reasoning.ReasoningStrategy,
@@ -579,13 +625,51 @@ func (a *Agent) saveToHistory(
 		return
 	}
 
-	// Clear previous history and save the entire conversation
-	// This ensures HistoryService has the complete conversation state
-	history.ClearHistory()
+	// Extract sessionID from context
+	sessionID := ""
+	if sessionIDValue := ctx.Value("sessionID"); sessionIDValue != nil {
+		if sid, ok := sessionIDValue.(string); ok {
+			sessionID = sid
+		}
+	}
 
-	// Save all messages from the conversation (includes tool calls, tool results, etc.)
-	for _, msg := range state.Conversation {
-		history.AddToHistory(msg)
+	// Add user's input message to conversation (if not already there)
+	if len(state.Conversation) == 0 || state.Conversation[len(state.Conversation)-1].Role != "user" {
+		userMsg := llms.Message{
+			Role:    "user",
+			Content: input,
+		}
+		state.Conversation = append(state.Conversation, userMsg)
+	}
+
+	// Add assistant's final response to conversation (if not already added via tool calls)
+	finalResponse := state.AssistantResponse.String()
+	if finalResponse != "" {
+		// Check if the last message is already an assistant message with this content
+		// (it would have been added if there were tool calls)
+		lastIsAssistant := len(state.Conversation) > 0 && state.Conversation[len(state.Conversation)-1].Role == "assistant"
+
+		if !lastIsAssistant {
+			// No tool calls in final iteration, add the final response
+			assistantMsg := llms.Message{
+				Role:    "assistant",
+				Content: finalResponse,
+			}
+			state.Conversation = append(state.Conversation, assistantMsg)
+		}
+	}
+
+	// Save NEW messages from this execution
+	// Note: state.Conversation already includes loaded history + new messages
+	// We need to save only the NEW messages (after the loaded history)
+
+	// Get current history size to know where new messages start
+	existingHistory := history.GetRecentHistory(sessionID, 10000) // Get all history
+	existingCount := len(existingHistory)
+
+	// Save only the new messages (those added during this execution)
+	for i := existingCount; i < len(state.Conversation); i++ {
+		history.AddToHistory(sessionID, state.Conversation[i])
 	}
 }
 

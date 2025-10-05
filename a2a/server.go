@@ -470,7 +470,12 @@ func (s *Server) handleSessionRoutes(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		s.handleGetSession(w, r, sessionID)
+		// GET /sessions/{sessionId}/stream - WebSocket streaming
+		if len(parts) == 2 && parts[1] == "stream" {
+			s.handleSessionStreamTask(w, r, sessionID)
+		} else {
+			s.handleGetSession(w, r, sessionID)
+		}
 	case http.MethodDelete:
 		s.handleDeleteSession(w, r, sessionID)
 	case http.MethodPost:
@@ -690,4 +695,88 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// ============================================================================
+// SESSION STREAMING
+// ============================================================================
+
+// handleSessionStreamTask handles streaming task execution in a session via WebSocket
+func (s *Server) handleSessionStreamTask(w http.ResponseWriter, r *http.Request, sessionID string) {
+	upgrader := &websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		http.Error(w, "Failed to upgrade to WebSocket", http.StatusBadRequest)
+		return
+	}
+	defer conn.Close()
+
+	s.mu.RLock()
+	session, exists := s.sessions[sessionID]
+	s.mu.RUnlock()
+
+	if !exists {
+		conn.WriteJSON(map[string]string{"error": "Session not found"})
+		return
+	}
+
+	s.mu.RLock()
+	agent, exists := s.agents[session.AgentID]
+	s.mu.RUnlock()
+
+	if !exists {
+		conn.WriteJSON(map[string]string{"error": "Agent not found"})
+		return
+	}
+
+	var taskReq TaskRequest
+	if err := conn.ReadJSON(&taskReq); err != nil {
+		conn.WriteJSON(map[string]string{"error": "Invalid task request"})
+		return
+	}
+
+	if taskReq.TaskID == "" {
+		taskReq.TaskID = uuid.New().String()
+	}
+
+	if taskReq.Context == nil {
+		taskReq.Context = &TaskContext{}
+	}
+	taskReq.Context.SessionID = sessionID
+
+	s.mu.Lock()
+	session.LastActivityAt = time.Now()
+	s.mu.Unlock()
+
+	ctx := context.Background()
+	streamCh, err := agent.ExecuteTaskStreaming(ctx, &taskReq)
+	if err != nil {
+		conn.WriteJSON(&StreamChunk{
+			TaskID:    taskReq.TaskID,
+			ChunkType: ChunkTypeError,
+			Content:   fmt.Sprintf("Execution failed: %v", err),
+			Timestamp: time.Now(),
+			Final:     true,
+		})
+		return
+	}
+
+	for chunk := range streamCh {
+		if chunk.Timestamp.IsZero() {
+			chunk.Timestamp = time.Now()
+		}
+
+		if err := conn.WriteJSON(chunk); err != nil {
+			return
+		}
+
+		if chunk.Final {
+			break
+		}
+	}
 }

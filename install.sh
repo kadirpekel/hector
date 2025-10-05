@@ -26,6 +26,12 @@ echo "📁 Installing to: $INSTALL_DIR"
 cp hector "$INSTALL_DIR/hector"
 chmod +x "$INSTALL_DIR/hector"
 
+# Ad-hoc sign the binary for macOS (prevents "killed" error)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo "🔐 Signing binary for macOS..."
+    codesign --force --deep --sign - "$INSTALL_DIR/hector" 2>/dev/null || true
+fi
+
 echo ""
 echo "✅ Hector installed successfully!"
 echo ""

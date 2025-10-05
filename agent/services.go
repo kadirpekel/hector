@@ -181,7 +181,15 @@ func (s *DefaultPromptService) BuildMessages(
 			maxHistory = s.promptConfig.MaxHistoryMessages
 		}
 
-		historyMsgs := s.historyService.GetRecentHistory(maxHistory)
+		// Extract sessionID from context (if available)
+		sessionID := ""
+		if sessionIDValue := ctx.Value("sessionID"); sessionIDValue != nil {
+			if sid, ok := sessionIDValue.(string); ok {
+				sessionID = sid
+			}
+		}
+
+		historyMsgs := s.historyService.GetRecentHistory(sessionID, maxHistory)
 
 		// Already in llms.Message format - append directly
 		messages = append(messages, historyMsgs...)
@@ -372,7 +380,8 @@ func NewHistoryService(maxSize int) reasoning.HistoryService {
 }
 
 // AddToHistory implements reasoning.HistoryService
-func (s *DefaultHistoryService) AddToHistory(msg llms.Message) {
+func (s *DefaultHistoryService) AddToHistory(sessionID string, msg llms.Message) {
+	// Ignore sessionID for backward compatibility (non-session-aware)
 	s.history = append(s.history, msg)
 
 	// Simple FIFO truncation
@@ -382,7 +391,8 @@ func (s *DefaultHistoryService) AddToHistory(msg llms.Message) {
 }
 
 // GetRecentHistory implements reasoning.HistoryService
-func (s *DefaultHistoryService) GetRecentHistory(count int) []llms.Message {
+func (s *DefaultHistoryService) GetRecentHistory(sessionID string, count int) []llms.Message {
+	// Ignore sessionID for backward compatibility (non-session-aware)
 	if count <= 0 || len(s.history) == 0 {
 		return []llms.Message{}
 	}
@@ -399,7 +409,8 @@ func (s *DefaultHistoryService) GetRecentHistory(count int) []llms.Message {
 }
 
 // ClearHistory implements reasoning.HistoryService
-func (s *DefaultHistoryService) ClearHistory() {
+func (s *DefaultHistoryService) ClearHistory(sessionID string) {
+	// Ignore sessionID for backward compatibility (non-session-aware)
 	s.history = make([]llms.Message, 0)
 }
 
@@ -414,12 +425,15 @@ func (s *DefaultHistoryService) ClearHistory() {
 // DefaultToolService implements reasoning.ToolService
 type DefaultToolService struct {
 	toolRegistry *tools.ToolRegistry
+	allowedTools []string // If nil/empty, all tools are allowed
 }
 
-// NewToolService creates a new tool service
-func NewToolService(toolRegistry *tools.ToolRegistry) reasoning.ToolService {
+// NewToolService creates a new tool service with optional tool filtering
+// If allowedTools is nil or empty, all tools from the registry are available
+func NewToolService(toolRegistry *tools.ToolRegistry, allowedTools []string) reasoning.ToolService {
 	return &DefaultToolService{
 		toolRegistry: toolRegistry,
+		allowedTools: allowedTools,
 	}
 }
 
@@ -441,7 +455,7 @@ func (s *DefaultToolService) ExecuteToolCall(ctx context.Context, toolCall llms.
 	return result.Content, nil
 }
 
-// GetAvailableTools returns all available tools
+// GetAvailableTools returns tools available to this agent (filtered by allowedTools)
 func (s *DefaultToolService) GetAvailableTools() []llms.ToolDefinition {
 	if s.toolRegistry == nil {
 		return []llms.ToolDefinition{}
@@ -450,8 +464,25 @@ func (s *DefaultToolService) GetAvailableTools() []llms.ToolDefinition {
 	allToolInfos := s.toolRegistry.ListTools()
 	result := make([]llms.ToolDefinition, 0, len(allToolInfos))
 
+	// If no tool filter specified, return all tools
+	if len(s.allowedTools) == 0 {
+		for _, toolInfo := range allToolInfos {
+			result = append(result, convertToolInfoToToolDefinition(toolInfo))
+		}
+		return result
+	}
+
+	// Create a set of allowed tools for O(1) lookup
+	allowedSet := make(map[string]bool)
+	for _, toolName := range s.allowedTools {
+		allowedSet[toolName] = true
+	}
+
+	// Filter tools based on allowed list
 	for _, toolInfo := range allToolInfos {
-		result = append(result, convertToolInfoToToolDefinition(toolInfo))
+		if allowedSet[toolInfo.Name] {
+			result = append(result, convertToolInfoToToolDefinition(toolInfo))
+		}
 	}
 
 	return result

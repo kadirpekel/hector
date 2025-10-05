@@ -434,8 +434,7 @@ type AgentConfig struct {
 	Prompt         PromptConfig    `yaml:"prompt,omitempty"`          // Prompt configuration
 	Reasoning      ReasoningConfig `yaml:"reasoning,omitempty"`       // Reasoning configuration
 	Search         SearchConfig    `yaml:"search,omitempty"`          // Search configuration
-	// Note: Tools are global resources (defined at config root level)
-	// All agents share the same tool registry
+	Tools          []string        `yaml:"tools,omitempty"`           // Tool references (defined globally in tools: section)
 }
 
 // Validate implements Config.Validate for AgentConfig

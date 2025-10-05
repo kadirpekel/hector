@@ -1,10 +1,36 @@
 // Package a2a implements the Agent-to-Agent (A2A) protocol
-// Specification: https://a2a-protocol.org/
+// Pure, standalone implementation following https://a2a-protocol.org/
 package a2a
 
 import (
+	"context"
 	"time"
 )
+
+// ============================================================================
+// A2A PROTOCOL VERSION
+// ============================================================================
+
+const (
+	ProtocolVersion = "1.0" // A2A Protocol version
+)
+
+// ============================================================================
+// CORE AGENT INTERFACE
+// Pure A2A protocol interface - no abstractions, no convenience wrappers
+// ============================================================================
+
+// Agent represents any A2A-compliant agent
+type Agent interface {
+	// GetAgentCard returns the agent's capability card for discovery
+	GetAgentCard() *AgentCard
+
+	// ExecuteTask executes a task and returns the complete response
+	ExecuteTask(ctx context.Context, request *TaskRequest) (*TaskResponse, error)
+
+	// ExecuteTaskStreaming executes a task with real-time streaming output
+	ExecuteTaskStreaming(ctx context.Context, request *TaskRequest) (<-chan *StreamChunk, error)
+}
 
 // ============================================================================
 // AGENT CARD - Agent Discovery & Capability Advertisement
@@ -159,37 +185,4 @@ type AgentQuery struct {
 	Capabilities []string `json:"capabilities,omitempty"`
 	Tags         []string `json:"tags,omitempty"`
 	Search       string   `json:"search,omitempty"`
-}
-
-// ============================================================================
-// ORCHESTRATION - Multi-Agent Coordination
-// ============================================================================
-
-// OrchestrationStep represents a step in a multi-agent workflow
-type OrchestrationStep struct {
-	Name       string                 `json:"name"`
-	AgentID    string                 `json:"agentId"`
-	Input      string                 `json:"input"` // Template with variables
-	DependsOn  []string               `json:"dependsOn,omitempty"`
-	OutputVar  string                 `json:"outputVar,omitempty"`
-	Parameters map[string]interface{} `json:"parameters,omitempty"`
-	Retry      *RetryConfig           `json:"retry,omitempty"`
-}
-
-// RetryConfig defines retry behavior for tasks
-type RetryConfig struct {
-	MaxAttempts int           `json:"maxAttempts"`
-	BackoffType string        `json:"backoffType"` // "fixed", "exponential"
-	InitialWait time.Duration `json:"initialWait"`
-}
-
-// OrchestrationResult represents the result of an orchestrated workflow
-type OrchestrationResult struct {
-	WorkflowID  string                   `json:"workflowId"`
-	Status      TaskStatus               `json:"status"`
-	StepResults map[string]*TaskResponse `json:"stepResults"`
-	FinalOutput *TaskOutput              `json:"finalOutput,omitempty"`
-	Variables   map[string]interface{}   `json:"variables"`
-	StartedAt   time.Time                `json:"startedAt"`
-	CompletedAt time.Time                `json:"completedAt,omitempty"`
 }

@@ -79,14 +79,14 @@ func NewAgentServices(agentConfig *config.AgentConfig, componentManager *compone
 
 	// Create services (order matters due to dependencies)
 	llmService := NewLLMService(llm)
-	toolService := NewToolService(toolRegistry)
+	toolService := NewToolService(toolRegistry, agentConfig.Tools)
 
-	// Create history service
+	// Create session-aware history service
 	maxHistory := 10
 	if agentConfig.Prompt.MaxHistoryMessages > 0 {
 		maxHistory = agentConfig.Prompt.MaxHistoryMessages
 	}
-	historyService := NewHistoryService(maxHistory)
+	historyService := NewSessionHistoryService(maxHistory)
 
 	// contextService already created above based on document store availability
 	promptService := NewPromptService(agentConfig.Prompt, contextService, historyService)

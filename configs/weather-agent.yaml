@@ -1,8 +1,7 @@
 # Weather Agent - Demonstrates MCP tool integration
 # 
-# ⚠️  REQUIRES: MCP weather server running at ${MCP_WEATHER_SERVER}
-# This is an EXAMPLE showing how to configure external MCP tools.
-# Without a running MCP server, Hector will report it can't access weather data.
+# This example shows how to integrate external MCP servers for real-time data access.
+# Tools are defined globally and referenced by name in the agent configuration.
 
 agents:
   weather_assistant:
@@ -10,6 +9,7 @@ agents:
     description: "Friendly weather assistant with real-time data access"
     
     llm: "gpt-llm"
+    tools: ["weather_mcp"]  # Reference global tool by name
     
     prompt:
       prompt_slots:
@@ -33,14 +33,10 @@ agents:
       show_thinking: true  # Show task tracking
       show_debug_info: false  # Hide debug details
       show_tool_execution: true  # Show tool execution labels
-    
-    tools:
-      # MCP Weather Server Integration
-      weather:
-        type: mcp
-        enabled: true
-        server_url: "${MCP_SERVER_URL}"
-        description: "Get real-time weather data for any city worldwide"
+
+# ============================================================================
+# LLM Configuration
+# ============================================================================
 
 llms:
   gpt-llm:
@@ -50,18 +46,39 @@ llms:
     temperature: 0.8  # Higher for personality!
     max_tokens: 2000
 
-# Setup:
-# ------
-# 1. Start an MCP weather server at http://localhost:3000
-#    (See: https://modelcontextprotocol.io for MCP server examples)
-# 2. Set MCP_WEATHER_SERVER in your .env file
-# 3. Run: hector --config configs/weather-agent.yaml
+# ============================================================================
+# Tool Configuration (Global)
+# ============================================================================
+
+tools:
+  # MCP Weather Server Integration
+  # Connects to external MCP server for real-time weather data
+  weather_mcp:
+    type: mcp
+    server_url: "${MCP_SERVER_URL}"  # e.g., Composio, Mem0, or custom MCP server
+    description: "Get real-time weather data for any city worldwide"
+
+# ============================================================================
+# Setup Instructions
+# ============================================================================
+# 
+# 1. Set environment variable:
+#    export MCP_SERVER_URL="https://your-mcp-server.com/api"
+#    
+# 2. Start Hector server:
+#    hector serve --config configs/weather-agent.yaml
+#    
+# 3. Chat with the agent:
+#    hector chat weather_assistant
 #
 # Example queries:
 # > "What's the weather in Tokyo? Should I bring an umbrella?"
 # > "Compare weather in Paris, London, and Berlin - where should I vacation?"
 # > "Is it hoodie weather in San Francisco right now?"
 #
-# Without MCP server: Hector will say it can't access real-time weather data.
-# This config demonstrates MCP integration patterns for your own tools.
-
+# Popular MCP Providers:
+# - Composio: https://composio.dev (150+ integrations)
+# - Mem0: Memory/context management
+# - Browserbase: Web browsing capabilities
+# - Custom: Build your own MCP server
+#

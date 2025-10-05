@@ -15,14 +15,8 @@ Hector provides a **powerful, extensible tool system** that gives agents capabil
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  Agent (LLM)                        │
-│  Decides which tools to call based on task         │
-└────────────────┬────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────┐
-│              Tool Registry                          │
-│  Centralized management of all tool sources        │
+│     Global Tool Registry (Loaded at Startup)       │
+│  All tools defined once in config.yaml             │
 └────────┬────────────────┬──────────────┬───────────┘
          │                │              │
          ▼                ▼              ▼

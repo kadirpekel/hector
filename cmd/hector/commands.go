@@ -198,9 +198,6 @@ func executeChatCommand(agentURL string, token string) error {
 
 	fmt.Printf("🔗 Session: %s\n\n", session.SessionID[:8]+"...")
 
-	// Store agent card for status polling
-	agentCard := card
-
 	// Ensure session cleanup on exit
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -260,25 +257,43 @@ func executeChatCommand(agentURL string, token string) error {
 			}
 		}
 
-		// Execute task within session context
-		result, err := client.ExecuteTaskInSession(context.Background(), sessionURL+"/"+session.SessionID, input, agentCard)
-		if err != nil {
-			fmt.Printf("❌ Error: %v\n", err)
+		// Execute task within session context with streaming
+		outputCh := make(chan string, 100)
+
+		// Start streaming in background
+		var result *a2a.TaskResponse
+		var execErr error
+		done := make(chan struct{})
+
+		go func() {
+			defer close(done)
+			result, execErr = client.ExecuteTaskStreamingInSession(context.Background(), sessionURL+"/"+session.SessionID, input, outputCh)
+			close(outputCh)
+		}()
+
+		// Print streaming output in real-time
+		for chunk := range outputCh {
+			fmt.Print(chunk)
+		}
+
+		// Wait for completion
+		<-done
+
+		if execErr != nil {
+			fmt.Printf("\n❌ Error: %v\n", execErr)
 			continue
 		}
 
 		if result.Status == a2a.TaskStatusFailed {
 			if result.Error != nil {
-				fmt.Printf("❌ Agent error: %s\n", result.Error.Message)
+				fmt.Printf("\n❌ Agent error: %s\n", result.Error.Message)
 			} else {
-				fmt.Println("❌ Task failed")
+				fmt.Println("\n❌ Task failed")
 			}
 			continue
 		}
 
-		// Print response
-		output := a2a.ExtractOutputText(result.Output)
-		fmt.Println(output)
+		fmt.Println()
 		fmt.Println()
 	}
 

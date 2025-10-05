@@ -75,10 +75,11 @@ type PromptService interface {
 }
 
 // HistoryService defines history management capabilities
+// All methods are session-aware (stateless API design)
 type HistoryService interface {
-	GetRecentHistory(count int) []llms.Message
-	AddToHistory(msg llms.Message)
-	ClearHistory()
+	GetRecentHistory(sessionID string, count int) []llms.Message
+	AddToHistory(sessionID string, msg llms.Message)
+	ClearHistory(sessionID string)
 }
 
 // ============================================================================
