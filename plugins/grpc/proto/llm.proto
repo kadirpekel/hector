@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package hector.plugin;
+
+option go_package = "github.com/kadirpekel/hector/plugins/grpc/proto";
+
+import "common.proto";
+
+// LLM Provider Plugin Service
+service LLMProvider {
+  // Initialize the plugin with configuration
+  rpc Initialize(InitializeRequest) returns (InitializeResponse);
+  
+  // Shutdown the plugin
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+  
+  // Check plugin health
+  rpc Health(HealthRequest) returns (HealthResponse);
+  
+  // Get plugin manifest
+  rpc GetManifest(ManifestRequest) returns (ManifestResponse);
+  
+  // Get plugin status
+  rpc GetStatus(StatusRequest) returns (StatusResponse);
+  
+  // Generate a response (non-streaming)
+  rpc Generate(GenerateRequest) returns (GenerateResponse);
+  
+  // Generate a streaming response
+  rpc GenerateStreaming(GenerateRequest) returns (stream StreamChunk);
+  
+  // Get model information
+  rpc GetModelInfo(Empty) returns (ModelInfo);
+}
+
+// Message represents a conversation message
+message Message {
+  string role = 1;    // "user", "assistant", "system", "tool"
+  string content = 2;
+  repeated ToolCall tool_calls = 3;
+  string tool_call_id = 4;
+}
+
+// ToolDefinition defines a tool that can be called
+message ToolDefinition {
+  string name = 1;
+  string description = 2;
+  string parameters_json = 3;  // JSON schema for parameters
+}
+
+// ToolCall represents a tool call from the LLM
+message ToolCall {
+  string id = 1;
+  string name = 2;
+  string arguments_json = 3;  // JSON-encoded arguments
+}
+
+// GenerateRequest requests text generation
+message GenerateRequest {
+  repeated Message messages = 1;
+  repeated ToolDefinition tools = 2;
+}
+
+// GenerateResponse returns generated text
+message GenerateResponse {
+  string text = 1;
+  repeated ToolCall tool_calls = 2;
+  int32 tokens_used = 3;
+}
+
+// StreamChunk represents a chunk of streaming response
+message StreamChunk {
+  enum ChunkType {
+    TEXT = 0;
+    TOOL_CALL = 1;
+    DONE = 2;
+    ERROR = 3;
+  }
+  
+  ChunkType type = 1;
+  string text = 2;
+  ToolCall tool_call = 3;
+  string error = 4;
+  int32 tokens_used = 5;
+}
+
+// ModelInfo returns information about the model
+message ModelInfo {
+  string model_name = 1;
+  int32 max_tokens = 2;
+  double temperature = 3;
+}
+

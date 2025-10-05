@@ -38,6 +38,9 @@ type Config struct {
 
 	// Document store configurations
 	DocumentStores map[string]DocumentStoreConfig `yaml:"document_stores,omitempty"`
+
+	// Plugin configurations
+	Plugins PluginConfigs `yaml:"plugins,omitempty"`
 }
 
 // Validate implements Config.Validate for Config
@@ -92,6 +95,11 @@ func (c *Config) Validate() error {
 		if err := store.Validate(); err != nil {
 			return fmt.Errorf("document store '%s' validation failed: %w", name, err)
 		}
+	}
+
+	// Validate plugins
+	if err := c.Plugins.Validate(); err != nil {
+		return fmt.Errorf("plugins validation failed: %w", err)
 	}
 
 	return nil
@@ -180,6 +188,9 @@ func (c *Config) SetDefaults() {
 		store.SetDefaults()
 		c.DocumentStores[name] = store
 	}
+
+	// Set plugin defaults
+	c.Plugins.SetDefaults()
 }
 
 // ============================================================================

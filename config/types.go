@@ -24,6 +24,136 @@ type ProviderConfigs struct {
 	Embedders map[string]EmbedderProviderConfig `yaml:"embedders,omitempty"`
 }
 
+// ============================================================================
+// PLUGIN CONFIGURATIONS
+// ============================================================================
+
+// PluginDiscoveryConfig contains configuration for plugin discovery
+type PluginDiscoveryConfig struct {
+	Enabled            bool     `yaml:"enabled" json:"enabled"`
+	Paths              []string `yaml:"paths" json:"paths"`
+	ScanSubdirectories bool     `yaml:"scan_subdirectories" json:"scan_subdirectories"`
+}
+
+// SetDefaults sets default values for plugin discovery config
+func (c *PluginDiscoveryConfig) SetDefaults() {
+	if c.Paths == nil || len(c.Paths) == 0 {
+		c.Paths = []string{"./plugins", "~/.hector/plugins"}
+	}
+	// Enabled defaults to true if not explicitly set (checked elsewhere)
+}
+
+// Validate validates the plugin discovery configuration
+func (c *PluginDiscoveryConfig) Validate() error {
+	return nil // No strict validation needed
+}
+
+// PluginConfig represents the configuration for a single plugin
+type PluginConfig struct {
+	Name    string                 `yaml:"name" json:"name"`
+	Type    string                 `yaml:"type" json:"type"`       // Must be "grpc"
+	Path    string                 `yaml:"path" json:"path"`       // Path to plugin executable
+	Enabled bool                   `yaml:"enabled" json:"enabled"` // Whether plugin is enabled
+	Config  map[string]interface{} `yaml:"config" json:"config"`   // Plugin-specific configuration
+}
+
+// SetDefaults sets default values for plugin config
+func (c *PluginConfig) SetDefaults() {
+	if c.Type == "" {
+		c.Type = "grpc"
+	}
+}
+
+// Validate validates the plugin configuration
+func (c *PluginConfig) Validate() error {
+	if c.Name == "" {
+		return fmt.Errorf("plugin name is required")
+	}
+	if c.Path == "" {
+		return fmt.Errorf("plugin path is required")
+	}
+	if c.Type != "" && c.Type != "grpc" {
+		return fmt.Errorf("invalid plugin type: %s (only 'grpc' is supported)", c.Type)
+	}
+	return nil
+}
+
+// PluginConfigs contains all plugin configurations
+type PluginConfigs struct {
+	// Plugin discovery configuration
+	Discovery PluginDiscoveryConfig `yaml:"plugin_discovery,omitempty" json:"plugin_discovery,omitempty"`
+
+	// Plugin definitions by category
+	LLMProviders        map[string]PluginConfig `yaml:"llm_providers,omitempty" json:"llm_providers,omitempty"`
+	DatabaseProviders   map[string]PluginConfig `yaml:"database_providers,omitempty" json:"database_providers,omitempty"`
+	EmbedderProviders   map[string]PluginConfig `yaml:"embedder_providers,omitempty" json:"embedder_providers,omitempty"`
+	ToolProviders       map[string]PluginConfig `yaml:"tool_providers,omitempty" json:"tool_providers,omitempty"`
+	ReasoningStrategies map[string]PluginConfig `yaml:"reasoning_strategies,omitempty" json:"reasoning_strategies,omitempty"`
+}
+
+// SetDefaults sets default values for plugin configs
+func (c *PluginConfigs) SetDefaults() {
+	c.Discovery.SetDefaults()
+	for name := range c.LLMProviders {
+		cfg := c.LLMProviders[name]
+		cfg.SetDefaults()
+		c.LLMProviders[name] = cfg
+	}
+	for name := range c.DatabaseProviders {
+		cfg := c.DatabaseProviders[name]
+		cfg.SetDefaults()
+		c.DatabaseProviders[name] = cfg
+	}
+	for name := range c.EmbedderProviders {
+		cfg := c.EmbedderProviders[name]
+		cfg.SetDefaults()
+		c.EmbedderProviders[name] = cfg
+	}
+	for name := range c.ToolProviders {
+		cfg := c.ToolProviders[name]
+		cfg.SetDefaults()
+		c.ToolProviders[name] = cfg
+	}
+	for name := range c.ReasoningStrategies {
+		cfg := c.ReasoningStrategies[name]
+		cfg.SetDefaults()
+		c.ReasoningStrategies[name] = cfg
+	}
+}
+
+// Validate validates all plugin configurations
+func (c *PluginConfigs) Validate() error {
+	if err := c.Discovery.Validate(); err != nil {
+		return fmt.Errorf("plugin discovery validation failed: %w", err)
+	}
+	for name, cfg := range c.LLMProviders {
+		if err := cfg.Validate(); err != nil {
+			return fmt.Errorf("LLM provider plugin '%s' validation failed: %w", name, err)
+		}
+	}
+	for name, cfg := range c.DatabaseProviders {
+		if err := cfg.Validate(); err != nil {
+			return fmt.Errorf("database provider plugin '%s' validation failed: %w", name, err)
+		}
+	}
+	for name, cfg := range c.EmbedderProviders {
+		if err := cfg.Validate(); err != nil {
+			return fmt.Errorf("embedder provider plugin '%s' validation failed: %w", name, err)
+		}
+	}
+	for name, cfg := range c.ToolProviders {
+		if err := cfg.Validate(); err != nil {
+			return fmt.Errorf("tool provider plugin '%s' validation failed: %w", name, err)
+		}
+	}
+	for name, cfg := range c.ReasoningStrategies {
+		if err := cfg.Validate(); err != nil {
+			return fmt.Errorf("reasoning strategy plugin '%s' validation failed: %w", name, err)
+		}
+	}
+	return nil
+}
+
 // Validate implements Config.Validate for ProviderConfigs
 func (c *ProviderConfigs) Validate() error {
 	for name, llm := range c.LLMs {

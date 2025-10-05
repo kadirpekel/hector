@@ -43,12 +43,21 @@
 └─────────────────────────────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────┐
-│                 LLM PROVIDERS                           │
-│  • Anthropic (Claude)                                   │
-│  • OpenAI (GPT-4)                                       │
-│  • Native function calling                              │
-│  • Streaming support                                    │
-│  • Rate limit handling                                  │
+│              PROVIDERS & PLUGINS                        │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  Built-in Providers:                            │   │
+│  │  • Anthropic (Claude)                           │   │
+│  │  • OpenAI (GPT-4)                               │   │
+│  │  • Qdrant (Vector DB)                           │   │
+│  │  • Ollama (Embeddings)                          │   │
+│  └─────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  Plugin System (gRPC):                          │   │
+│  │  • Custom LLM Providers                         │   │
+│  │  • Custom Database Providers                    │   │
+│  │  • Custom Embedder Providers                    │   │
+│  │  • Process isolation, auto-discovery            │   │
+│  └─────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -299,6 +308,7 @@ type ComponentManager struct {
 	dbRegistry       *databases.DatabaseRegistry
 	embedderRegistry *embedders.EmbedderRegistry
 	toolRegistry     *tools.ToolRegistry
+	pluginRegistry   *plugins.PluginRegistry
 }
 
 // Usage
@@ -310,6 +320,62 @@ tools := componentManager.GetToolRegistry()
 - Single source of truth
 - Lazy initialization
 - Easy to swap implementations
+
+### 4. Plugin Architecture
+
+**Problem:** Need to extend Hector without modifying core code
+
+**Solution:** gRPC-based plugin system with HashiCorp go-plugin
+
+```go
+// Plugin interface
+type Plugin interface {
+	Initialize(ctx context.Context, config map[string]string) error
+	Shutdown(ctx context.Context) error
+	Health(ctx context.Context) error
+}
+
+// Example: LLM Plugin
+type LLMProvider interface {
+	Plugin
+	Generate(ctx context.Context, messages []*Message, tools []*ToolDefinition) (*GenerateResponse, error)
+	GenerateStreaming(ctx context.Context, messages []*Message, tools []*ToolDefinition) (<-chan *StreamChunk, error)
+	GetModelInfo(ctx context.Context) (*ModelInfo, error)
+}
+```
+
+**Architecture:**
+```
+┌──────────────┐         ┌──────────────┐         ┌──────────────┐
+│   Hector     │         │  go-plugin   │         │   Plugin     │
+│   Core       │         │   Framework  │         │   Process    │
+└──────┬───────┘         └──────┬───────┘         └──────┬───────┘
+       │                        │                        │
+       │ 1. Load                │                        │
+       ├───────────────────────>│                        │
+       │                        │ 2. Start Process       │
+       │                        ├───────────────────────>│
+       │                        │                        │
+       │                        │ 3. gRPC Handshake      │
+       │                        │<═══════════════════════│
+       │                        │                        │
+       │ 4. Interface           │                        │
+       │<───────────────────────┤                        │
+       │                        │                        │
+       │ 5. RPC Call            │                        │
+       ├───────────────────────>│ 6. gRPC               │
+       │                        ├═══════════════════════>│
+       │                        │ 7. Response            │
+       │ 8. Result              │<═══════════════════════│
+       │<───────────────────────┤                        │
+```
+
+**Benefits:**
+- ✅ **Process Isolation**: Plugin crashes don't affect Hector
+- ✅ **Language Agnostic**: Plugins can be in any language (via gRPC)
+- ✅ **Auto-Discovery**: Drop plugins in directory, Hector finds them
+- ✅ **Hot-Pluggable**: Add providers via configuration only
+- ✅ **Production Proven**: Built on HashiCorp go-plugin (used by Terraform, Vault)
 
 ---
 
@@ -419,6 +485,17 @@ LLM streams to channel              │
 - Native function calling
 - Streaming support
 - Rate limit handling
+- LLM registry
+
+### `databases/`
+- Database provider implementations (Qdrant)
+- Vector operations
+- Database registry
+
+### `embedders/`
+- Embedder provider implementations (Ollama)
+- Text embedding
+- Embedder registry
 
 ### `tools/`
 - Tool implementations
@@ -426,9 +503,24 @@ LLM streams to channel              │
 - Local tools (execute_command, file_writer, etc.)
 - MCP tool integration (foundation)
 
+### `plugins/`
+- Plugin system core (registry, discovery, types)
+- gRPC plugin implementation
+- Protocol Buffer definitions
+- Plugin adapters (LLM, Database, Embedder)
+- Plugin lifecycle management
+- Health monitoring and restart
+
+### `component/`
+- ComponentManager (service locator)
+- Registry management
+- Plugin initialization
+- Global configuration
+
 ### `config/`
 - Configuration types
 - Workflow configuration
+- Plugin configuration
 - Validation
 - Defaults
 
@@ -441,7 +533,79 @@ LLM streams to channel              │
 
 ## Extension Points
 
-### 1. New Reasoning Strategy
+### 1. Plugin System (Recommended for Providers)
+
+**For LLM, Database, and Embedder providers, use the plugin system instead of code-level extensions.**
+
+#### Create an LLM Plugin
+
+```go
+// Separate executable
+package main
+
+import (
+	"context"
+	"github.com/kadirpekel/hector/plugins/grpc"
+)
+
+type MyLLMProvider struct{}
+
+func (p *MyLLMProvider) Initialize(ctx context.Context, config map[string]string) error {
+	// Initialize your LLM client
+	return nil
+}
+
+func (p *MyLLMProvider) Generate(ctx context.Context, messages []*grpc.Message, tools []*grpc.ToolDefinition) (*grpc.GenerateResponse, error) {
+	// Your LLM implementation
+	return &grpc.GenerateResponse{Text: "response"}, nil
+}
+
+func (p *MyLLMProvider) GenerateStreaming(ctx context.Context, messages []*grpc.Message, tools []*grpc.ToolDefinition) (<-chan *grpc.StreamChunk, error) {
+	// Your streaming implementation
+}
+
+func (p *MyLLMProvider) GetModelInfo(ctx context.Context) (*grpc.ModelInfo, error) {
+	return &grpc.ModelInfo{ModelName: "my-model"}, nil
+}
+
+func (p *MyLLMProvider) Shutdown(ctx context.Context) error {
+	return nil
+}
+
+func (p *MyLLMProvider) Health(ctx context.Context) error {
+	return nil
+}
+
+func main() {
+	grpc.ServeLLMPlugin(&MyLLMProvider{})
+}
+```
+
+**Configuration:**
+```yaml
+plugins:
+  llm_providers:
+    my-llm:
+      type: grpc
+      path: "./plugins/my-llm"
+      enabled: true
+      config:
+        api_key: "${MY_API_KEY}"
+
+agents:
+  my-agent:
+    llm: "my-llm"
+```
+
+**Benefits:**
+- ✅ Zero changes to Hector core
+- ✅ Isolated process (crash-safe)
+- ✅ Language agnostic
+- ✅ Hot-pluggable via config
+
+**See**: [Plugin Development Guide](examples/plugins/README.md) | [Echo LLM Example](examples/plugins/echo-llm/)
+
+### 2. New Reasoning Strategy (Code-Level)
 
 ```go
 type MyStrategy struct{}
@@ -465,26 +629,7 @@ func (s *MyStrategy) GetPromptSlots() PromptSlots {
 // Register in reasoning/factory.go
 ```
 
-### 2. New LLM Provider
-
-```go
-type MyProvider struct {
-	config config.LLMProviderConfig
-	client *http.Client
-}
-
-func (p *MyProvider) Generate(messages []Message, tools []ToolDefinition) (string, []ToolCall, int, error) {
-	// Your implementation
-}
-
-func (p *MyProvider) GenerateStreaming(...) (<-chan StreamChunk, error) {
-	// Your streaming implementation
-}
-
-// Register in llms/registry.go
-```
-
-### 3. New Tool
+### 3. New Tool (Code-Level)
 
 ```go
 type MyTool struct{}
@@ -503,6 +648,30 @@ func (t *MyTool) Execute(ctx context.Context, args map[string]interface{}) (Tool
 
 // Register in tools/local.go
 ```
+
+### 4. Built-in Provider (Advanced, Not Recommended)
+
+Only for providers that need deep integration with Hector internals.
+
+```go
+// llms/myprovider.go
+type MyProvider struct {
+	config config.LLMProviderConfig
+	client *http.Client
+}
+
+func (p *MyProvider) Generate(messages []Message, tools []ToolDefinition) (string, []ToolCall, int, error) {
+	// Your implementation
+}
+
+func (p *MyProvider) GenerateStreaming(...) (<-chan StreamChunk, error) {
+	// Your streaming implementation
+}
+
+// Register in llms/registry.go
+```
+
+**Note:** Prefer plugins for extensibility. Built-in providers require modifying Hector core.
 
 ---
 
@@ -795,18 +964,22 @@ input := coordinationService.GetContext("research_data")
 - Production-ready DAG executor testing
 - Autonomous mode improvements
 - Better error recovery in workflows
+- More example plugins (OpenRouter, Cohere, etc.)
 
 ### Medium Term
 - Conditional workflow steps (if/else)
 - Loop constructs (for-each agent)
 - Workflow templates and reuse
 - MCP tool examples and documentation
+- Plugin marketplace/registry
+- Plugin sandboxing/permissions
 
 ### Long Term
 - Visual workflow designer
 - Workflow marketplace
 - Advanced reasoning strategies (ToT, Reflexion)
-- Plugin system for custom executors
+- Plugin hot-reload
+- Plugin metrics and observability
 
 ---
 
@@ -816,8 +989,10 @@ input := coordinationService.GetContext("research_data")
 - **Strategy Pattern**: https://refactoring.guru/design-patterns/strategy
 - **Dependency Injection**: https://martinfowler.com/articles/injection.html
 - **Clean Architecture**: https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
+- **Plugin Architecture**: [PLUGIN_ARCHITECTURE.md](PLUGIN_ARCHITECTURE.md)
+- **HashiCorp go-plugin**: https://github.com/hashicorp/go-plugin
 
 ---
 
-**Last Updated:** October 4, 2025
+**Last Updated:** October 5, 2025
 

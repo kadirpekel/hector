@@ -21,6 +21,7 @@
 **📚 Documentation:**
 - [Configuration Reference](CONFIGURATION.md) - Complete YAML options and examples
 - [Architecture Guide](ARCHITECTURE.md) - System design, patterns, and multi-agent orchestration
+- [Plugin System](PLUGIN_ARCHITECTURE.md) - Extend Hector with custom LLM providers, databases, embedders
 - [Example Configs](configs/) - Ready-to-use templates (coding, workflows, etc.)
 
 ---
@@ -266,10 +267,17 @@ llms:
     temperature: 0.7
 ```
 
-**Supported:**
+**Built-in Providers:**
 - OpenAI (GPT-4o, GPT-4, etc.)
 - Anthropic (Claude 3.7 Sonnet, etc.)
-- Extensible: Add custom providers
+
+**Plugin System:**
+- Add custom LLM providers without modifying core
+- Support for custom databases and embedders
+- gRPC-based plugin architecture for robustness
+- Auto-discovery and dynamic loading
+
+[Learn more about plugins →](PLUGIN_ARCHITECTURE.md) | [Example plugin →](examples/plugins/echo-llm/)
 
 ### 🔍 Semantic Search
 
@@ -311,7 +319,7 @@ prompt:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                  YAML Configuration Layer                       │
-│   (Agents, Workflows, Tools, LLMs, Prompt Slots, Security)     │
+│   (Agents, Workflows, Tools, LLMs, Plugins, Prompt Slots)      │
 └────────────────────────────┬────────────────────────────────────┘
                              ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -326,7 +334,8 @@ prompt:
 │         ├─────► LLM Service (OpenAI, Anthropic)    │          │
 │         ├─────► Tool Service (Local, MCP)          │          │
 │         ├─────► Context Service (Search, History)  │          │
-│         └─────► Prompt Service (Slots, Templates) ◄┘          │
+│         ├─────► Prompt Service (Slots, Templates)  │          │
+│         └─────► Plugin Registry (gRPC Providers) ◄─┘          │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │              Multi-Agent Orchestration                   │  │
@@ -337,12 +346,19 @@ prompt:
                              ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │                  External Integrations                          │
-│  LLM APIs │ MCP Servers │ Vector DBs │ Tool Plugins │ Custom   │
+│  LLM APIs │ MCP Servers │ Vector DBs │ gRPC Plugins │ Custom   │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐ │
+│  │  Plugin System (Process-Isolated, Language-Agnostic):    │ │
+│  │  • Custom LLM Providers  • Custom Databases              │ │
+│  │  • Custom Embedders      • Auto-Discovery                │ │
+│  └───────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 **Key Patterns:**
 - **Strategy Pattern**: Pluggable reasoning engines
+- **Plugin Architecture**: gRPC-based dynamic service discovery
 - **Service-Oriented**: Clean boundaries for testing and extension
 - **Interface-Based**: Extend without modifying core
 - **Event-Driven**: Streaming execution with real-time events
@@ -442,29 +458,74 @@ workflows:
 
 ## Extensibility
 
-### Add Custom Tools
+Hector is designed for extension at multiple levels:
 
+### 🔌 Plugin System (Recommended)
+
+The **plugin system** allows you to extend Hector without modifying the core codebase. Plugins are separate executables that communicate via gRPC.
+
+**What you can extend:**
+- **LLM Providers**: Add support for custom or proprietary models
+- **Database Providers**: Integrate custom vector databases
+- **Embedder Providers**: Use custom embedding models
+
+**Example: Custom LLM Plugin**
+
+```yaml
+# Configuration only - no code changes to Hector!
+plugins:
+  llm_providers:
+    my-custom-llm:
+      type: grpc
+      path: "./plugins/my-custom-llm"
+      enabled: true
+      config:
+        api_key: "${MY_LLM_API_KEY}"
+        model: "custom-model-v1"
+
+agents:
+  my-agent:
+    llm: "my-custom-llm"  # Use your plugin
+```
+
+**Plugin development** is simple - implement the interface, build a binary, deploy:
+
+```go
+// Your plugin (separate executable)
+type MyLLMProvider struct{}
+
+func (p *MyLLMProvider) Generate(ctx context.Context, messages []*grpc.Message, tools []*grpc.ToolDefinition) (*grpc.GenerateResponse, error) {
+    // Your LLM implementation
+}
+
+func main() {
+    grpc.ServeLLMPlugin(&MyLLMProvider{})
+}
+```
+
+**Benefits:**
+- ✅ **Zero core changes**: Extend without touching Hector code
+- ✅ **Language agnostic**: Plugins can be written in any language (via gRPC)
+- ✅ **Auto-discovery**: Drop plugins in a directory, Hector finds them
+- ✅ **Isolated**: Plugins run as separate processes
+- ✅ **Declarative**: Configure once, use everywhere
+
+[Plugin Development Guide →](PLUGIN_ARCHITECTURE.md) | [Example Plugin →](examples/plugins/echo-llm/)
+
+### 🛠️ Code-Level Extensions (Advanced)
+
+For built-in components, you can extend Hector at the code level:
+
+**Custom Tools:**
 ```go
 type MyTool struct{}
 
 func (t *MyTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
-    // Your implementation
     return ToolResult{Success: true, Content: "Done"}, nil
-}
-
-func (t *MyTool) GetDefinition() ToolDefinition {
-    return ToolDefinition{
-        Name: "my_tool",
-        Description: "Does something useful",
-        Parameters: []ParameterDefinition{
-            {Name: "input", Type: "string", Description: "Input data", Required: true},
-        },
-    }
 }
 ```
 
-### Add Reasoning Strategies
-
+**Custom Reasoning Strategies:**
 ```go
 type CustomStrategy struct{}
 
@@ -472,25 +533,9 @@ func (s *CustomStrategy) PrepareIteration(state *ReasoningState) error {
     // Your reasoning logic
     return nil
 }
-
-func (s *CustomStrategy) GetPromptSlots() map[string]string {
-    return map[string]string{
-        "reasoning_instructions": "Your custom approach...",
-    }
-}
 ```
 
-### Add LLM Providers
-
-```go
-type CustomProvider struct{}
-
-func (p *CustomProvider) Generate(messages []Message, tools []ToolDefinition) (string, []ToolCall, int, error) {
-    // Your provider implementation
-}
-```
-
-**All extensions are hot-pluggable via configuration.**
+**Note**: For LLM providers, databases, and embedders, prefer the plugin system over code-level extensions.
 
 ---
 
@@ -501,6 +546,7 @@ func (p *CustomProvider) Generate(messages []Message, tools []ToolDefinition) (s
 - ✅ File creation and modification  
 - ✅ Sandboxed command execution
 - ✅ LLM provider flexibility (OpenAI, Anthropic)
+- ✅ Plugin system (gRPC-based dynamic service discovery)
 - ✅ Semantic search (Qdrant + Ollama)
 - ✅ Tool system (built-in + MCP protocol foundation)
 - ✅ Prompt customization via slots

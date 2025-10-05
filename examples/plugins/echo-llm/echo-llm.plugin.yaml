@@ -1,0 +1,35 @@
+plugin:
+  name: "echo-llm"
+  version: "1.0.0"
+  author: "Hector Team"
+  description: "Simple echo LLM plugin for demonstration and testing"
+  homepage: "https://github.com/kadirpekel/hector"
+  license: "MIT"
+  
+  # Plugin type - what kind of provider this is
+  type: llm_provider
+  
+  # Communication protocol - always grpc for Hector
+  protocol: grpc
+  
+  # Compatible Hector versions
+  hector_version: ">=0.1.0"
+  
+  # Configuration schema - defines what config values this plugin expects
+  config_schema:
+    required: []  # No required config for this simple plugin
+    optional:
+      - prefix     # Optional prefix to add before echoed text
+      - max_tokens # Optional max tokens setting
+      - temperature # Optional temperature setting
+    defaults:
+      prefix: "Echo: "
+      max_tokens: 1000
+      temperature: 0.7
+  
+  # Plugin capabilities
+  capabilities:
+    streaming: true
+    function_calling: false
+    vision: false
+

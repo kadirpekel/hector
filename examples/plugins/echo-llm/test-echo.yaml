@@ -1,0 +1,61 @@
+# Test Configuration for Echo LLM Plugin
+# This config file demonstrates how to use the echo plugin with Hector
+
+version: "1.0"
+name: "echo-plugin-test"
+description: "Test configuration for echo LLM plugin"
+
+# Plugin Configuration
+plugins:
+  # Plugin discovery (optional - plugins can be explicitly configured too)
+  plugin_discovery:
+    enabled: true
+    paths:
+      - "./examples/plugins"
+      - "~/.hector/plugins"
+    scan_subdirectories: true
+  
+  # Explicit plugin configuration
+  llm_providers:
+    echo-llm:
+      type: grpc
+      path: "./examples/plugins/echo-llm/echo-llm"
+      enabled: true
+      config:
+        prefix: "🔊 Echo: "
+        max_tokens: 1000
+        temperature: 0.7
+
+# Agent Configuration
+agents:
+  echo-agent:
+    name: "Echo Agent"
+    description: "A simple agent that echoes your messages using the echo plugin"
+    llm: "echo-llm"  # References the plugin defined above
+    
+    # Reasoning configuration
+    reasoning:
+      max_iterations: 1  # Only need 1 iteration for echo
+      strategy: "chain-of-thought"
+    
+    # Tools (disabled for this simple example)
+    tools:
+      - type: local
+        name: execute_command
+        enabled: false
+    
+    # No database or embedder needed for echo
+    database: ""
+    embedder: ""
+    document_stores: []
+
+# No workflows for this simple example
+workflows: {}
+
+# Global settings
+global:
+  logging:
+    level: "info"
+  performance:
+    max_concurrent_tasks: 1
+

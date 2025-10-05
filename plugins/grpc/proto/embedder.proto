@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package hector.plugin;
+
+option go_package = "github.com/kadirpekel/hector/plugins/grpc/proto";
+
+import "common.proto";
+
+// Embedder Provider Plugin Service
+service EmbedderProvider {
+  // Initialize the plugin with configuration
+  rpc Initialize(InitializeRequest) returns (InitializeResponse);
+  
+  // Shutdown the plugin
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+  
+  // Check plugin health
+  rpc Health(HealthRequest) returns (HealthResponse);
+  
+  // Get plugin manifest
+  rpc GetManifest(ManifestRequest) returns (ManifestResponse);
+  
+  // Get plugin status
+  rpc GetStatus(StatusRequest) returns (StatusResponse);
+  
+  // Generate embeddings for text
+  rpc Embed(EmbedRequest) returns (EmbedResponse);
+  
+  // Get embedder information
+  rpc GetEmbedderInfo(Empty) returns (EmbedderInfo);
+}
+
+// EmbedRequest requests embeddings for text
+message EmbedRequest {
+  string text = 1;
+}
+
+// EmbedResponse returns the embedding vector
+message EmbedResponse {
+  repeated float vector = 1;
+  string error = 2;
+}
+
+// EmbedderInfo returns information about the embedder
+message EmbedderInfo {
+  string model_name = 1;
+  int32 dimension = 2;
+}
+

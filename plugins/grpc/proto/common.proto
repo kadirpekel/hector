@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package hector.plugin;
+
+option go_package = "github.com/kadirpekel/hector/plugins/grpc/proto";
+
+// Common types shared across all plugin types
+
+// Empty represents an empty message
+message Empty {}
+
+// InitializeRequest is sent to initialize a plugin with configuration
+message InitializeRequest {
+  map<string, string> config = 1;
+}
+
+// InitializeResponse confirms initialization
+message InitializeResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ShutdownRequest is sent to cleanly shutdown a plugin
+message ShutdownRequest {}
+
+// ShutdownResponse confirms shutdown
+message ShutdownResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// HealthRequest checks if plugin is healthy
+message HealthRequest {}
+
+// HealthResponse indicates plugin health status
+message HealthResponse {
+  bool healthy = 1;
+  string message = 2;
+}
+
+// ManifestRequest requests the plugin manifest
+message ManifestRequest {}
+
+// ManifestResponse returns the plugin manifest
+message ManifestResponse {
+  string name = 1;
+  string version = 2;
+  string author = 3;
+  string description = 4;
+  string type = 5;
+  string protocol = 6;
+  string hector_version = 7;
+  map<string, string> capabilities = 8;
+}
+
+// StatusRequest requests the current plugin status
+message StatusRequest {}
+
+// StatusResponse returns the plugin status
+message StatusResponse {
+  string status = 1; // "unloaded", "loading", "ready", "error", "crashed", "shutdown", "restarting"
+}
+
