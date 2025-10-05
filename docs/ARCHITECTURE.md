@@ -61,137 +61,104 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Multi-Agent Orchestration Architecture
+### Multi-Agent Orchestration (A2A Protocol)
+
+Hector uses the **A2A (Agent-to-Agent) protocol** for multi-agent orchestration. All agents (native and external) are A2A-compliant peers that can be orchestrated through a supervisor agent. External agents can be integrated **declaratively via YAML configuration** without writing any code.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   USER INTERFACE                        │
-│          (CLI with --workflow flag)                     │
+│                   USER / CLIENT                         │
+│            (CLI, API, External A2A Client)              │
 └──────────────────────┬──────────────────────────────────┘
-                       │
+                       │ A2A Protocol (HTTP/JSON)
 ┌──────────────────────▼──────────────────────────────────┐
-│                      TEAM                               │
-│  • Manages workflow lifecycle                           │
-│  • Coordinates multiple agents                          │
-│  • Shares context between agents                        │
-│  • Streams events from all agents                       │
-│                                                         │
-│  Services:                                              │
-│  ├─ TeamWorkflowService (executor management)          │
-│  ├─ TeamAgentService (agent lifecycle)                 │
-│  └─ TeamCoordinationService (context sharing)          │
+│                   A2A SERVER                            │
+│  • Agent discovery (/agents endpoint)                   │
+│  • Task execution (/agents/{id}/tasks)                  │
+│  • Session management                                   │
+│  • Pure protocol compliance                             │
 └──────────────────────┬──────────────────────────────────┘
                        │
-┌──────────────────────▼──────────────────────────────────┐
-│              WORKFLOW EXECUTOR                          │
-│                                                         │
-│  DAG Executor:                                          │
-│  • Dependency-based execution                           │
-│  • Parallel step execution                              │
-│  • Context passing (${variables})                       │
-│  • Progress tracking                                    │
-│                                                         │
-│  Autonomous Executor (Experimental):                    │
-│  • Self-organizing workflows                            │
-│  • Dynamic agent selection                              │
-│  • Adaptive coordination                                │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-         ┌─────────────┼─────────────┐
-         │             │             │
-         ▼             ▼             ▼
-    ┌────────┐    ┌────────┐    ┌────────┐
-    │ Agent  │    │ Agent  │    │ Agent  │
-    │   1    │    │   2    │    │   3    │
-    └────┬───┘    └────┬───┘    └────┬───┘
-         │             │             │
-         └─────────────┼─────────────┘
-                       │
-                 Shared Context
-              (Variables, Artifacts)
+         ┌─────────────┼─────────────────────┐
+         │             │                     │
+         ▼             ▼                     ▼
+┌─────────────┐  ┌─────────────┐    ┌─────────────┐
+│ Orchestrator│  │  Specialist │    │  Specialist │
+│   Agent     │  │   Agent 1   │    │   Agent 2   │
+│             │  │             │    │             │
+│ Tools:      │  │ Tools:      │    │ Tools:      │
+│ • agent_call│  │ • domain    │    │ • domain    │
+│             │  │   specific  │    │   specific  │
+└──────┬──────┘  └─────────────┘    └─────────────┘
+       │
+       │ agent_call(agent_id, task)
+       │
+       └──────────┐
+                  ▼
+          ┌────────────────┐
+          │  AgentRegistry │
+          │  (all agents)  │
+          └────────────────┘
+
+ORCHESTRATION FLOW:
+1. User calls Orchestrator Agent
+2. Orchestrator analyzes task, decomposes into subtasks
+3. Orchestrator delegates via agent_call tool
+4. Target agents execute (native or remote A2A agents)
+5. Orchestrator synthesizes results
+6. Returns unified response
 ```
+
+**Key Features:**
+- **Pure A2A Protocol**: All agents comply with A2A specification
+- **Transparent Delegation**: Orchestrator uses `agent_call` tool
+- **Native + Remote**: Supports both in-process and remote A2A agents
+- **Declarative External Agents**: Define external agents via URL in YAML config
+- **LLM-Driven Routing**: Orchestrator decides delegation dynamically
+- **Composable**: Orchestrators can call other orchestrators
+- **Agent Ecosystem Ready**: Enables interoperability within organizations and the broader agent internet
 
 ---
 
 ## Core Components
 
-### 1. Team (`team/team.go`)
+### 1. A2A Server (`a2a/server.go`)
 
-**Responsibility:** Multi-agent workflow orchestration
+**Responsibility:** Host agents via A2A protocol
 
-**Key Methods:**
-- `ExecuteStreaming(input)` - Execute workflow with streaming
-- `GetStatus()` - Get workflow status
-- `GetSharedState()` - Access shared context
-- `GetAgent(name)` - Retrieve specific agent
+**Key Features:**
+- Agent discovery (GET /agents)
+- Task execution (POST /agents/{id}/tasks)
+- Session management
+- Streaming support
+- Pure protocol compliance
 
-**Services:**
+**Core Methods:**
 ```go
-type Team struct {
-	workflowService     *TeamWorkflowService
-	agentService        *TeamAgentService
-	coordinationService *TeamCoordinationService
-}
+func (s *Server) RegisterAgent(agentID string, agent Agent) error
+func (s *Server) Start() error
+func (s *Server) Stop(ctx context.Context) error
 ```
 
-**TeamWorkflowService:**
-- Manages workflow executors (DAG, Autonomous)
-- Routes to appropriate executor based on mode
-- Handles workflow streaming events
+### 2. Agent (`agent/agent.go`)
 
-**TeamAgentService:**
-- Creates and manages agent instances
-- Provides agent capabilities query
-- Handles agent lifecycle
+**Responsibility:** Execute reasoning tasks via A2A protocol
 
-**TeamCoordinationService:**
-- Manages shared state across agents
-- Context variable storage
-- Inter-agent communication
-
-### 2. Workflow Executors (`workflow/`)
-
-**DAGExecutor (`workflow/executors.go`):**
+**A2A Interface Implementation:**
 ```go
-type DAGExecutor struct {
-	name   string
-	config *config.DAGExecution
-}
+// Pure A2A Agent interface
+func (a *Agent) GetAgentCard() *a2a.AgentCard
+func (a *Agent) ExecuteTask(ctx context.Context, request *a2a.TaskRequest) (*a2a.TaskResponse, error)
+func (a *Agent) ExecuteTaskStreaming(ctx context.Context, request *a2a.TaskRequest) (<-chan *a2a.StreamChunk, error)
 ```
 
-**Capabilities:**
-- Dependency resolution (`depends_on` field)
-- Variable substitution (`${variable_name}`)
-- Parallel execution of independent steps
-- Progress tracking
-- Error recovery with retries
-
-**Execution Flow:**
-1. Parse workflow steps and dependencies
-2. Build dependency graph
-3. Execute steps when dependencies satisfied
-4. Pass outputs as inputs to dependent steps
-5. Stream events for each step
-
-**AutonomousExecutor (Experimental):**
-- Dynamic workflow planning
-- Self-organizing agent selection
-- Adaptive goal pursuit
-- Real-time coordination
-
-### 3. Agent (`agent/agent.go`)
-
-**Responsibility:** Orchestrate the reasoning loop
-
-**Key Methods:**
-- `Query(input)` - Non-streaming execution
-- `QueryStreaming(input)` - Streaming execution
+**Internal Methods:**
 - `execute()` - Main reasoning loop
 - `callLLM()` - LLM interaction
-- `executeTools()` - Tool execution with dynamic labels
+- `executeTools()` - Tool execution
 - `saveToHistory()` - Conversation persistence
 
-**Design Pattern:** Orchestrator + Strategy
+**Design Pattern:** Strategy Pattern
 
 ```go
 type Agent struct {
@@ -202,7 +169,64 @@ type Agent struct {
 }
 ```
 
-### 2. Reasoning Strategy (`reasoning/chain_of_thought_strategy.go`)
+**Key Features:**
+- Pure A2A compliance (no legacy Query/QueryStreaming)
+- Direct protocol implementation
+- Transparent to clients (native or remote)
+- Tool-based orchestration via `agent_call`
+
+### 3. Orchestration Tools (`agent/agent_call_tool.go`)
+
+**Responsibility:** Enable multi-agent coordination
+
+**`agent_call` Tool:**
+```go
+type AgentCallTool struct {
+	registry *AgentRegistry
+}
+
+// Delegates task to another agent
+func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}) (tools.ToolResult, error)
+```
+
+**Features:**
+- Transparent delegation to any registered agent
+- Works with both native and remote A2A agents
+- Pure A2A protocol communication
+- Enables LLM-driven orchestration
+
+**Usage:**
+```yaml
+agents:
+  # Native agent
+  researcher:
+    name: "Research Agent"
+    llm: "gpt-4"
+    reasoning:
+      engine: "chain-of-thought"
+  
+  # External A2A agent (pure interoperability!)
+  partner_specialist:
+    type: "a2a"
+    url: "https://partner-ai.com/agents/specialist"
+  
+  # Orchestrator coordinates both
+  orchestrator:
+    name: "Hybrid Orchestrator"
+    llm: "gpt-4"
+    tools:
+      - agent_call  # Can call native AND external agents
+    reasoning:
+      engine: "supervisor"  # Optimized for delegation
+```
+
+**Benefits:**
+- 🌍 **Agent Internet**: Connect to the emerging agent ecosystem
+- 🏢 **Enterprise Interoperability**: Integrate partner/vendor agents without code
+- 📝 **Declarative**: External agents defined in YAML like native ones
+- 🔌 **Zero Code**: No API integration, no custom connectors
+
+### 4. Reasoning Strategy (`reasoning/chain_of_thought_strategy.go`, `reasoning/supervisor_strategy.go`)
 
 **Responsibility:** Define reasoning behavior
 
@@ -225,7 +249,7 @@ type ReasoningStrategy interface {
 - Self-reflection after each iteration
 - Todo injection into context
 
-### 3. Services (`agent/services.go`)
+### 5. Services (`agent/services.go`)
 
 **Service Architecture:**
 

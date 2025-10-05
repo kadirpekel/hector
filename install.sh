@@ -8,7 +8,7 @@ echo ""
 
 # Build the binary
 echo "📦 Building Hector..."
-go build -o hector cmd/hector/main.go
+go build -o hector ./cmd/hector
 
 # Determine install location
 if [ -w "/usr/local/bin" ]; then
@@ -30,9 +30,11 @@ echo ""
 echo "✅ Hector installed successfully!"
 echo ""
 echo "Usage:"
-echo "  hector              # Default config"
-echo "  hector coding       # Developer mode"
-echo "  hector --help       # Show help"
+echo "  hector serve --config hector.yaml    # Start A2A server"
+echo "  hector list                          # List available agents"
+echo "  hector call <agent> \"prompt\"         # Execute a task"
+echo "  hector chat <agent>                  # Interactive chat"
+echo "  hector --help                        # Show help"
 echo ""
 
 # Check if directory is in PATH
@@ -44,5 +46,10 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo ""
 fi
 
-echo "🎉 Ready to use: hector coding"
+echo "🎉 Ready to use!"
+echo ""
+echo "Quick Start:"
+echo "  1. hector serve --config configs/a2a-server.yaml"
+echo "  2. hector list"
+echo "  3. hector call <agent-id> \"your prompt\""
 

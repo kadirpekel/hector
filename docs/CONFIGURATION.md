@@ -2,6 +2,8 @@
 
 Complete guide to configuring Hector AI Assistant.
 
+> **📖 External A2A Agents:** For integrating external agents via URL, see [EXTERNAL_AGENTS.md](EXTERNAL_AGENTS.md). This document covers native agent configuration only.
+
 ---
 
 ## Table of Contents
@@ -92,6 +94,8 @@ document_stores: # Knowledge bases
 ---
 
 ## Agent Configuration
+
+**Note:** This section covers **native agents** only. For external A2A agents, see [EXTERNAL_AGENTS.md](EXTERNAL_AGENTS.md).
 
 ### Basic Structure
 

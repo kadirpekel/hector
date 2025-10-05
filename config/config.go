@@ -204,6 +204,9 @@ type GlobalSettings struct {
 
 	// Performance settings
 	Performance PerformanceConfig `yaml:"performance,omitempty"`
+
+	// A2A Server configuration
+	A2AServer A2AServerConfig `yaml:"a2a_server,omitempty"`
 }
 
 // Validate implements Config.Validate for GlobalSettings
@@ -214,6 +217,9 @@ func (c *GlobalSettings) Validate() error {
 	if err := c.Performance.Validate(); err != nil {
 		return fmt.Errorf("performance config validation failed: %w", err)
 	}
+	if err := c.A2AServer.Validate(); err != nil {
+		return fmt.Errorf("A2A server config validation failed: %w", err)
+	}
 	return nil
 }
 
@@ -221,6 +227,39 @@ func (c *GlobalSettings) Validate() error {
 func (c *GlobalSettings) SetDefaults() {
 	c.Logging.SetDefaults()
 	c.Performance.SetDefaults()
+	c.A2AServer.SetDefaults()
+}
+
+// ============================================================================
+// A2A SERVER CONFIGURATION
+// ============================================================================
+
+// A2AServerConfig contains configuration for the A2A protocol server
+type A2AServerConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Host    string `yaml:"host"`
+	Port    int    `yaml:"port"`
+	BaseURL string `yaml:"base_url,omitempty"` // Public URL for agent cards
+}
+
+// Validate validates the A2A server configuration
+func (c *A2AServerConfig) Validate() error {
+	if c.Enabled {
+		if c.Port <= 0 || c.Port > 65535 {
+			return fmt.Errorf("invalid port: %d", c.Port)
+		}
+	}
+	return nil
+}
+
+// SetDefaults sets default values for A2A server configuration
+func (c *A2AServerConfig) SetDefaults() {
+	if c.Host == "" {
+		c.Host = "0.0.0.0"
+	}
+	if c.Port == 0 {
+		c.Port = 8080
+	}
 }
 
 // ============================================================================

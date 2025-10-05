@@ -9,615 +9,570 @@
 ╚═╝  ╚═╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
 ```
 
-**Declarative AI Agent Platform**
+**Pure A2A-Native Declarative AI Agent Platform**
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
 [![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://golang.org/)
-[![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/kadirpekel/hector)
-[![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
+[![A2A Protocol](https://img.shields.io/badge/A2A-compliant-green.svg)](https://a2a-protocol.org)
 
-> ⚠️ **Alpha Stage**: Core features are stable, but APIs may change. Production use at your own discretion.
+> **Define agents in YAML, serve via A2A protocol, orchestrate without code**
 
-**📚 Documentation:**
-- [Configuration Reference](CONFIGURATION.md) - Complete YAML options and examples
-- [Architecture Guide](ARCHITECTURE.md) - System design, patterns, and multi-agent orchestration
-- [Plugin System](PLUGIN_ARCHITECTURE.md) - Extend Hector with custom LLM providers, databases, embedders
-- [Example Configs](configs/) - Ready-to-use templates (coding, workflows, etc.)
-
----
-
-## What is Hector?
-
-Hector is an **AI agent** you configure, not code. It's a complete agentic system that adapts to any task through declarative YAML configuration—from weather queries to complex workflows.
-
-**What makes Hector different:**
-- **Hector IS the agent**: You configure what it knows and can do, it handles the rest
-- **Declarative configuration**: Define capabilities in YAML, no programming required
-- **Domain-agnostic**: Same agent, infinite personas (research, support, development, analysis)
-- **Extensible platform**: Connect tools, LLMs, and data sources through configuration
-- **Self-hosted intelligence**: Your agent, your data, your control
+**📚 Quick Links:**
+- [Quick Start](#-quick-start) - Get running in 5 minutes
+- [A2A Server](#-a2a-server-mode) - Host agents via A2A protocol
+- [Multi-Agent Orchestration](#-multi-agent-orchestration) - Coordinate multiple agents
+- [External Agents](docs/EXTERNAL_AGENTS.md) - Use remote A2A agents
+- [Architecture](docs/ARCHITECTURE.md) - System design
+- [Documentation](docs/) - Complete documentation
 
 ---
 
-## Quick Start
+## 🌟 **What is Hector?**
+
+Hector is a **pure A2A-native declarative AI agent platform** that enables you to:
+
+- **📝 Define agents in YAML** - Native AND external agents, zero code required
+- **🌐 Serve via A2A protocol** - Industry-standard agent communication
+- **🤖 Deploy single or multi-agent systems** - From simple assistants to complex workflows
+- **🔗 Orchestrate with LLM-driven delegation** - Agents coordinate intelligently
+- **🔌 Integrate external agents** - Connect to any A2A agent via URL in your config
+- **🌍 Agent Ecosystem Ready** - Interoperate within organizations or the broader agent internet
+
+### **How Hector is Different**
+
+Unlike frameworks like **LangChain**, **AutoGen**, or **CrewAI** that require writing Python code to define agents, Hector uses **pure YAML configuration**:
+
+```yaml
+# Define your ENTIRE multi-agent system in one YAML file
+agents:
+  # Native agent (runs locally)
+  assistant:
+    name: "Customer Support Agent"
+    llm: "gpt-4o"
+    reasoning:
+      engine: "chain-of-thought"
+    tools:
+      - search
+      - database
+  
+  # External A2A agent (just provide URL!)
+  partner_specialist:
+    type: "a2a"
+    url: "https://partner-ai.com/agents/specialist"
+    # That's it! No code, no API integration - pure interoperability
+```
+
+**Key Differentiators:**
+- ✅ **Declarative** - YAML configuration for native AND external agents, zero code required
+- ✅ **A2A-Native** - 100% protocol compliance enables universal interoperability
+- ✅ **External Agent Integration** - Connect to any A2A agent via URL in your YAML
+- ✅ **Multi-Agent** - Built-in orchestration via `agent_call` tool across all agents
+- ✅ **Agent Internet Ready** - Participate in the emerging agent ecosystem
+- ✅ **Enterprise Interoperability** - Integrate partner/vendor agents declaratively
+
+---
+
+## 🚀 **Quick Start**
+
+### Install
 
 ```bash
 # Clone and build
 git clone https://github.com/kadirpekel/hector
 cd hector
-go build -o hector cmd/hector/main.go
-./install.sh  # Optional: adds to PATH
+go build -o hector ./cmd/hector
 
-# Configure your agent
-cp .env.example .env
-# Add your OPENAI_API_KEY to .env
-
-# Talk to Hector
-hector
+# Optional: Install to PATH
+./install.sh
 ```
 
-**See Hector in action:**
+### Start A2A Server
 
 ```bash
-# General knowledge (works immediately)
-echo "Explain quantum computing like I'm five" | hector
+# 1. Set API key
+export OPENAI_API_KEY="sk-..."
 
-# Task management (built-in tool)
-echo "Create a todo list for planning a weekend trip to Paris" | hector
+# 2. Start server hosting multiple agents
+./hector serve --config configs/a2a-server.yaml
 
-# Software development
-hector coding
-> "Create a REST API with JWT authentication"
-
-# Research & analysis
-echo "What are the top 3 trends in AI agents for 2024?" | hector
+# Expected output:
+# 🚀 Starting Hector A2A Server...
+# 📋 Registering agents...
+#   ✅ Competitor Analysis Agent (competitor_analyst)
+#   ✅ Customer Support Agent (customer_support)
+# 🌐 A2A Server ready!
+# 📡 Agent directory: http://localhost:8080/agents
 ```
 
-**Same agent, different capabilities** through configuration.
-
-**Connect external tools via MCP** (when you have an MCP server running):
-
-```yaml
-# configs/weather-agent.yaml (example)
-agents:
-  weather_assistant:
-    llm: "gpt-4o"
-    prompt:
-      system_role: "Friendly weather assistant with humor"
-    
-tools:
-  weather:
-    type: mcp
-    server_url: "${MCP_WEATHER_SERVER}"  # Your MCP server
-```
+### Test with CLI
 
 ```bash
-# Then use it (requires running MCP server)
-hector --config configs/weather-agent.yaml
-> "Check weather in Paris and Tokyo, compare them, then recommend best city. 
-   Create a task list and complete step-by-step."
+# List available agents
+./hector list
 
-📋 Tasks Created:
-  1. ⏳ Check Paris weather
-  2. ⏳ Check Tokyo weather  
-  3. ⏳ Compare results
-  4. ⏳ Give recommendation
+# Get agent details
+./hector info competitor_analyst
 
-🔧 Calling tools... ✅✅
+# Execute a task
+./hector call competitor_analyst "Analyze top AI agent frameworks"
 
-📋 Tasks Updated:
-  1. ✅ Check Paris weather       → Done
-  2. ✅ Check Tokyo weather       → Done
-  3. 🔄 Compare results           → Working...
-  4. ⏳ Give recommendation
-
-🌥️ Paris: 10°C, broken clouds
-☁️ Tokyo: 20°C, overcast, humid
-
-→ Recommendation: Tokyo has warmer weather, better for outdoor activities!
+# Interactive chat
+./hector chat competitor_analyst
 ```
 
-**The power**: Hector adapts through configuration. Built-in tools work immediately, external tools connect via MCP protocol.
-
-**Note**: The weather-agent config demonstrates MCP integration. You'll need a running MCP weather server to use it. See [Model Context Protocol](https://modelcontextprotocol.io/) for server examples.
-
-**Configure Hector per workspace:**
-
-Point Hector at different configs to change its entire personality and capabilities:
-
-```bash
-# Individual workspaces (any domain)
-research-project/
-  ├── hector.yaml          # Research assistant config
-  └── data/
-
-writing-workspace/
-  ├── hector.yaml          # Content creation config
-  └── drafts/
-
-# Multi-tenant shared configs (teams/orgs)
-company-workspace/
-  ├── configs/
-  │   ├── support.yaml     # Customer support agent
-  │   ├── research.yaml    # Research analyst
-  │   ├── writer.yaml      # Content writer
-  │   └── developer.yaml   # Software development
-  └── projects/
-
-# Use from anywhere
-cd research-project && hector           # Research mode
-cd company-workspace && hector support  # Support mode
-cd company-workspace && hector developer # Development mode
-```
-
-**Use cases:**
-- **Domain-Specific**: Configure agents for research, writing, support, development, etc.
-- **Team Workflows**: Share persona configs across team (research standards, writing style, support protocols)
-- **Multi-Persona**: Switch contexts easily (researcher, writer, analyst, developer)
-- **Client/Project Separation**: Different configs per client, project, or environment
+**That's it!** You now have an A2A server running with multiple agents.
 
 ---
 
-## Core Capabilities
+## 💡 **Key Concepts**
 
-### 🛠️ Extensive Tool System
+### 1. **A2A Protocol**
 
-**Built-in Tools:**
-- `execute_command`: Sandboxed shell execution
-- `file_writer`: Create and modify files
-- `search_replace`: Precise text replacement
-- `search`: Semantic codebase search (requires vector DB)
-- `todo_write`: Task management and tracking
+Hector implements the [A2A (Agent-to-Agent) protocol](https://a2a-protocol.org), an open standard for agent interoperability.
 
-**MCP Protocol - Connect External Tools:**
+**Benefits:**
+- ✅ **Interoperability** - Works with any A2A-compliant client or agent
+- ✅ **Discovery** - Agents publish capability cards
+- ✅ **Standard Communication** - TaskRequest/TaskResponse model
+- ✅ **Ecosystem** - Contribute to growing A2A ecosystem
 
-Hector can connect to external tool servers using the [Model Context Protocol](https://modelcontextprotocol.io/). Want weather data? GitHub access? Custom APIs? Point Hector at an MCP server:
+### 2. **Pure A2A Architecture**
+
+```
+┌─────────────────────────────────────┐
+│  User / External A2A Client         │
+└───────────┬─────────────────────────┘
+            │ A2A Protocol (HTTP/JSON)
+┌───────────▼─────────────────────────┐
+│  Hector A2A Server                  │
+│  • Agent discovery                  │
+│  • Task execution                   │
+│  • Session management               │
+└───────────┬─────────────────────────┘
+            │
+    ┌───────┼───────┐
+    │       │       │
+    ▼       ▼       ▼
+┌────────┐ ┌────────┐ ┌────────┐
+│Agent 1 │ │Agent 2 │ │Agent 3 │
+│(Native)│ │(Native)│ │(Remote)│
+└────────┘ └────────┘ └────────┘
+```
+
+**All communication via A2A protocol - no proprietary APIs!**
+
+### 3. **Multi-Agent Orchestration**
+
+Instead of hard-coded workflows, Hector uses:
+- **LLM-driven delegation** - Orchestrator agent decides routing
+- **agent_call tool** - Delegates to other agents via A2A
+- **Transparent** - Native and external agents treated identically
 
 ```yaml
-# configs/weather-agent.yaml (example pattern)
-tools:
-  weather:
-    type: mcp
-    server_url: "${MCP_WEATHER_SERVER}"  # Your MCP server
+agents:
+  orchestrator:
+    tools:
+      - agent_call  # Enable orchestration
+    reasoning:
+      engine: "supervisor"  # Optimized for delegation
+    prompt:
+      system_role: |
+        Coordinate other agents using agent_call.
+        Available: researcher, analyst, writer
 ```
+
+---
+
+## 🌐 **A2A Server Mode**
+
+### Start Server
 
 ```bash
-# .env
-MCP_WEATHER_SERVER=http://localhost:3000  # Your running MCP server
+./hector serve --config configs/a2a-server.yaml
 ```
 
-**Note**: MCP integration requires running MCP servers. The weather-agent example shows the pattern—you'll need to set up MCP servers for your specific tools.
+### A2A Endpoints
 
-**What you can connect:**
-- **Data & APIs**: Weather services, news feeds, databases, REST APIs
-- **Development**: GitHub, GitLab, Jira, CI/CD systems
-- **Cloud**: AWS, GCP, Azure management tools
-- **Communication**: Slack, Discord, email integrations
-- **Custom**: Your own domain-specific MCP servers
+```
+GET  /agents                    → List all agents
+GET  /agents/{id}               → Get agent card (capabilities)
+POST /agents/{id}/tasks         → Execute task
+GET  /agents/{id}/tasks/{taskId} → Get task status
+```
 
-**The power**: Pure declarative extension. Configure once, Hector gains abilities—no code changes, no rebuilds.
+### Example: Call via curl
 
-**Configuration Presets (Security Profiles):**
+```bash
+# Discover agents
+curl http://localhost:8080/agents
 
-Hector provides example configurations with different tool access levels:
-- **Safe Mode** (`hector.yaml`): Read-only commands + task management
-- **Developer Mode** (`configs/coding.yaml`): File editing + expanded commands
-- **Custom**: Define your own tool permissions
+# Get agent card
+curl http://localhost:8080/agents/competitor_analyst
 
-*Note: Tool permissions are configured via YAML, not enforced at the framework level. Review and customize tool access for your use case.*
+# Execute task
+curl -X POST http://localhost:8080/agents/competitor_analyst/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "taskId": "task-1",
+    "input": {
+      "type": "text/plain",
+      "content": "Analyze top 3 AI frameworks"
+    }
+  }'
+```
 
-### 🤝 Multi-Agent Orchestration
+### Example: Python Client
 
-**Hector can split itself into specialized sub-agents** that coordinate on complex tasks:
+```python
+import requests
+
+# Discover agent
+card = requests.get("http://localhost:8080/agents/competitor_analyst").json()
+print(f"Agent: {card['name']}")
+print(f"Capabilities: {card['capabilities']}")
+
+# Execute task
+task = {
+    "taskId": "py-task-1",
+    "input": {
+        "type": "text/plain",
+        "content": "Analyze Rust vs Go"
+    }
+}
+
+response = requests.post(
+    "http://localhost:8080/agents/competitor_analyst/tasks",
+    json=task
+)
+
+result = response.json()
+print(f"Status: {result['status']}")
+print(f"Output: {result['output']['content']}")
+```
+
+**Any A2A-compliant client can interact with Hector agents!**
+
+---
+
+## 🔗 **Multi-Agent Orchestration**
+
+### Simple Example
 
 ```yaml
+# configs/orchestrator-simple.yaml
 agents:
   researcher:
     name: "Research Agent"
-    llm: "gpt-4o"
-    prompt:
-      prompt_slots:
-        system_role: "Information gathering specialist"
+    llm: "gpt-4o-mini"
   
   analyst:
     name: "Analysis Agent"
-    llm: "claude-3-7-sonnet"
+    llm: "gpt-4o-mini"
+  
+  orchestrator:
+    name: "Orchestrator"
+    llm: "gpt-4o"
+    tools:
+      - agent_call  # THE KEY TOOL
+    reasoning:
+      engine: "supervisor"
     prompt:
-      prompt_slots:
-        system_role: "Data analysis expert"
+      system_role: |
+        Coordinate agents:
+        - researcher: Gathers information
+        - analyst: Analyzes data
+        
+        Use agent_call to delegate tasks.
 ```
 
-**Workflow Orchestration (In Development):**
-- **DAG Execution**: Dependency-based coordination
-- **Context Sharing**: Pass data between agents
-- **Progress Tracking**: Real-time workflow events
-- **Error Recovery**: Retries and rollback
+### Test Orchestration
 
-[See example →](configs/research-pipeline-workflow.yaml)
+```bash
+# Start server
+./hector serve --config configs/orchestrator-simple.yaml
 
-### 🧠 Pluggable Reasoning Strategies
-
-**Chain-of-Thought (Production):**
-- Iterative problem solving
-- Dynamic tool usage
-- Self-reflection and replanning
-
-**Future Strategies:**
-- Tree-of-Thought
-- Reflexion
-- Multi-step planning
-
-Define in config:
-```yaml
-reasoning:
-  engine: "chain-of-thought"
-  max_iterations: 10
-  enable_streaming: true
+# Call orchestrator (it will delegate to others)
+./hector call orchestrator "Research AI frameworks and analyze top 3"
 ```
 
-### 🔌 LLM Provider Flexibility
+**Expected flow:**
+1. Orchestrator receives task
+2. Calls researcher: "Research AI frameworks"
+3. Calls analyst: "Analyze top 3: [research results]"
+4. Synthesizes final response
 
-Switch providers via configuration:
+### Advanced Example
 
-```yaml
-llms:
-  main:
-    type: "anthropic"
-    model: "claude-3-7-sonnet-latest"
-    temperature: 0.7
-```
-
-**Built-in Providers:**
-- OpenAI (GPT-4o, GPT-4, etc.)
-- Anthropic (Claude 3.7 Sonnet, etc.)
-
-**Plugin System:**
-- Add custom LLM providers without modifying core
-- Support for custom databases and embedders
-- gRPC-based plugin architecture for robustness
-- Auto-discovery and dynamic loading
-
-[Learn more about plugins →](PLUGIN_ARCHITECTURE.md) | [Example plugin →](examples/plugins/echo-llm/)
-
-### 🔍 Semantic Search
-
-Index codebases for intelligent search:
-
-```yaml
-document_stores:
-  codebase:
-    path: "."
-    include_patterns: ["*.go", "*.py", "*.js"]
-    database: "qdrant"
-    embedder: "ollama"
-```
-
-**Requires:** Qdrant (vector DB) + Ollama (embeddings)
-
-### 📝 Prompt Engineering via Slots
-
-Customize agent behavior without full prompt rewrites:
-
-```yaml
-prompt:
-  prompt_slots:
-    system_role: "Expert software architect"
-    tool_usage: "Proactively use search and file tools"
-    reasoning_instructions: "Break complex tasks into steps"
-    communication_style: "Concise, technical, actionable"
-```
-
-**Three levels of customization:**
-1. Strategy defaults (built-in)
-2. Partial override via `prompt_slots`
-3. Full override via `system_prompt`
+See `configs/orchestrator-example.yaml` for a complete multi-agent system with:
+- Research Agent
+- Analysis Agent
+- Content Writer
+- Orchestrator (coordinates all)
 
 ---
 
-## Architecture
+## 🔌 **External A2A Agents**
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                  YAML Configuration Layer                       │
-│   (Agents, Workflows, Tools, LLMs, Plugins, Prompt Slots)      │
-└────────────────────────────┬────────────────────────────────────┘
-                             ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                      Hector Engine Core                         │
-│                                                                 │
-│  ┌──────────────┐    ┌─────────────────┐   ┌───────────────┐  │
-│  │    Agent     │ ←→ │    Strategy     │   │   Workflow    │  │
-│  │ Orchestrator │    │ (Chain-of-      │   │   Executors   │  │
-│  │              │    │  Thought, etc)  │   │  (DAG, Auto)  │  │
-│  └──────┬───────┘    └─────────────────┘   └───────┬───────┘  │
-│         │                                           │          │
-│         ├─────► LLM Service (OpenAI, Anthropic)    │          │
-│         ├─────► Tool Service (Local, MCP)          │          │
-│         ├─────► Context Service (Search, History)  │          │
-│         ├─────► Prompt Service (Slots, Templates)  │          │
-│         └─────► Plugin Registry (gRPC Providers) ◄─┘          │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              Multi-Agent Orchestration                   │  │
-│  │  Team System → Workflow Registry → Executor Selection   │  │
-│  │  Context Sharing → Dependency Management → Streaming    │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                             ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                  External Integrations                          │
-│  LLM APIs │ MCP Servers │ Vector DBs │ gRPC Plugins │ Custom   │
-│                                                                 │
-│  ┌───────────────────────────────────────────────────────────┐ │
-│  │  Plugin System (Process-Isolated, Language-Agnostic):    │ │
-│  │  • Custom LLM Providers  • Custom Databases              │ │
-│  │  • Custom Embedders      • Auto-Discovery                │ │
-│  └───────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
+Hector can orchestrate **external A2A agents** alongside native agents!
+
+### Example: Use External Agent
+
+```go
+import (
+    "context"
+    "github.com/kadirpekel/hector/a2a"
+    "github.com/kadirpekel/hector/agent"
+)
+
+// 1. Create A2A client
+client := a2a.NewClient(&a2a.ClientConfig{})
+
+// 2. Discover external agent
+externalAgent, _ := agent.NewA2AAgentFromURL(
+    context.Background(),
+    "https://external-service.com/agents/translator",
+    client,
+)
+
+// 3. Register in registry
+registry := agent.NewAgentRegistry()
+registry.RegisterAgent("translator", externalAgent, config, capabilities)
+
+// 4. Orchestrator can now call it via agent_call!
 ```
 
-**Key Patterns:**
-- **Strategy Pattern**: Pluggable reasoning engines
-- **Plugin Architecture**: gRPC-based dynamic service discovery
-- **Service-Oriented**: Clean boundaries for testing and extension
-- **Interface-Based**: Extend without modifying core
-- **Event-Driven**: Streaming execution with real-time events
+**Key Point:** Native and external agents use the **same interface**. The orchestrator doesn't know (or care) about the difference!
 
-**Component Responsibilities:**
-- **Agent**: Orchestrates reasoning loop, coordinates services
-- **Strategy**: Implements reasoning approach (CoT, ToT, etc.)
-- **Workflow**: Multi-agent coordination and dependency management
-- **Services**: Isolated concerns (LLM, tools, context, prompts)
+**See [docs/EXTERNAL_AGENTS.md](docs/EXTERNAL_AGENTS.md) for complete guide.**
 
 ---
 
-## Configuration Example
+## ⚙️ **Configuration**
 
-**Basic Single Agent:**
+### Minimal Agent
+
 ```yaml
 agents:
-  assistant:
-    name: "Development Assistant"
-    llm: "main-llm"
-    
+  hello:
+    name: "Hello Agent"
+    llm: "gpt-4o-mini"
     prompt:
-      prompt_slots:
-        system_role: "Expert software development assistant"
-        tool_usage: "Use file editing and search proactively"
-    
-    reasoning:
-      engine: "chain-of-thought"
-      max_iterations: 10
-      enable_streaming: true
+      system_role: "You are a friendly assistant"
 
 llms:
-  main-llm:
-    type: "anthropic"
-    model: "claude-3-7-sonnet-latest"
-    api_key: "${ANTHROPIC_API_KEY}"
-    temperature: 0.7
+  gpt-4o-mini:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+```
+
+### Agent with Tools
+
+```yaml
+agents:
+  coder:
+    name: "Coding Assistant"
+    llm: "gpt-4o"
+    tools:
+      - write_file
+      - execute_command
+    prompt:
+      system_role: "Expert programmer"
 
 tools:
+  write_file:
+    type: file_system
+    path: "./workspace"
+  
   execute_command:
     type: command
-    allowed_commands: ["ls", "cat", "grep"]
-  
-  file_writer:
-    type: file_writer
+    allowed_commands: ["ls", "cat", "python3"]
 ```
 
-**Multi-Agent Workflow:**
-```yaml
-workflows:
-  research_pipeline:
-    mode: "dag"
-    execution:
-      dag:
-        steps:
-          - name: "research"
-            agent: "researcher"
-            input: "${user_input}"
-            output: "research_data"
-          
-          - name: "analyze"
-            agent: "analyst"
-            input: "Analyze: ${research_data}"
-            depends_on: [research]
-            output: "analysis"
-          
-          - name: "report"
-            agent: "writer"
-            input: "Report: ${research_data}, ${analysis}"
-            depends_on: [research, analyze]
-```
-
-[Full configuration reference →](CONFIGURATION.md)
-
----
-
-## Use Cases
-
-### General Purpose
-- **Research Assistants**: Information gathering, fact-checking, literature review
-- **Content Creation**: Blog posts, documentation, technical writing, marketing copy
-- **Data Analysis**: CSV processing, pattern recognition, insights extraction, reporting
-- **Customer Support**: Automated responses, ticket triage, FAQ generation
-- **Education**: Tutoring, concept explanation, quiz generation, study guides
-
-### Technical/Development
-- **Coding Assistance**: Code generation, refactoring, debugging (via `hector coding`)
-- **DevOps Automation**: Infrastructure scripts, deployment automation, monitoring
-- **API Integration**: Connect external services via MCP protocol, workflow orchestration
-
-### Enterprise Workflows
-- **Multi-Agent Pipelines**: Research → Analysis → Reporting with specialized agents
-- **Document Processing**: Extract, transform, summarize large document collections
-- **Compliance & Audit**: Policy checking, automated reporting, audit trail generation
-
----
-
-## Extensibility
-
-Hector is designed for extension at multiple levels:
-
-### 🔌 Plugin System (Recommended)
-
-The **plugin system** allows you to extend Hector without modifying the core codebase. Plugins are separate executables that communicate via gRPC.
-
-**What you can extend:**
-- **LLM Providers**: Add support for custom or proprietary models
-- **Database Providers**: Integrate custom vector databases
-- **Embedder Providers**: Use custom embedding models
-
-**Example: Custom LLM Plugin**
+### Orchestrator Agent
 
 ```yaml
-# Configuration only - no code changes to Hector!
-plugins:
-  llm_providers:
-    my-custom-llm:
-      type: grpc
-      path: "./plugins/my-custom-llm"
-      enabled: true
-      config:
-        api_key: "${MY_LLM_API_KEY}"
-        model: "custom-model-v1"
-
 agents:
-  my-agent:
-    llm: "my-custom-llm"  # Use your plugin
+  orchestrator:
+    name: "Task Orchestrator"
+    llm: "gpt-4o"
+    tools:
+      - agent_call  # Enable orchestration
+    reasoning:
+      engine: "supervisor"  # Optimized strategy
+      max_iterations: 20
+    prompt:
+      system_role: |
+        Coordinate other agents using agent_call tool.
 ```
 
-**Plugin development** is simple - implement the interface, build a binary, deploy:
-
-```go
-// Your plugin (separate executable)
-type MyLLMProvider struct{}
-
-func (p *MyLLMProvider) Generate(ctx context.Context, messages []*grpc.Message, tools []*grpc.ToolDefinition) (*grpc.GenerateResponse, error) {
-    // Your LLM implementation
-}
-
-func main() {
-    grpc.ServeLLMPlugin(&MyLLMProvider{})
-}
-```
-
-**Benefits:**
-- ✅ **Zero core changes**: Extend without touching Hector code
-- ✅ **Language agnostic**: Plugins can be written in any language (via gRPC)
-- ✅ **Auto-discovery**: Drop plugins in a directory, Hector finds them
-- ✅ **Isolated**: Plugins run as separate processes
-- ✅ **Declarative**: Configure once, use everywhere
-
-[Plugin Development Guide →](PLUGIN_ARCHITECTURE.md) | [Example Plugin →](examples/plugins/echo-llm/)
-
-### 🛠️ Code-Level Extensions (Advanced)
-
-For built-in components, you can extend Hector at the code level:
-
-**Custom Tools:**
-```go
-type MyTool struct{}
-
-func (t *MyTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
-    return ToolResult{Success: true, Content: "Done"}, nil
-}
-```
-
-**Custom Reasoning Strategies:**
-```go
-type CustomStrategy struct{}
-
-func (s *CustomStrategy) PrepareIteration(state *ReasoningState) error {
-    // Your reasoning logic
-    return nil
-}
-```
-
-**Note**: For LLM providers, databases, and embedders, prefer the plugin system over code-level extensions.
+**See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete reference.**
 
 ---
 
-## What Works Today
+## 🎯 **Use Cases**
 
-**Production-Ready:**
-- ✅ Single-agent execution with streaming
-- ✅ File creation and modification  
-- ✅ Sandboxed command execution
-- ✅ LLM provider flexibility (OpenAI, Anthropic)
-- ✅ Plugin system (gRPC-based dynamic service discovery)
-- ✅ Semantic search (Qdrant + Ollama)
-- ✅ Tool system (built-in + MCP protocol foundation)
-- ✅ Prompt customization via slots
-
-**Experimental:**
-- 🧪 Multi-agent workflow orchestration (DAG executor implemented, needs production validation)
-- 🧪 Autonomous workflow mode (research prototype)
-
-**Not Yet Available:**
-- ❌ Web UI (CLI only)
-- ❌ Visual workflow designer
-- ❌ Additional LLM providers (extensible, contributions welcome)
-
----
-
-## Installation
-
-### From Source
-```bash
-git clone https://github.com/kadirpekel/hector
-cd hector
-go build -o hector cmd/hector/main.go
-./install.sh  # Optional: adds to PATH
-```
-
-### Requirements
-- Go 1.21+
-- LLM API access (OpenAI or Anthropic)
-- Optional: Qdrant + Ollama (semantic search)
-- Optional: MCP servers (external tools)
-
-### Configuration Files
-
-Hector looks for configuration in this order:
-1. `--config` flag (explicit path)
-2. `hector.yaml` in current directory
-3. Zero-config mode (safe defaults with `OPENAI_API_KEY` from env)
-
-### Pre-built Configs
+### 1. Single Agent Execution
 
 ```bash
-# General-purpose (default)
-hector
+# Direct agent call
+echo "Explain quantum computing" | ./hector
+```
 
-# Development assistant (Cursor-like experience with full capabilities)
-hector coding
+### 2. A2A Server
 
-# Multi-agent workflow (experimental)
-hector --config configs/research-pipeline-workflow.yaml --workflow research_pipeline
+```bash
+# Host multiple agents via A2A protocol
+./hector serve --config configs/a2a-server.yaml
+
+# Any A2A client can connect
+curl http://localhost:8080/agents
+```
+
+### 3. Multi-Agent Orchestration
+
+```bash
+# Orchestrator coordinates multiple agents
+./hector call orchestrator "Research, analyze, and write report on AI"
+
+# Flow: orchestrator → researcher → analyst → writer → synthesize
+```
+
+### 4. External Integration
+
+```bash
+# Mix native + external A2A agents
+# Orchestrator calls both transparently
+./hector call orchestrator "Use local researcher and external translator"
+```
+
+### 5. CLI Client
+
+```bash
+# Use Hector CLI as A2A client
+./hector list --server https://external-a2a-server.com
+./hector call external_agent "Task" --server https://...
 ```
 
 ---
 
-## License
+## 🏗️ **Architecture**
 
-**AGPL-3.0 for Personal Use** | **Commercial License Required**
+### Core Components
 
-Hector is dual-licensed:
-- **Personal/Non-Commercial**: Free under AGPL-3.0 (hobbyists, education, research, open-source)
-- **Commercial Use**: Requires a commercial license (for-profit companies, SaaS, enterprise)
+1. **A2A Server** (`a2a/server.go`)
+   - Hosts agents via A2A protocol
+   - Handles discovery, execution, sessions
+   
+2. **Agent** (`agent/agent.go`)
+   - Implements `a2a.Agent` interface
+   - Pure A2A compliance (ExecuteTask, GetAgentCard)
+   
+3. **A2AAgent** (`agent/a2a_agent.go`)
+   - Wraps external A2A agents
+   - Same interface as native agents
+   
+4. **AgentRegistry** (`agent/registry.go`)
+   - Stores `a2a.Agent` interface
+   - Works with native + external agents
+   
+5. **agent_call Tool** (`agent/agent_call_tool.go`)
+   - Enables orchestration
+   - Transparent delegation
 
-**What's Commercial?**
-- Using Hector at a for-profit company
-- Building commercial products/services with Hector
-- Any use that generates revenue
+### Architecture Diagram
 
-See [LICENSE.md](LICENSE.md) for full terms and commercial licensing inquiries.
+```
+User/Client
+    ↓ A2A Protocol
+A2A Server
+    ↓
+AgentRegistry (a2a.Agent interface)
+    ├─ Native Agents (in-process)
+    │  └─ agent.Agent
+    │
+    └─ External A2A Agents (HTTP)
+       └─ agent.A2AAgent → a2a.Client
+```
+
+**See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design.**
 
 ---
 
-## Links
+## 📚 **Documentation**
 
-- **GitHub**: [kadirpekel/hector](https://github.com/kadirpekel/hector)
-- **Issues**: [Report bugs or request features](https://github.com/kadirpekel/hector/issues)
+**[📚 Complete Documentation →](docs/)**
+
+- **[Quick Start](docs/QUICK_START.md)** - Get started in 5 minutes
+- **[Architecture](docs/ARCHITECTURE.md)** - System design and A2A protocol
+- **[Configuration](docs/CONFIGURATION.md)** - Complete config reference
+- **[CLI Guide](docs/CLI_GUIDE.md)** - Command-line interface
+- **[External Agents](docs/EXTERNAL_AGENTS.md)** - External agent integration
+- **[Orchestrator Guide](docs/ORCHESTRATOR_SUMMARY.md)** - Multi-agent orchestration
+
+---
+
+## 🧪 **Testing**
+
+### Basic Test
+
+```bash
+# Test A2A protocol
+./test-a2a.sh
+```
+
+### Full Integration Test
+
+```bash
+# Complete server + client test
+./test-a2a-full.sh
+```
+
+### Manual Testing
+
+```bash
+# Terminal 1: Start server
+./hector serve --config configs/orchestrator-example.yaml
+
+# Terminal 2: Test commands
+./hector list
+./hector info orchestrator
+./hector call orchestrator "Research AI and write summary"
+```
+
+---
+
+## 🔧 **CLI Reference**
+
+### Server Commands
+
+```bash
+hector serve [--config FILE] [--debug]
+```
+
+### Client Commands
+
+```bash
+hector list [--server URL] [--token TOKEN]
+hector info <agent> [--token TOKEN]
+hector call <agent> "prompt" [--server URL] [--token TOKEN]
+hector chat <agent> [--server URL] [--token TOKEN]
+hector help
+hector version
+```
+
+### Environment Variables
+
+```bash
+export HECTOR_SERVER="http://localhost:8080"
+export HECTOR_TOKEN="your-bearer-token"
+export OPENAI_API_KEY="sk-..."
+```
+
+**See [docs/CLI_GUIDE.md](docs/CLI_GUIDE.md) for complete reference.**
+
+---
+
+## 📄 **License**
+
+AGPL-3.0 - See [LICENSE.md](LICENSE.md)

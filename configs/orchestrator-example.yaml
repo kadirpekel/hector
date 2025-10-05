@@ -1,0 +1,181 @@
+# Orchestrator Agent Example Configuration
+# Demonstrates multi-agent orchestration using agent_call tool
+# Run with: hector serve --config configs/orchestrator-example.yaml
+
+global:
+  a2a_server:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8080
+
+agents:
+  # ============================================================================
+  # SPECIALIZED AGENTS - Each has specific expertise
+  # ============================================================================
+  
+  researcher:
+    name: "Research Agent"
+    description: "Gathers and synthesizes information from various sources"
+    llm: "main-llm"
+    tools:
+      - execute_command
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 5
+    prompt:
+      system_role: |
+        You are a research specialist. Your job is to:
+        1. Gather comprehensive information on topics
+        2. Synthesize findings into clear summaries
+        3. Cite sources when possible
+        
+        Be thorough but concise. Focus on key facts and insights.
+  
+  analyst:
+    name: "Analysis Agent"
+    description: "Analyzes data and provides insights"
+    llm: "main-llm"
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 5
+    prompt:
+      system_role: |
+        You are a data analyst. Your job is to:
+        1. Examine data and information critically
+        2. Identify patterns and trends
+        3. Provide actionable insights
+        
+        Be analytical and objective. Support conclusions with evidence.
+  
+  writer:
+    name: "Content Writer"
+    description: "Creates well-structured written content"
+    llm: "main-llm"
+    tools:
+      - file_writer
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 5
+    prompt:
+      system_role: |
+        You are a professional content writer. Your job is to:
+        1. Create clear, engaging content
+        2. Structure information logically
+        3. Adapt tone to audience
+        
+        Write professionally but accessibly. Focus on clarity.
+  
+  # ============================================================================
+  # ORCHESTRATOR AGENT - Coordinates the specialists
+  # ============================================================================
+  
+  orchestrator:
+    name: "Task Orchestrator"
+    description: "Coordinates multiple agents to solve complex tasks"
+    llm: "main-llm"
+    tools:
+      - agent_call  # THE KEY TOOL for orchestration
+    reasoning:
+      engine: "supervisor"  # Optimized for multi-agent orchestration!
+      max_iterations: 20  # More iterations for complex orchestration
+    prompt:
+      system_role: |
+        You are an orchestrator agent that coordinates specialized agents 
+        to accomplish complex tasks efficiently.
+        
+        AVAILABLE AGENTS:
+        - researcher: Gathers and synthesizes information
+        - analyst: Analyzes data and provides insights
+        - writer: Creates well-structured written content
+        
+        YOUR PROCESS:
+        1. UNDERSTAND: Break down the user's request into subtasks
+        2. PLAN: Determine which agents to use and in what order
+        3. DELEGATE: Use agent_call tool to execute each subtask
+        4. SYNTHESIZE: Combine results into a coherent final output
+        
+        DELEGATION GUIDELINES:
+        - Pass clear, focused tasks to each agent
+        - Build on previous results (reference them in new tasks)
+        - Don't just concatenate outputs - add your synthesis
+        - Think about dependencies (what info do you need first?)
+        
+        AGENT_CALL TOOL USAGE:
+        Use this format:
+        {
+          "agent": "researcher",
+          "task": "Research AI agent frameworks in 2025"
+        }
+        
+        EXAMPLE WORKFLOW:
+        User: "Research and analyze AI frameworks, then write a report"
+        1. Call researcher: "Research AI agent frameworks"
+        2. Call analyst: "Analyze these frameworks: [research results]"
+        3. Call writer: "Write report on: [analysis results]"
+        4. Synthesize: Review outputs and present final report
+      
+      tool_usage: |
+        Use agent_call to delegate subtasks to specialized agents.
+        Each delegation should have a clear, specific task.
+        Build on previous results by referencing them.
+      
+      communication_style: |
+        Be clear about your orchestration process.
+        Explain which agents you're calling and why.
+        Synthesize their outputs into a unified response.
+
+# ============================================================================
+# LLM CONFIGURATION
+# ============================================================================
+
+llms:
+  main-llm:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 4000
+
+# ============================================================================
+# TOOLS CONFIGURATION
+# ============================================================================
+
+tools:
+  execute_command:
+    type: command
+    allowed_commands: ["curl", "echo"]
+    working_directory: "."
+  
+  file_writer:
+    type: file_system
+    path: "./output"
+    allowed_operations: ["write"]
+
+# ============================================================================
+# USAGE EXAMPLES
+# ============================================================================
+
+# Start server:
+#   $ hector serve --config configs/orchestrator-example.yaml
+
+# Test individual agents:
+#   $ hector call researcher "Research Rust programming language"
+#   $ hector call analyst "What are key trends in AI?"
+#   $ hector call writer "Write a brief intro to AI agents"
+
+# Test orchestrator (multi-agent coordination):
+#   $ hector call orchestrator "Research AI agent frameworks, analyze the top 3, and write a comparison report"
+#   $ hector call orchestrator "Gather info on climate change, analyze the data, and write a summary"
+#   $ hector call orchestrator "Research Python vs Rust, analyze performance differences, and write recommendations"
+
+# Interactive chat with orchestrator:
+#   $ hector chat orchestrator
+
+# Expected behavior:
+# The orchestrator will:
+# 1. Break down your request
+# 2. Call researcher for information
+# 3. Call analyst for insights
+# 4. Call writer for content creation
+# 5. Synthesize everything into final output
+

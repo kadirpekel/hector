@@ -410,15 +410,24 @@ func (c *EmbedderProviderConfig) SetDefaults() {
 
 // AgentConfig represents agent configuration
 type AgentConfig struct {
-	Name           string          `yaml:"name"`            // Agent name
-	Description    string          `yaml:"description"`     // Agent description
-	LLM            string          `yaml:"llm"`             // LLM provider reference
-	Database       string          `yaml:"database"`        // Database provider reference
-	Embedder       string          `yaml:"embedder"`        // Embedder provider reference
-	DocumentStores []string        `yaml:"document_stores"` // Document store references
-	Prompt         PromptConfig    `yaml:"prompt"`          // Prompt configuration
-	Reasoning      ReasoningConfig `yaml:"reasoning"`       // Reasoning configuration
-	Search         SearchConfig    `yaml:"search"`          // Search configuration
+	// Agent type: "native" (default) or "a2a" (external)
+	Type string `yaml:"type,omitempty"` // Agent type: "native" (default) or "a2a"
+
+	// Common fields (both native and external)
+	Name        string `yaml:"name"`        // Agent name
+	Description string `yaml:"description"` // Agent description
+
+	// External A2A agent fields (when type="a2a")
+	URL string `yaml:"url,omitempty"` // A2A agent URL (e.g., "https://server.com/agents/specialist")
+
+	// Native agent fields (when type="native" or omitted)
+	LLM            string          `yaml:"llm,omitempty"`             // LLM provider reference
+	Database       string          `yaml:"database,omitempty"`        // Database provider reference
+	Embedder       string          `yaml:"embedder,omitempty"`        // Embedder provider reference
+	DocumentStores []string        `yaml:"document_stores,omitempty"` // Document store references
+	Prompt         PromptConfig    `yaml:"prompt,omitempty"`          // Prompt configuration
+	Reasoning      ReasoningConfig `yaml:"reasoning,omitempty"`       // Reasoning configuration
+	Search         SearchConfig    `yaml:"search,omitempty"`          // Search configuration
 	// Note: Tools are global resources (defined at config root level)
 	// All agents share the same tool registry
 }
@@ -428,47 +437,92 @@ func (c *AgentConfig) Validate() error {
 	if c.Name == "" {
 		return fmt.Errorf("name is required")
 	}
-	if c.LLM == "" {
-		return fmt.Errorf("llm provider reference is required")
+
+	// Normalize type
+	if c.Type == "" {
+		c.Type = "native"
 	}
-	// Database and embedder are only required if document stores are configured
-	if len(c.DocumentStores) > 0 {
-		if c.Database == "" {
-			return fmt.Errorf("database provider reference is required when document stores are configured")
+
+	// Validate based on agent type
+	switch c.Type {
+	case "a2a":
+		// External A2A agent - only URL is required
+		if c.URL == "" {
+			return fmt.Errorf("url is required for external A2A agents (type=a2a)")
 		}
-		if c.Embedder == "" {
-			return fmt.Errorf("embedder provider reference is required when document stores are configured")
+		// LLM, Database, etc. should not be specified for external agents
+		if c.LLM != "" {
+			return fmt.Errorf("llm should not be specified for external A2A agents (agent has its own LLM)")
 		}
+
+	case "native":
+		// Native agent - LLM is required
+		if c.LLM == "" {
+			return fmt.Errorf("llm provider reference is required for native agents")
+		}
+		// Database and embedder are only required if document stores are configured
+		if len(c.DocumentStores) > 0 {
+			if c.Database == "" {
+				return fmt.Errorf("database provider reference is required when document stores are configured")
+			}
+			if c.Embedder == "" {
+				return fmt.Errorf("embedder provider reference is required when document stores are configured")
+			}
+		}
+		// Validate native agent configs
+		if err := c.Prompt.Validate(); err != nil {
+			return fmt.Errorf("prompt configuration validation failed: %w", err)
+		}
+		if err := c.Reasoning.Validate(); err != nil {
+			return fmt.Errorf("reasoning configuration validation failed: %w", err)
+		}
+		if err := c.Search.Validate(); err != nil {
+			return fmt.Errorf("search configuration validation failed: %w", err)
+		}
+
+	default:
+		return fmt.Errorf("invalid agent type '%s' (must be 'native' or 'a2a')", c.Type)
 	}
-	if err := c.Prompt.Validate(); err != nil {
-		return fmt.Errorf("prompt configuration validation failed: %w", err)
-	}
-	if err := c.Reasoning.Validate(); err != nil {
-		return fmt.Errorf("reasoning configuration validation failed: %w", err)
-	}
-	if err := c.Search.Validate(); err != nil {
-		return fmt.Errorf("search configuration validation failed: %w", err)
-	}
+
 	return nil
 }
 
 // SetDefaults implements Config.SetDefaults for AgentConfig
 func (c *AgentConfig) SetDefaults() {
-	// Zero-config: Set default name and references if not specified
-	if c.Name == "" {
-		c.Name = "Assistant"
+	// Default to native agent if not specified
+	if c.Type == "" {
+		c.Type = "native"
 	}
-	if c.Description == "" {
-		c.Description = "AI assistant with local tools and knowledge"
-	}
-	if c.LLM == "" {
-		c.LLM = "default-llm"
-	}
-	// Database, embedder, and document stores must be explicitly configured - no defaults
 
-	c.Prompt.SetDefaults()
-	c.Reasoning.SetDefaults()
-	c.Search.SetDefaults()
+	// Set defaults based on agent type
+	switch c.Type {
+	case "native":
+		// Zero-config: Set default name and references if not specified
+		if c.Name == "" {
+			c.Name = "Assistant"
+		}
+		if c.Description == "" {
+			c.Description = "AI assistant with local tools and knowledge"
+		}
+		if c.LLM == "" {
+			c.LLM = "default-llm"
+		}
+		// Database, embedder, and document stores must be explicitly configured - no defaults
+
+		c.Prompt.SetDefaults()
+		c.Reasoning.SetDefaults()
+		c.Search.SetDefaults()
+
+	case "a2a":
+		// External A2A agent - minimal defaults
+		if c.Name == "" {
+			c.Name = "External Agent"
+		}
+		if c.Description == "" {
+			c.Description = "External A2A-compliant agent"
+		}
+		// No other defaults needed - external agent has its own config
+	}
 }
 
 // ============================================================================

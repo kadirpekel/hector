@@ -1,0 +1,106 @@
+# Hector A2A Server Configuration
+# Run with: hector serve --config configs/a2a-server.yaml
+
+# Global settings including A2A server
+global:
+  a2a_server:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8080
+    base_url: "http://localhost:8080"  # Public URL for agent cards
+
+# Define agents that will be exposed via A2A protocol
+agents:
+  competitor_analyst:
+    name: "Competitor Analysis Agent"
+    description: "Analyzes market competitors and provides insights"
+    llm: "main-llm"
+    tools:
+      - execute_command
+      - file_writer
+    
+    prompt:
+      system_role: "Expert market research analyst specializing in competitive intelligence"
+      tool_usage: "Use search and file writing tools to gather and document competitive insights"
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 10
+      enable_streaming: true
+  
+  customer_support:
+    name: "Customer Support Agent"
+    description: "Handles customer inquiries and support tickets"
+    llm: "main-llm"
+    
+    prompt:
+      system_role: "Professional customer support specialist"
+      communication_style: "Friendly, helpful, and solution-oriented"
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 5
+      enable_streaming: true
+  
+  research_orchestrator:
+    name: "Research Pipeline Orchestrator"
+    description: "Coordinates multi-step research workflows using other agents"
+    llm: "main-llm"
+    
+    prompt:
+      system_role: "Workflow orchestrator that delegates tasks to specialized agents"
+      tool_usage: "Break down complex research tasks and delegate to appropriate agents"
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 15
+      enable_streaming: true
+
+# LLM Configuration
+llms:
+  main-llm:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 8000
+    timeout: 60
+
+# Tools (basic set for A2A agents)
+tools:
+  execute_command:
+    type: command
+    allowed_commands: ["ls", "cat", "grep", "find", "head", "tail"]
+    working_directory: "./"
+    max_execution_time: "30s"
+    enable_sandboxing: true
+  
+  file_writer:
+    type: file_writer
+    description: "Write content to files"
+
+# Usage Examples:
+# 
+# 1. Start A2A Server:
+#    $ hector --config configs/a2a-server.yaml --serve
+#
+# 2. List available agents:
+#    $ curl http://localhost:8080/agents
+#
+# 3. Get agent card:
+#    $ curl http://localhost:8080/agents/competitor-analyst
+#
+# 4. Execute task:
+#    $ curl -X POST http://localhost:8080/agents/competitor-analyst/tasks \
+#      -H "Content-Type: application/json" \
+#      -d '{
+#        "taskId": "task-123",
+#        "input": {
+#          "type": "text/plain",
+#          "content": "Analyze top 5 AI agent frameworks"
+#        }
+#      }'
+#
+# 5. Get task status:
+#    $ curl http://localhost:8080/agents/competitor-analyst/tasks/task-123
+

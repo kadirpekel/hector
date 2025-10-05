@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kadirpekel/hector/a2a"
 	"github.com/kadirpekel/hector/component"
 	"github.com/kadirpekel/hector/config"
 	"github.com/kadirpekel/hector/internal/httpclient"
@@ -50,23 +51,88 @@ func NewAgent(agentConfig *config.AgentConfig, componentMgr interface{}) (*Agent
 }
 
 // ============================================================================
-// PUBLIC API - QUERY METHODS
+// PUBLIC API - PURE A2A METHODS ONLY
 // ============================================================================
 
-// Query executes a query using reasoning strategy (non-streaming interface)
-func (a *Agent) Query(ctx context.Context, query string) (*reasoning.ReasoningResponse, error) {
-	start := time.Now()
+// ClearHistory clears the conversation history
+func (a *Agent) ClearHistory() {
+	history := a.services.History()
+	if history != nil {
+		history.ClearHistory()
+	}
+}
+
+// ============================================================================
+// PURE A2A INTERFACE IMPLEMENTATION
+// Agent implements a2a.Agent interface directly - no adapter needed!
+// ============================================================================
+
+// GetAgentCard implements a2a.Agent.GetAgentCard
+func (a *Agent) GetAgentCard() *a2a.AgentCard {
+	return &a2a.AgentCard{
+		AgentID:      a.name, // Use name as ID by default
+		Name:         a.name,
+		Description:  a.description,
+		Version:      "1.0.0",
+		Capabilities: []string{"text_generation", "conversation", "reasoning"},
+		Endpoints: a2a.AgentEndpoints{
+			// These will be set by the server when registering
+			Task:   "",
+			Stream: "",
+			Status: "",
+		},
+		InputTypes: []string{
+			"text/plain",
+			"application/json",
+		},
+		OutputTypes: []string{
+			"text/plain",
+			"text/markdown",
+			"application/json",
+		},
+		Metadata: map[string]string{
+			"platform": "hector",
+			"llm":      a.config.LLM,
+			"engine":   a.config.Reasoning.Engine,
+		},
+	}
+}
+
+// ExecuteTask implements a2a.Agent.ExecuteTask
+func (a *Agent) ExecuteTask(ctx context.Context, request *a2a.TaskRequest) (*a2a.TaskResponse, error) {
+	startTime := time.Now()
+
+	// Extract input from A2A TaskRequest
+	input := extractInputText(request.Input)
 
 	// Create strategy based on config
 	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
 	if err != nil {
-		return nil, err
+		return &a2a.TaskResponse{
+			TaskID:    request.TaskID,
+			Status:    a2a.TaskStatusFailed,
+			StartedAt: startTime,
+			EndedAt:   time.Now(),
+			Error: &a2a.TaskError{
+				Code:    "strategy_error",
+				Message: err.Error(),
+			},
+		}, nil
 	}
 
-	// Execute reasoning loop
-	streamCh, err := a.execute(ctx, query, strategy)
+	// Execute reasoning loop directly
+	streamCh, err := a.execute(ctx, input, strategy)
 	if err != nil {
-		return nil, err
+		return &a2a.TaskResponse{
+			TaskID:    request.TaskID,
+			Status:    a2a.TaskStatusFailed,
+			StartedAt: startTime,
+			EndedAt:   time.Now(),
+			Error: &a2a.TaskError{
+				Code:    "execution_error",
+				Message: err.Error(),
+			},
+		}, nil
 	}
 
 	// Collect all streaming output
@@ -79,32 +145,68 @@ func (a *Agent) Query(ctx context.Context, query string) (*reasoning.ReasoningRe
 		tokensUsed += len(strings.Fields(chunk))
 	}
 
-	return &reasoning.ReasoningResponse{
-		Answer:     fullResponse.String(),
-		TokensUsed: tokensUsed,
-		Duration:   time.Since(start),
-		Confidence: 0.8, // Good confidence for default approach
+	// Build A2A TaskResponse
+	return &a2a.TaskResponse{
+		TaskID:    request.TaskID,
+		Status:    a2a.TaskStatusCompleted,
+		StartedAt: startTime,
+		EndedAt:   time.Now(),
+		Output: &a2a.TaskOutput{
+			Type:    "text/plain",
+			Content: fullResponse.String(),
+		},
+		Metadata: map[string]interface{}{
+			"tokens_used": tokensUsed,
+			"duration_ms": time.Since(startTime).Milliseconds(),
+			"confidence":  0.8, // Good confidence for default approach
+		},
 	}, nil
 }
 
-// QueryStreaming executes a query with streaming output
-func (a *Agent) QueryStreaming(ctx context.Context, query string) (<-chan string, error) {
+// ExecuteTaskStreaming implements a2a.Agent.ExecuteTaskStreaming
+func (a *Agent) ExecuteTaskStreaming(ctx context.Context, request *a2a.TaskRequest) (<-chan *a2a.StreamChunk, error) {
+	// Extract input from A2A TaskRequest
+	input := extractInputText(request.Input)
+
 	// Create strategy based on config
 	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
 	if err != nil {
 		return nil, err
 	}
 
-	// Execute reasoning loop
-	return a.execute(ctx, query, strategy)
-}
-
-// ClearHistory clears the conversation history
-func (a *Agent) ClearHistory() {
-	history := a.services.History()
-	if history != nil {
-		history.ClearHistory()
+	// Execute reasoning loop directly
+	hectorStream, err := a.execute(ctx, input, strategy)
+	if err != nil {
+		return nil, err
 	}
+
+	// Convert to A2A StreamChunks
+	a2aStream := make(chan *a2a.StreamChunk, 10)
+
+	go func() {
+		defer close(a2aStream)
+
+		for chunk := range hectorStream {
+			a2aStream <- &a2a.StreamChunk{
+				TaskID:    request.TaskID,
+				ChunkType: a2a.ChunkTypeText,
+				Content:   chunk,
+				Timestamp: time.Now(),
+				Final:     false,
+			}
+		}
+
+		// Send final chunk
+		a2aStream <- &a2a.StreamChunk{
+			TaskID:    request.TaskID,
+			ChunkType: a2a.ChunkTypeText,
+			Content:   "",
+			Timestamp: time.Now(),
+			Final:     true,
+		}
+	}()
+
+	return a2aStream, nil
 }
 
 // ============================================================================
@@ -547,3 +649,10 @@ func (a *Agent) GetConfig() *config.AgentConfig {
 func (a *Agent) GetServices() reasoning.AgentServices {
 	return a.services
 }
+
+// ============================================================================
+// COMPILE-TIME CHECK
+// ============================================================================
+
+// Ensure Agent implements a2a.Agent interface directly
+var _ a2a.Agent = (*Agent)(nil)

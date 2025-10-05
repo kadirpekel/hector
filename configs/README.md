@@ -1,185 +1,242 @@
-# Configuration Presets
+# Hector Configuration Examples
 
-This directory contains specialized configuration presets for different use cases.
+This directory contains example configurations demonstrating various use cases for Hector's A2A-native agent platform.
 
-**Note**: The default `hector.yaml` in the root directory is a general-purpose configuration suitable for most users. These configs show specialized presets for specific advanced use cases.
+---
 
-## Philosophy
+## 📋 **Available Configurations**
 
-The default `hector.yaml` is **already optimized for general-purpose use** with safe defaults (Tier 1). These presets show **specialized configurations** for specific advanced use cases.
+### 1. **A2A Server** (`a2a-server.yaml`) - 🌐 Production Ready
+**Purpose:** Run Hector as an A2A-compliant server exposing agents via HTTP API
 
-## Available Presets
+**Features:**
+- ✅ **3 Example Agents**: competitor_analyst, customer_support, research_orchestrator
+- 🌐 **A2A Protocol**: Full compliance with A2A specification
+- 🔌 **HTTP API**: REST endpoints for agent discovery and task execution
+- 📡 **External Access**: Other A2A clients can consume your agents
 
-### 1. Research Pipeline Workflow (`research-pipeline-workflow.yaml`) - 🟢 Tier 1: Safe
-
-**Purpose**: Demonstrates **automated multi-agent orchestration** for complex workflows
-
-**⚡ Key Feature**: Shows Hector's **Team + Workflow system** with DAG execution, dependency management, and automatic context sharing
-
-**Features**:
-- **3 Specialized Agents** (auto-orchestrated):
-  - 🔍 Researcher (GPT-4o, temp 0.3): Information gathering
-  - 📊 Analyst (Claude Sonnet, temp 0.5): Data analysis
-  - ✍️  Writer (GPT-4o, temp 0.7): Report synthesis
-- **DAG Workflow Execution**:
-  - Dependency-based execution (analyst waits for researcher)
-  - Context sharing via variables (`${research_data}`)
-  - Automatic progress tracking and streaming
-  - Error recovery with retries
-- **Single Command**: All agents execute automatically
-
-**Use Cases**:
-- Complex multi-step automation
-- Specialized role-based processing
-- Data pipeline orchestration
-- Report generation workflows
-
-**Usage**:
+**Usage:**
 ```bash
-# Automatic orchestration - single command
-hector --config configs/research-pipeline-workflow.yaml --workflow research_pipeline
-> "Research AI agent frameworks and market adoption in 2024"
+# Start A2A server
+hector serve --config configs/a2a-server.yaml
 
-# Hector automatically:
-# 1. Executes researcher agent
-# 2. Passes output to analyst (waits for completion)
-# 3. Combines both outputs for writer
-# 4. Returns final report
+# Test with CLI
+hector list
+hector info competitor_analyst
+hector call competitor_analyst "Analyze AI agent market"
 
-# Manual single-agent mode (for testing):
-hector --config configs/research-pipeline-workflow.yaml --agent researcher
-> "Research AI agent frameworks"
+# Test with curl (pure A2A protocol)
+curl http://localhost:8080/agents
+curl http://localhost:8080/agents/competitor_analyst
 ```
 
-### 2. Coding Assistant (`coding.yaml`) - 🟡 Tier 2: Developer Mode
+**Use Cases:**
+- Expose agents as services
+- API-first deployment
+- Integration with external systems
+- Multi-tenant agent platforms
 
-**Purpose**: Complete Cursor/Claude-like experience for professional development
+---
 
-**⚠️  Security Notice**: This configuration includes **file editing tools** and aggressive tool usage. Only use in trusted environments with proper backups.
+### 2. **Orchestrator Example** (`orchestrator-example.yaml`) - 🎯 Multi-Agent
+**Purpose:** Demonstrates multi-agent orchestration with the `agent_call` tool
 
-**Features**:
-- **LLM**: Claude Sonnet 3.7 (Anthropic)
-- **Experience**: Full Cursor/Claude capabilities with maximum context windows
-- **Tools**: Complete developer toolkit:
-  - 🔧 `execute_command` (git, go, npm, docker, etc.)
-  - ✏️  `file_writer` (create/overwrite files)
-  - 📝 `search_replace` (precise editing)
-  - ✅ `todo_write` (task management)
-- **Semantic Search**: Enabled with Qdrant + Ollama for deep codebase understanding
-- **Prompt**: Optimized system prompt matching Cursor's pair programming behavior
-- **Temperature**: 0.1 (precise, deterministic)
-- **Max Iterations**: 10 (allows complex multi-step tasks)
-- **Max Tokens**: 16,000 (large context)
+**Features:**
+- 🤝 **4 Agents**: researcher, analyst, writer, orchestrator
+- 🔧 **agent_call Tool**: Orchestrator delegates to specialized agents
+- 🧠 **Supervisor Strategy**: Optimized reasoning for coordination
+- 📋 **Task Decomposition**: Breaks complex tasks into subtasks
 
-**Use Cases**:
-- Professional pair programming (Cursor-like workflow)
-- Complex multi-file refactoring
-- Code generation with context awareness
-- Bug fixing and debugging
-- Architecture changes and migrations
-- Code review and improvement
-
-**Usage**:
+**Usage:**
 ```bash
-# Interactive mode (shorthand)
-hector coding
+# Start server with orchestrator
+hector serve --config configs/orchestrator-example.yaml
 
-# Single query
-echo "Refactor the auth module to use JWT tokens" | hector coding
+# Test orchestration (single complex task)
+hector call orchestrator "Research AI frameworks, analyze top 3, and write a comparison report"
 
-# Or use explicit path
-hector --config configs/coding.yaml
+# Expected behavior:
+# 1. Orchestrator breaks down the task
+# 2. Calls researcher: "Research AI frameworks"
+# 3. Calls analyst: "Analyze these frameworks: [results]"
+# 4. Calls writer: "Write comparison report: [analysis]"
+# 5. Synthesizes final output
+```
 
-# Prerequisites: 
+**Use Cases:**
+- Complex multi-step workflows
+- Task decomposition and delegation
+- Specialized agent coordination
+- Research and analysis pipelines
+
+---
+
+### 3. **Coding Assistant** (`coding.yaml`) - 💻 Developer Mode
+**Purpose:** Cursor/Claude-like pair programming experience with full dev tools
+
+**⚠️  Security Notice:** Includes file editing and command execution. Only use in trusted environments.
+
+**Features:**
+- 🤖 **LLM**: Claude Sonnet 3.7 (Anthropic)
+- 🔧 **Full Dev Tools**: file_writer, search_replace, execute_command, todo_write
+- 🔍 **Semantic Search**: Qdrant + Ollama for codebase understanding
+- 📝 **Optimized Prompt**: Matches Cursor's pair programming behavior
+- 🎯 **High Precision**: Temperature 0.1 for deterministic code
+
+**Usage:**
+```bash
+# Interactive mode
+hector serve --config configs/coding.yaml
+hector call assistant "Refactor the auth module to use JWT"
+
+# Prerequisites:
 # - ANTHROPIC_API_KEY (required)
 # - Qdrant + Ollama (optional, for semantic search)
 ```
 
+**Use Cases:**
+- Professional pair programming
+- Multi-file refactoring
+- Code generation with context
+- Bug fixing and debugging
+- Architecture changes
 
-## Quick Start
+---
 
-### For Most Users (Default)
+### 4. **Weather Agent** (`weather-agent.yaml`) - 🌤️ MCP Integration
+**Purpose:** Example showing Model Context Protocol (MCP) tool integration
 
-Just use the default configuration:
+**⚠️  Requires:** MCP weather server running at `${MCP_SERVER_URL}`
+
+**Features:**
+- 🌐 **MCP Integration**: Connects to external MCP servers
+- 🌤️ **Weather Tool**: Real-time weather data access
+- 😊 **Personality**: Friendly, emoji-rich responses
+- 📚 **Integration Example**: Template for your own MCP tools
+
+**Usage:**
 ```bash
-# Set your API key
-export OPENAI_API_KEY="your-key"  # or ANTHROPIC_API_KEY
+# Setup MCP server first (see: https://modelcontextprotocol.io)
+export MCP_SERVER_URL="http://localhost:3000"
 
-# Run with default config (uses hector.yaml)
-hector
-
-# Or explicitly specify it
-hector --config hector.yaml
+# Start agent
+hector serve --config configs/weather-agent.yaml
+hector call weather_assistant "What's the weather in Tokyo?"
 ```
 
-### For Specialized Use Cases
+**Use Cases:**
+- External API integration patterns
+- MCP server connectivity
+- Tool integration examples
+- Custom tool development reference
 
-1. **Choose your preset**:
-   - Coding tasks (Developer Mode) → `configs/coding.yaml`
-   - Full Cursor experience → `configs/cursor.yaml`
+---
 
-2. **Set up environment variables**:
-   ```bash
-   export ANTHROPIC_API_KEY="your-key"  # For Claude-based configs
-   export OPENAI_API_KEY="your-key"     # For GPT-based configs
+## 🚀 **Quick Start**
+
+### Basic A2A Server
+```bash
+# 1. Set API key
+export OPENAI_API_KEY="your-key"
+
+# 2. Start server
+hector serve --config configs/a2a-server.yaml
+
+# 3. Test
+hector list
+hector call competitor_analyst "Your task here"
+```
+
+### Multi-Agent Orchestration
+```bash
+# Start orchestrator server
+hector serve --config configs/orchestrator-example.yaml
+
+# Run complex multi-agent task
+hector call orchestrator "Research Python vs Rust, analyze performance, write recommendations"
+```
+
+---
+
+## 📊 **Configuration Comparison**
+
+| Feature | A2A Server | Orchestrator | Coding | Weather |
+|---------|------------|--------------|--------|---------|
+| **Agents** | 3 specialists | 4 (3 + orchestrator) | 1 assistant | 1 weather |
+| **Reasoning** | chain-of-thought | supervisor | chain-of-thought | chain-of-thought |
+| **Tools** | command, file | agent_call | full dev suite | MCP weather |
+| **LLM** | GPT-4o | GPT-4o-mini | Claude Sonnet | GPT-4o |
+| **Use Case** | Production API | Complex workflows | Development | Integration demo |
+| **Security** | 🟢 Safe | 🟢 Safe | 🟡 Dev Mode | 🟢 Safe |
+
+---
+
+## 🔧 **Customization**
+
+All configs can be customized by modifying:
+
+1. **LLM Configuration**
+   ```yaml
+   llms:
+     main-llm:
+       type: "openai"  # or "anthropic"
+       model: "gpt-4o"
+       temperature: 0.7
    ```
 
-3. **Run Hector**:
-   ```bash
-   # Short form (recommended)
-   hector coding
-   hector cursor
-   
-   # Long form
-   hector --config configs/coding.yaml
+2. **Agent Prompts**
+   ```yaml
+   agents:
+     my_agent:
+       prompt:
+         system_role: "Your custom role"
    ```
 
-## Customization
+3. **Reasoning Strategy**
+   ```yaml
+   reasoning:
+     engine: "chain-of-thought"  # or "supervisor"
+     max_iterations: 10
+   ```
 
-Each example can be customized by:
+4. **Tools**
+   ```yaml
+   tools:
+     - execute_command
+     - agent_call  # For orchestration
+   ```
 
-1. **Changing the LLM**: Modify the `llms` section
-2. **Adjusting prompts**: Edit `prompt_slots` for fine-tuning
-3. **Adding/removing tools**: Update the `tools` section
-4. **Enabling features**: Toggle `include_context`, `show_debug_info`, etc.
+---
 
-## Configuration Reference
+## 📚 **Learn More**
 
-For detailed configuration options, see: [CONFIGURATION.md](../CONFIGURATION.md)
+- **[Configuration Reference](../docs/CONFIGURATION.md)** - Complete config options
+- **[Architecture](../docs/ARCHITECTURE.md)** - System design and A2A protocol
+- **[External Agents](../docs/EXTERNAL_AGENTS.md)** - Integrate remote A2A agents
+- **[Orchestration Guide](../docs/ORCHESTRATOR_SUMMARY.md)** - Multi-agent patterns
 
-## Comparison
+---
 
-| Feature | Default (Root) | Research Pipeline | Coding |
-|---------|----------------|-------------------|--------|
-| **LLM** | OpenAI GPT-4o | Mixed (GPT+Claude) | Claude 3.7 |
-| **Security Tier** | 🟢 Safe | 🟢 Safe | 🟡 Developer |
-| **File Editing** | ❌ No | ❌ No | ✅ Yes |
-| **Semantic Search** | ❌ Optional | ❌ No | ✅ Yes |
-| **Workflow Mode** | ❌ Single Agent | ✅ DAG (3 agents) | ❌ Single |
-| **Orchestration** | Manual | **Automatic** | Manual |
-| **Context Sharing** | ❌ No | ✅ Yes (`${vars}`) | ❌ No |
-| **Temperature** | 0.7 (balanced) | 0.3-0.7 (per role) | 0.1 (precise) |
-| **Max Tokens** | 8,000 | 8,000-16,000 | 16,000 |
-| **Max Iterations** | 5 | Varies | 10 |
-| **Use Case** | General purpose | **Automated workflows** | **Pro development** |
+## 💡 **Tips**
 
-## Tips
+### For Production
+- Start with `a2a-server.yaml`
+- Add authentication (API keys, OAuth2)
+- Enable monitoring and logging
+- Run behind reverse proxy (nginx, Caddy)
 
-- **Getting started**: Use the default `hector.yaml`
-  - ✅ Zero-config ready with safe defaults
-  - ✅ General-purpose for most use cases
-  - ✅ No external dependencies required
-  
-- **For multi-agent workflows**: See `configs/multi-agent-workflow.yaml`
-  - 🟢 Safe (Tier 1)
-  - ✅ Shows agent coordination patterns
-  - 💡 Starting point for complex automation
-  
-- **For development**: Use `hector coding`
-  - 🟡 Full developer capabilities (Tier 2)
-  - ✅ Cursor/Claude-like experience
-  - ✅ Semantic search for codebase understanding
-  - ⚠️  Only in trusted environments
-  
-- **For production**: Start with default, customize via `prompt_slots`
+### For Development
+- Use `coding.yaml` for full dev capabilities
+- Enable semantic search for better code understanding
+- Set up proper backups before using file editing tools
+- Test in isolated environments first
 
+### For Orchestration
+- Study `orchestrator-example.yaml` patterns
+- Use `supervisor` strategy for coordinators
+- Keep specialist agents focused and simple
+- Build complex behaviors through composition
+
+---
+
+**Need help?** Check the [docs/](../docs/) directory for comprehensive guides.
