@@ -20,6 +20,9 @@ Complete guide to building single agents: prompts, tools, RAG, sessions, streami
 ### [Tools & Extensions](TOOLS.md)
 Comprehensive guide to Hector's tool system: built-in tools, MCP protocol, gRPC plugins, and custom integrations.
 
+### [API Reference](API_REFERENCE.md)
+Complete A2A protocol API reference: HTTP endpoints, WebSocket streaming, request/response schemas, authentication, and client examples.
+
 ### [Architecture](ARCHITECTURE.md)
 System design, A2A protocol implementation, sessions, orchestration patterns, and core components.
 
@@ -60,6 +63,9 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 **Connect to 150+ apps (MCP)**
 → [Tools - MCP Integration](TOOLS.md#mcp-integration)
 
+**Integrate via A2A protocol**
+→ [API Reference](API_REFERENCE.md)
+
 **Customize prompts and tools**
 → [Building Agents Guide](AGENTS.md)
 
@@ -95,6 +101,7 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 |----------|---------|
 | [Building Agents](AGENTS.md) | Complete single-agent guide (Start here) |
 | [Tools & Extensions](TOOLS.md) | Built-in tools, MCP, plugins |
+| [API Reference](API_REFERENCE.md) | A2A protocol HTTP/WebSocket API |
 | [Quick Start](QUICK_START.md) | Get started in 5 minutes |
 | [Architecture](ARCHITECTURE.md) | System design, sessions, orchestration |
 | [Configuration](CONFIGURATION.md) | Complete config reference |

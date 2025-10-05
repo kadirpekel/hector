@@ -630,11 +630,14 @@ AgentRegistry (a2a.Agent interface)
 **[📚 Complete Documentation →](docs/)**
 
 - **[Quick Start](docs/QUICK_START.md)** - Get started in 5 minutes
+- **[Building Agents](docs/AGENTS.md)** - Complete single-agent guide
+- **[Tools & Extensions](docs/TOOLS.md)** - Built-in tools, MCP, plugins
+- **[API Reference](docs/API_REFERENCE.md)** - Complete A2A HTTP/WebSocket API
 - **[Architecture](docs/ARCHITECTURE.md)** - System design and A2A protocol
 - **[Configuration](docs/CONFIGURATION.md)** - Complete config reference
 - **[CLI Guide](docs/CLI_GUIDE.md)** - Command-line interface
 - **[External Agents](docs/EXTERNAL_AGENTS.md)** - External agent integration
-- **[Orchestrator Guide](docs/ORCHESTRATOR_SUMMARY.md)** - Multi-agent orchestration
+- **[Authentication](docs/AUTHENTICATION.md)** - JWT token validation
 
 ---
 
