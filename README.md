@@ -17,47 +17,47 @@
 
 > **Define agents in YAML, serve via A2A protocol, orchestrate without code**
 
-**📚 Quick Links:**
-- [Quick Start](#-quick-start) - Get running in 5 minutes
+**Quick Links:**
+- [Quick Start](#quick-start) - Get running in 5 minutes
 - [Building Agents](docs/AGENTS.md) - **Core guide** for single agents
-- [A2A Server](#-a2a-server-mode) - Host agents via A2A protocol
-- [Multi-Agent Orchestration](#-multi-agent-orchestration) - Coordinate multiple agents
+- [A2A Server](#a2a-server-mode) - Host agents via A2A protocol
+- [Multi-Agent Orchestration](#multi-agent-orchestration) - Coordinate multiple agents
 - [External Agents](docs/EXTERNAL_AGENTS.md) - Use remote A2A agents
 - [Authentication](docs/AUTHENTICATION.md) - Secure with JWT validation
 - [Documentation](docs/) - Complete documentation
 
 ---
 
-## 🌟 **What is Hector?**
+## What is Hector?
 
 Hector is a **declarative AI agent platform** that lets you build powerful agents in pure YAML.
 
-### **Core Capabilities**
+### Core Capabilities
 
-**🎯 Build Sophisticated Agents Without Code**
-- **📝 Pure YAML configuration** - Define complete agents declaratively
-- **🎨 Prompt customization** - Slot-based system for fine control
-- **🧠 Reasoning strategies** - Chain-of-thought or supervisor
-- **🔧 Built-in tools** - Search, file ops, commands, todos
-- **📚 RAG support** - Semantic search with document stores
-- **🔌 Plugin system** - Extend with custom LLMs, databases, tools
-- **💬 Multi-turn sessions** - Conversation history and context
-- **📡 Real-time streaming** - Token-by-token output
+**Build Sophisticated Agents Without Code**
+- Pure YAML configuration - Define complete agents declaratively
+- Prompt customization - Slot-based system for fine control
+- Reasoning strategies - Chain-of-thought or supervisor
+- Built-in tools - Search, file ops, commands, todos
+- RAG support - Semantic search with document stores
+- Plugin system - Extend with custom LLMs, databases, tools
+- Multi-turn sessions - Conversation history and context
+- Real-time streaming - Token-by-token output
 
-**🌐 A2A Protocol Native**
-- **🤝 Serve via A2A** - Industry-standard agent communication
-- **🌍 External agents** - Connect to remote A2A agents via URL
-- **🔗 Multi-agent orchestration** - LLM-driven delegation
-- **🌏 Agent ecosystem ready** - Interoperate across organizations
+**A2A Protocol Native**
+- Serve via A2A - Industry-standard agent communication
+- External agents - Connect to remote A2A agents via URL
+- Multi-agent orchestration - LLM-driven delegation
+- Agent ecosystem ready - Interoperate across organizations
 
-**🏢 Enterprise Features**
-- **🛡️ JWT authentication** - OAuth2/OIDC provider support
-- **🔒 Visibility control** - Public, internal, or private agents
-- **📊 Production ready** - Sessions, streaming, error handling
+**Enterprise Features**
+- JWT authentication - OAuth2/OIDC provider support
+- Visibility control - Public, internal, or private agents
+- Production ready - Sessions, streaming, error handling
 
-### **How Hector is Different**
+### How Hector is Different
 
-Unlike frameworks like **LangChain**, **AutoGen**, or **CrewAI** that require writing Python/code, Hector uses **pure YAML**:
+Unlike frameworks like **LangChain**, **AutoGen**, or **CrewAI** that require writing Python code, Hector uses **pure YAML configuration**:
 
 **Single Agent Example:**
 ```yaml
@@ -130,7 +130,7 @@ agents:
 
 ---
 
-## 🚀 **Quick Start**
+## Quick Start
 
 ### Install
 
@@ -184,10 +184,10 @@ export OPENAI_API_KEY="sk-..."
 ./hector serve --config my-agent.yaml
 
 # Output:
-# 🚀 A2A Server starting on 0.0.0.0:8080
-# 📋 Registering agents...
+# A2A Server starting on 0.0.0.0:8080
+# Registering agents...
 #   ✅ assistant (visibility: public)
-# 🌐 A2A Server ready!
+# A2A Server ready!
 ```
 
 ### 4. Chat with Your Agent
@@ -208,47 +208,47 @@ curl -X POST http://localhost:8080/agents/assistant/tasks \
 - ✅ A2A protocol compliance  
 
 **Next Steps:**
-- 📖 [Building Agents Guide](docs/AGENTS.md) - Learn about prompts, RAG, tools, sessions
-- 🌐 [Multi-Agent Orchestration](#-multi-agent-orchestration) - Coordinate multiple agents
-- 🔒 [Authentication](docs/AUTHENTICATION.md) - Secure your agents
+- [Building Agents Guide](docs/AGENTS.md) - Learn about prompts, RAG, tools, sessions
+- [Multi-Agent Orchestration](#multi-agent-orchestration) - Coordinate multiple agents
+- [Authentication](docs/AUTHENTICATION.md) - Secure your agents
 
 ---
 
-## ✨ **Features**
+## Features
 
 ### Single Agent Capabilities
-- **📝 Declarative YAML** - Complete agents without code
-- **🎨 Prompt Customization** - 6-slot system for fine control (role, reasoning, tools, output, style)
-- **🧠 Reasoning Strategies** - Chain-of-thought (default) or supervisor (for orchestration)
-- **🔧 Built-in Tools** - Command execution, file ops, search, todos
-- **📚 RAG Support** - Semantic search with document stores (Qdrant)
-- **💬 Multi-Turn Sessions** - Conversation history and context management
-- **📡 Real-Time Streaming** - Token-by-token output via WebSocket
-- **🔌 Plugin System** - Extend with custom LLMs, databases, tools (gRPC)
+- **Declarative YAML** - Complete agents without code
+- **Prompt Customization** - 6-slot system for fine control (role, reasoning, tools, output, style)
+- **Reasoning Strategies** - Chain-of-thought (default) or supervisor (for orchestration)
+- **Built-in Tools** - Command execution, file ops, search, todos
+- **RAG Support** - Semantic search with document stores (Qdrant)
+- **Multi-Turn Sessions** - Conversation history and context management
+- **Real-Time Streaming** - Token-by-token output via WebSocket
+- **Plugin System** - Extend with custom LLMs, databases, tools (gRPC)
 
 ### Multi-Agent & A2A
-- **🎯 Pure A2A Protocol** - 100% compliant with [A2A specification](https://a2a-protocol.org)
-- **🤖 Native Agents** - Run agents locally with full capabilities
-- **🌐 External Agents** - Connect to remote A2A agents via URL
-- **🔗 Orchestration** - LLM-driven delegation via `agent_call` tool
-- **🌍 Agent Ecosystem** - Interoperate across organizations
+- **Pure A2A Protocol** - 100% compliant with [A2A specification](https://a2a-protocol.org)
+- **Native Agents** - Run agents locally with full capabilities
+- **External Agents** - Connect to remote A2A agents via URL
+- **Orchestration** - LLM-driven delegation via `agent_call` tool
+- **Agent Ecosystem** - Interoperate across organizations
 
 ### Enterprise & Production
-- **🛡️ JWT Authentication** - OAuth2/OIDC provider support (Auth0, Keycloak, etc.)
-- **🔒 Visibility Control** - Public, internal, or private agent exposure
-- **🔐 Secure Tools** - Command whitelisting, path restrictions, sandboxing
-- **📊 Production Ready** - Error handling, logging, monitoring
+- **JWT Authentication** - OAuth2/OIDC provider support (Auth0, Keycloak, etc.)
+- **Visibility Control** - Public, internal, or private agent exposure
+- **Secure Tools** - Command whitelisting, path restrictions, sandboxing
+- **Production Ready** - Error handling, logging, monitoring
 
 ### Developer Experience
-- **🚀 Quick Start** - Running in 5 minutes
-- **📖 Comprehensive Docs** - Guides for single agents, multi-agent, config
-- **🧪 Testing Tools** - Automated test scripts included
-- **🐛 Debug Mode** - Detailed logging and tracing
-- **💻 CLI & API** - Use via command-line or HTTP/WebSocket
+- **Quick Start** - Running in 5 minutes
+- **Comprehensive Docs** - Guides for single agents, multi-agent, config
+- **Testing Tools** - Automated test scripts included
+- **Debug Mode** - Detailed logging and tracing
+- **CLI & API** - Use via command-line or HTTP/WebSocket
 
 ---
 
-## 💡 **Key Concepts**
+## Key Concepts
 
 ### 1. **A2A Protocol**
 
@@ -307,7 +307,7 @@ tools:
 
 ---
 
-## 🌐 **A2A Server Mode**
+## A2A Server Mode
 
 ### Start Server
 
@@ -378,7 +378,7 @@ print(f"Output: {result['output']['content']}")
 
 ---
 
-## 🔗 **Multi-Agent Orchestration**
+## Multi-Agent Orchestration
 
 ### Simple Example
 
@@ -435,7 +435,7 @@ See `configs/orchestrator-example.yaml` for a complete multi-agent system with:
 
 ---
 
-## 🔌 **External A2A Agents**
+## External A2A Agents
 
 Hector can orchestrate **external A2A agents** alongside native agents!
 
@@ -534,7 +534,7 @@ agents:
 
 ---
 
-## 🎯 **Use Cases**
+## Use Cases
 
 ### 1. Single Agent Execution
 
@@ -623,7 +623,7 @@ AgentRegistry (a2a.Agent interface)
 
 ---
 
-## 📚 **Documentation**
+## Documentation
 
 **[📚 Complete Documentation →](docs/)**
 
@@ -666,7 +666,7 @@ AgentRegistry (a2a.Agent interface)
 
 ---
 
-## 🔧 **CLI Reference**
+## CLI Reference
 
 ### Server Commands
 

@@ -1,10 +1,10 @@
 # External A2A Agents Guide
 
-## ✅ **External Agent Support - FULLY IMPLEMENTED**
+## External Agent Support
 
 Hector **fully supports external A2A agents** through **pure YAML configuration**. Any A2A-compliant agent can be integrated into your multi-agent system without writing any code.
 
-**Key Benefits:**
+**Key Benefits:
 - 🌍 **Agent Ecosystem Participation** - Connect to the emerging "agent internet"
 - 🏢 **Enterprise Interoperability** - Integrate partner and vendor agents seamlessly
 - 📝 **Declarative Integration** - Define external agents in YAML alongside native ones
@@ -12,7 +12,7 @@ Hector **fully supports external A2A agents** through **pure YAML configuration*
 
 ---
 
-## 🚀 **Quick Start: YAML Configuration (Recommended)**
+## Quick Start: YAML Configuration (Recommended)
 
 ### Define External Agents in Your Config
 
@@ -63,9 +63,9 @@ hector call orchestrator "Complex multi-agent task"
 
 ---
 
-## 🌍 **Use Cases**
+## Use Cases
 
-### 1. **Enterprise Integration**
+### 1. **Enterprise Integration
 ```yaml
 agents:
   # Your agents
@@ -85,7 +85,7 @@ agents:
 
 **Benefit:** Integrate vendor services without custom API code. Pure A2A interoperability.
 
-### 2. **Agent Internet Ecosystem**
+### 2. **Agent Internet Ecosystem
 ```yaml
 agents:
   # Community agents
@@ -105,7 +105,7 @@ agents:
 
 **Benefit:** Participate in the broader agent ecosystem. Discover and use community agents.
 
-### 3. **Organizational Interoperability**
+### 3. **Organizational Interoperability
 ```yaml
 agents:
   # Engineering team's agents
@@ -128,7 +128,7 @@ agents:
 
 ---
 
-## 🔍 **How It Works**
+## How It Works
 
 ### Architecture
 
@@ -149,7 +149,7 @@ AgentRegistry (a2a.Agent interface)
 
 ---
 
-## 🚀 **Quick Example**
+## Quick Example
 
 ### Step 1: Discover External Agent
 
@@ -213,7 +213,7 @@ agents:
 
 ---
 
-## 🔧 **Advanced: Programmatic Registration**
+## Advanced: Programmatic Registration
 
 While YAML configuration is recommended, you can also register external agents programmatically:
 
@@ -276,7 +276,7 @@ func main() {
 
 ---
 
-## 🔧 **Implementation Details**
+## Implementation Details
 
 ### A2AAgent Class
 
@@ -295,11 +295,11 @@ func (a *A2AAgent) ExecuteTask(ctx, request) (*a2a.TaskResponse, error)
 func (a *A2AAgent) ExecuteTaskStreaming(ctx, request) (<-chan *a2a.StreamChunk, error)
 ```
 
-**Key Features:**
-- ✅ Pure A2A protocol communication
-- ✅ Same interface as native agents
-- ✅ Transparent to orchestrator
-- ✅ Full TaskRequest/TaskResponse support
+**Key Features:
+- Pure A2A protocol communication
+- Same interface as native agents
+- Transparent to orchestrator
+- Full TaskRequest/TaskResponse support
 
 ### AgentRegistry
 
@@ -319,11 +319,11 @@ func (r *AgentRegistry) RegisterAgent(
 ) error
 ```
 
-**Key Features:**
-- ✅ Stores `a2a.Agent` interface (not concrete types)
-- ✅ Works with native `agent.Agent`
-- ✅ Works with external `agent.A2AAgent`
-- ✅ Completely transparent
+**Key Features:
+- Stores `a2a.Agent` interface (not concrete types)
+- Works with native `agent.Agent`
+- Works with external `agent.A2AAgent`
+- Completely transparent
 
 ### agent_call Tool
 
@@ -339,15 +339,15 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 }
 ```
 
-**Key Features:**
-- ✅ Uses `a2a.Agent` interface
-- ✅ Doesn't care if native or external
-- ✅ Pure protocol communication
-- ✅ Same delegation logic for all agents
+**Key Features:
+- Uses `a2a.Agent` interface
+- Doesn't care if native or external
+- Pure protocol communication
+- Same delegation logic for all agents
 
 ---
 
-## 🎯 **Use Cases**
+## Use Cases
 
 ### Use Case 1: Specialized External Service
 
@@ -407,7 +407,7 @@ for _, serviceURL := range services {
 
 ---
 
-## 🔐 **Authentication**
+## Authentication
 
 ### Bearer Token
 
@@ -443,7 +443,7 @@ externalAgent, _ := agent.NewA2AAgentFromURL(ctx, url, client)
 
 ---
 
-## 🎨 **Configuration-Based Registration** (Future)
+## Configuration-Based Registration (Future)
 
 ```yaml
 # Future: Configure external agents in YAML
@@ -473,7 +473,7 @@ agents:
 
 ---
 
-## ✅ **Verification**
+## Verification
 
 ### Test External Agent Support
 
@@ -499,31 +499,31 @@ result, _ := tool.Execute(ctx, map[string]interface{}{
 
 ---
 
-## 🎯 **Key Benefits**
+## Key Benefits
 
-### 1. **Transparency**
+### 1. **Transparency
 - Orchestrator doesn't know if agent is native or external
 - Same `agent_call` tool works for both
 - Same A2A protocol for all communication
 
-### 2. **Flexibility**
+### 2. **Flexibility
 - Mix native (fast) and external (specialized) agents
 - Add external services without code changes
 - Replace native with external (or vice versa) easily
 
-### 3. **Scalability**
+### 3. **Scalability
 - Distribute load across external services
 - Use specialized external agents when needed
 - Keep frequently-used agents native for speed
 
-### 4. **Interoperability**
+### 4. **Interoperability
 - Any A2A-compliant agent works
 - Contribute to A2A ecosystem
 - Use agents from other providers
 
 ---
 
-## 📊 **Performance Considerations**
+## Performance Considerations
 
 ### Native Agents
 - **Latency:** ~0ms (in-process)
@@ -544,11 +544,11 @@ Orchestrator
 └─ legal_expert (A2A)      → Specialized, less frequent
 ```
 
-**Use native for speed, external for specialization!**
+**Use native for speed, external for specialization!
 
 ---
 
-## 🔍 **Discovery & Registration Flow**
+## Discovery & Registration Flow
 
 ```
 1. A2A Discovery
@@ -578,36 +578,36 @@ Orchestrator
 
 ---
 
-## 🎉 **Summary**
+## Summary
 
 ### External Agent Support: ✅ COMPLETE
 
-**What works:**
-- ✅ Discover external A2A agents
-- ✅ Wrap them in A2AAgent
-- ✅ Register in AgentRegistry
-- ✅ Use in orchestration via agent_call
-- ✅ Pure A2A protocol communication
-- ✅ Transparent to orchestrator
-- ✅ Authentication support
-- ✅ Same interface as native agents
+**What works:
+- Discover external A2A agents
+- Wrap them in A2AAgent
+- Register in AgentRegistry
+- Use in orchestration via agent_call
+- Pure A2A protocol communication
+- Transparent to orchestrator
+- Authentication support
+- Same interface as native agents
 
-**Architecture:**
-- ✅ `agent.A2AAgent` - Wraps external agents
-- ✅ `agent.AgentRegistry` - Stores `a2a.Agent` interface
-- ✅ `agent.AgentCallTool` - Uses `a2a.Agent` interface
-- ✅ Pure protocol-driven design
+**Architecture:
+- `agent.A2AAgent` - Wraps external agents
+- `agent.AgentRegistry` - Stores `a2a.Agent` interface
+- `agent.AgentCallTool` - Uses `a2a.Agent` interface
+- Pure protocol-driven design
 
-**Result:**
-- ✅ **Native and external agents are completely interchangeable**
-- ✅ **Orchestrator treats them identically**
-- ✅ **Full A2A ecosystem compatibility**
+**Result:
+- **Native and external agents are completely interchangeable
+- **Orchestrator treats them identically
+- **Full A2A ecosystem compatibility
 
 ---
 
 **Hector's orchestration system fully supports external A2A agents!** 🚀
 
-**Try it:**
+**Try it:
 ```go
 externalAgent, _ := agent.NewA2AAgentFromURL(ctx, "https://...", client)
 registry.RegisterAgent("external", externalAgent, config, caps)

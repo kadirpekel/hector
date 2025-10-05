@@ -10,7 +10,7 @@ This directory contains example configurations demonstrating various use cases f
 **Purpose:** Run Hector as an A2A-compliant server exposing agents via HTTP API
 
 **Features:**
-- ✅ **3 Example Agents**: competitor_analyst, customer_support, research_orchestrator
+- **3 Example Agents**: competitor_analyst, customer_support, research_orchestrator
 - 🌐 **A2A Protocol**: Full compliance with A2A specification
 - 🔌 **HTTP API**: REST endpoints for agent discovery and task execution
 - 📡 **External Access**: Other A2A clients can consume your agents
@@ -132,7 +132,7 @@ hector call weather_assistant "What's the weather in Tokyo?"
 
 ---
 
-## 🚀 **Quick Start**
+## Quick Start
 
 ### Basic A2A Server
 ```bash
@@ -158,7 +158,7 @@ hector call orchestrator "Research Python vs Rust, analyze performance, write re
 
 ---
 
-## 📊 **Configuration Comparison**
+## Configuration Comparison
 
 | Feature | A2A Server | Orchestrator | Coding | Weather |
 |---------|------------|--------------|--------|---------|
@@ -171,7 +171,7 @@ hector call orchestrator "Research Python vs Rust, analyze performance, write re
 
 ---
 
-## 🔧 **Customization**
+## Customization
 
 All configs can be customized by modifying:
 
@@ -208,7 +208,7 @@ All configs can be customized by modifying:
 
 ---
 
-## 📚 **Learn More**
+## Learn More
 
 - **[Configuration Reference](../docs/CONFIGURATION.md)** - Complete config options
 - **[Architecture](../docs/ARCHITECTURE.md)** - System design and A2A protocol
@@ -217,7 +217,7 @@ All configs can be customized by modifying:
 
 ---
 
-## 💡 **Tips**
+## Tips
 
 ### For Production
 - Start with `a2a-server.yaml`

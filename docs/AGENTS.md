@@ -1,21 +1,21 @@
 # Building AI Agents with Hector
 
-**Declarative, Powerful, Production-Ready**
+Declarative, Powerful, Production-Ready
 
 ## Overview
 
 Hector's core strength is making it incredibly easy to build sophisticated AI agents **without writing code**. Define everything in YAML, and Hector handles the complex orchestration, tool integration, context management, and streaming.
 
 **What makes Hector's agents powerful:**
-- ✅ **100% Declarative** - Pure YAML, zero code
-- ✅ **Prompt Customization** - Slot-based system for fine control
-- ✅ **Reasoning Strategies** - Chain-of-thought or supervisor
-- ✅ **Built-in Tools** - Search, file ops, commands, todos
-- ✅ **Plugin Extensibility** - Add custom LLMs, databases, tools
-- ✅ **Real-Time Streaming** - Token-by-token output
-- ✅ **Multi-Turn Sessions** - Conversation history & context
-- ✅ **Document Stores** - Semantic search with RAG
-- ✅ **Production Ready** - Error handling, logging, monitoring
+- **100% Declarative** - Pure YAML, zero code
+- **Prompt Customization** - Slot-based system for fine control
+- **Reasoning Strategies** - Chain-of-thought or supervisor
+- **Built-in Tools** - Search, file ops, commands, todos
+- **Plugin Extensibility** - Add custom LLMs, databases, tools
+- **Real-Time Streaming** - Token-by-token output
+- **Multi-Turn Sessions** - Conversation history & context
+- **Document Stores** - Semantic search with RAG
+- **Production Ready** - Error handling, logging, monitoring
 
 ---
 
@@ -303,11 +303,11 @@ reasoning:
 ```
 
 **Characteristics:**
-- ✅ One LLM call per iteration
-- ✅ Implicit planning
-- ✅ Tool execution with automatic continuation
-- ✅ Natural conversation flow
-- ✅ Fast response times
+-  One LLM call per iteration
+-  Implicit planning
+-  Tool execution with automatic continuation
+-  Natural conversation flow
+-  Fast response times
 
 **Use cases:**
 - Coding assistants
@@ -335,10 +335,10 @@ reasoning:
 ```
 
 **Characteristics:**
-- ✅ Task decomposition guidance
-- ✅ Agent delegation patterns
-- ✅ Result synthesis support
-- ✅ Based on chain-of-thought with orchestration enhancements
+-  Task decomposition guidance
+-  Agent delegation patterns
+-  Result synthesis support
+-  Based on chain-of-thought with orchestration enhancements
 
 **Use cases:**
 - Multi-agent workflows
@@ -597,10 +597,10 @@ curl -X POST http://localhost:8080/sessions/550e8400-.../tasks \
 ```
 
 **Benefits:**
-- ✅ Conversation history maintained
-- ✅ Context across multiple turns
-- ✅ Personalized responses
-- ✅ Follow-up questions work naturally
+-  Conversation history maintained
+-  Context across multiple turns
+-  Personalized responses
+-  Follow-up questions work naturally
 
 ### Real-Time Streaming
 
@@ -628,10 +628,10 @@ ws.onmessage = (event) => {
 ```
 
 **Benefits:**
-- ✅ Immediate feedback to users
-- ✅ Better UX for long responses
-- ✅ Cancel long-running tasks
-- ✅ Progress indicators
+-  Immediate feedback to users
+-  Better UX for long responses
+-  Cancel long-running tasks
+-  Progress indicators
 
 **Configure:**
 ```yaml

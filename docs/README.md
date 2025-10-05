@@ -4,7 +4,7 @@ Complete documentation for Hector - Pure A2A-Native AI Agent Platform
 
 ---
 
-## 📚 **Getting Started**
+## Getting Started
 
 **[Quick Start Guide →](QUICK_START.md)**
 
@@ -12,10 +12,10 @@ Get up and running in 5 minutes. Install, configure, and start using Hector.
 
 ---
 
-## 📖 **Core Documentation**
+## Core Documentation
 
-### [Building Agents](AGENTS.md) ⭐
-**Start here!** Complete guide to building single agents: prompts, tools, RAG, sessions, streaming, and more.
+### [Building Agents](AGENTS.md) ← Start Here
+Complete guide to building single agents: prompts, tools, RAG, sessions, streaming, and more.
 
 ### [Architecture](ARCHITECTURE.md)
 System design, A2A protocol implementation, sessions, orchestration patterns, and core components.
@@ -28,7 +28,7 @@ Command-line interface reference for all `hector` commands.
 
 ---
 
-## 🔗 **Multi-Agent Features**
+## Multi-Agent Features
 
 ### [External Agents](EXTERNAL_AGENTS.md)
 How to integrate external A2A agents with Hector. Discover, register, and orchestrate remote agents transparently.
@@ -41,12 +41,12 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 
 ---
 
-## 🎯 **Quick Navigation**
+## Quick Navigation
 
 ### I want to...
 
 **Build my first agent**
-→ [Building Agents Guide](AGENTS.md) ⭐
+→ [Building Agents Guide](AGENTS.md)
 
 **Get started quickly**
 → [Quick Start](QUICK_START.md)
@@ -80,30 +80,31 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 
 ---
 
-## 📊 **Documentation Index**
+## Documentation Index
 
 | Document | Purpose |
 |----------|---------|
+| [Building Agents](AGENTS.md) | Complete single-agent guide (Start here) |
 | [Quick Start](QUICK_START.md) | Get started in 5 minutes |
-| [Architecture](ARCHITECTURE.md) | System design and A2A implementation |
+| [Architecture](ARCHITECTURE.md) | System design, sessions, orchestration |
 | [Configuration](CONFIGURATION.md) | Complete config reference |
 | [CLI Guide](CLI_GUIDE.md) | Command-line interface |
 | [External Agents](EXTERNAL_AGENTS.md) | External A2A agent integration |
-| [Multi-Agent Orchestration](ARCHITECTURE.md#orchestrator-pattern) | Multi-agent orchestration |
+| [Authentication](AUTHENTICATION.md) | JWT token validation |
 
 ---
 
-## 🔗 **External Resources**
+## External Resources
 
-- **[A2A Protocol](https://a2a-protocol.org)** - Official specification
-- **[GitHub Repository](https://github.com/kadirpekel/hector)** - Source code
-- **[Main README](../README.md)** - Project overview
+- [A2A Protocol Specification](https://a2a-protocol.org) - Official specification
+- [GitHub Repository](https://github.com/kadirpekel/hector) - Source code
+- [Main README](../README.md) - Project overview
 
 ---
 
-## 💡 **Tips**
+## Tips
 
-- Start with [Building Agents](AGENTS.md) to understand core capabilities ⭐
+- Start with [Building Agents](AGENTS.md) to understand core capabilities
 - Use [Quick Start](QUICK_START.md) for a 5-minute setup
 - Check [Configuration](CONFIGURATION.md) for all YAML options
 - Learn [orchestration patterns](ARCHITECTURE.md#orchestrator-pattern) for multi-agent systems
