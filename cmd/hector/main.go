@@ -10,6 +10,7 @@ import (
 
 	"github.com/kadirpekel/hector/a2a"
 	"github.com/kadirpekel/hector/agent"
+	"github.com/kadirpekel/hector/auth"
 	"github.com/kadirpekel/hector/component"
 	"github.com/kadirpekel/hector/config"
 	hectorcontext "github.com/kadirpekel/hector/context"
@@ -241,6 +242,33 @@ func executeServeCommand(args *CLIArgs) {
 	}
 
 	server := a2a.NewServer(a2aServerCfg)
+
+	// Initialize authentication if enabled
+	if hectorConfig.Global.Auth.Enabled {
+		fmt.Println("\n🔒 Initializing authentication...")
+
+		authValidator, err := auth.NewJWTValidator(
+			hectorConfig.Global.Auth.JWKSURL,
+			hectorConfig.Global.Auth.Issuer,
+			hectorConfig.Global.Auth.Audience,
+		)
+		if err != nil {
+			fmt.Printf("❌ Failed to initialize JWT validator: %v\n", err)
+			fmt.Println("Please check your auth configuration:")
+			fmt.Printf("   - JWKS URL: %s\n", hectorConfig.Global.Auth.JWKSURL)
+			fmt.Printf("   - Issuer: %s\n", hectorConfig.Global.Auth.Issuer)
+			fmt.Printf("   - Audience: %s\n", hectorConfig.Global.Auth.Audience)
+			return
+		}
+
+		server.SetAuthValidator(authValidator)
+		fmt.Println("  ✅ JWT validator initialized")
+		fmt.Printf("     Provider: %s\n", hectorConfig.Global.Auth.Issuer)
+		if args.Debug {
+			fmt.Printf("     JWKS URL: %s\n", hectorConfig.Global.Auth.JWKSURL)
+			fmt.Printf("     Audience: %s\n", hectorConfig.Global.Auth.Audience)
+		}
+	}
 
 	// Create agent registry for orchestration
 	agentRegistry := agent.NewAgentRegistry()

@@ -207,6 +207,9 @@ type GlobalSettings struct {
 
 	// A2A Server configuration
 	A2AServer A2AServerConfig `yaml:"a2a_server,omitempty"`
+
+	// Authentication configuration
+	Auth AuthConfig `yaml:"auth,omitempty"`
 }
 
 // Validate implements Config.Validate for GlobalSettings
@@ -220,6 +223,9 @@ func (c *GlobalSettings) Validate() error {
 	if err := c.A2AServer.Validate(); err != nil {
 		return fmt.Errorf("A2A server config validation failed: %w", err)
 	}
+	if err := c.Auth.Validate(); err != nil {
+		return fmt.Errorf("auth config validation failed: %w", err)
+	}
 	return nil
 }
 
@@ -228,6 +234,7 @@ func (c *GlobalSettings) SetDefaults() {
 	c.Logging.SetDefaults()
 	c.Performance.SetDefaults()
 	c.A2AServer.SetDefaults()
+	c.Auth.SetDefaults()
 }
 
 // ============================================================================
@@ -260,6 +267,40 @@ func (c *A2AServerConfig) SetDefaults() {
 	if c.Port == 0 {
 		c.Port = 8080
 	}
+}
+
+// ============================================================================
+// AUTHENTICATION CONFIGURATION
+// ============================================================================
+
+// AuthConfig contains authentication configuration
+// Hector is a JWT consumer - it validates tokens from external auth providers
+type AuthConfig struct {
+	Enabled  bool   `yaml:"enabled"`  // Enable authentication
+	JWKSURL  string `yaml:"jwks_url"` // JWKS URL from auth provider (e.g., https://auth0.com/.well-known/jwks.json)
+	Issuer   string `yaml:"issuer"`   // Expected token issuer (e.g., https://auth0.com/)
+	Audience string `yaml:"audience"` // Expected token audience (e.g., "hector-api")
+}
+
+// Validate validates the authentication configuration
+func (c *AuthConfig) Validate() error {
+	if c.Enabled {
+		if c.JWKSURL == "" {
+			return fmt.Errorf("jwks_url is required when auth is enabled")
+		}
+		if c.Issuer == "" {
+			return fmt.Errorf("issuer is required when auth is enabled")
+		}
+		if c.Audience == "" {
+			return fmt.Errorf("audience is required when auth is enabled")
+		}
+	}
+	return nil
+}
+
+// SetDefaults sets default values for auth configuration
+func (c *AuthConfig) SetDefaults() {
+	// No defaults - auth is opt-in
 }
 
 // ============================================================================

@@ -22,6 +22,7 @@
 - [A2A Server](#-a2a-server-mode) - Host agents via A2A protocol
 - [Multi-Agent Orchestration](#-multi-agent-orchestration) - Coordinate multiple agents
 - [External Agents](docs/EXTERNAL_AGENTS.md) - Use remote A2A agents
+- [Authentication](docs/AUTHENTICATION.md) - Secure with JWT validation
 - [Architecture](docs/ARCHITECTURE.md) - System design
 - [Documentation](docs/) - Complete documentation
 
@@ -38,6 +39,7 @@ Hector is a **pure A2A-native declarative AI agent platform** that enables you t
 - **🔌 Integrate external agents** - Connect to any A2A agent via URL in your config
 - **🌍 Agent Ecosystem Ready** - Interoperate within organizations or the broader agent internet
 - **🔒 Visibility Control** - Fine-grained control over agent exposure (public/internal/private)
+- **🛡️ Enterprise Authentication** - JWT validation with any OAuth2/OIDC provider (Auth0, Keycloak, etc.)
 
 ### **How Hector is Different**
 
@@ -70,6 +72,7 @@ agents:
 - ✅ **Multi-Agent** - Built-in orchestration via `agent_call` tool across all agents
 - ✅ **Agent Internet Ready** - Participate in the emerging agent ecosystem
 - ✅ **Enterprise Interoperability** - Integrate partner/vendor agents declaratively
+- ✅ **Enterprise Security** - JWT authentication with any OAuth2/OIDC provider
 
 ---
 
@@ -122,6 +125,35 @@ export OPENAI_API_KEY="sk-..."
 ```
 
 **That's it!** You now have an A2A server running with multiple agents.
+
+---
+
+## ✨ **Features**
+
+### Core Platform
+- **🎯 Pure A2A Protocol** - 100% compliant with [A2A specification](https://a2a-protocol.org)
+- **📝 Declarative YAML** - Define agents without writing code
+- **🔌 Plugin System** - Extend with gRPC plugins for LLMs, databases, tools
+- **💬 Multi-Turn Sessions** - Maintain conversation context across interactions
+- **📡 Real-Time Streaming** - WebSocket streaming for live output
+
+### Multi-Agent System
+- **🤖 Native Agents** - Run agents locally with full tooling support
+- **🌐 External Agents** - Connect to remote A2A agents via URL
+- **🔗 Orchestration** - LLM-driven agent delegation via `agent_call` tool
+- **🎭 Multiple Strategies** - Chain-of-thought or supervisor reasoning
+
+### Enterprise Features
+- **🛡️ JWT Authentication** - Validate tokens from any OAuth2/OIDC provider
+- **🔒 Visibility Control** - Public, internal, or private agent exposure
+- **🔐 Secure by Design** - Industry-standard security practices
+- **📊 Production Ready** - Sessions, streaming, error handling
+
+### Developer Experience
+- **🚀 Quick Start** - Running in 5 minutes
+- **📖 Comprehensive Docs** - Architecture, config, examples
+- **🧪 Testing Tools** - Automated test scripts included
+- **🐛 Debug Mode** - Detailed logging and tracing
 
 ---
 

@@ -30,7 +30,7 @@ Command-line interface reference for all `hector` commands.
 ### [External Agents](EXTERNAL_AGENTS.md)
 How to integrate external A2A agents with Hector. Discover, register, and orchestrate remote agents transparently.
 
-### [Orchestrator Guide](ORCHESTRATOR_SUMMARY.md)
+### [Multi-Agent Orchestration](ARCHITECTURE.md#orchestrator-pattern)
 Multi-agent orchestration patterns. Use the `agent_call` tool to coordinate multiple agents for complex tasks.
 
 ---
@@ -55,7 +55,7 @@ Multi-agent orchestration patterns. Use the `agent_call` tool to coordinate mult
 → [External Agents](EXTERNAL_AGENTS.md)
 
 **Orchestrate multiple agents**
-→ [Orchestrator Guide](ORCHESTRATOR_SUMMARY.md)
+→ [Orchestration Patterns](ARCHITECTURE.md#orchestrator-pattern)
 
 ---
 
@@ -68,7 +68,7 @@ Multi-agent orchestration patterns. Use the `agent_call` tool to coordinate mult
 | [Configuration](CONFIGURATION.md) | Complete config reference |
 | [CLI Guide](CLI_GUIDE.md) | Command-line interface |
 | [External Agents](EXTERNAL_AGENTS.md) | External A2A agent integration |
-| [Orchestrator Guide](ORCHESTRATOR_SUMMARY.md) | Multi-agent orchestration |
+| [Orchestrator Guide](ARCHITECTURE.md#orchestrator-pattern) | Multi-agent orchestration |
 
 ---
 
@@ -85,7 +85,8 @@ Multi-agent orchestration patterns. Use the `agent_call` tool to coordinate mult
 - Start with [Quick Start](QUICK_START.md) if you're new
 - Check [Configuration](CONFIGURATION.md) for all YAML options
 - See [External Agents](EXTERNAL_AGENTS.md) for integration examples
-- Use [Orchestrator Guide](ORCHESTRATOR_SUMMARY.md) for multi-agent patterns
+- Use [Architecture](ARCHITECTURE.md#orchestrator-pattern) for orchestration patterns
+- Secure with [Authentication](AUTHENTICATION.md) for enterprise deployments
 
 ---
 

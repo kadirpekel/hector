@@ -29,6 +29,14 @@ type Server struct {
 	tasks           map[string]*TaskResponse
 	mu              sync.RWMutex
 	httpServer      *http.Server
+	authValidator   AuthValidator // Optional JWT validator (nil = auth disabled)
+}
+
+// AuthValidator interface for JWT validation
+// This allows the server to be decoupled from the specific auth implementation
+type AuthValidator interface {
+	HTTPMiddleware(next http.Handler) http.Handler
+	ValidateToken(ctx context.Context, tokenString string) (interface{}, error)
 }
 
 // ServerConfig contains configuration for the A2A server
@@ -54,7 +62,14 @@ func NewServer(cfg *ServerConfig) *Server {
 		agentVisibility: make(map[string]string),
 		sessions:        make(map[string]*Session),
 		tasks:           make(map[string]*TaskResponse),
+		authValidator:   nil, // Auth disabled by default
 	}
+}
+
+// SetAuthValidator sets the JWT validator for authentication
+// If validator is nil, authentication is disabled
+func (s *Server) SetAuthValidator(validator AuthValidator) {
+	s.authValidator = validator
 }
 
 // ============================================================================
@@ -114,10 +129,20 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
 	// A2A Protocol Endpoints
-	mux.HandleFunc("/agents", s.handleListAgents)       // GET - List all agents
-	mux.HandleFunc("/agents/", s.handleAgentRoutes)     // Agent-specific routes
-	mux.HandleFunc("/sessions", s.handleSessions)       // Session management
-	mux.HandleFunc("/sessions/", s.handleSessionRoutes) // Session-specific routes
+	mux.HandleFunc("/agents", s.handleListAgents) // GET - List all public agents (no auth required)
+
+	// Agent routes - conditionally protected by auth
+	if s.authValidator != nil {
+		// With authentication - protect agent operations
+		mux.Handle("/agents/", s.authValidator.HTTPMiddleware(http.HandlerFunc(s.handleAgentRoutes)))
+		mux.Handle("/sessions", s.authValidator.HTTPMiddleware(http.HandlerFunc(s.handleSessions)))
+		mux.Handle("/sessions/", s.authValidator.HTTPMiddleware(http.HandlerFunc(s.handleSessionRoutes)))
+	} else {
+		// Without authentication - allow all operations
+		mux.HandleFunc("/agents/", s.handleAgentRoutes)
+		mux.HandleFunc("/sessions", s.handleSessions)
+		mux.HandleFunc("/sessions/", s.handleSessionRoutes)
+	}
 
 	s.httpServer = &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", s.host, s.port),
@@ -125,6 +150,11 @@ func (s *Server) Start() error {
 	}
 
 	fmt.Printf("🚀 A2A Server starting on %s:%d\n", s.host, s.port)
+	if s.authValidator != nil {
+		fmt.Printf("🔒 Authentication: ENABLED\n")
+	} else {
+		fmt.Printf("🔓 Authentication: DISABLED\n")
+	}
 	fmt.Printf("📋 Agent Cards available at: %s/agents\n", s.baseURL)
 	fmt.Printf("💬 Sessions available at: %s/sessions\n", s.baseURL)
 

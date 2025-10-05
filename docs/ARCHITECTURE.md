@@ -866,6 +866,152 @@ func TestRealLLM(t *testing.T) {
 
 ---
 
+## Sessions and Streaming
+
+### Session Management
+
+**Full A2A Protocol Support:**
+
+```
+POST   /sessions              # Create new session
+GET    /sessions              # List sessions
+GET    /sessions/{id}         # Get session details
+DELETE /sessions/{id}         # End session
+POST   /sessions/{id}/tasks   # Execute task in session context
+```
+
+**Features:**
+- ✅ Multi-turn conversations with context
+- ✅ Session state management
+- ✅ Per-session conversation history
+- ✅ Metadata support
+- ✅ Activity tracking (lastActivityAt)
+
+**Implementation:**
+- **Storage:** In-memory (`map[string]*Session`)
+- **Lifecycle:** Sessions survive until explicitly deleted or server restart
+- **Future:** Persistent storage (Redis, PostgreSQL)
+
+**Example:**
+```bash
+# Create session
+SESSION=$(curl -s -X POST http://localhost:8080/sessions \
+  -d '{"agentId": "assistant"}' | jq -r '.sessionId')
+
+# Chat with context
+curl -X POST http://localhost:8080/sessions/$SESSION/tasks \
+  -d '{"input":{"type":"text/plain","content":"My name is Alice"}}'
+
+# Agent remembers context
+curl -X POST http://localhost:8080/sessions/$SESSION/tasks \
+  -d '{"input":{"type":"text/plain","content":"What is my name?"}}'
+```
+
+### WebSocket Streaming
+
+**Real-Time Output:**
+
+```
+WS ws://localhost:8080/agents/{agentId}/stream
+```
+
+**Features:**
+- ✅ Real-time output streaming
+- ✅ Token-by-token delivery (for LLM streaming)
+- ✅ Chunked responses with timestamps
+- ✅ Multiple chunk types (text, data, error, metadata)
+
+**Implementation:**
+- **Protocol:** WebSocket (gorilla/websocket)
+- **Format:** JSON-encoded `StreamChunk` objects
+- **Backpressure:** Go channels handle it naturally
+
+**Example:**
+```javascript
+const ws = new WebSocket('ws://localhost:8080/agents/assistant/stream');
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    taskId: 'task-123',
+    input: {type: 'text/plain', content: 'Write a poem'}
+  }));
+};
+
+ws.onmessage = (event) => {
+  const chunk = JSON.parse(event.data);
+  console.log(chunk.content);  // Real-time output
+  if (chunk.final) ws.close();
+};
+```
+
+---
+
+## Orchestrator Pattern
+
+### Design Decision: Regular Agent + `agent_call` Tool
+
+**Why not a special orchestrator implementation?**
+
+1. **Industry Alignment** - OpenAI, Anthropic use function calling, not special agent types
+2. **Pure A2A Philosophy** - All agents implement the same interface
+3. **Composability** - Any agent can become an orchestrator with `agent_call` tool
+
+**Configuration:**
+```yaml
+agents:
+  researcher:
+    name: "Research Agent"
+    llm: "gpt-4o-mini"
+  
+  analyst:
+    name: "Analysis Agent"
+    llm: "gpt-4o-mini"
+  
+  orchestrator:
+    name: "Orchestrator"
+    llm: "gpt-4o"  # More capable model
+    tools:
+      - agent_call  # Enable delegation
+    reasoning:
+      engine: "supervisor"  # Optimized for orchestration
+    prompt:
+      system_role: |
+        You are an orchestrator that coordinates other agents.
+        Available agents: researcher, analyst
+        Use agent_call to delegate tasks.
+```
+
+**Execution Flow:**
+```
+User Request
+    ↓
+Orchestrator Agent (supervisor reasoning)
+    ↓
+Decides: "Need research first"
+    ↓
+agent_call("researcher", task="Research topic X")
+    ↓
+Researcher executes via A2A protocol
+    ↓
+Returns results to Orchestrator
+    ↓
+Orchestrator decides: "Now analyze"
+    ↓
+agent_call("analyst", task="Analyze: [research results]")
+    ↓
+Analyst executes
+    ↓
+Orchestrator synthesizes final answer
+```
+
+**Benefits:**
+- ✅ No special orchestrator class needed
+- ✅ Native and external agents treated identically
+- ✅ LLM makes routing decisions dynamically
+- ✅ Same code path for all agents
+
+---
+
 ## Multi-Agent Workflow Execution
 
 ### DAG Workflow Example
