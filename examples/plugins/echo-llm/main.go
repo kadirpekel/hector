@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kadirpekel/hector/plugins/grpc"
+	"github.com/kadirpekel/hector/pkg/plugins/grpc"
 )
 
 // ============================================================================

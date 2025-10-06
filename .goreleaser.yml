@@ -1,0 +1,78 @@
+# GoReleaser configuration for Hector
+# https://goreleaser.com
+
+project_name: hector
+
+builds:
+  - id: hector
+    main: ./cmd/hector
+    binary: hector
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -X 'github.com/kadirpekel/hector.BuildDate={{.Date}}'
+      - -X 'github.com/kadirpekel/hector.GitCommit={{.ShortCommit}}'
+    env:
+      - CGO_ENABLED=0
+
+archives:
+  - id: default
+    builds:
+      - hector
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE.md
+      - configs/*.yaml
+      - docs/*.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - '^build:'
+
+release:
+  github:
+    owner: kadirpekel
+    name: hector
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Hector {{ .Tag }}
+    
+    Pure A2A-Native Declarative AI Agent Platform
+    
+    ### What's Changed
+    
+  footer: |
+    **Full Changelog**: https://github.com/kadirpekel/hector/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+brews:
+  - name: hector
+    homepage: https://github.com/kadirpekel/hector
+    description: "Pure A2A-Native Declarative AI Agent Platform"
+    license: "AGPL-3.0"
+    test: |
+      system "#{bin}/hector version"
+    install: |
+      bin.install "hector"

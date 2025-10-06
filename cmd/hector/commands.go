@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kadirpekel/hector/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a"
 )
 
 // ============================================================================

@@ -1,0 +1,103 @@
+# Hector Makefile
+# Build and release management for the Hector AI agent platform
+
+.PHONY: help build install test clean fmt vet lint release version
+
+# Default target
+help:
+	@echo "Hector Build System"
+	@echo ""
+	@echo "Available targets:"
+	@echo "  build     - Build the hector binary"
+	@echo "  install   - Install hector to GOPATH/bin"
+	@echo "  test      - Run all tests"
+	@echo "  clean     - Clean build artifacts"
+	@echo "  fmt       - Format Go code"
+	@echo "  vet       - Run go vet"
+	@echo "  lint      - Run golangci-lint (if installed)"
+	@echo "  release   - Build release binaries"
+	@echo "  version   - Show version information"
+	@echo "  deps      - Download dependencies"
+	@echo "  mod-tidy  - Tidy go.mod"
+
+# Build the binary
+build:
+	@echo "Building hector..."
+	go build -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" -o hector ./cmd/hector
+
+# Install to GOPATH/bin
+install:
+	@echo "Installing hector..."
+	go install -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" ./cmd/hector
+
+# Run tests
+test:
+	@echo "Running tests..."
+	go test -v ./...
+
+# Clean build artifacts
+clean:
+	@echo "Cleaning..."
+	rm -f hector
+	go clean
+
+# Format code
+fmt:
+	@echo "Formatting code..."
+	go fmt ./...
+
+# Run go vet
+vet:
+	@echo "Running go vet..."
+	go vet ./...
+
+# Run linter (if available)
+lint:
+	@echo "Running linter..."
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run; \
+	else \
+		echo "golangci-lint not installed, skipping..."; \
+		echo "Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+	fi
+
+# Build release binaries for multiple platforms
+release:
+	@echo "Building release binaries..."
+	@mkdir -p dist
+	
+	# Linux
+	GOOS=linux GOARCH=amd64 go build -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" -o dist/hector-linux-amd64 ./cmd/hector
+	GOOS=linux GOARCH=arm64 go build -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" -o dist/hector-linux-arm64 ./cmd/hector
+	
+	# macOS
+	GOOS=darwin GOARCH=amd64 go build -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" -o dist/hector-darwin-amd64 ./cmd/hector
+	GOOS=darwin GOARCH=arm64 go build -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" -o dist/hector-darwin-arm64 ./cmd/hector
+	
+	# Windows
+	GOOS=windows GOARCH=amd64 go build -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" -o dist/hector-windows-amd64.exe ./cmd/hector
+	
+	@echo "Release binaries built in dist/"
+
+# Show version information
+version:
+	@echo "Version Information:"
+	@go run -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" ./cmd/hector version
+
+# Download dependencies
+deps:
+	@echo "Downloading dependencies..."
+	go mod download
+
+# Tidy go.mod
+mod-tidy:
+	@echo "Tidying go.mod..."
+	go mod tidy
+
+# Development workflow
+dev: fmt vet test build
+	@echo "Development build complete"
+
+# CI workflow
+ci: deps fmt vet test
+	@echo "CI checks complete"

@@ -11,11 +11,20 @@
 
 **Pure A2A-Native Declarative AI Agent Platform**
 
+[![Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/kadirpekel/hector)
+[![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
-[![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://golang.org/)
 [![A2A Protocol](https://img.shields.io/badge/A2A-compliant-green.svg)](https://a2a-protocol.org)
+[![GitHub Release](https://img.shields.io/github/v/release/kadirpekel/hector?include_prereleases&sort=semver)](https://github.com/kadirpekel/hector/releases)
+[![GitHub Issues](https://img.shields.io/github/issues/kadirpekel/hector)](https://github.com/kadirpekel/hector/issues)
+[![GitHub Stars](https://img.shields.io/github/stars/kadirpekel/hector)](https://github.com/kadirpekel/hector/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/kadirpekel/hector)](https://github.com/kadirpekel/hector/network)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
+[![GoDoc](https://godoc.org/github.com/kadirpekel/hector?status.svg)](https://godoc.org/github.com/kadirpekel/hector)
 
 > **Define agents in YAML, serve via A2A protocol, orchestrate without code**
+
+> ⚠️ **Alpha Status**: Hector is currently in alpha development. APIs may change, and some features are experimental. We welcome feedback and contributions!
 
 **Quick Links:**
 - [Quick Start](#quick-start) - Get running in 5 minutes
@@ -135,6 +144,8 @@ agents:
 
 ### Install
 
+#### Option 1: Binary Installation (Recommended)
+
 ```bash
 # Clone and build
 git clone https://github.com/kadirpekel/hector
@@ -143,6 +154,28 @@ go build -o hector ./cmd/hector
 
 # Optional: Install to PATH
 ./install.sh
+```
+
+#### Option 2: Go Package Installation
+
+```bash
+# Install as Go module
+go install github.com/kadirpekel/hector/cmd/hector@latest
+
+# Or add to your project
+go get github.com/kadirpekel/hector
+```
+
+#### Option 3: Use as Go Library
+
+```go
+import (
+    "github.com/kadirpekel/hector/pkg/agent"
+    "github.com/kadirpekel/hector/pkg/a2a"
+    "github.com/kadirpekel/hector/pkg/config"
+)
+
+// Use Hector components in your Go application
 ```
 
 ### 2. Create Your First Agent
@@ -446,8 +479,8 @@ Hector can orchestrate **external A2A agents** alongside native agents!
 ```go
 import (
     "context"
-    "github.com/kadirpekel/hector/a2a"
-    "github.com/kadirpekel/hector/agent"
+    "github.com/kadirpekel/hector/pkg/a2a"
+    "github.com/kadirpekel/hector/pkg/agent"
 )
 
 // 1. Create A2A client
@@ -699,6 +732,93 @@ export OPENAI_API_KEY="sk-..."
 ```
 
 **See [docs/CLI_GUIDE.md](docs/CLI_GUIDE.md) for complete reference.**
+
+---
+
+## 📦 **Go Package API**
+
+Hector can be used as a Go library in your applications:
+
+### Core Components
+
+```go
+import (
+    "context"
+    "github.com/kadirpekel/hector/pkg/agent"
+    "github.com/kadirpekel/hector/pkg/a2a"
+    "github.com/kadirpekel/hector/pkg/config"
+)
+
+// Create agent registry
+registry := agent.NewAgentRegistry()
+
+// Load configuration
+cfg, err := config.LoadFromFile("config.yaml")
+
+// Create native agent
+nativeAgent, err := agent.NewAgent(cfg.Agents["my_agent"], cfg)
+
+// Create A2A client for external agents
+client := a2a.NewClient(&a2a.ClientConfig{})
+
+// Create external A2A agent
+externalAgent, err := agent.NewA2AAgentFromURL(
+    context.Background(),
+    "https://external-service.com/agents/translator",
+    client,
+)
+
+// Register agents
+registry.RegisterAgent("native", nativeAgent, cfg, capabilities)
+registry.RegisterAgent("external", externalAgent, cfg, capabilities)
+
+// Start A2A server
+server := a2a.NewServer(registry, &a2a.ServerConfig{
+    Port: 8080,
+})
+server.Start()
+```
+
+### Key Interfaces
+
+- **`a2a.Agent`** - Core agent interface (ExecuteTask, GetAgentCard)
+- **`agent.AgentRegistry`** - Manages agent registration and discovery
+- **`a2a.Server`** - A2A protocol server
+- **`a2a.Client`** - A2A protocol client for external agents
+
+**See [GoDoc](https://godoc.org/github.com/kadirpekel/hector) for complete API reference.**
+
+---
+
+## 🤝 **Contributing**
+
+We welcome contributions! Since Hector is in alpha, this is a great time to shape the project.
+
+### Getting Started
+
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Make your changes** and add tests
+4. **Run tests**: `go test ./...`
+5. **Commit your changes**: `git commit -m 'Add amazing feature'`
+6. **Push to the branch**: `git push origin feature/amazing-feature`
+7. **Open a Pull Request**
+
+### Development Guidelines
+
+- Follow Go conventions and use `gofmt`
+- Add tests for new features
+- Update documentation for API changes
+- Use semantic versioning for releases
+
+### Alpha Status Notes
+
+- **APIs may change** - We're still refining the interfaces
+- **Feedback welcome** - Your input helps shape the project
+- **Breaking changes** - Will be documented in release notes
+- **Experimental features** - May be removed or modified
+
+**See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.**
 
 ---
 

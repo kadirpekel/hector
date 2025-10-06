@@ -8,13 +8,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/kadirpekel/hector/a2a"
-	"github.com/kadirpekel/hector/agent"
-	"github.com/kadirpekel/hector/auth"
-	"github.com/kadirpekel/hector/component"
-	"github.com/kadirpekel/hector/config"
-	hectorcontext "github.com/kadirpekel/hector/context"
-	"github.com/kadirpekel/hector/tools"
+	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/agent"
+	"github.com/kadirpekel/hector/pkg/auth"
+	"github.com/kadirpekel/hector/pkg/component"
+	"github.com/kadirpekel/hector/pkg/config"
+	hectorcontext "github.com/kadirpekel/hector/pkg/context"
+	"github.com/kadirpekel/hector/pkg/tools"
 )
 
 // ============================================================================
@@ -355,7 +355,7 @@ func executeServeCommand(args *CLIArgs) {
 	fmt.Println("\n💡 Test with Hector CLI:")
 	fmt.Printf("   hector list\n")
 	fmt.Printf("   hector call <agent-id> \"your prompt\"\n")
-	fmt.Println("\nPress Ctrl+C to stop\n")
+	fmt.Println("\nPress Ctrl+C to stop")
 
 	// Setup graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -451,7 +451,7 @@ func initializeDocumentStores(hectorConfig *config.Config, componentManager *com
 // ============================================================================
 
 func showHelp() {
-	fmt.Println(`
+	fmt.Print(`
 Hector - A2A-Native AI Agent Platform
 
 USAGE:
