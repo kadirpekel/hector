@@ -20,11 +20,11 @@ type JWTValidator struct {
 
 // Claims represents extracted JWT claims
 type Claims struct {
-	Subject  string                 `json:"sub"`      // User ID
-	Email    string                 `json:"email"`    // User email
-	Role     string                 `json:"role"`     // User role (for RBAC)
+	Subject  string                 `json:"sub"`       // User ID
+	Email    string                 `json:"email"`     // User email
+	Role     string                 `json:"role"`      // User role (for RBAC)
 	TenantID string                 `json:"tenant_id"` // Tenant ID (for multi-tenancy)
-	Custom   map[string]interface{} `json:"-"`        // All other claims
+	Custom   map[string]interface{} `json:"-"`         // All other claims
 }
 
 // NewJWTValidator creates a validator that auto-fetches JWKS from the provider
@@ -108,7 +108,7 @@ func (v *JWTValidator) ValidateToken(ctx context.Context, tokenString string) (i
 	for iter := token.Iterate(context.Background()); iter.Next(context.Background()); {
 		pair := iter.Pair()
 		key := pair.Key.(string)
-		
+
 		// Skip standard claims already extracted
 		if key != "sub" && key != "email" && key != "role" && key != "tenant_id" &&
 			key != "iss" && key != "aud" && key != "exp" && key != "iat" && key != "nbf" {
@@ -124,4 +124,3 @@ func (v *JWTValidator) Close() {
 	// The cache doesn't have an explicit close method
 	// The goroutine will stop when the context is cancelled
 }
-

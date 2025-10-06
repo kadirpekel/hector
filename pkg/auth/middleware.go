@@ -104,4 +104,3 @@ func RequireTenant(validator *JWTValidator, allowedTenants ...string) func(http.
 		}))
 	}
 }
-

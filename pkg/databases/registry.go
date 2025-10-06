@@ -121,7 +121,7 @@ func (r *DatabaseRegistry) GetDatabase(name string) (DatabaseProvider, error) {
 // ListDatabases returns all registered database names
 func (r *DatabaseRegistry) ListDatabases() []string {
 	names := make([]string, 0)
-	for _, _ = range r.List() {
+	for range r.List() {
 		// Use a placeholder name since we don't have a name method
 		names = append(names, "database")
 	}

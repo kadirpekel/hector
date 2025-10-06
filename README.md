@@ -23,6 +23,7 @@
 [![GitHub Forks](https://img.shields.io/github/forks/kadirpekel/hector)](https://github.com/kadirpekel/hector/network)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 [![GoDoc](https://godoc.org/github.com/kadirpekel/hector?status.svg)](https://godoc.org/github.com/kadirpekel/hector)
+[![Docker](https://img.shields.io/badge/docker-available-blue.svg)](https://hub.docker.com/r/kadirpekel/hector)
 
 > **Define agents in YAML, serve via A2A protocol, orchestrate without code**
 
@@ -166,7 +167,23 @@ go install github.com/kadirpekel/hector/cmd/hector@latest
 go get github.com/kadirpekel/hector
 ```
 
-#### Option 3: Use as Go Library
+#### Option 3: Docker Installation
+
+```bash
+# Pull from Docker Hub (recommended)
+docker pull kadirpekel/hector:latest
+
+# Or pull from GitHub Container Registry
+docker pull ghcr.io/kadirpekel/hector:latest
+
+# Run with default configuration
+docker run -p 8080:8080 kadirpekel/hector:latest
+
+# Run with custom configuration
+docker run -p 8080:8080 -v $(pwd)/my-config.yaml:/app/configs/hector.yaml kadirpekel/hector:latest
+```
+
+#### Option 4: Use as Go Library
 
 ```go
 import (
