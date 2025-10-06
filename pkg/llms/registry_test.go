@@ -11,7 +11,7 @@ func TestNewLLMRegistry(t *testing.T) {
 	}
 
 	// Test that registry is initialized
-	providers := registry.List()
+	providers := registry.BaseRegistry.List()
 	if providers == nil {
 		t.Error("List() should not return nil")
 	}
@@ -32,7 +32,7 @@ func TestLLMRegistry_RegisterLLM(t *testing.T) {
 	}
 
 	// Verify provider was registered
-	registeredProvider, exists := registry.Get("test-provider")
+	registeredProvider, exists := registry.BaseRegistry.Get("test-provider")
 	if !exists {
 		t.Error("Expected provider to be registered")
 	}
@@ -73,7 +73,7 @@ func TestLLMRegistry_Get(t *testing.T) {
 	}
 
 	// Get the provider
-	registeredProvider, exists := registry.Get("test-provider")
+	registeredProvider, exists := registry.BaseRegistry.Get("test-provider")
 	if !exists {
 		t.Fatal("Get() should return true for existing provider")
 	}
@@ -90,7 +90,7 @@ func TestLLMRegistry_Get(t *testing.T) {
 func TestLLMRegistry_Get_NotFound(t *testing.T) {
 	registry := NewLLMRegistry()
 
-	_, exists := registry.Get("non-existent-provider")
+	_, exists := registry.BaseRegistry.Get("non-existent-provider")
 	if exists {
 		t.Error("Expected false when getting non-existent provider")
 	}
@@ -100,7 +100,7 @@ func TestLLMRegistry_List(t *testing.T) {
 	registry := NewLLMRegistry()
 
 	// Initially should be empty
-	providers := registry.List()
+	providers := registry.BaseRegistry.List()
 	if len(providers) != 0 {
 		t.Errorf("Expected 0 providers initially, got %d", len(providers))
 	}
@@ -113,7 +113,7 @@ func TestLLMRegistry_List(t *testing.T) {
 	}
 
 	// Should now have one provider
-	providers = registry.List()
+	providers = registry.BaseRegistry.List()
 	if len(providers) != 1 {
 		t.Errorf("Expected 1 provider, got %d", len(providers))
 	}
@@ -130,13 +130,13 @@ func TestLLMRegistry_Remove(t *testing.T) {
 	}
 
 	// Remove the provider
-	err = registry.Remove("test-provider")
+	err = registry.BaseRegistry.Remove("test-provider")
 	if err != nil {
 		t.Fatalf("Remove() error = %v", err)
 	}
 
 	// Verify provider was removed
-	_, exists := registry.Get("test-provider")
+	_, exists := registry.BaseRegistry.Get("test-provider")
 	if exists {
 		t.Error("Expected provider to be removed")
 	}
@@ -145,7 +145,7 @@ func TestLLMRegistry_Remove(t *testing.T) {
 func TestLLMRegistry_Remove_NotFound(t *testing.T) {
 	registry := NewLLMRegistry()
 
-	err := registry.Remove("non-existent-provider")
+	err := registry.BaseRegistry.Remove("non-existent-provider")
 	if err == nil {
 		t.Error("Expected error when removing non-existent provider")
 	}
@@ -155,7 +155,7 @@ func TestLLMRegistry_Count(t *testing.T) {
 	registry := NewLLMRegistry()
 
 	// Initially should be 0
-	count := registry.Count()
+	count := registry.BaseRegistry.Count()
 	if count != 0 {
 		t.Errorf("Expected count 0 initially, got %d", count)
 	}
@@ -168,7 +168,7 @@ func TestLLMRegistry_Count(t *testing.T) {
 	registry.RegisterLLM("provider2", provider2)
 
 	// Should now be 2
-	count = registry.Count()
+	count = registry.BaseRegistry.Count()
 	if count != 2 {
 		t.Errorf("Expected count 2, got %d", count)
 	}
@@ -182,10 +182,10 @@ func TestLLMRegistry_Clear(t *testing.T) {
 	registry.RegisterLLM("test-provider", provider)
 
 	// Clear the registry
-	registry.Clear()
+	registry.BaseRegistry.Clear()
 
 	// Should be empty
-	count := registry.Count()
+	count := registry.BaseRegistry.Count()
 	if count != 0 {
 		t.Errorf("Expected count 0 after clear, got %d", count)
 	}

@@ -53,7 +53,9 @@ Thank you for your interest in contributing to Hector! Since we're in alpha, thi
 
 3. **Run quality checks**
    ```bash
-   make dev  # Runs fmt, vet, test, and build
+   make pre-commit  # Runs all CI checks (deps, fmt, vet, lint, test, build)
+   # or for development
+   make quality     # Runs fmt, vet, lint, and test
    ```
 
 4. **Commit your changes**
@@ -96,6 +98,31 @@ test: add integration tests for A2A protocol
 - Use meaningful variable and function names
 - Add comments for exported functions and types
 - Keep functions focused and small
+- Pass all linting checks with `golangci-lint`
+
+### Code Quality Checks
+
+All code must pass our comprehensive quality checks:
+
+```bash
+# Run all quality checks
+make quality
+
+# Run individual checks
+make fmt      # Format code with gofmt
+make vet      # Run go vet for static analysis
+make lint     # Run golangci-lint (auto-installs if needed)
+make test     # Run all tests
+make build    # Build the project
+```
+
+**Quality Requirements**:
+- ✅ Code must be formatted with `gofmt`
+- ✅ Must pass `go vet` static analysis
+- ✅ Must pass `golangci-lint` with zero warnings
+- ✅ All tests must pass
+- ✅ Project must build successfully
+- ✅ No race conditions (use `make test-race`)
 
 ### Testing
 
@@ -122,8 +149,11 @@ make test
 # Run tests with coverage
 make test-coverage
 
-# Run quality checks (fmt + vet + test + build)
-make dev
+# Run quality checks (fmt + vet + lint + test)
+make quality
+
+# Run full CI simulation (deps + fmt + vet + lint + test + build)
+make pre-commit
 ```
 
 See [TESTING.md](TESTING.md) for comprehensive testing guidelines.
@@ -161,6 +191,7 @@ hector/
 - **A2A Protocol Compliance**: Ensure full compliance with the A2A specification
 - **Documentation**: Improve guides, examples, and API docs
 - **Testing**: Improve test coverage for core packages (see [TESTING.md](TESTING.md))
+- **Code Quality**: Maintain high code quality standards and linting compliance
 - **Performance**: Optimize agent execution and memory usage
 
 ### Medium Priority

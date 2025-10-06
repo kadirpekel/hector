@@ -14,7 +14,7 @@ func TestNewToolRegistryForTesting(t *testing.T) {
 	}
 
 	// Test that registry is initialized with test tools
-	tools := registry.List()
+	tools := registry.BaseRegistry.List()
 	if len(tools) == 0 {
 		t.Error("Expected at least one test tool")
 	}
@@ -32,13 +32,13 @@ func TestToolRegistry_Register(t *testing.T) {
 		Name:       "test-tool",
 	}
 
-	err := registry.Register("test-tool", entry)
+	err := registry.BaseRegistry.Register("test-tool", entry)
 	if err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
 
 	// Verify tool was registered
-	registeredEntry, exists := registry.Get("test-tool")
+	registeredEntry, exists := registry.BaseRegistry.Get("test-tool")
 	if !exists {
 		t.Error("Expected tool to be registered")
 	}
@@ -59,13 +59,13 @@ func TestToolRegistry_Register_Duplicate(t *testing.T) {
 	}
 
 	// Register first time
-	err := registry.Register("test-tool", entry)
+	err := registry.BaseRegistry.Register("test-tool", entry)
 	if err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
 
 	// Try to register again
-	err = registry.Register("test-tool", entry)
+	err = registry.BaseRegistry.Register("test-tool", entry)
 	if err == nil {
 		t.Error("Expected error when registering duplicate tool")
 	}
@@ -82,13 +82,13 @@ func TestToolRegistry_Get(t *testing.T) {
 		Name:       "test-tool",
 	}
 
-	err := registry.Register("test-tool", entry)
+	err := registry.BaseRegistry.Register("test-tool", entry)
 	if err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
 
 	// Get the tool
-	registeredEntry, exists := registry.Get("test-tool")
+	registeredEntry, exists := registry.BaseRegistry.Get("test-tool")
 	if !exists {
 		t.Fatal("Get() should return true for existing tool")
 	}
@@ -105,7 +105,7 @@ func TestToolRegistry_Get(t *testing.T) {
 func TestToolRegistry_Get_NotFound(t *testing.T) {
 	registry := NewToolRegistry()
 
-	_, exists := registry.Get("non-existent-tool")
+	_, exists := registry.BaseRegistry.Get("non-existent-tool")
 	if exists {
 		t.Error("Expected false when getting non-existent tool")
 	}
@@ -115,7 +115,7 @@ func TestToolRegistry_List(t *testing.T) {
 	registry := NewToolRegistry()
 
 	// Initially should be empty
-	tools := registry.List()
+	tools := registry.BaseRegistry.List()
 	if len(tools) != 0 {
 		t.Errorf("Expected 0 tools initially, got %d", len(tools))
 	}
@@ -129,13 +129,13 @@ func TestToolRegistry_List(t *testing.T) {
 		Name:       "test-tool",
 	}
 
-	err := registry.Register("test-tool", entry)
+	err := registry.BaseRegistry.Register("test-tool", entry)
 	if err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
 
 	// Should now have one tool
-	tools = registry.List()
+	tools = registry.BaseRegistry.List()
 	if len(tools) != 1 {
 		t.Errorf("Expected 1 tool, got %d", len(tools))
 	}
@@ -153,19 +153,19 @@ func TestToolRegistry_Remove(t *testing.T) {
 		Name:       "test-tool",
 	}
 
-	err := registry.Register("test-tool", entry)
+	err := registry.BaseRegistry.Register("test-tool", entry)
 	if err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
 
 	// Remove the tool
-	err = registry.Remove("test-tool")
+	err = registry.BaseRegistry.Remove("test-tool")
 	if err != nil {
 		t.Fatalf("Remove() error = %v", err)
 	}
 
 	// Verify tool was removed
-	_, exists := registry.Get("test-tool")
+	_, exists := registry.BaseRegistry.Get("test-tool")
 	if exists {
 		t.Error("Expected tool to be removed")
 	}
@@ -174,7 +174,7 @@ func TestToolRegistry_Remove(t *testing.T) {
 func TestToolRegistry_Remove_NotFound(t *testing.T) {
 	registry := NewToolRegistry()
 
-	err := registry.Remove("non-existent-tool")
+	err := registry.BaseRegistry.Remove("non-existent-tool")
 	if err == nil {
 		t.Error("Expected error when removing non-existent tool")
 	}
@@ -184,7 +184,7 @@ func TestToolRegistry_Count(t *testing.T) {
 	registry := NewToolRegistry()
 
 	// Initially should be 0
-	count := registry.Count()
+	count := registry.BaseRegistry.Count()
 	if count != 0 {
 		t.Errorf("Expected count 0 initially, got %d", count)
 	}
@@ -206,11 +206,11 @@ func TestToolRegistry_Count(t *testing.T) {
 		Name:       "tool2",
 	}
 
-	registry.Register("tool1", entry1)
-	registry.Register("tool2", entry2)
+	registry.BaseRegistry.Register("tool1", entry1)
+	registry.BaseRegistry.Register("tool2", entry2)
 
 	// Should now be 2
-	count = registry.Count()
+	count = registry.BaseRegistry.Count()
 	if count != 2 {
 		t.Errorf("Expected count 2, got %d", count)
 	}
@@ -228,13 +228,13 @@ func TestToolRegistry_Clear(t *testing.T) {
 		Name:       "test-tool",
 	}
 
-	registry.Register("test-tool", entry)
+	registry.BaseRegistry.Register("test-tool", entry)
 
 	// Clear the registry
-	registry.Clear()
+	registry.BaseRegistry.Clear()
 
 	// Should be empty
-	count := registry.Count()
+	count := registry.BaseRegistry.Count()
 	if count != 0 {
 		t.Errorf("Expected count 0 after clear, got %d", count)
 	}

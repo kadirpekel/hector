@@ -1,7 +1,7 @@
 # Hector Makefile
 # Build and release management for the Hector AI agent platform
 
-.PHONY: help build install test clean fmt vet lint release version test-coverage test-coverage-summary test-package test-race test-verbose dev ci
+.PHONY: help build install test clean fmt vet lint release version test-coverage test-coverage-summary test-package test-race test-verbose dev ci install-lint quality pre-commit
 
 # Default target
 help:
@@ -126,11 +126,11 @@ mod-tidy:
 	go mod tidy
 
 # Development workflow
-dev: fmt vet test build
+dev: fmt vet lint test build
 	@echo "Development build complete"
 
 # CI workflow
-ci: deps fmt vet test
+ci: deps fmt vet lint test
 	@echo "CI checks complete"
 
 # Test package coverage
@@ -152,3 +152,25 @@ test-race:
 test-verbose:
 	@echo "Running tests with verbose output..."
 	go test -v ./...
+
+# Install golangci-lint
+install-lint:
+	@echo "Installing golangci-lint..."
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v1.55.2
+
+# Run golangci-lint
+lint:
+	@echo "Running golangci-lint..."
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+		echo "golangci-lint not found. Installing..."; \
+		$(MAKE) install-lint; \
+	fi
+	export PATH=$$PATH:$(shell go env GOPATH)/bin && golangci-lint run --timeout=5m
+
+# Run all quality checks
+quality: fmt vet lint test
+	@echo "All quality checks passed"
+
+# Pre-commit checks (what CI runs)
+pre-commit: deps fmt vet lint test build
+	@echo "Pre-commit checks complete - ready to push"

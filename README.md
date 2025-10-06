@@ -40,6 +40,7 @@
 - [Documentation](docs/) - Complete documentation
 - [Contributing](docs/CONTRIBUTING.md) - How to contribute
 - [Testing](docs/TESTING.md) - Testing practices and guidelines
+- [Development](#development) - Local development setup
 
 ---
 
@@ -828,6 +829,7 @@ We welcome contributions! Since Hector is in alpha, this is a great time to shap
 - **Write comprehensive tests** - See [Testing Guide](docs/TESTING.md)
 - Update documentation for API changes
 - Use semantic versioning for releases
+- **Pass all quality checks** - See [Development](#development) section below
 
 ### Testing Requirements
 
@@ -852,6 +854,110 @@ Hector follows **proper unit testing best practices**:
 - **Experimental features** - May be removed or modified
 
 **See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed contribution guidelines.**
+
+---
+
+## 🛠️ **Development**
+
+### Prerequisites
+
+- Go 1.24 or later
+- Git
+- Make (optional, for convenience targets)
+
+### Local Development Setup
+
+1. **Clone and setup**
+   ```bash
+   git clone https://github.com/kadirpekel/hector.git
+   cd hector
+   go mod download
+   ```
+
+2. **Build the project**
+   ```bash
+   make build
+   # or
+   go build -o hector ./cmd/hector
+   ```
+
+3. **Run tests**
+   ```bash
+   make test
+   # or
+   go test ./...
+   ```
+
+### Quality Checks
+
+Hector maintains high code quality standards with comprehensive checks:
+
+```bash
+# Run all quality checks (recommended before committing)
+make pre-commit  # deps + fmt + vet + lint + test + build
+
+# Run quality checks without build (faster feedback)
+make quality     # fmt + vet + lint + test
+
+# Individual checks
+make fmt         # Format code with gofmt
+make vet         # Run go vet for static analysis
+make lint        # Run golangci-lint (auto-installs if needed)
+make test        # Run all tests
+make test-race   # Run tests with race detection
+make build       # Build the project
+```
+
+### Quality Requirements
+
+All code must pass these checks:
+- ✅ **Code formatting** - Must be formatted with `gofmt`
+- ✅ **Static analysis** - Must pass `go vet` with zero warnings
+- ✅ **Linting** - Must pass `golangci-lint` with zero warnings
+- ✅ **Tests** - All tests must pass
+- ✅ **Build** - Project must build successfully
+- ✅ **Race conditions** - No race conditions detected
+
+### Development Workflow
+
+1. **Create feature branch**
+   ```bash
+   git checkout -b feature/your-feature
+   ```
+
+2. **Make changes and test**
+   ```bash
+   # During development
+   make quality
+   
+   # Before committing
+   make pre-commit
+   ```
+
+3. **Commit and push**
+   ```bash
+   git add .
+   git commit -m "feat: add your feature"
+   git push origin feature/your-feature
+   ```
+
+### Available Make Targets
+
+```bash
+make help           # Show all available targets
+make build          # Build the project
+make test           # Run all tests
+make test-coverage  # Run tests with coverage
+make test-race      # Run tests with race detection
+make fmt            # Format code
+make vet            # Run static analysis
+make lint           # Run linter
+make quality        # Run quality checks
+make pre-commit     # Run full CI simulation
+make clean          # Clean build artifacts
+make deps           # Download dependencies
+make mod-tidy       # Tidy go.mod
+```
 
 ---
 

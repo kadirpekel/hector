@@ -127,14 +127,23 @@ go tool cover -html=coverage.out -o coverage.html
 ### Quality Checks
 
 ```bash
-# Run all quality checks (fmt, vet, test, build)
-make dev
+# Run all quality checks (fmt, vet, lint, test)
+make quality
+
+# Run full CI simulation (deps + fmt + vet + lint + test + build)
+make pre-commit
 
 # Format code
 make fmt
 
-# Run linter
+# Run static analysis
+make vet
+
+# Run linter (auto-installs golangci-lint if needed)
 make lint
+
+# Run tests with race detection
+make test-race
 ```
 
 ## Test Categories
@@ -373,7 +382,7 @@ llms:
 
 ### GitHub Actions
 
-Tests are automatically run in CI/CD pipeline:
+Tests and quality checks are automatically run in CI/CD pipeline:
 
 ```yaml
 # .github/workflows/ci.yml
@@ -383,8 +392,17 @@ Tests are automatically run in CI/CD pipeline:
 - name: Run tests with coverage
   run: make test-coverage
 
+- name: Run go vet
+  run: make vet
+
+- name: Run golangci-lint
+  uses: golangci/golangci-lint-action@v6
+  with:
+    version: v1.55.2
+    args: --timeout=5m --verbose
+
 - name: Upload coverage reports
-  uses: codecov/codecov-action@v3
+  uses: codecov/codecov-action@v4
   with:
     file: ./coverage.out
 ```
@@ -392,8 +410,11 @@ Tests are automatically run in CI/CD pipeline:
 ### Pre-commit Hooks
 
 ```bash
-# Run before committing
-make dev  # fmt + vet + test + build
+# Run before committing (full CI simulation)
+make pre-commit  # deps + fmt + vet + lint + test + build
+
+# Or for faster feedback during development
+make quality     # fmt + vet + lint + test
 ```
 
 ## Common Testing Patterns

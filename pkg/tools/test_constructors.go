@@ -103,7 +103,7 @@ func NewToolRegistryForTesting() *ToolRegistry {
 
 	// Register test tools
 	todoTool := NewTodoToolForTesting()
-	registry.Register("todo_write", ToolEntry{
+	registry.BaseRegistry.Register("todo_write", ToolEntry{
 		Tool:       todoTool,
 		Source:     &TestToolSource{name: "test-local"},
 		SourceType: "local",
