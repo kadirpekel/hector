@@ -101,6 +101,7 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 |----------|---------|
 | [Building Agents](AGENTS.md) | Complete single-agent guide (Start here) |
 | [Tools & Extensions](TOOLS.md) | Built-in tools, MCP, plugins |
+| [Plugins](PLUGINS.md) | Plugin development guide (gRPC extensions) |
 | [API Reference](API_REFERENCE.md) | A2A protocol HTTP/WebSocket API |
 | [Quick Start](QUICK_START.md) | Get started in 5 minutes |
 | [Architecture](ARCHITECTURE.md) | System design, sessions, orchestration |

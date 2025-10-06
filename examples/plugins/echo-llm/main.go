@@ -25,8 +25,6 @@ type EchoLLMProvider struct {
 // Initialize is called when the plugin starts
 // This is where you would initialize your LLM client, load models, etc.
 func (e *EchoLLMProvider) Initialize(ctx context.Context, config map[string]string) error {
-	fmt.Println("🔌 Echo LLM Plugin initializing...")
-
 	// Load configuration
 	if prefix, ok := config["prefix"]; ok {
 		e.prefix = prefix
@@ -40,7 +38,6 @@ func (e *EchoLLMProvider) Initialize(ctx context.Context, config map[string]stri
 	// Parse temperature (with default)
 	e.temperature = 0.7
 
-	fmt.Printf("✅ Echo LLM Plugin initialized with prefix: %s\n", e.prefix)
 	return nil
 }
 
@@ -163,7 +160,6 @@ func (e *EchoLLMProvider) GetModelInfo(ctx context.Context) (*grpc.ModelInfo, er
 // Shutdown is called when the plugin is being stopped
 // Clean up any resources here
 func (e *EchoLLMProvider) Shutdown(ctx context.Context) error {
-	fmt.Printf("🔌 Echo LLM Plugin shutting down (processed %d calls)\n", e.callCount)
 	return nil
 }
 
@@ -183,8 +179,6 @@ func (e *EchoLLMProvider) Health(ctx context.Context) error {
 // ============================================================================
 
 func main() {
-	fmt.Println("🚀 Starting Echo LLM Plugin...")
-
 	// Create the plugin implementation
 	provider := &EchoLLMProvider{}
 

@@ -2,7 +2,9 @@ package component
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/kadirpekel/hector/config"
 	"github.com/kadirpekel/hector/databases"
@@ -11,6 +13,7 @@ import (
 	"github.com/kadirpekel/hector/plugins"
 	plugingrpc "github.com/kadirpekel/hector/plugins/grpc"
 	"github.com/kadirpekel/hector/tools"
+	"gopkg.in/yaml.v3"
 )
 
 // ============================================================================
@@ -286,13 +289,21 @@ func (cm *ComponentManager) isPluginConfigured(name string, pluginConfig *config
 
 // loadAndRegisterPlugin loads a plugin and registers it with appropriate registry
 func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name string, cfg *config.PluginConfig, pluginType plugins.PluginType) error {
+	// Load manifest from .plugin.yaml file
+	manifestPath := cfg.Path + ".plugin.yaml"
+	manifest, err := loadPluginManifest(manifestPath)
+	if err != nil {
+		return fmt.Errorf("failed to load manifest from %s: %w", manifestPath, err)
+	}
+
 	// Convert config.PluginConfig to plugins.PluginConfig
 	pluginCfg := &plugins.PluginConfig{
-		Name:    name,
-		Type:    plugins.PluginProtocol(cfg.Type),
-		Path:    cfg.Path,
-		Enabled: cfg.Enabled,
-		Config:  cfg.Config,
+		Name:     name,
+		Type:     plugins.PluginProtocol(cfg.Type),
+		Path:     cfg.Path,
+		Enabled:  cfg.Enabled,
+		Config:   cfg.Config,
+		Manifest: manifest,
 	}
 
 	// Load the plugin
@@ -309,19 +320,44 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 	// Register with appropriate component registry based on type
 	switch pluginType {
 	case plugins.PluginTypeLLM:
-		// TODO: Create LLM provider adapter and register with llmRegistry
-		fmt.Printf("✓ Loaded LLM plugin: %s\n", name)
+		llmAdapter, ok := plugin.(*plugingrpc.LLMPluginAdapter)
+		if !ok {
+			return fmt.Errorf("plugin is not an LLM provider")
+		}
+
+		// Create bridge and register
+		llmBridge := &llmPluginBridge{adapter: llmAdapter}
+		if err := cm.llmRegistry.RegisterLLM(name, llmBridge); err != nil {
+			return fmt.Errorf("failed to register LLM plugin: %w", err)
+		}
+		fmt.Printf("✓ Registered LLM plugin: %s\n", name)
 
 	case plugins.PluginTypeDatabase:
-		// TODO: Create Database provider adapter and register with dbRegistry
-		fmt.Printf("✓ Loaded Database plugin: %s\n", name)
+		dbAdapter, ok := plugin.(*plugingrpc.DatabasePluginAdapter)
+		if !ok {
+			return fmt.Errorf("plugin is not a Database provider")
+		}
+
+		// Create bridge and register
+		dbBridge := &databasePluginBridge{adapter: dbAdapter}
+		if err := cm.dbRegistry.RegisterDatabase(name, dbBridge); err != nil {
+			return fmt.Errorf("failed to register Database plugin: %w", err)
+		}
+		fmt.Printf("✓ Registered Database plugin: %s\n", name)
 
 	case plugins.PluginTypeEmbedder:
-		// TODO: Create Embedder provider adapter and register with embedderRegistry
-		fmt.Printf("✓ Loaded Embedder plugin: %s\n", name)
-	}
+		embedderAdapter, ok := plugin.(*plugingrpc.EmbedderPluginAdapter)
+		if !ok {
+			return fmt.Errorf("plugin is not an Embedder provider")
+		}
 
-	_ = plugin // Suppress unused variable warning for now
+		// Create bridge and register
+		embedderBridge := &embedderPluginBridge{adapter: embedderAdapter}
+		if err := cm.embedderRegistry.RegisterEmbedder(name, embedderBridge); err != nil {
+			return fmt.Errorf("failed to register Embedder plugin: %w", err)
+		}
+		fmt.Printf("✓ Registered Embedder plugin: %s\n", name)
+	}
 
 	return nil
 }
@@ -332,6 +368,254 @@ func (cm *ComponentManager) ShutdownPlugins(ctx context.Context) error {
 		return cm.pluginRegistry.Shutdown(ctx)
 	}
 	return nil
+}
+
+// ============================================================================
+// PLUGIN HELPER FUNCTIONS
+// ============================================================================
+
+// loadPluginManifest loads a plugin manifest from a .plugin.yaml file
+func loadPluginManifest(manifestPath string) (*plugins.PluginManifest, error) {
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read manifest file: %w", err)
+	}
+
+	var manifestWrapper struct {
+		Plugin plugins.PluginManifest `yaml:"plugin"`
+	}
+	if err := yaml.Unmarshal(data, &manifestWrapper); err != nil {
+		return nil, fmt.Errorf("failed to parse manifest YAML: %w", err)
+	}
+
+	return &manifestWrapper.Plugin, nil
+}
+
+// ============================================================================
+// PLUGIN BRIDGE IMPLEMENTATIONS
+// ============================================================================
+// These bridge types adapt plugin adapters to component registry interfaces
+// with zero overhead - just simple method forwarding and type conversion.
+
+// llmPluginBridge adapts LLMPluginAdapter to llms.LLMProvider interface
+type llmPluginBridge struct {
+	adapter *plugingrpc.LLMPluginAdapter
+}
+
+func (b *llmPluginBridge) Generate(messages []llms.Message, tools []llms.ToolDefinition) (text string, toolCalls []llms.ToolCall, tokens int, err error) {
+	// Convert llms.Message to pb.Message
+	pbMessages := make([]*plugingrpc.Message, len(messages))
+	for i, msg := range messages {
+		pbMessages[i] = &plugingrpc.Message{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	// Convert llms.ToolDefinition to pb.ToolDefinition
+	pbTools := make([]*plugingrpc.ToolDefinition, len(tools))
+	for i, tool := range tools {
+		// Serialize parameters to JSON
+		paramsJSON, _ := json.Marshal(tool.Parameters)
+		pbTools[i] = &plugingrpc.ToolDefinition{
+			Name:           tool.Name,
+			Description:    tool.Description,
+			ParametersJson: string(paramsJSON),
+		}
+	}
+
+	// Call plugin
+	response, err := b.adapter.GetPlugin().Generate(context.Background(), pbMessages, pbTools)
+	if err != nil {
+		return "", nil, 0, err
+	}
+
+	// Convert pb.ToolCall back to llms.ToolCall
+	llmToolCalls := make([]llms.ToolCall, len(response.ToolCalls))
+	for i, tc := range response.ToolCalls {
+		// Deserialize arguments from JSON
+		var args map[string]interface{}
+		if err := json.Unmarshal([]byte(tc.ArgumentsJson), &args); err != nil {
+			args = make(map[string]interface{})
+		}
+
+		llmToolCalls[i] = llms.ToolCall{
+			ID:        tc.Id,
+			Name:      tc.Name,
+			Arguments: args,
+			RawArgs:   tc.ArgumentsJson,
+		}
+	}
+
+	return response.Text, llmToolCalls, int(response.TokensUsed), nil
+}
+
+func (b *llmPluginBridge) GenerateStreaming(messages []llms.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
+	// Convert messages and tools
+	pbMessages := make([]*plugingrpc.Message, len(messages))
+	for i, msg := range messages {
+		pbMessages[i] = &plugingrpc.Message{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	pbTools := make([]*plugingrpc.ToolDefinition, len(tools))
+	for i, tool := range tools {
+		// Serialize parameters to JSON
+		paramsJSON, _ := json.Marshal(tool.Parameters)
+		pbTools[i] = &plugingrpc.ToolDefinition{
+			Name:           tool.Name,
+			Description:    tool.Description,
+			ParametersJson: string(paramsJSON),
+		}
+	}
+
+	// Get plugin streaming channel
+	pbChunks, err := b.adapter.GetPlugin().GenerateStreaming(context.Background(), pbMessages, pbTools)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create output channel and convert chunks
+	llmChunks := make(chan llms.StreamChunk, 10)
+	go func() {
+		defer close(llmChunks)
+		for pbChunk := range pbChunks {
+			llmChunk := llms.StreamChunk{
+				Text:   pbChunk.Text,
+				Tokens: int(pbChunk.TokensUsed),
+			}
+
+			// Convert chunk type
+			switch pbChunk.Type {
+			case plugingrpc.ChunkTypeText:
+				llmChunk.Type = "text"
+			case plugingrpc.ChunkTypeDone:
+				llmChunk.Type = "done"
+			case plugingrpc.ChunkTypeError:
+				llmChunk.Type = "error"
+				llmChunk.Error = fmt.Errorf("%s", pbChunk.Error)
+			}
+
+			llmChunks <- llmChunk
+		}
+	}()
+
+	return llmChunks, nil
+}
+
+func (b *llmPluginBridge) GetModelName() string {
+	info, err := b.adapter.GetPlugin().GetModelInfo(context.Background())
+	if err != nil {
+		return "unknown"
+	}
+	return info.ModelName
+}
+
+func (b *llmPluginBridge) GetMaxTokens() int {
+	info, err := b.adapter.GetPlugin().GetModelInfo(context.Background())
+	if err != nil {
+		return 0
+	}
+	return int(info.MaxTokens)
+}
+
+func (b *llmPluginBridge) GetTemperature() float64 {
+	info, err := b.adapter.GetPlugin().GetModelInfo(context.Background())
+	if err != nil {
+		return 0.0
+	}
+	return info.Temperature
+}
+
+func (b *llmPluginBridge) Close() error {
+	return b.adapter.Shutdown(context.Background())
+}
+
+// databasePluginBridge adapts DatabasePluginAdapter to databases.DatabaseProvider interface
+type databasePluginBridge struct {
+	adapter *plugingrpc.DatabasePluginAdapter
+}
+
+func (b *databasePluginBridge) Upsert(ctx context.Context, collection string, id string, vector []float32, metadata map[string]interface{}) error {
+	// Convert metadata from interface{} to string
+	stringMetadata := make(map[string]string)
+	for k, v := range metadata {
+		stringMetadata[k] = fmt.Sprintf("%v", v)
+	}
+
+	return b.adapter.GetPlugin().Upsert(ctx, collection, id, vector, stringMetadata)
+}
+
+func (b *databasePluginBridge) Search(ctx context.Context, collection string, vector []float32, topK int) ([]databases.SearchResult, error) {
+	pbResults, err := b.adapter.GetPlugin().Search(ctx, collection, vector, int32(topK))
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert pb.SearchResult to databases.SearchResult
+	results := make([]databases.SearchResult, len(pbResults))
+	for i, pbResult := range pbResults {
+		metadata := make(map[string]interface{})
+		for k, v := range pbResult.Metadata {
+			metadata[k] = v
+		}
+
+		results[i] = databases.SearchResult{
+			ID:       pbResult.Id,
+			Score:    pbResult.Score,
+			Content:  pbResult.Content,
+			Metadata: metadata,
+		}
+	}
+
+	return results, nil
+}
+
+func (b *databasePluginBridge) Delete(ctx context.Context, collection string, id string) error {
+	return b.adapter.GetPlugin().Delete(ctx, collection, id)
+}
+
+func (b *databasePluginBridge) CreateCollection(ctx context.Context, collection string, vectorSize uint64) error {
+	return b.adapter.GetPlugin().CreateCollection(ctx, collection, vectorSize)
+}
+
+func (b *databasePluginBridge) DeleteCollection(ctx context.Context, collection string) error {
+	return b.adapter.GetPlugin().DeleteCollection(ctx, collection)
+}
+
+func (b *databasePluginBridge) Close() error {
+	return b.adapter.Shutdown(context.Background())
+}
+
+// embedderPluginBridge adapts EmbedderPluginAdapter to embedders.EmbedderProvider interface
+type embedderPluginBridge struct {
+	adapter *plugingrpc.EmbedderPluginAdapter
+}
+
+func (b *embedderPluginBridge) Embed(text string) ([]float32, error) {
+	return b.adapter.GetPlugin().Embed(context.Background(), text)
+}
+
+func (b *embedderPluginBridge) GetDimension() int {
+	info, err := b.adapter.GetPlugin().GetEmbedderInfo(context.Background())
+	if err != nil {
+		return 0
+	}
+	return int(info.Dimension)
+}
+
+func (b *embedderPluginBridge) GetModelName() string {
+	info, err := b.adapter.GetPlugin().GetEmbedderInfo(context.Background())
+	if err != nil {
+		return "unknown"
+	}
+	return info.ModelName
+}
+
+func (b *embedderPluginBridge) Close() error {
+	return b.adapter.Shutdown(context.Background())
 }
 
 // ============================================================================
