@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kadirpekel/hector/internal/httpclient"
+	"github.com/kadirpekel/hector/pkg/httpclient"
 	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"

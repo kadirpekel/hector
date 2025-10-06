@@ -23,9 +23,7 @@ builds:
       - CGO_ENABLED=0
 
 archives:
-  - builds:
-      - hector
-    format_overrides:
+  - format_overrides:
       - goos: windows
         format: zip
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"

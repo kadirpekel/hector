@@ -30,6 +30,18 @@ install:
 	@echo "Installing hector..."
 	go install -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" ./cmd/hector
 
+# Install to system PATH (requires sudo)
+install-system:
+	@echo "Installing hector to /usr/local/bin..."
+	@sudo cp hector /usr/local/bin/hector
+	@echo "Hector installed successfully!"
+
+# Uninstall from system PATH
+uninstall:
+	@echo "Uninstalling hector from /usr/local/bin..."
+	@sudo rm -f /usr/local/bin/hector
+	@echo "Hector uninstalled successfully!"
+
 # Run tests
 test:
 	@echo "Running tests..."

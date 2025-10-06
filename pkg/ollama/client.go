@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kadirpekel/hector/internal/httpclient"
+	"github.com/kadirpekel/hector/pkg/httpclient"
 )
 
 // ============================================================================

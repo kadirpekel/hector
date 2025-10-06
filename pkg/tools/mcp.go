@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kadirpekel/hector/internal/httpclient"
+	"github.com/kadirpekel/hector/pkg/httpclient"
 )
 
 // MCPToolSource manages tools from a single MCP server

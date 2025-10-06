@@ -151,10 +151,10 @@ agents:
 # Clone and build
 git clone https://github.com/kadirpekel/hector
 cd hector
-go build -o hector ./cmd/hector
+make build
 
-# Optional: Install to PATH
-./install.sh
+# Optional: Install to system PATH
+make install-system
 ```
 
 #### Option 2: Go Package Installation
@@ -832,7 +832,7 @@ We welcome contributions! Since Hector is in alpha, this is a great time to shap
 - **Breaking changes** - Will be documented in release notes
 - **Experimental features** - May be removed or modified
 
-**See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.**
+**See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed contribution guidelines.**
 
 ---
 
