@@ -170,11 +170,8 @@ go get github.com/kadirpekel/hector
 #### Option 3: Docker Installation
 
 ```bash
-# Pull from Docker Hub (recommended)
+# Pull from Docker Hub
 docker pull kadirpekel/hector:latest
-
-# Or pull from GitHub Container Registry
-docker pull ghcr.io/kadirpekel/hector:latest
 
 # Run with default configuration
 docker run -p 8080:8080 kadirpekel/hector:latest

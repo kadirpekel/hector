@@ -1,6 +1,8 @@
 # GoReleaser configuration for Hector
 # https://goreleaser.com
 
+version: 2
+
 project_name: hector
 
 builds:
