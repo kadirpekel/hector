@@ -38,11 +38,6 @@ archives:
 checksum:
   name_template: 'checksums.txt'
 
-snapshot:
-  name_template: "{{ .Tag }}-next"
-  global:
-    id: snapshot
-
 changelog:
   sort: asc
   filters:
