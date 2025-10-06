@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kadirpekel/hector/pkg/httpclient"
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/httpclient"
 )
 
 // ============================================================================
