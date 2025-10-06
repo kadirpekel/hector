@@ -13,7 +13,7 @@ import (
 	"github.com/kadirpekel/hector/pkg/plugins"
 	plugingrpc "github.com/kadirpekel/hector/pkg/plugins/grpc"
 	"github.com/kadirpekel/hector/pkg/tools"
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 // ============================================================================
