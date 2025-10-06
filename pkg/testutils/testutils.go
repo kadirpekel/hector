@@ -79,13 +79,21 @@ func TestAgentCard() *a2a.AgentCard {
 
 // TestContext returns a context with timeout for testing
 func TestContext() context.Context {
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Note: We don't call cancel here because this is a test utility
+	// that returns a context for immediate use. The context will be
+	// automatically cancelled when the timeout expires.
+	_ = cancel // Explicitly ignore to satisfy linter
 	return ctx
 }
 
 // TestContextWithTimeout returns a context with custom timeout for testing
 func TestContextWithTimeout(timeout time.Duration) context.Context {
-	ctx, _ := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// Note: We don't call cancel here because this is a test utility
+	// that returns a context for immediate use. The context will be
+	// automatically cancelled when the timeout expires.
+	_ = cancel // Explicitly ignore to satisfy linter
 	return ctx
 }
 
