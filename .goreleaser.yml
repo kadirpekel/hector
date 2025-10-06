@@ -23,8 +23,7 @@ builds:
       - CGO_ENABLED=0
 
 archives:
-  - id: default
-    builds:
+  - builds:
       - hector
     format_overrides:
       - goos: windows
@@ -41,6 +40,8 @@ checksum:
 
 snapshot:
   name_template: "{{ .Tag }}-next"
+  global:
+    id: snapshot
 
 changelog:
   sort: asc
@@ -69,12 +70,13 @@ release:
   footer: |
     **Full Changelog**: https://github.com/kadirpekel/hector/compare/{{ .PreviousTag }}...{{ .Tag }}
 
-brews:
-  - name: hector
-    homepage: https://github.com/kadirpekel/hector
-    description: "Pure A2A-Native Declarative AI Agent Platform"
-    license: "AGPL-3.0"
-    test: |
-      system "#{bin}/hector version"
-    install: |
-      bin.install "hector"
+# Homebrew formula (commented out for now)
+# brews:
+#   - name: hector
+#     homepage: https://github.com/kadirpekel/hector
+#     description: "Pure A2A-Native Declarative AI Agent Platform"
+#     license: "AGPL-3.0"
+#     test: |
+#       system "#{bin}/hector version"
+#     install: |
+#       bin.install "hector"
