@@ -297,14 +297,16 @@ func executeServeCommand(args *CLIArgs) {
 			}
 
 		case "a2a":
-			// External A2A agent
+			// External A2A agent - discover immediately
 			agentInstance, err = agent.NewA2AAgentFromURL(context.Background(), agentConfig.URL, a2aClient)
 			if err != nil {
-				fmt.Printf("❌ Failed to connect to external agent '%s' at %s: %v\n", agentID, agentConfig.URL, err)
+				fmt.Printf("⚠️  Failed to discover external agent '%s' at %s: %v\n", agentID, agentConfig.URL, err)
+				fmt.Printf("    Make sure the external A2A server is running and accessible.\n")
+				fmt.Printf("    Skipping registration for '%s'.\n", agentID)
 				continue
 			}
 			if args.Debug {
-				fmt.Printf("  🌐 Connected to external agent: %s → %s\n", agentID, agentConfig.URL)
+				fmt.Printf("  🌐 Discovered external agent: %s → %s\n", agentID, agentConfig.URL)
 			}
 
 		default:

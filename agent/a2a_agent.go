@@ -28,8 +28,9 @@ func NewA2AAgent(agentCard *a2a.AgentCard, client *a2a.Client) *A2AAgent {
 }
 
 // NewA2AAgentFromURL creates a new A2A agent by discovering it from a URL
+// Returns error if discovery fails - caller must handle
 func NewA2AAgentFromURL(ctx context.Context, agentURL string, client *a2a.Client) (*A2AAgent, error) {
-	// Discover the agent
+	// Discover the agent immediately
 	agentCard, err := client.DiscoverAgent(ctx, agentURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover A2A agent at %s: %w", agentURL, err)

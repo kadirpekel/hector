@@ -579,6 +579,10 @@ func (a *Agent) executeTools(
 // Shared logic for both streaming and non-streaming modes
 func formatToolLabel(toolName string, args map[string]interface{}) string {
 	switch toolName {
+	case "agent_call":
+		if agentName, ok := args["agent"].(string); ok {
+			return fmt.Sprintf("%s → %s", toolName, agentName)
+		}
 	case "execute_command":
 		if cmd, ok := args["command"].(string); ok {
 			if len(cmd) > 60 {

@@ -1,0 +1,63 @@
+# A2A Client Configuration - Consumes External Weather Expert
+# This config has a travel planner that calls the external weather expert agent
+
+# Global settings
+global:
+  a2a_server:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8081  # Different port to avoid conflict with weather server
+
+agents:
+  # Local agent with orchestration capability
+  travel_planner:
+    name: "Travel Planner"
+    description: "Travel planning agent that coordinates with weather experts to provide recommendations"
+    visibility: "public"
+    
+    llm: "gpt-llm"
+    
+    prompt:
+      prompt_slots:
+        system_role: |
+          You are a travel planning assistant.
+          You help users plan trips by coordinating with weather experts to get accurate weather information.
+          
+          Your goal is to provide comprehensive travel recommendations based on weather conditions.
+        
+        reasoning_instructions: |
+          When helping users with travel planning:
+          
+          1. Listen to what they're interested in and remember their preferences
+          2. For weather information, use agent_call to contact the weather_expert
+          3. Combine weather insights with travel recommendations
+          4. Provide helpful suggestions based on conditions
+          
+          You can answer general travel questions directly, but delegate weather queries to the weather expert.
+    
+    reasoning:
+      engine: "supervisor"  # Orchestrator strategy
+      enable_streaming: true
+      show_thinking: true
+      show_tool_execution: true
+    
+    tools:
+      - "agent_call"  # Required for orchestration
+  
+  # External agent reference (A2A)
+  weather_expert:
+    name: "Weather Expert (External)"
+    description: "External weather expert agent via A2A protocol"
+    type: "a2a"  # External A2A agent
+    url: "http://localhost:8080/agents/weather_expert"  # Points to the server
+    visibility: "internal"  # Not exposed, only for internal use
+
+# LLM Configuration
+llms:
+  gpt-llm:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 2000
+    timeout: 60

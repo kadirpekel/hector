@@ -103,13 +103,20 @@ func (s *Server) RegisterAgent(agentID string, agent Agent, visibility string) e
 	// Get the agent's card directly (pure A2A protocol)
 	card := agent.GetAgentCard()
 
-	// Ensure card has the correct agentID and endpoints
+	// Ensure card has the correct agentID
 	card.AgentID = agentID
-	card.Endpoints = AgentEndpoints{
-		Task:   fmt.Sprintf("%s/agents/%s/tasks", s.baseURL, agentID),
-		Stream: fmt.Sprintf("%s/agents/%s/stream", s.baseURL, agentID),
-		Status: fmt.Sprintf("%s/agents/%s/tasks/{taskId}", s.baseURL, agentID),
+
+	// Only set endpoints if they're not already set (native agents)
+	// External A2A agents should keep their original endpoints from discovery
+	if card.Endpoints.Task == "" {
+		// Native agent - set endpoints to this server
+		card.Endpoints = AgentEndpoints{
+			Task:   fmt.Sprintf("%s/agents/%s/tasks", s.baseURL, agentID),
+			Stream: fmt.Sprintf("%s/agents/%s/stream", s.baseURL, agentID),
+			Status: fmt.Sprintf("%s/agents/%s/tasks/{taskId}", s.baseURL, agentID),
+		}
 	}
+	// External agents already have their endpoints set from discovery - preserve them
 
 	s.agents[agentID] = agent
 	s.agentCards[agentID] = card

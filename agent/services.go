@@ -195,6 +195,10 @@ func (s *DefaultPromptService) BuildMessages(
 		messages = append(messages, historyMsgs...)
 	}
 
+	// Add current tool conversation (assistant responses + tool results from this query)
+	// This includes conversation history loaded in agent.go
+	messages = append(messages, currentToolConversation...)
+
 	// Add current user query if not already in history
 	// (History might already have it if we're in a follow-up iteration)
 	needsUserQuery := true
@@ -211,9 +215,6 @@ func (s *DefaultPromptService) BuildMessages(
 			Content: query,
 		})
 	}
-
-	// Add current tool conversation (assistant responses + tool results from this query)
-	messages = append(messages, currentToolConversation...)
 
 	return messages, nil
 }

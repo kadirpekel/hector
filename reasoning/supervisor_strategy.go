@@ -109,40 +109,20 @@ SYNTHESIS GUIDELINES:
 - Present a unified perspective
 - Credit agents when their insights are valuable`,
 
-		ToolUsage: `ORCHESTRATION TOOLS:
+		ToolUsage: `Use agent_call to delegate tasks to specialized agents.
 
-You have access to agent_call for delegating work:
+When you need another agent's expertise:
+- Identify which agent has the needed capabilities
+- Call agent_call with the agent name and a clear task description
+- Provide sufficient context in the task description
+- Build on previous results when making sequential calls
 
-agent_call:
-  Purpose: Delegate a specific task to another agent
-  Parameters:
-    - agent: The agent ID (e.g., "researcher", "analyst")
-    - task: Clear description of what you want the agent to do
-  
-  Example:
-    {"agent": "researcher", "task": "Research AI agent frameworks in 2025"}
-  
-  Tips:
-    - Pass specific, actionable tasks
-    - Include relevant context from previous steps
-    - One clear objective per call
-    - Reference previous results when building on them
+Common orchestration patterns:
+- Sequential: Output of one agent feeds into the next
+- Parallel: Multiple independent tasks executed simultaneously
+- Hierarchical: Break down complex tasks, delegate parts, then synthesize
 
-ORCHESTRATION PATTERNS:
-
-Sequential (A → B → C):
-  Use when output of one agent feeds into another
-  Example: Research → Analyze → Write
-
-Parallel (A + B + C):
-  Use when tasks are independent
-  Call multiple agents, then synthesize
-
-Hierarchical (A → [B, C] → D):
-  Break down, delegate substeps, combine
-  Example: Plan → [Research, Code] → Review
-
-Always think about the orchestration strategy before delegating.`,
+Think strategically about which agents to involve and in what order.`,
 
 		OutputFormat: `Present results in a clear, organized way:
 - Explain your orchestration strategy
