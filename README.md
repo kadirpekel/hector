@@ -1,3 +1,5 @@
+> ⚠️ **Alpha Status**: Hector is currently in alpha development. APIs may change, and some features are experimental. We welcome feedback and contributions!
+
 # Hector
 
 ```
@@ -23,8 +25,6 @@
 [![GoDoc](https://godoc.org/github.com/kadirpekel/hector?status.svg)](https://godoc.org/github.com/kadirpekel/hector)
 
 > **Define agents in YAML, serve via A2A protocol, orchestrate without code**
-
-> ⚠️ **Alpha Status**: Hector is currently in alpha development. APIs may change, and some features are experimental. We welcome feedback and contributions!
 
 **Quick Links:**
 - [Quick Start](#quick-start) - Get running in 5 minutes
