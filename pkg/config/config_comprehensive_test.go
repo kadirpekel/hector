@@ -1,0 +1,475 @@
+package config
+
+import (
+	"testing"
+	"time"
+)
+
+func TestConfig_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *Config
+		wantErr bool
+	}{
+		{
+			name: "valid_minimal_config",
+			config: &Config{
+				Agents: map[string]AgentConfig{
+					"test-agent": {
+						Name: "Test Agent",
+						LLM:  "test-llm",
+					},
+				},
+				LLMs: map[string]LLMProviderConfig{
+					"test-llm": {
+						Type:   "openai",
+						Model:  "gpt-4o",
+						Host:   "https://api.openai.com/v1",
+						APIKey: "sk-test-key",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid_complete_config",
+			config: &Config{
+				Agents: map[string]AgentConfig{
+					"test-agent": {
+						Name: "Test Agent",
+						LLM:  "test-llm",
+					},
+				},
+				LLMs: map[string]LLMProviderConfig{
+					"test-llm": {
+						Type:   "openai",
+						Model:  "gpt-4o",
+						Host:   "https://api.openai.com/v1",
+						APIKey: "sk-test-key",
+					},
+				},
+				Global: GlobalSettings{
+					Logging: LoggingConfig{
+						Level:  "info",
+						Format: "text",
+						Output: "stdout",
+					},
+					Performance: PerformanceConfig{
+						MaxConcurrency: 4,
+						Timeout:        15 * time.Minute,
+					},
+					A2AServer: A2AServerConfig{
+						Enabled: true,
+						Host:    "0.0.0.0",
+						Port:    8080,
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid_agent_config",
+			config: &Config{
+				Agents: map[string]AgentConfig{
+					"test-agent": {
+						Name: "", // Missing name
+						LLM:  "test-llm",
+					},
+				},
+				LLMs: map[string]LLMProviderConfig{
+					"test-llm": {
+						Type:  "openai",
+						Model: "gpt-4o",
+						Host:  "https://api.openai.com/v1",
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid_llm_config",
+			config: &Config{
+				Agents: map[string]AgentConfig{
+					"test-agent": {
+						Name: "Test Agent",
+						LLM:  "test-llm",
+					},
+				},
+				LLMs: map[string]LLMProviderConfig{
+					"test-llm": {
+						Type:  "", // Missing type
+						Model: "gpt-4o",
+						Host:  "https://api.openai.com/v1",
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid_global_settings",
+			config: &Config{
+				Agents: map[string]AgentConfig{
+					"test-agent": {
+						Name: "Test Agent",
+						LLM:  "test-llm",
+					},
+				},
+				LLMs: map[string]LLMProviderConfig{
+					"test-llm": {
+						Type:  "openai",
+						Model: "gpt-4o",
+						Host:  "https://api.openai.com/v1",
+					},
+				},
+				Global: GlobalSettings{
+					Logging: LoggingConfig{
+						Level:  "invalid", // Invalid log level
+						Format: "text",
+						Output: "stdout",
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name:    "empty_config",
+			config:  &Config{},
+			wantErr: true, // Empty config will fail validation due to missing API key for default LLM
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set defaults before validation
+			tt.config.SetDefaults()
+
+			err := tt.config.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Config.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestConfig_SetDefaults(t *testing.T) {
+	tests := []struct {
+		name           string
+		config         *Config
+		validateConfig func(t *testing.T, config *Config)
+	}{
+		{
+			name:   "empty_config",
+			config: &Config{},
+			validateConfig: func(t *testing.T, config *Config) {
+				// Should create default services
+				if len(config.LLMs) == 0 {
+					t.Error("SetDefaults() should create default LLM")
+				}
+				if len(config.Databases) == 0 {
+					t.Error("SetDefaults() should create default database")
+				}
+				if len(config.Embedders) == 0 {
+					t.Error("SetDefaults() should create default embedder")
+				}
+				if len(config.Agents) == 0 {
+					t.Error("SetDefaults() should create default agent")
+				}
+
+				// Check default LLM
+				if llm, exists := config.LLMs["default-llm"]; exists {
+					if llm.Type != "openai" {
+						t.Errorf("Default LLM type = %v, want %v", llm.Type, "openai")
+					}
+					if llm.Model != "gpt-4o" {
+						t.Errorf("Default LLM model = %v, want %v", llm.Model, "gpt-4o")
+					}
+				} else {
+					t.Error("Default LLM 'default-llm' should exist")
+				}
+
+				// Check default agent
+				if agent, exists := config.Agents["default-agent"]; exists {
+					if agent.Name != "Assistant" {
+						t.Errorf("Default agent name = %v, want %v", agent.Name, "Assistant")
+					}
+					if agent.LLM != "default-llm" {
+						t.Errorf("Default agent LLM = %v, want %v", agent.LLM, "default-llm")
+					}
+				} else {
+					t.Error("Default agent 'default-agent' should exist")
+				}
+			},
+		},
+		{
+			name: "config_with_existing_services",
+			config: &Config{
+				LLMs: map[string]LLMProviderConfig{
+					"custom-llm": {
+						Type:  "anthropic",
+						Model: "claude-3-5-sonnet",
+					},
+				},
+				Agents: map[string]AgentConfig{
+					"custom-agent": {
+						Name: "Custom Agent",
+						LLM:  "custom-llm",
+					},
+				},
+			},
+			validateConfig: func(t *testing.T, config *Config) {
+				// Should not create defaults when services already exist
+				if len(config.LLMs) != 1 {
+					t.Errorf("Should have 1 LLM, got %d", len(config.LLMs))
+				}
+				if len(config.Agents) != 1 {
+					t.Errorf("Should have 1 agent, got %d", len(config.Agents))
+				}
+
+				// Should still create defaults for missing services
+				if len(config.Databases) == 0 {
+					t.Error("SetDefaults() should create default database")
+				}
+				if len(config.Embedders) == 0 {
+					t.Error("SetDefaults() should create default embedder")
+				}
+			},
+		},
+		{
+			name: "config_with_partial_llm",
+			config: &Config{
+				LLMs: map[string]LLMProviderConfig{
+					"partial-llm": {
+						Type: "openai",
+						// Missing model and host
+					},
+				},
+			},
+			validateConfig: func(t *testing.T, config *Config) {
+				if llm, exists := config.LLMs["partial-llm"]; exists {
+					if llm.Model == "" {
+						t.Error("SetDefaults() should set default model for LLM")
+					}
+					if llm.Host == "" {
+						t.Error("SetDefaults() should set default host for LLM")
+					}
+					if llm.Temperature == 0 {
+						t.Error("SetDefaults() should set default temperature for LLM")
+					}
+				} else {
+					t.Error("Partial LLM should still exist after SetDefaults")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.config.SetDefaults()
+			tt.validateConfig(t, tt.config)
+		})
+	}
+}
+
+func TestConfig_HelperMethods(t *testing.T) {
+	config := &Config{
+		Agents: map[string]AgentConfig{
+			"agent1": {Name: "Agent 1", LLM: "llm1"},
+			"agent2": {Name: "Agent 2", LLM: "llm2"},
+		},
+		Workflows: map[string]WorkflowConfig{
+			"workflow1": {Name: "Workflow 1"},
+			"workflow2": {Name: "Workflow 2"},
+		},
+		DocumentStores: map[string]DocumentStoreConfig{
+			"store1": {Name: "Store 1", Source: "directory", Path: "./docs"},
+			"store2": {Name: "Store 2", Source: "directory", Path: "./data"},
+		},
+	}
+
+	t.Run("GetAgent", func(t *testing.T) {
+		// Test existing agent
+		agent, exists := config.GetAgent("agent1")
+		if !exists {
+			t.Error("GetAgent() should return true for existing agent")
+		}
+		if agent.Name != "Agent 1" {
+			t.Errorf("GetAgent() name = %v, want %v", agent.Name, "Agent 1")
+		}
+
+		// Test non-existing agent
+		_, exists = config.GetAgent("non-existing")
+		if exists {
+			t.Error("GetAgent() should return false for non-existing agent")
+		}
+	})
+
+	t.Run("GetWorkflow", func(t *testing.T) {
+		// Test existing workflow
+		workflow, exists := config.GetWorkflow("workflow1")
+		if !exists {
+			t.Error("GetWorkflow() should return true for existing workflow")
+		}
+		if workflow.Name != "Workflow 1" {
+			t.Errorf("GetWorkflow() name = %v, want %v", workflow.Name, "Workflow 1")
+		}
+
+		// Test non-existing workflow
+		_, exists = config.GetWorkflow("non-existing")
+		if exists {
+			t.Error("GetWorkflow() should return false for non-existing workflow")
+		}
+	})
+
+	t.Run("GetDocumentStore", func(t *testing.T) {
+		// Test existing document store
+		store, exists := config.GetDocumentStore("store1")
+		if !exists {
+			t.Error("GetDocumentStore() should return true for existing store")
+		}
+		if store.Name != "Store 1" {
+			t.Errorf("GetDocumentStore() name = %v, want %v", store.Name, "Store 1")
+		}
+
+		// Test non-existing document store
+		_, exists = config.GetDocumentStore("non-existing")
+		if exists {
+			t.Error("GetDocumentStore() should return false for non-existing store")
+		}
+	})
+
+	t.Run("ListAgents", func(t *testing.T) {
+		agents := config.ListAgents()
+		if len(agents) != 2 {
+			t.Errorf("ListAgents() length = %v, want %v", len(agents), 2)
+		}
+
+		// Check that both agents are in the list
+		agentMap := make(map[string]bool)
+		for _, agent := range agents {
+			agentMap[agent] = true
+		}
+		if !agentMap["agent1"] || !agentMap["agent2"] {
+			t.Error("ListAgents() should contain both agents")
+		}
+	})
+
+	t.Run("ListWorkflows", func(t *testing.T) {
+		workflows := config.ListWorkflows()
+		if len(workflows) != 2 {
+			t.Errorf("ListWorkflows() length = %v, want %v", len(workflows), 2)
+		}
+
+		// Check that both workflows are in the list
+		workflowMap := make(map[string]bool)
+		for _, workflow := range workflows {
+			workflowMap[workflow] = true
+		}
+		if !workflowMap["workflow1"] || !workflowMap["workflow2"] {
+			t.Error("ListWorkflows() should contain both workflows")
+		}
+	})
+
+	t.Run("ListDocumentStores", func(t *testing.T) {
+		stores := config.ListDocumentStores()
+		if len(stores) != 2 {
+			t.Errorf("ListDocumentStores() length = %v, want %v", len(stores), 2)
+		}
+
+		// Check that both stores are in the list
+		storeMap := make(map[string]bool)
+		for _, store := range stores {
+			storeMap[store] = true
+		}
+		if !storeMap["store1"] || !storeMap["store2"] {
+			t.Error("ListDocumentStores() should contain both stores")
+		}
+	})
+}
+
+func TestConfig_EmptyMaps(t *testing.T) {
+	config := &Config{
+		Agents:         make(map[string]AgentConfig),
+		Workflows:      make(map[string]WorkflowConfig),
+		DocumentStores: make(map[string]DocumentStoreConfig),
+	}
+
+	t.Run("EmptyAgents", func(t *testing.T) {
+		agents := config.ListAgents()
+		if len(agents) != 0 {
+			t.Errorf("ListAgents() length = %v, want %v", len(agents), 0)
+		}
+
+		_, exists := config.GetAgent("non-existing")
+		if exists {
+			t.Error("GetAgent() should return false for empty map")
+		}
+	})
+
+	t.Run("EmptyWorkflows", func(t *testing.T) {
+		workflows := config.ListWorkflows()
+		if len(workflows) != 0 {
+			t.Errorf("ListWorkflows() length = %v, want %v", len(workflows), 0)
+		}
+
+		_, exists := config.GetWorkflow("non-existing")
+		if exists {
+			t.Error("GetWorkflow() should return false for empty map")
+		}
+	})
+
+	t.Run("EmptyDocumentStores", func(t *testing.T) {
+		stores := config.ListDocumentStores()
+		if len(stores) != 0 {
+			t.Errorf("ListDocumentStores() length = %v, want %v", len(stores), 0)
+		}
+
+		_, exists := config.GetDocumentStore("non-existing")
+		if exists {
+			t.Error("GetDocumentStore() should return false for empty map")
+		}
+	})
+}
+
+func TestConfig_NilMaps(t *testing.T) {
+	config := &Config{
+		Agents:         nil,
+		Workflows:      nil,
+		DocumentStores: nil,
+	}
+
+	t.Run("NilAgents", func(t *testing.T) {
+		agents := config.ListAgents()
+		if len(agents) != 0 {
+			t.Errorf("ListAgents() length = %v, want %v", len(agents), 0)
+		}
+
+		_, exists := config.GetAgent("non-existing")
+		if exists {
+			t.Error("GetAgent() should return false for nil map")
+		}
+	})
+
+	t.Run("NilWorkflows", func(t *testing.T) {
+		workflows := config.ListWorkflows()
+		if len(workflows) != 0 {
+			t.Errorf("ListWorkflows() length = %v, want %v", len(workflows), 0)
+		}
+
+		_, exists := config.GetWorkflow("non-existing")
+		if exists {
+			t.Error("GetWorkflow() should return false for nil map")
+		}
+	})
+
+	t.Run("NilDocumentStores", func(t *testing.T) {
+		stores := config.ListDocumentStores()
+		if len(stores) != 0 {
+			t.Errorf("ListDocumentStores() length = %v, want %v", len(stores), 0)
+		}
+
+		_, exists := config.GetDocumentStore("non-existing")
+		if exists {
+			t.Error("GetDocumentStore() should return false for nil map")
+		}
+	})
+}

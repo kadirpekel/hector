@@ -47,10 +47,24 @@ test:
 	@echo "Running tests..."
 	go test -v ./...
 
+# Run tests with coverage
+test-coverage:
+	@echo "Running tests with coverage..."
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+# Run tests with coverage and show summary
+test-coverage-summary:
+	@echo "Running tests with coverage summary..."
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out
+
 # Clean build artifacts
 clean:
 	@echo "Cleaning..."
 	rm -f hector
+	rm -f coverage.out coverage.html
 	go clean
 
 # Format code
