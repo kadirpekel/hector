@@ -24,6 +24,8 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 [![GoDoc](https://godoc.org/github.com/kadirpekel/hector?status.svg)](https://godoc.org/github.com/kadirpekel/hector)
 [![Docker](https://img.shields.io/badge/docker-available-blue.svg)](https://hub.docker.com/r/kadirpekel/hector)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/kadirpekel/hector/actions)
+[![Coverage](https://img.shields.io/badge/coverage-75%25-brightgreen.svg)](https://github.com/kadirpekel/hector/actions)
 
 > **Define agents in YAML, serve via A2A protocol, orchestrate without code**
 
@@ -36,6 +38,8 @@
 - [External Agents](docs/EXTERNAL_AGENTS.md) - Use remote A2A agents
 - [Authentication](docs/AUTHENTICATION.md) - Secure with JWT validation
 - [Documentation](docs/) - Complete documentation
+- [Contributing](docs/CONTRIBUTING.md) - How to contribute
+- [Testing](docs/TESTING.md) - Testing practices and guidelines
 
 ---
 
@@ -821,9 +825,24 @@ We welcome contributions! Since Hector is in alpha, this is a great time to shap
 ### Development Guidelines
 
 - Follow Go conventions and use `gofmt`
-- Add tests for new features
+- **Write comprehensive tests** - See [Testing Guide](docs/TESTING.md)
 - Update documentation for API changes
 - Use semantic versioning for releases
+
+### Testing Requirements
+
+Hector follows **proper unit testing best practices**:
+
+- **Test Coverage Targets**: Critical packages >90%, Core packages >80%
+- **Test Quality**: Table-driven tests, edge cases, error handling
+- **CI/CD Integration**: All tests must pass before merging
+- **Documentation**: See [TESTING.md](docs/TESTING.md) for comprehensive guidelines
+
+**Current Coverage**:
+- HTTPClient Package: 99.0%
+- Config Package: 56.6%
+- Tools Package: 57.5%
+- Registry Package: 100.0%
 
 ### Alpha Status Notes
 

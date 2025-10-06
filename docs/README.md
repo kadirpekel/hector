@@ -32,6 +32,9 @@ Complete configuration reference with examples and all available options.
 ### [CLI Guide](CLI_GUIDE.md)
 Command-line interface reference for all `hector` commands.
 
+### [Testing Guide](TESTING.md)
+Comprehensive testing practices, strategies, and tools for Hector development.
+
 ---
 
 ## Multi-Agent Features
@@ -93,6 +96,12 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 **Understand the system**
 → [Architecture](ARCHITECTURE.md)
 
+**Contribute to the project**
+→ [Contributing Guide](CONTRIBUTING.md)
+
+**Write tests**
+→ [Testing Guide](TESTING.md)
+
 ---
 
 ## Documentation Index
@@ -109,6 +118,8 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 | [CLI Guide](CLI_GUIDE.md) | Command-line interface |
 | [External Agents](EXTERNAL_AGENTS.md) | External A2A agent integration |
 | [Authentication](AUTHENTICATION.md) | JWT token validation |
+| [Contributing](CONTRIBUTING.md) | How to contribute to Hector |
+| [Testing](TESTING.md) | Testing practices and guidelines |
 
 ---
 

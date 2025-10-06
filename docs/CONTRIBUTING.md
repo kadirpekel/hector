@@ -99,10 +99,34 @@ test: add integration tests for A2A protocol
 
 ### Testing
 
-- Write tests for new functionality
-- Aim for good test coverage
-- Use table-driven tests where appropriate
+Hector follows **proper unit testing best practices**. All contributions must include comprehensive tests.
+
+**Requirements**:
+- Write tests for all new functionality
+- Maintain or improve test coverage
+- Follow our [Testing Guide](TESTING.md) for best practices
+- Use table-driven tests for multiple scenarios
 - Test both success and error cases
+- Include edge cases and boundary conditions
+
+**Test Coverage Targets**:
+- Critical packages (Config, Agent, HTTPClient): >90%
+- Core packages (Tools, LLMs, A2A): >80%
+- Utility packages: >70%
+
+**Running Tests**:
+```bash
+# Run all tests
+make test
+
+# Run tests with coverage
+make test-coverage
+
+# Run quality checks (fmt + vet + test + build)
+make dev
+```
+
+See [TESTING.md](TESTING.md) for comprehensive testing guidelines.
 
 ### Documentation
 
@@ -136,7 +160,7 @@ hector/
 
 - **A2A Protocol Compliance**: Ensure full compliance with the A2A specification
 - **Documentation**: Improve guides, examples, and API docs
-- **Testing**: Add more comprehensive tests
+- **Testing**: Improve test coverage for core packages (see [TESTING.md](TESTING.md))
 - **Performance**: Optimize agent execution and memory usage
 
 ### Medium Priority

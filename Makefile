@@ -1,7 +1,7 @@
 # Hector Makefile
 # Build and release management for the Hector AI agent platform
 
-.PHONY: help build install test clean fmt vet lint release version
+.PHONY: help build install test clean fmt vet lint release version test-coverage test-coverage-summary test-package test-race test-verbose dev ci
 
 # Default target
 help:
@@ -11,6 +11,11 @@ help:
 	@echo "  build     - Build the hector binary"
 	@echo "  install   - Install hector to GOPATH/bin"
 	@echo "  test      - Run all tests"
+	@echo "  test-coverage - Run tests with coverage report"
+	@echo "  test-coverage-summary - Run tests with coverage summary"
+	@echo "  test-package - Run tests for specific package (PACKAGE=pkg/name)"
+	@echo "  test-race - Run tests with race detection"
+	@echo "  test-verbose - Run tests with verbose output"
 	@echo "  clean     - Clean build artifacts"
 	@echo "  fmt       - Format Go code"
 	@echo "  vet       - Run go vet"
@@ -127,3 +132,23 @@ dev: fmt vet test build
 # CI workflow
 ci: deps fmt vet test
 	@echo "CI checks complete"
+
+# Test package coverage
+test-package:
+	@echo "Running tests for specific package..."
+	@if [ -z "$(PACKAGE)" ]; then \
+		echo "Usage: make test-package PACKAGE=pkg/config"; \
+		exit 1; \
+	fi
+	go test -v -coverprofile=coverage.out ./$(PACKAGE)/...
+	go tool cover -func=coverage.out
+
+# Test with race detection
+test-race:
+	@echo "Running tests with race detection..."
+	go test -race -v ./...
+
+# Test with verbose output
+test-verbose:
+	@echo "Running tests with verbose output..."
+	go test -v ./...
