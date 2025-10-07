@@ -122,11 +122,39 @@ func executeCallCommand(agentURL string, input string, token string, stream bool
 	fmt.Printf("🤖 Calling %s...\n\n", card.Name)
 
 	if stream {
-		// TODO: Implement streaming when we add WebSocket support
-		fmt.Println("⚠️  Streaming not yet implemented, using standard execution")
+		// Use A2A SSE streaming
+		message := a2a.CreateTextMessage(a2a.MessageRoleUser, input)
+		eventCh, err := client.SendMessageStreaming(context.Background(), card.URL, message)
+		if err != nil {
+			return fmt.Errorf("streaming failed: %w", err)
+		}
+
+		// Process streaming events
+		for event := range eventCh {
+			switch event.Type {
+			case a2a.StreamEventTypeMessage:
+				if event.Message != nil && event.Message.Role == a2a.MessageRoleAssistant {
+					for _, part := range event.Message.Parts {
+						if part.Type == a2a.PartTypeText {
+							fmt.Print(part.Text)
+						}
+					}
+				}
+			case a2a.StreamEventTypeStatus:
+				if event.Status != nil && event.Status.State == a2a.TaskStateFailed {
+					fmt.Println("\n❌ Task failed")
+					if event.Status.Reason != "" {
+						return fmt.Errorf("agent error: %s", event.Status.Reason)
+					}
+					return fmt.Errorf("task failed")
+				}
+			}
+		}
+		fmt.Println() // New line after streaming
+		return nil
 	}
 
-	// Execute task using new A2A message/send
+	// Non-streaming execution
 	task, err := client.SendTextMessage(context.Background(), card.URL, input)
 	if err != nil {
 		return fmt.Errorf("task execution failed: %w", err)

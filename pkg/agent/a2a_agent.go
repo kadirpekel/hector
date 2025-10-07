@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/kadirpekel/hector/pkg/a2a"
 )
@@ -87,39 +86,9 @@ func (a *A2AAgent) ExecuteTaskStreaming(ctx context.Context, task *a2a.Task) (<-
 }
 
 // ============================================================================
-// HELPER FUNCTIONS
+// NOTE: Helper functions like ExtractTextFromTask are in pkg/a2a/client.go
+// This keeps the A2A protocol package standalone and reusable
 // ============================================================================
-
-// ExtractTextFromTask extracts text content from a task (for backward compat)
-func ExtractTextFromTask(task *a2a.Task) string {
-	if task == nil {
-		return ""
-	}
-
-	var texts []string
-
-	// Extract from assistant messages
-	for _, msg := range task.Messages {
-		if msg.Role == a2a.MessageRoleAssistant {
-			for _, part := range msg.Parts {
-				if part.Type == a2a.PartTypeText {
-					texts = append(texts, part.Text)
-				}
-			}
-		}
-	}
-
-	// Extract from artifacts
-	for _, artifact := range task.Artifacts {
-		for _, part := range artifact.Parts {
-			if part.Type == a2a.PartTypeText {
-				texts = append(texts, part.Text)
-			}
-		}
-	}
-
-	return strings.Join(texts, "\n")
-}
 
 // ============================================================================
 // COMPILE-TIME CHECK
