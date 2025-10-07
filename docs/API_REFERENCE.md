@@ -1,6 +1,6 @@
 # Hector A2A API Reference
 
-**A2A Protocol Implementation - HTTP/WebSocket API**
+**A2A Protocol Implementation - HTTP+JSON/SSE API**
 
 This document provides a complete reference for Hector's A2A (Agent-to-Agent) protocol implementation. Hector follows the [A2A specification](https://a2a-protocol.org) to enable standardized agent interoperability.
 
@@ -29,7 +29,7 @@ The A2A (Agent-to-Agent) protocol is an open standard for agent interoperability
 - **Agent Cards** - Capability discovery and metadata
 - **Task Execution** - Standardized request/response model
 - **Sessions** - Multi-turn conversation state management
-- **Streaming** - Real-time output via WebSocket
+- **Streaming** - Real-time output via Server-Sent Events (SSE)
 
 ### Hector's A2A Implementation
 
@@ -37,7 +37,7 @@ Hector implements the A2A specification with the following features:
 
 ✅ **Full A2A Core Compliance** - Discovery, task execution, status  
 ✅ **Session Management** - Stateful multi-turn conversations  
-✅ **WebSocket Streaming** - Real-time chunked output  
+✅ **SSE Streaming** - Real-time output via Server-Sent Events  
 ✅ **JWT Authentication** - Optional OAuth2/OIDC integration  
 ✅ **Visibility Control** - Public, internal, and private agents  
 
@@ -505,80 +505,84 @@ curl -X DELETE http://localhost:8080/sessions/sess-abc123
 
 ## Streaming
 
-Real-time streaming of task output via WebSocket.
+Real-time streaming of task output via **Server-Sent Events (SSE)** per A2A specification.
 
 ### Stream Task Execution
 
-**Endpoint**: `WS /agents/{agentId}/stream`
+**Endpoint**: `POST /agents/{agentId}/message/stream`
 
-WebSocket endpoint for streaming task execution.
+Server-Sent Events endpoint for streaming task execution.
 
-**Connection**:
-```javascript
-const ws = new WebSocket('ws://localhost:8080/agents/competitor_analyst/stream');
-
-ws.onopen = () => {
-  ws.send(JSON.stringify({
-    taskId: 'task-789',
-    input: {
-      type: 'text/plain',
-      content: 'Analyze LangChain vs CrewAI'
-    }
-  }));
-};
-
-ws.onmessage = (event) => {
-  const chunk = JSON.parse(event.data);
-  console.log(chunk);
-};
+**Request**:
+```bash
+curl -N -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{"message":{"role":"user","parts":[{"type":"text","text":"Analyze LangChain vs CrewAI"}]}}' \
+  http://localhost:8080/agents/competitor_analyst/message/stream
 ```
 
-**Stream Chunks**:
-
-**Text Chunk**:
-```json
-{
-  "taskId": "task-789",
-  "chunkType": "text",
-  "content": "LangChain is a framework...",
-  "timestamp": "2025-10-05T10:30:01.234Z",
-  "final": false
-}
+**Response Headers**:
+```
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
 ```
 
-**Final Chunk**:
-```json
-{
-  "taskId": "task-789",
-  "chunkType": "done",
-  "content": null,
-  "timestamp": "2025-10-05T10:30:05.678Z",
-  "final": true
-}
+**Event Stream Format**:
+
+**Status Event**:
+```
+event: status
+data: {"task_id":"task-789","status":{"state":"working","message":"Processing..."}}
+
 ```
 
-**Error Chunk**:
-```json
-{
-  "taskId": "task-789",
-  "chunkType": "error",
-  "content": "Execution failed: timeout",
-  "timestamp": "2025-10-05T10:30:30.000Z",
-  "final": true
-}
+**Message Event** (incremental content):
+```
+event: message
+data: {"task_id":"task-789","message":{"role":"assistant","parts":[{"type":"text","text":"LangChain is a framework"}]}}
+
 ```
 
-**Chunk Types**:
-- `text` - Text output chunk
-- `data` - Structured data chunk
-- `metadata` - Additional metadata
-- `error` - Error message
-- `done` - Final chunk (end of stream)
+**Artifact Event** (tool execution):
+```
+event: artifact
+data: {"task_id":"task-789","artifact":{"type":"tool_call","name":"search","result":"..."}}
+
+```
+
+**Completion**:
+```
+event: status
+data: {"task_id":"task-789","status":{"state":"completed"}}
+
+[connection closes]
+```
+
+### Resume Streaming (Resubscribe)
+
+**Endpoint**: `POST /agents/{agentId}/tasks/{taskId}/resubscribe`
+
+Resume streaming for an existing task from a specific event.
+
+**Request**:
+```bash
+curl -N -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{"lastEventId":"evt-123"}' \
+  http://localhost:8080/agents/competitor_analyst/tasks/task-789/resubscribe
+```
+
+**Event Types** (per A2A spec):
+- `status` - Task status updates (working, completed, failed)
+- `message` - Incremental message content
+- `artifact` - Tool executions, attachments, metadata
 
 **Notes**:
-- Chunks arrive as they're generated (real-time)
-- `final: true` indicates the last chunk
-- Connection closes automatically after final chunk
+- Follows A2A SSE specification (Section 7)
+- Events arrive in real-time as generated
+- Connection closes automatically on completion or error
+- Use `lastEventId` to resume from specific point
 
 ---
 
@@ -597,7 +601,7 @@ Agent capability card for discovery.
   capabilities: string[];    // List of capabilities
   endpoints: {
     task: string;            // POST endpoint for tasks
-    stream?: string;         // WebSocket endpoint (optional)
+    stream?: string;         // SSE endpoint (optional)
     status?: string;         // GET endpoint for status (optional)
   };
   inputTypes: string[];      // Accepted MIME types
@@ -837,33 +841,44 @@ async function executeTask(agentId, prompt) {
   return result;
 }
 
-// 3. Stream task execution
-function streamTask(agentId, prompt) {
-  const ws = new WebSocket(`ws://localhost:8080/agents/${agentId}/stream`);
-  
-  ws.onopen = () => {
-    ws.send(JSON.stringify({
-      input: {
-        type: 'text/plain',
-        content: prompt
+// 3. Stream task execution with SSE
+async function streamTask(agentId, prompt) {
+  const response = await fetch(`${baseUrl}/agents/${agentId}/message/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream'
+    },
+    body: JSON.stringify({
+      message: {
+        role: 'user',
+        parts: [{type: 'text', text: prompt}]
       }
-    }));
-  };
-  
-  ws.onmessage = (event) => {
-    const chunk = JSON.parse(event.data);
+    })
+  });
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const {done, value} = await reader.read();
+    if (done) break;
     
-    if (chunk.chunkType === 'text') {
-      process.stdout.write(chunk.content);
-    } else if (chunk.chunkType === 'done') {
-      console.log('\n\nStream complete');
-      ws.close();
+    const chunk = decoder.decode(value);
+    const lines = chunk.split('\n');
+    
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const data = JSON.parse(line.slice(6));
+        if (data.message && data.message.parts) {
+          for (const part of data.message.parts) {
+            if (part.text) process.stdout.write(part.text);
+          }
+        }
+      }
     }
-  };
-  
-  ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
-  };
+  }
+  console.log('\n\nStream complete');
 }
 
 // 4. Session management
@@ -987,7 +1002,7 @@ curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
 Hector implements:
 - ✅ **A2A Core**: Agent discovery, task execution, status
 - ✅ **Sessions**: Multi-turn conversation state management
-- ✅ **Streaming**: Real-time WebSocket output
+- ✅ **Streaming**: Real-time SSE output
 - ✅ **Authentication**: Optional JWT/OAuth2
 - ✅ **Visibility**: Public, internal, private agents
 

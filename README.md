@@ -16,9 +16,6 @@
 [![A2A Protocol](https://img.shields.io/badge/A2A-compliant-green.svg)](https://a2a-protocol.org)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 [![GoDoc](https://godoc.org/github.com/kadirpekel/hector?status.svg)](https://godoc.org/github.com/kadirpekel/hector)
-[![Docker](https://img.shields.io/badge/docker-available-blue.svg)](https://hub.docker.com/r/kadirpekel/hector)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/kadirpekel/hector/actions)
-[![Coverage](https://img.shields.io/badge/coverage-75%25-brightgreen.svg)](https://github.com/kadirpekel/hector/actions)
 
 > **Build powerful AI agents in pure YAML. Compose single agents, orchestrate multi-agent systems, and integrate external A2A agents—all through declarative configuration and industry-standard protocols.**
 
@@ -41,83 +38,99 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 ### Single Agent Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Hector Agent                        │
-│                                                         │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │              A2A Interface                       │  │
-│  │  GetAgentCard() | ExecuteTask() | Streaming     │  │
-│  └─────────────────────┬────────────────────────────┘  │
-│                        │                               │
-│  ┌─────────────────────▼────────────────────────────┐  │
-│  │          Reasoning Engine                       │  │
-│  │  • Chain-of-Thought                            │  │
-│  │  • Supervisor (Multi-Agent)                    │  │
-│  └─────────────────────┬────────────────────────────┘  │
-│                        │                               │
-│         ┌──────────────┼──────────────┐                │
-│         │              │              │                │
-│  ┌──────▼─────┐ ┌──────▼─────┐ ┌─────▼──────┐        │
-│  │   Tools    │ │    LLM     │ │    RAG     │        │
-│  │ • Execute  │ │ • OpenAI   │ │ • Qdrant   │        │
-│  │ • File Ops │ │ • Anthropic│ │ • Semantic │        │
-│  │ • Search   │ │ • Plugins  │ │   Search   │        │
-│  │ • MCP      │ │            │ │            │        │
-│  └────────────┘ └────────────┘ └────────────┘        │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        USER / CLIENT                        │
+│                  (CLI, HTTP, A2A Protocol)                  │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          │ HTTP+JSON / SSE
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      A2A INTERFACE                          │
+│      GetAgentCard() • ExecuteTask() • Streaming (SSE)       │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    REASONING ENGINE                         │
+│  Chain-of-Thought Strategy    |    Supervisor Strategy      │
+│  • Step-by-step reasoning     |    • Multi-agent coord      │
+│  • Natural termination        |    • Task decomposition     │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+      ┌───────────────────┼───────────────────┐
+      │                   │                   │
+      ▼                   ▼                   ▼
+┌──────────────┐    ┌──────────────┐   ┌──────────────┐
+│    TOOLS     │    │     LLM      │   │     RAG      │
+│              │    │              │   │              │
+│ • Command    │    │ • OpenAI     │   │ • Qdrant     │
+│ • File Ops   │    │ • Anthropic  │   │ • Semantic   │
+│ • Search     │    │ • Ollama     │   │   Search     │
+│ • MCP        │    │ • Plugins    │   │ • Documents  │
+└──────────────┘    └──────────────┘   └──────────────┘
 ```
 
 **Single Agent Capabilities:**
-- ✅ **Custom Prompts** - 6-slot system (role, reasoning, tools, output, style, additional)
-- ✅ **Reasoning Strategies** - Chain-of-thought or supervisor modes
-- ✅ **Built-in Tools** - Command execution, file operations, search, todos
-- ✅ **MCP Integration** - Connect to 150+ apps (Composio, Mem0, custom servers)
-- ✅ **RAG Support** - Semantic search with document stores (Qdrant)
-- ✅ **Sessions** - Multi-turn conversations with context
-- ✅ **Streaming** - Token-by-token output via SSE
-- ✅ **Plugin System** - Extend with custom LLMs, databases, tools (gRPC)
+- **6-Slot Prompt System** - Fine-tune role, reasoning, tools, output, style, additional
+- **Built-in Tools** - Command execution, file operations, search, todos
+- **MCP Integration** - 150+ apps (Composio, Mem0, custom servers)
+- **RAG Support** - Semantic search with Qdrant vector database
+- **Multi-turn Sessions** - Conversation history and context
+- **Real-time Streaming** - Server-Sent Events (SSE) per A2A spec
+- **gRPC Plugin System** - Extend with custom LLMs, databases, tools (any language)
 
 ---
 
 ### Multi-Agent Architecture
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                    A2A Protocol Layer                      │
-│            HTTP+JSON | Sessions | Streaming                │
-└───────────────────────┬────────────────────────────────────┘
-                        │
-        ┌───────────────┼───────────────┐
-        │               │               │
-┌───────▼────────┐ ┌────▼──────┐ ┌─────▼─────────┐
-│  Orchestrator  │ │  Native   │ │   External    │
-│     Agent      │ │  Agents   │ │  A2A Agents   │
-│                │ │           │ │               │
-│ • Supervisor   │ │ • Local   │ │ • Remote URL  │
-│ • agent_call   │ │ • Full    │ │ • A2A Client  │
-│ • Synthesis    │ │   Control │ │ • Transparent │
-└───────┬────────┘ └─────┬─────┘ └───────┬───────┘
-        │                │                │
-        └────────────────┼────────────────┘
-                         │
-              ┌──────────▼──────────┐
-              │  LLM-Driven Routing │
-              │  (agent_call tool)  │
-              └─────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        USER / CLIENT                        │
+│                  (CLI, HTTP, A2A Protocol)                  │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          │ A2A Protocol (HTTP+JSON/SSE)
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      A2A SERVER                             │
+│         • Discovery (/agents)    • Execution (/tasks)       │
+│         • Sessions               • Streaming (SSE)          │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+      ┌───────────────────┼───────────────────┐
+      │                   │                   │
+      ▼                   ▼                   ▼
+┌──────────────┐    ┌──────────────┐   ┌──────────────┐
+│Orchestrator  │    │   Native     │   │   External   │
+│    Agent     │    │   Agents     │   │  A2A Agents  │
+│              │    │              │   │              │
+│ • Supervisor │    │ • Local      │   │ • Remote URL │
+│ • agent_call │    │ • Full Ctrl  │   │ • HTTP Proxy │
+│ • Synthesis  │    │              │   │ • Same Iface │
+└──────┬───────┘    └──────────────┘   └──────────────┘
+       │
+       │ LLM-Driven Routing (agent_call tool)
+       └──────────────────┐
+                          ▼
+                  ┌───────────────┐
+                  │ Agent Registry│
+                  │  (All Agents) │
+                  └───────────────┘
 ```
 
 **Multi-Agent Capabilities:**
-- ✅ **LLM-Driven Orchestration** - No hard-coded workflows, intelligent delegation
-- ✅ **Native + External** - Mix local and remote agents seamlessly
-- ✅ **Transparent Interface** - Same `a2a.Agent` interface for all agents
-- ✅ **Agent Discovery** - Automatic capability detection via Agent Cards
-- ✅ **Ecosystem Ready** - Interoperate across organizations via A2A protocol
+- **LLM-Driven Orchestration** - No hard-coded workflows, intelligent delegation
+- **Heterogeneous Agents** - Mix native (local) and external (remote) seamlessly
+- **Transparent Interface** - Same `a2a.Agent` interface for all agent types
+- **Agent Discovery** - Automatic capability detection via Agent Cards
+- **True Interoperability** - Works with any A2A-compliant agent across organizations
 
 **Key Concepts:**
-- **A2A Protocol** - Open standard for agent interoperability ([spec](https://a2a-protocol.org))
-- **Agent Card** - Describes capabilities, endpoints, authentication
-- **Task Model** - Standard request/response with streaming support
-- **agent_call Tool** - Enables orchestration by delegating to other agents
+- **A2A Protocol** - Open standard for agent communication ([specification](https://a2a-protocol.org))
+- **Agent Card** - JSON document describing capabilities, endpoints, authentication
+- **agent_call Tool** - Built-in tool enabling orchestration by delegating to other agents
+- **Supervisor Strategy** - Optimized reasoning for multi-agent coordination
 
 ---
 
@@ -171,9 +184,65 @@ export OPENAI_API_KEY="sk-..."
 
 ---
 
-## Features
+## Core Capabilities
 
-### Declarative Configuration
+Hector provides a comprehensive feature set through pure YAML configuration:
+
+**Declarative Configuration**
+- Pure YAML - Zero code for complete agent systems
+- 6-slot prompt system - Role, reasoning, tools, output, style, additional
+- Environment variables - Secure API key management
+- Multiple LLM providers - OpenAI, Anthropic, Ollama
+
+**Tools & Integrations**
+- Built-in tools - Command execution, file operations, search, todos
+- MCP Protocol - 150+ apps (GitHub, Slack, Gmail, Notion via Composio)
+- Custom tools - Add domain-specific capabilities
+- Security controls - Command whitelisting, path restrictions, timeouts
+
+**RAG & Knowledge**
+- Vector databases - Qdrant, Pinecone, or custom via plugins
+- Semantic search - Automatic document retrieval
+- Document stores - Organize knowledge by domain
+- Embeddings - Ollama or custom embedder plugins
+
+**Sessions & Streaming**
+- Multi-turn conversations - Persistent conversation history
+- Server-Sent Events - Real-time A2A-compliant streaming
+- Session management - Create, list, delete sessions via API
+- Context retention - Agent remembers conversation across messages
+
+**Multi-Agent Orchestration**
+- LLM-driven routing - Agent decides which specialist to delegate to
+- Native + External - Mix local and remote A2A agents
+- agent_call tool - Automatic orchestration capability
+- Supervisor strategy - Optimized for coordination tasks
+
+**Plugin System (gRPC)**
+- Language-agnostic - Write in Go, Python, Rust, JavaScript, etc.
+- Custom LLMs - Integrate proprietary models or local inference
+- Custom databases - Add specialized vector stores
+- Custom embedders - Fine-tuned or domain-specific embeddings
+- Process isolation - Plugins run in separate processes for stability
+
+**Security & Deployment**
+- JWT Authentication - OAuth2/OIDC integration
+- Visibility control - Public, internal, private agents
+- Tool security - Whitelisting, sandboxing, resource limits
+- Docker support - Production-ready containerization
+
+**A2A Protocol Compliance**
+- Agent Cards - Standard capability discovery
+- HTTP+JSON transport - RESTful A2A endpoints
+- SSE streaming - Real-time output per spec
+- Task management - Create, get status, cancel tasks
+- Session support - Multi-turn conversations
+
+---
+
+## Detailed Examples
+
+### Single Agent with RAG
 
 ```yaml
 agents:
@@ -181,118 +250,116 @@ agents:
     name: "Coding Assistant"
     llm: "claude-3-5-sonnet"
     
-    # Customize behavior with slot-based prompts
     prompt:
       system_role: "Expert software engineer"
       reasoning_instructions: |
         1. Understand requirements fully
-        2. Consider edge cases
+        2. Search codebase for patterns
         3. Write clean, testable code
     
-    # Enable RAG
-    document_stores:
-      - "codebase_docs"
+    document_stores: ["codebase_docs"]
+    tools: [execute_command, file_writer, search]
     
-    # Built-in tools
-    tools:
-      - execute_command
-      - file_writer
-    
-    # Reasoning strategy
     reasoning:
       engine: "chain-of-thought"
+      max_iterations: 15
       enable_streaming: true
+
+llms:
+  claude-3-5-sonnet:
+    type: "anthropic"
+    model: "claude-3-5-sonnet-20241022"
+    api_key: "${ANTHROPIC_API_KEY}"
+
+document_stores:
+  codebase_docs:
+    type: "qdrant"
+    url: "http://localhost:6333"
+    collection: "codebase"
 ```
 
 ---
 
-### Multi-Agent Orchestration
+### Multi-Agent System
 
 ```yaml
 agents:
-  # Native agents
+  # Specialized agents
   researcher:
+    name: "Research Specialist"
     llm: "gpt-4o"
     document_stores: ["research_db"]
   
   analyst:
+    name: "Data Analyst"
     llm: "gpt-4o"
   
   # External A2A agent (just provide URL!)
-  partner_specialist:
+  translator:
     type: "a2a"
-    url: "https://partner.com/agents/specialist"
+    url: "https://translation-service.com/agents/translator"
   
-  # Orchestrator coordinates them all
+  # Orchestrator coordinates all
   orchestrator:
+    name: "Orchestrator"
     llm: "gpt-4o"
-    tools:
-      - agent_call  # Enable orchestration
+    tools: [agent_call]  # Enable delegation
     reasoning:
       engine: "supervisor"
+    prompt:
+      system_role: |
+        Coordinate specialists: researcher, analyst, translator
+        Use agent_call to delegate tasks intelligently
 ```
 
 **Usage:**
 ```bash
-./hector call orchestrator "Research AI frameworks and analyze top 3"
-```
-
-The orchestrator automatically delegates to researcher → analyst → synthesis.
-
----
-
-### A2A Server Mode
-
-Expose your agents via standard A2A protocol:
-
-```bash
-# Start server
-./hector serve --config agents.yaml
-
-# A2A endpoints available:
-# GET  /agents                    → List all agents
-# GET  /agents/{id}               → Get agent card
-# POST /agents/{id}/message/send  → Execute task
-# POST /agents/{id}/message/stream → Streaming execution
-# POST /sessions                  → Create session
-```
-
-**Any A2A-compliant client can connect:**
-
-```bash
-# Using curl
-curl http://localhost:8080/agents
-
-# Using Hector CLI
-./hector list
-./hector call assistant "your prompt"
+./hector call orchestrator "Research AI frameworks, analyze top 3, translate summary to Spanish"
 ```
 
 ---
 
-## Use Cases
+### Custom Plugin Integration
 
-| Scenario | Solution |
-|----------|----------|
-| **Single Expert Agent** | Define agent with custom prompt, tools, RAG |
-| **Multi-Agent Research** | Orchestrator → researchers → analysts → synthesizer |
-| **External Integration** | Mix native agents with external A2A services |
-| **Agent Marketplace** | Expose agents via A2A for others to consume |
-| **CLI Tool** | Use Hector CLI to interact with any A2A server |
+```yaml
+# Add custom LLM via gRPC plugin
+plugins:
+  llm_providers:
+    my_custom_llm:
+      type: "grpc"
+      path: "./plugins/my-llm"
+      enabled: true
+      config:
+        api_key: "${CUSTOM_API_KEY}"
+
+llms:
+  custom:
+    type: "plugin:my_custom_llm"
+    model: "custom-model-v1"
+
+agents:
+  my_agent:
+    llm: "custom"  # Use plugin
+```
 
 ---
 
 ## CLI Commands
 
 ```bash
-# Server
-hector serve --config FILE [--debug]
+# Server Commands
+hector serve --config FILE [--debug]      # Start A2A server
 
-# Client
-hector list [--server URL]                  # List agents
-hector call <agent> "prompt" [--stream]     # Call agent
-hector chat <agent>                         # Interactive chat
-hector version                              # Show version
+# Client Commands
+hector list [--server URL]                # List available agents
+hector call <agent> "prompt" [--stream]   # Call an agent
+hector chat <agent>                       # Interactive chat session
+hector version                            # Show version
+
+# Environment Variables
+export HECTOR_SERVER="http://localhost:8080"
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-..."
 ```
 
 ---
@@ -306,72 +373,39 @@ hector version                              # Show version
 | **External Agents** | ✅ Seamless | ⚠️ Custom | ⚠️ Custom | ❌ No |
 | **Zero Code** | ✅ Yes | ❌ No | ❌ No | ❌ No |
 | **Interoperability** | ✅ Open protocol | ❌ Proprietary | ❌ Proprietary | ❌ Proprietary |
+| **Multi-Agent** | ✅ LLM-driven | ✅ Hard-coded | ✅ Hard-coded | ✅ Hard-coded |
+| **Plugins** | ✅ gRPC any language | ⚠️ Python only | ⚠️ Python only | ⚠️ Python only |
 
----
-
-## Examples
-
-### Research Agent
-
-```yaml
-agents:
-  researcher:
-    name: "Research Analyst"
-    llm: "gpt-4o"
-    prompt:
-      system_role: "Thorough research analyst"
-      reasoning_instructions: |
-        1. Break down research question
-        2. Use search to gather information
-        3. Cross-reference sources
-        4. Synthesize findings
-    document_stores:
-      - "company_research"
-    tools:
-      - search
-```
-
-### Coding Agent
-
-```yaml
-agents:
-  coder:
-    name: "Coding Assistant"
-    llm: "claude-3-5-sonnet"
-    prompt:
-      system_role: "Expert software engineer"
-      tool_usage: |
-        - Use search to find patterns in codebase
-        - Use file_writer to create/update files
-        - Use execute_command to run tests
-    document_stores:
-      - "codebase_index"
-    tools:
-      - file_writer
-      - execute_command
-      - search
-```
+**Hector's unique value:**
+- **Declarative-first** - Define complete systems in YAML
+- **Standards-based** - Built on open A2A protocol
+- **True interoperability** - Works with any A2A agent
+- **Flexible orchestration** - LLM-driven, not hard-coded workflows
+- **Language-agnostic plugins** - Extend in any language via gRPC
 
 ---
 
 ## Documentation
 
-**Core Guides:**
+### Core Guides
 - **[Quick Start](docs/QUICK_START.md)** - Get running in 5 minutes
 - **[Building Agents](docs/AGENTS.md)** - Complete single-agent guide
-- **[Tools & Extensions](docs/TOOLS.md)** - Built-in tools, MCP, plugins
 - **[Configuration](docs/CONFIGURATION.md)** - Complete config reference
+- **[CLI Guide](docs/CLI_GUIDE.md)** - Command-line interface
 
-**Advanced:**
+### Advanced Topics
 - **[Multi-Agent Orchestration](docs/ARCHITECTURE.md#orchestrator-pattern)** - Orchestration patterns
 - **[External Agents](docs/EXTERNAL_AGENTS.md)** - External agent integration
-- **[Authentication](docs/AUTHENTICATION.md)** - JWT token validation
-- **[A2A Compliance](docs/A2A_COMPLIANCE.md)** - 100% spec compliance details
+- **[Tools & MCP](docs/TOOLS.md)** - Built-in tools and MCP protocol
+- **[Plugin Development](docs/PLUGINS.md)** - Custom LLMs, databases, tools
 
-**Reference:**
+### Protocol & Security
+- **[A2A Compliance](docs/A2A_COMPLIANCE.md)** - 100% spec compliance details
 - **[API Reference](docs/API_REFERENCE.md)** - Complete A2A HTTP/SSE API
-- **[CLI Guide](docs/CLI_GUIDE.md)** - Command-line interface
-- **[Architecture](docs/ARCHITECTURE.md)** - System design
+- **[Authentication](docs/AUTHENTICATION.md)** - JWT token validation
+
+### Reference
+- **[Architecture](docs/ARCHITECTURE.md)** - System design and patterns
 - **[Testing Guide](docs/TESTING.md)** - Testing practices
 
 **[📚 Complete Documentation →](docs/)**
@@ -380,14 +414,14 @@ agents:
 
 ## Contributing
 
-We welcome contributions! Please see **[CONTRIBUTING.md](docs/CONTRIBUTING.md)** for:
+We welcome contributions! See **[CONTRIBUTING.md](docs/CONTRIBUTING.md)** for:
 - Development setup
 - Coding standards
 - Testing requirements
 - Quality checks
 - Pull request process
 
-**Quick development workflow:**
+**Quick start:**
 ```bash
 git clone https://github.com/kadirpekel/hector
 cd hector

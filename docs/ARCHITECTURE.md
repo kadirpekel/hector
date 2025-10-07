@@ -907,42 +907,50 @@ curl -X POST http://localhost:8080/sessions/$SESSION/tasks \
   -d '{"input":{"type":"text/plain","content":"What is my name?"}}'
 ```
 
-### WebSocket Streaming
+### SSE Streaming (A2A Compliant)
 
 **Real-Time Output:**
 
 ```
-WS ws://localhost:8080/agents/{agentId}/stream
+POST /agents/{agentId}/message/stream
 ```
 
 **Features:**
-- ✅ Real-time output streaming
+- ✅ Real-time output streaming per A2A specification
 - ✅ Token-by-token delivery (for LLM streaming)
-- ✅ Chunked responses with timestamps
-- ✅ Multiple chunk types (text, data, error, metadata)
+- ✅ Server-Sent Events (SSE) protocol
+- ✅ Multiple event types (status, message, artifact)
 
 **Implementation:**
-- **Protocol:** WebSocket (gorilla/websocket)
-- **Format:** JSON-encoded `StreamChunk` objects
+- **Protocol:** Server-Sent Events (SSE) per A2A spec Section 7
+- **Format:** SSE event stream with JSON data payloads
+- **Events:** status, message, artifact
 - **Backpressure:** Go channels handle it naturally
 
 **Example:**
-```javascript
-const ws = new WebSocket('ws://localhost:8080/agents/assistant/stream');
+```bash
+curl -N -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{"message":{"role":"user","parts":[{"type":"text","text":"Write a poem"}]}}' \
+  http://localhost:8080/agents/assistant/message/stream
 
-ws.onopen = () => {
-  ws.send(JSON.stringify({
-    taskId: 'task-123',
-    input: {type: 'text/plain', content: 'Write a poem'}
-  }));
-};
-
-ws.onmessage = (event) => {
-  const chunk = JSON.parse(event.data);
-  console.log(chunk.content);  // Real-time output
-  if (chunk.final) ws.close();
-};
+# Output:
+# event: status
+# data: {"task_id":"task-123","status":{"state":"working"}}
+#
+# event: message
+# data: {"task_id":"task-123","message":{"role":"assistant","parts":[{"type":"text","text":"Roses are red..."}]}}
+#
+# event: status
+# data: {"task_id":"task-123","status":{"state":"completed"}}
 ```
+
+**Resume Streaming:**
+```
+POST /agents/{agentId}/tasks/{taskId}/resubscribe
+```
+
+Allows reconnecting to an in-progress task and resuming from a specific event.
 
 ---
 

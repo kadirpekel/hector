@@ -355,7 +355,7 @@ hector serve --config test-config.yaml --debug
 
 ## What's Next
 
-1. **Streaming** - WebSocket-based streaming (currently uses polling)
+1. **Streaming** - Server-Sent Events (SSE) streaming per A2A specification
 2. **Session management** - Proper A2A session support
 3. **Authentication** - Bearer token and API key auth
 4. **Multi-agent orchestration** - Using `agent_call` tool

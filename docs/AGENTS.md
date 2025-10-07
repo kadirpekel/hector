@@ -604,27 +604,31 @@ curl -X POST http://localhost:8080/sessions/550e8400-.../tasks \
 
 ### Real-Time Streaming
 
-Get token-by-token output via WebSocket:
+Get token-by-token output via Server-Sent Events (SSE) per A2A specification:
 
-```javascript
-const ws = new WebSocket('ws://localhost:8080/agents/my_agent/stream');
+```bash
+# Using curl
+curl -N -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{"message":{"role":"user","parts":[{"type":"text","text":"Explain quantum computing"}]}}' \
+  http://localhost:8080/agents/my_agent/message/stream
 
-ws.onopen = () => {
-  ws.send(JSON.stringify({
-    taskId: 'task-1',
-    input: {type: 'text/plain', content: 'Explain quantum computing'}
-  }));
-};
+# Output (SSE format):
+# event: message
+# data: {"task_id":"task-1","message":{"role":"assistant","parts":[{"type":"text","text":"Quantum"}]}}
+#
+# event: message
+# data: {"task_id":"task-1","message":{"role":"assistant","parts":[{"type":"text","text":" computing"}]}}
+#
+# event: status
+# data: {"task_id":"task-1","status":{"state":"completed"}}
+```
 
-ws.onmessage = (event) => {
-  const chunk = JSON.parse(event.data);
-  console.log(chunk.content);  // Token-by-token output
-  
-  if (chunk.final) {
-    console.log('Complete!');
-    ws.close();
-  }
-};
+**Using Hector CLI:**
+```bash
+# Streaming is enabled by default in chat and --stream flag in call
+hector chat my_agent         # Interactive with streaming
+hector call my_agent "prompt" --stream  # Single call with streaming
 ```
 
 **Benefits:**
@@ -632,6 +636,7 @@ ws.onmessage = (event) => {
 -  Better UX for long responses
 -  Cancel long-running tasks
 -  Progress indicators
+-  A2A-compliant
 
 **Configure:**
 ```yaml
@@ -1047,7 +1052,7 @@ prompt:
 reasoning:
   enable_streaming: true
 
-# 2. Use WebSocket (not HTTP)
+# 2. Use SSE streaming (not regular HTTP)
 # ws://localhost:8080/agents/my_agent/stream
 ```
 
