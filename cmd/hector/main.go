@@ -286,7 +286,7 @@ func executeServeCommand(args *CLIArgs) {
 		// Create agent based on type
 		switch agentConfig.Type {
 		case "native", "":
-			// Native Hector agent
+			// Native Hector agent - directly implements a2a.Agent
 			agentInstance, err = agent.NewAgent(&agentConfig, componentManager)
 			if err != nil {
 				fmt.Printf("❌ Failed to create native agent '%s': %v\n", agentID, err)

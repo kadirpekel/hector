@@ -1,6 +1,7 @@
 package a2a
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,16 +10,14 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 )
 
 // ============================================================================
-// A2A CLIENT - Call external A2A agents
+// A2A CLIENT - HTTP+JSON Transport Client
+// Implements A2A client for calling external agents
 // ============================================================================
 
-// Client is an A2A protocol client for calling external agents
+// Client is an A2A protocol client
 type Client struct {
 	httpClient *http.Client
 	auth       *AuthCredentials
@@ -63,6 +62,7 @@ func NewClient(cfg *ClientConfig) *Client {
 // ============================================================================
 
 // DiscoverAgent fetches an agent's card
+// GET /agents/{agentId}
 func (c *Client) DiscoverAgent(ctx context.Context, agentURL string) (*AgentCard, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, agentURL, nil)
 	if err != nil {
@@ -91,6 +91,7 @@ func (c *Client) DiscoverAgent(ctx context.Context, agentURL string) (*AgentCard
 }
 
 // ListAgents fetches available agents from a directory endpoint
+// GET /agents
 func (c *Client) ListAgents(ctx context.Context, directoryURL string) ([]AgentCard, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, directoryURL, nil)
 	if err != nil {
@@ -119,38 +120,27 @@ func (c *Client) ListAgents(ctx context.Context, directoryURL string) ([]AgentCa
 }
 
 // ============================================================================
-// TASK EXECUTION
+// MESSAGE SENDING (A2A Spec Section 7.1)
 // ============================================================================
 
-// ExecuteTask executes a task on an external agent
-func (c *Client) ExecuteTask(ctx context.Context, agentCard *AgentCard, input string, params map[string]interface{}) (*TaskResponse, error) {
-	taskReq := TaskRequest{
-		TaskID: uuid.New().String(),
-		Input: TaskInput{
-			Type:    "text/plain",
-			Content: input,
-		},
-		Parameters: params,
+// SendMessage sends a message to an agent using A2A message/send
+// POST /agents/{agentId}/message/send
+func (c *Client) SendMessage(ctx context.Context, agentURL string, message Message, config *MessageConfiguration) (*Task, error) {
+	// Build message/send endpoint
+	sendURL := fmt.Sprintf("%s/message/send", agentURL)
+
+	// Build request params
+	params := MessageSendParams{
+		Message:       message,
+		Configuration: config,
 	}
 
-	return c.ExecuteTaskRequest(ctx, agentCard, &taskReq)
-}
-
-// ExecuteTaskRequest executes a task request on an external agent
-func (c *Client) ExecuteTaskRequest(ctx context.Context, agentCard *AgentCard, taskReq *TaskRequest) (*TaskResponse, error) {
-	// Ensure task has an ID
-	if taskReq.TaskID == "" {
-		taskReq.TaskID = uuid.New().String()
-	}
-
-	// Marshal task request
-	body, err := json.Marshal(taskReq)
+	body, err := json.Marshal(params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal task request: %w", err)
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, agentCard.Endpoints.Task, bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sendURL, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -158,43 +148,171 @@ func (c *Client) ExecuteTaskRequest(ctx context.Context, agentCard *AgentCard, t
 	req.Header.Set("Content-Type", "application/json")
 	c.setAuthHeaders(req)
 
-	// Execute request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute task: %w", err)
+		return nil, fmt.Errorf("failed to send message: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("task execution failed: %s - %s", resp.Status, string(body))
+		return nil, fmt.Errorf("message send failed: %s - %s", resp.Status, string(body))
 	}
 
-	// Decode response
-	var taskResp TaskResponse
-	if err := json.NewDecoder(resp.Body).Decode(&taskResp); err != nil {
-		return nil, fmt.Errorf("failed to decode task response: %w", err)
+	var task Task
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		return nil, fmt.Errorf("failed to decode task: %w", err)
 	}
 
-	// If task is async (status running/pending), poll for completion
-	if taskResp.Status == TaskStatusRunning || taskResp.Status == TaskStatusPending {
-		return c.waitForTask(ctx, agentCard, taskResp.TaskID)
+	// If task is async, poll for completion
+	if task.Status.State == TaskStateSubmitted || task.Status.State == TaskStateWorking {
+		return c.waitForTask(ctx, agentURL, task.ID)
 	}
 
-	return &taskResp, nil
+	return &task, nil
+}
+
+// SendTextMessage is a convenience method for sending simple text messages
+func (c *Client) SendTextMessage(ctx context.Context, agentURL string, text string) (*Task, error) {
+	message := Message{
+		Role: MessageRoleUser,
+		Parts: []Part{
+			{
+				Type: PartTypeText,
+				Text: text,
+			},
+		},
+	}
+
+	return c.SendMessage(ctx, agentURL, message, nil)
+}
+
+// ContinueTask continues an existing task with a new message
+// POST /agents/{agentId}/message/send with taskId
+func (c *Client) ContinueTask(ctx context.Context, agentURL string, taskID string, message Message) (*Task, error) {
+	sendURL := fmt.Sprintf("%s/message/send", agentURL)
+
+	params := MessageSendParams{
+		Message: message,
+		TaskID:  taskID, // Continue existing task
+	}
+
+	body, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sendURL, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	c.setAuthHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to continue task: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("continue task failed: %s - %s", resp.Status, string(body))
+	}
+
+	var task Task
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		return nil, fmt.Errorf("failed to decode task: %w", err)
+	}
+
+	// Poll for completion
+	if task.Status.State == TaskStateWorking {
+		return c.waitForTask(ctx, agentURL, task.ID)
+	}
+
+	return &task, nil
+}
+
+// ============================================================================
+// TASK OPERATIONS (A2A Spec Sections 7.3-7.4)
+// ============================================================================
+
+// GetTask gets the current status of a task
+// GET /agents/{agentId}/tasks/{taskId}
+func (c *Client) GetTask(ctx context.Context, agentURL string, taskID string) (*Task, error) {
+	taskURL := fmt.Sprintf("%s/tasks/%s", agentURL, taskID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, taskURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("get task failed: %s - %s", resp.Status, string(body))
+	}
+
+	var task Task
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		return nil, fmt.Errorf("failed to decode task: %w", err)
+	}
+
+	return &task, nil
+}
+
+// CancelTask cancels a running task
+// POST /agents/{agentId}/tasks/{taskId}/cancel
+func (c *Client) CancelTask(ctx context.Context, agentURL string, taskID string, reason string) (*Task, error) {
+	cancelURL := fmt.Sprintf("%s/tasks/%s/cancel", agentURL, taskID)
+
+	params := TaskCancelParams{
+		TaskID: taskID,
+		Reason: reason,
+	}
+
+	body, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cancelURL, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	c.setAuthHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to cancel task: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("cancel task failed: %s - %s", resp.Status, string(body))
+	}
+
+	var task Task
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		return nil, fmt.Errorf("failed to decode task: %w", err)
+	}
+
+	return &task, nil
 }
 
 // waitForTask polls for task completion
-func (c *Client) waitForTask(ctx context.Context, agentCard *AgentCard, taskID string) (*TaskResponse, error) {
-	if agentCard.Endpoints.Status == "" {
-		return nil, fmt.Errorf("agent does not support status endpoint")
-	}
-
-	// Build status URL
-	statusURL := agentCard.Endpoints.Status
-	// Replace {taskId} placeholder with actual task ID
-	statusURL = strings.ReplaceAll(statusURL, "{taskId}", taskID)
-
+func (c *Client) waitForTask(ctx context.Context, agentURL string, taskID string) (*Task, error) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -207,47 +325,118 @@ func (c *Client) waitForTask(ctx context.Context, agentCard *AgentCard, taskID s
 		case <-timeout:
 			return nil, fmt.Errorf("task timed out")
 		case <-ticker.C:
-			// Check task status
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+			task, err := c.GetTask(ctx, agentURL, taskID)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create status request: %w", err)
+				return nil, err
 			}
-
-			c.setAuthHeaders(req)
-
-			resp, err := c.httpClient.Do(req)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get task status: %w", err)
-			}
-
-			var taskResp TaskResponse
-			if err := json.NewDecoder(resp.Body).Decode(&taskResp); err != nil {
-				resp.Body.Close()
-				return nil, fmt.Errorf("failed to decode task status: %w", err)
-			}
-			resp.Body.Close()
 
 			// Check if task is complete
-			if taskResp.Status == TaskStatusCompleted || taskResp.Status == TaskStatusFailed || taskResp.Status == TaskStatusCancelled {
-				return &taskResp, nil
+			switch task.Status.State {
+			case TaskStateCompleted, TaskStateFailed, TaskStateCanceled:
+				return task, nil
 			}
 		}
 	}
 }
 
 // ============================================================================
-// SESSION MANAGEMENT
+// STREAMING (Server-Sent Events - A2A Spec 7.2)
+// ============================================================================
+
+// SendMessageStreaming sends a message to an agent with SSE streaming (A2A Spec 7.2)
+// Uses Server-Sent Events per A2A specification Section 3.3.3
+func (c *Client) SendMessageStreaming(ctx context.Context, agentURL string, message Message) (<-chan StreamEvent, error) {
+	// Construct SSE streaming endpoint: POST /message/stream
+	streamURL := agentURL + "/message/stream"
+
+	params := MessageSendParams{
+		Message: message,
+	}
+
+	body, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal params: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, streamURL, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	c.setAuthHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to SSE stream: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("streaming failed: %s - %s", resp.Status, string(bodyBytes))
+	}
+
+	// Use shared SSE parser
+	return c.parseSSEStream(ctx, resp, ""), nil
+}
+
+// ResubscribeToTask resumes streaming for an existing task (A2A Spec 7.9)
+// POST /agents/{agentId}/tasks/{taskId}/resubscribe
+func (c *Client) ResubscribeToTask(ctx context.Context, agentURL string, taskID string, lastEventID string) (<-chan StreamEvent, error) {
+	// Construct resubscribe endpoint
+	resubscribeURL := agentURL + "/tasks/" + taskID + "/resubscribe"
+
+	params := TaskResubscribeParams{
+		LastEventID: lastEventID,
+	}
+
+	body, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal params: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, resubscribeURL, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	c.setAuthHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resubscribe to task: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("resubscribe failed: %s - %s", resp.Status, string(bodyBytes))
+	}
+
+	// Use shared SSE parser
+	return c.parseSSEStream(ctx, resp, taskID), nil
+}
+
+// ============================================================================
+// SESSION MANAGEMENT (Hector Extension)
 // ============================================================================
 
 // CreateSession creates a new conversation session
-func (c *Client) CreateSession(ctx context.Context, sessionURL string, req *SessionRequest) (*Session, error) {
-	var body []byte
-	var err error
-	if req != nil {
-		body, err = json.Marshal(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal request: %w", err)
-		}
+func (c *Client) CreateSession(ctx context.Context, baseURL string, agentName string, metadata map[string]interface{}) (*Session, error) {
+	sessionURL := fmt.Sprintf("%s/sessions", baseURL)
+
+	req := map[string]interface{}{
+		"agentName": agentName,
+		"metadata":  metadata,
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, sessionURL, bytes.NewBuffer(body))
@@ -277,8 +466,73 @@ func (c *Client) CreateSession(ctx context.Context, sessionURL string, req *Sess
 	return &session, nil
 }
 
+// ListSessions lists all conversation sessions
+func (c *Client) ListSessions(ctx context.Context, baseURL string) ([]Session, error) {
+	sessionURL := fmt.Sprintf("%s/sessions", baseURL)
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, sessionURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeaders(httpReq)
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("session list failed: %s - %s", resp.Status, string(bodyBytes))
+	}
+
+	var result struct {
+		Sessions []Session `json:"sessions"`
+		Total    int       `json:"total"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode sessions: %w", err)
+	}
+
+	return result.Sessions, nil
+}
+
+// GetSession retrieves a specific conversation session
+func (c *Client) GetSession(ctx context.Context, baseURL string, sessionID string) (*Session, error) {
+	sessionURL := fmt.Sprintf("%s/sessions/%s", baseURL, sessionID)
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, sessionURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setAuthHeaders(httpReq)
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("session retrieval failed: %s - %s", resp.Status, string(bodyBytes))
+	}
+
+	var session Session
+	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
+		return nil, fmt.Errorf("failed to decode session: %w", err)
+	}
+
+	return &session, nil
+}
+
 // DeleteSession deletes a conversation session
-func (c *Client) DeleteSession(ctx context.Context, sessionURL string) error {
+func (c *Client) DeleteSession(ctx context.Context, baseURL string, sessionID string) error {
+	sessionURL := fmt.Sprintf("%s/sessions/%s", baseURL, sessionID)
+
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, sessionURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -300,106 +554,98 @@ func (c *Client) DeleteSession(ctx context.Context, sessionURL string) error {
 	return nil
 }
 
-// ExecuteTaskInSession executes a task within a session context
-func (c *Client) ExecuteTaskInSession(ctx context.Context, sessionURL string, input string, agentCard *AgentCard) (*TaskResponse, error) {
-	taskReq := &TaskRequest{
-		TaskID: uuid.New().String(),
-		Input: TaskInput{
-			Type:    "text/plain",
-			Content: input,
-		},
-	}
-
-	body, err := json.Marshal(taskReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// sessionURL is like: http://localhost:8080/sessions/sess-123
-	// we need to POST to: http://localhost:8080/sessions/sess-123/tasks
-	taskURL := sessionURL + "/tasks"
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, taskURL, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	c.setAuthHeaders(httpReq)
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute task: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("task execution failed: %s - %s", resp.Status, string(bodyBytes))
-	}
-
-	var taskResp TaskResponse
-	if err := json.NewDecoder(resp.Body).Decode(&taskResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	// If task is running asynchronously, poll for completion using the status endpoint
-	if taskResp.Status == TaskStatusRunning || taskResp.Status == TaskStatusPending {
-		// Use the agent card's status endpoint
-		// Status URL format: http://localhost:8080/agents/{agentId}/tasks/{taskId}
-		statusURL := agentCard.Endpoints.Status
-		statusURL = strings.ReplaceAll(statusURL, "{taskId}", taskResp.TaskID)
-
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
-
-		timeout := time.After(60 * time.Second)
-
-		for {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-timeout:
-				return nil, fmt.Errorf("task timed out after 60s")
-			case <-ticker.C:
-				// Poll for task status
-				statusReq, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
-				if err != nil {
-					continue
-				}
-
-				c.setAuthHeaders(statusReq)
-
-				statusResp, err := c.httpClient.Do(statusReq)
-				if err != nil {
-					continue
-				}
-
-				if statusResp.StatusCode == http.StatusOK {
-					var updatedResp TaskResponse
-					if err := json.NewDecoder(statusResp.Body).Decode(&updatedResp); err != nil {
-						statusResp.Body.Close()
-						continue
-					}
-					statusResp.Body.Close()
-
-					if updatedResp.Status == TaskStatusCompleted || updatedResp.Status == TaskStatusFailed {
-						return &updatedResp, nil
-					}
-					// Task still running, continue polling
-				} else {
-					statusResp.Body.Close()
-				}
-			}
-		}
-	}
-
-	return &taskResp, nil
-}
-
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
+
+// parseSSEStream parses SSE events from an HTTP response body
+// Shared by SendMessageStreaming and ResubscribeToTask
+func (c *Client) parseSSEStream(ctx context.Context, resp *http.Response, taskID string) <-chan StreamEvent {
+	eventCh := make(chan StreamEvent, 10)
+
+	go func() {
+		defer close(eventCh)
+		defer resp.Body.Close()
+
+		scanner := bufio.NewScanner(resp.Body)
+		var eventType string
+		var eventData string
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			// SSE format: "event: type" or "data: json" or empty line (delimiter)
+			if strings.HasPrefix(line, "event: ") {
+				eventType = strings.TrimPrefix(line, "event: ")
+			} else if strings.HasPrefix(line, "data: ") {
+				eventData = strings.TrimPrefix(line, "data: ")
+			} else if line == "" && eventType != "" && eventData != "" {
+				// Parse and send event
+				var event StreamEvent
+				switch eventType {
+				case "message":
+					var msgEvent TaskMessageEvent
+					if err := json.Unmarshal([]byte(eventData), &msgEvent); err == nil {
+						event = StreamEvent{
+							Type:      StreamEventTypeMessage,
+							TaskID:    msgEvent.TaskID,
+							Message:   &msgEvent.Message,
+							Timestamp: time.Now(),
+						}
+					}
+				case "status":
+					var statusEvent TaskStatusUpdateEvent
+					if err := json.Unmarshal([]byte(eventData), &statusEvent); err == nil {
+						event = StreamEvent{
+							Type:      StreamEventTypeStatus,
+							TaskID:    statusEvent.TaskID,
+							Status:    &statusEvent.Status,
+							Timestamp: time.Now(),
+						}
+					}
+				case "artifact":
+					var artifactEvent TaskArtifactUpdateEvent
+					if err := json.Unmarshal([]byte(eventData), &artifactEvent); err == nil {
+						event = StreamEvent{
+							Type:      StreamEventTypeArtifact,
+							TaskID:    artifactEvent.TaskID,
+							Artifact:  &artifactEvent.Artifact,
+							Timestamp: time.Now(),
+						}
+					}
+				}
+
+				if event.Type != "" {
+					eventCh <- event
+
+					// Check if this is a final status
+					if event.Type == StreamEventTypeStatus && event.Status != nil {
+						switch event.Status.State {
+						case TaskStateCompleted, TaskStateFailed, TaskStateCanceled:
+							return
+						}
+					}
+				}
+
+				// Reset for next event
+				eventType = ""
+				eventData = ""
+			}
+		}
+
+		if err := scanner.Err(); err != nil && ctx.Err() == nil {
+			// Send error event if context not cancelled
+			eventCh <- StreamEvent{
+				Type:      StreamEventTypeStatus,
+				TaskID:    taskID,
+				Status:    &TaskStatus{State: TaskStateFailed},
+				Timestamp: time.Now(),
+			}
+		}
+	}()
+
+	return eventCh
+}
 
 // setAuthHeaders sets authentication headers on the request
 func (c *Client) setAuthHeaders(req *http.Request) {
@@ -424,92 +670,49 @@ func (c *Client) setAuthHeaders(req *http.Request) {
 }
 
 // ============================================================================
-// STREAMING CLIENT
-// ============================================================================
-
-// ExecuteTaskStreamingInSession executes a task in a session with real-time streaming output
-func (c *Client) ExecuteTaskStreamingInSession(ctx context.Context, sessionURL string, input string, outputCh chan<- string) (*TaskResponse, error) {
-	wsURL := strings.Replace(sessionURL, "http://", "ws://", 1)
-	wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
-	wsURL = wsURL + "/stream"
-
-	dialer := websocket.DefaultDialer
-	conn, _, err := dialer.DialContext(ctx, wsURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to WebSocket: %w", err)
-	}
-	defer conn.Close()
-
-	taskReq := TaskRequest{
-		Input: TaskInput{
-			Type:    "text/plain",
-			Content: input,
-		},
-	}
-
-	if err := conn.WriteJSON(taskReq); err != nil {
-		return nil, fmt.Errorf("failed to send task request: %w", err)
-	}
-
-	var finalResponse *TaskResponse
-	for {
-		_, message, err := conn.ReadMessage()
-		if err != nil {
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-				break
-			}
-			return nil, fmt.Errorf("failed to read message: %w", err)
-		}
-
-		var chunk StreamChunk
-		if err := json.Unmarshal(message, &chunk); err != nil {
-			continue
-		}
-
-		if chunk.Final {
-			finalResponse = &TaskResponse{
-				TaskID:    chunk.TaskID,
-				Status:    TaskStatusCompleted,
-				StartedAt: chunk.Timestamp,
-				EndedAt:   chunk.Timestamp,
-			}
-			break
-		}
-
-		if content, ok := chunk.Content.(string); ok && content != "" {
-			outputCh <- content
-		}
-	}
-
-	if finalResponse == nil {
-		return nil, fmt.Errorf("no final response received")
-	}
-
-	return finalResponse, nil
-}
-
-// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
-// ExtractOutputText extracts text content from task output
-func ExtractOutputText(output *TaskOutput) string {
-	if output == nil {
+// ExtractTextFromTask extracts text content from task messages and artifacts
+func ExtractTextFromTask(task *Task) string {
+	if task == nil {
 		return ""
 	}
 
-	switch v := output.Content.(type) {
-	case string:
-		return v
-	case map[string]interface{}:
-		if text, ok := v["text"].(string); ok {
-			return text
-		}
-		// Try to JSON encode
-		if jsonBytes, err := json.Marshal(v); err == nil {
-			return string(jsonBytes)
+	var texts []string
+
+	// Extract from messages
+	for _, msg := range task.Messages {
+		if msg.Role == MessageRoleAssistant {
+			for _, part := range msg.Parts {
+				if part.Type == PartTypeText {
+					texts = append(texts, part.Text)
+				}
+			}
 		}
 	}
 
-	return fmt.Sprintf("%v", output.Content)
+	// Extract from artifacts
+	for _, artifact := range task.Artifacts {
+		for _, part := range artifact.Parts {
+			if part.Type == PartTypeText {
+				texts = append(texts, part.Text)
+			}
+		}
+	}
+
+	return strings.Join(texts, "\n")
+}
+
+// CreateTextMessage is a helper to create a simple text message
+func CreateTextMessage(role MessageRole, text string) Message {
+	return Message{
+		Role: role,
+		Parts: []Part{
+			{
+				Type: PartTypeText,
+				Text: text,
+			},
+		},
+	}
 }

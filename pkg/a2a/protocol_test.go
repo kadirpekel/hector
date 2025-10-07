@@ -6,53 +6,52 @@ import (
 	"time"
 )
 
-func TestTaskRequest_Validate(t *testing.T) {
+func TestTask_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
-		request TaskRequest
+		task    Task
 		wantErr bool
 	}{
 		{
-			name: "valid request",
-			request: TaskRequest{
-				TaskID: "test-task-1",
-				Input: TaskInput{
-					Type:    "text/plain",
-					Content: "Hello, world!",
+			name: "valid task",
+			task: Task{
+				ID: "test-task-1",
+				Messages: []Message{
+					{
+						Role: MessageRoleUser,
+						Parts: []Part{
+							{Type: PartTypeText, Text: "Hello"},
+						},
+					},
+				},
+				Status: TaskStatus{
+					State:     TaskStateSubmitted,
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
 				},
 			},
 			wantErr: false,
 		},
 		{
 			name: "empty task ID",
-			request: TaskRequest{
-				TaskID: "",
-				Input: TaskInput{
-					Type:    "text/plain",
-					Content: "Hello, world!",
+			task: Task{
+				ID: "",
+				Messages: []Message{
+					{
+						Role: MessageRoleUser,
+						Parts: []Part{
+							{Type: PartTypeText, Text: "Hello"},
+						},
+					},
 				},
 			},
 			wantErr: true,
 		},
 		{
-			name: "empty input type",
-			request: TaskRequest{
-				TaskID: "test-task-1",
-				Input: TaskInput{
-					Type:    "",
-					Content: "Hello, world!",
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "empty input content",
-			request: TaskRequest{
-				TaskID: "test-task-1",
-				Input: TaskInput{
-					Type:    "text/plain",
-					Content: "",
-				},
+			name: "empty messages",
+			task: Task{
+				ID:       "test-task-1",
+				Messages: []Message{},
 			},
 			wantErr: true,
 		},
@@ -60,68 +59,48 @@ func TestTaskRequest_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Since there's no Validate method, we'll test the structure creation
-			if tt.request.TaskID == "" && !tt.wantErr {
-				t.Error("TaskRequest with empty TaskID should be invalid")
+			// Basic validation
+			if tt.task.ID == "" && !tt.wantErr {
+				t.Error("Task with empty ID should be invalid")
 			}
-			if tt.request.Input.Type == "" && !tt.wantErr {
-				t.Error("TaskRequest with empty Input.Type should be invalid")
+			if len(tt.task.Messages) == 0 && !tt.wantErr {
+				t.Error("Task with empty Messages should be invalid")
 			}
 		})
 	}
 }
 
-func TestTaskResponse_Validate(t *testing.T) {
+func TestMessage_Validate(t *testing.T) {
 	tests := []struct {
-		name     string
-		response TaskResponse
-		wantErr  bool
+		name    string
+		message Message
+		wantErr bool
 	}{
 		{
-			name: "valid response",
-			response: TaskResponse{
-				TaskID: "test-task-1",
-				Status: TaskStatusCompleted,
-				Output: &TaskOutput{
-					Type:    "text/plain",
-					Content: "Response content",
+			name: "valid user message",
+			message: Message{
+				Role: MessageRoleUser,
+				Parts: []Part{
+					{Type: PartTypeText, Text: "Hello"},
 				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "empty task ID",
-			response: TaskResponse{
-				TaskID: "",
-				Status: TaskStatusCompleted,
-				Output: &TaskOutput{
-					Type:    "text/plain",
-					Content: "Response content",
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "valid status",
-			response: TaskResponse{
-				TaskID: "test-task-1",
-				Status: TaskStatusCompleted,
-				Output: &TaskOutput{
-					Type:    "text/plain",
-					Content: "Response content",
+			name: "valid assistant message",
+			message: Message{
+				Role: MessageRoleAssistant,
+				Parts: []Part{
+					{Type: PartTypeText, Text: "Hi there!"},
 				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "empty output type",
-			response: TaskResponse{
-				TaskID: "test-task-1",
-				Status: TaskStatusCompleted,
-				Output: &TaskOutput{
-					Type:    "",
-					Content: "Response content",
-				},
+			name: "empty parts",
+			message: Message{
+				Role:  MessageRoleUser,
+				Parts: []Part{},
 			},
 			wantErr: true,
 		},
@@ -129,12 +108,8 @@ func TestTaskResponse_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Since there's no Validate method, we'll test the structure creation
-			if tt.response.TaskID == "" && !tt.wantErr {
-				t.Error("TaskResponse with empty TaskID should be invalid")
-			}
-			if tt.response.Output != nil && tt.response.Output.Type == "" && !tt.wantErr {
-				t.Error("TaskResponse with empty Output.Type should be invalid")
+			if len(tt.message.Parts) == 0 && !tt.wantErr {
+				t.Error("Message with empty Parts should be invalid")
 			}
 		})
 	}
@@ -149,44 +124,32 @@ func TestAgentCard_Validate(t *testing.T) {
 		{
 			name: "valid agent card",
 			card: AgentCard{
-				AgentID:      "test-agent",
-				Name:         "Test Agent",
-				Description:  "A test agent",
-				Version:      "1.0.0",
-				Capabilities: []string{"text-processing", "reasoning"},
+				Name:               "Test Agent",
+				Description:        "A test agent",
+				Version:            "1.0.0",
+				PreferredTransport: "http+json",
+				Capabilities: AgentCapabilities{
+					Streaming: true,
+					MultiTurn: true,
+				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "empty ID",
-			card: AgentCard{
-				AgentID:      "",
-				Name:         "Test Agent",
-				Description:  "A test agent",
-				Version:      "1.0.0",
-				Capabilities: []string{"text-processing"},
-			},
-			wantErr: true,
-		},
-		{
 			name: "empty name",
 			card: AgentCard{
-				AgentID:      "test-agent",
-				Name:         "",
-				Description:  "A test agent",
-				Version:      "1.0.0",
-				Capabilities: []string{"text-processing"},
+				Name:        "",
+				Description: "A test agent",
+				Version:     "1.0.0",
 			},
 			wantErr: true,
 		},
 		{
 			name: "empty version",
 			card: AgentCard{
-				AgentID:      "test-agent",
-				Name:         "Test Agent",
-				Description:  "A test agent",
-				Version:      "",
-				Capabilities: []string{"text-processing"},
+				Name:        "Test Agent",
+				Description: "A test agent",
+				Version:     "",
 			},
 			wantErr: true,
 		},
@@ -194,12 +157,11 @@ func TestAgentCard_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Since there's no Validate method, we'll test the structure creation
-			if tt.card.AgentID == "" && !tt.wantErr {
-				t.Error("AgentCard with empty AgentID should be invalid")
-			}
 			if tt.card.Name == "" && !tt.wantErr {
 				t.Error("AgentCard with empty Name should be invalid")
+			}
+			if tt.card.Version == "" && !tt.wantErr {
+				t.Error("AgentCard with empty Version should be invalid")
 			}
 		})
 	}
@@ -208,95 +170,185 @@ func TestAgentCard_Validate(t *testing.T) {
 // MockAgent implements the Agent interface for testing
 type MockAgent struct {
 	card        *AgentCard
-	executeFunc func(ctx context.Context, request *TaskRequest) (*TaskResponse, error)
+	executeFunc func(ctx context.Context, task *Task) (*Task, error)
 }
 
 func (m *MockAgent) GetAgentCard() *AgentCard {
 	return m.card
 }
 
-func (m *MockAgent) ExecuteTask(ctx context.Context, request *TaskRequest) (*TaskResponse, error) {
+func (m *MockAgent) ExecuteTask(ctx context.Context, task *Task) (*Task, error) {
 	if m.executeFunc != nil {
-		return m.executeFunc(ctx, request)
+		return m.executeFunc(ctx, task)
 	}
-	return &TaskResponse{
-		TaskID: request.TaskID,
-		Status: TaskStatusCompleted,
-		Output: &TaskOutput{
-			Type:    "text/plain",
-			Content: "Mock response",
+
+	// Add assistant response
+	task.Messages = append(task.Messages, Message{
+		Role: MessageRoleAssistant,
+		Parts: []Part{
+			{Type: PartTypeText, Text: "Mock response"},
 		},
-	}, nil
+	})
+	task.Status.State = TaskStateCompleted
+	task.Status.UpdatedAt = time.Now()
+
+	return task, nil
 }
 
-func (m *MockAgent) ExecuteTaskStreaming(ctx context.Context, request *TaskRequest) (<-chan *StreamChunk, error) {
-	ch := make(chan *StreamChunk, 1)
-	ch <- &StreamChunk{
-		TaskID:    request.TaskID,
-		ChunkType: ChunkTypeText,
-		Content:   "Mock streaming response",
-		Timestamp: time.Now(),
-		Final:     true,
-	}
-	close(ch)
+func (m *MockAgent) ExecuteTaskStreaming(ctx context.Context, task *Task) (<-chan StreamEvent, error) {
+	ch := make(chan StreamEvent, 2)
+
+	go func() {
+		defer close(ch)
+
+		// Send message event
+		ch <- StreamEvent{
+			Type:   StreamEventTypeMessage,
+			TaskID: task.ID,
+			Message: &Message{
+				Role: MessageRoleAssistant,
+				Parts: []Part{
+					{Type: PartTypeText, Text: "Mock streaming response"},
+				},
+			},
+			Timestamp: time.Now(),
+		}
+
+		// Send completion status
+		ch <- StreamEvent{
+			Type:   StreamEventTypeStatus,
+			TaskID: task.ID,
+			Status: &TaskStatus{
+				State:     TaskStateCompleted,
+				UpdatedAt: time.Now(),
+			},
+			Timestamp: time.Now(),
+		}
+	}()
+
 	return ch, nil
 }
 
 func TestMockAgent_ExecuteTask(t *testing.T) {
 	agent := &MockAgent{
 		card: &AgentCard{
-			AgentID:      "mock-agent",
-			Name:         "Mock Agent",
-			Description:  "A mock agent for testing",
-			Version:      "1.0.0",
-			Capabilities: []string{"testing"},
+			Name:        "Mock Agent",
+			Description: "A mock agent for testing",
+			Version:     "1.0.0",
+			Capabilities: AgentCapabilities{
+				Streaming: true,
+			},
 		},
 	}
 
 	ctx := context.Background()
-	request := &TaskRequest{
-		TaskID: "test-task",
-		Input: TaskInput{
-			Type:    "text/plain",
-			Content: "Test input",
+	task := &Task{
+		ID: "test-task",
+		Messages: []Message{
+			{
+				Role: MessageRoleUser,
+				Parts: []Part{
+					{Type: PartTypeText, Text: "Test input"},
+				},
+			},
+		},
+		Status: TaskStatus{
+			State:     TaskStateSubmitted,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		},
 	}
 
-	response, err := agent.ExecuteTask(ctx, request)
+	result, err := agent.ExecuteTask(ctx, task)
 	if err != nil {
 		t.Fatalf("ExecuteTask() error = %v", err)
 	}
 
-	if response.TaskID != request.TaskID {
-		t.Errorf("ExecuteTask() TaskID = %v, want %v", response.TaskID, request.TaskID)
+	if result.ID != task.ID {
+		t.Errorf("ExecuteTask() ID = %v, want %v", result.ID, task.ID)
 	}
 
-	if response.Status != TaskStatusCompleted {
-		t.Errorf("ExecuteTask() Status = %v, want %v", response.Status, TaskStatusCompleted)
+	if result.Status.State != TaskStateCompleted {
+		t.Errorf("ExecuteTask() State = %v, want %v", result.Status.State, TaskStateCompleted)
 	}
 
-	if response.Output.Content != "Mock response" {
-		t.Errorf("ExecuteTask() Output.Content = %v, want %v", response.Output.Content, "Mock response")
+	if len(result.Messages) < 2 {
+		t.Errorf("ExecuteTask() should have added assistant message, got %d messages", len(result.Messages))
 	}
 }
 
 func TestMockAgent_GetAgentCard(t *testing.T) {
 	expectedCard := &AgentCard{
-		AgentID:      "mock-agent",
-		Name:         "Mock Agent",
-		Description:  "A mock agent for testing",
-		Version:      "1.0.0",
-		Capabilities: []string{"testing"},
+		Name:        "Mock Agent",
+		Description: "A mock agent for testing",
+		Version:     "1.0.0",
+		Capabilities: AgentCapabilities{
+			Streaming: true,
+		},
 	}
 
 	agent := &MockAgent{card: expectedCard}
 	card := agent.GetAgentCard()
 
-	if card.AgentID != expectedCard.AgentID {
-		t.Errorf("GetAgentCard() AgentID = %v, want %v", card.AgentID, expectedCard.AgentID)
-	}
-
 	if card.Name != expectedCard.Name {
 		t.Errorf("GetAgentCard() Name = %v, want %v", card.Name, expectedCard.Name)
+	}
+
+	if card.Version != expectedCard.Version {
+		t.Errorf("GetAgentCard() Version = %v, want %v", card.Version, expectedCard.Version)
+	}
+}
+
+func TestExtractTextFromTask(t *testing.T) {
+	tests := []struct {
+		name string
+		task *Task
+		want string
+	}{
+		{
+			name: "extract from assistant messages",
+			task: &Task{
+				Messages: []Message{
+					{
+						Role: MessageRoleUser,
+						Parts: []Part{
+							{Type: PartTypeText, Text: "Hello"},
+						},
+					},
+					{
+						Role: MessageRoleAssistant,
+						Parts: []Part{
+							{Type: PartTypeText, Text: "Response 1"},
+						},
+					},
+					{
+						Role: MessageRoleAssistant,
+						Parts: []Part{
+							{Type: PartTypeText, Text: "Response 2"},
+						},
+					},
+				},
+			},
+			want: "Response 1\nResponse 2",
+		},
+		{
+			name: "empty task",
+			task: &Task{},
+			want: "",
+		},
+		{
+			name: "nil task",
+			task: nil,
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractTextFromTask(tt.task)
+			if got != tt.want {
+				t.Errorf("ExtractTextFromTask() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

@@ -34,6 +34,7 @@
 - [Building Agents](docs/AGENTS.md) - **Core guide** for single agents
 - [Tools & Extensions](docs/TOOLS.md) - MCP, built-in tools, plugins
 - [A2A Server](#a2a-server-mode) - Host agents via A2A protocol
+- [A2A Compliance](docs/A2A_COMPLIANCE.md) - **100% A2A spec compliance details**
 - [Multi-Agent Orchestration](#multi-agent-orchestration) - Coordinate multiple agents
 - [External Agents](docs/EXTERNAL_AGENTS.md) - Use remote A2A agents
 - [Authentication](docs/AUTHENTICATION.md) - Secure with JWT validation

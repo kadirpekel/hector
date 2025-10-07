@@ -10,30 +10,29 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 )
 
 // ============================================================================
-// A2A SERVER - Exposes Hector agents via A2A protocol
+// A2A SERVER - HTTP+JSON Transport Implementation
+// Spec Section 3.2.3: HTTP+JSON/REST Transport
 // ============================================================================
 
-// Server implements the A2A protocol server
+// Server implements the A2A protocol HTTP+JSON server
 type Server struct {
 	host            string
 	port            int
 	baseURL         string
-	agents          map[string]Agent // Pure A2A Agent interface
+	agents          map[string]Agent // A2A-compliant agents
 	agentCards      map[string]*AgentCard
-	agentVisibility map[string]string // Agent visibility: "public", "internal", "private"
+	agentVisibility map[string]string // "public", "internal", "private"
+	tasks           map[string]*Task  // Active tasks
 	sessions        map[string]*Session
-	tasks           map[string]*TaskResponse
 	mu              sync.RWMutex
 	httpServer      *http.Server
-	authValidator   AuthValidator // Optional JWT validator (nil = auth disabled)
+	authValidator   AuthValidator // Optional JWT validator
 }
 
-// AuthValidator interface for JWT validation
-// This allows the server to be decoupled from the specific auth implementation
+// AuthValidator interface for authentication
 type AuthValidator interface {
 	HTTPMiddleware(next http.Handler) http.Handler
 	ValidateToken(ctx context.Context, tokenString string) (interface{}, error)
@@ -43,7 +42,7 @@ type AuthValidator interface {
 type ServerConfig struct {
 	Host    string `yaml:"host" json:"host"`
 	Port    int    `yaml:"port" json:"port"`
-	BaseURL string `yaml:"base_url" json:"base_url"` // Public URL for agent cards
+	BaseURL string `yaml:"base_url" json:"base_url"` // Public URL
 }
 
 // NewServer creates a new A2A protocol server
@@ -60,14 +59,12 @@ func NewServer(cfg *ServerConfig) *Server {
 		agents:          make(map[string]Agent),
 		agentCards:      make(map[string]*AgentCard),
 		agentVisibility: make(map[string]string),
+		tasks:           make(map[string]*Task),
 		sessions:        make(map[string]*Session),
-		tasks:           make(map[string]*TaskResponse),
-		authValidator:   nil, // Auth disabled by default
 	}
 }
 
-// SetAuthValidator sets the JWT validator for authentication
-// If validator is nil, authentication is disabled
+// SetAuthValidator sets the authentication validator
 func (s *Server) SetAuthValidator(validator AuthValidator) {
 	s.authValidator = validator
 }
@@ -76,47 +73,35 @@ func (s *Server) SetAuthValidator(validator AuthValidator) {
 // AGENT REGISTRATION
 // ============================================================================
 
-// RegisterAgent registers an A2A-compliant agent with visibility control
-// The agent must implement the pure A2A Agent interface
-//
-// Visibility levels:
-// - "public" (default): Discoverable via /agents and callable via API
-// - "internal": Not discoverable, but callable via API if you know the agent ID
-// - "private": Only callable by local orchestrators, not via external API
+// RegisterAgent registers an A2A-compliant agent
+// Visibility: "public" (discoverable), "internal" (callable but not listed), "private" (local only)
 func (s *Server) RegisterAgent(agentID string, agent Agent, visibility string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Normalize visibility (default to public)
+	// Normalize visibility
 	if visibility == "" {
 		visibility = "public"
 	}
-
-	// Validate visibility
-	switch visibility {
-	case "public", "internal", "private":
-		// Valid
-	default:
-		return fmt.Errorf("invalid visibility '%s' (must be 'public', 'internal', or 'private')", visibility)
+	if visibility != "public" && visibility != "internal" && visibility != "private" {
+		return fmt.Errorf("invalid visibility: %s", visibility)
 	}
 
-	// Get the agent's card directly (pure A2A protocol)
+	// Get agent card
 	card := agent.GetAgentCard()
-
-	// Ensure card has the correct agentID
-	card.AgentID = agentID
-
-	// Only set endpoints if they're not already set (native agents)
-	// External A2A agents should keep their original endpoints from discovery
-	if card.Endpoints.Task == "" {
-		// Native agent - set endpoints to this server
-		card.Endpoints = AgentEndpoints{
-			Task:   fmt.Sprintf("%s/agents/%s/tasks", s.baseURL, agentID),
-			Stream: fmt.Sprintf("%s/agents/%s/stream", s.baseURL, agentID),
-			Status: fmt.Sprintf("%s/agents/%s/tasks/{taskId}", s.baseURL, agentID),
-		}
+	if card == nil {
+		return fmt.Errorf("agent %s returned nil agent card", agentID)
 	}
-	// External agents already have their endpoints set from discovery - preserve them
+
+	// Set URL if not already set
+	if card.URL == "" {
+		card.URL = fmt.Sprintf("%s/agents/%s", s.baseURL, agentID)
+	}
+
+	// Set preferred transport if not set
+	if card.PreferredTransport == "" {
+		card.PreferredTransport = "http+json"
+	}
 
 	s.agents[agentID] = agent
 	s.agentCards[agentID] = card
@@ -124,8 +109,6 @@ func (s *Server) RegisterAgent(agentID string, agent Agent, visibility string) e
 
 	return nil
 }
-
-// Note: createAgentCard removed - agents provide their own cards via GetAgentCard()
 
 // ============================================================================
 // HTTP SERVER
@@ -135,17 +118,15 @@ func (s *Server) RegisterAgent(agentID string, agent Agent, visibility string) e
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
-	// A2A Protocol Endpoints
-	mux.HandleFunc("/agents", s.handleListAgents) // GET - List all public agents (no auth required)
+	// A2A Protocol Endpoints (Spec Section 7)
+	mux.HandleFunc("/agents", s.handleListAgents) // Public discovery
 
 	// Agent routes - conditionally protected by auth
 	if s.authValidator != nil {
-		// With authentication - protect agent operations
 		mux.Handle("/agents/", s.authValidator.HTTPMiddleware(http.HandlerFunc(s.handleAgentRoutes)))
 		mux.Handle("/sessions", s.authValidator.HTTPMiddleware(http.HandlerFunc(s.handleSessions)))
 		mux.Handle("/sessions/", s.authValidator.HTTPMiddleware(http.HandlerFunc(s.handleSessionRoutes)))
 	} else {
-		// Without authentication - allow all operations
 		mux.HandleFunc("/agents/", s.handleAgentRoutes)
 		mux.HandleFunc("/sessions", s.handleSessions)
 		mux.HandleFunc("/sessions/", s.handleSessionRoutes)
@@ -156,14 +137,13 @@ func (s *Server) Start() error {
 		Handler: s.corsMiddleware(s.loggingMiddleware(mux)),
 	}
 
-	fmt.Printf("🚀 A2A Server starting on %s:%d\n", s.host, s.port)
+	fmt.Printf("🚀 A2A Server (HTTP+JSON) starting on %s:%d\n", s.host, s.port)
+	fmt.Printf("📋 Agent discovery: %s/agents\n", s.baseURL)
 	if s.authValidator != nil {
 		fmt.Printf("🔒 Authentication: ENABLED\n")
 	} else {
 		fmt.Printf("🔓 Authentication: DISABLED\n")
 	}
-	fmt.Printf("📋 Agent Cards available at: %s/agents\n", s.baseURL)
-	fmt.Printf("💬 Sessions available at: %s/sessions\n", s.baseURL)
 
 	return s.httpServer.ListenAndServe()
 }
@@ -177,11 +157,11 @@ func (s *Server) Stop(ctx context.Context) error {
 }
 
 // ============================================================================
-// HTTP HANDLERS
+// HTTP HANDLERS - Agent Discovery
 // ============================================================================
 
-// handleListAgents returns the directory of all publicly discoverable agents
-// Only agents with visibility="public" are listed here
+// handleListAgents returns directory of public agents
+// GET /agents
 func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -191,11 +171,10 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Only include agents with visibility="public"
+	// Only include public agents
 	agents := make([]AgentCard, 0, len(s.agentCards))
 	for agentID, card := range s.agentCards {
-		visibility := s.agentVisibility[agentID]
-		if visibility == "public" {
+		if s.agentVisibility[agentID] == "public" {
 			agents = append(agents, *card)
 		}
 	}
@@ -210,7 +189,7 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 
 // handleAgentRoutes routes agent-specific requests
 func (s *Server) handleAgentRoutes(w http.ResponseWriter, r *http.Request) {
-	// Parse path: /agents/{agentId}[/tasks[/{taskId}]]
+	// Parse path: /agents/{agentId}[/...]
 	path := strings.TrimPrefix(r.URL.Path, "/agents/")
 	parts := strings.Split(path, "/")
 
@@ -226,22 +205,37 @@ func (s *Server) handleAgentRoutes(w http.ResponseWriter, r *http.Request) {
 	case len(parts) == 1:
 		// GET /agents/{agentId} - Get agent card
 		s.handleGetAgentCard(w, r, agentID)
-	case len(parts) == 2 && parts[1] == "tasks":
-		// POST /agents/{agentId}/tasks - Execute task
-		s.handleExecuteTask(w, r, agentID)
+
+	case len(parts) == 3 && parts[1] == "message" && parts[2] == "send":
+		// POST /agents/{agentId}/message/send - A2A message/send (Spec 7.1)
+		s.handleMessageSend(w, r, agentID)
+
+	case len(parts) == 3 && parts[1] == "message" && parts[2] == "stream":
+		// POST /agents/{agentId}/message/stream - A2A SSE streaming (Spec 7.2)
+		s.handleMessageStream(w, r, agentID)
+
 	case len(parts) == 3 && parts[1] == "tasks":
-		// GET /agents/{agentId}/tasks/{taskId} - Get task status
-		s.handleGetTaskStatus(w, r, agentID, parts[2])
-	case len(parts) == 2 && parts[1] == "stream":
-		// WebSocket /agents/{agentId}/stream - Streaming execution
-		s.handleStreamTask(w, r, agentID)
+		taskID := parts[2]
+		// GET /agents/{agentId}/tasks/{taskId} - A2A tasks/get (Spec 7.3)
+		s.handleTaskGet(w, r, agentID, taskID)
+
+	case len(parts) == 4 && parts[1] == "tasks" && parts[3] == "cancel":
+		taskID := parts[2]
+		// POST /agents/{agentId}/tasks/{taskId}/cancel - A2A tasks/cancel (Spec 7.4)
+		s.handleTaskCancel(w, r, agentID, taskID)
+
+	case len(parts) == 4 && parts[1] == "tasks" && parts[3] == "resubscribe":
+		taskID := parts[2]
+		// POST /agents/{agentId}/tasks/{taskId}/resubscribe - A2A tasks/resubscribe (Spec 7.9)
+		s.handleTaskResubscribe(w, r, agentID, taskID)
+
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}
 }
 
 // handleGetAgentCard returns an agent's card
-// Private agents return 404 (not accessible via external API)
+// GET /agents/{agentId}
 func (s *Server) handleGetAgentCard(w http.ResponseWriter, r *http.Request, agentID string) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -258,111 +252,97 @@ func (s *Server) handleGetAgentCard(w http.ResponseWriter, r *http.Request, agen
 		return
 	}
 
-	// Private agents are not accessible via external API
+	// Private agents not accessible via API
 	if visibility == "private" {
-		http.Error(w, "Agent not found", http.StatusNotFound) // Don't reveal existence
+		http.Error(w, "Agent not found", http.StatusNotFound)
 		return
 	}
 
-	// Public and internal agents can return their card
 	respondJSON(w, http.StatusOK, card)
 }
 
-// handleExecuteTask executes a task on an agent
-// Private agents cannot be called via external API
-func (s *Server) handleExecuteTask(w http.ResponseWriter, r *http.Request, agentID string) {
+// ============================================================================
+// HTTP HANDLERS - A2A RPC Methods (Spec Section 7)
+// ============================================================================
+
+// handleMessageSend implements message/send (Spec Section 7.1)
+// POST /agents/{agentId}/message/send
+func (s *Server) handleMessageSend(w http.ResponseWriter, r *http.Request, agentID string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Get agent and check visibility
+	// Get agent
 	s.mu.RLock()
 	agent, exists := s.agents[agentID]
 	visibility := s.agentVisibility[agentID]
 	s.mu.RUnlock()
 
-	if !exists {
+	if !exists || visibility == "private" {
 		http.Error(w, "Agent not found", http.StatusNotFound)
 		return
 	}
 
-	// Private agents cannot be called via external API (only by local orchestrators)
-	if visibility == "private" {
-		http.Error(w, "Agent not found", http.StatusNotFound) // Don't reveal existence
-		return
-	}
-
-	// Parse task request
-	var taskReq TaskRequest
-	if err := json.NewDecoder(r.Body).Decode(&taskReq); err != nil {
+	// Parse request body
+	var params MessageSendParams
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// Generate task ID if not provided
-	if taskReq.TaskID == "" {
-		taskReq.TaskID = uuid.New().String()
+	// Create or continue task
+	var task *Task
+	if params.TaskID != "" {
+		// Continue existing task
+		s.mu.RLock()
+		task, exists = s.tasks[params.TaskID]
+		s.mu.RUnlock()
+
+		if !exists {
+			http.Error(w, "Task not found", http.StatusNotFound)
+			return
+		}
+
+		// Add new message to task
+		task.Messages = append(task.Messages, params.Message)
+	} else {
+		// Create new task
+		task = &Task{
+			ID:       uuid.New().String(),
+			Messages: []Message{params.Message},
+			Status: TaskStatus{
+				State:     TaskStateSubmitted,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+		}
 	}
 
-	// Initialize task response
-	taskResp := &TaskResponse{
-		TaskID:    taskReq.TaskID,
-		Status:    TaskStatusRunning,
-		StartedAt: time.Now(),
-	}
-
+	// Store task
 	s.mu.Lock()
-	s.tasks[taskReq.TaskID] = taskResp
+	s.tasks[task.ID] = task
+	task.Status.State = TaskStateWorking
+	task.Status.UpdatedAt = time.Now()
 	s.mu.Unlock()
 
-	// Execute agent in background
-	go s.executeTask(agent, &taskReq, taskResp)
+	// Execute task asynchronously
+	go s.executeTask(agent, task)
 
-	// Return immediate response with task ID
-	respondJSON(w, http.StatusAccepted, taskResp)
+	// Return task immediately
+	respondJSON(w, http.StatusAccepted, task)
 }
 
-// executeTask runs the agent and updates task status
-// Uses pure A2A protocol: TaskRequest → Agent.ExecuteTask() → TaskResponse
-func (s *Server) executeTask(agent Agent, req *TaskRequest, resp *TaskResponse) {
-	ctx := context.Background()
-
-	// Execute agent using pure A2A protocol
-	result, err := agent.ExecuteTask(ctx, req)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if err != nil {
-		resp.Status = TaskStatusFailed
-		resp.Error = &TaskError{
-			Code:    "execution_error",
-			Message: err.Error(),
-		}
-	} else {
-		// Copy the result into our response
-		resp.Status = result.Status
-		resp.Output = result.Output
-		resp.Error = result.Error
-		resp.Metadata = result.Metadata
-		resp.EndedAt = result.EndedAt
-	}
-
-	if resp.EndedAt.IsZero() {
-		resp.EndedAt = time.Now()
-	}
-}
-
-// handleGetTaskStatus returns the status of a task
-func (s *Server) handleGetTaskStatus(w http.ResponseWriter, r *http.Request, agentID, taskID string) {
+// handleTaskGet implements tasks/get (Spec Section 7.3)
+// GET /agents/{agentId}/tasks/{taskId}
+func (s *Server) handleTaskGet(w http.ResponseWriter, r *http.Request, agentID, taskID string) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	s.mu.RLock()
-	taskResp, exists := s.tasks[taskID]
+	task, exists := s.tasks[taskID]
 	s.mu.RUnlock()
 
 	if !exists {
@@ -370,92 +350,336 @@ func (s *Server) handleGetTaskStatus(w http.ResponseWriter, r *http.Request, age
 		return
 	}
 
-	respondJSON(w, http.StatusOK, taskResp)
+	respondJSON(w, http.StatusOK, task)
 }
 
-// handleStreamTask handles streaming task execution via WebSocket
-func (s *Server) handleStreamTask(w http.ResponseWriter, r *http.Request, agentID string) {
-	// Upgrade to WebSocket
-	upgrader := &websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true // Allow all origins (configure for production)
-		},
-	}
-
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		http.Error(w, "Failed to upgrade to WebSocket", http.StatusBadRequest)
+// handleTaskCancel implements tasks/cancel (Spec Section 7.4)
+// POST /agents/{agentId}/tasks/{taskId}/cancel
+func (s *Server) handleTaskCancel(w http.ResponseWriter, r *http.Request, agentID, taskID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	defer conn.Close()
+
+	// Parse optional cancel reason
+	var params TaskCancelParams
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&params)
+	}
+
+	s.mu.Lock()
+	task, exists := s.tasks[taskID]
+	if exists {
+		task.Status.State = TaskStateCanceled
+		task.Status.UpdatedAt = time.Now()
+		if params.Reason != "" {
+			task.Status.Reason = params.Reason
+		}
+	}
+	s.mu.Unlock()
+
+	if !exists {
+		http.Error(w, "Task not found", http.StatusNotFound)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, task)
+}
+
+// handleMessageStream implements message/stream with SSE (Spec Section 7.2)
+// POST /agents/{agentId}/message/stream
+func (s *Server) handleMessageStream(w http.ResponseWriter, r *http.Request, agentID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
 	// Get agent
 	s.mu.RLock()
 	agent, exists := s.agents[agentID]
+	visibility := s.agentVisibility[agentID]
 	s.mu.RUnlock()
 
-	if !exists {
-		conn.WriteJSON(map[string]string{"error": "Agent not found"})
+	if !exists || visibility == "private" {
+		http.Error(w, "Agent not found", http.StatusNotFound)
 		return
 	}
 
-	// Read task request from WebSocket
-	var taskReq TaskRequest
-	if err := conn.ReadJSON(&taskReq); err != nil {
-		conn.WriteJSON(map[string]string{"error": "Invalid task request"})
+	// Parse request body
+	var params MessageSendParams
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// Generate task ID if not provided
-	if taskReq.TaskID == "" {
-		taskReq.TaskID = uuid.New().String()
+	// Create or continue task
+	var task *Task
+	if params.TaskID != "" {
+		// Continue existing task
+		s.mu.RLock()
+		task, exists = s.tasks[params.TaskID]
+		s.mu.RUnlock()
+
+		if !exists {
+			http.Error(w, "Task not found", http.StatusNotFound)
+			return
+		}
+
+		// Add new message to task
+		task.Messages = append(task.Messages, params.Message)
+	} else {
+		// Create new task
+		task = &Task{
+			ID:       uuid.New().String(),
+			Messages: []Message{params.Message},
+			Status: TaskStatus{
+				State:     TaskStateSubmitted,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+		}
 	}
+
+	// Store task
+	s.mu.Lock()
+	s.tasks[task.ID] = task
+	task.Status.State = TaskStateWorking
+	task.Status.UpdatedAt = time.Now()
+	s.mu.Unlock()
+
+	// Set SSE headers (Spec Section 3.3.3)
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Send initial status event
+	s.sendSSEEvent(w, flusher, "status", TaskStatusUpdateEvent{
+		TaskID: task.ID,
+		Status: task.Status,
+	})
 
 	// Execute task with streaming
-	ctx := context.Background()
-	streamCh, err := agent.ExecuteTaskStreaming(ctx, &taskReq)
+	eventCh, err := agent.ExecuteTaskStreaming(r.Context(), task)
 	if err != nil {
-		conn.WriteJSON(&StreamChunk{
-			TaskID:    taskReq.TaskID,
-			ChunkType: ChunkTypeError,
-			Content:   fmt.Sprintf("Execution failed: %v", err),
-			Timestamp: time.Now(),
-			Final:     true,
+		// Send error status
+		task.Status.State = TaskStateFailed
+		task.Status.UpdatedAt = time.Now()
+		task.Error = &TaskError{
+			Code:    "execution_error",
+			Message: err.Error(),
+		}
+		s.sendSSEEvent(w, flusher, "status", TaskStatusUpdateEvent{
+			TaskID: task.ID,
+			Status: task.Status,
 		})
 		return
 	}
 
-	// Stream chunks to client
-	for chunk := range streamCh {
-		// Add timestamp if not set
-		if chunk.Timestamp.IsZero() {
-			chunk.Timestamp = time.Now()
+	// Stream events to client
+	for event := range eventCh {
+		switch event.Type {
+		case StreamEventTypeMessage:
+			if event.Message != nil {
+				s.sendSSEEvent(w, flusher, "message", TaskMessageEvent{
+					TaskID:  event.TaskID,
+					Message: *event.Message,
+				})
+			}
+		case StreamEventTypeArtifact:
+			if event.Artifact != nil {
+				s.sendSSEEvent(w, flusher, "artifact", TaskArtifactUpdateEvent{
+					TaskID:   event.TaskID,
+					Artifact: *event.Artifact,
+				})
+			}
+		case StreamEventTypeStatus:
+			if event.Status != nil {
+				s.sendSSEEvent(w, flusher, "status", TaskStatusUpdateEvent{
+					TaskID: event.TaskID,
+					Status: *event.Status,
+				})
+				// Update task status
+				s.mu.Lock()
+				if t, exists := s.tasks[event.TaskID]; exists {
+					t.Status = *event.Status
+				}
+				s.mu.Unlock()
+			}
 		}
+	}
 
-		if err := conn.WriteJSON(chunk); err != nil {
-			// Client disconnected
+	// Send final completion status
+	s.mu.Lock()
+	if task.Status.State != TaskStateCompleted && task.Status.State != TaskStateFailed {
+		task.Status.State = TaskStateCompleted
+		task.Status.UpdatedAt = time.Now()
+	}
+	finalStatus := task.Status
+	s.mu.Unlock()
+
+	s.sendSSEEvent(w, flusher, "status", TaskStatusUpdateEvent{
+		TaskID: task.ID,
+		Status: finalStatus,
+	})
+}
+
+// handleTaskResubscribe implements tasks/resubscribe (Spec Section 7.9)
+// POST /agents/{agentId}/tasks/{taskId}/resubscribe
+func (s *Server) handleTaskResubscribe(w http.ResponseWriter, r *http.Request, agentID, taskID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get task
+	s.mu.RLock()
+	task, exists := s.tasks[taskID]
+	agent, agentExists := s.agents[agentID]
+	s.mu.RUnlock()
+
+	if !exists {
+		http.Error(w, "Task not found", http.StatusNotFound)
+		return
+	}
+
+	if !agentExists {
+		http.Error(w, "Agent not found", http.StatusNotFound)
+		return
+	}
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Send current status
+	s.sendSSEEvent(w, flusher, "status", TaskStatusUpdateEvent{
+		TaskID: task.ID,
+		Status: task.Status,
+	})
+
+	// If task is still running, resubscribe to events
+	if task.Status.State == TaskStateWorking {
+		// Execute streaming again
+		eventCh, err := agent.ExecuteTaskStreaming(r.Context(), task)
+		if err != nil {
+			task.Status.State = TaskStateFailed
+			task.Status.UpdatedAt = time.Now()
+			task.Error = &TaskError{
+				Code:    "resubscribe_error",
+				Message: err.Error(),
+			}
+			s.sendSSEEvent(w, flusher, "status", TaskStatusUpdateEvent{
+				TaskID: task.ID,
+				Status: task.Status,
+			})
 			return
 		}
 
-		// If this is the final chunk, close connection
-		if chunk.Final {
-			break
+		// Stream events
+		for event := range eventCh {
+			switch event.Type {
+			case StreamEventTypeMessage:
+				if event.Message != nil {
+					s.sendSSEEvent(w, flusher, "message", TaskMessageEvent{
+						TaskID:  event.TaskID,
+						Message: *event.Message,
+					})
+				}
+			case StreamEventTypeArtifact:
+				if event.Artifact != nil {
+					s.sendSSEEvent(w, flusher, "artifact", TaskArtifactUpdateEvent{
+						TaskID:   event.TaskID,
+						Artifact: *event.Artifact,
+					})
+				}
+			case StreamEventTypeStatus:
+				if event.Status != nil {
+					s.sendSSEEvent(w, flusher, "status", TaskStatusUpdateEvent{
+						TaskID: event.TaskID,
+						Status: *event.Status,
+					})
+				}
+			}
 		}
 	}
 }
 
+// sendSSEEvent sends a Server-Sent Event per A2A spec
+func (s *Server) sendSSEEvent(w http.ResponseWriter, flusher http.Flusher, eventType string, data interface{}) {
+	// Marshal data to JSON
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+
+	// Write SSE format: event: type\ndata: json\n\n
+	fmt.Fprintf(w, "event: %s\n", eventType)
+	fmt.Fprintf(w, "data: %s\n\n", jsonData)
+	flusher.Flush()
+}
+
 // ============================================================================
-// SESSION MANAGEMENT
+// TASK EXECUTION
 // ============================================================================
 
-// handleSessions handles session creation and listing
+// executeTask runs the agent and updates task status
+func (s *Server) executeTask(agent Agent, task *Task) {
+	ctx := context.Background()
+
+	// Execute agent
+	resultTask, err := agent.ExecuteTask(ctx, task)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err != nil {
+		task.Status.State = TaskStateFailed
+		task.Status.UpdatedAt = time.Now()
+		task.Error = &TaskError{
+			Code:    "execution_error",
+			Message: err.Error(),
+		}
+	} else if resultTask != nil {
+		// Copy result into our task
+		task.Status = resultTask.Status
+		task.Messages = resultTask.Messages
+		task.Artifacts = resultTask.Artifacts
+		task.Error = resultTask.Error
+		task.Metadata = resultTask.Metadata
+	}
+
+	// Ensure completion state
+	if task.Status.State != TaskStateFailed && task.Status.State != TaskStateCanceled {
+		task.Status.State = TaskStateCompleted
+	}
+	task.Status.UpdatedAt = time.Now()
+}
+
+// ============================================================================
+// SESSION MANAGEMENT (Hector Extension)
+// ============================================================================
+
+// handleSessions handles session operations
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		// Create new session
 		s.handleCreateSession(w, r)
 	case http.MethodGet:
-		// List sessions (optionally filtered by agent)
 		s.handleListSessions(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -464,7 +688,6 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 
 // handleSessionRoutes routes session-specific requests
 func (s *Server) handleSessionRoutes(w http.ResponseWriter, r *http.Request) {
-	// Parse path: /sessions/{sessionId}
 	path := strings.TrimPrefix(r.URL.Path, "/sessions/")
 	parts := strings.Split(path, "/")
 
@@ -477,37 +700,39 @@ func (s *Server) handleSessionRoutes(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		// GET /sessions/{sessionId}/stream - WebSocket streaming
-		if len(parts) == 2 && parts[1] == "stream" {
-			s.handleSessionStreamTask(w, r, sessionID)
-		} else {
-			s.handleGetSession(w, r, sessionID)
-		}
+		s.handleGetSession(w, r, sessionID)
 	case http.MethodDelete:
 		s.handleDeleteSession(w, r, sessionID)
-	case http.MethodPost:
-		// POST /sessions/{sessionId}/tasks - Execute task in session context
-		if len(parts) == 2 && parts[1] == "tasks" {
-			s.handleSessionTask(w, r, sessionID)
-		} else {
-			http.Error(w, "Not found", http.StatusNotFound)
-		}
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-// handleCreateSession creates a new session
 func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
-	var req SessionRequest
+	var req struct {
+		AgentName string                 `json:"agentName"`
+		Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// Verify agent exists
+	// Find agent by ID or name
 	s.mu.RLock()
-	_, exists := s.agents[req.AgentID]
+	agentID := req.AgentName
+	// First try direct lookup by ID
+	_, exists := s.agents[agentID]
+	if !exists {
+		// Try finding by agent name (card.Name)
+		for id, card := range s.agentCards {
+			if card.Name == req.AgentName {
+				agentID = id
+				exists = true
+				break
+			}
+		}
+	}
 	s.mu.RUnlock()
 
 	if !exists {
@@ -517,33 +742,28 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 
 	// Create session
 	session := &Session{
-		SessionID:      uuid.New().String(),
-		AgentID:        req.AgentID,
+		ID:             uuid.New().String(),
+		AgentName:      agentID, // Store the agent ID for lookups
+		Tasks:          []string{},
 		CreatedAt:      time.Now(),
 		LastActivityAt: time.Now(),
-		State:          make(map[string]interface{}),
 		Metadata:       req.Metadata,
 	}
 
 	s.mu.Lock()
-	s.sessions[session.SessionID] = session
+	s.sessions[session.ID] = session
 	s.mu.Unlock()
 
 	respondJSON(w, http.StatusCreated, session)
 }
 
-// handleListSessions lists all sessions, optionally filtered by agent
 func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
-	agentID := r.URL.Query().Get("agent_id")
-
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	sessions := make([]*Session, 0)
+	sessions := make([]*Session, 0, len(s.sessions))
 	for _, session := range s.sessions {
-		if agentID == "" || session.AgentID == agentID {
-			sessions = append(sessions, session)
-		}
+		sessions = append(sessions, session)
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
@@ -552,7 +772,6 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleGetSession retrieves a session
 func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, sessionID string) {
 	s.mu.RLock()
 	session, exists := s.sessions[sessionID]
@@ -566,7 +785,6 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request, sessio
 	respondJSON(w, http.StatusOK, session)
 }
 
-// handleDeleteSession deletes a session
 func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request, sessionID string) {
 	s.mu.Lock()
 	_, exists := s.sessions[sessionID]
@@ -583,89 +801,9 @@ func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request, ses
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleSessionTask executes a task in a session context
-func (s *Server) handleSessionTask(w http.ResponseWriter, r *http.Request, sessionID string) {
-	// Get session
-	s.mu.RLock()
-	session, exists := s.sessions[sessionID]
-	s.mu.RUnlock()
-
-	if !exists {
-		http.Error(w, "Session not found", http.StatusNotFound)
-		return
-	}
-
-	// Update session activity
-	s.mu.Lock()
-	session.LastActivityAt = time.Now()
-	s.mu.Unlock()
-
-	// Parse task request
-	var taskReq TaskRequest
-	if err := json.NewDecoder(r.Body).Decode(&taskReq); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Inject session context
-	if taskReq.Context == nil {
-		taskReq.Context = &TaskContext{}
-	}
-	taskReq.Context.SessionID = sessionID
-
-	// Generate task ID if not provided
-	if taskReq.TaskID == "" {
-		taskReq.TaskID = uuid.New().String()
-	}
-
-	// Get agent
-	s.mu.RLock()
-	agent, exists := s.agents[session.AgentID]
-	s.mu.RUnlock()
-
-	if !exists {
-		http.Error(w, "Agent not found", http.StatusNotFound)
-		return
-	}
-
-	// Initialize task response
-	taskResp := &TaskResponse{
-		TaskID:    taskReq.TaskID,
-		Status:    TaskStatusRunning,
-		StartedAt: time.Now(),
-	}
-
-	s.mu.Lock()
-	s.tasks[taskReq.TaskID] = taskResp
-	s.mu.Unlock()
-
-	// Execute agent in background
-	go s.executeTask(agent, &taskReq, taskResp)
-
-	// Return immediate response with task ID
-	respondJSON(w, http.StatusAccepted, taskResp)
-}
-
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
-
-// extractInput extracts the input string from TaskInput
-func (s *Server) extractInput(input TaskInput) string {
-	switch v := input.Content.(type) {
-	case string:
-		return v
-	case map[string]interface{}:
-		if text, ok := v["text"].(string); ok {
-			return text
-		}
-		// Try to JSON encode if it's structured data
-		if jsonBytes, err := json.Marshal(v); err == nil {
-			return string(jsonBytes)
-		}
-	}
-	return fmt.Sprintf("%v", input.Content)
-}
 
 // respondJSON writes a JSON response
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {
@@ -673,10 +811,6 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 }
-
-// ============================================================================
-// MIDDLEWARE
-// ============================================================================
 
 // loggingMiddleware logs HTTP requests
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
@@ -702,88 +836,4 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-// ============================================================================
-// SESSION STREAMING
-// ============================================================================
-
-// handleSessionStreamTask handles streaming task execution in a session via WebSocket
-func (s *Server) handleSessionStreamTask(w http.ResponseWriter, r *http.Request, sessionID string) {
-	upgrader := &websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
-
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		http.Error(w, "Failed to upgrade to WebSocket", http.StatusBadRequest)
-		return
-	}
-	defer conn.Close()
-
-	s.mu.RLock()
-	session, exists := s.sessions[sessionID]
-	s.mu.RUnlock()
-
-	if !exists {
-		conn.WriteJSON(map[string]string{"error": "Session not found"})
-		return
-	}
-
-	s.mu.RLock()
-	agent, exists := s.agents[session.AgentID]
-	s.mu.RUnlock()
-
-	if !exists {
-		conn.WriteJSON(map[string]string{"error": "Agent not found"})
-		return
-	}
-
-	var taskReq TaskRequest
-	if err := conn.ReadJSON(&taskReq); err != nil {
-		conn.WriteJSON(map[string]string{"error": "Invalid task request"})
-		return
-	}
-
-	if taskReq.TaskID == "" {
-		taskReq.TaskID = uuid.New().String()
-	}
-
-	if taskReq.Context == nil {
-		taskReq.Context = &TaskContext{}
-	}
-	taskReq.Context.SessionID = sessionID
-
-	s.mu.Lock()
-	session.LastActivityAt = time.Now()
-	s.mu.Unlock()
-
-	ctx := context.Background()
-	streamCh, err := agent.ExecuteTaskStreaming(ctx, &taskReq)
-	if err != nil {
-		conn.WriteJSON(&StreamChunk{
-			TaskID:    taskReq.TaskID,
-			ChunkType: ChunkTypeError,
-			Content:   fmt.Sprintf("Execution failed: %v", err),
-			Timestamp: time.Now(),
-			Final:     true,
-		})
-		return
-	}
-
-	for chunk := range streamCh {
-		if chunk.Timestamp.IsZero() {
-			chunk.Timestamp = time.Now()
-		}
-
-		if err := conn.WriteJSON(chunk); err != nil {
-			return
-		}
-
-		if chunk.Final {
-			break
-		}
-	}
 }

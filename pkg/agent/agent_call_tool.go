@@ -95,17 +95,29 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 		}, err
 	}
 
-	// Create A2A TaskRequest
-	taskRequest := &a2a.TaskRequest{
-		TaskID: fmt.Sprintf("task-%d", time.Now().UnixNano()),
-		Input: a2a.TaskInput{
-			Type:    "text/plain",
-			Content: task,
+	// Create A2A Task with user message
+	a2aTask := &a2a.Task{
+		ID: fmt.Sprintf("task-%d", time.Now().UnixNano()),
+		Messages: []a2a.Message{
+			{
+				Role: a2a.MessageRoleUser,
+				Parts: []a2a.Part{
+					{
+						Type: a2a.PartTypeText,
+						Text: task,
+					},
+				},
+			},
+		},
+		Status: a2a.TaskStatus{
+			State:     a2a.TaskStateSubmitted,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		},
 	}
 
 	// Execute the agent using pure A2A protocol
-	taskResponse, err := targetAgent.ExecuteTask(ctx, taskRequest)
+	resultTask, err := targetAgent.ExecuteTask(ctx, a2aTask)
 	if err != nil {
 		return tools.ToolResult{
 			Success:       false,
@@ -117,10 +129,10 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 	}
 
 	// Check A2A task status
-	if taskResponse.Status == a2a.TaskStatusFailed {
+	if resultTask.Status.State == a2a.TaskStateFailed {
 		errorMsg := "Task failed"
-		if taskResponse.Error != nil {
-			errorMsg = taskResponse.Error.Message
+		if resultTask.Error != nil {
+			errorMsg = resultTask.Error.Message
 		}
 		return tools.ToolResult{
 			Success:       false,
@@ -131,8 +143,8 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 		}, fmt.Errorf("%s", errorMsg)
 	}
 
-	// Extract output from A2A response
-	output := a2a.ExtractOutputText(taskResponse.Output)
+	// Extract output from A2A response messages
+	output := a2a.ExtractTextFromTask(resultTask)
 
 	// Return successful result
 	return tools.ToolResult{
@@ -144,8 +156,8 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 			"agent_name":        agentName,
 			"task":              task,
 			"execution_time_ms": time.Since(start).Milliseconds(),
-			"a2a_task_id":       taskResponse.TaskID,
-			"a2a_status":        string(taskResponse.Status),
+			"a2a_task_id":       resultTask.ID,
+			"a2a_status":        string(resultTask.Status.State),
 		},
 	}, nil
 }

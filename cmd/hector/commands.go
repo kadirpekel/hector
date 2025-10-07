@@ -38,12 +38,23 @@ func executeListCommand(serverURL string, token string) error {
 	fmt.Printf("\n📋 Available agents at %s:\n\n", serverURL)
 	for _, agent := range agents {
 		fmt.Printf("  🤖 %s\n", agent.Name)
-		fmt.Printf("     ID: %s\n", agent.AgentID)
+		fmt.Printf("     URL: %s\n", agent.URL)
 		if agent.Description != "" {
 			fmt.Printf("     %s\n", agent.Description)
 		}
-		fmt.Printf("     Capabilities: %s\n", strings.Join(agent.Capabilities, ", "))
-		fmt.Printf("     Endpoint: %s\n", agent.Endpoints.Task)
+		// Display capabilities
+		capStr := "None"
+		if agent.Capabilities.Streaming || agent.Capabilities.MultiTurn {
+			caps := []string{}
+			if agent.Capabilities.Streaming {
+				caps = append(caps, "streaming")
+			}
+			if agent.Capabilities.MultiTurn {
+				caps = append(caps, "multi-turn")
+			}
+			capStr = strings.Join(caps, ", ")
+		}
+		fmt.Printf("     Capabilities: %s\n", capStr)
 		fmt.Println()
 	}
 
@@ -61,48 +72,38 @@ func executeInfoCommand(agentURL string, token string) error {
 
 	fmt.Printf("\n🤖 Agent: %s\n", card.Name)
 	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
-	fmt.Printf("ID:          %s\n", card.AgentID)
+	fmt.Printf("URL:         %s\n", card.URL)
 	fmt.Printf("Description: %s\n", card.Description)
 	fmt.Printf("Version:     %s\n", card.Version)
+	fmt.Printf("Transport:   %s\n", card.PreferredTransport)
 	fmt.Println()
 
 	fmt.Println("Capabilities:")
-	for _, cap := range card.Capabilities {
-		fmt.Printf("  • %s\n", cap)
+	if card.Capabilities.Streaming {
+		fmt.Printf("  • Streaming: Yes\n")
+	}
+	if card.Capabilities.MultiTurn {
+		fmt.Printf("  • Multi-turn: Yes\n")
+	}
+	if card.Capabilities.PushNotifications {
+		fmt.Printf("  • Push notifications: Yes\n")
 	}
 	fmt.Println()
 
-	fmt.Println("Endpoints:")
-	fmt.Printf("  Task:   %s\n", card.Endpoints.Task)
-	if card.Endpoints.Stream != "" {
-		fmt.Printf("  Stream: %s\n", card.Endpoints.Stream)
-	}
-	if card.Endpoints.Status != "" {
-		fmt.Printf("  Status: %s\n", card.Endpoints.Status)
-	}
-	fmt.Println()
-
-	fmt.Println("Input Types:")
-	for _, t := range card.InputTypes {
-		fmt.Printf("  • %s\n", t)
-	}
-	fmt.Println()
-
-	fmt.Println("Output Types:")
-	for _, t := range card.OutputTypes {
-		fmt.Printf("  • %s\n", t)
-	}
-	fmt.Println()
-
-	if card.Auth.Type != "" {
-		fmt.Printf("Authentication: %s\n", card.Auth.Type)
-	}
-
-	if len(card.Metadata) > 0 {
-		fmt.Println("\nMetadata:")
-		for k, v := range card.Metadata {
-			fmt.Printf("  %s: %s\n", k, v)
+	if len(card.Skills) > 0 {
+		fmt.Println("Skills:")
+		for _, skill := range card.Skills {
+			fmt.Printf("  • %s: %s\n", skill.Name, skill.Description)
 		}
+		fmt.Println()
+	}
+
+	if len(card.SecuritySchemes) > 0 {
+		fmt.Println("Authentication:")
+		for _, scheme := range card.SecuritySchemes {
+			fmt.Printf("  • Type: %s\n", scheme.Type)
+		}
+		fmt.Println()
 	}
 
 	return nil
@@ -125,34 +126,34 @@ func executeCallCommand(agentURL string, input string, token string, stream bool
 		fmt.Println("⚠️  Streaming not yet implemented, using standard execution")
 	}
 
-	// Execute task
-	result, err := client.ExecuteTask(context.Background(), card, input, nil)
+	// Execute task using new A2A message/send
+	task, err := client.SendTextMessage(context.Background(), card.URL, input)
 	if err != nil {
 		return fmt.Errorf("task execution failed: %w", err)
 	}
 
 	// Check status
-	if result.Status == a2a.TaskStatusFailed {
-		if result.Error != nil {
-			return fmt.Errorf("agent error: %s - %s", result.Error.Code, result.Error.Message)
+	if task.Status.State == a2a.TaskStateFailed {
+		if task.Error != nil {
+			return fmt.Errorf("agent error: %s - %s", task.Error.Code, task.Error.Message)
 		}
 		return fmt.Errorf("task failed with unknown error")
 	}
 
-	// Extract and print output
-	output := a2a.ExtractOutputText(result.Output)
+	// Extract and print output from assistant messages
+	output := a2a.ExtractTextFromTask(task)
 	fmt.Println(output)
 
 	// Show metadata if available
-	if result.Metadata != nil {
+	if task.Metadata != nil {
 		fmt.Println()
-		if tokens, ok := result.Metadata["tokens_used"].(float64); ok {
+		if tokens, ok := task.Metadata["tokens_used"].(float64); ok {
 			fmt.Printf("📊 Tokens: %.0f", tokens)
 		}
-		if duration, ok := result.Metadata["duration_ms"].(float64); ok {
+		if duration, ok := task.Metadata["duration_ms"].(float64); ok {
 			fmt.Printf(" | Duration: %.0fms", duration)
 		}
-		if len(result.Metadata) > 0 {
+		if len(task.Metadata) > 0 {
 			fmt.Println()
 		}
 	}
@@ -178,31 +179,37 @@ func executeChatCommand(agentURL string, token string) error {
 	fmt.Println("  /info - Show agent information")
 	fmt.Println()
 
-	// Create session for multi-turn conversation
-	sessionReq := &a2a.SessionRequest{
-		AgentID: card.AgentID,
-		Metadata: map[string]string{
-			"client": "hector-cli",
-		},
+	// Determine base server URL from agent card
+	// The agent URL format is: http://host:port/agents/{agentId}
+	// We need to extract: http://host:port
+	baseURL := card.URL
+	if idx := strings.Index(baseURL, "/agents/"); idx != -1 {
+		baseURL = baseURL[:idx]
+	} else {
+		// Fallback: derive from the agentURL we connected to
+		baseURL = agentURL
+		if idx := strings.Index(baseURL, "/agents/"); idx != -1 {
+			baseURL = baseURL[:idx]
+		}
 	}
 
-	// Determine session endpoint from agent card or default
-	sessionURL := strings.TrimSuffix(card.Endpoints.Task, "/tasks")
-	sessionURL = strings.TrimSuffix(sessionURL, fmt.Sprintf("/agents/%s", card.AgentID))
-	sessionURL = sessionURL + "/sessions"
+	// Create session for multi-turn conversation
+	metadata := map[string]interface{}{
+		"client": "hector-cli",
+	}
 
-	session, err := client.CreateSession(context.Background(), sessionURL, sessionReq)
+	session, err := client.CreateSession(context.Background(), baseURL, card.Name, metadata)
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
 
-	fmt.Printf("🔗 Session: %s\n\n", session.SessionID[:8]+"...")
+	fmt.Printf("🔗 Session: %s\n\n", session.ID[:8]+"...")
 
 	// Ensure session cleanup on exit
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		client.DeleteSession(ctx, sessionURL+"/"+session.SessionID)
+		client.DeleteSession(ctx, baseURL, session.ID)
 	}()
 
 	scanner := os.Stdin
@@ -233,23 +240,23 @@ func executeChatCommand(agentURL string, token string) error {
 				return nil
 			case "/clear":
 				// Create new session (clears history)
-				newSession, err := client.CreateSession(context.Background(), sessionURL, sessionReq)
+				newSession, err := client.CreateSession(context.Background(), baseURL, card.Name, metadata)
 				if err != nil {
 					fmt.Printf("❌ Failed to clear history: %v\n", err)
 					continue
 				}
 				// Delete old session
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				client.DeleteSession(ctx, sessionURL+"/"+session.SessionID)
+				client.DeleteSession(ctx, baseURL, session.ID)
 				cancel()
 				// Use new session
 				session = newSession
-				fmt.Printf("💭 Conversation history cleared (new session: %s)\n\n", session.SessionID[:8]+"...")
+				fmt.Printf("💭 Conversation history cleared (new session: %s)\n\n", session.ID[:8]+"...")
 				continue
 			case "/info":
 				fmt.Printf("\n🤖 %s\n", card.Name)
 				fmt.Printf("   %s\n", card.Description)
-				fmt.Printf("   Session: %s\n\n", session.SessionID)
+				fmt.Printf("   Session: %s\n\n", session.ID)
 				continue
 			default:
 				fmt.Printf("Unknown command: %s\n", input)
@@ -257,43 +264,53 @@ func executeChatCommand(agentURL string, token string) error {
 			}
 		}
 
-		// Execute task within session context with streaming
-		outputCh := make(chan string, 100)
-
-		// Start streaming in background
-		var result *a2a.TaskResponse
-		var execErr error
-		done := make(chan struct{})
-
-		go func() {
-			defer close(done)
-			result, execErr = client.ExecuteTaskStreamingInSession(context.Background(), sessionURL+"/"+session.SessionID, input, outputCh)
-			close(outputCh)
-		}()
-
-		// Print streaming output in real-time
-		for chunk := range outputCh {
-			fmt.Print(chunk)
-		}
-
-		// Wait for completion
-		<-done
+		// Execute task with streaming using A2A SSE
+		message := a2a.CreateTextMessage(a2a.MessageRoleUser, input)
+		eventCh, execErr := client.SendMessageStreaming(context.Background(), card.URL, message)
 
 		if execErr != nil {
 			fmt.Printf("\n❌ Error: %v\n", execErr)
 			continue
 		}
 
-		if result.Status == a2a.TaskStatusFailed {
-			if result.Error != nil {
-				fmt.Printf("\n❌ Agent error: %s\n", result.Error.Message)
-			} else {
-				fmt.Println("\n❌ Task failed")
+		// Process streaming events
+		failed := false
+
+		for event := range eventCh {
+			switch event.Type {
+			case a2a.StreamEventTypeMessage:
+				if event.Message != nil && event.Message.Role == a2a.MessageRoleAssistant {
+					// Print each chunk as it arrives (chunks are already incremental)
+					for _, part := range event.Message.Parts {
+						if part.Type == a2a.PartTypeText {
+							fmt.Print(part.Text)
+						}
+					}
+				}
+
+			case a2a.StreamEventTypeStatus:
+				if event.Status != nil {
+					switch event.Status.State {
+					case a2a.TaskStateFailed:
+						failed = true
+						fmt.Println("\n❌ Task failed")
+						if event.Status.Reason != "" {
+							fmt.Printf("   Reason: %s\n", event.Status.Reason)
+						}
+					case a2a.TaskStateCompleted:
+						// Task completed successfully
+					}
+				}
+
+			case a2a.StreamEventTypeArtifact:
+				// Artifacts are typically handled separately or could be shown inline
+				// For now, we'll just note that we received them
 			}
-			continue
 		}
 
-		fmt.Println()
+		if !failed {
+			fmt.Println() // New line after streaming completes
+		}
 		fmt.Println()
 	}
 

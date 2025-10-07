@@ -23,6 +23,9 @@ Comprehensive guide to Hector's tool system: built-in tools, MCP protocol, gRPC 
 ### [API Reference](API_REFERENCE.md)
 Complete A2A protocol API reference: HTTP endpoints, WebSocket streaming, request/response schemas, authentication, and client examples.
 
+### [A2A Protocol Compliance](A2A_COMPLIANCE.md)
+Complete A2A specification compliance documentation with spec section references and implementation details.
+
 ### [Architecture](ARCHITECTURE.md)
 System design, A2A protocol implementation, sessions, orchestration patterns, and core components.
 
@@ -69,6 +72,9 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 **Integrate via A2A protocol**
 → [API Reference](API_REFERENCE.md)
 
+**Verify A2A compliance**
+→ [A2A Protocol Compliance](A2A_COMPLIANCE.md)
+
 **Customize prompts and tools**
 → [Building Agents Guide](AGENTS.md)
 
@@ -112,6 +118,7 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 | [Tools & Extensions](TOOLS.md) | Built-in tools, MCP, plugins |
 | [Plugins](PLUGINS.md) | Plugin development guide (gRPC extensions) |
 | [API Reference](API_REFERENCE.md) | A2A protocol HTTP/WebSocket API |
+| [A2A Compliance](A2A_COMPLIANCE.md) | A2A specification compliance details |
 | [Quick Start](QUICK_START.md) | Get started in 5 minutes |
 | [Architecture](ARCHITECTURE.md) | System design, sessions, orchestration |
 | [Configuration](CONFIGURATION.md) | Complete config reference |

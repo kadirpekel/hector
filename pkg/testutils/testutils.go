@@ -43,37 +43,57 @@ func TestLLMConfig() *config.LLMProviderConfig {
 	}
 }
 
-// TestTaskRequest returns a valid task request for testing
-func TestTaskRequest() *a2a.TaskRequest {
-	return &a2a.TaskRequest{
-		TaskID: "test-task-1",
-		Input: a2a.TaskInput{
-			Type:    "text/plain",
-			Content: "Test input content",
+// TestTask returns a valid A2A task for testing
+func TestTask() *a2a.Task {
+	return &a2a.Task{
+		ID: "test-task-1",
+		Messages: []a2a.Message{
+			{
+				Role: a2a.MessageRoleUser,
+				Parts: []a2a.Part{
+					{
+						Type: a2a.PartTypeText,
+						Text: "Test input content",
+					},
+				},
+			},
+		},
+		Status: a2a.TaskStatus{
+			State:     a2a.TaskStateSubmitted,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		},
 	}
 }
 
-// TestTaskResponse returns a valid task response for testing
-func TestTaskResponse() *a2a.TaskResponse {
-	return &a2a.TaskResponse{
-		TaskID: "test-task-1",
-		Status: a2a.TaskStatusCompleted,
-		Output: &a2a.TaskOutput{
-			Type:    "text/plain",
-			Content: "Test response content",
+// TestTaskWithResponse returns a completed A2A task for testing
+func TestTaskWithResponse() *a2a.Task {
+	task := TestTask()
+	task.Messages = append(task.Messages, a2a.Message{
+		Role: a2a.MessageRoleAssistant,
+		Parts: []a2a.Part{
+			{
+				Type: a2a.PartTypeText,
+				Text: "Test response content",
+			},
 		},
-	}
+	})
+	task.Status.State = a2a.TaskStateCompleted
+	task.Status.UpdatedAt = time.Now()
+	return task
 }
 
 // TestAgentCard returns a valid agent card for testing
 func TestAgentCard() *a2a.AgentCard {
 	return &a2a.AgentCard{
-		AgentID:      "test-agent",
-		Name:         "Test Agent",
-		Description:  "A test agent for unit testing",
-		Version:      "1.0.0",
-		Capabilities: []string{"testing", "mock-responses"},
+		Name:               "Test Agent",
+		Description:        "A test agent for unit testing",
+		Version:            "1.0.0",
+		PreferredTransport: "http+json",
+		Capabilities: a2a.AgentCapabilities{
+			Streaming: true,
+			MultiTurn: true,
+		},
 	}
 }
 
@@ -100,7 +120,7 @@ func TestContextWithTimeout(timeout time.Duration) context.Context {
 // MockAgent implements the a2a.Agent interface for testing
 type MockAgent struct {
 	Card         *a2a.AgentCard
-	ExecuteFunc  func(ctx context.Context, request *a2a.TaskRequest) (*a2a.TaskResponse, error)
+	ExecuteFunc  func(ctx context.Context, task *a2a.Task) (*a2a.Task, error)
 	ExecuteDelay time.Duration
 	ExecuteError error
 }
@@ -109,21 +129,31 @@ type MockAgent struct {
 func NewMockAgent() *MockAgent {
 	return &MockAgent{
 		Card: TestAgentCard(),
-		ExecuteFunc: func(ctx context.Context, request *a2a.TaskRequest) (*a2a.TaskResponse, error) {
-			content := "Mock response"
-			if request.Input.Content != nil {
-				if contentStr, ok := request.Input.Content.(string); ok {
-					content = "Mock response for: " + contentStr
+		ExecuteFunc: func(ctx context.Context, task *a2a.Task) (*a2a.Task, error) {
+			// Extract user message text
+			userText := ""
+			if len(task.Messages) > 0 {
+				lastMsg := task.Messages[len(task.Messages)-1]
+				if lastMsg.Role == a2a.MessageRoleUser && len(lastMsg.Parts) > 0 {
+					if lastMsg.Parts[0].Type == a2a.PartTypeText {
+						userText = lastMsg.Parts[0].Text
+					}
 				}
 			}
-			return &a2a.TaskResponse{
-				TaskID: request.TaskID,
-				Status: a2a.TaskStatusCompleted,
-				Output: &a2a.TaskOutput{
-					Type:    "text/plain",
-					Content: content,
+
+			// Add assistant response
+			task.Messages = append(task.Messages, a2a.Message{
+				Role: a2a.MessageRoleAssistant,
+				Parts: []a2a.Part{
+					{
+						Type: a2a.PartTypeText,
+						Text: "Mock response for: " + userText,
+					},
 				},
-			}, nil
+			})
+			task.Status.State = a2a.TaskStateCompleted
+			task.Status.UpdatedAt = time.Now()
+			return task, nil
 		},
 	}
 }
@@ -134,7 +164,7 @@ func (m *MockAgent) GetAgentCard() *a2a.AgentCard {
 }
 
 // ExecuteTask executes a task and returns the response
-func (m *MockAgent) ExecuteTask(ctx context.Context, request *a2a.TaskRequest) (*a2a.TaskResponse, error) {
+func (m *MockAgent) ExecuteTask(ctx context.Context, task *a2a.Task) (*a2a.Task, error) {
 	// Add delay if specified
 	if m.ExecuteDelay > 0 {
 		select {
@@ -151,18 +181,22 @@ func (m *MockAgent) ExecuteTask(ctx context.Context, request *a2a.TaskRequest) (
 
 	// Use custom function if provided
 	if m.ExecuteFunc != nil {
-		return m.ExecuteFunc(ctx, request)
+		return m.ExecuteFunc(ctx, task)
 	}
 
 	// Default behavior
-	return &a2a.TaskResponse{
-		TaskID: request.TaskID,
-		Status: a2a.TaskStatusCompleted,
-		Output: &a2a.TaskOutput{
-			Type:    "text/plain",
-			Content: "Mock response",
+	task.Messages = append(task.Messages, a2a.Message{
+		Role: a2a.MessageRoleAssistant,
+		Parts: []a2a.Part{
+			{
+				Type: a2a.PartTypeText,
+				Text: "Mock response",
+			},
 		},
-	}, nil
+	})
+	task.Status.State = a2a.TaskStateCompleted
+	task.Status.UpdatedAt = time.Now()
+	return task, nil
 }
 
 // SetExecuteError sets an error to be returned by ExecuteTask
@@ -176,20 +210,44 @@ func (m *MockAgent) SetExecuteDelay(delay time.Duration) {
 }
 
 // ExecuteTaskStreaming executes a task with streaming output
-func (m *MockAgent) ExecuteTaskStreaming(ctx context.Context, request *a2a.TaskRequest) (<-chan *a2a.StreamChunk, error) {
-	ch := make(chan *a2a.StreamChunk, 1)
-	ch <- &a2a.StreamChunk{
-		TaskID:    request.TaskID,
-		ChunkType: a2a.ChunkTypeText,
-		Content:   "Mock streaming response",
-		Timestamp: time.Now(),
-		Final:     true,
-	}
-	close(ch)
+func (m *MockAgent) ExecuteTaskStreaming(ctx context.Context, task *a2a.Task) (<-chan a2a.StreamEvent, error) {
+	ch := make(chan a2a.StreamEvent, 2)
+
+	go func() {
+		defer close(ch)
+
+		// Send message event
+		ch <- a2a.StreamEvent{
+			Type:   a2a.StreamEventTypeMessage,
+			TaskID: task.ID,
+			Message: &a2a.Message{
+				Role: a2a.MessageRoleAssistant,
+				Parts: []a2a.Part{
+					{
+						Type: a2a.PartTypeText,
+						Text: "Mock streaming response",
+					},
+				},
+			},
+			Timestamp: time.Now(),
+		}
+
+		// Send completion status
+		ch <- a2a.StreamEvent{
+			Type:   a2a.StreamEventTypeStatus,
+			TaskID: task.ID,
+			Status: &a2a.TaskStatus{
+				State:     a2a.TaskStateCompleted,
+				UpdatedAt: time.Now(),
+			},
+			Timestamp: time.Now(),
+		}
+	}()
+
 	return ch, nil
 }
 
 // SetExecuteFunc sets a custom function for ExecuteTask
-func (m *MockAgent) SetExecuteFunc(fn func(ctx context.Context, request *a2a.TaskRequest) (*a2a.TaskResponse, error)) {
+func (m *MockAgent) SetExecuteFunc(fn func(ctx context.Context, task *a2a.Task) (*a2a.Task, error)) {
 	m.ExecuteFunc = fn
 }

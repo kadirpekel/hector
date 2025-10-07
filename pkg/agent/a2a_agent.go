@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/kadirpekel/hector/pkg/a2a"
 )
@@ -49,52 +50,76 @@ func (a *A2AAgent) GetAgentCard() *a2a.AgentCard {
 }
 
 // ExecuteTask implements a2a.Agent.ExecuteTask
-// Pure A2A protocol: TaskRequest → TaskResponse
-func (a *A2AAgent) ExecuteTask(ctx context.Context, request *a2a.TaskRequest) (*a2a.TaskResponse, error) {
-	// Execute task via A2A client (pure protocol pass-through)
-	result, err := a.client.ExecuteTaskRequest(ctx, a.agentCard, request)
+// Converts Task to message, calls remote agent, returns updated Task
+func (a *A2AAgent) ExecuteTask(ctx context.Context, task *a2a.Task) (*a2a.Task, error) {
+	// Get the last user message
+	if len(task.Messages) == 0 {
+		return nil, fmt.Errorf("task has no messages")
+	}
+
+	lastMessage := task.Messages[len(task.Messages)-1]
+
+	// Send message to remote agent
+	resultTask, err := a.client.SendMessage(ctx, a.agentCard.URL, lastMessage, nil)
 	if err != nil {
 		return nil, fmt.Errorf("A2A agent %s execution failed: %w", a.agentCard.Name, err)
 	}
 
-	return result, nil
+	return resultTask, nil
 }
 
 // ExecuteTaskStreaming implements a2a.Agent.ExecuteTaskStreaming
-func (a *A2AAgent) ExecuteTaskStreaming(ctx context.Context, request *a2a.TaskRequest) (<-chan *a2a.StreamChunk, error) {
-	// TODO: Implement true A2A streaming when a2a.Client supports it
-	// For now, fall back to non-streaming
-	streamCh := make(chan *a2a.StreamChunk, 1)
+func (a *A2AAgent) ExecuteTaskStreaming(ctx context.Context, task *a2a.Task) (<-chan a2a.StreamEvent, error) {
+	// Get the last user message
+	if len(task.Messages) == 0 {
+		return nil, fmt.Errorf("task has no messages")
+	}
 
-	go func() {
-		defer close(streamCh)
+	lastMessage := task.Messages[len(task.Messages)-1]
 
-		result, err := a.ExecuteTask(ctx, request)
-		if err != nil {
-			streamCh <- &a2a.StreamChunk{
-				TaskID:    request.TaskID,
-				ChunkType: a2a.ChunkTypeText,
-				Content:   fmt.Sprintf("Error: %v", err),
-				Final:     true,
-			}
-			return
-		}
+	// Use client's streaming method
+	eventCh, err := a.client.SendMessageStreaming(ctx, a.agentCard.URL, lastMessage)
+	if err != nil {
+		return nil, fmt.Errorf("A2A agent %s streaming failed: %w", a.agentCard.Name, err)
+	}
 
-		// Send the result as a single chunk
-		if result.Output != nil {
-			streamCh <- &a2a.StreamChunk{
-				TaskID:    request.TaskID,
-				ChunkType: a2a.ChunkTypeText,
-				Content:   a2a.ExtractOutputText(result.Output),
-				Final:     true,
-			}
-		}
-	}()
-
-	return streamCh, nil
+	return eventCh, nil
 }
 
-// Note: Shared helpers (extractInputText) are in a2a_helpers.go
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+// ExtractTextFromTask extracts text content from a task (for backward compat)
+func ExtractTextFromTask(task *a2a.Task) string {
+	if task == nil {
+		return ""
+	}
+
+	var texts []string
+
+	// Extract from assistant messages
+	for _, msg := range task.Messages {
+		if msg.Role == a2a.MessageRoleAssistant {
+			for _, part := range msg.Parts {
+				if part.Type == a2a.PartTypeText {
+					texts = append(texts, part.Text)
+				}
+			}
+		}
+	}
+
+	// Extract from artifacts
+	for _, artifact := range task.Artifacts {
+		for _, part := range artifact.Parts {
+			if part.Type == a2a.PartTypeText {
+				texts = append(texts, part.Text)
+			}
+		}
+	}
+
+	return strings.Join(texts, "\n")
+}
 
 // ============================================================================
 // COMPILE-TIME CHECK

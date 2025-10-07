@@ -80,131 +80,110 @@ func (a *Agent) ClearHistory(sessionID string) {
 
 // ============================================================================
 // PURE A2A INTERFACE IMPLEMENTATION
-// Agent implements a2a.Agent interface directly - no adapter needed!
+// Agent implements a2a.Agent interface directly - no wrapper needed!
 // ============================================================================
 
-// GetAgentCard implements a2a.Agent.GetAgentCard
+// GetAgentCard returns the agent's capability card
 func (a *Agent) GetAgentCard() *a2a.AgentCard {
 	return &a2a.AgentCard{
-		AgentID:      a.name, // Use name as ID by default
-		Name:         a.name,
-		Description:  a.description,
-		Version:      "1.0.0",
-		Capabilities: []string{"text_generation", "conversation", "reasoning"},
-		Endpoints: a2a.AgentEndpoints{
-			// These will be set by the server when registering
-			Task:   "",
-			Stream: "",
-			Status: "",
-		},
-		InputTypes: []string{
-			"text/plain",
-			"application/json",
-		},
-		OutputTypes: []string{
-			"text/plain",
-			"text/markdown",
-			"application/json",
-		},
-		Metadata: map[string]string{
-			"platform": "hector",
-			"llm":      a.config.LLM,
-			"engine":   a.config.Reasoning.Engine,
+		Name:               a.name,
+		Description:        a.description,
+		Version:            "1.0.0",
+		PreferredTransport: "http+json",
+		Capabilities: a2a.AgentCapabilities{
+			Streaming: true,
+			MultiTurn: true,
 		},
 	}
 }
 
 // ExecuteTask implements a2a.Agent.ExecuteTask
-func (a *Agent) ExecuteTask(ctx context.Context, request *a2a.TaskRequest) (*a2a.TaskResponse, error) {
-	startTime := time.Now()
-
-	// Extract input from A2A TaskRequest
-	input := extractInputText(request.Input)
-
-	// Extract sessionID from A2A request context (if present)
-	sessionID := ""
-	if request.Context != nil {
-		sessionID = request.Context.SessionID
-	}
-
-	// Pass sessionID via context for downstream services
-	if sessionID != "" {
-		ctx = context.WithValue(ctx, "sessionID", sessionID)
+func (a *Agent) ExecuteTask(ctx context.Context, task *a2a.Task) (*a2a.Task, error) {
+	// Extract user message text
+	userText := a2a.ExtractTextFromTask(task)
+	if userText == "" && len(task.Messages) > 0 {
+		// Get the last user message
+		for i := len(task.Messages) - 1; i >= 0; i-- {
+			if task.Messages[i].Role == a2a.MessageRoleUser {
+				for _, part := range task.Messages[i].Parts {
+					if part.Type == a2a.PartTypeText {
+						userText = part.Text
+						break
+					}
+				}
+				if userText != "" {
+					break
+				}
+			}
+		}
 	}
 
 	// Create strategy based on config
 	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
 	if err != nil {
-		return &a2a.TaskResponse{
-			TaskID:    request.TaskID,
-			Status:    a2a.TaskStatusFailed,
-			StartedAt: startTime,
-			EndedAt:   time.Now(),
-			Error: &a2a.TaskError{
-				Code:    "strategy_error",
-				Message: err.Error(),
-			},
-		}, nil
+		task.Status.State = a2a.TaskStateFailed
+		task.Status.UpdatedAt = time.Now()
+		task.Error = &a2a.TaskError{
+			Code:    "strategy_error",
+			Message: err.Error(),
+		}
+		return task, nil
 	}
 
-	// Execute reasoning loop directly
-	streamCh, err := a.execute(ctx, input, strategy)
+	// Execute reasoning loop
+	streamCh, err := a.execute(ctx, userText, strategy)
 	if err != nil {
-		return &a2a.TaskResponse{
-			TaskID:    request.TaskID,
-			Status:    a2a.TaskStatusFailed,
-			StartedAt: startTime,
-			EndedAt:   time.Now(),
-			Error: &a2a.TaskError{
-				Code:    "execution_error",
-				Message: err.Error(),
-			},
-		}, nil
+		task.Status.State = a2a.TaskStateFailed
+		task.Status.UpdatedAt = time.Now()
+		task.Error = &a2a.TaskError{
+			Code:    "execution_error",
+			Message: err.Error(),
+		}
+		return task, nil
 	}
 
 	// Collect all streaming output
 	var fullResponse strings.Builder
-	var tokensUsed int
-
 	for chunk := range streamCh {
 		fullResponse.WriteString(chunk)
-		// Rough token estimation
-		tokensUsed += len(strings.Fields(chunk))
 	}
 
-	// Build A2A TaskResponse
-	return &a2a.TaskResponse{
-		TaskID:    request.TaskID,
-		Status:    a2a.TaskStatusCompleted,
-		StartedAt: startTime,
-		EndedAt:   time.Now(),
-		Output: &a2a.TaskOutput{
-			Type:    "text/plain",
-			Content: fullResponse.String(),
+	// Add assistant response to task
+	task.Messages = append(task.Messages, a2a.Message{
+		Role: a2a.MessageRoleAssistant,
+		Parts: []a2a.Part{
+			{
+				Type: a2a.PartTypeText,
+				Text: fullResponse.String(),
+			},
 		},
-		Metadata: map[string]interface{}{
-			"tokens_used": tokensUsed,
-			"duration_ms": time.Since(startTime).Milliseconds(),
-			"confidence":  0.8, // Good confidence for default approach
-		},
-	}, nil
+	})
+	task.Status.State = a2a.TaskStateCompleted
+	task.Status.UpdatedAt = time.Now()
+
+	return task, nil
 }
 
 // ExecuteTaskStreaming implements a2a.Agent.ExecuteTaskStreaming
-func (a *Agent) ExecuteTaskStreaming(ctx context.Context, request *a2a.TaskRequest) (<-chan *a2a.StreamChunk, error) {
-	// Extract sessionID from A2A request context (if present)
-	sessionID := ""
-	if request.Context != nil {
-		sessionID = request.Context.SessionID
+func (a *Agent) ExecuteTaskStreaming(ctx context.Context, task *a2a.Task) (<-chan a2a.StreamEvent, error) {
+	// Extract user message text
+	userText := a2a.ExtractTextFromTask(task)
+	if userText == "" && len(task.Messages) > 0 {
+		// Get the last user message
+		for i := len(task.Messages) - 1; i >= 0; i-- {
+			if task.Messages[i].Role == a2a.MessageRoleUser {
+				for _, part := range task.Messages[i].Parts {
+					if part.Type == a2a.PartTypeText {
+						userText = part.Text
+						break
+					}
+				}
+				if userText != "" {
+					break
+				}
+			}
+		}
 	}
-
-	// Pass sessionID via context for downstream services
-	if sessionID != "" {
-		ctx = context.WithValue(ctx, "sessionID", sessionID)
-	}
-
-	// Extract input from A2A TaskRequest
-	input := extractInputText(request.Input)
 
 	// Create strategy based on config
 	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
@@ -212,39 +191,53 @@ func (a *Agent) ExecuteTaskStreaming(ctx context.Context, request *a2a.TaskReque
 		return nil, err
 	}
 
-	// Execute reasoning loop directly
-	hectorStream, err := a.execute(ctx, input, strategy)
+	// Execute reasoning loop
+	hectorStream, err := a.execute(ctx, userText, strategy)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert to A2A StreamChunks
-	a2aStream := make(chan *a2a.StreamChunk, 10)
+	// Convert to A2A StreamEvents
+	eventCh := make(chan a2a.StreamEvent, 10)
 
 	go func() {
-		defer close(a2aStream)
+		defer close(eventCh)
+
+		var fullText strings.Builder
 
 		for chunk := range hectorStream {
-			a2aStream <- &a2a.StreamChunk{
-				TaskID:    request.TaskID,
-				ChunkType: a2a.ChunkTypeText,
-				Content:   chunk,
+			fullText.WriteString(chunk)
+
+			// Send text chunk as message event
+			eventCh <- a2a.StreamEvent{
+				Type:   a2a.StreamEventTypeMessage,
+				TaskID: task.ID,
+				Message: &a2a.Message{
+					Role: a2a.MessageRoleAssistant,
+					Parts: []a2a.Part{
+						{
+							Type: a2a.PartTypeText,
+							Text: chunk,
+						},
+					},
+				},
 				Timestamp: time.Now(),
-				Final:     false,
 			}
 		}
 
-		// Send final chunk
-		a2aStream <- &a2a.StreamChunk{
-			TaskID:    request.TaskID,
-			ChunkType: a2a.ChunkTypeText,
-			Content:   "",
+		// Send completion status
+		eventCh <- a2a.StreamEvent{
+			Type:   a2a.StreamEventTypeStatus,
+			TaskID: task.ID,
+			Status: &a2a.TaskStatus{
+				State:     a2a.TaskStateCompleted,
+				UpdatedAt: time.Now(),
+			},
 			Timestamp: time.Now(),
-			Final:     true,
 		}
 	}()
 
-	return a2aStream, nil
+	return eventCh, nil
 }
 
 // ============================================================================
