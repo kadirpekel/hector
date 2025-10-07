@@ -1,4 +1,4 @@
-![Hector Logo](hector_logo.png)
+![Hector Logo](hector-logo.png)
 
 # Hector
 
