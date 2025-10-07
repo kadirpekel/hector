@@ -1,7 +1,3 @@
-<table style="border: none; border-collapse: collapse;" cellpadding="10" cellspacing="0">
-<tr>
-<td style="border: none;">
-
 ```
 ██╗  ██╗███████╗ ██████╗████████╗ ██████╗ ██████╗ 
 ██║  ██║██╔════╝██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗
@@ -10,13 +6,6 @@
 ██║  ██║███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║
 ╚═╝  ╚═╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
 ```
-
-</td>
-<td width="300" align="center" style="border: none;">
-<img src="gopher.png" alt="Hector Gopher Logo">
-</td>
-</tr>
-</table>
 # Hector
 **Pure A2A-Native Declarative AI Agent Platform**
 
@@ -446,6 +435,10 @@ make quality  # Run all checks
 Hector is in active development. While the core functionality is stable and production-ready, APIs may evolve as we refine the platform based on user feedback. We welcome early adopters and contributors!
 
 ---
+
+## Say hi to Hector!
+
+![Hector Gopher Logo](gopher.png)
 
 ## License
 
