@@ -13,7 +13,7 @@
 
 </td>
 <td width="300" align="center" style="border: none;">
-<img src="hector-logo.png" alt="Hector Gopher Logo">
+<img src="hector-gopher.png" alt="Hector Gopher Logo">
 </td>
 </tr>
 </table>
