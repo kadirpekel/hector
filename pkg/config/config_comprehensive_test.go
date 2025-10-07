@@ -140,8 +140,11 @@ func TestConfig_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set defaults before validation
-			tt.config.SetDefaults()
+			// Only set defaults for tests that should pass validation
+			// Don't set defaults for invalid configs - we want to test validation of incomplete configs
+			if !tt.wantErr {
+				tt.config.SetDefaults()
+			}
 
 			err := tt.config.Validate()
 			if (err != nil) != tt.wantErr {
