@@ -423,6 +423,32 @@ func (a *Agent) execute(
 
 			// Strategy hook: should stop?
 			if strategy.ShouldStop(text, toolCalls, state) {
+				// Optional: Verify task completion before stopping (if enabled)
+				if cfg.EnableCompletionVerification && len(toolCalls) == 0 {
+					// Only verify completion when there are no more tool calls
+					assessment, err := reasoning.AssessTaskCompletion(ctx, input, state.AssistantResponse.String(), a.services)
+					if err == nil && cfg.ShowDebugInfo {
+						// Display completion assessment
+						outputCh <- fmt.Sprintf("\033[90m\n🎯 **Completion Assessment:**\n")
+						outputCh <- fmt.Sprintf("  - Complete: %v (%.0f%% confident)\n", assessment.IsComplete, assessment.Confidence*100)
+						outputCh <- fmt.Sprintf("  - Quality: %s\n", assessment.Quality)
+						if len(assessment.MissingActions) > 0 {
+							outputCh <- fmt.Sprintf("  - Missing: %v\n", assessment.MissingActions)
+						}
+						outputCh <- fmt.Sprintf("  - Recommendation: %s\n", assessment.Recommendation)
+						outputCh <- fmt.Sprintf("  - Reasoning: %s\n", assessment.Reasoning)
+						outputCh <- "\033[0m"
+					}
+
+					// If not complete, continue for one more iteration
+					if err == nil && !assessment.IsComplete && assessment.Recommendation == "continue" {
+						if cfg.ShowDebugInfo {
+							outputCh <- "\033[90m⚠️  Task not fully complete, continuing...\033[0m\n"
+						}
+						continue
+					}
+				}
+
 				if cfg.ShowDebugInfo {
 					outputCh <- "\033[90m\n\n✅ **Reasoning complete**\033[0m\n"
 				}

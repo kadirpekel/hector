@@ -1,0 +1,28 @@
+agents:
+  test_agent_reflection:
+    name: "Reflection Test Agent (Gemini)"
+    description: "Test agent with structured reflection enabled"
+    llm: "gemini-llm"
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 10
+      enable_self_reflection: true
+      enable_structured_reflection: true
+      enable_completion_verification: false
+      enable_streaming: true
+      show_debug_info: true
+    visibility: public
+
+llms:
+  gemini-llm:
+    type: "gemini"
+    model: "gemini-2.0-flash-exp"
+    host: "https://generativelanguage.googleapis.com"
+    api_key: "${GEMINI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 4096
+
+server:
+  port: 8080
+  host: "0.0.0.0"
+

@@ -45,7 +45,21 @@ func (s *ChainOfThoughtStrategy) AfterIteration(
 ) error {
 	// Self-reflection: Evaluate progress made in this iteration
 	if state.ShowDebugInfo && state.OutputChannel != nil {
-		s.reflectOnProgress(iteration, text, toolCalls, results, state)
+		// Try structured reflection first (more reliable)
+		if state.Services != nil && state.Context != nil {
+			analysis, err := AnalyzeToolResults(state.Context, toolCalls, results, state.Services)
+			if err == nil {
+				s.displayStructuredReflection(iteration, analysis, state)
+				// Store analysis in state for potential use by agent
+				state.CustomState["reflection_analysis"] = analysis
+			} else {
+				// Fallback to heuristic reflection
+				s.reflectOnProgress(iteration, text, toolCalls, results, state)
+			}
+		} else {
+			// No services available, use heuristic reflection
+			s.reflectOnProgress(iteration, text, toolCalls, results, state)
+		}
 	}
 
 	// Rely on LLM to explicitly call todo_write with merge=true for updates
@@ -53,7 +67,56 @@ func (s *ChainOfThoughtStrategy) AfterIteration(
 	return nil
 }
 
-// reflectOnProgress performs self-reflection and outputs thinking blocks
+// displayStructuredReflection displays reflection based on structured LLM analysis
+func (s *ChainOfThoughtStrategy) displayStructuredReflection(
+	iteration int,
+	analysis *ReflectionAnalysis,
+	state *ReasoningState,
+) {
+	if len(analysis.SuccessfulTools) == 0 && len(analysis.FailedTools) == 0 {
+		return
+	}
+
+	// Output reflection thinking block (in gray)
+	output := "\033[90m\n💭 **Self-Reflection (AI Analysis):**\n"
+
+	// Show tool execution summary
+	if len(analysis.SuccessfulTools) > 0 {
+		output += fmt.Sprintf("  - ✅ Succeeded: %s\n", formatStringList(analysis.SuccessfulTools))
+	}
+	if len(analysis.FailedTools) > 0 {
+		output += fmt.Sprintf("  - ❌ Failed: %s\n", formatStringList(analysis.FailedTools))
+	}
+
+	// Show confidence
+	output += fmt.Sprintf("  - 🎯 Confidence: %.0f%%\n", analysis.Confidence*100)
+
+	// Show recommendation
+	if analysis.ShouldPivot {
+		output += "  - ⚠️  Recommendation: Pivot approach\n"
+	} else {
+		switch analysis.Recommendation {
+		case "retry_failed":
+			output += "  - 🔄 Recommendation: Retry failed tools\n"
+		case "pivot_approach":
+			output += "  - 🔀 Recommendation: Change approach\n"
+		case "stop":
+			output += "  - 🛑 Recommendation: Stop (task may be infeasible)\n"
+		default:
+			output += "  - ✅ Recommendation: Continue\n"
+		}
+	}
+
+	// Check if we're on high iterations
+	if iteration > 5 {
+		output += fmt.Sprintf("  - 📊 Iteration %d - consider simplifying approach\n", iteration)
+	}
+
+	output += "\033[0m" // Reset color
+	state.OutputChannel <- output
+}
+
+// reflectOnProgress performs self-reflection and outputs thinking blocks (fallback heuristic method)
 func (s *ChainOfThoughtStrategy) reflectOnProgress(
 	iteration int,
 	text string,
@@ -101,6 +164,19 @@ func (s *ChainOfThoughtStrategy) reflectOnProgress(
 }
 
 // Helper functions for formatting reflection output
+func formatStringList(items []string) string {
+	if len(items) == 0 {
+		return "none"
+	}
+	if len(items) == 1 {
+		return items[0]
+	}
+	if len(items) <= 3 {
+		return fmt.Sprintf("%s", items)
+	}
+	return fmt.Sprintf("%d items", len(items))
+}
+
 func formatToolList(toolCalls []llms.ToolCall) string {
 	if len(toolCalls) == 0 {
 		return "none"

@@ -41,6 +41,15 @@ type LLMService interface {
 	// Text chunks are streamed to outputCh as they arrive
 	// Returns (toolCalls, tokens, error)
 	GenerateStreaming(messages []llms.Message, tools []llms.ToolDefinition, outputCh chan<- string) ([]llms.ToolCall, int, error)
+
+	// GenerateStructured generates a response with structured output (JSON schema)
+	// This is used internally for reliable reflection and meta-cognitive analysis
+	// Returns (text, toolCalls, tokens, error)
+	GenerateStructured(messages []llms.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []llms.ToolCall, int, error)
+
+	// SupportsStructuredOutput checks if the underlying provider supports structured output
+	// Returns false for providers that don't implement StructuredOutputProvider
+	SupportsStructuredOutput() bool
 }
 
 // ToolService defines tool execution capabilities - only tool responsibilities

@@ -1,6 +1,8 @@
 package reasoning
 
 import (
+	"fmt"
+
 	"github.com/kadirpekel/hector/pkg/llms"
 )
 
@@ -27,10 +29,48 @@ func NewSupervisorStrategy() *SupervisorStrategy {
 }
 
 // PrepareIteration implements ReasoningStrategy
-// Supervisor doesn't need special preparation beyond chain-of-thought
+// Supervisor extracts goals on first iteration (if enabled), then delegates to base strategy
 func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningState) error {
+	// On first iteration, optionally extract goals for task decomposition
+	if iteration == 1 && state.Services != nil {
+		cfg := state.Services.GetConfig()
+		if cfg.EnableGoalExtraction {
+			// Extract goals using structured output
+			decomposition, err := ExtractGoals(state.Context, state.Query, []string{}, state.Services)
+			if err == nil {
+				// Store decomposition in custom state
+				state.CustomState["task_decomposition"] = decomposition
+
+				// Display decomposition if debug enabled
+				if state.ShowDebugInfo && state.OutputChannel != nil {
+					s.displayTaskDecomposition(decomposition, state.OutputChannel)
+				}
+			}
+		}
+	}
+
 	// Delegate to base strategy
 	return s.ChainOfThoughtStrategy.PrepareIteration(iteration, state)
+}
+
+// displayTaskDecomposition shows the extracted task plan to the user
+func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecomposition, outputCh chan<- string) {
+	outputCh <- "\033[90m\n📋 **Task Decomposition:**\n"
+	outputCh <- fmt.Sprintf("  - Main Goal: %s\n", decomposition.MainGoal)
+	outputCh <- fmt.Sprintf("  - Execution Order: %s\n", decomposition.ExecutionOrder)
+	outputCh <- fmt.Sprintf("  - Required Agents: %v\n", decomposition.RequiredAgents)
+	outputCh <- fmt.Sprintf("  - Strategy: %s\n", decomposition.Strategy)
+	if len(decomposition.Subtasks) > 0 {
+		outputCh <- fmt.Sprintf("  - Subtasks (%d):\n", len(decomposition.Subtasks))
+		for i, task := range decomposition.Subtasks {
+			deps := "none"
+			if len(task.DependsOn) > 0 {
+				deps = fmt.Sprintf("%v", task.DependsOn)
+			}
+			outputCh <- fmt.Sprintf("    %d. [P%d] %s (agent: %s, depends: %s)\n", i+1, task.Priority, task.Description, task.AgentType, deps)
+		}
+	}
+	outputCh <- "\033[0m"
 }
 
 // ShouldStop implements ReasoningStrategy

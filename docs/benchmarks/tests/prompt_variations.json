@@ -1,0 +1,52 @@
+{
+  "test_name": "prompt_variations",
+  "description": "A/B test different prompt variations for reasoning instructions",
+  "test_type": "ab_test",
+  "variants": [
+    {
+      "name": "control",
+      "description": "Original default prompt",
+      "config": "configs/baseline-openai.yaml"
+    },
+    {
+      "name": "concise_reasoning",
+      "description": "More concise reasoning instructions",
+      "config": "configs/baseline-openai.yaml",
+      "config_overrides": {
+        "agents.test_agent_baseline.prompt.reasoning_instructions": "Think step-by-step. Be concise and direct."
+      }
+    },
+    {
+      "name": "detailed_reasoning",
+      "description": "More detailed reasoning instructions",
+      "config": "configs/baseline-openai.yaml",
+      "config_overrides": {
+        "agents.test_agent_baseline.prompt.reasoning_instructions": "For each problem:\n1. Understand the requirements fully\n2. Break down into sub-problems\n3. Consider edge cases\n4. Solve systematically\n5. Verify your solution"
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "simple_math",
+      "prompt": "Calculate 15 * 23 + 47",
+      "expected_output_keywords": ["392"]
+    },
+    {
+      "name": "multi_step",
+      "prompt": "Calculate the sum of all even numbers between 1 and 20, then multiply by 3",
+      "expected_output_keywords": ["300"]
+    },
+    {
+      "name": "word_problem",
+      "prompt": "If Alice has 3 times as many apples as Bob, and Bob has 5 apples, how many apples does Alice have?",
+      "expected_output_keywords": ["15"]
+    }
+  ],
+  "metrics": {
+    "primary": "quality",
+    "secondary": ["tokens", "iterations", "latency"]
+  },
+  "providers": ["openai"],
+  "iterations": 3
+}
+

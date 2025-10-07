@@ -1,0 +1,32 @@
+# Baseline configuration (no structured output features)
+# Provider: OpenAI GPT-4
+agents:
+  test_agent:
+    name: "Baseline Test Agent (OpenAI)"
+    description: "Test agent with no structured output features enabled"
+    llm: "openai-llm"
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 10
+      enable_self_reflection: true
+      enable_structured_reflection: false       # Baseline: heuristic mode
+      enable_completion_verification: false     # Baseline: disabled
+      enable_goal_extraction: false             # Baseline: disabled
+      show_debug_info: true
+      show_tool_execution: true
+      enable_streaming: false
+    visibility: public
+
+llms:
+  openai-llm:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.3
+    max_tokens: 4096
+    timeout: 60
+
+server:
+  port: 8080
+  host: "0.0.0.0"
+

@@ -1,0 +1,61 @@
+{
+  "scenarios": [
+    {
+      "id": "simple_math",
+      "name": "Simple Math Task",
+      "description": "Single-step arithmetic task to test baseline performance",
+      "prompt": "Calculate 157 * 89 and tell me the result.",
+      "expected_iterations": 1,
+      "tests_features": ["baseline"]
+    },
+    {
+      "id": "multi_step",
+      "name": "Multi-Step Calculation",
+      "description": "Multi-step task requiring multiple tool calls",
+      "prompt": "Calculate (25 * 4) + (100 / 5), then multiply the result by 3. Show each step.",
+      "expected_iterations": 3,
+      "tests_features": ["reflection", "completion"]
+    },
+    {
+      "id": "error_recovery",
+      "name": "Error Recovery",
+      "description": "Task with intentional errors to test reflection",
+      "prompt": "Calculate 50 / 0, then if that fails, calculate 50 / 5 instead.",
+      "expected_iterations": 2,
+      "tests_features": ["reflection"]
+    },
+    {
+      "id": "complex_multi_step",
+      "name": "Complex Multi-Step Task",
+      "description": "Complex task to test completion verification",
+      "prompt": "Do the following: 1) Calculate 100 + 200, 2) Multiply the result by 3, 3) Divide by 2, 4) Add 50. Report all intermediate results.",
+      "expected_iterations": 4,
+      "tests_features": ["completion", "reflection"]
+    },
+    {
+      "id": "incomplete_prone",
+      "name": "Incomplete-Prone Task",
+      "description": "Task designed to test if agent completes all steps",
+      "prompt": "Calculate three things: A) 25 * 4, B) 100 / 5, and C) the sum of A and B. Make sure to report all three results separately.",
+      "expected_iterations": 3,
+      "tests_features": ["completion"]
+    },
+    {
+      "id": "orchestration",
+      "name": "Multi-Agent Orchestration",
+      "description": "Complex task requiring decomposition",
+      "prompt": "I need to: 1) Search for the current weather in New York, 2) Calculate how many hours until sunset (assume 6PM), 3) Recommend activities based on weather. Break this down and execute step by step.",
+      "expected_iterations": 3,
+      "tests_features": ["goals", "supervisor"]
+    },
+    {
+      "id": "sequential_dependencies",
+      "name": "Sequential Dependencies",
+      "description": "Tasks with clear dependencies to test goal extraction",
+      "prompt": "Research the population of Tokyo, then calculate 10% of that population, then tell me how many buses would be needed to transport that many people (assume 50 people per bus).",
+      "expected_iterations": 3,
+      "tests_features": ["goals", "supervisor", "completion"]
+    }
+  ]
+}
+

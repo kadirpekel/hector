@@ -1,0 +1,57 @@
+{
+  "test_name": "model_comparison",
+  "description": "Compare different LLM models for cost/quality tradeoffs",
+  "test_type": "benchmark",
+  "variants": [
+    {
+      "name": "gpt4o",
+      "description": "GPT-4o (most capable, expensive)",
+      "config": "configs/baseline-openai.yaml",
+      "config_overrides": {
+        "llms.test-llm.model": "gpt-4o"
+      }
+    },
+    {
+      "name": "gpt4o_mini",
+      "description": "GPT-4o-mini (balanced, cost-effective)",
+      "config": "configs/baseline-openai.yaml",
+      "config_overrides": {
+        "llms.test-llm.model": "gpt-4o-mini"
+      }
+    },
+    {
+      "name": "gpt35_turbo",
+      "description": "GPT-3.5-turbo (fastest, cheapest)",
+      "config": "configs/baseline-openai.yaml",
+      "config_overrides": {
+        "llms.test-llm.model": "gpt-3.5-turbo"
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "simple_task",
+      "prompt": "List the days of the week",
+      "expected_output_keywords": ["Monday", "Tuesday", "Wednesday"]
+    },
+    {
+      "name": "complex_reasoning",
+      "prompt": "Design a simple caching strategy for a web API that gets updated every hour",
+      "success_criteria": {
+        "max_tokens": 1000
+      }
+    },
+    {
+      "name": "code_generation",
+      "prompt": "Write a Python function to check if a string is a palindrome",
+      "expected_output_keywords": ["def", "palindrome", "return"]
+    }
+  ],
+  "metrics": {
+    "primary": "cost",
+    "secondary": ["quality", "speed", "tokens"]
+  },
+  "providers": ["openai"],
+  "iterations": 3
+}
+

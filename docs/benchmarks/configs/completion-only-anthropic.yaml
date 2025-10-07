@@ -1,0 +1,27 @@
+agents:
+  test_agent_completion:
+    name: "Completion Test Agent (Anthropic)"
+    description: "Test agent with completion verification enabled"
+    llm: "anthropic-llm"
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 10
+      enable_self_reflection: false
+      enable_structured_reflection: false
+      enable_completion_verification: true
+      enable_streaming: true
+      show_debug_info: true
+    visibility: public
+
+llms:
+  anthropic-llm:
+    type: "anthropic"
+    model: "claude-3-5-sonnet-20241022"
+    api_key: "${ANTHROPIC_API_KEY}"
+    temperature: 0.7
+    max_tokens: 4096
+
+server:
+  port: 8080
+  host: "0.0.0.0"
+

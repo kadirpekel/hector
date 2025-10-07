@@ -1,0 +1,20 @@
+# Benchmarks - Results and Logs
+
+# Benchmark results (excluded from git)
+results/*
+!results/.gitkeep
+
+# Log files
+*.log
+nohup.out
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Temporary files
+*.tmp
+*.swp
+*~
+

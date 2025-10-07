@@ -151,3 +151,24 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 
 **Documentation Version:** 1.0  
 **Last Updated:** October 2025
+
+## 📊 Benchmarks
+
+The `benchmarks/` directory contains a comprehensive testing lab for validating structured output features across multiple LLM providers.
+
+**Quick Start:**
+```bash
+cd docs/benchmarks
+./run_all_benchmarks.sh
+```
+
+**Documentation:**
+- [Benchmarks README](benchmarks/README.md) - Overview and quick start
+- [Results Interpretation](benchmarks/RESULTS_INTERPRETATION.md) - Understanding results
+- [Executive Summary](benchmarks/EXECUTIVE_SUMMARY.md) - Business insights
+
+**What it tests:**
+- 3 structured output features (Reflection, Completion, Goals)
+- 3 LLM providers (OpenAI, Anthropic, Gemini)
+- 240 total tests (performance + behavioral)
+- Expected: 10-20% quality improvement, 15-37% cost increase

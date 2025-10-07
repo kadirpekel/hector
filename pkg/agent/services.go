@@ -318,6 +318,33 @@ func (s *DefaultLLMService) GenerateStreaming(messages []llms.Message, tools []l
 	return toolCalls, tokens, nil
 }
 
+// GenerateStructured implements reasoning.LLMService
+func (s *DefaultLLMService) GenerateStructured(messages []llms.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []llms.ToolCall, int, error) {
+	// Check if provider supports structured output
+	structProvider, ok := s.llmProvider.(llms.StructuredOutputProvider)
+	if !ok {
+		// Provider doesn't implement structured output interface
+		return "", nil, 0, fmt.Errorf("provider does not support structured output")
+	}
+
+	if !structProvider.SupportsStructuredOutput() {
+		return "", nil, 0, fmt.Errorf("provider does not support structured output")
+	}
+
+	return structProvider.GenerateStructured(messages, tools, config)
+}
+
+// SupportsStructuredOutput implements reasoning.LLMService
+func (s *DefaultLLMService) SupportsStructuredOutput() bool {
+	// Check if provider implements StructuredOutputProvider interface
+	structProvider, ok := s.llmProvider.(llms.StructuredOutputProvider)
+	if !ok {
+		return false
+	}
+
+	return structProvider.SupportsStructuredOutput()
+}
+
 // ============================================================================
 // HISTORY SERVICE
 // ============================================================================
