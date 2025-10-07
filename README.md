@@ -1,7 +1,23 @@
-![Hector Logo](hector-logo.png)
+<table style="border: none; border-collapse: collapse;" cellpadding="10" cellspacing="0">
+<tr>
+<td style="border: none;">
 
+```
+██╗  ██╗███████╗ ██████╗████████╗ ██████╗ ██████╗ 
+██║  ██║██╔════╝██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗
+███████║█████╗  ██║        ██║   ██║   ██║██████╔╝
+██╔══██║██╔══╝  ██║        ██║   ██║   ██║██╔══██╗
+██║  ██║███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║
+╚═╝  ╚═╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
+```
+
+</td>
+<td width="300" align="center" style="border: none;">
+<img src="hector-logo.png" alt="Hector Gopher Logo">
+</td>
+</tr>
+</table>
 # Hector
-
 **Pure A2A-Native Declarative AI Agent Platform**
 
 [![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8.svg)](https://golang.org/)
