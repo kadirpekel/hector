@@ -30,14 +30,15 @@ type OpenAIProvider struct {
 
 // OpenAIRequest represents the request payload for OpenAI API
 type OpenAIRequest struct {
-	Model               string          `json:"model"`
-	Messages            []OpenAIMessage `json:"messages"`
-	MaxTokens           int             `json:"max_tokens,omitempty"`
-	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"`
-	Temperature         float64         `json:"temperature"`
-	Stream              bool            `json:"stream"`
-	Tools               []OpenAITool    `json:"tools,omitempty"`       // Function calling
-	ToolChoice          string          `json:"tool_choice,omitempty"` // "auto", "required", "none"
+	Model               string                `json:"model"`
+	Messages            []OpenAIMessage       `json:"messages"`
+	MaxTokens           int                   `json:"max_tokens,omitempty"`
+	MaxCompletionTokens int                   `json:"max_completion_tokens,omitempty"`
+	Temperature         float64               `json:"temperature"`
+	Stream              bool                  `json:"stream"`
+	Tools               []OpenAITool          `json:"tools,omitempty"`           // Function calling
+	ToolChoice          string                `json:"tool_choice,omitempty"`     // "auto", "required", "none"
+	ResponseFormat      *OpenAIResponseFormat `json:"response_format,omitempty"` // Structured output
 }
 
 // OpenAIResponse represents the response from OpenAI API
@@ -92,6 +93,24 @@ type Error struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Code    string `json:"code"`
+}
+
+// ============================================================================
+// STRUCTURED OUTPUT TYPES (OpenAI-specific)
+// ============================================================================
+
+// OpenAIResponseFormat configures structured output
+type OpenAIResponseFormat struct {
+	Type       string            `json:"type"` // "json_object" or "json_schema"
+	JSONSchema *OpenAIJSONSchema `json:"json_schema,omitempty"`
+}
+
+// OpenAIJSONSchema represents a JSON schema for structured output
+type OpenAIJSONSchema struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	Schema      map[string]interface{} `json:"schema"`
+	Strict      bool                   `json:"strict,omitempty"` // Enable strict validation
 }
 
 // ============================================================================
@@ -242,6 +261,106 @@ func (p *OpenAIProvider) GetTemperature() float64 {
 // Close closes the provider and releases resources
 func (p *OpenAIProvider) Close() error {
 	return nil
+}
+
+// ============================================================================
+// STRUCTURED OUTPUT METHODS
+// ============================================================================
+
+// GenerateStructured generates a response with structured output
+func (p *OpenAIProvider) GenerateStructured(messages []Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []ToolCall, int, error) {
+	req := p.buildRequest(messages, false, tools)
+
+	// Add structured output configuration
+	if structConfig != nil && structConfig.Format == "json" && structConfig.Schema != nil {
+		schema, ok := structConfig.Schema.(map[string]interface{})
+		if !ok {
+			return "", nil, 0, fmt.Errorf("schema must be a map")
+		}
+
+		req.ResponseFormat = &OpenAIResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &OpenAIJSONSchema{
+				Name:   "response",
+				Schema: schema,
+				Strict: true, // Enable strict validation
+			},
+		}
+	}
+
+	// Make actual API call using existing makeRequest method
+	response, err := p.makeRequest(req)
+	if err != nil {
+		return "", nil, 0, err
+	}
+
+	if response.Error != nil {
+		return "", nil, 0, fmt.Errorf("OpenAI API error: %s", response.Error.Message)
+	}
+
+	if len(response.Choices) == 0 {
+		return "", nil, 0, fmt.Errorf("no response choices returned")
+	}
+
+	choice := response.Choices[0]
+	tokensUsed := response.Usage.TotalTokens
+
+	// Extract text content (may be empty if only tool calls)
+	text := choice.Message.Content
+
+	// Check if model wants to call tools
+	var toolCalls []ToolCall
+	if len(choice.Message.ToolCalls) > 0 {
+		toolCalls, err = parseToolCalls(choice.Message.ToolCalls)
+		if err != nil {
+			return text, nil, tokensUsed, err
+		}
+	}
+
+	return text, toolCalls, tokensUsed, nil
+}
+
+// GenerateStructuredStreaming generates a streaming response with structured output
+func (p *OpenAIProvider) GenerateStructuredStreaming(messages []Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
+	req := p.buildRequest(messages, true, tools)
+
+	// Add structured output configuration
+	if structConfig != nil && structConfig.Format == "json" && structConfig.Schema != nil {
+		schema, ok := structConfig.Schema.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("schema must be a map")
+		}
+
+		req.ResponseFormat = &OpenAIResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &OpenAIJSONSchema{
+				Name:   "response",
+				Schema: schema,
+				Strict: true,
+			},
+		}
+	}
+
+	// Make actual streaming API call using existing makeStreamingRequest method
+	outputCh := make(chan StreamChunk, 100)
+
+	go func() {
+		defer close(outputCh)
+
+		if err := p.makeStreamingRequest(req, outputCh); err != nil {
+			outputCh <- StreamChunk{
+				Type:  "error",
+				Error: err,
+			}
+		}
+	}()
+
+	return outputCh, nil
+}
+
+// SupportsStructuredOutput returns true (OpenAI supports structured output)
+func (p *OpenAIProvider) SupportsStructuredOutput() bool {
+	return true
 }
 
 // ============================================================================

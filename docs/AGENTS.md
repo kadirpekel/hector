@@ -10,6 +10,7 @@ Hector's core strength is making it incredibly easy to build sophisticated AI ag
 - **100% Declarative** - Pure YAML, zero code
 - **Prompt Customization** - Slot-based system for fine control
 - **Reasoning Strategies** - Chain-of-thought or supervisor
+- **Structured Output** - Provider-aware JSON/XML/Enum for reliable data extraction
 - **Built-in Tools** - Search, file ops, commands, todos
 - **Plugin Extensibility** - Add custom LLMs, databases, tools
 - **Real-Time Streaming** - Token-by-token output
@@ -132,6 +133,7 @@ llms:
 **Supported Providers:**
 - OpenAI (GPT-4o, GPT-4, GPT-3.5)
 - Anthropic (Claude 3.5 Sonnet, Claude 3 Opus/Haiku)
+- Google Gemini (Gemini 2.0 Flash, Gemini 1.5 Pro/Flash)
 - Custom via gRPC plugins
 
 ### 2. **Prompt (Optional but Recommended)**
@@ -831,6 +833,101 @@ llms:
     max_tokens: 2000
 ```
 
+### Example 4: Data Extraction with Structured Output
+
+**Use case:** Extract structured data from unstructured text for downstream processing.
+
+```yaml
+agents:
+  invoice_extractor:
+    name: "Invoice Data Extractor"
+    description: "Extracts structured data from invoices and receipts"
+    llm: "gemini-llm"  # Gemini's structured output is excellent
+    
+    prompt:
+      system_role: |
+        You are an expert at extracting structured invoice data.
+        Extract all relevant fields accurately.
+      
+      reasoning_instructions: |
+        1. Identify the document type (invoice, receipt, bill)
+        2. Extract company information
+        3. Extract line items with prices
+        4. Calculate totals
+        5. Identify payment details
+      
+      output_format: |
+        Always output valid JSON matching the schema.
+        Use null for missing fields.
+    
+    # Structured output configuration
+    structured_output:
+      format: "json"
+      schema:
+        type: "object"
+        properties:
+          document_type:
+            type: "string"
+            enum: ["invoice", "receipt", "bill", "quote"]
+          vendor:
+            type: "object"
+            properties:
+              name: {type: "string"}
+              address: {type: "string"}
+              tax_id: {type: "string"}
+          invoice_number: {type: "string"}
+          date: {type: "string", format: "date"}
+          line_items:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                description: {type: "string"}
+                quantity: {type: "number"}
+                unit_price: {type: "number"}
+                total: {type: "number"}
+          subtotal: {type: "number"}
+          tax: {type: "number"}
+          total: {type: "number"}
+        required: ["document_type", "vendor", "line_items", "total"]
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 5
+
+llms:
+  gemini-llm:
+    type: "gemini"
+    model: "gemini-2.0-flash"
+    api_key: "${GEMINI_API_KEY}"
+    temperature: 0.1  # Low for accuracy
+    max_tokens: 2048
+```
+
+**Why structured output is perfect here:**
+- ✅ **Reliable parsing** - No regex or text parsing needed
+- ✅ **Type safety** - Guaranteed data types (numbers, dates, enums)
+- ✅ **Validation** - Required fields enforced by schema
+- ✅ **Downstream integration** - Direct JSON → database/API
+- ✅ **Error reduction** - Schema prevents malformed output
+
+**Usage:**
+```bash
+curl http://localhost:8080/agents/invoice_extractor/message/send \
+  -d '{"message":{"role":"user","parts":[{"type":"text","text":"<invoice text>"}]}}'
+
+# Response: Perfect JSON ready for your database
+{
+  "document_type": "invoice",
+  "vendor": {"name": "Acme Corp", "address": "123 Main St"},
+  "invoice_number": "INV-2024-001",
+  "line_items": [{"description": "Widget", "quantity": 5, "unit_price": 10.00, "total": 50.00}],
+  "total": 50.00
+}
+```
+
+See [Structured Output Guide](STRUCTURED_OUTPUT.md) for more examples.
+
 ---
 
 ## Best Practices
@@ -877,9 +974,54 @@ researcher:
 # Creative writing (higher temperature)
 writer:
   llm: "gpt-4o"
-  # In llm config:
   temperature: 0.9
+
+# Data extraction (very low)
+extractor:
+  llm: "gemini-llm"
+  temperature: 0.1  # With structured output
 ```
+
+### 4. **Use Structured Output for Data Tasks**
+
+**When to use:**
+- Data extraction (invoices, forms, documents)
+- Classification (sentiment, categories, priorities)
+- Entity extraction (names, dates, amounts)
+- Form filling
+- API response formatting
+- Database record creation
+
+**Example:**
+```yaml
+agents:
+  sentiment_analyzer:
+    llm: "openai-llm"
+    structured_output:
+      format: "json"
+      schema:
+        type: "object"
+        properties:
+          sentiment: 
+            type: "string"
+            enum: ["positive", "negative", "neutral"]
+          confidence: 
+            type: "number"
+            minimum: 0
+            maximum: 1
+          key_phrases:
+            type: "array"
+            items: {type: "string"}
+        required: ["sentiment", "confidence"]
+```
+
+**Benefits:**
+- No text parsing needed
+- Type-safe outputs
+- Downstream integration ready
+- Reduced error rates
+
+See [Structured Output Guide](STRUCTURED_OUTPUT.md) for provider-specific optimizations (OpenAI strict mode, Anthropic prefill, Gemini property ordering).
 
 ### 4. **Organize Document Stores**
 

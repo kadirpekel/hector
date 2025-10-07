@@ -41,6 +41,22 @@ type LLMProvider interface {
 	Close() error
 }
 
+// StructuredOutputProvider is an optional interface for providers that support structured output
+// Providers can implement this to enable structured output features (JSON, XML, enum)
+type StructuredOutputProvider interface {
+	LLMProvider
+
+	// GenerateStructured generates a response with structured output
+	// config specifies the desired output format (JSON schema, enum, etc.)
+	GenerateStructured(messages []Message, tools []ToolDefinition, config *StructuredOutputConfig) (text string, toolCalls []ToolCall, tokens int, err error)
+
+	// GenerateStructuredStreaming generates a streaming response with structured output
+	GenerateStructuredStreaming(messages []Message, tools []ToolDefinition, config *StructuredOutputConfig) (<-chan StreamChunk, error)
+
+	// SupportsStructuredOutput returns true if the provider supports structured output
+	SupportsStructuredOutput() bool
+}
+
 // LLMRegistry manages LLM provider instances
 type LLMRegistry struct {
 	*registry.BaseRegistry[LLMProvider]
@@ -88,8 +104,10 @@ func (r *LLMRegistry) CreateLLMFromConfig(name string, config *config.LLMProvide
 		provider, err = NewOpenAIProviderFromConfig(config)
 	case "anthropic":
 		provider, err = NewAnthropicProviderFromConfig(config)
+	case "gemini":
+		provider, err = NewGeminiProviderFromConfig(config)
 	default:
-		return nil, fmt.Errorf("unsupported LLM type: %s (supported: openai, anthropic - native function calling required)", config.Type)
+		return nil, fmt.Errorf("unsupported LLM type: %s (supported: openai, anthropic, gemini)", config.Type)
 	}
 
 	if err != nil {

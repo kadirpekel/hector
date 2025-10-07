@@ -64,7 +64,7 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 │              │    │              │   │              │
 │ • Command    │    │ • OpenAI     │   │ • Qdrant     │
 │ • File Ops   │    │ • Anthropic  │   │ • Semantic   │
-│ • Search     │    │ • Ollama     │   │   Search     │
+│ • Search     │    │ • Gemini     │   │   Search     │
 │ • MCP        │    │ • Plugins    │   │ • Documents  │
 └──────────────┘    └──────────────┘   └──────────────┘
 ```
@@ -190,7 +190,7 @@ Hector provides a comprehensive feature set through pure YAML configuration:
 - Pure YAML - Zero code for complete agent systems
 - 6-slot prompt system - Role, reasoning, tools, output, style, additional
 - Environment variables - Secure API key management
-- Multiple LLM providers - OpenAI, Anthropic, Ollama
+- Multiple LLM providers - OpenAI, Anthropic, Gemini
 
 **Tools & Integrations**
 - Built-in tools - Command execution, file operations, search, todos
@@ -395,6 +395,7 @@ export ANTHROPIC_API_KEY="sk-..."
 - **[Multi-Agent Orchestration](docs/ARCHITECTURE.md#orchestrator-pattern)** - Orchestration patterns
 - **[External Agents](docs/EXTERNAL_AGENTS.md)** - External agent integration
 - **[Tools & MCP](docs/TOOLS.md)** - Built-in tools and MCP protocol
+- **[Structured Output](docs/STRUCTURED_OUTPUT.md)** - Provider-aware JSON/XML/Enum output
 - **[Plugin Development](docs/PLUGINS.md)** - Custom LLMs, databases, tools
 
 ### Protocol & Security

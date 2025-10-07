@@ -195,15 +195,37 @@ func (c *ProviderConfigs) SetDefaults() {
 
 // LLMProviderConfig represents LLM provider configuration
 type LLMProviderConfig struct {
-	Type        string  `yaml:"type"`        // "ollama", "openai"
+	Type        string  `yaml:"type"`        // "ollama", "openai", "anthropic", "gemini"
 	Model       string  `yaml:"model"`       // Model name
-	APIKey      string  `yaml:"api_key"`     // API key (for OpenAI)
+	APIKey      string  `yaml:"api_key"`     // API key (for OpenAI, Anthropic, Gemini)
 	Host        string  `yaml:"host"`        // Host for ollama or custom OpenAI endpoint
 	Temperature float64 `yaml:"temperature"` // Temperature setting
 	MaxTokens   int     `yaml:"max_tokens"`  // Max tokens
 	Timeout     int     `yaml:"timeout"`     // Request timeout in seconds
 	MaxRetries  int     `yaml:"max_retries"` // Max retry attempts for rate limits (default: 5)
 	RetryDelay  int     `yaml:"retry_delay"` // Base retry delay in seconds (default: 2, exponential backoff)
+
+	// Structured output configuration (optional)
+	StructuredOutput *StructuredOutputConfig `yaml:"structured_output,omitempty"`
+}
+
+// StructuredOutputConfig represents configuration for structured output
+// Works across all providers (OpenAI, Anthropic, Gemini)
+type StructuredOutputConfig struct {
+	// Format: "json", "xml", "enum"
+	Format string `yaml:"format,omitempty"`
+
+	// Schema: JSON schema as YAML/JSON (for format="json")
+	Schema map[string]interface{} `yaml:"schema,omitempty"`
+
+	// Enum: List of allowed values (for format="enum")
+	Enum []string `yaml:"enum,omitempty"`
+
+	// Prefill: Prefill string for Anthropic (optional, provider-specific)
+	Prefill string `yaml:"prefill,omitempty"`
+
+	// PropertyOrdering: Property order for Gemini (optional, provider-specific)
+	PropertyOrdering []string `yaml:"property_ordering,omitempty"`
 }
 
 // Validate implements Config.Validate for LLMProviderConfig
@@ -251,6 +273,8 @@ func (c *LLMProviderConfig) SetDefaults() {
 			c.Model = "gpt-4o"
 		case "anthropic":
 			c.Model = "claude-3-7-sonnet-latest"
+		case "gemini":
+			c.Model = "gemini-2.0-flash-exp"
 		default:
 			c.Model = "gpt-4o"
 		}
@@ -262,6 +286,8 @@ func (c *LLMProviderConfig) SetDefaults() {
 			c.Host = "https://api.openai.com/v1"
 		case "anthropic":
 			c.Host = "https://api.anthropic.com"
+		case "gemini":
+			c.Host = "https://generativelanguage.googleapis.com"
 		default:
 			c.Host = "https://api.openai.com/v1"
 		}
@@ -296,6 +322,10 @@ func (c *LLMProviderConfig) SetDefaults() {
 			}
 		case "anthropic":
 			if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+				c.APIKey = key
+			}
+		case "gemini":
+			if key := os.Getenv("GEMINI_API_KEY"); key != "" {
 				c.APIKey = key
 			}
 		}

@@ -472,3 +472,86 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 
 	return nil
 }
+
+// ============================================================================
+// STRUCTURED OUTPUT METHODS
+// ============================================================================
+
+// GenerateStructured generates a response with structured output
+func (p *AnthropicProvider) GenerateStructured(messages []Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []ToolCall, int, error) {
+	// Apply prefill if configured (Anthropic-specific optimization)
+	if structConfig != nil && structConfig.Prefill != "" {
+		messages = append(messages, Message{
+			Role:    "assistant",
+			Content: structConfig.Prefill,
+		})
+	}
+
+	// Build system prompt with schema instructions
+	systemPrompt := p.buildSystemPromptWithSchema(structConfig)
+
+	req := p.buildRequest(messages, false, tools)
+	if systemPrompt != "" {
+		if req.System != "" {
+			req.System = req.System + "\n\n" + systemPrompt
+		} else {
+			req.System = systemPrompt
+		}
+	}
+
+	// Make the actual API call using the existing Generate method
+	return p.Generate(messages, tools)
+}
+
+// GenerateStructuredStreaming generates a streaming response with structured output
+func (p *AnthropicProvider) GenerateStructuredStreaming(messages []Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
+	// Apply prefill if configured
+	if structConfig != nil && structConfig.Prefill != "" {
+		messages = append(messages, Message{
+			Role:    "assistant",
+			Content: structConfig.Prefill,
+		})
+	}
+
+	// Build system prompt with schema instructions
+	systemPrompt := p.buildSystemPromptWithSchema(structConfig)
+
+	req := p.buildRequest(messages, true, tools)
+	if systemPrompt != "" {
+		if req.System != "" {
+			req.System = req.System + "\n\n" + systemPrompt
+		} else {
+			req.System = systemPrompt
+		}
+	}
+
+	// Make the actual API call using the existing GenerateStreaming method
+	return p.GenerateStreaming(messages, tools)
+}
+
+// SupportsStructuredOutput returns true (Anthropic supports structured output via prefill)
+func (p *AnthropicProvider) SupportsStructuredOutput() bool {
+	return true
+}
+
+// buildSystemPromptWithSchema builds system prompt with schema instructions
+func (p *AnthropicProvider) buildSystemPromptWithSchema(structConfig *StructuredOutputConfig) string {
+	if structConfig == nil || structConfig.Schema == nil {
+		return ""
+	}
+
+	schemaJSON, err := json.MarshalIndent(structConfig.Schema, "", "  ")
+	if err != nil {
+		return ""
+	}
+
+	return fmt.Sprintf(`You must respond with valid JSON matching this exact schema:
+
+%s
+
+Important:
+- Output ONLY valid JSON, no other text
+- All required fields must be present
+- Follow the exact structure specified
+- Use correct data types for each field`, string(schemaJSON))
+}

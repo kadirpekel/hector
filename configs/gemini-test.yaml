@@ -1,0 +1,26 @@
+agents:
+  gemini_assistant:
+    name: "Gemini Test Assistant"
+    description: "Test agent using Google Gemini API"
+    llm: "gemini-llm"
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 5
+      enable_streaming: true
+    
+    visibility: public
+
+llms:
+  gemini-llm:
+    type: "gemini"
+    model: "gemini-2.0-flash"
+    host: "https://generativelanguage.googleapis.com"
+    api_key: "${GEMINI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 2048
+
+server:
+  port: 8080
+  host: "0.0.0.0"
+

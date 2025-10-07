@@ -254,10 +254,148 @@ llms:
     retry_delay: 2                      # Base delay in seconds (default: 2, exponential backoff)
 ```
 
+### Google Gemini
+
+```yaml
+llms:
+  main-llm:
+    type: "gemini"
+    model: "gemini-2.0-flash"                              # or gemini-1.5-pro, gemini-1.5-flash
+    api_key: "${GEMINI_API_KEY}"
+    host: "https://generativelanguage.googleapis.com"     # Default
+    temperature: 0.7
+    max_tokens: 2048
+    timeout: 60
+    max_retries: 3
+    retry_delay: 2
+```
+
+**Available Models:**
+- `gemini-2.0-flash` - Latest, fastest, cost-effective
+- `gemini-1.5-pro` - Most powerful, best for complex tasks
+- `gemini-1.5-flash` - Balanced speed and capability
+
 **Supported Models:**
 - `gpt-4o` - Most capable
 - `gpt-4o-mini` - Faster, cheaper
 - `gpt-3.5-turbo` - Budget option
+
+---
+
+## Structured Output Configuration
+
+Configure schema-validated JSON/XML/Enum output for reliable data extraction. Works with OpenAI, Anthropic, and Gemini.
+
+**When to use:**
+- Data extraction (invoices, forms, documents)
+- Classification (sentiment, priority, category)
+- Entity extraction (names, dates, locations, amounts)
+- API integrations requiring specific JSON formats
+- Database record creation
+- Form filling from unstructured text
+
+### Basic JSON Schema
+
+```yaml
+agents:
+  data_extractor:
+    llm: "openai-llm"
+    structured_output:
+      format: "json"
+      schema:
+        type: "object"
+        properties:
+          name: {type: "string"}
+          age: {type: "number"}
+          email: {type: "string", format: "email"}
+        required: ["name", "email"]
+```
+
+### Provider-Specific Optimizations
+
+#### OpenAI: Strict Mode
+```yaml
+agents:
+  openai_extractor:
+    llm: "openai-llm"
+    structured_output:
+      format: "json"
+      schema:  # Schema validated strictly
+        type: "object"
+        properties:
+          sentiment: {type: "string", enum: ["positive", "negative", "neutral"]}
+          confidence: {type: "number", minimum: 0, maximum: 1}
+        required: ["sentiment", "confidence"]
+```
+
+#### Anthropic: Prefill Technique
+```yaml
+agents:
+  anthropic_extractor:
+    llm: "claude-llm"
+    structured_output:
+      format: "json"
+      schema: {<your-schema>}
+      prefill: '{"sentiment":'  # Forces response to start with JSON
+```
+
+#### Gemini: Property Ordering
+```yaml
+agents:
+  gemini_extractor:
+    llm: "gemini-llm"
+    structured_output:
+      format: "json"
+      schema: {<your-schema>}
+      property_ordering: ["name", "age", "email"]  # Consistent field order
+```
+
+### Classification with Enum
+
+```yaml
+agents:
+  priority_classifier:
+    llm: "gemini-llm"
+    structured_output:
+      format: "enum"
+      enum: ["Urgent", "High", "Medium", "Low"]
+```
+
+### Real-World Example: Invoice Extraction
+
+```yaml
+agents:
+  invoice_parser:
+    llm: "gemini-llm"
+    structured_output:
+      format: "json"
+      schema:
+        type: "object"
+        properties:
+          vendor: {type: "string"}
+          invoice_number: {type: "string"}
+          date: {type: "string", format: "date"}
+          line_items:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                description: {type: "string"}
+                quantity: {type: "number"}
+                unit_price: {type: "number"}
+                total: {type: "number"}
+          total: {type: "number"}
+        required: ["vendor", "invoice_number", "total"]
+```
+
+**Benefits:**
+- ✅ No regex or text parsing
+- ✅ Type-safe outputs (strings, numbers, booleans, arrays)
+- ✅ Required field validation
+- ✅ Direct database/API integration
+- ✅ Reduced error rates
+
+**See [Structured Output Guide](STRUCTURED_OUTPUT.md) for complete documentation and examples.**
 
 ---
 
