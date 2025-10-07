@@ -1,10 +1,13 @@
 name: CI
 
 on:
-  push:
-    branches: [ main, develop ]
+  # Run CI on pull requests for testing before merge
   pull_request:
     branches: [ main ]
+  # Run full CI only on release tags
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: read
