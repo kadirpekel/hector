@@ -2,7 +2,7 @@
 layout: default
 title: Configuration
 nav_order: 4
-parent: Core Guides
+parent: Reference
 description: "Complete configuration reference with examples and all available options"
 ---
 

@@ -15,8 +15,9 @@ Complete technical reference for developers and integrators.
 - **[API Reference](API_REFERENCE)** - Complete A2A HTTP/SSE API documentation
 - **[A2A Compliance](A2A_COMPLIANCE)** - 100% A2A specification compliance details
 
-## System Reference
+## Configuration & System
 
+- **[Configuration](CONFIGURATION)** - Complete configuration reference with all options
 - **[Architecture](ARCHITECTURE)** - System design, components, and patterns
 - **[Testing Guide](TESTING)** - Testing practices and quality assurance
 
