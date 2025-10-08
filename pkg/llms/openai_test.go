@@ -132,12 +132,13 @@ func TestOpenAIProvider_Generate_Success(t *testing.T) {
 		}
 
 		// Send mock response
+		content := "Hello! How can I help you today?"
 		response := OpenAIResponse{
 			Choices: []Choice{
 				{
 					Message: OpenAIMessage{
 						Role:    "assistant",
-						Content: "Hello! How can I help you today?",
+						Content: &content,
 					},
 					FinishReason: "stop",
 				},
@@ -207,12 +208,13 @@ func TestOpenAIProvider_Generate_WithTools(t *testing.T) {
 		}
 
 		// Send mock response with tool call
+		emptyContent := ""
 		response := OpenAIResponse{
 			Choices: []Choice{
 				{
 					Message: OpenAIMessage{
 						Role:    "assistant",
-						Content: "",
+						Content: &emptyContent,
 						ToolCalls: []OpenAIToolCall{
 							{
 								ID:   "call_123",
@@ -507,12 +509,13 @@ func TestOpenAIProvider_WithCustomHTTPClient(t *testing.T) {
 
 	// Create a mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		content := "Hello from custom client!"
 		response := OpenAIResponse{
 			Choices: []Choice{
 				{
 					Message: OpenAIMessage{
 						Role:    "assistant",
-						Content: "Hello from custom client!",
+						Content: &content,
 					},
 					FinishReason: "stop",
 				},

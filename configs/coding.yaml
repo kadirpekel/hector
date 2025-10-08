@@ -306,7 +306,7 @@ agents:
     # ========================================================================
     tools:
       # - "search"           # Semantic code search (requires Qdrant + Ollama)
-      - "file_writer"      # Create/overwrite files
+      - "write_file"       # Create/overwrite files
       - "search_replace"   # Edit files precisely
       - "execute_command"  # Run system commands (git, npm, make, etc.)
       - "todo_write"       # Task management (BETTER than Cursor)
@@ -422,8 +422,8 @@ tools:
   # --------------------------------------------------------------------------
   # FILE WRITER: Create/overwrite files
   # --------------------------------------------------------------------------
-  file_writer:
-    type: file_writer
+  write_file:
+    type: wirte_file
     description: "Create or overwrite files"
     max_file_size: 1048576  # 1MB
     working_directory: "./"

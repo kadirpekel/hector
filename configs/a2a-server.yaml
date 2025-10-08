@@ -17,7 +17,7 @@ agents:
     llm: "main-llm"
     tools:
       - execute_command
-      - file_writer
+      - write_file
     
     prompt:
       system_role: "Expert market research analyst specializing in competitive intelligence"
@@ -75,8 +75,8 @@ tools:
     max_execution_time: "30s"
     enable_sandboxing: true
   
-  file_writer:
-    type: file_writer
+  write_file:
+    type: wirte_file
     description: "Write content to files"
 
 # Usage Examples:

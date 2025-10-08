@@ -1020,7 +1020,7 @@ func (c *ToolConfigs) SetDefaults() {
 	}
 
 	// Zero-config: Create default safe tools (Tier 1) ONLY if no tools are configured
-	// For file editing tools (file_writer, search_replace), users must explicitly enable them
+	// For file editing tools (wirte_file, search_replace), users must explicitly enable them
 	if len(c.Tools) == 0 {
 		c.Tools = map[string]ToolConfig{
 			"execute_command": {
@@ -1033,7 +1033,7 @@ func (c *ToolConfigs) SetDefaults() {
 			"todo_write": {
 				Type: "todo",
 			},
-			// NOTE: file_writer, search_replace are NOT included in safe defaults
+			// NOTE: wirte_file, search_replace are NOT included in safe defaults
 			// Users must explicitly enable them via configuration for security
 		}
 	}
@@ -1047,7 +1047,7 @@ func (c *ToolConfigs) SetDefaults() {
 
 // ToolConfig represents a single tool configuration
 type ToolConfig struct {
-	Type        string `yaml:"type"`                  // Tool type: "command", "file_writer", "search_replace", "todo", etc.
+	Type        string `yaml:"type"`                  // Tool type: "command", "wirte_file", "search_replace", "todo", etc.
 	Enabled     bool   `yaml:"enabled,omitempty"`     // Tool enabled (default: true)
 	Description string `yaml:"description,omitempty"` // Tool description
 
@@ -1092,7 +1092,7 @@ func (c *ToolConfig) Validate() error {
 		if len(c.AllowedCommands) == 0 {
 			return fmt.Errorf("allowed_commands is required for command tool")
 		}
-	case "file_writer":
+	case "wirte_file":
 		// Optional validation
 	case "search_replace":
 		// Optional validation
@@ -1127,7 +1127,7 @@ func (c *ToolConfig) SetDefaults() {
 		if c.MaxExecutionTime == "" {
 			c.MaxExecutionTime = "30s"
 		}
-	case "file_writer":
+	case "wirte_file":
 		if c.MaxFileSize == 0 {
 			c.MaxFileSize = 1048576 // 1MB
 		}

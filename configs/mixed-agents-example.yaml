@@ -34,7 +34,7 @@ agents:
     description: "Native agent that creates written content"
     llm: "main-llm"
     tools:
-      - file_writer
+      - write_file
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 5
@@ -110,8 +110,8 @@ tools:
     allowed_commands: ["curl", "echo", "cat"]
     working_directory: "."
   
-  file_writer:
-    type: file_writer
+  write_file:
+    type: wirte_file
     working_directory: "./output"
 
 # ============================================================================

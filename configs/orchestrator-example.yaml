@@ -52,7 +52,7 @@ agents:
     description: "Creates well-structured written content"
     llm: "main-llm"
     tools:
-      - file_writer
+      - wirte_file
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 5
@@ -146,7 +146,7 @@ tools:
     allowed_commands: ["curl", "echo"]
     working_directory: "."
   
-  file_writer:
+  wirte_file:
     type: file_system
     path: "./output"
     allowed_operations: ["write"]

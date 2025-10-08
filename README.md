@@ -273,7 +273,7 @@ agents:
         3. Write clean, testable code
     
     document_stores: ["codebase_docs"]
-    tools: [execute_command, file_writer, search]
+    tools: [execute_command, write_file, search]
     
     reasoning:
       engine: "chain-of-thought"

@@ -57,10 +57,10 @@ type OpenAIStreamResponse struct {
 
 // OpenAIMessage represents a message in OpenAI's format
 type OpenAIMessage struct {
-	Role       string            `json:"role"`
-	Content    *string           `json:"content"`                // Always present, can be empty string
-	ToolCalls  []OpenAIToolCall  `json:"tool_calls,omitempty"`   // Tool calls from assistant
-	ToolCallID string            `json:"tool_call_id,omitempty"` // Tool result reference
+	Role       string           `json:"role"`
+	Content    *string          `json:"content"`                // Always present, can be empty string
+	ToolCalls  []OpenAIToolCall `json:"tool_calls,omitempty"`   // Tool calls from assistant
+	ToolCallID string           `json:"tool_call_id,omitempty"` // Tool result reference
 }
 
 // Choice represents a response choice
@@ -381,7 +381,7 @@ func (p *OpenAIProvider) buildRequest(messages []Message, stream bool, tools []T
 		// OpenAI requires content to always be present (even if empty string)
 		// Using pointer to ensure it's always included in JSON, never null
 		content := msg.Content
-		
+
 		openaiMsg := OpenAIMessage{
 			Role:    msg.Role,
 			Content: &content, // Always include content, even if empty

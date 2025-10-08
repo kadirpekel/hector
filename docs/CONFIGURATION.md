@@ -511,7 +511,7 @@ No configuration needed! Default tools are automatically registered:
 
 ```yaml
 # Just don't specify tools section
-# Defaults: execute_command, search, file_writer, search_replace, todo_write
+# Defaults: execute_command, search, wirte_file, search_replace, todo_write
 ```
 
 ### Custom Configuration
@@ -525,8 +525,8 @@ tools:
     max_execution_time: "30s"
     enable_sandboxing: true
   
-  file_writer:
-    type: file_writer
+  wirte_file:
+    type: wirte_file
     max_file_size: 1048576
     allowed_extensions: [".go", ".py", ".js", ".ts", ".md"]
     working_directory: "./"
@@ -552,7 +552,7 @@ tools:
 | Tool | Type | Description |
 |------|------|-------------|
 | `execute_command` | command | Execute shell commands |
-| `file_writer` | file_writer | Create/overwrite files |
+| `wirte_file` | wirte_file | Create/overwrite files |
 | `search_replace` | search_replace | Precise text replacement |
 | `search` | search | Semantic codebase search |
 | `todo_write` | todo | Task management |

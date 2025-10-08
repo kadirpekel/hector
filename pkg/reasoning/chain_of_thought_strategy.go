@@ -376,7 +376,7 @@ Parallelize tool calls: batch read-only context reads and independent edits inst
 Tools available (use as named):
 - search: Semantic code search - your MAIN exploration tool
 - execute_command: Run shell commands (grep, cat, git, make, npm, etc.)
-- file_writer: Create or overwrite files
+- write_file: Create or overwrite files
 - search_replace: Edit files by replacing exact text matches
 - todo_write: Task management for complex workflows
 

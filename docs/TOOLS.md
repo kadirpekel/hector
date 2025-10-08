@@ -24,7 +24,7 @@ Hector provides a **powerful, extensible tool system** that gives agents capabil
 │ Built-in Tools │ │  MCP Servers │ │gRPC Plugins │
 │                │ │              │ │             │
 │ • command      │ │ • Composio   │ │ • Custom    │
-│ • file_writer  │ │ • Mem0       │ │   LLMs      │
+│ • wirte_file  │ │ • Mem0       │ │   LLMs      │
 │ • search       │ │ • Custom     │ │ • Custom    │
 │ • todo         │ │   servers    │ │   tools     │
 │ • search_replace│ │              │ │             │
@@ -92,15 +92,15 @@ drwxr-xr-x  5 user  staff   160 Oct  5 cmd/
 - **Path restrictions** - Optional working_directory constraint
 - **Sandboxing** - Optional isolation (platform-dependent)
 
-### 2. file_writer
+### 2. wirte_file
 
 Create and modify files safely.
 
 **Configuration:**
 ```yaml
 tools:
-  file_writer:
-    type: "file_writer"
+  wirte_file:
+    type: "wirte_file"
     enabled: true
     allowed_extensions:
       - ".go"
@@ -117,7 +117,7 @@ tools:
 **Usage in Agent:**
 ```
 Agent: I'll create a README file
-Tool Call: file_writer(
+Tool Call: wirte_file(
   path="README.md",
   content="# My Project\n\nDescription..."
 )
@@ -727,8 +727,8 @@ tools:
     max_execution_time: "30s"
     enable_sandboxing: true
   
-  file_writer:
-    type: "file_writer"
+  wirte_file:
+    type: "wirte_file"
     enabled: true
     allowed_extensions: [".go", ".yaml", ".md"]
     forbidden_paths: ["/etc", "/usr"]
@@ -785,7 +785,7 @@ agents:
         - search (for looking up information)
         - todo (for task tracking)
         
-        Never use execute_command or file_writer.
+        Never use execute_command or wirte_file.
 ```
 
 **Why global?**
@@ -858,7 +858,7 @@ tools:
 **Extension whitelist:**
 ```yaml
 tools:
-  file_writer:
+  wirte_file:
     allowed_extensions:
       - ".txt"
       - ".md"
@@ -869,7 +869,7 @@ tools:
 **Path blacklist:**
 ```yaml
 tools:
-  file_writer:
+  wirte_file:
     forbidden_paths:
       - "/etc"
       - "/usr"
@@ -881,7 +881,7 @@ tools:
 **Size limits:**
 ```yaml
 tools:
-  file_writer:
+  wirte_file:
     max_file_size: 10485760  # 10MB max
 ```
 
@@ -952,7 +952,7 @@ prompt:
     - API reference
     - Code examples
     
-    Use file_writer for:
+    Use wirte_file for:
     - Creating new files
     - Updating configurations
     
@@ -1126,8 +1126,8 @@ tools:
     allowed_commands: ["cat", "ls", "grep", "git", "npm", "go"]
     max_execution_time: "30s"
   
-  file_writer:
-    type: "file_writer"
+  wirte_file:
+    type: "wirte_file"
     enabled: true
     allowed_extensions: [".go", ".yaml", ".md", ".txt"]
     max_file_size: 10485760
@@ -1164,7 +1164,7 @@ agents:
       tool_usage: |
         Use tools appropriately:
         - search: Look up documentation
-        - file_writer: Create/modify code
+        - wirte_file: Create/modify code
         - execute_command: Run builds and tests
         - composio tools: Interact with GitHub, Slack, etc.
 ```
