@@ -17,7 +17,7 @@ Pure A2A-Native Declarative AI Agent Platform
 Build powerful AI agents in pure YAML. Compose single agents, orchestrate multi-agent systems, and integrate external A2A agents—all through declarative configuration and industry-standard protocols.
 {: .fs-5 .fw-300 }
 
-[Get started now]({{ site.baseurl }}/QUICK_START){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
+[Get started now](/QUICK_START){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [View on GitHub]({{ site.hector.repo_url }}){: .btn .fs-5 .mb-4 .mb-md-0 }
 
 ---
@@ -28,12 +28,12 @@ Build powerful AI agents in pure YAML. Compose single agents, orchestrate multi-
 
 **Want to see the power of Hector?** Check out our featured tutorial:
 
-### [LangChain vs Hector: Multi-Agent Systems]({{ site.baseurl }}/tutorials/MULTI_AGENT_RESEARCH_PIPELINE)
+### [LangChain vs Hector: Multi-Agent Systems](/tutorials/MULTI_AGENT_RESEARCH_PIPELINE)
 {: .text-purple-000}
 
 See how Hector transforms complex LangChain multi-agent implementations into simple YAML configuration. **What takes 500+ lines of Python code becomes 120 lines of YAML** - same functionality, dramatically simpler approach.
 
-[Read the comparison →]({{ site.baseurl }}/tutorials/MULTI_AGENT_RESEARCH_PIPELINE){: .btn .btn-outline }
+[Read the comparison →](/tutorials/MULTI_AGENT_RESEARCH_PIPELINE){: .btn .btn-outline }
 
 </div>
 
@@ -43,11 +43,11 @@ See how Hector transforms complex LangChain multi-agent implementations into sim
 
 | Guide | Description |
 |:------|:------------|
-| [**Quick Start**]({{ site.baseurl }}/QUICK_START) | Get up and running in 5 minutes |
-| [**Building Agents**]({{ site.baseurl }}/AGENTS) | Complete single-agent guide with prompts, tools, RAG |
-| [**LangChain vs Hector**]({{ site.baseurl }}/tutorials/MULTI_AGENT_RESEARCH_PIPELINE) | Multi-agent systems comparison tutorial |
-| [**Custom MCP Tools**]({{ site.baseurl }}/MCP_CUSTOM_TOOLS) | Build custom tools in 5 minutes 🔥 |
-| [**Tools & Extensions**]({{ site.baseurl }}/TOOLS) | Built-in tools, MCP protocol, gRPC plugins |
+| [**Quick Start**](/QUICK_START) | Get up and running in 5 minutes |
+| [**Building Agents**](/AGENTS) | Complete single-agent guide with prompts, tools, RAG |
+| [**LangChain vs Hector**](/tutorials/MULTI_AGENT_RESEARCH_PIPELINE) | Multi-agent systems comparison tutorial |
+| [**Custom MCP Tools**](/MCP_CUSTOM_TOOLS) | Build custom tools in 5 minutes 🔥 |
+| [**Tools & Extensions**](/TOOLS) | Built-in tools, MCP protocol, gRPC plugins |
 
 ---
 
@@ -92,7 +92,7 @@ llms:
 - [🏠 Project Homepage]({{ site.hector.repo_url }})
 - [📊 A2A Protocol Specification](https://a2a-protocol.org)
 - [🐛 Report Issues]({{ site.hector.repo_url }}/issues)
-- [🤝 Contributing Guide]({{ site.baseurl }}/CONTRIBUTING)
+- [🤝 Contributing Guide](/CONTRIBUTING)
 
 ---
 

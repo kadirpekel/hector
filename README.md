@@ -12,10 +12,20 @@
 [![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
 [![A2A Protocol](https://img.shields.io/badge/A2A-compliant-green.svg)](https://a2a-protocol.org)
+[![Documentation](https://img.shields.io/badge/docs-gohector.dev-blue.svg)](https://gohector.dev)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 [![GoDoc](https://godoc.org/github.com/kadirpekel/hector?status.svg)](https://godoc.org/github.com/kadirpekel/hector)
 
 > **Build powerful AI agents in pure YAML. Compose single agents, orchestrate multi-agent systems, and integrate external A2A agents—all through declarative configuration and industry-standard protocols.**
+
+📖 **[Complete Documentation & Tutorials → gohector.dev](https://gohector.dev)**
+
+| Quick Links | |
+|:------------|:--|
+| 🚀 **[Get Started](https://gohector.dev/QUICK_START)** | Install and run your first agent in 5 minutes |
+| 🔥 **[LangChain vs Hector](https://gohector.dev/tutorials/MULTI_AGENT_RESEARCH_PIPELINE)** | See 500+ lines of Python become 120 lines of YAML |
+| 🤖 **[Build Cursor-like Assistant](https://gohector.dev/tutorials/BUILD_YOUR_OWN_CURSOR)** | Create an AI coding assistant in pure YAML |
+| ⚡ **[Custom MCP Tools](https://gohector.dev/MCP_CUSTOM_TOOLS)** | Build custom tools in 5 minutes |
 
 ---
 
@@ -29,7 +39,7 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 - **External Integration** - Connect remote A2A agents seamlessly
 - **Production Ready** - Authentication, streaming, sessions, monitoring
 
-**Want to see what's possible?** Check out our [**Coding Assistant Tutorial**](docs/tutorials/BUILD_YOUR_OWN_CURSOR.md) to learn how to build a Cursor-like AI coding assistant with semantic search, chain-of-thought reasoning, and comprehensive language support—all through pure YAML configuration.
+**Want to see what's possible?** Check out our [**LangChain vs Hector Tutorial**](https://gohector.dev/tutorials/MULTI_AGENT_RESEARCH_PIPELINE) to see how Hector transforms complex multi-agent implementations into simple YAML configuration, or try our [**Coding Assistant Tutorial**](https://gohector.dev/tutorials/BUILD_YOUR_OWN_CURSOR) to build a Cursor-like AI coding assistant—all through pure YAML configuration.
 
 ---
 
@@ -484,34 +494,37 @@ export ANTHROPIC_API_KEY="sk-..."                # Anthropic authentication
 
 ## Documentation
 
-### Tutorials
-- **[LangChain vs Hector: Multi-Agent Systems](docs/tutorials/MULTI_AGENT_RESEARCH_PIPELINE.md)** - See how Hector transforms complex LangChain multi-agent implementations into simple YAML configuration. What takes 500+ lines of Python code becomes 120 lines of YAML (with example config: [`configs/research-assistant.yaml`](configs/research-assistant.yaml))
-- **[Build Your Own Cursor-Like AI Coding Assistant](docs/tutorials/BUILD_YOUR_OWN_CURSOR.md)** - Step-by-step tutorial showing how to create a powerful AI coding assistant using pure YAML configuration (with example config: [`configs/coding.yaml`](configs/coding.yaml))
+📖 **[Complete Documentation Site → gohector.dev](https://gohector.dev)**
 
-### Core Guides
-- **[Quick Start](docs/QUICK_START.md)** - Get running in 5 minutes
-- **[Building Agents](docs/AGENTS.md)** - Complete single-agent guide
-- **[Configuration](docs/CONFIGURATION.md)** - Complete config reference
-- **[CLI Guide](docs/CLI_GUIDE.md)** - Command-line interface
+### 🎯 Featured Tutorials
+- **[LangChain vs Hector: Multi-Agent Systems](https://gohector.dev/tutorials/MULTI_AGENT_RESEARCH_PIPELINE)** - See how Hector transforms complex LangChain multi-agent implementations into simple YAML configuration. What takes 500+ lines of Python code becomes 120 lines of YAML
+- **[Build Your Own Cursor-Like AI Coding Assistant](https://gohector.dev/tutorials/BUILD_YOUR_OWN_CURSOR)** - Step-by-step tutorial showing how to create a powerful AI coding assistant using pure YAML configuration
 
-### Advanced Topics
-- **[Multi-Agent Orchestration](docs/ARCHITECTURE.md#orchestrator-pattern)** - Orchestration patterns
-- **[External Agents](docs/EXTERNAL_AGENTS.md)** - External agent integration
-- **[Tools & MCP](docs/TOOLS.md)** - Built-in tools and MCP protocol
-- **[Custom MCP Tools](docs/MCP_CUSTOM_TOOLS.md)** - Build custom tools in 5 minutes 🔥
-- **[Structured Output](docs/STRUCTURED_OUTPUT.md)** - Provider-aware JSON/XML/Enum output
-- **[Plugin Development](docs/PLUGINS.md)** - Custom LLMs, databases, tools
+### 📚 Core Guides  
+- **[Quick Start](https://gohector.dev/QUICK_START)** - Get running in 5 minutes
+- **[Building Agents](https://gohector.dev/AGENTS)** - Complete single-agent guide  
+- **[Custom MCP Tools](https://gohector.dev/MCP_CUSTOM_TOOLS)** - Build custom tools in 5 minutes 🔥
+- **[Configuration](https://gohector.dev/CONFIGURATION)** - Complete config reference
+- **[CLI Guide](https://gohector.dev/CLI_GUIDE)** - Command-line interface
 
-### Protocol & Security
-- **[A2A Compliance](docs/A2A_COMPLIANCE.md)** - 100% spec compliance details
-- **[API Reference](docs/API_REFERENCE.md)** - Complete A2A HTTP/SSE API
-- **[Authentication](docs/AUTHENTICATION.md)** - JWT token validation
+### 🚀 Advanced Topics
+- **[Multi-Agent Orchestration](https://gohector.dev/ARCHITECTURE#multi-agent-orchestration-a2a-protocol)** - Orchestration patterns
+- **[External Agents](https://gohector.dev/EXTERNAL_AGENTS)** - External agent integration
+- **[Tools & MCP](https://gohector.dev/TOOLS)** - Built-in tools and MCP protocol
+- **[Custom MCP Tools](https://gohector.dev/MCP_CUSTOM_TOOLS)** - Build custom tools in 5 minutes 🔥
+- **[Structured Output](https://gohector.dev/STRUCTURED_OUTPUT)** - Provider-aware JSON/XML/Enum output
+- **[Plugin Development](https://gohector.dev/PLUGINS)** - Custom LLMs, databases, tools
 
-### Reference
-- **[Architecture](docs/ARCHITECTURE.md)** - System design and patterns
-- **[Testing Guide](docs/TESTING.md)** - Testing practices
+### 🔒 Protocol & Security
+- **[A2A Compliance](https://gohector.dev/A2A_COMPLIANCE)** - 100% spec compliance details
+- **[API Reference](https://gohector.dev/API_REFERENCE)** - Complete A2A HTTP/SSE API
+- **[Authentication](https://gohector.dev/AUTHENTICATION)** - JWT token validation
 
-**[📚 Complete Documentation →](docs/)**
+### 📖 Reference
+- **[Architecture](https://gohector.dev/ARCHITECTURE)** - System design and patterns
+- **[Testing Guide](https://gohector.dev/TESTING)** - Testing practices
+
+**[📚 Complete Documentation →](https://gohector.dev)**
 
 ---
 
