@@ -1,3 +1,11 @@
+---
+layout: default
+title: Tools & Extensions
+nav_order: 2
+parent: Core Guides
+description: "Built-in tools, MCP protocol, gRPC plugins, and custom integrations"
+---
+
 # Tools & Extensions
 
 Complete guide to Hector's extensible tool system

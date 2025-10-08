@@ -1,3 +1,11 @@
+---
+layout: default
+title: Configuration
+nav_order: 4
+parent: Core Guides
+description: "Complete configuration reference with examples and all available options"
+---
+
 # Hector Configuration Reference
 
 Complete guide to configuring Hector AI Assistant.

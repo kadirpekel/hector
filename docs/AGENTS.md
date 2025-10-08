@@ -1,3 +1,11 @@
+---
+layout: default
+title: Building Agents
+nav_order: 1
+parent: Core Guides
+description: "Complete guide to building single agents with prompts, tools, RAG, sessions, and streaming"
+---
+
 # Building AI Agents with Hector
 
 Declarative, Powerful, Production-Ready

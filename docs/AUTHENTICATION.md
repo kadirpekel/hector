@@ -1,3 +1,11 @@
+---
+layout: default
+title: Authentication
+nav_order: 3
+parent: Advanced
+description: "JWT token validation and security configuration"
+---
+
 # Authentication in Hector
 
 **JWT Token Validation for Enterprise Security**

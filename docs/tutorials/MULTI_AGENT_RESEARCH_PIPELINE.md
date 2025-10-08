@@ -1,7 +1,7 @@
 ---
 layout: default
-title: "LangChain vs Hector: Multi-Agent Systems"
-nav_order: 3
+title: "LangChain vs Hector"
+nav_order: 1
 parent: Tutorials
 description: "See how Hector transforms complex LangChain multi-agent implementations into simple YAML configuration"
 ---

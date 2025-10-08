@@ -1,3 +1,11 @@
+---
+layout: default
+title: Architecture
+nav_order: 1
+parent: Advanced
+description: "System design, multi-agent orchestration, and core components"
+---
+
 # Hector Architecture
 
 **Design Philosophy:** Clean architecture with Strategy pattern, dependency injection, and single responsibility principle.

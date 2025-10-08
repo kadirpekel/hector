@@ -1,3 +1,11 @@
+---
+layout: default
+title: CLI Guide
+nav_order: 5
+parent: Core Guides
+description: "Command-line interface reference for all hector commands"
+---
+
 # Hector CLI Guide
 
 ## Overview

@@ -1,3 +1,11 @@
+---
+layout: default
+title: Custom MCP Tools
+nav_order: 3
+parent: Core Guides
+description: "Build custom tools in 5 minutes with Python or TypeScript"
+---
+
 # Building Custom MCP Tools in Minutes
 
 **The fastest way to extend Hector with domain-specific capabilities**

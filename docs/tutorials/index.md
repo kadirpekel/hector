@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Tutorials
-nav_order: 3
+nav_order: 20
 has_children: true
 description: "Step-by-step tutorials for building real-world AI agent systems with Hector"
 ---
