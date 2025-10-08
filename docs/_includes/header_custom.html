@@ -1,0 +1,36 @@
+<div class="theme-toggle" style="text-align: right; margin-bottom: 1rem;">
+  <button id="theme-toggle" class="btn btn-outline" style="font-size: 0.8rem; padding: 0.25rem 0.5rem;">
+    ☀️ Light Mode
+  </button>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const toggleButton = document.getElementById('theme-toggle');
+  const currentTheme = localStorage.getItem('theme') || 'dark'; // Default to dark
+  
+  // Apply saved theme
+  if (currentTheme === 'light') {
+    jtd.setTheme('light');
+    toggleButton.innerHTML = '🌙 Dark Mode';
+  } else {
+    // Already in dark mode by default, just update button
+    toggleButton.innerHTML = '☀️ Light Mode';
+  }
+  
+  // Toggle theme on button click
+  toggleButton.addEventListener('click', function() {
+    const currentTheme = localStorage.getItem('theme') || 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    localStorage.setItem('theme', newTheme);
+    jtd.setTheme(newTheme);
+    
+    if (newTheme === 'light') {
+      toggleButton.innerHTML = '🌙 Dark Mode';
+    } else {
+      toggleButton.innerHTML = '☀️ Light Mode';
+    }
+  });
+});
+</script>

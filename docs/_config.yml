@@ -23,7 +23,7 @@ plugins:
   - jekyll-titles-from-headings
 
 # Just the Docs theme configuration
-color_scheme: nil  # Allows user to toggle between light/dark
+color_scheme: dark  # Default to dark mode
 search_enabled: true
 search:
   heading_level: 2
