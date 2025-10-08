@@ -52,7 +52,7 @@ func NewLocalToolSourceWithConfig(toolConfigs map[string]config.ToolConfig) (*Lo
 			tool, err = NewCommandToolWithConfig(toolName, toolConfig)
 		case "search":
 			tool, err = NewSearchToolWithConfig(toolName, toolConfig)
-		case "wirte_file":
+		case "write_file":
 			tool, err = NewFileWriterToolWithConfig(toolName, toolConfig)
 		case "search_replace":
 			tool, err = NewSearchReplaceToolWithConfig(toolName, toolConfig)

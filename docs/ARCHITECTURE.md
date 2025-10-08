@@ -524,7 +524,7 @@ LLM streams to channel              │
 ### `tools/`
 - Tool implementations
 - Tool registry
-- Local tools (execute_command, wirte_file, etc.)
+- Local tools (execute_command, write_file, etc.)
 - MCP tool integration (foundation)
 
 ### `plugins/`

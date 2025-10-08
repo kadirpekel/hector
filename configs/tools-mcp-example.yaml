@@ -34,7 +34,7 @@ tools:
     max_execution_time: "30s"
   
   write_file:
-    type: "wirte_file"
+    type: "write_file"
     enabled: true
     allowed_extensions: [".txt", ".md", ".yaml", ".json"]
     max_file_size: 10485760  # 10MB

@@ -76,7 +76,7 @@ tools:
     enable_sandboxing: true
   
   write_file:
-    type: wirte_file
+    type: write_file
     description: "Write content to files"
 
 # Usage Examples:

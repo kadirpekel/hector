@@ -423,7 +423,7 @@ tools:
   # FILE WRITER: Create/overwrite files
   # --------------------------------------------------------------------------
   write_file:
-    type: wirte_file
+    type: write_file
     description: "Create or overwrite files"
     max_file_size: 1048576  # 1MB
     working_directory: "./"

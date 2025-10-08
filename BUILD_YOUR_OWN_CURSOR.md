@@ -157,7 +157,7 @@ agents:
     
     tools:
       - "search"          # Semantic code search
-      - "wirte_file"     # Create/update files
+      - "write_file"     # Create/update files
       - "search_replace"  # Precise edits
       - "execute_command" # Run commands
       - "todo_write"      # Task management
@@ -234,7 +234,7 @@ agents:
     # Remove document_stores, database, embedder
     tools:
       # Remove "search"
-      - "wirte_file"
+      - "write_file"
       - "search_replace"
       - "execute_command"
       - "todo_write"
@@ -410,7 +410,7 @@ Here's the flow:
 
 ```
 💭 Self-Reflection (AI Analysis):
-  - ✅ Succeeded: search, wirte_file
+  - ✅ Succeeded: search, write_file
   - ❌ Failed: execute_command
   - 🎯 Confidence: 75%
   - 🔄 Recommendation: Retry failed tools
@@ -540,13 +540,13 @@ llms:
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ ITERATION 2: Claude generates response                      │
-│ • Tool calls: [wirte_file("auth_test.go", "...")]        │
+│ • Tool calls: [write_file("auth_test.go", "...")]        │
 └─────────────────────────────────────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Execute tools                                               │
-│ ✅ wirte_file → Created auth_test.go                      │
+│ ✅ write_file → Created auth_test.go                      │
 └─────────────────────────────────────────────────────────────┘
                           │
                           ▼

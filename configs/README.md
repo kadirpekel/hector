@@ -78,7 +78,7 @@ hector call orchestrator "Research AI frameworks, analyze top 3, and write a com
 
 **Features:**
 - 🤖 **LLM**: Claude Sonnet 3.7 (Anthropic)
-- 🔧 **Full Dev Tools**: wirte_file, search_replace, execute_command, todo_write
+- 🔧 **Full Dev Tools**: write_file, search_replace, execute_command, todo_write
 - 🔍 **Semantic Search**: Qdrant + Ollama for codebase understanding
 - 📝 **Optimized Prompt**: Matches Cursor's pair programming behavior
 - 🎯 **High Precision**: Temperature 0.1 for deterministic code

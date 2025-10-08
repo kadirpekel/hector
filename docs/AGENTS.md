@@ -44,7 +44,7 @@ agents:
         4. Explain your decisions
       
       tool_usage: |
-        Use wirte_file to create/update files
+        Use write_file to create/update files
         Use execute_command to run tests
         Use search to find relevant documentation
     
@@ -232,7 +232,7 @@ prompt:
   tool_usage: |
     - Use search to find similar patterns in the codebase
     - Use execute_command to run linters/tests
-    - Use wirte_file only if explicitly asked to fix code
+    - Use write_file only if explicitly asked to fix code
   
   output_format: |
     Structure reviews as:
@@ -404,14 +404,14 @@ Tool: search(query="authentication module usage", stores=["codebase_docs"])
 Agent: Based on the docs, here's how to use it: [explains]
 ```
 
-### 3. **wirte_file**
+### 3. **write_file**
 
 Create and modify files:
 
 ```yaml
 tools:
-  wirte_file:
-    type: "wirte_file"
+  write_file:
+    type: "write_file"
     enabled: true
     allowed_paths:
       - "./src/"
@@ -423,7 +423,7 @@ tools:
 ```
 User: Create a README file
 Agent: I'll create that for you...
-Tool: wirte_file(path="README.md", content="# Project Title...")
+Tool: write_file(path="README.md", content="# Project Title...")
 Agent: Created README.md with [description]
 ```
 
@@ -761,7 +761,7 @@ agents:
       
       tool_usage: |
         - Use search to find similar patterns in codebase
-        - Use wirte_file to create/update files
+        - Use write_file to create/update files
         - Use execute_command to run tests/linters
         - Use search_replace for refactoring
     
@@ -1151,7 +1151,7 @@ llms:
 prompt:
   tool_usage: |
     ALWAYS use search when asked about [specific topics]
-    Use wirte_file when asked to create files
+    Use write_file when asked to create files
 
 # 2. Provide examples in prompt
   reasoning_instructions: |

@@ -111,7 +111,7 @@ tools:
     working_directory: "."
   
   write_file:
-    type: wirte_file
+    type: write_file
     working_directory: "./output"
 
 # ============================================================================
