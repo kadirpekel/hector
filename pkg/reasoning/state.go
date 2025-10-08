@@ -49,6 +49,9 @@ type ReasoningState struct {
 	// Optional - only needed for advanced strategies
 	Services AgentServices
 	Context  context.Context
+
+	// Todo completion tracking (for deterministic stop)
+	TodosWereCompleteLastIteration bool
 }
 
 // NewReasoningState creates a new reasoning state

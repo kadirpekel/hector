@@ -132,6 +132,23 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 
 ---
 
+## 🎯 Build Your Own Cursor
+
+**New:** Learn how to build a Cursor-equivalent AI coding assistant using pure YAML configuration.
+
+👉 **[BUILD_YOUR_OWN_CURSOR.md](BUILD_YOUR_OWN_CURSOR.md)** - Complete tutorial
+
+**What you'll get:**
+- ✅ Comparable quality with different tradeoffs
+- ✅ Identical prompts to what Claude receives in Cursor  
+- ✅ Open-source alternative with full customization
+- ✅ Fully declarative (no code required)
+- ✅ Works as API service, on-premise option, multi-LLM support
+
+**Example configuration:** [`configs/coding.yaml`](configs/coding.yaml)
+
+---
+
 ## Quick Start
 
 ### Install
