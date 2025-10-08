@@ -12,6 +12,16 @@ Get up and running in 5 minutes. Install, configure, and start using Hector.
 
 ---
 
+## Tutorials
+
+### [LangChain vs Hector: Multi-Agent Systems](tutorials/MULTI_AGENT_RESEARCH_PIPELINE.md)
+Direct comparison showing how Hector transforms complex LangChain multi-agent implementations into simple YAML configuration. Perfect for developers migrating from Python-based frameworks.
+
+### [Build Your Own Cursor-Like AI Coding Assistant](tutorials/BUILD_YOUR_OWN_CURSOR.md)
+Step-by-step tutorial for building a powerful AI coding assistant with semantic search, chain-of-thought reasoning, and comprehensive language support.
+
+---
+
 ## Core Documentation
 
 ### [Building Agents](AGENTS.md) ← Start Here
@@ -59,6 +69,9 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 ## Quick Navigation
 
 ### I want to...
+
+**Learn multi-agent systems**
+→ [LangChain vs Hector Tutorial](tutorials/MULTI_AGENT_RESEARCH_PIPELINE.md)
 
 **Build my first agent**
 → [Building Agents Guide](AGENTS.md)

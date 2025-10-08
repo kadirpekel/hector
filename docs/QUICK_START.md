@@ -360,6 +360,12 @@ hector serve --config test-config.yaml --debug
 
 ## What's Next
 
+**Ready for more advanced topics?**
+
+**🚀 [LangChain vs Hector: Multi-Agent Systems](tutorials/MULTI_AGENT_RESEARCH_PIPELINE.md)** - See how Hector transforms complex multi-agent implementations into simple YAML. Perfect next step after this quick start!
+
+**Other topics to explore:**
+
 1. **Streaming** - Server-Sent Events (SSE) streaming per A2A specification
 2. **Session management** - Proper A2A session support
 3. **Authentication** - Bearer token and API key auth

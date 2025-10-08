@@ -485,6 +485,7 @@ export ANTHROPIC_API_KEY="sk-..."                # Anthropic authentication
 ## Documentation
 
 ### Tutorials
+- **[LangChain vs Hector: Multi-Agent Systems](docs/tutorials/MULTI_AGENT_RESEARCH_PIPELINE.md)** - See how Hector transforms complex LangChain multi-agent implementations into simple YAML configuration. What takes 500+ lines of Python code becomes 120 lines of YAML (with example config: [`configs/research-assistant.yaml`](configs/research-assistant.yaml))
 - **[Build Your Own Cursor-Like AI Coding Assistant](docs/tutorials/BUILD_YOUR_OWN_CURSOR.md)** - Step-by-step tutorial showing how to create a powerful AI coding assistant using pure YAML configuration (with example config: [`configs/coding.yaml`](configs/coding.yaml))
 
 ### Core Guides
