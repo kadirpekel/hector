@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -55,7 +56,7 @@ const (
 
 // Default indexing timeout
 const (
-	DefaultIndexingTimeout = 30 * time.Second
+	DefaultIndexingTimeout = 120 * time.Second // 2 minutes per document
 )
 
 // ============================================================================
@@ -276,12 +277,13 @@ func (ds *DocumentStore) StartIndexing() error {
 
 // indexDirectory indexes a local directory with enhanced error handling and progress tracking
 func (ds *DocumentStore) indexDirectory() error {
-	var indexedCount int
-	var errorCount int
+	var indexedCount sync.WaitGroup
+	var successCount int32
+	var failCount int32
 
 	err := filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			errorCount++
+			atomic.AddInt32(&failCount, 1)
 			log.Printf("Warning: Failed to access %s: %v", path, err)
 			return nil // Continue with other files
 		}
@@ -303,16 +305,24 @@ func (ds *DocumentStore) indexDirectory() error {
 
 		// Index the document with semaphore control
 		ds.indexingSemaphore <- struct{}{} // Acquire semaphore
-		go func() {
-			defer func() { <-ds.indexingSemaphore }() // Release semaphore
+		indexedCount.Add(1)
+		go func(p string, i os.FileInfo) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("Panic while indexing %s: %v", p, r)
+					atomic.AddInt32(&failCount, 1)
+				}
+				<-ds.indexingSemaphore // Release semaphore
+				indexedCount.Done()
+			}()
 
-			if err := ds.indexDocument(path, info); err != nil {
-				errorCount++
-				log.Printf("Warning: Failed to index %s: %v", path, err)
+			if err := ds.indexDocument(p, i); err != nil {
+				atomic.AddInt32(&failCount, 1)
+				log.Printf("Warning: Failed to index %s: %v", p, err)
 			} else {
-				indexedCount++
+				atomic.AddInt32(&successCount, 1)
 			}
-		}()
+		}(path, info)
 
 		return nil
 	})
@@ -322,18 +332,13 @@ func (ds *DocumentStore) indexDirectory() error {
 	}
 
 	// Wait for all indexing operations to complete
-	for i := 0; i < MaxConcurrentIndexing; i++ {
-		ds.indexingSemaphore <- struct{}{}
-	}
-	for i := 0; i < MaxConcurrentIndexing; i++ {
-		<-ds.indexingSemaphore
-	}
+	indexedCount.Wait()
 
 	ds.mu.Lock()
-	ds.status.DocumentCount = indexedCount
+	ds.status.DocumentCount = int(successCount)
 	ds.mu.Unlock()
 
-	fmt.Printf("✅ Document store '%s' indexed: %d documents (%d errors)\n", ds.name, indexedCount, errorCount)
+	fmt.Printf("✅ Document store '%s' indexed: %d documents (%d errors)\n", ds.name, successCount, failCount)
 	return nil
 }
 

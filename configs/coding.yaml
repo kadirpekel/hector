@@ -337,7 +337,8 @@ databases:
   qdrant:
     type: "qdrant"
     host: "${QDRANT_HOST:-localhost}"
-    port: 6334
+    port: 6334  # gRPC port (Hector uses gRPC protocol)
+    timeout: 300  # 5 minutes for initial indexing
     collection_name: "codebase"
 
 # ============================================================================

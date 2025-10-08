@@ -135,8 +135,13 @@ See [`configs/coding.yaml`](../../configs/coding.yaml) for the complete, product
    
    **Qdrant vector database:**
    ```bash
-   docker run -p 6334:6333 -p 6333:6333 qdrant/qdrant
+   # IMPORTANT: Hector uses Qdrant's gRPC interface (port 6334)
+   docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
    ```
+   
+   **Note:** Hector's Qdrant client uses the **gRPC protocol on port 6334**. Make sure both ports are exposed:
+   - Port 6333: HTTP/REST API (for dashboard/debugging)
+   - Port 6334: gRPC API (required by Hector)
    
    **Ollama for embeddings:**
    ```bash
@@ -451,22 +456,45 @@ llms:
 
 ### Semantic search not working
 
-**Symptom:** Agent can't find relevant code
+**Symptom:** Agent can't find relevant code, or you see indexing errors like:
+```
+Warning: Failed to index <file>: rpc error: code = Unavailable
+```
 
 **Fixes:**
-1. **Restart server to re-index:**
+
+1. **Check Qdrant ports (MOST COMMON ISSUE):**
+   ```bash
+   # Verify Qdrant is running with BOTH ports exposed
+   docker ps | grep qdrant
+   # Should show: 0.0.0.0:6333->6333/tcp, 0.0.0.0:6334->6334/tcp
+   
+   # If ports are wrong, restart Qdrant:
+   docker stop <container-id>
+   docker rm <container-id>
+   docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant
+   ```
+   
+   **IMPORTANT:** Hector requires port **6334 (gRPC)** for indexing. Port 6333 is only for the web UI.
+
+2. **Test Qdrant connectivity:**
+   ```bash
+   # Test HTTP (web UI)
+   curl http://localhost:6333
+   
+   # Check collections
+   curl http://localhost:6333/collections
+   ```
+
+3. **Restart server to re-index:**
    ```bash
    # Stop the server (Ctrl+C) and restart it
    hector serve --config my-cursor.yaml
-   # Indexing happens automatically on startup
+   # Watch for "✅ Document store 'codebase' indexed: X documents"
+   # If X = 0, check Qdrant port 6334
    ```
 
-2. **Check Qdrant is running:**
-   ```bash
-   curl http://localhost:6334/health
-   ```
-
-3. **Verify Ollama and embeddings:**
+4. **Verify Ollama and embeddings:**
    ```bash
    # Check Ollama is running
    curl http://localhost:11434/api/tags
@@ -475,8 +503,8 @@ llms:
    ollama list | grep nomic
    ```
 
-4. **Check logs for indexing errors:**
-   Look for errors during server startup related to document store initialization
+5. **Check server logs for details:**
+   Look for "rpc error" messages pointing to port 6334 issues
 
 ---
 
