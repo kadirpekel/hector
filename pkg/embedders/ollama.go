@@ -101,7 +101,7 @@ func (e *OllamaEmbedder) EmbedWithContext(ctx context.Context, text string) ([]f
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Ollama API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("ollama API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	// Parse response
@@ -172,7 +172,7 @@ var (
 )
 
 // Close closes the Ollama embedder and releases resources
-func (oe *OllamaEmbedder) Close() error {
+func (e *OllamaEmbedder) Close() error {
 	// Ollama embedder doesn't need explicit cleanup
 	return nil
 }

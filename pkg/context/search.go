@@ -405,7 +405,7 @@ func (se *SearchEngine) prepareMetadata(content string, metadata map[string]inte
 	prepared["content"] = content
 
 	// Add existing metadata
-	if metadata != nil {
+	{ // Always iterate
 		for k, v := range metadata {
 			prepared[k] = v
 		}

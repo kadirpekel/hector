@@ -92,7 +92,7 @@ func NewLocalToolSourceForTesting() *LocalToolSource {
 
 	// Register some test tools
 	todoTool := NewTodoToolForTesting()
-	source.RegisterTool(todoTool)
+	_ = source.RegisterTool(todoTool)
 
 	return source
 }
@@ -103,7 +103,7 @@ func NewToolRegistryForTesting() *ToolRegistry {
 
 	// Register test tools
 	todoTool := NewTodoToolForTesting()
-	registry.BaseRegistry.Register("todo_write", ToolEntry{
+	_ = registry.BaseRegistry.Register("todo_write", ToolEntry{
 		Tool:       todoTool,
 		Source:     &TestToolSource{name: "test-local"},
 		SourceType: "local",
@@ -159,7 +159,7 @@ func (t *TestToolSource) RegisterTool(tool Tool) {
 	t.tools[tool.GetName()] = tool
 }
 
-// Test utilities for creating mock responses and validating results
+// CreateMockMCPResponse creates mock MCP responses for testing
 func CreateMockMCPResponse(tools []map[string]interface{}) string {
 	// Simple JSON marshaling for test responses
 	jsonStr := `{"jsonrpc":"2.0","id":1,"result":{"tools":[`

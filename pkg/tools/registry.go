@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"sync"
 
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/registry"
@@ -49,7 +48,7 @@ func NewToolRegistryError(component, action, message string, err error) *ToolReg
 // ToolRegistry manages multiple tool repositories and provides centralized access
 type ToolRegistry struct {
 	*registry.BaseRegistry[ToolEntry]
-	mu sync.RWMutex
+	// mu sync.RWMutex // Reserved for future use
 }
 
 // NewToolRegistry creates a new tool registry

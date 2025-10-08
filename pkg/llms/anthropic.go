@@ -1,3 +1,4 @@
+// Package llms provides LLM provider implementations.
 package llms
 
 import (
@@ -25,6 +26,7 @@ type AnthropicProvider struct {
 }
 
 // AnthropicRequest represents the request payload for Anthropic API
+
 // AnthropicTool represents a tool definition in Anthropic format
 type AnthropicTool struct {
 	Name        string                 `json:"name"`
@@ -169,7 +171,7 @@ func (p *AnthropicProvider) Generate(messages []Message, tools []ToolDefinition)
 	}
 
 	if response.Error != nil {
-		return "", nil, 0, fmt.Errorf("Anthropic API error: %s", response.Error.Message)
+		return "", nil, 0, fmt.Errorf("anthropic API error: %s", response.Error.Message)
 	}
 
 	tokensUsed := response.Usage.InputTokens + response.Usage.OutputTokens

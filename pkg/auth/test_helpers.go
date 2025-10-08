@@ -1,3 +1,4 @@
+// Package auth provides authentication and authorization.
 package auth
 
 import (
@@ -119,7 +120,7 @@ func setupTestValidator(t testing.TB) (*JWTValidator, *rsa.PrivateKey, string, s
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(keysetJSON)
+		_, _ = w.Write(keysetJSON)
 	}))
 
 	jwksURL := server.URL + "/.well-known/jwks.json"

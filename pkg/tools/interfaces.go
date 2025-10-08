@@ -8,6 +8,7 @@ import (
 // ============================================================================
 // TOOL SYSTEM INTERFACES
 // ============================================================================
+
 // ToolInfo represents metadata about a tool
 type ToolInfo struct {
 	Name        string          `json:"name"`

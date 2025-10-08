@@ -1,3 +1,4 @@
+// Package auth provides authentication and authorization.
 package auth
 
 import (
@@ -122,5 +123,5 @@ func (v *JWTValidator) ValidateToken(ctx context.Context, tokenString string) (i
 // Close stops the auto-refresh goroutine
 func (v *JWTValidator) Close() {
 	// The cache doesn't have an explicit close method
-	// The goroutine will stop when the context is cancelled
+	// The goroutine will stop when the context is canceled
 }

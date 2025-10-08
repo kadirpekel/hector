@@ -207,7 +207,7 @@ func TestClient_Do_Success(t *testing.T) {
 	// Create a test server that returns success
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("success"))
+		_, _ = w.Write([]byte("success"))
 	}))
 	defer server.Close()
 
@@ -248,7 +248,7 @@ func TestClient_Do_RetryableError(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		} else {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("success after retry"))
+			_, _ = w.Write([]byte("success after retry"))
 		}
 	}))
 	defer server.Close()
@@ -293,8 +293,7 @@ func TestClient_Do_MaxRetriesExceeded(t *testing.T) {
 	}
 	if resp == nil {
 		t.Error("Do() response = nil, want non-nil")
-	}
-	if resp.StatusCode != http.StatusInternalServerError {
+	} else if resp.StatusCode != http.StatusInternalServerError {
 		t.Errorf("Do() status code = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
 	}
 
@@ -328,7 +327,7 @@ func TestClient_Do_RateLimitWithRetryAfter(t *testing.T) {
 			w.WriteHeader(http.StatusTooManyRequests)
 		} else {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("success after rate limit"))
+			_, _ = w.Write([]byte("success after rate limit"))
 		}
 	}))
 	defer server.Close()

@@ -2,7 +2,6 @@ package llms
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/registry"
@@ -60,7 +59,7 @@ type StructuredOutputProvider interface {
 // LLMRegistry manages LLM provider instances
 type LLMRegistry struct {
 	*registry.BaseRegistry[LLMProvider]
-	mu sync.RWMutex
+	// mu sync.RWMutex // Reserved for future use
 }
 
 // NewLLMRegistry creates a new LLM registry

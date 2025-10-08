@@ -364,7 +364,7 @@ func (s *Server) handleTaskCancel(w http.ResponseWriter, r *http.Request, agentI
 	// Parse optional cancel reason
 	var params TaskCancelParams
 	if r.Body != nil {
-		json.NewDecoder(r.Body).Decode(&params)
+		_ = json.NewDecoder(r.Body).Decode(&params)
 	}
 
 	s.mu.Lock()
@@ -809,7 +809,7 @@ func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request, ses
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 // loggingMiddleware logs HTTP requests

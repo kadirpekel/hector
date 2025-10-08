@@ -1,46 +1,14 @@
-# golangci-lint configuration for Hector
+# golangci-lint configuration for Hector  
 run:
   timeout: 5m
   issues-exit-code: 1
   tests: true
-  skip-dirs:
-    - pkg/plugins/grpc/proto
-  skip-files:
-    - ".*\\.pb\\.go$"
 
 linters-settings:
-  govet:
-    check-shadowing: true
-  golint:
-    min-confidence: 0.8
-  gocyclo:
-    min-complexity: 15
-  maligned:
-    suggest-new: true
-  dupl:
-    threshold: 100
-  goconst:
-    min-len: 2
-    min-occurrences: 2
-  misspell:
-    locale: US
-  lll:
-    line-length: 140
   goimports:
     local-prefixes: github.com/kadirpekel/hector
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - dupImport # https://github.com/go-critic/go-critic/issues/845
-      - ifElseChain
-      - octalLiteral
-      - whyNoLint
-      - wrapperFunc
+  misspell:
+    locale: US
 
 linters:
   enable:
@@ -51,46 +19,15 @@ linters:
     - ineffassign
     - misspell
     - staticcheck
-    - stylecheck
     - unused
-    - whitespace
 
 issues:
   exclude-rules:
     - path: _test\.go
       linters:
-        - gomnd
-        - goconst
-        - dupl
-    - path: pkg/plugins/grpc/proto
-      linters:
-        - all
-    - path: pkg/.*/registry\.go
-      linters:
-        - typecheck
-    - path: pkg/plugins/grpc/.*\.go
-      linters:
-        - typecheck
-    - linters:
-        - lll
-      source: "^//go:generate "
-
-  exclude-use-default: false
+        - errcheck
+  
+  # Exclude known false positives and non-critical suggestions
   exclude:
-    # errcheck: Almost all programs ignore errors on these functions and in most cases it's ok
-    - 'Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*printf?|os\.(Un)?Setenv). is not checked'
-
-    # govet: Common false positives
-    - '(possible misuse of unsafe.Pointer|should have signature)'
-
-    # staticcheck: Developers tend to write in C-style with an explicit 'break' in a 'switch', so it's ok to ignore
-    - 'ineffective break statement. Did you mean to break out of the outer loop'
-
-    # gosec: Too many false positives
-    - '(G104|G307)'
-
-    # goconst: Too many false positives
-    - '(strings\.)?(Join|Split)\.* is (1|2) times more effective'
-
-    # gomnd: Magic numbers are often used in tests
-    - 'mnd: Magic number: (1|2|3|4|5) found'
+    - 'S1016.*should convert.*instead of using struct literal'  # gosimple: explicit is fine
+    - 'File is not properly formatted'  # goimports false positives

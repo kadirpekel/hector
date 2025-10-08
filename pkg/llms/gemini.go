@@ -1,3 +1,4 @@
+// Package llms provides LLM provider implementations.
 package llms
 
 import (
@@ -100,7 +101,7 @@ type GeminiError struct {
 // NewGeminiProviderFromConfig creates a new Gemini provider from configuration
 func NewGeminiProviderFromConfig(cfg *config.LLMProviderConfig) (*GeminiProvider, error) {
 	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("Gemini API key is required")
+		return nil, fmt.Errorf("gemini API key is required")
 	}
 
 	return &GeminiProvider{
@@ -129,7 +130,7 @@ func (p *GeminiProvider) Generate(messages []Message, tools []ToolDefinition) (s
 
 	resp, err := p.httpClient.Do(httpReq)
 	if err != nil {
-		return "", nil, 0, fmt.Errorf("Gemini API request failed: %w", err)
+		return "", nil, 0, fmt.Errorf("gemini API request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -150,7 +151,7 @@ func (p *GeminiProvider) Generate(messages []Message, tools []ToolDefinition) (s
 
 	if geminiResp.Error != nil {
 		log.Printf("[GEMINI DEBUG] Gemini returned error: %+v\n", geminiResp.Error)
-		return "", nil, 0, fmt.Errorf("Gemini API error: %s", geminiResp.Error.Message)
+		return "", nil, 0, fmt.Errorf("gemini API error: %s", geminiResp.Error.Message)
 	}
 
 	if len(geminiResp.Candidates) == 0 {
@@ -196,7 +197,7 @@ func (p *GeminiProvider) GenerateStreaming(messages []Message, tools []ToolDefin
 		if resp.StatusCode != http.StatusOK {
 			// Read error response body
 			bodyBytes, _ := io.ReadAll(resp.Body)
-			err := fmt.Errorf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+			err := fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
 			log.Printf("[GEMINI ERROR] %v\n", err)
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return
@@ -224,7 +225,7 @@ func (p *GeminiProvider) GenerateStructured(messages []Message, tools []ToolDefi
 
 	resp, err := p.httpClient.Do(httpReq)
 	if err != nil {
-		return "", nil, 0, fmt.Errorf("Gemini API request failed: %w", err)
+		return "", nil, 0, fmt.Errorf("gemini API request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -239,7 +240,7 @@ func (p *GeminiProvider) GenerateStructured(messages []Message, tools []ToolDefi
 	}
 
 	if geminiResp.Error != nil {
-		return "", nil, 0, fmt.Errorf("Gemini API error: %s", geminiResp.Error.Message)
+		return "", nil, 0, fmt.Errorf("gemini API error: %s", geminiResp.Error.Message)
 	}
 
 	return p.parseResponse(&geminiResp)
@@ -278,7 +279,7 @@ func (p *GeminiProvider) GenerateStructuredStreaming(messages []Message, tools [
 		if resp.StatusCode != http.StatusOK {
 			// Read error response body
 			bodyBytes, _ := io.ReadAll(resp.Body)
-			err := fmt.Errorf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+			err := fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
 			log.Printf("[GEMINI ERROR] %v\n", err)
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return

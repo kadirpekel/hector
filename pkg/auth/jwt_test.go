@@ -41,7 +41,7 @@ func TestNewJWTValidator(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(keysetJSON)
+		_, _ = w.Write(keysetJSON)
 	}))
 	defer server.Close()
 
@@ -155,7 +155,7 @@ func TestJWTValidator_ValidateToken(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(keysetJSON)
+		_, _ = w.Write(keysetJSON)
 	}))
 	defer server.Close()
 
@@ -279,11 +279,11 @@ func TestJWTValidator_ValidateToken(t *testing.T) {
 			if tt.name == "expired_token" {
 				// Create expired token manually
 				token := jwt.New()
-				token.Set(jwt.IssuerKey, tt.issuer)
-				token.Set(jwt.AudienceKey, tt.audience)
-				token.Set(jwt.SubjectKey, tt.subject)
-				token.Set(jwt.IssuedAtKey, time.Now().Add(-2*time.Hour))
-				token.Set(jwt.ExpirationKey, time.Now().Add(-1*time.Hour)) // Expired 1 hour ago
+				_ = token.Set(jwt.IssuerKey, tt.issuer)
+				_ = token.Set(jwt.AudienceKey, tt.audience)
+				_ = token.Set(jwt.SubjectKey, tt.subject)
+				_ = token.Set(jwt.IssuedAtKey, time.Now().Add(-2*time.Hour))
+				_ = token.Set(jwt.ExpirationKey, time.Now().Add(-1*time.Hour)) // Expired 1 hour ago
 
 				key, err := jwk.FromRaw(privateKey)
 				if err != nil {
@@ -365,7 +365,7 @@ func TestJWTValidator_ValidateToken_InvalidToken(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(keysetJSON)
+		_, _ = w.Write(keysetJSON)
 	}))
 	defer server.Close()
 

@@ -152,7 +152,7 @@ func TestAnthropicProvider_Generate_Success(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -227,7 +227,7 @@ func TestAnthropicProvider_Generate_WithTools(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -289,7 +289,7 @@ func TestAnthropicProvider_Generate_HTTPError(t *testing.T) {
 	// Create a mock server that returns an error
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
+		_, _ = w.Write([]byte("Internal Server Error"))
 	}))
 	defer server.Close()
 
@@ -323,7 +323,7 @@ func TestAnthropicProvider_Generate_InvalidJSON(t *testing.T) {
 	// Create a mock server that returns invalid JSON
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("invalid json"))
+		_, _ = w.Write([]byte("invalid json"))
 	}))
 	defer server.Close()
 
@@ -397,7 +397,7 @@ data: {"type": "message_stop"}`,
 		}
 
 		for _, chunk := range chunks {
-			w.Write([]byte(chunk + "\n\n"))
+			_, _ = w.Write([]byte(chunk + "\n\n"))
 		}
 	}))
 	defer server.Close()
@@ -454,7 +454,7 @@ func TestAnthropicProvider_GenerateStreaming_Error(t *testing.T) {
 	// Create a mock server that returns an error
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
+		_, _ = w.Write([]byte("Internal Server Error"))
 	}))
 	defer server.Close()
 
@@ -521,7 +521,7 @@ func TestAnthropicProvider_WithCustomHTTPClient(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 

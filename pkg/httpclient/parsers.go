@@ -38,10 +38,10 @@ func ParseOpenAIRateLimitHeaders(headers http.Header) RateLimitInfo {
 
 	// Parse remaining counts
 	if remaining := headers.Get("x-ratelimit-remaining-requests"); remaining != "" {
-		fmt.Sscanf(remaining, "%d", &info.RequestsRemaining)
+		_, _ = fmt.Sscanf(remaining, "%d", &info.RequestsRemaining)
 	}
 	if remaining := headers.Get("x-ratelimit-remaining-tokens"); remaining != "" {
-		fmt.Sscanf(remaining, "%d", &info.TokensRemaining)
+		_, _ = fmt.Sscanf(remaining, "%d", &info.TokensRemaining)
 	}
 
 	return info
@@ -79,13 +79,13 @@ func ParseAnthropicRateLimitHeaders(headers http.Header) RateLimitInfo {
 
 	// Parse remaining counts
 	if remaining := headers.Get("anthropic-ratelimit-requests-remaining"); remaining != "" {
-		fmt.Sscanf(remaining, "%d", &info.RequestsRemaining)
+		_, _ = fmt.Sscanf(remaining, "%d", &info.RequestsRemaining)
 	}
 	if remaining := headers.Get("anthropic-ratelimit-input-tokens-remaining"); remaining != "" {
-		fmt.Sscanf(remaining, "%d", &info.InputTokensRemaining)
+		_, _ = fmt.Sscanf(remaining, "%d", &info.InputTokensRemaining)
 	}
 	if remaining := headers.Get("anthropic-ratelimit-output-tokens-remaining"); remaining != "" {
-		fmt.Sscanf(remaining, "%d", &info.OutputTokensRemaining)
+		_, _ = fmt.Sscanf(remaining, "%d", &info.OutputTokensRemaining)
 	}
 
 	return info

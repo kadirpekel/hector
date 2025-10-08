@@ -164,8 +164,8 @@ func TestLLMRegistry_Count(t *testing.T) {
 	provider1 := &MockLLMProvider{name: "provider1"}
 	provider2 := &MockLLMProvider{name: "provider2"}
 
-	registry.RegisterLLM("provider1", provider1)
-	registry.RegisterLLM("provider2", provider2)
+	_ = registry.RegisterLLM("provider1", provider1)
+	_ = registry.RegisterLLM("provider2", provider2)
 
 	// Should now be 2
 	count = registry.BaseRegistry.Count()
@@ -179,7 +179,7 @@ func TestLLMRegistry_Clear(t *testing.T) {
 
 	// Register a provider
 	provider := &MockLLMProvider{name: "test-provider"}
-	registry.RegisterLLM("test-provider", provider)
+	_ = registry.RegisterLLM("test-provider", provider)
 
 	// Clear the registry
 	registry.BaseRegistry.Clear()

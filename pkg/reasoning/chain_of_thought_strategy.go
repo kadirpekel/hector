@@ -57,10 +57,10 @@ func (s *ChainOfThoughtStrategy) ShouldStop(text string, toolCalls []llms.ToolCa
 	return false
 }
 
-// allTodosComplete checks if all todos are marked as completed or cancelled
+// allTodosComplete checks if all todos are marked as completed or canceled
 func (s *ChainOfThoughtStrategy) allTodosComplete(todos []tools.TodoItem) bool {
 	for _, todo := range todos {
-		if todo.Status != "completed" && todo.Status != "cancelled" {
+		if todo.Status != "completed" && todo.Status != "canceled" {
 			return false
 		}
 	}
@@ -285,7 +285,7 @@ func (s *ChainOfThoughtStrategy) displayTodos(todos []tools.TodoItem, outputCh c
 			status = "🔄"
 		case "completed":
 			status = "✅"
-		case "cancelled":
+		case "canceled":
 			status = "❌"
 		default:
 			status = "○"

@@ -158,8 +158,8 @@ func TestLocalToolSource_ListTools(t *testing.T) {
 	todoTool := NewTodoToolForTesting()
 	commandTool := NewCommandToolForTesting()
 
-	source.RegisterTool(todoTool)
-	source.RegisterTool(commandTool)
+	_ = source.RegisterTool(todoTool)
+	_ = source.RegisterTool(commandTool)
 
 	// Should now have 2 tools
 	tools = source.ListTools()
@@ -197,7 +197,7 @@ func TestLocalToolSource_GetTool(t *testing.T) {
 
 	// Register a tool
 	tool := NewTodoToolForTesting()
-	source.RegisterTool(tool)
+	_ = source.RegisterTool(tool)
 
 	// Test getting existing tool
 	registeredTool, exists := source.GetTool("todo_write")
@@ -226,7 +226,7 @@ func TestLocalToolSource_RemoveTool(t *testing.T) {
 
 	// Register a tool
 	tool := NewTodoToolForTesting()
-	source.RegisterTool(tool)
+	_ = source.RegisterTool(tool)
 
 	// Verify tool is registered
 	_, exists := source.GetTool("todo_write")
@@ -279,13 +279,13 @@ func TestLocalToolSource_Concurrency(t *testing.T) {
 
 	go func() {
 		tool := NewTodoToolForTesting()
-		source.RegisterTool(tool)
+		_ = source.RegisterTool(tool)
 		done <- true
 	}()
 
 	go func() {
 		tool := NewCommandToolForTesting()
-		source.RegisterTool(tool)
+		_ = source.RegisterTool(tool)
 		done <- true
 	}()
 

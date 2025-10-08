@@ -324,7 +324,7 @@ func (a *Agent) execute(
 			// Check context cancellation
 			select {
 			case <-ctx.Done():
-				outputCh <- fmt.Sprintf("\n⚠️  Cancelled: %v\n", ctx.Err())
+				outputCh <- fmt.Sprintf("\n⚠️  Canceled: %v\n", ctx.Err())
 				return
 			default:
 			}
@@ -439,7 +439,7 @@ func (a *Agent) execute(
 					assessment, err := reasoning.AssessTaskCompletion(ctx, input, state.AssistantResponse.String(), a.services)
 					if err == nil && cfg.ShowDebugInfo {
 						// Display completion assessment
-						outputCh <- fmt.Sprintf("\033[90m\n🎯 **Completion Assessment:**\n")
+						outputCh <- "\033[90m\n🎯 **Completion Assessment:**\n"
 						outputCh <- fmt.Sprintf("  - Complete: %v (%.0f%% confident)\n", assessment.IsComplete, assessment.Confidence*100)
 						outputCh <- fmt.Sprintf("  - Quality: %s\n", assessment.Quality)
 						if len(assessment.MissingActions) > 0 {
@@ -483,6 +483,7 @@ func (a *Agent) execute(
 // ============================================================================
 
 // isRetryableError checks if an error is transient and worth retrying
+// nolint:unused // Reserved for future use
 func (a *Agent) isRetryableError(err error) bool {
 	if err == nil {
 		return false
@@ -608,11 +609,11 @@ func (a *Agent) executeTools(
 		if err != nil {
 			resultContent = fmt.Sprintf("Error: %v", err)
 			if cfg.ShowToolExecution {
-				outputCh <- fmt.Sprintf(" ❌\n")
+				outputCh <- " ❌\n"
 			}
 		} else {
 			if cfg.ShowToolExecution {
-				outputCh <- fmt.Sprintf(" ✅\n")
+				outputCh <- " ✅\n"
 			}
 		}
 

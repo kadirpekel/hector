@@ -986,12 +986,12 @@ func (ds *DocumentStore) handleFileEvent(event fsnotify.Event) {
 	case event.Op&fsnotify.Create == fsnotify.Create:
 		operation = OperationCreate
 		if info, err := os.Stat(event.Name); err == nil {
-			ds.indexDocument(event.Name, info)
+			_ = ds.indexDocument(event.Name, info)
 		}
 	case event.Op&fsnotify.Write == fsnotify.Write:
 		operation = OperationModify
 		if info, err := os.Stat(event.Name); err == nil {
-			ds.indexDocument(event.Name, info)
+			_ = ds.indexDocument(event.Name, info)
 		}
 	case event.Op&fsnotify.Remove == fsnotify.Remove:
 		operation = OperationDelete
@@ -1151,7 +1151,7 @@ func UnregisterDocumentStore(name string) {
 	if store, exists := globalDocumentStoreRegistry.stores[name]; exists {
 		// Stop file watching if active
 		if store.status.IsWatching {
-			store.StopWatching()
+			_ = store.StopWatching()
 		}
 		// Close the store
 		store.Close()

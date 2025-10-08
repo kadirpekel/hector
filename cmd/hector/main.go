@@ -128,19 +128,19 @@ func parseArgs() *CLIArgs {
 
 	switch command {
 	case "serve":
-		serveCmd.Parse(os.Args[2:])
+		_ = serveCmd.Parse(os.Args[2:])
 		args.Command = CommandServe
 		args.ConfigFile = *serveConfig
 		args.Debug = *serveDebug
 
 	case "list":
-		listCmd.Parse(os.Args[2:])
+		_ = listCmd.Parse(os.Args[2:])
 		args.Command = CommandList
 		args.ServerURL = resolveServerURL(*listServer)
 		args.Token = *listToken
 
 	case "info":
-		infoCmd.Parse(os.Args[2:])
+		_ = infoCmd.Parse(os.Args[2:])
 		if len(infoCmd.Args()) < 1 {
 			fatalf("Usage: hector info <agent> [--server URL]")
 		}
@@ -149,7 +149,7 @@ func parseArgs() *CLIArgs {
 		args.Token = *infoToken
 
 	case "call":
-		callCmd.Parse(os.Args[2:])
+		_ = callCmd.Parse(os.Args[2:])
 		if len(callCmd.Args()) < 2 {
 			fatalf("Usage: hector call <agent> \"prompt\" [--server URL]")
 		}
@@ -160,7 +160,7 @@ func parseArgs() *CLIArgs {
 		args.Stream = *callStream
 
 	case "chat":
-		chatCmd.Parse(os.Args[2:])
+		_ = chatCmd.Parse(os.Args[2:])
 		if len(chatCmd.Args()) < 1 {
 			fatalf("Usage: hector chat <agent> [--server URL]")
 		}

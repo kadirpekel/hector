@@ -287,7 +287,8 @@ func TestTodoTool_GetTodos_JSONSerializable(t *testing.T) {
 	}
 }
 
-// Helper function to check if string contains substring
+// contains is a helper function to check if string contains substring
+// nolint:unused
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }

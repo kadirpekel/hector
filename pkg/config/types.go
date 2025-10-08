@@ -37,7 +37,7 @@ type PluginDiscoveryConfig struct {
 
 // SetDefaults sets default values for plugin discovery config
 func (c *PluginDiscoveryConfig) SetDefaults() {
-	if c.Paths == nil || len(c.Paths) == 0 {
+	if len(c.Paths) == 0 {
 		c.Paths = []string{"./plugins", "~/.hector/plugins"}
 	}
 	// Enabled defaults to true if not explicitly set (checked elsewhere)

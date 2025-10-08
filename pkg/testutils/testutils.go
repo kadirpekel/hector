@@ -102,7 +102,7 @@ func TestContext() context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	// Note: We don't call cancel here because this is a test utility
 	// that returns a context for immediate use. The context will be
-	// automatically cancelled when the timeout expires.
+	// automatically canceled when the timeout expires.
 	_ = cancel // Explicitly ignore to satisfy linter
 	return ctx
 }
@@ -112,7 +112,7 @@ func TestContextWithTimeout(timeout time.Duration) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	// Note: We don't call cancel here because this is a test utility
 	// that returns a context for immediate use. The context will be
-	// automatically cancelled when the timeout expires.
+	// automatically canceled when the timeout expires.
 	_ = cancel // Explicitly ignore to satisfy linter
 	return ctx
 }

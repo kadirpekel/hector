@@ -3,7 +3,6 @@ package databases
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/registry"
@@ -51,7 +50,7 @@ type SearchResult struct {
 // DatabaseRegistry manages database provider instances
 type DatabaseRegistry struct {
 	*registry.BaseRegistry[DatabaseProvider]
-	mu sync.RWMutex
+	// mu sync.RWMutex // Reserved for future use
 }
 
 // NewDatabaseRegistry creates a new database registry

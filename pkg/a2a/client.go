@@ -634,7 +634,7 @@ func (c *Client) parseSSEStream(ctx context.Context, resp *http.Response, taskID
 		}
 
 		if err := scanner.Err(); err != nil && ctx.Err() == nil {
-			// Send error event if context not cancelled
+			// Send error event if context not canceled
 			eventCh <- StreamEvent{
 				Type:      StreamEventTypeStatus,
 				TaskID:    taskID,

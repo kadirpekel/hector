@@ -10,7 +10,7 @@ import (
 	"github.com/kadirpekel/hector/pkg/tools"
 )
 
-// NewAgentServicesWithConfig creates agent services with all dependencies wired up
+// NewAgentServices creates agent services with all dependencies wired up
 // Returns the configured agent services
 func NewAgentServices(agentConfig *config.AgentConfig, componentManager *component.ComponentManager) (reasoning.AgentServices, error) {
 	if agentConfig == nil {

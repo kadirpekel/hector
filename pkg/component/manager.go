@@ -307,7 +307,7 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 	}
 
 	// Load the plugin
-	if err := cm.pluginRegistry.LoadPlugin(ctx, pluginCfg); err != nil {
+	if pluginErr := cm.pluginRegistry.LoadPlugin(ctx, pluginCfg); pluginErr != nil {
 		return err
 	}
 

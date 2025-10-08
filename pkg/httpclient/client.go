@@ -1,3 +1,4 @@
+// Package httpclient provides HTTP client utilities with retry logic.
 package httpclient
 
 import (

@@ -33,7 +33,7 @@ func TestJWTValidator_HTTPMiddleware(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 
 	middleware := validator.HTTPMiddleware(testHandler)
@@ -91,11 +91,11 @@ func TestJWTValidator_HTTPMiddleware(t *testing.T) {
 			setupToken: func() string {
 				// Create expired token
 				token := jwt.New()
-				token.Set(jwt.IssuerKey, issuer)
-				token.Set(jwt.AudienceKey, audience)
-				token.Set(jwt.SubjectKey, "test-user-123")
-				token.Set(jwt.IssuedAtKey, time.Now().Add(-2*time.Hour))
-				token.Set(jwt.ExpirationKey, time.Now().Add(-1*time.Hour)) // Expired 1 hour ago
+				_ = token.Set(jwt.IssuerKey, issuer)
+				_ = token.Set(jwt.AudienceKey, audience)
+				_ = token.Set(jwt.SubjectKey, "test-user-123")
+				_ = token.Set(jwt.IssuedAtKey, time.Now().Add(-2*time.Hour))
+				_ = token.Set(jwt.ExpirationKey, time.Now().Add(-1*time.Hour)) // Expired 1 hour ago
 
 				key, err := jwk.FromRaw(privateKey)
 				if err != nil {
@@ -243,7 +243,7 @@ func TestRequireRole(t *testing.T) {
 	// Test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Access granted"))
+		_, _ = w.Write([]byte("Access granted"))
 	})
 
 	tests := []struct {
@@ -328,7 +328,7 @@ func TestRequireTenant(t *testing.T) {
 	// Test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Access granted"))
+		_, _ = w.Write([]byte("Access granted"))
 	})
 
 	tests := []struct {
@@ -414,7 +414,7 @@ func TestRequireRole_WithoutToken(t *testing.T) {
 	// Test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Access granted"))
+		_, _ = w.Write([]byte("Access granted"))
 	})
 
 	// Create middleware
@@ -443,7 +443,7 @@ func TestRequireTenant_WithoutToken(t *testing.T) {
 	// Test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Access granted"))
+		_, _ = w.Write([]byte("Access granted"))
 	})
 
 	// Create middleware

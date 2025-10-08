@@ -246,7 +246,7 @@ func executeChatCommand(agentURL string, token string) error {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), sessionCleanupTimeout)
 		defer cancel()
-		client.DeleteSession(ctx, baseURL, session.ID)
+		_ = client.DeleteSession(ctx, baseURL, session.ID)
 	}()
 
 	scanner := os.Stdin
@@ -284,7 +284,7 @@ func executeChatCommand(agentURL string, token string) error {
 				}
 				// Delete old session
 				ctx, cancel := context.WithTimeout(context.Background(), sessionCleanupTimeout)
-				client.DeleteSession(ctx, baseURL, session.ID)
+				_ = client.DeleteSession(ctx, baseURL, session.ID)
 				cancel()
 				// Use new session
 				session = newSession

@@ -183,14 +183,14 @@ func TestRetryableError_IsRetryable(t *testing.T) {
 
 func TestRetryableError_ErrorInterface(t *testing.T) {
 	// Test that RetryableError implements the error interface
-	var err error = &RetryableError{
+	err := &RetryableError{
 		StatusCode: 429,
 		Message:    "Rate limit exceeded",
 		RetryAfter: 30 * time.Second,
 		Err:        errors.New("underlying error"),
 	}
 
-	if err == nil {
+	if err.Error() == "" {
 		t.Error("RetryableError should implement error interface")
 	}
 

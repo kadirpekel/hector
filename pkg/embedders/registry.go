@@ -2,7 +2,6 @@ package embedders
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/registry"
@@ -34,7 +33,7 @@ type EmbedderProvider interface {
 // EmbedderRegistry manages embedder provider instances
 type EmbedderRegistry struct {
 	*registry.BaseRegistry[EmbedderProvider]
-	mu sync.RWMutex
+	// mu sync.RWMutex // Reserved for future use
 }
 
 // NewEmbedderRegistry creates a new embedder registry

@@ -36,14 +36,18 @@ type (
 	AgentConfig   = config.AgentConfig
 	AgentRegistry = agent.AgentRegistry
 
-	// A2A types
-	A2AAgent     = agent.A2AAgent
-	A2AServer    = a2a.Server
-	A2AClient    = a2a.Client
+	// A2AAgent represents an agent-to-agent communication agent
+	A2AAgent = agent.A2AAgent
+	// A2AServer is the A2A protocol server
+	A2AServer = a2a.Server
+	// A2AClient is the A2A protocol client
+	A2AClient = a2a.Client
+	// ServerConfig configures the A2A server
 	ServerConfig = a2a.ServerConfig
+	// ClientConfig configures the A2A client
 	ClientConfig = a2a.ClientConfig
 
-	// Configuration types
+	// Config is the main Hector configuration
 	Config = config.Config
 )
 

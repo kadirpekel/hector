@@ -206,8 +206,8 @@ func TestToolRegistry_Count(t *testing.T) {
 		Name:       "tool2",
 	}
 
-	registry.BaseRegistry.Register("tool1", entry1)
-	registry.BaseRegistry.Register("tool2", entry2)
+	_ = registry.BaseRegistry.Register("tool1", entry1)
+	_ = registry.BaseRegistry.Register("tool2", entry2)
 
 	// Should now be 2
 	count = registry.BaseRegistry.Count()
@@ -228,7 +228,7 @@ func TestToolRegistry_Clear(t *testing.T) {
 		Name:       "test-tool",
 	}
 
-	registry.BaseRegistry.Register("test-tool", entry)
+	_ = registry.BaseRegistry.Register("test-tool", entry)
 
 	// Clear the registry
 	registry.BaseRegistry.Clear()

@@ -280,7 +280,7 @@ func TestBaseRegistry_Concurrency(t *testing.T) {
 				ID:   fmt.Sprintf("concurrent-%d", i),
 				Name: fmt.Sprintf("Concurrent Item %d", i),
 			}
-			registry.Register(item.ID, item)
+			_ = registry.Register(item.ID, item)
 		}
 	}()
 

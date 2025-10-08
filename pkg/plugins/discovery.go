@@ -1,3 +1,4 @@
+// Package plugins provides plugin discovery and management.
 package plugins
 
 import (

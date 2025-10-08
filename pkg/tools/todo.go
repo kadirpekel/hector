@@ -23,7 +23,7 @@ type TodoTool struct {
 type TodoItem struct {
 	ID      string `json:"id"`
 	Content string `json:"content"`
-	Status  string `json:"status"` // "pending", "in_progress", "completed", "cancelled"
+	Status  string `json:"status"` // "pending", "in_progress", "completed", "canceled"
 }
 
 // TodoWriteRequest represents the parameters for todo_write
@@ -54,7 +54,7 @@ func (t *TodoTool) GetInfo() ToolInfo {
 			{
 				Name:        "todos",
 				Type:        "array",
-				Description: "Array of todo items. Each item has: id (string), content (string), status ('pending'|'in_progress'|'completed'|'cancelled')",
+				Description: "Array of todo items. Each item has: id (string), content (string), status ('pending'|'in_progress'|'completed'|'canceled')",
 				Required:    true,
 				Items: map[string]interface{}{
 					"type": "object",
@@ -69,7 +69,7 @@ func (t *TodoTool) GetInfo() ToolInfo {
 						},
 						"status": map[string]interface{}{
 							"type":        "string",
-							"enum":        []string{"pending", "in_progress", "completed", "cancelled"},
+							"enum":        []string{"pending", "in_progress", "completed", "canceled"},
 							"description": "Current status of the task",
 						},
 					},
@@ -237,7 +237,7 @@ func (t *TodoTool) generateSummary(sessionID string) string {
 		return "✅ No active todos"
 	}
 
-	var pending, inProgress, completed, cancelled int
+	var pending, inProgress, completed, canceled int
 	for _, todo := range todos {
 		switch todo.Status {
 		case "pending":
@@ -246,13 +246,13 @@ func (t *TodoTool) generateSummary(sessionID string) string {
 			inProgress++
 		case "completed":
 			completed++
-		case "cancelled":
-			cancelled++
+		case "canceled":
+			canceled++
 		}
 	}
 
-	summary := fmt.Sprintf("📋 Todo Summary: %d total (%d pending, %d in progress, %d completed, %d cancelled)\n\n",
-		len(todos), pending, inProgress, completed, cancelled)
+	summary := fmt.Sprintf("📋 Todo Summary: %d total (%d pending, %d in progress, %d completed, %d canceled)\n\n",
+		len(todos), pending, inProgress, completed, canceled)
 
 	// List all todos
 	for _, todo := range todos {
@@ -275,7 +275,7 @@ func (t *TodoTool) errorResult(message string, start time.Time) ToolResult {
 
 // isValidStatus checks if a status is valid
 func isValidStatus(status string) bool {
-	return status == "pending" || status == "in_progress" || status == "completed" || status == "cancelled"
+	return status == "pending" || status == "in_progress" || status == "completed" || status == "canceled"
 }
 
 // getStatusIcon returns an icon for a status
@@ -287,7 +287,7 @@ func getStatusIcon(status string) string {
 		return "🔄"
 	case "completed":
 		return "✅"
-	case "cancelled":
+	case "canceled":
 		return "❌"
 	default:
 		return "❓"
