@@ -57,10 +57,10 @@ type OpenAIStreamResponse struct {
 
 // OpenAIMessage represents a message in OpenAI's format
 type OpenAIMessage struct {
-	Role       string           `json:"role"`
-	Content    string           `json:"content,omitempty"`
-	ToolCalls  []OpenAIToolCall `json:"tool_calls,omitempty"`   // Tool calls from assistant
-	ToolCallID string           `json:"tool_call_id,omitempty"` // Tool result reference
+	Role       string            `json:"role"`
+	Content    *string           `json:"content"`                // Always present, can be empty string
+	ToolCalls  []OpenAIToolCall  `json:"tool_calls,omitempty"`   // Tool calls from assistant
+	ToolCallID string            `json:"tool_call_id,omitempty"` // Tool result reference
 }
 
 // Choice represents a response choice
@@ -208,7 +208,10 @@ func (p *OpenAIProvider) Generate(messages []Message, tools []ToolDefinition) (s
 	tokensUsed := response.Usage.TotalTokens
 
 	// Extract text content (may be empty if only tool calls)
-	text := choice.Message.Content
+	text := ""
+	if choice.Message.Content != nil {
+		text = *choice.Message.Content
+	}
 
 	// Check if model wants to call tools
 	var toolCalls []ToolCall
@@ -306,7 +309,10 @@ func (p *OpenAIProvider) GenerateStructured(messages []Message, tools []ToolDefi
 	tokensUsed := response.Usage.TotalTokens
 
 	// Extract text content (may be empty if only tool calls)
-	text := choice.Message.Content
+	text := ""
+	if choice.Message.Content != nil {
+		text = *choice.Message.Content
+	}
 
 	// Check if model wants to call tools
 	var toolCalls []ToolCall
@@ -372,9 +378,13 @@ func (p *OpenAIProvider) buildRequest(messages []Message, stream bool, tools []T
 	// Convert universal Message to OpenAI-specific message format
 	openaiMessages := make([]OpenAIMessage, len(messages))
 	for i, msg := range messages {
+		// OpenAI requires content to always be present (even if empty string)
+		// Using pointer to ensure it's always included in JSON, never null
+		content := msg.Content
+		
 		openaiMsg := OpenAIMessage{
 			Role:    msg.Role,
-			Content: msg.Content,
+			Content: &content, // Always include content, even if empty
 		}
 
 		// Handle tool calls (from assistant)

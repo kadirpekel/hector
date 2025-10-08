@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -116,12 +117,16 @@ func NewGeminiProviderFromConfig(cfg *config.LLMProviderConfig) (*GeminiProvider
 
 // Generate generates a response with function calling support
 func (p *GeminiProvider) Generate(messages []Message, tools []ToolDefinition) (string, []ToolCall, int, error) {
+	log.Printf("[GEMINI DEBUG] Generate called with %d messages, %d tools\n", len(messages), len(tools))
+
 	req := p.buildRequest(messages, tools, nil)
 
 	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent?key=%s",
 		p.config.Host, p.config.Model, p.config.APIKey)
 
 	reqBody, _ := json.Marshal(req)
+	log.Printf("[GEMINI DEBUG] Request body size: %d bytes\n", len(reqBody))
+
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(reqBody))
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("failed to create request: %w", err)
@@ -134,23 +139,32 @@ func (p *GeminiProvider) Generate(messages []Message, tools []ToolDefinition) (s
 	}
 	defer resp.Body.Close()
 
+	log.Printf("[GEMINI DEBUG] HTTP Status: %d\n", resp.StatusCode)
+
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	log.Printf("[GEMINI DEBUG] Response body size: %d bytes\n", len(respBody))
+
 	var geminiResp GeminiResponse
 	if err := json.Unmarshal(respBody, &geminiResp); err != nil {
+		log.Printf("[GEMINI DEBUG] Failed to parse response: %v\nBody: %s\n", err, string(respBody))
 		return "", nil, 0, fmt.Errorf("failed to parse Gemini response: %w", err)
 	}
 
 	if geminiResp.Error != nil {
+		log.Printf("[GEMINI DEBUG] Gemini returned error: %+v\n", geminiResp.Error)
 		return "", nil, 0, fmt.Errorf("Gemini API error: %s", geminiResp.Error.Message)
 	}
 
 	if len(geminiResp.Candidates) == 0 {
+		log.Printf("[GEMINI DEBUG] No candidates in response\n")
 		return "", nil, 0, fmt.Errorf("no candidates in response")
 	}
+
+	log.Printf("[GEMINI DEBUG] Candidates: %d\n", len(geminiResp.Candidates))
 
 	return p.parseResponse(&geminiResp)
 }
@@ -176,12 +190,23 @@ func (p *GeminiProvider) GenerateStreaming(messages []Message, tools []ToolDefin
 
 		httpReq.Header.Set("Content-Type", "application/json")
 
-		resp, err := http.DefaultClient.Do(httpReq)
+		// Use p.httpClient which has retry logic and backoff configured
+		resp, err := p.httpClient.Do(httpReq)
 		if err != nil {
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return
 		}
 		defer resp.Body.Close()
+
+		// Check for HTTP errors (rate limits, auth failures, etc.)
+		if resp.StatusCode != http.StatusOK {
+			// Read error response body
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			err := fmt.Errorf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+			log.Printf("[GEMINI ERROR] %v\n", err)
+			chunks <- StreamChunk{Type: "error", Error: err}
+			return
+		}
 
 		p.parseStreamingResponse(resp.Body, chunks)
 	}()
@@ -247,12 +272,23 @@ func (p *GeminiProvider) GenerateStructuredStreaming(messages []Message, tools [
 
 		httpReq.Header.Set("Content-Type", "application/json")
 
-		resp, err := http.DefaultClient.Do(httpReq)
+		// Use p.httpClient which has retry logic and backoff configured
+		resp, err := p.httpClient.Do(httpReq)
 		if err != nil {
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return
 		}
 		defer resp.Body.Close()
+
+		// Check for HTTP errors (rate limits, auth failures, etc.)
+		if resp.StatusCode != http.StatusOK {
+			// Read error response body
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			err := fmt.Errorf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+			log.Printf("[GEMINI ERROR] %v\n", err)
+			chunks <- StreamChunk{Type: "error", Error: err}
+			return
+		}
 
 		p.parseStreamingResponse(resp.Body, chunks)
 	}()
@@ -428,7 +464,12 @@ func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []ToolCall
 	var textParts []string
 	var toolCalls []ToolCall
 
-	for _, part := range candidate.Content.Parts {
+	// Debug logging
+	log.Printf("[GEMINI DEBUG] finishReason: %s, parts count: %d\n", candidate.FinishReason, len(candidate.Content.Parts))
+
+	for i, part := range candidate.Content.Parts {
+		log.Printf("[GEMINI DEBUG] Part %d: %+v\n", i, part)
+
 		// Extract text
 		if text, ok := part["text"].(string); ok {
 			textParts = append(textParts, text)
@@ -452,7 +493,10 @@ func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []ToolCall
 		tokens = resp.UsageMetadata.TotalTokenCount
 	}
 
-	return strings.Join(textParts, ""), toolCalls, tokens, nil
+	finalText := strings.Join(textParts, "")
+	log.Printf("[GEMINI DEBUG] Final text length: %d, tool calls: %d, tokens: %d\n", len(finalText), len(toolCalls), tokens)
+
+	return finalText, toolCalls, tokens, nil
 }
 
 // parseStreamingResponse parses streaming response chunks
@@ -460,35 +504,49 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 	scanner := bufio.NewScanner(body)
 	var accumulatedText strings.Builder
 	totalTokens := 0
+	lineCount := 0
+	chunkCount := 0
+
+	log.Printf("[GEMINI DEBUG STREAM] Starting to parse streaming response\n")
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		lineCount++
 
 		// Skip empty lines and non-data lines
 		if !strings.HasPrefix(line, "data: ") {
+			log.Printf("[GEMINI DEBUG STREAM] Line %d: skipped (not data: prefix)\n", lineCount)
 			continue
 		}
 
 		data := strings.TrimPrefix(line, "data: ")
+		log.Printf("[GEMINI DEBUG STREAM] Line %d: data length %d bytes\n", lineCount, len(data))
 
 		var resp GeminiResponse
 		if err := json.Unmarshal([]byte(data), &resp); err != nil {
+			log.Printf("[GEMINI DEBUG STREAM] Line %d: failed to parse JSON: %v\n", lineCount, err)
 			continue
 		}
 
 		if resp.Error != nil {
+			log.Printf("[GEMINI DEBUG STREAM] Error in response: %+v\n", resp.Error)
 			chunks <- StreamChunk{Type: "error", Error: fmt.Errorf("%s", resp.Error.Message)}
 			return
 		}
 
 		if len(resp.Candidates) > 0 {
 			candidate := resp.Candidates[0]
+			log.Printf("[GEMINI DEBUG STREAM] Line %d: finishReason=%s, parts=%d\n", lineCount, candidate.FinishReason, len(candidate.Content.Parts))
 
-			for _, part := range candidate.Content.Parts {
+			for i, part := range candidate.Content.Parts {
+				log.Printf("[GEMINI DEBUG STREAM] Part %d: %+v\n", i, part)
+
 				// Stream text
 				if text, ok := part["text"].(string); ok {
 					accumulatedText.WriteString(text)
 					chunks <- StreamChunk{Type: "text", Text: text}
+					chunkCount++
+					log.Printf("[GEMINI DEBUG STREAM] Sent text chunk %d: %d chars\n", chunkCount, len(text))
 				}
 
 				// Stream function calls
@@ -504,14 +562,21 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 							Arguments: args,
 						},
 					}
+					chunkCount++
+					log.Printf("[GEMINI DEBUG STREAM] Sent tool_call chunk %d: %s\n", chunkCount, name)
 				}
 			}
+		} else {
+			log.Printf("[GEMINI DEBUG STREAM] Line %d: NO CANDIDATES\n", lineCount)
 		}
 
 		if resp.UsageMetadata != nil {
 			totalTokens = resp.UsageMetadata.TotalTokenCount
+			log.Printf("[GEMINI DEBUG STREAM] Tokens: %d\n", totalTokens)
 		}
 	}
+
+	log.Printf("[GEMINI DEBUG STREAM] Done parsing. Lines: %d, Chunks sent: %d, Total tokens: %d\n", lineCount, chunkCount, totalTokens)
 
 	// Send done chunk
 	chunks <- StreamChunk{Type: "done", Tokens: totalTokens}

@@ -285,7 +285,7 @@ agents:
     reasoning:
       engine: "chain-of-thought"         # Simple, effective loop
       max_iterations: 99                 # Reasonable limit (like real Cursor)
-      show_debug_info: false             # Keep output clean
+      show_debug_info: true              # Show iteration info for debugging
       show_thinking: true                # Show grayed-out reflection (Cursor-style)
       enable_streaming: true             # Real-time output
       enable_structured_reflection: false # Keep it simple like Cursor
@@ -317,16 +317,20 @@ agents:
 llms:
   sonnet-llm:
     type: "gemini"
-    model: "gemini-2.0-flash-exp"      # Fast and capable
+    model: "gemini-2.0-flash-exp"      # Testing to fix premature exits
     api_key: "${GEMINI_API_KEY}"
     temperature: 0.7                   # Natural variation (like real Cursor)
     max_tokens: 8000                   # Enough for complex refactoring
     timeout: 120                       # 2 minutes for complex operations
     
-    # Alternative: Use OpenAI instead
-    # type: "openai"
+    # Alternative providers:
+    # type: "openai"  # Good balance of speed and quality
     # model: "gpt-4o"
     # api_key: "${OPENAI_API_KEY}"
+    #
+    # type: "anthropic"  # Most reliable but can be expensive
+    # model: "claude-sonnet-4-20250514"
+    # api_key: "${ANTHROPIC_API_KEY}"
 
 # ============================================================================
 # VECTOR DATABASE FOR SEMANTIC SEARCH
@@ -450,6 +454,13 @@ tools:
       - "wc"
       - "tree"
       - "echo"
+      - "mkdir"
+      - "touch"
+      - "rm"
+      - "cp"
+      - "mv"
+      - "chmod"
+      - "cd"
       
       # Version control
       - "git"
