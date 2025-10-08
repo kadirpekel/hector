@@ -239,6 +239,8 @@ Result: Created 3 tasks
 
 **Model Context Protocol (MCP)** is an open standard that enables agents to connect to external tools and data sources.
 
+> 🔥 **Want to add custom tools?** See **[Building Custom MCP Tools in 5 Minutes](MCP_CUSTOM_TOOLS.md)** - The fastest way to extend Hector with domain-specific capabilities.
+
 ### What is MCP?
 
 MCP is like a **universal adapter** for AI tools:
@@ -246,12 +248,14 @@ MCP is like a **universal adapter** for AI tools:
 - **Auto-discovery** - Tools self-describe their capabilities
 - **Provider ecosystem** - Composio, Mem0, Browserbase, custom servers
 - **Language-agnostic** - Python, TypeScript, Go, any language
+- **Build your own** - Custom tools in 5-10 minutes
 
 **Why MCP over custom integrations?**
 - ✅ **Zero custom code** - Just point to a URL
 - ✅ **150+ integrations** - Via providers like Composio
 - ✅ **Standardized** - One protocol for everything
 - ✅ **Community** - Growing ecosystem of MCP servers
+- ✅ **Fast custom tools** - Build in Python/TypeScript in minutes
 
 ### Quick Start
 
@@ -358,9 +362,13 @@ tools:
     description: "Custom business logic tools"
 ```
 
-### Building Custom MCP Servers
+> 📖 **[Complete Guide: Building Custom MCP Tools](MCP_CUSTOM_TOOLS.md)** - Real-world examples, best practices, deployment, and more.
+
+### Building Custom MCP Servers (Quick Overview)
 
 Create your own MCP server in **Python** or **TypeScript**.
+
+For a comprehensive guide with real-world examples, see **[MCP_CUSTOM_TOOLS.md](MCP_CUSTOM_TOOLS.md)**.
 
 #### Python Example
 

@@ -20,6 +20,9 @@ Complete guide to building single agents: prompts, tools, RAG, sessions, streami
 ### [Tools & Extensions](TOOLS.md)
 Comprehensive guide to Hector's tool system: built-in tools, MCP protocol, gRPC plugins, and custom integrations.
 
+### [Custom MCP Tools](MCP_CUSTOM_TOOLS.md) 🔥
+Build custom tools in 5 minutes with Python or TypeScript. Real-world examples, best practices, and deployment guide.
+
 ### [API Reference](API_REFERENCE.md)
 Complete A2A protocol API reference: HTTP endpoints, SSE streaming, request/response schemas, authentication, and client examples.
 
@@ -65,6 +68,9 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 
 **Add tools & integrations**
 → [Tools & Extensions Guide](TOOLS.md)
+
+**Build custom tools quickly**
+→ [Custom MCP Tools Guide](MCP_CUSTOM_TOOLS.md) 🔥
 
 **Connect to 150+ apps (MCP)**
 → [Tools - MCP Integration](TOOLS.md#mcp-integration)
@@ -116,6 +122,7 @@ Securing Hector with JWT token validation. Works with any OAuth2/OIDC provider (
 |----------|---------|
 | [Building Agents](AGENTS.md) | Complete single-agent guide (Start here) |
 | [Tools & Extensions](TOOLS.md) | Built-in tools, MCP, plugins |
+| [Custom MCP Tools](MCP_CUSTOM_TOOLS.md) | Build custom tools in 5 minutes 🔥 |
 | [Plugins](PLUGINS.md) | Plugin development guide (gRPC extensions) |
 | [API Reference](API_REFERENCE.md) | A2A protocol HTTP+JSON/SSE API |
 | [A2A Compliance](A2A_COMPLIANCE.md) | A2A specification compliance details |

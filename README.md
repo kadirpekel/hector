@@ -207,7 +207,7 @@ Hector provides a comprehensive feature set through pure YAML configuration:
 **Tools & Integrations**
 - Built-in tools - Command execution, file operations, search, todos
 - MCP Protocol - 150+ apps (GitHub, Slack, Gmail, Notion via Composio)
-- Custom tools - Add domain-specific capabilities
+- **Custom MCP tools** - Build your own in 5 minutes (Python/TypeScript) 🔥
 - Security controls - Command whitelisting, path restrictions, timeouts
 
 **RAG & Knowledge**
@@ -247,6 +247,61 @@ Hector provides a comprehensive feature set through pure YAML configuration:
 - SSE streaming - Real-time output per spec
 - Task management - Create, get status, cancel tasks
 - Session support - Multi-turn conversations
+
+---
+
+## Extend with Custom Tools in 5 Minutes
+
+Need domain-specific capabilities? Build a custom MCP server in minutes:
+
+```python
+# my_tools.py
+from mcp.server import Server
+import requests
+
+app = Server("my-tools")
+
+@app.tool()
+async def web_search(query: str, num_results: int = 5) -> str:
+    """Search the web"""
+    # Your implementation using any API
+    response = requests.get(f"https://api.search.com?q={query}")
+    return format_results(response.json())
+
+@app.tool()
+async def get_weather(city: str) -> str:
+    """Get current weather"""
+    response = requests.get(f"https://api.weather.com?city={city}")
+    data = response.json()
+    return f"Weather in {city}: {data['description']}, {data['temp']}°C"
+
+if __name__ == "__main__":
+    app.run(port=3000)
+```
+
+**Configure Hector:**
+```yaml
+tools:
+  my_tools:
+    type: "mcp"
+    enabled: true
+    server_url: "http://localhost:3000"
+
+agents:
+  assistant:
+    name: "Assistant with Custom Tools"
+    llm: "gpt-4o"
+    # Agent automatically gets web_search and get_weather tools!
+```
+
+**Use it:**
+```bash
+./hector call assistant "Search for 'AI frameworks' and tell me the weather in Tokyo"
+```
+
+**That's it!** No Hector code changes, just pure Python/TypeScript.
+
+**[📖 Full Guide: Building Custom MCP Tools →](docs/MCP_CUSTOM_TOOLS.md)**
 
 ---
 
@@ -442,6 +497,7 @@ export ANTHROPIC_API_KEY="sk-..."                # Anthropic authentication
 - **[Multi-Agent Orchestration](docs/ARCHITECTURE.md#orchestrator-pattern)** - Orchestration patterns
 - **[External Agents](docs/EXTERNAL_AGENTS.md)** - External agent integration
 - **[Tools & MCP](docs/TOOLS.md)** - Built-in tools and MCP protocol
+- **[Custom MCP Tools](docs/MCP_CUSTOM_TOOLS.md)** - Build custom tools in 5 minutes 🔥
 - **[Structured Output](docs/STRUCTURED_OUTPUT.md)** - Provider-aware JSON/XML/Enum output
 - **[Plugin Development](docs/PLUGINS.md)** - Custom LLMs, databases, tools
 
