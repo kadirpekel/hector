@@ -43,8 +43,11 @@ nav_external_links:
 # Footer content
 footer_content: "Copyright &copy; 2025 Hector Team. Licensed under AGPL-3.0."
 
-# Favicon and logo
-logo: "hector-gopher.png"
+# Site title and logo
+title: "Hector Docs"
+aux_links:
+  "GitHub":
+    - "https://github.com/kadirpekel/hector"
 
 # Back to top link
 back_to_top: true
