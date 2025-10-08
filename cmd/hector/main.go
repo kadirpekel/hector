@@ -108,7 +108,7 @@ func parseArgs() *CLIArgs {
 	callCmd := flag.NewFlagSet("call", flag.ExitOnError)
 	callServer := callCmd.String("server", "", "A2A server URL (default: localhost:8080)")
 	callToken := callCmd.String("token", "", "Authentication token")
-	callStream := callCmd.Bool("stream", false, "Enable streaming")
+	callStream := callCmd.Bool("stream", true, "Enable streaming (use --stream=false to disable)")
 
 	chatCmd := flag.NewFlagSet("chat", flag.ExitOnError)
 	chatServer := chatCmd.String("server", "", "A2A server URL (default: localhost:8080)")

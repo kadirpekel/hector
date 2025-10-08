@@ -515,17 +515,25 @@ func (a *Agent) callLLM(
 		// Streaming mode - capture streamed text for history
 		var streamedText strings.Builder
 		wrappedCh := make(chan string, 100)
+		done := make(chan struct{})
 
 		// Goroutine to capture and forward streamed text
 		go func() {
+			defer close(done)
 			for chunk := range wrappedCh {
 				streamedText.WriteString(chunk)
-				outputCh <- chunk
+				// Safely send to outputCh (might be closed)
+				select {
+				case outputCh <- chunk:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}()
 
 		toolCalls, tokens, err := llm.GenerateStreaming(messages, toolDefs, wrappedCh)
 		close(wrappedCh)
+		<-done // Wait for goroutine to finish
 
 		if err != nil {
 			return "", nil, 0, err
