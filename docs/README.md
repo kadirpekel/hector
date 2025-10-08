@@ -1,3 +1,9 @@
+---
+layout: default
+title: README
+nav_exclude: true
+---
+
 # Hector Documentation
 
 Complete documentation for Hector - Pure A2A-Native AI Agent Platform

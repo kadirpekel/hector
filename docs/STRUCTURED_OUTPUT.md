@@ -1,3 +1,11 @@
+---
+layout: default
+title: Structured Output
+nav_order: 6
+parent: Core Guides
+description: "Provider-aware JSON/XML/Enum output for reliable data extraction"
+---
+
 # Structured Output Guide
 
 Hector provides comprehensive structured output capabilities across all supported LLM providers (OpenAI, Anthropic, Gemini). This guide explains how to leverage provider-specific optimizations for consistent, reliable structured responses.

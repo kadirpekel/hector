@@ -1,3 +1,11 @@
+---
+layout: default
+title: Plugin Development
+nav_order: 4
+parent: Advanced
+description: "Build custom LLMs, databases, and tools via gRPC plugins"
+---
+
 # Plugin Development Guide
 
 ## Overview

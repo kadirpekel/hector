@@ -1,3 +1,11 @@
+---
+layout: default
+title: Contributing
+nav_order: 3
+parent: Reference
+description: "How to contribute to Hector development"
+---
+
 # Contributing to Hector
 
 Thank you for your interest in contributing to Hector! Since we're in alpha, this is a great time to help shape the project.

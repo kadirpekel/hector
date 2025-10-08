@@ -1,3 +1,11 @@
+---
+layout: default
+title: API Reference
+nav_order: 1
+parent: Reference
+description: "Complete A2A protocol HTTP/SSE API documentation"
+---
+
 # Hector A2A API Reference
 
 **A2A Protocol Implementation - HTTP+JSON/SSE API**

@@ -1,3 +1,11 @@
+---
+layout: default
+title: Auth0 Setup
+nav_order: 6
+parent: Advanced
+description: "Step-by-step Auth0 configuration for Hector authentication"
+---
+
 # Testing Hector Authentication with Auth0
 
 This guide walks you through testing Hector's JWT authentication using your Auth0 account.

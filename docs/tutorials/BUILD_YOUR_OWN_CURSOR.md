@@ -1,3 +1,11 @@
+---
+layout: default
+title: "Build Cursor-like Assistant"
+nav_order: 2
+parent: Tutorials
+description: "Step-by-step tutorial for building a powerful AI coding assistant with semantic search and chain-of-thought reasoning"
+---
+
 # Build Your Own Cursor-Like AI Coding Assistant in Pure YAML
 
 **TL;DR:** Modern AI coding assistants use well-crafted prompts, chain-of-thought reasoning, and semantic search to help developers write code. In this tutorial, you'll build a similar AI coding assistant using **only YAML configuration** - no code required.

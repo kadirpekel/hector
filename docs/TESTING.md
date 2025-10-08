@@ -1,3 +1,11 @@
+---
+layout: default
+title: Testing
+nav_order: 5
+parent: Advanced
+description: "Testing practices and quality assurance for Hector agents"
+---
+
 # Testing Guide
 
 This guide covers testing practices, strategies, and tools used in Hector development.

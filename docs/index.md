@@ -22,23 +22,138 @@ Build powerful AI agents in pure YAML. Compose single agents, orchestrate multi-
 
 ---
 
-## 🚀 Quick Start
+## What is Hector?
 
-<div class="code-example" markdown="1">
+Hector is a **declarative AI agent platform** that eliminates code from agent development. Unlike Python-based frameworks (LangChain, AutoGen, CrewAI), Hector uses **pure YAML configuration** to define complete agent systems.
 
-**New to Hector?** Start with our **[Getting Started](getting-started)** guide, then try these popular paths:
+### The Hector Advantage
 
-### For Beginners
-- **[Quick Start](QUICK_START)** - Install and run your first agent in 5 minutes
-- **[Building Agents](AGENTS)** - Learn the fundamentals step-by-step
+<div class="grid-container">
 
-### For LangChain Users  
-- **[LangChain vs Hector](tutorials/MULTI_AGENT_RESEARCH_PIPELINE)** - See 500+ lines of Python become 120 lines of YAML
-- **[Migration Guide](tutorials/MULTI_AGENT_RESEARCH_PIPELINE#the-dramatic-difference)** - Compare approaches side-by-side
+<div class="feature-card">
+  <h4>🎯 Zero Code Required</h4>
+  <p>Define agents, tools, prompts, and orchestration in pure YAML. No Python, no JavaScript, no complexity.</p>
+</div>
 
-### For Advanced Users
-- **[Multi-Agent Systems](ARCHITECTURE#multi-agent-orchestration-a2a-protocol)** - Orchestrate multiple agents
-- **[Custom Tools](MCP_CUSTOM_TOOLS)** - Build custom MCP tools in 5 minutes
+<div class="feature-card">
+  <h4>🌐 100% A2A Native</h4>
+  <p>Built on the <a href="https://a2a-protocol.org">Agent-to-Agent protocol</a> for true interoperability and standardization.</p>
+</div>
+
+<div class="feature-card">
+  <h4>🚀 Single & Multi-Agent</h4>
+  <p>From individual agents to complex orchestration. Scale naturally from simple to sophisticated.</p>
+</div>
+
+<div class="feature-card">
+  <h4>🔗 External Integration</h4>
+  <p>Connect remote A2A agents seamlessly. Build distributed agent networks effortlessly.</p>
+</div>
+
+<div class="feature-card">
+  <h4>⚡ Production Ready</h4>
+  <p>Authentication, streaming, sessions, monitoring. Built for enterprise from day one.</p>
+</div>
+
+<div class="feature-card">
+  <h4>🛠️ Extensible</h4>
+  <p>MCP protocol support, gRPC plugins. Add custom LLMs, databases, and tools easily.</p>
+</div>
+
+</div>
+
+---
+
+## See the Difference
+
+### Traditional Approach (LangChain)
+```python
+# 500+ lines across 8+ Python files
+from langchain.agents import Agent, AgentExecutor
+from langchain.tools import Tool
+from langchain.memory import ConversationBufferMemory
+from langchain.prompts import PromptTemplate
+# ... hundreds more lines of setup, state management, 
+# error handling, orchestration logic, etc.
+```
+
+### Hector Approach (Pure YAML)
+```yaml
+# 120 lines of YAML - same functionality
+agents:
+  research_coordinator:
+    name: "Research Coordinator"
+    llm: "gpt-4o"
+    reasoning:
+      engine: "supervisor"
+    tools: ["agent_call"]
+    
+  researcher:
+    name: "Web Researcher"
+    llm: "gpt-4o-mini"
+    tools: ["execute_command"]
+```
+
+**Want to see the complete comparison?** Check out our [**LangChain vs Hector Tutorial**](tutorials/MULTI_AGENT_RESEARCH_PIPELINE) 🔥
+
+---
+
+## Quick Example
+
+Here's a complete AI agent in pure YAML:
+
+```yaml
+agents:
+  assistant:
+    name: "My Assistant"
+    llm: "gpt-4o"
+    prompt:
+      system_role: |
+        You are a helpful assistant who explains concepts clearly
+        and provides actionable guidance.
+
+llms:
+  gpt-4o:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+```
+
+**That's it!** Start the server and you have a working AI agent with:
+- ✅ Streaming responses
+- ✅ Session management  
+- ✅ A2A protocol compliance
+- ✅ Built-in security
+- ✅ Production monitoring
+
+---
+
+## Popular Learning Paths
+
+<div class="learning-paths">
+
+### 🎯 **New to AI Agents?**
+Start with the fundamentals and build your first agent.
+
+1. **[Getting Started](getting-started)** - Set up Hector in 5 minutes
+2. **[Quick Start](QUICK_START)** - Run your first agent
+3. **[Building Agents](AGENTS)** - Learn core concepts
+4. **[Tools & Extensions](TOOLS)** - Add capabilities
+
+### 🔄 **Coming from LangChain/AutoGen?**
+See how Hector simplifies what you already know.
+
+1. **[LangChain vs Hector](tutorials/MULTI_AGENT_RESEARCH_PIPELINE)** - Direct comparison
+2. **[Multi-Agent Systems](ARCHITECTURE#multi-agent-orchestration-a2a-protocol)** - Orchestration patterns
+3. **[Migration Benefits](tutorials/MULTI_AGENT_RESEARCH_PIPELINE#the-dramatic-difference)** - Why switch?
+
+### 🚀 **Building Production Systems?**
+Advanced patterns for enterprise deployments.
+
+1. **[Architecture](ARCHITECTURE)** - System design patterns
+2. **[Authentication](AUTHENTICATION)** - JWT security
+3. **[External Agents](EXTERNAL_AGENTS)** - Distributed systems
+4. **[Plugin Development](PLUGINS)** - Custom extensions
 
 </div>
 
@@ -46,7 +161,7 @@ Build powerful AI agents in pure YAML. Compose single agents, orchestrate multi-
 
 ## 📚 Documentation Sections
 
-<div class="grid-container">
+<div class="doc-grid">
 
 <div class="doc-section">
   <h3><a href="getting-started">🎯 Getting Started</a></h3>
@@ -108,6 +223,7 @@ Build powerful AI agents in pure YAML. Compose single agents, orchestrate multi-
 | **External Agents** | ✅ Seamless | ⚠️ Custom | ⚠️ Custom | ❌ No |
 | **Zero Code** | ✅ Yes | ❌ No | ❌ No | ❌ No |
 | **Multi-Agent** | ✅ LLM-driven | ✅ Hard-coded | ✅ Hard-coded | ✅ Hard-coded |
+| **Production Ready** | ✅ Built-in | ⚠️ DIY | ⚠️ DIY | ⚠️ DIY |
 
 ---
 
@@ -127,6 +243,63 @@ Build powerful AI agents in pure YAML. Compose single agents, orchestrate multi-
 
 <style>
 .grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.feature-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  background: var(--code-background-color);
+  text-align: center;
+}
+
+.feature-card h4 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  font-size: 1.1rem;
+}
+
+.feature-card p {
+  font-size: 0.9rem;
+  color: var(--body-text-color);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.learning-paths {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin: 2rem 0;
+}
+
+.learning-paths > div {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  background: var(--code-background-color);
+}
+
+.learning-paths h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.learning-paths ol {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.learning-paths li {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.doc-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.5rem;

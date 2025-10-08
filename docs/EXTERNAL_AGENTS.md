@@ -1,3 +1,11 @@
+---
+layout: default
+title: External Agents
+nav_order: 2
+parent: Advanced
+description: "Integrate external A2A agents with Hector seamlessly"
+---
+
 # External A2A Agents Guide
 
 ## External Agent Support

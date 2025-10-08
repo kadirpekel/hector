@@ -1,3 +1,11 @@
+---
+layout: default
+title: A2A Compliance
+nav_order: 2
+parent: Reference
+description: "100% A2A specification compliance details and implementation"
+---
+
 # A2A Protocol Compliance
 
 Hector is a **100% A2A native agent platform** implementing the [Agent-to-Agent (A2A) Protocol specification](https://a2a-protocol.org/latest/specification/). This document describes how Hector implements each section of the A2A specification.
