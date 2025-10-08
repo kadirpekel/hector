@@ -29,6 +29,8 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 - **External Integration** - Connect remote A2A agents seamlessly
 - **Production Ready** - Authentication, streaming, sessions, monitoring
 
+**Want to see what's possible?** Check out our [**Coding Assistant Tutorial**](docs/tutorials/BUILD_YOUR_OWN_CURSOR.md) to learn how to build a Cursor-like AI coding assistant with semantic search, chain-of-thought reasoning, and comprehensive language support—all through pure YAML configuration.
+
 ---
 
 ## Architecture
@@ -129,23 +131,6 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 - **Agent Card** - JSON document describing capabilities, endpoints, authentication
 - **agent_call Tool** - Built-in tool enabling orchestration by delegating to other agents
 - **Supervisor Strategy** - Optimized reasoning for multi-agent coordination
-
----
-
-## 🎯 Build Your Own Cursor
-
-**New:** Learn how to build a Cursor-equivalent AI coding assistant using pure YAML configuration.
-
-👉 **[BUILD_YOUR_OWN_CURSOR.md](BUILD_YOUR_OWN_CURSOR.md)** - Complete tutorial
-
-**What you'll get:**
-- ✅ Comparable quality with different tradeoffs
-- ✅ Identical prompts to what Claude receives in Cursor  
-- ✅ Open-source alternative with full customization
-- ✅ Fully declarative (no code required)
-- ✅ Works as API service, on-premise option, multi-LLM support
-
-**Example configuration:** [`configs/coding.yaml`](configs/coding.yaml)
 
 ---
 
@@ -443,6 +428,9 @@ export ANTHROPIC_API_KEY="sk-..."                # Anthropic authentication
 ---
 
 ## Documentation
+
+### Tutorials
+- **[Build Your Own Cursor-Like AI Coding Assistant](docs/tutorials/BUILD_YOUR_OWN_CURSOR.md)** - Step-by-step tutorial showing how to create a powerful AI coding assistant using pure YAML configuration (with example config: [`configs/coding.yaml`](configs/coding.yaml))
 
 ### Core Guides
 - **[Quick Start](docs/QUICK_START.md)** - Get running in 5 minutes

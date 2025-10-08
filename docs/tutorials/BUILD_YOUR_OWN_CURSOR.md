@@ -1,51 +1,45 @@
-# Build Your Own Cursor: AI Coding Assistant in Pure YAML
+# Build Your Own Cursor-Like AI Coding Assistant in Pure YAML
 
-**TL;DR:** Cursor's "magic" is just good prompts + chain-of-thought + semantic search. In this tutorial, you'll build an equivalent AI coding assistant using **only YAML configuration** - no code required.
+**TL;DR:** Modern AI coding assistants use well-crafted prompts, chain-of-thought reasoning, and semantic search to help developers write code. In this tutorial, you'll build a similar AI coding assistant using **only YAML configuration** - no code required.
 
 ---
 
 ## Table of Contents
 
-- [Why This Matters](#why-this-matters)
-- [What Makes Cursor Effective](#what-makes-cursor-effective)
-- [How Close Are We?](#how-close-are-we)
+- [Why This Tutorial](#why-this-tutorial)
+- [Understanding AI Coding Assistants](#understanding-ai-coding-assistants)
 - [The Configuration](#the-configuration)
 - [Getting Started](#getting-started)
 - [Example Tasks](#example-tasks)
-- [Cost Comparison](#cost-comparison)
-- [What Makes This Better](#what-makes-this-better)
 - [Architecture Deep Dive](#architecture-deep-dive)
 - [Customization](#customization)
 - [Troubleshooting](#troubleshooting)
 
 ---
 
-## Why This Matters
+## Why This Tutorial
 
-Cursor charges $20/month for what is essentially:
-1. **Good prompts** (telling Claude how to behave)
-2. **Chain-of-thought** (looping until no more tool calls)
-3. **Semantic search** (exploring codebases intelligently)
-4. **Parallel tool calls** (efficiency)
-5. **Thinking blocks** (transparency)
+This tutorial demonstrates how to build a powerful AI coding assistant using **pure declarative configuration** - no programming required. You'll learn:
 
-**All of this is declarative.** No magic. No secret sauce. Just excellent prompt engineering.
+1. **How AI coding assistants work** - Understanding the core components (prompts, reasoning loops, tool execution)
+2. **Configuration over code** - Building complex behavior through YAML configuration
+3. **Flexibility through modularity** - Swapping LLM providers, customizing tools, and adjusting behavior
 
-This tutorial proves you can build your own with:
-- ✅ **100% YAML configuration** (no code)
-- ✅ **Open source** (full control, on-premise)
-- ✅ **Provider-agnostic** (OpenAI, Anthropic, Gemini)
-- ✅ **Better in some ways** (structured reflection, todo tracking)
+By the end, you'll have:
+- ✅ A working AI coding assistant
+- ✅ Deep understanding of how these systems operate
+- ✅ Full control to customize for your specific needs
+- ✅ Foundation to experiment with different approaches
 
 ---
 
-## What Makes Cursor Effective
+## Understanding AI Coding Assistants
 
-Let's break down Cursor's effectiveness:
+AI coding assistants are built from several key components that work together:
 
 ### 1. The Prompts
 
-Cursor uses **Claude Sonnet 4.5** with carefully crafted prompts. Here's the actual system role Cursor sends to Claude:
+Modern AI coding assistants use carefully crafted prompts with LLMs like Claude Sonnet. Here's an example of an effective system prompt pattern:
 
 ```
 You are an AI coding assistant, powered by Claude Sonnet 4.5. You operate in Cursor.
@@ -76,13 +70,15 @@ Bias towards not asking the user for help if you can find the answer yourself.
 
 ### 3. Chain-of-Thought Loop
 
+The core reasoning loop is simple - continue until the LLM stops requesting tool calls:
+
 ```go
 func (s *ChainOfThoughtStrategy) ShouldStop(...) bool {
     return len(toolCalls) == 0  // Stop when no more tool calls
 }
 ```
 
-**That's it.** Loop until the LLM stops making tool calls. Trust the LLM to know when it's done.
+**Key insight:** Loop until the LLM stops making tool calls. The model determines when it has enough information to provide a complete answer.
 
 ### 4. Parallel Tool Calls
 
@@ -105,32 +101,9 @@ make all of the independent tool calls in parallel.
 
 ---
 
-## How Close Are We?
-
-**Rating: Comparable quality with different tradeoffs.**
-
-**Note:** This configuration has been tested and refined based on actual agent behavior. Key learning: Simple, clear instructions work better than over-emphasizing thoroughness.
-
-| Feature | Cursor | Hector | Notes |
-|---------|--------|--------|-------|
-| **Prompts** | ✅ | ✅ | Identical - word-for-word |
-| **Chain-of-thought** | ✅ | ✅ | Same simple loop |
-| **Semantic search** | ✅ | ✅ | Same RAG approach |
-| **Parallel tools** | ✅ | ✅ | Same optimization |
-| **Thinking blocks** | ✅ | ✅ | Same grayed-out style |
-| **Structured reflection** | ❌ | ✅ | LLM-based tool analysis |
-| **Todo tracking** | ❌ | ✅ | Systematic task management |
-| **Declarative config** | ❌ | ✅ | Pure YAML, no code |
-| **On-premise** | ❌ | ✅ | Your infrastructure |
-| **Multi-LLM** | ❌ | ✅ | OpenAI, Anthropic, Gemini |
-| **IDE integration** | ✅ Native | Separate | Cursor has tight integration |
-| **Cost** | $20/month fixed | Pay-as-you-go | Different pricing models |
-
----
-
 ## The Configuration
 
-Here's the **entire** configuration for a Cursor-equivalent agent:
+Now that you understand the components, let's see how simple it is to configure them. Here's the **complete configuration** for a capable AI coding assistant:
 
 ```yaml
 agents:
@@ -171,9 +144,9 @@ llms:
     max_tokens: 8000
 ```
 
-**That's it.** ~50 lines of YAML to get 85-90% of Cursor's capabilities.
+**That's it.** ~50 lines of YAML to build a powerful AI coding assistant.
 
-See [`configs/coding.yaml`](configs/coding.yaml) for the complete, production-ready configuration with detailed comments.
+See [`configs/coding.yaml`](../../configs/coding.yaml) for the complete, production-ready configuration with detailed comments.
 
 ---
 
@@ -193,54 +166,70 @@ See [`configs/coding.yaml`](configs/coding.yaml) for the complete, production-re
    export ANTHROPIC_API_KEY="sk-ant-..."
    ```
 
-3. **Qdrant for semantic search** (optional but recommended):
+3. **For semantic search (strongly recommended for codebase exploration):**
+   
+   **Qdrant vector database:**
    ```bash
    docker run -p 6334:6333 -p 6333:6333 qdrant/qdrant
    ```
-
-4. **Ollama for embeddings** (optional but recommended):
+   
+   **Ollama for embeddings:**
    ```bash
-   # Install: https://ollama.ai
+   # Install from: https://ollama.ai
    ollama pull nomic-embed-text
    ```
+   
+   **Note:** Semantic search is optional but significantly improves the agent's ability to explore and understand codebases. Without it, the agent can still edit files and run commands but cannot intelligently search through code.
 
 ### Quick Start
 
-1. **Copy the configuration:**
+#### Option A: With Semantic Search (Recommended)
+
+1. **Ensure Qdrant and Ollama are running** (see Prerequisites above)
+
+2. **Copy and customize the configuration:**
    ```bash
    cp configs/coding.yaml configs/my-cursor.yaml
+   # Edit configs/my-cursor.yaml if needed (API keys, etc.)
    ```
 
-2. **Start the agent:**
+3. **Start the agent server:**
    ```bash
-   # Document store will automatically index on startup
    hector serve --config configs/my-cursor.yaml
    ```
    
-   **Note:** The codebase will be indexed automatically when the server starts. This may take a few minutes for large codebases.
+   **Note:** On first run, if you have document stores configured, the codebase will be indexed automatically. This may take a few minutes for large codebases. You'll see indexing progress in the logs.
 
-3. **Chat with your agent:**
+4. **Chat with your agent:**
    ```bash
    hector chat coding_assistant
    ```
 
-### Without Semantic Search
+#### Option B: Without Semantic Search (Basic Mode)
 
-Don't want to set up Qdrant/Ollama? You can still use the agent without semantic search:
+If you want to skip the Qdrant/Ollama setup, you can run in basic mode:
 
-```yaml
-agents:
-  coding_assistant:
-    # Remove document_stores, database, embedder
-    tools:
-      # Remove "search"
-      - "write_file"
-      - "search_replace"
-      - "execute_command"
-      - "todo_write"
-```
+1. **Create a simplified configuration:**
+   ```yaml
+   # In configs/my-cursor.yaml
+   agents:
+     coding_assistant:
+       # Remove document_stores, database, embedder sections
+       tools:
+         # Remove "search" from tools list
+         - "write_file"
+         - "search_replace"
+         - "execute_command"
+         - "todo_write"
+   ```
 
-**Note:** Without semantic search, the agent can still edit files and run commands, but won't be able to explore the codebase intelligently.
+2. **Start the agent:**
+   ```bash
+   hector serve --config configs/my-cursor.yaml
+   hector chat coding_assistant
+   ```
+
+**Note:** In basic mode, the agent can edit files and run commands but cannot intelligently explore the codebase through semantic search. This is suitable for small projects or when you provide explicit file paths.
 
 ---
 
@@ -284,9 +273,6 @@ Here's the flow:
    Tools are executed through the tool registry...
 ```
 
-**Time:** ~30 seconds  
-**Cost:** ~$0.10 (Claude Sonnet)
-
 ### 2. Refactoring
 
 **Prompt:**
@@ -310,9 +296,6 @@ Here's the flow:
 5. Runs tests with `execute_command`
 6. Marks todos complete
 
-**Time:** ~2-3 minutes  
-**Cost:** ~$0.30
-
 ### 3. Feature Addition
 
 **Prompt:**
@@ -326,9 +309,6 @@ Here's the flow:
 3. Proposes design (token bucket vs. sliding window)
 4. Implements with tests
 5. Updates documentation
-
-**Time:** ~5-10 minutes  
-**Cost:** ~$0.50-1.00
 
 ### 4. Debugging
 
@@ -345,167 +325,6 @@ Here's the flow:
 5. Proposes fix
 6. Applies fix
 7. Runs test again to verify
-
-**Time:** ~1 minute  
-**Cost:** ~$0.15
-
----
-
-## Cost Comparison
-
-### Cursor
-
-**$20/month** for unlimited usage.
-
-**Pros:**
-- Fixed cost
-- Unlimited sessions
-
-**Cons:**
-- Limited to Cursor IDE
-- No on-premise option
-- Can't customize prompts
-- Single LLM provider
-
-### Hector (Pay-as-you-go)
-
-**Example costs with Claude Sonnet:**
-- $3 per 1M input tokens
-- $15 per 1M output tokens
-- Typical session: ~10k tokens = **~$0.15**
-
-**Break-even:**
-- $20 / $0.15 = **~133 sessions/month**
-- ~4-5 sessions/day
-
-**Pros:**
-- Works in ANY editor
-- On-premise option available
-- Fully customizable
-- Multi-LLM (OpenAI, Anthropic, Gemini)
-- Pay only for what you use
-
-**Cons:**
-- Variable cost
-- Need to manage API keys
-
-**Cost optimization:**
-- Use `gpt-4o-mini` instead of Claude: **~$0.03/session** (666 sessions = $20)
-- Use `claude-haiku`: **~$0.05/session** (400 sessions = $20)
-- Enable caching: **-50% cost** for repeated queries
-
----
-
-## Different Tradeoffs
-
-**Testing Notes:** This configuration completes simple tasks in 2-3 iterations (verified with live tests). Performance matches Cursor for straightforward coding tasks.
-
-### Hector's Advantages
-
-#### 1. Structured Reflection
-
-**Cursor:** Heuristic tool analysis (simple success/fail)
-
-**Hector:** LLM-based structured reflection with confidence scores:
-
-```
-💭 Self-Reflection (AI Analysis):
-  - ✅ Succeeded: search, write_file
-  - ❌ Failed: execute_command
-  - 🎯 Confidence: 75%
-  - 🔄 Recommendation: Retry failed tools
-```
-
-**Impact:** May improve quality, adds ~20% cost
-
-#### 2. Todo Tracking
-
-**Cursor:** No built-in task management
-
-**Hector:** Systematic todo tracking:
-
-```
-📋 Current Tasks:
-  1. ✅ Design API structure
-  2. 🔄 Implement handlers  
-  3. ⏳ Add tests
-  4. ⏳ Update documentation
-```
-
-**Impact:** Useful for complex multi-step tasks
-
-#### 3. Fully Declarative
-
-**Cursor:** Closed-source, no customization
-
-**Hector:** Pure YAML configuration:
-
-```yaml
-# Want to change how the agent thinks?
-reasoning_instructions: |
-  Your custom instructions here
-
-# Want to add a custom tool?
-tools:
-  my_custom_tool:
-    type: "command"
-    allowed_commands: ["my_cmd"]
-```
-
-**Impact:** Full customization
-
-#### 4. On-Premise
-
-**Cursor:** Cloud-only (your code goes to Cursor servers)
-
-**Hector:** Deploy anywhere:
-- Your laptop
-- Your datacenter
-- Your VPC
-- Air-gapped environment
-
-**Impact:** Security, compliance, control
-
-#### 5. Multi-LLM
-
-**Cursor:** Locked to Anthropic (Claude)
-
-**Hector:** Choose your LLM:
-
-```yaml
-llms:
-  my_llm:
-    type: "openai"      # or "anthropic" or "gemini"
-    model: "gpt-4o"
-```
-
-**Impact:** Cost optimization, provider flexibility
-
-### Cursor's Advantages
-
-#### 1. Tight IDE Integration
-
-**Cursor:** Native IDE with inline edits, file tree, terminal integration
-
-**Hector:** Runs as separate service, requires terminal or API calls
-
-**Impact:** Cursor's UX is more polished for coding workflows
-
-#### 2. Fixed Pricing
-
-**Cursor:** $20/month unlimited (predictable)
-
-**Hector:** Pay-per-use (variable)
-
-**Impact:** Cursor is simpler for budgeting heavy users
-
-#### 3. Zero Setup
-
-**Cursor:** Download and start coding
-
-**Hector:** Requires Qdrant + Ollama setup for semantic search
-
-**Impact:** Cursor is faster to get started
 
 ---
 
@@ -663,16 +482,16 @@ reasoning:
   max_iterations: 200  # Higher for complex tasks
 ```
 
-### Enable Cost Optimization
+### Optimize Performance
 
 ```yaml
 llms:
   my_llm:
-    temperature: 0.0        # Deterministic (enable caching)
-    max_tokens: 4000        # Lower = cheaper
+    temperature: 0.0        # Deterministic (enables caching)
+    max_tokens: 4000        # Lower token limit for faster responses
     
-    # Use cheaper model for simple tasks
-    model: "gpt-4o-mini"    # $0.15/1M vs. $2.50/1M
+    # Use lighter models for simple tasks
+    model: "gpt-4o-mini"    # Faster and more efficient
 ```
 
 ---
@@ -731,9 +550,11 @@ llms:
 **Symptom:** Agent can't find relevant code
 
 **Fixes:**
-1. **Re-index codebase:**
+1. **Restart server to re-index:**
    ```bash
-   hector index --config my-cursor.yaml --force
+   # Stop the server (Ctrl+C) and restart it
+   hector serve --config my-cursor.yaml
+   # Indexing happens automatically on startup
    ```
 
 2. **Check Qdrant is running:**
@@ -741,44 +562,26 @@ llms:
    curl http://localhost:6334/health
    ```
 
-3. **Verify embeddings:**
+3. **Verify Ollama and embeddings:**
    ```bash
-   curl http://localhost:11434/api/tags | grep nomic
+   # Check Ollama is running
+   curl http://localhost:11434/api/tags
+   
+   # Ensure nomic-embed-text is installed
+   ollama list | grep nomic
    ```
 
-### High costs
-
-**Symptom:** Spending more than expected
-
-**Fixes:**
-1. **Use cheaper model:**
-   ```yaml
-   model: "gpt-4o-mini"  # 90% quality, 10% cost
-   ```
-
-2. **Enable caching:**
-   ```yaml
-   temperature: 0.0  # Enables caching for identical requests
-   ```
-
-3. **Reduce max_tokens:**
-   ```yaml
-   max_tokens: 4000  # Down from 8000
-   ```
-
-4. **Monitor usage:**
-   ```bash
-   hector stats --config my-cursor.yaml
-   ```
+4. **Check logs for indexing errors:**
+   Look for errors during server startup related to document store initialization
 
 ---
 
 ## Next Steps
 
-1. **Try it out:** Copy `configs/coding-enhanced.yaml` and run your first session
-2. **Customize:** Adjust prompts, tools, and LLM to your preferences
-3. **Benchmark:** Compare quality and cost to Cursor
-4. **Share:** Contribute your configs back to the community
+1. **Try it out:** Follow the [Getting Started](#getting-started) guide to set up your first agent
+2. **Customize:** Experiment with different prompts, tools, and LLM configurations to match your workflow
+3. **Test:** Try it on your real projects and evaluate the results
+4. **Share:** Contribute your improved configs and learnings back to the community
 
 ---
 
@@ -792,26 +595,43 @@ llms:
 
 ## Conclusion
 
-Cursor is excellent, but it's not magic. It's good prompts + chain-of-thought + semantic search - all of which are replicable.
+This tutorial demonstrated that AI coding assistants are built on well-understood components: effective prompting, chain-of-thought reasoning loops, and semantic search. By using declarative YAML configuration, you can build sophisticated AI systems without writing code.
 
-With Hector, you can build a **competitive open-source alternative** with **pure YAML configuration**.
+**What you've learned:**
+- How to configure an AI agent using only YAML
+- The core components that make AI coding assistants effective
+- How to customize prompts, tools, and reasoning strategies
+- How to deploy and troubleshoot your agent
 
-**When to use Hector:**
-- ✅ You want full control and customization
-- ✅ You need on-premise deployment
-- ✅ You want to experiment with different LLMs
-- ✅ You prefer pay-as-you-go pricing
-- ✅ You want to learn how AI coding assistants work
+**Next steps to explore:**
+- Experiment with different prompt strategies
+- Try various LLM providers (OpenAI, Anthropic, Gemini)
+- Add custom tools for your specific workflow
+- Deploy on your own infrastructure
 
-**When to use Cursor:**
-- ✅ You want the most polished IDE experience
-- ✅ You prefer fixed-price unlimited usage
-- ✅ You want zero setup time
-- ✅ You value tight editor integration
-
-**Try it today:** [`configs/coding.yaml`](configs/coding.yaml)
+The complete working example is available at: [`configs/coding.yaml`](../../configs/coding.yaml)
 
 ---
 
-**Built with ❤️ by developers who believe AI tools should be open and customizable.**
+## Important Note
+
+**What we've built:** This tutorial demonstrates building a **Cursor-like coding assistant at its core** - the AI agent that reasons, searches code, and executes tasks. On the agent side, this is close to a production-ready system with proper chain-of-thought reasoning, semantic search, tool execution, and reflection capabilities.
+
+**What Cursor offers beyond this:** Cursor is a much more sophisticated **complete IDE solution** that includes:
+- **Native editor integration** - Deep integration with VS Code fork
+- **Inline diff views** - Visual code change previews directly in the editor
+- **Multi-file editing UI** - Seamless interface for reviewing changes across files
+- **Checkpoint/rollback system** - Version control for AI-generated changes
+- **Inline code completion** - Real-time suggestions as you type
+- **Chat panel integration** - Built-in chat interface within the IDE
+- **File tree awareness** - Context-aware file navigation and suggestions
+- **Terminal integration** - Embedded terminal with AI context
+- **Git integration** - Smart commit messages and change tracking
+- **Collaborative editing** - Multi-cursor and pair programming features
+- **Command palette** - Quick access to AI features via keyboard
+- **Settings UI** - User-friendly configuration interface
+
+**The distinction:** Building a powerful AI agent (what this tutorial covers) is different from building a polished IDE experience. The agent's reasoning capabilities, tool use, and code understanding can match professional systems, but the user experience and workflow integration require significant additional IDE engineering.
+
+**This is valuable because:** Understanding how the AI agent works gives you full control over the intelligence layer, letting you customize reasoning strategies, add domain-specific tools, and deploy on your infrastructure - even if you access it through a terminal or API rather than a native IDE.
 

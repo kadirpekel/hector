@@ -2,25 +2,24 @@
 # BUILD YOUR OWN CURSOR: Coding Assistant Configuration
 # ============================================================================
 #
-# This configuration implements a Cursor-like coding assistant:
+# This configuration implements a Cursor-like AI coding assistant with:
+# ✅ Claude Sonnet 4 (most capable LLM for coding)
+# ✅ Semantic code search (requires Qdrant + Ollama - see prerequisites)
 # ✅ Chain-of-thought reasoning (natural termination)
 # ✅ Todo tracking for complex multi-step tasks
-# ✅ Semantic code search (requires Qdrant + Ollama)
-# ✅ Temperature 0.7 for natural variation
-# ✅ Simplified prompts (no over-verification)
+# ✅ Comprehensive language support (Go, Python, JS/TS, Rust, Java, etc.)
+# ✅ Rich toolset (git, npm, docker, testing frameworks, linters, etc.)
 #
-# KEY LEARNINGS FROM TESTING:
-# - Simple, clear instructions work best
-# - "Be thorough" can cause over-verification loops
-# - Let the LLM naturally recognize completion
-# - Explicit termination: "provide summary and stop"
+# PREREQUISITES:
+# 1. Anthropic API key: export ANTHROPIC_API_KEY="sk-ant-..."
+# 2. Qdrant running: docker run -p 6334:6333 -p 6333:6333 qdrant/qdrant
+# 3. Ollama with embeddings: ollama pull nomic-embed-text
 #
-# DIFFERENT TRADEOFFS VS CURSOR:
-# ✅ Fully declarative (pure YAML configuration)
-# ✅ On-premise option (your infrastructure)
-# ✅ Provider-agnostic (OpenAI, Anthropic, Gemini)
-# ✅ Open source (full customization)
-# ❌ Separate service (not native IDE integration)
+# QUICK START:
+# 1. Start server: hector serve --config configs/coding.yaml
+# 2. Chat: hector chat coding_assistant
+#
+# See docs/tutorials/BUILD_YOUR_OWN_CURSOR.md for full tutorial
 #
 # ============================================================================
 
@@ -295,114 +294,166 @@ agents:
     # ========================================================================
     # SEMANTIC CODE SEARCH
     # ========================================================================
-    # Commented out for quick testing - uncomment when you have Qdrant + Ollama running
-    # document_stores:
-    #   - "codebase"
-    # database: "qdrant"
-    # embedder: "embedder"
+    document_stores:
+      - "codebase"
+    database: "qdrant"
+    embedder: "embedder"
     
     # ========================================================================
     # TOOLS: What the agent can do
     # ========================================================================
     tools:
-      # - "search"           # Semantic code search (requires Qdrant + Ollama)
+      - "search"           # Semantic code search (primary exploration tool)
       - "write_file"       # Create/overwrite files
       - "search_replace"   # Edit files precisely
       - "execute_command"  # Run system commands (git, npm, make, etc.)
-      - "todo_write"       # Task management (BETTER than Cursor)
+      - "todo_write"       # Task management
 
 # ============================================================================
 # LLM CONFIGURATION
 # ============================================================================
 llms:
   sonnet-llm:
-    type: "openai"
-    model: "gpt-4o"                    # Good balance of speed and quality
-    api_key: "${OPENAI_API_KEY}"
-    temperature: 0.7                   # Natural variation (like real Cursor)
+    type: "anthropic"
+    model: "claude-sonnet-4-20250514"  # Most capable model for coding
+    api_key: "${ANTHROPIC_API_KEY}"
+    temperature: 0.7                   # Natural variation (balanced creativity)
     max_tokens: 8000                   # Enough for complex refactoring
     timeout: 120                       # 2 minutes for complex operations
     
     # Alternative providers:
-    # type: "anthropic"  # Most reliable (need credits)
-    # model: "claude-sonnet-4-20250514"
-    # api_key: "${ANTHROPIC_API_KEY}"
+    # type: "openai"
+    # model: "gpt-4o"
+    # api_key: "${OPENAI_API_KEY}"
     #
-    # type: "gemini"  # Fast but strict rate limits (good for quick tests only)
+    # type: "gemini"
     # model: "gemini-2.0-flash-exp"
     # api_key: "${GEMINI_API_KEY}"
 
 # ============================================================================
 # VECTOR DATABASE FOR SEMANTIC SEARCH
 # ============================================================================
-# Commented out for quick testing - uncomment when you have Qdrant + Ollama running
-# databases:
-#   qdrant:
-#     type: "qdrant"
-#     host: "${QDRANT_HOST:-localhost}"
-#     port: 6334
-#     collection_name: "codebase"
+databases:
+  qdrant:
+    type: "qdrant"
+    host: "${QDRANT_HOST:-localhost}"
+    port: 6334
+    collection_name: "codebase"
 
 # ============================================================================
 # EMBEDDER FOR SEMANTIC SEARCH
 # ============================================================================
-# Commented out for quick testing - uncomment when you have Qdrant + Ollama running
-# embedders:
-#   embedder:
-#     type: "ollama"
-#     model: "nomic-embed-text"         # Fast, accurate embeddings
-#     host: "${OLLAMA_HOST:-http://localhost:11434}"
+embedders:
+  embedder:
+    type: "ollama"
+    model: "nomic-embed-text"         # Fast, accurate embeddings
+    host: "${OLLAMA_HOST:-http://localhost:11434}"
 
 # ============================================================================
 # DOCUMENT STORE: YOUR CODEBASE
 # ============================================================================
-# Commented out for quick testing - uncomment when you have Qdrant + Ollama running
-# document_stores:
-#   codebase:
-#     name: "codebase"
-#     path: "."                         # Index current directory
-#     source: "directory"
-#     
-#     # Languages to index
-#     include_patterns:
-#       - "*.go"
-#       - "*.py"
-#       - "*.js"
-#       - "*.ts"
-#       - "*.tsx"
-#       - "*.jsx"
-#       - "*.java"
-#       - "*.cpp"
-#       - "*.c"
-#       - "*.h"
-#       - "*.rs"
-#       - "*.rb"
-#       - "*.php"
-#       - "*.swift"
-#       - "*.kt"
-#       - "*.scala"
-#       - "*.md"
-#       - "*.yaml"
-#       - "*.yml"
-#       - "*.json"
-#       - "*.toml"
-#     
-#     # Common directories to exclude
-#     exclude_patterns:
-#       - "vendor/**"
-#       - ".git/**"
-#       - "**/testdata/**"
-#       - "node_modules/**"
-#       - "target/**"
-#       - "build/**"
-#       - "dist/**"
-#       - "*.min.js"
-#       - "*.bundle.js"
-#     
-#     max_file_size: 1048576   # 1MB max per file
-#     watch_changes: false      # Manual re-indexing
-#     database: "qdrant"
-#     embedder: "embedder"
+document_stores:
+  codebase:
+    name: "codebase"
+    path: "."                         # Index current directory
+    source: "directory"
+    
+    # Languages to index (comprehensive list for coding assistant)
+    include_patterns:
+      # Backend/Systems
+      - "*.go"
+      - "*.rs"
+      - "*.c"
+      - "*.cpp"
+      - "*.cc"
+      - "*.h"
+      - "*.hpp"
+      - "*.java"
+      - "*.kt"
+      - "*.scala"
+      
+      # Scripting/Dynamic
+      - "*.py"
+      - "*.rb"
+      - "*.php"
+      - "*.lua"
+      - "*.perl"
+      - "*.pl"
+      
+      # Web/Frontend
+      - "*.js"
+      - "*.jsx"
+      - "*.ts"
+      - "*.tsx"
+      - "*.vue"
+      - "*.svelte"
+      - "*.html"
+      - "*.css"
+      - "*.scss"
+      - "*.sass"
+      - "*.less"
+      
+      # Mobile
+      - "*.swift"
+      - "*.m"
+      - "*.mm"
+      
+      # Config/Data
+      - "*.yaml"
+      - "*.yml"
+      - "*.json"
+      - "*.toml"
+      - "*.xml"
+      - "*.ini"
+      - "*.conf"
+      
+      # Documentation
+      - "*.md"
+      - "*.rst"
+      - "*.txt"
+      
+      # Shell/Scripts
+      - "*.sh"
+      - "*.bash"
+      - "*.zsh"
+      
+      # Database
+      - "*.sql"
+      
+      # Build files
+      - "Makefile"
+      - "Dockerfile"
+      - "*.dockerfile"
+    
+    # Common directories to exclude
+    exclude_patterns:
+      - "vendor/**"
+      - ".git/**"
+      - "**/testdata/**"
+      - "node_modules/**"
+      - "target/**"
+      - "build/**"
+      - "dist/**"
+      - "out/**"
+      - "bin/**"
+      - ".next/**"
+      - ".nuxt/**"
+      - "venv/**"
+      - "env/**"
+      - "__pycache__/**"
+      - "*.pyc"
+      - "*.min.js"
+      - "*.bundle.js"
+      - "*.map"
+      - ".DS_Store"
+      - "*.lock"
+      - "package-lock.json"
+      - "yarn.lock"
+    
+    max_file_size: 1048576   # 1MB max per file
+    watch_changes: false      # Manual re-indexing (restart server)
+    database: "qdrant"
+    embedder: "embedder"
 
 # ============================================================================
 # TOOLS CONFIGURATION
@@ -411,13 +462,12 @@ tools:
   # --------------------------------------------------------------------------
   # SEMANTIC SEARCH: Main exploration tool
   # --------------------------------------------------------------------------
-  # Commented out for quick testing - uncomment when you have Qdrant + Ollama running
-  # search:
-  #   type: search
-  #   document_stores:
-  #     - "codebase"
-  #   default_limit: 10       # Balance between context and cost
-  #   max_limit: 50           # Cap for performance
+  search:
+    type: search
+    document_stores:
+      - "codebase"
+    default_limit: 10       # Balance between context and relevance
+    max_limit: 50           # Cap for performance
   
   # --------------------------------------------------------------------------
   # FILE WRITER: Create/overwrite files
@@ -451,6 +501,8 @@ tools:
       - "pwd"
       - "find"
       - "grep"
+      - "awk"
+      - "sed"
       - "wc"
       - "tree"
       - "echo"
@@ -460,7 +512,10 @@ tools:
       - "cp"
       - "mv"
       - "chmod"
+      - "chown"
       - "cd"
+      - "diff"
+      - "patch"
       
       # Version control
       - "git"
@@ -468,79 +523,149 @@ tools:
       # Build tools
       - "make"
       - "cmake"
+      - "gradle"
+      - "maven"
+      - "mvn"
+      - "ant"
       
       # Language-specific
-      - "go"          # Go
-      - "npm"         # Node.js
+      # Go
+      - "go"
+      - "gofmt"
+      - "golangci-lint"
+      
+      # Node.js/JavaScript
+      - "npm"
       - "yarn"
       - "pnpm"
       - "node"
       - "deno"
       - "bun"
-      - "python"      # Python
+      - "npx"
+      - "eslint"
+      - "prettier"
+      - "tsc"
+      
+      # Python
+      - "python"
       - "python3"
       - "pip"
-      - "cargo"       # Rust
+      - "pip3"
+      - "poetry"
+      - "pipenv"
+      - "pytest"
+      - "pylint"
+      - "black"
+      - "flake8"
+      - "mypy"
+      
+      # Rust
+      - "cargo"
       - "rustc"
+      - "rustfmt"
+      - "clippy"
+      
+      # Ruby
+      - "ruby"
+      - "gem"
+      - "bundle"
+      - "rake"
+      - "rspec"
+      - "rubocop"
+      
+      # Java/JVM
+      - "java"
+      - "javac"
+      - "jar"
+      - "kotlin"
+      - "kotlinc"
+      - "scala"
+      - "scalac"
+      
+      # C/C++
+      - "gcc"
+      - "g++"
+      - "clang"
+      - "clang++"
+      
+      # PHP
+      - "php"
+      - "composer"
+      - "phpunit"
+      
+      # Shell/Scripting
+      - "bash"
+      - "sh"
+      - "zsh"
       
       # Container/cloud
       - "docker"
+      - "docker-compose"
       - "kubectl"
+      - "helm"
+      
+      # Databases
+      - "psql"
+      - "mysql"
+      - "sqlite3"
+      - "redis-cli"
+      - "mongo"
       
       # Utilities
       - "curl"
       - "wget"
+      - "jq"
+      - "yq"
       - "date"
-      - "echo"
+      - "env"
+      - "which"
+      - "whoami"
+      - "tar"
+      - "zip"
+      - "unzip"
+      - "gzip"
+      - "gunzip"
     
     working_directory: "./"
     max_execution_time: "120s"
     enable_sandboxing: true
   
   # --------------------------------------------------------------------------
-  # TODO WRITE: Task management (BETTER than Cursor)
+  # TODO WRITE: Task management
   # --------------------------------------------------------------------------
   todo_write:
     type: todo
     description: "Manage task lists for complex workflows"
 
 # ============================================================================
-# EXAMPLE TASKS
+# EXAMPLE TASKS TO TRY
 # ============================================================================
 #
-# Try these with your Cursor-equivalent agent:
+# Try these prompts with your coding assistant:
 #
 # 1. Code Exploration:
 #    "How does the agent execute tasks in this codebase?"
-#    → Agent will use semantic search to explore architecture
+#    → Agent uses semantic search to explore architecture
 #
 # 2. Refactoring:
 #    "Refactor the ChainOfThoughtStrategy to use dependency injection"
-#    → Agent will read files, make changes, verify with tests
+#    → Agent reads files, makes changes, verifies with tests
 #
 # 3. Feature Addition:
 #    "Add support for streaming to the HTTP client"
-#    → Agent will create todos, implement incrementally, test
+#    → Agent creates todos, implements incrementally, tests
 #
 # 4. Debugging:
-#    "Why is the test failing in pkg/agent/agent_test.go?"
-#    → Agent will read test, run it, analyze error, propose fix
+#    "The test in pkg/agent/agent_test.go is failing. Fix it."
+#    → Agent reads test, runs it, analyzes error, proposes and applies fix
 #
 # 5. Documentation:
 #    "Write a comprehensive README for the tools package"
-#    → Agent will explore code, write docs, format nicely
+#    → Agent explores code, writes docs, formats nicely
 #
-# ============================================================================
-# COST COMPARISON
-# ============================================================================
-#
-# Cursor: $20/month (unlimited usage, but limited to Cursor IDE)
-#
-# Hector: Pay-as-you-go
-#   - Claude Sonnet: $3/1M input tokens, $15/1M output tokens
-#   - Typical session: ~10k tokens = $0.15
-#   - 133 sessions/month = $20 (break-even with Cursor)
-#   - BUT: Works in ANY editor, on-premise option, multi-LLM
+# 6. Multi-file Changes:
+#    "Add logging to all HTTP endpoints"
+#    → Agent finds endpoints, updates files systematically with todos
 #
 # ============================================================================
 
