@@ -200,96 +200,44 @@ If you want to skip the Qdrant/Ollama setup, you can run in basic mode:
 
 ## Example Tasks
 
-### 1. Code Exploration
+Once your agent is running, try these example prompts to see it in action:
 
-**Prompt:**
+### Code Exploration
 ```
 "How does the agent execute tasks in this codebase?"
 ```
+The agent uses semantic search to find relevant code, reads files, traces dependencies, and synthesizes an explanation with code citations.
 
-**What happens:**
-1. Agent uses semantic search: "agent task execution flow"
-2. Finds `pkg/agent/agent.go` with `ExecuteTask` method
-3. Reads the file, traces dependencies
-4. Searches for "tool execution" to understand the full flow
-5. Synthesizes explanation with code citations
-
-**Output:**
+### Refactoring
 ```
-The agent executes tasks through the `ExecuteTask` method in `pkg/agent/agent.go`.
-
-Here's the flow:
-
-1. **Task Reception** (lines 245-250):
-   ```245:250:pkg/agent/agent.go
-   func (a *Agent) ExecuteTask(ctx context.Context, task *a2a.Task) (*a2a.Task, error) {
-       // Validates task and prepares for execution
-   }
-   ```
-
-2. **Reasoning Loop** (lines 300-350):
-   The agent uses a reasoning strategy (chain-of-thought or supervisor) to iteratively:
-   - Generate responses with tool calls
-   - Execute tool calls in parallel
-   - Reflect on results
-   - Continue until no more tool calls
-
-3. **Tool Execution** (lines 400-450):
-   Tools are executed through the tool registry...
+"Refactor the ChainOfThoughtStrategy to use dependency injection"
 ```
+Creates a task plan, reads the implementation, searches for patterns, makes changes using `search_replace`, and runs tests to verify.
 
-### 2. Refactoring
-
-**Prompt:**
+### Feature Implementation
 ```
-"Refactor the ChainOfThoughtStrategy to use dependency injection for the LLM service"
+"Add rate limiting to the HTTP client"
 ```
+Explores existing code, researches patterns, proposes design, implements with tests, and updates documentation.
 
-**What happens:**
-1. Creates todos:
-   ```
-   📋 Current Tasks:
-     1. 🔄 Read current implementation
-     2. ⏳ Design new interface
-     3. ⏳ Implement changes
-     4. ⏳ Update tests
-   ```
-
-2. Reads `pkg/reasoning/chain_of_thought_strategy.go`
-3. Searches for "dependency injection patterns in Go"
-4. Makes changes using `search_replace`
-5. Runs tests with `execute_command`
-6. Marks todos complete
-
-### 3. Feature Addition
-
-**Prompt:**
-```
-"Add support for rate limiting to the HTTP client"
-```
-
-**What happens:**
-1. Explores existing HTTP client implementation
-2. Searches for "rate limiting patterns"
-3. Proposes design (token bucket vs. sliding window)
-4. Implements with tests
-5. Updates documentation
-
-### 4. Debugging
-
-**Prompt:**
+### Debugging
 ```
 "The test in pkg/agent/agent_test.go is failing. Fix it."
 ```
+Reads the test, runs it to see the error, analyzes the issue, searches for related code, applies a fix, and re-runs to verify.
 
-**What happens:**
-1. Reads test file
-2. Runs test: `go test ./pkg/agent -v`
-3. Analyzes error output
-4. Searches for related code
-5. Proposes fix
-6. Applies fix
-7. Runs test again to verify
+### Multi-File Changes
+```
+"Add logging to all HTTP endpoints"
+```
+Uses semantic search to find all endpoints, creates a task plan, updates files systematically, and ensures consistency.
+
+**What You'll Notice:**
+- Agent uses semantic search to understand your codebase
+- Works autonomously through multi-step tasks
+- Creates todos for complex changes
+- Runs tests and linters automatically
+- Provides clear explanations of what it's doing
 
 ---
 
@@ -297,7 +245,7 @@ Here's the flow:
 
 ### How Chain-of-Thought Works
 
-The reasoning loop is straightforward:
+The reasoning loop follows this pattern:
 
 ```
 ┌──────────────────────────────────────┐
@@ -326,38 +274,56 @@ The reasoning loop is straightforward:
     └─────────────────┘
 ```
 
-**How it works:**
-1. User provides a request
-2. LLM generates response and decides which tools to call
-3. Tools execute (in parallel when possible)
-4. Loop continues until LLM has no more tool calls
-5. Final response returned to user
-
-The loop naturally terminates when the LLM determines it has all the information needed to complete the task.
+**Key Points:**
+- The LLM naturally determines when it has enough information
+- Tools execute in parallel for speed
+- The loop continues until the LLM stops requesting tools
+- No manual intervention needed—the agent manages its own workflow
 
 ### How Semantic Search Works
 
-**One-time setup:**
-Your codebase is split into chunks, converted to vector embeddings, and stored in Qdrant. This creates a searchable vector database of your entire codebase.
+**One-Time Setup (Indexing):**
 
-**At query time:**
 ```
-Query: "authentication flow"
-   ↓
-Convert to vector embedding
-   ↓
-Find similar vectors in database
-   ↓
-Return relevant code chunks:
-  • auth.go:50-80 (95% match)
-  • middleware.go:120-150 (89% match)
-  • user.go:200-230 (84% match)
+┌─────────────────────────────────────┐
+│  Codebase Indexing                  │
+│                                     │
+│  For each file:                     │
+│    1. Split into chunks             │
+│    2. Generate embeddings           │
+│    3. Store in Qdrant               │
+│                                     │
+│  Result: Vector database            │
+└─────────────────────────────────────┘
 ```
 
-**Why this is powerful:**
-- Finds code by **meaning**, not keywords
-- Discovers related code even with different names
-- Fast vector similarity search
+**At Query Time:**
+
+```
+┌─────────────────────────────────────┐
+│ Query: "authentication flow"        │
+└─────────────────────────────────────┘
+              ↓
+┌─────────────────────────────────────┐
+│ Convert to vector embedding         │
+└─────────────────────────────────────┘
+              ↓
+┌─────────────────────────────────────┐
+│ Find similar vectors in database    │
+└─────────────────────────────────────┘
+              ↓
+┌─────────────────────────────────────┐
+│ Return top matches:                 │
+│  • auth.go:50-80 (95% match)       │
+│  • middleware.go:120-150 (89%)     │
+│  • user.go:200-230 (84%)           │
+└─────────────────────────────────────┘
+```
+
+**Why This Works:**
+- Finds code by **meaning**, not just keyword matching
+- Discovers related concepts even with different naming
+- Fast vector similarity search (sub-second queries)
 
 ---
 
