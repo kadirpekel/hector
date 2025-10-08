@@ -19,85 +19,50 @@
 
 ## Why This Tutorial
 
-This tutorial demonstrates how to build a powerful AI coding assistant using **pure declarative configuration** - no programming required. You'll learn:
+With Hector, you can build a powerful AI coding assistant using **pure YAML configuration**—no programming required. This tutorial shows you how to create an intelligent agent with capabilities comparable to commercial coding assistants.
 
-1. **How AI coding assistants work** - Understanding the core components (prompts, reasoning loops, tool execution)
-2. **Configuration over code** - Building complex behavior through YAML configuration
-3. **Flexibility through modularity** - Swapping LLM providers, customizing tools, and adjusting behavior
+**What you'll build:**
+- ✅ **Semantic code search** - Find code by meaning, not keywords
+- ✅ **Chain-of-thought reasoning** - Iterative problem solving
+- ✅ **Tool execution** - File operations, commands, tests, linters
+- ✅ **Streaming responses** - Real-time output as the agent works
+- ✅ **Full customization** - Every prompt, tool, and behavior under your control
 
-By the end, you'll have:
-- ✅ A working AI coding assistant
-- ✅ Deep understanding of how these systems operate
-- ✅ Full control to customize for your specific needs
-- ✅ Foundation to experiment with different approaches
+**What you'll learn:**
+- How AI coding assistants work under the hood
+- The power of declarative configuration over imperative code
+- How to customize and extend the agent for your workflow
+- How to deploy on your own infrastructure
+
+**The result:** A production-ready AI coding assistant you fully own and control, deployable anywhere, integrable with any workflow.
 
 ---
 
 ## Understanding AI Coding Assistants
 
-AI coding assistants are built from several key components that work together:
+AI coding assistants rely on three core components:
 
-### 1. The Prompts
+### 1. **Effective Prompts**
 
-Modern AI coding assistants use carefully crafted prompts with LLMs like Claude Sonnet. Here's an example of an effective system prompt pattern:
+The system prompt establishes the agent as a "pair programmer" who takes action rather than just making suggestions. Key elements:
+- Defines the agent's role and behavior
+- Instructs to implement changes, not just suggest them
+- Emphasizes thoroughness and self-sufficiency
+- Guides tool usage patterns
 
-```
-You are an AI coding assistant, powered by Claude Sonnet 4.5. You operate in Cursor.
+### 2. **Chain-of-Thought Reasoning**
 
-You are pair programming with a USER to solve their coding task. Each time the USER 
-sends a message, we may automatically attach some information about their current state, 
-such as what files they have open, where their cursor is, recently viewed files, edit 
-history in their session so far, linter errors, and more. This information may or may 
-not be relevant to the coding task, it is up for you to decide.
+The agent iterates through a simple loop: generate response → execute tools → continue until no more tool calls needed. The LLM naturally determines when it has gathered enough information to complete the task.
 
-Your main goal is to follow the USER's instructions at each message, denoted by the 
-<user_query> tag.
-```
+### 3. **Tool Execution**
 
-**Key insight:** The prompt establishes Claude as a "pair programmer" who has context and should take action, not just make suggestions.
+Essential capabilities that make the agent practical:
+- **Semantic Search** - Find relevant code by meaning, not keywords
+- **File Operations** - Read, write, and edit files precisely
+- **Command Execution** - Run tests, linters, build tools
+- **Parallel Execution** - Handle multiple operations simultaneously for speed
 
-### 2. Reasoning Instructions
-
-```
-By default, implement changes rather than only suggesting them.
-Be THOROUGH when gathering information. Make sure you have the FULL picture before replying.
-TRACE every symbol back to its definitions and usages so you fully understand it.
-Semantic search is your MAIN exploration tool.
-Bias towards not asking the user for help if you can find the answer yourself.
-```
-
-**Key insight:** Bias toward **action** (not suggestions), **thoroughness** (not quick answers), and **self-sufficiency** (not asking users).
-
-### 3. Chain-of-Thought Loop
-
-The core reasoning loop is simple - continue until the LLM stops requesting tool calls:
-
-```go
-func (s *ChainOfThoughtStrategy) ShouldStop(...) bool {
-    return len(toolCalls) == 0  // Stop when no more tool calls
-}
-```
-
-**Key insight:** Loop until the LLM stops making tool calls. The model determines when it has enough information to provide a complete answer.
-
-### 4. Parallel Tool Calls
-
-```
-If you intend to call multiple tools and there are no dependencies between the tool calls, 
-make all of the independent tool calls in parallel.
-```
-
-**Key insight:** Read 3 files? Make 3 parallel calls. Explore 5 functions? 5 parallel searches. This is **fast**.
-
-### 5. Semantic Search
-
-```
-- CRITICAL: Start with a broad, high-level query (e.g. "authentication flow")
-- MANDATORY: Run multiple searches with different wording
-- Keep searching new areas until you're CONFIDENT nothing important remains
-```
-
-**Key insight:** Semantic search is the **main** exploration tool, not a fallback. Start broad, then narrow.
+**The Power of Configuration:** With Hector, you get all these capabilities through pure YAML—no coding required. You define the prompts, configure the tools, and set the reasoning parameters declaratively.
 
 ---
 
@@ -332,94 +297,67 @@ Here's the flow:
 
 ### How Chain-of-Thought Works
 
+The reasoning loop is straightforward:
+
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ USER: "Add tests for the auth module"                      │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│ ITERATION 1: Claude generates response                      │
-│ • Tool calls: [search("auth module tests")]                │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Execute tools in parallel                                   │
-│ ✅ search → Found auth.go, auth_test.go                    │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│ REFLECTION: Analyze tool results                           │
-│ • Confidence: 80%                                           │
-│ • Recommendation: Continue (need to read files)            │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│ ITERATION 2: Claude generates response                      │
-│ • Tool calls: [write_file("auth_test.go", "...")]        │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Execute tools                                               │
-│ ✅ write_file → Created auth_test.go                      │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│ ITERATION 3: Claude generates response                      │
-│ • Tool calls: []                                            │
-│ • Text: "I've added comprehensive tests..."               │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│ DONE: No more tool calls, return to user                   │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────┐
+│  User Request                        │
+│  "Add tests for auth module"         │
+└──────────────────────────────────────┘
+              ↓
+    ┌─────────────────┐
+    │  LLM generates  │ ←──┐
+    │  response +     │    │
+    │  tool calls     │    │
+    └─────────────────┘    │
+              ↓            │
+    ┌─────────────────┐    │
+    │  Execute tools  │    │
+    │  in parallel    │    │
+    └─────────────────┘    │
+              ↓            │
+       More tools? ─────Yes─┘
+              │
+             No
+              ↓
+    ┌─────────────────┐
+    │  Return result  │
+    │  to user        │
+    └─────────────────┘
 ```
 
-**Key points:**
-1. **Simple loop:** Generate → Execute → Reflect → Repeat
-2. **Natural termination:** LLM decides when to stop (no tool calls)
-3. **Parallel execution:** Independent tools run simultaneously
-4. **Self-reflection:** Agent analyzes its own progress
+**How it works:**
+1. User provides a request
+2. LLM generates response and decides which tools to call
+3. Tools execute (in parallel when possible)
+4. Loop continues until LLM has no more tool calls
+5. Final response returned to user
+
+The loop naturally terminates when the LLM determines it has all the information needed to complete the task.
 
 ### How Semantic Search Works
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ CODEBASE INDEXING (one-time)                               │
-│                                                             │
-│ For each file:                                              │
-│   1. Split into chunks (~500 tokens)                       │
-│   2. Generate embeddings (vector representations)          │
-│   3. Store in Qdrant with metadata                         │
-│                                                             │
-│ Result: Vector database of your entire codebase            │
-└─────────────────────────────────────────────────────────────┘
+**One-time setup:**
+Your codebase is split into chunks, converted to vector embeddings, and stored in Qdrant. This creates a searchable vector database of your entire codebase.
 
-┌─────────────────────────────────────────────────────────────┐
-│ SEARCH QUERY: "authentication flow"                        │
-│                                                             │
-│   1. Generate query embedding                               │
-│   2. Find nearest vectors (cosine similarity)              │
-│   3. Return top K chunks with scores                       │
-│   4. Format results for LLM                                │
-│                                                             │
-│ Results:                                                    │
-│   • auth.go:50-80 (score: 0.92)                           │
-│   • middleware.go:120-150 (score: 0.87)                   │
-│   • user.go:200-230 (score: 0.81)                         │
-└─────────────────────────────────────────────────────────────┘
+**At query time:**
+```
+Query: "authentication flow"
+   ↓
+Convert to vector embedding
+   ↓
+Find similar vectors in database
+   ↓
+Return relevant code chunks:
+  • auth.go:50-80 (95% match)
+  • middleware.go:120-150 (89% match)
+  • user.go:200-230 (84% match)
 ```
 
 **Why this is powerful:**
-- **Semantic** not keyword matching
-- **Fast:** O(log n) vector search
-- **Context-aware:** Finds related code even with different names
+- Finds code by **meaning**, not keywords
+- Discovers related code even with different names
+- Fast vector similarity search
 
 ---
 
@@ -615,23 +553,21 @@ The complete working example is available at: [`configs/coding.yaml`](../../conf
 
 ## Important Note
 
-**What we've built:** This tutorial demonstrates building a **Cursor-like coding assistant at its core** - the AI agent that reasons, searches code, and executes tasks. On the agent side, this is close to a production-ready system with proper chain-of-thought reasoning, semantic search, tool execution, and reflection capabilities.
+**What You've Built:** This tutorial demonstrates building the **core AI agent**—the intelligent reasoning engine that powers coding assistants. With Hector's pure YAML configuration, you've created a production-ready agent with:
 
-**What Cursor offers beyond this:** Cursor is a much more sophisticated **complete IDE solution** that includes:
-- **Native editor integration** - Deep integration with VS Code fork
-- **Inline diff views** - Visual code change previews directly in the editor
-- **Multi-file editing UI** - Seamless interface for reviewing changes across files
-- **Checkpoint/rollback system** - Version control for AI-generated changes
-- **Inline code completion** - Real-time suggestions as you type
-- **Chat panel integration** - Built-in chat interface within the IDE
-- **File tree awareness** - Context-aware file navigation and suggestions
-- **Terminal integration** - Embedded terminal with AI context
-- **Git integration** - Smart commit messages and change tracking
-- **Collaborative editing** - Multi-cursor and pair programming features
-- **Command palette** - Quick access to AI features via keyboard
-- **Settings UI** - User-friendly configuration interface
+- ✅ **Chain-of-thought reasoning** - Iterative problem solving
+- ✅ **Semantic code search** - Intelligent codebase exploration  
+- ✅ **Tool execution** - File operations, commands, and more
+- ✅ **Streaming responses** - Real-time output
+- ✅ **Full customization** - Complete control over prompts and behavior
 
-**The distinction:** Building a powerful AI agent (what this tutorial covers) is different from building a polished IDE experience. The agent's reasoning capabilities, tool use, and code understanding can match professional systems, but the user experience and workflow integration require significant additional IDE engineering.
+**About Complete Solutions:** Commercial products like Cursor combine a powerful AI agent with a polished IDE experience—native editor integration, inline diffs, visual change previews, and seamless workflows. That complete package offers significant value, especially if you prefer an all-in-one solution.
 
-**This is valuable because:** Understanding how the AI agent works gives you full control over the intelligence layer, letting you customize reasoning strategies, add domain-specific tools, and deploy on your infrastructure - even if you access it through a terminal or API rather than a native IDE.
+**Hector's Different Approach:** Instead of an integrated IDE, Hector gives you the intelligence layer as a flexible, standalone service. You can:
+- Deploy anywhere (laptop, datacenter, cloud, air-gapped)
+- Integrate with any workflow (terminal, API, web, custom IDE plugin)
+- Customize every aspect (prompts, tools, reasoning strategies)
+- Own and control your infrastructure
+
+**The Choice:** If you want a polished, ready-to-use IDE with AI built in, Cursor and similar products are excellent. If you need flexibility, customization, self-hosting, or want to integrate AI into your own systems and workflows, Hector provides the core intelligence you need—without vendor lock-in.
 
