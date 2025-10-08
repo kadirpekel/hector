@@ -10,6 +10,8 @@ repository: "kadirpekel/hector"
 # Build settings
 markdown: kramdown
 highlighter: rouge
+remote_theme: just-the-docs/just-the-docs
+
 plugins:
   - jekyll-feed
   - jekyll-sitemap
@@ -19,6 +21,31 @@ plugins:
   - jekyll-readme-index
   - jekyll-default-layout
   - jekyll-titles-from-headings
+
+# Just the Docs theme configuration
+color_scheme: light
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 3
+  preview_words_before: 5
+  preview_words_after: 10
+  tokenizer_separator: /[\s/]+/
+  rel_url: true
+  button: false
+
+# Navigation structure for just-the-docs
+nav_external_links:
+  - title: "GitHub Repository"
+    url: "https://github.com/kadirpekel/hector"
+    hide_icon: false
+
+# Footer content
+footer_content: "Copyright &copy; 2025 Hector Team. Licensed under AGPL-3.0."
+
+# Back to top link
+back_to_top: true
+back_to_top_text: "Back to top"
 
 # Kramdown settings
 kramdown:
@@ -30,53 +57,6 @@ kramdown:
       line_numbers: false
     block:
       line_numbers: true
-
-# Navigation structure
-nav_order:
-  - title: "Home"
-    url: "/"
-  - title: "Quick Start"
-    url: "/QUICK_START"
-  - title: "Tutorials"
-    children:
-      - title: "LangChain vs Hector"
-        url: "/tutorials/MULTI_AGENT_RESEARCH_PIPELINE"
-      - title: "Build Your Own Cursor"
-        url: "/tutorials/BUILD_YOUR_OWN_CURSOR"
-  - title: "Core Guides"
-    children:
-      - title: "Building Agents"
-        url: "/AGENTS"
-      - title: "Tools & Extensions"
-        url: "/TOOLS"
-      - title: "Custom MCP Tools"
-        url: "/MCP_CUSTOM_TOOLS"
-      - title: "Configuration"
-        url: "/CONFIGURATION"
-      - title: "CLI Guide"
-        url: "/CLI_GUIDE"
-  - title: "Advanced"
-    children:
-      - title: "Architecture"
-        url: "/ARCHITECTURE"
-      - title: "External Agents"
-        url: "/EXTERNAL_AGENTS"
-      - title: "Authentication"
-        url: "/AUTHENTICATION"
-      - title: "Plugin Development"
-        url: "/PLUGINS"
-      - title: "Structured Output"
-        url: "/STRUCTURED_OUTPUT"
-  - title: "Reference"
-    children:
-      - title: "API Reference"
-        url: "/API_REFERENCE"
-      - title: "A2A Compliance"
-        url: "/A2A_COMPLIANCE"
-      - title: "Testing Guide"
-        url: "/TESTING"
-      - title: "Contributing"
-        url: "/CONTRIBUTING"
 
 # Collections
 collections:
@@ -95,7 +75,7 @@ defaults:
       path: "tutorials"
       type: "pages"
     values:
-      layout: "tutorial"
+      layout: "default"
 
 # Exclude from processing
 exclude:
@@ -107,10 +87,7 @@ exclude:
   - Gemfile.lock
   - node_modules/
   - vendor/
-
-# Include processing
-include:
-  - _pages
+  - README_DEVELOPMENT.md
 
 # SEO and social
 author: "Hector Team"
@@ -130,6 +107,3 @@ hector:
   repo_url: "https://github.com/kadirpekel/hector"
   demo_url: "https://demo.hector.ai"
   discord_url: "https://discord.gg/hector"
-  
-# Analytics (optional)
-google_analytics: # Add GA tracking ID if needed

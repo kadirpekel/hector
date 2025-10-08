@@ -1,3 +1,11 @@
+---
+layout: default
+title: "LangChain vs Hector: Multi-Agent Systems"
+nav_order: 3
+parent: Tutorials
+description: "See how Hector transforms complex LangChain multi-agent implementations into simple YAML configuration"
+---
+
 # Building Multi-Agent Systems: LangChain vs Hector
 
 **TL;DR:** See how Hector transforms complex LangChain multi-agent implementations into simple YAML configuration. What takes 500+ lines of Python code in LangChain becomes 120 lines of YAML in Hector - same functionality, dramatically simpler approach.

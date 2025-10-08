@@ -1,3 +1,10 @@
+---
+layout: default
+title: Quick Start
+nav_order: 2
+description: "Get up and running with Hector in 5 minutes"
+---
+
 # Hector Quick Start - Pure A2A
 
 ## Overview
