@@ -3,8 +3,8 @@
 # Site settings
 title: "Hector Documentation"
 description: "Pure A2A-Native Declarative AI Agent Platform - Complete Documentation"
-url: "https://kadirpekel.github.io"
-baseurl: "/hector"
+url: "https://gohector.dev"
+baseurl: ""
 repository: "kadirpekel/hector"
 
 # Build settings
@@ -108,5 +108,6 @@ github:
 hector:
   version: "1.0.0"
   repo_url: "https://github.com/kadirpekel/hector"
-  demo_url: "https://demo.hector.ai"
+  docs_url: "https://gohector.dev"
+  demo_url: "https://demo.gohector.dev"
   discord_url: "https://discord.gg/hector"
