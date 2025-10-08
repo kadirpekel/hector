@@ -96,7 +96,8 @@ Hector's clean architecture scales from single agents to complex multi-agent sys
 
 ### Single Agent Architecture
 
-```
+<div class="architecture-diagram">
+<pre>
 ┌─────────────────────────────────────────────────────────────┐
 │                        USER / CLIENT                        │
 │                  (CLI, HTTP, A2A Protocol)                  │
@@ -128,11 +129,13 @@ Hector's clean architecture scales from single agents to complex multi-agent sys
 │ • Search     │    │ • Gemini     │   │   Search     │
 │ • MCP        │    │ • Plugins    │   │ • Documents  │
 └──────────────┘    └──────────────┘   └──────────────┘
-```
+</pre>
+</div>
 
 ### Multi-Agent Architecture
 
-```
+<div class="architecture-diagram">
+<pre>
 ┌─────────────────────────────────────────────────────────────┐
 │                        USER / CLIENT                        │
 │                  (CLI, HTTP, A2A Protocol)                  │
@@ -165,7 +168,8 @@ Hector's clean architecture scales from single agents to complex multi-agent sys
                   │ Agent Registry│
                   │  (All Agents) │
                   └───────────────┘
-```
+</pre>
+</div>
 
 ---
 
@@ -458,6 +462,26 @@ llms:
 </div>
 
 <style>
+.architecture-diagram {
+  background: var(--code-background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+}
+
+.architecture-diagram pre {
+  margin: 0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  color: var(--body-text-color);
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
 .grid-container {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
