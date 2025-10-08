@@ -1,0 +1,135 @@
+# Hector Documentation - GitHub Pages Configuration
+
+# Site settings
+title: "Hector Documentation"
+description: "Pure A2A-Native Declarative AI Agent Platform - Complete Documentation"
+url: "https://kadirpekel.github.io"
+baseurl: "/hector"
+repository: "kadirpekel/hector"
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-default-layout
+  - jekyll-titles-from-headings
+
+# Kramdown settings
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    css_class: 'highlight'
+    span:
+      line_numbers: false
+    block:
+      line_numbers: true
+
+# Navigation structure
+nav_order:
+  - title: "Home"
+    url: "/"
+  - title: "Quick Start"
+    url: "/QUICK_START"
+  - title: "Tutorials"
+    children:
+      - title: "LangChain vs Hector"
+        url: "/tutorials/MULTI_AGENT_RESEARCH_PIPELINE"
+      - title: "Build Your Own Cursor"
+        url: "/tutorials/BUILD_YOUR_OWN_CURSOR"
+  - title: "Core Guides"
+    children:
+      - title: "Building Agents"
+        url: "/AGENTS"
+      - title: "Tools & Extensions"
+        url: "/TOOLS"
+      - title: "Custom MCP Tools"
+        url: "/MCP_CUSTOM_TOOLS"
+      - title: "Configuration"
+        url: "/CONFIGURATION"
+      - title: "CLI Guide"
+        url: "/CLI_GUIDE"
+  - title: "Advanced"
+    children:
+      - title: "Architecture"
+        url: "/ARCHITECTURE"
+      - title: "External Agents"
+        url: "/EXTERNAL_AGENTS"
+      - title: "Authentication"
+        url: "/AUTHENTICATION"
+      - title: "Plugin Development"
+        url: "/PLUGINS"
+      - title: "Structured Output"
+        url: "/STRUCTURED_OUTPUT"
+  - title: "Reference"
+    children:
+      - title: "API Reference"
+        url: "/API_REFERENCE"
+      - title: "A2A Compliance"
+        url: "/A2A_COMPLIANCE"
+      - title: "Testing Guide"
+        url: "/TESTING"
+      - title: "Contributing"
+        url: "/CONTRIBUTING"
+
+# Collections
+collections:
+  tutorials:
+    output: true
+    permalink: /:collection/:name/
+
+# Default layouts
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"
+  - scope:
+      path: "tutorials"
+      type: "pages"
+    values:
+      layout: "tutorial"
+
+# Exclude from processing
+exclude:
+  - benchmarks/
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/
+
+# Include processing
+include:
+  - _pages
+
+# SEO and social
+author: "Hector Team"
+twitter:
+  username: hectorai
+  card: summary_large_image
+
+# GitHub Pages specific
+github:
+  repository_url: "https://github.com/kadirpekel/hector"
+  repository_name: "hector"
+  owner_name: "kadirpekel"
+  
+# Custom variables
+hector:
+  version: "1.0.0"
+  repo_url: "https://github.com/kadirpekel/hector"
+  demo_url: "https://demo.hector.ai"
+  discord_url: "https://discord.gg/hector"
+  
+# Analytics (optional)
+google_analytics: # Add GA tracking ID if needed

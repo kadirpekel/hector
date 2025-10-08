@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <!-- SEO -->
+    <title>{% if page.title %}{{ page.title | escape }} | {% endif %}{{ site.title | escape }}</title>
+    <meta name="description" content="{% if page.description %}{{ page.description | escape }}{% else %}{{ site.description | escape }}{% endif %}">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="{% if page.title %}{{ page.title | escape }} | {% endif %}{{ site.title | escape }}">
+    <meta property="og:description" content="{% if page.description %}{{ page.description | escape }}{% else %}{{ site.description | escape }}{% endif %}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ page.url | absolute_url }}">
+    <meta property="og:image" content="{{ '/assets/images/hector-og.png' | absolute_url }}">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{% if page.title %}{{ page.title | escape }} | {% endif %}{{ site.title | escape }}">
+    <meta name="twitter:description" content="{% if page.description %}{{ page.description | escape }}{% else %}{{ site.description | escape }}{% endif %}">
+    <meta name="twitter:image" content="{{ '/assets/images/hector-og.png' | absolute_url }}">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="{{ page.url | absolute_url }}">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="{{ '/assets/images/favicon.png' | relative_url }}">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="{{ '/assets/css/main.css' | relative_url }}">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Syntax highlighting -->
+    <link rel="stylesheet" href="{{ '/assets/css/syntax.css' | relative_url }}">
+    
+    {% seo %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="site-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="site-title">
+                    <a href="{{ '/' | relative_url }}">
+                        <img src="{{ '/assets/images/hector-logo.png' | relative_url }}" alt="Hector" class="logo">
+                        <span>Hector</span>
+                    </a>
+                    <span class="tagline">Documentation</span>
+                </div>
+                
+                <nav class="main-nav">
+                    <ul>
+                        <li><a href="{{ '/QUICK_START' | relative_url }}">Quick Start</a></li>
+                        <li class="dropdown">
+                            <a href="#" class="dropdown-toggle">Tutorials ▾</a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{{ '/tutorials/MULTI_AGENT_RESEARCH_PIPELINE' | relative_url }}">LangChain vs Hector</a></li>
+                                <li><a href="{{ '/tutorials/BUILD_YOUR_OWN_CURSOR' | relative_url }}">Build Your Own Cursor</a></li>
+                            </ul>
+                        </li>
+                        <li class="dropdown">
+                            <a href="#" class="dropdown-toggle">Guides ▾</a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{{ '/AGENTS' | relative_url }}">Building Agents</a></li>
+                                <li><a href="{{ '/TOOLS' | relative_url }}">Tools & Extensions</a></li>
+                                <li><a href="{{ '/MCP_CUSTOM_TOOLS' | relative_url }}">Custom MCP Tools</a></li>
+                                <li><a href="{{ '/CONFIGURATION' | relative_url }}">Configuration</a></li>
+                            </ul>
+                        </li>
+                        <li class="dropdown">
+                            <a href="#" class="dropdown-toggle">Reference ▾</a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{{ '/API_REFERENCE' | relative_url }}">API Reference</a></li>
+                                <li><a href="{{ '/ARCHITECTURE' | relative_url }}">Architecture</a></li>
+                                <li><a href="{{ '/A2A_COMPLIANCE' | relative_url }}">A2A Compliance</a></li>
+                            </ul>
+                        </li>
+                        <li><a href="{{ site.hector.repo_url }}" target="_blank" class="github-link">GitHub</a></li>
+                    </ul>
+                </nav>
+                
+                <button class="mobile-menu-toggle" aria-label="Toggle mobile menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="site-main">
+        <div class="container">
+            <div class="content-wrapper">
+                <!-- Sidebar Navigation -->
+                {% if page.url != '/' %}
+                <aside class="sidebar">
+                    <div class="sidebar-content">
+                        <div class="sidebar-section">
+                            <h4>Getting Started</h4>
+                            <ul>
+                                <li><a href="{{ '/' | relative_url }}">Documentation Home</a></li>
+                                <li><a href="{{ '/QUICK_START' | relative_url }}">Quick Start</a></li>
+                            </ul>
+                        </div>
+                        
+                        <div class="sidebar-section">
+                            <h4>Tutorials</h4>
+                            <ul>
+                                <li><a href="{{ '/tutorials/MULTI_AGENT_RESEARCH_PIPELINE' | relative_url }}">LangChain vs Hector</a></li>
+                                <li><a href="{{ '/tutorials/BUILD_YOUR_OWN_CURSOR' | relative_url }}">Build Your Own Cursor</a></li>
+                            </ul>
+                        </div>
+                        
+                        <div class="sidebar-section">
+                            <h4>Core Guides</h4>
+                            <ul>
+                                <li><a href="{{ '/AGENTS' | relative_url }}">Building Agents</a></li>
+                                <li><a href="{{ '/TOOLS' | relative_url }}">Tools & Extensions</a></li>
+                                <li><a href="{{ '/MCP_CUSTOM_TOOLS' | relative_url }}">Custom MCP Tools 🔥</a></li>
+                                <li><a href="{{ '/CONFIGURATION' | relative_url }}">Configuration</a></li>
+                                <li><a href="{{ '/CLI_GUIDE' | relative_url }}">CLI Guide</a></li>
+                            </ul>
+                        </div>
+                        
+                        <div class="sidebar-section">
+                            <h4>Advanced</h4>
+                            <ul>
+                                <li><a href="{{ '/ARCHITECTURE' | relative_url }}">Architecture</a></li>
+                                <li><a href="{{ '/EXTERNAL_AGENTS' | relative_url }}">External Agents</a></li>
+                                <li><a href="{{ '/AUTHENTICATION' | relative_url }}">Authentication</a></li>
+                                <li><a href="{{ '/PLUGINS' | relative_url }}">Plugin Development</a></li>
+                                <li><a href="{{ '/STRUCTURED_OUTPUT' | relative_url }}">Structured Output</a></li>
+                            </ul>
+                        </div>
+                        
+                        <div class="sidebar-section">
+                            <h4>Reference</h4>
+                            <ul>
+                                <li><a href="{{ '/API_REFERENCE' | relative_url }}">API Reference</a></li>
+                                <li><a href="{{ '/A2A_COMPLIANCE' | relative_url }}">A2A Compliance</a></li>
+                                <li><a href="{{ '/TESTING' | relative_url }}">Testing Guide</a></li>
+                                <li><a href="{{ '/CONTRIBUTING' | relative_url }}">Contributing</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </aside>
+                {% endif %}
+                
+                <!-- Page Content -->
+                <div class="page-content {% if page.url == '/' %}full-width{% endif %}">
+                    {% if page.url != '/' %}
+                    <div class="page-header">
+                        <div class="breadcrumb">
+                            <a href="{{ '/' | relative_url }}">Documentation</a>
+                            {% if page.url contains '/tutorials/' %}
+                            <span class="separator">›</span>
+                            <span>Tutorials</span>
+                            {% endif %}
+                            <span class="separator">›</span>
+                            <span>{{ page.title | default: page.name }}</span>
+                        </div>
+                        
+                        {% if page.title %}
+                        <h1>{{ page.title }}</h1>
+                        {% endif %}
+                        
+                        {% if page.description %}
+                        <p class="page-description">{{ page.description }}</p>
+                        {% endif %}
+                        
+                        <div class="page-meta">
+                            <a href="{{ site.hector.repo_url }}/edit/main/docs/{{ page.path }}" class="edit-link" target="_blank">
+                                Edit this page
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="page-body">
+                        {{ content }}
+                    </div>
+                    
+                    {% if page.url != '/' %}
+                    <div class="page-footer">
+                        <div class="page-navigation">
+                            <!-- Previous/Next navigation would go here -->
+                        </div>
+                        
+                        <div class="page-feedback">
+                            <p>Was this page helpful?</p>
+                            <div class="feedback-buttons">
+                                <button class="feedback-btn" data-feedback="yes">👍 Yes</button>
+                                <button class="feedback-btn" data-feedback="no">👎 No</button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Hector</h4>
+                    <p>Pure A2A-Native Declarative AI Agent Platform</p>
+                    <div class="social-links">
+                        <a href="{{ site.hector.repo_url }}" target="_blank">GitHub</a>
+                        <a href="{{ site.hector.discord_url }}" target="_blank">Discord</a>
+                    </div>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Documentation</h4>
+                    <ul>
+                        <li><a href="{{ '/QUICK_START' | relative_url }}">Quick Start</a></li>
+                        <li><a href="{{ '/AGENTS' | relative_url }}">Building Agents</a></li>
+                        <li><a href="{{ '/tutorials/MULTI_AGENT_RESEARCH_PIPELINE' | relative_url }}">LangChain vs Hector</a></li>
+                        <li><a href="{{ '/API_REFERENCE' | relative_url }}">API Reference</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Community</h4>
+                    <ul>
+                        <li><a href="{{ '/CONTRIBUTING' | relative_url }}">Contributing</a></li>
+                        <li><a href="{{ site.hector.repo_url }}/issues" target="_blank">Report Issues</a></li>
+                        <li><a href="{{ site.hector.discord_url }}" target="_blank">Join Discord</a></li>
+                        <li><a href="https://a2a-protocol.org" target="_blank">A2A Protocol</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Resources</h4>
+                    <ul>
+                        <li><a href="{{ site.hector.repo_url }}/releases" target="_blank">Releases</a></li>
+                        <li><a href="{{ site.hector.repo_url }}/examples" target="_blank">Examples</a></li>
+                        <li><a href="{{ '/CHANGELOG' | relative_url }}">Changelog</a></li>
+                        <li><a href="{{ '/LICENSE' | relative_url }}">License</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; {{ 'now' | date: "%Y" }} Hector Team. Licensed under AGPL-3.0.</p>
+                <p>Built with ❤️ using <a href="https://jekyllrb.com" target="_blank">Jekyll</a> and <a href="https://pages.github.com" target="_blank">GitHub Pages</a>.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="{{ '/assets/js/main.js' | relative_url }}"></script>
+    
+    <!-- Analytics -->
+    {% if site.google_analytics %}
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ site.google_analytics }}"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '{{ site.google_analytics }}');
+    </script>
+    {% endif %}
+</body>
+</html>
