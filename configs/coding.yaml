@@ -316,21 +316,21 @@ agents:
 # ============================================================================
 llms:
   sonnet-llm:
-    type: "gemini"
-    model: "gemini-2.0-flash-exp"      # Testing to fix premature exits
-    api_key: "${GEMINI_API_KEY}"
+    type: "openai"
+    model: "gpt-4o"                    # Good balance of speed and quality
+    api_key: "${OPENAI_API_KEY}"
     temperature: 0.7                   # Natural variation (like real Cursor)
     max_tokens: 8000                   # Enough for complex refactoring
     timeout: 120                       # 2 minutes for complex operations
     
     # Alternative providers:
-    # type: "openai"  # Good balance of speed and quality
-    # model: "gpt-4o"
-    # api_key: "${OPENAI_API_KEY}"
-    #
-    # type: "anthropic"  # Most reliable but can be expensive
+    # type: "anthropic"  # Most reliable (need credits)
     # model: "claude-sonnet-4-20250514"
     # api_key: "${ANTHROPIC_API_KEY}"
+    #
+    # type: "gemini"  # Fast but strict rate limits (good for quick tests only)
+    # model: "gemini-2.0-flash-exp"
+    # api_key: "${GEMINI_API_KEY}"
 
 # ============================================================================
 # VECTOR DATABASE FOR SEMANTIC SEARCH
