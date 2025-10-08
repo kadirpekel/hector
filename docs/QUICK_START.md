@@ -93,12 +93,12 @@ Expected output:
      Endpoint: http://0.0.0.0:8080/agents/hello/tasks
 ```
 
-**Get agent info:**
+**Get agent info (shorthand notation):**
 ```bash
-./hector info http://localhost:8080/agents/hello
+./hector info hello
 ```
 
-**Call the agent:**
+**Call the agent (shorthand notation):**
 ```bash
 ./hector call hello "Say hello to the A2A protocol!"
 ```
@@ -112,10 +112,15 @@ Hello! It's great to connect via the A2A protocol! How can I assist you today?
 📊 Tokens: 42 | Duration: 1234ms
 ```
 
-**Interactive chat:**
+**Interactive chat (shorthand notation):**
 ```bash
 ./hector chat hello
 ```
+
+> **Note**: Hector CLI now supports convenient shorthand notation! 
+> - Use just the agent ID: `hector call hello "prompt"`
+> - Or full URL: `hector call http://localhost:8080/agents/hello "prompt"`
+> - Or custom server: `hector call --server http://localhost:8081 hello "prompt"`
 
 Try:
 ```

@@ -103,15 +103,9 @@ func NewGeminiProviderFromConfig(cfg *config.LLMProviderConfig) (*GeminiProvider
 		return nil, fmt.Errorf("Gemini API key is required")
 	}
 
-	httpClient := httpclient.New(
-		httpclient.WithHTTPClient(&http.Client{Timeout: time.Duration(cfg.Timeout) * time.Second}),
-		httpclient.WithMaxRetries(cfg.MaxRetries),
-		httpclient.WithBaseDelay(time.Duration(cfg.RetryDelay)*time.Second),
-	)
-
 	return &GeminiProvider{
 		config:     cfg,
-		httpClient: httpClient,
+		httpClient: createHTTPClient(cfg),
 	}, nil
 }
 

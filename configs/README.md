@@ -20,10 +20,15 @@ This directory contains example configurations demonstrating various use cases f
 # Start A2A server
 hector serve --config configs/a2a-server.yaml
 
-# Test with CLI
-hector list
-hector info competitor_analyst
-hector call competitor_analyst "Analyze AI agent market"
+# Test with CLI (shorthand notation - so clean!)
+hector list                                              # List all agents
+hector info competitor_analyst                            # Get agent details
+hector call competitor_analyst "Analyze AI agent market"  # Execute task
+hector chat competitor_analyst                            # Interactive chat
+
+# Or use full URLs
+hector info http://localhost:8080/agents/competitor_analyst
+hector call http://localhost:8080/agents/competitor_analyst "Analyze..."
 
 # Test with curl (pure A2A protocol)
 curl http://localhost:8080/agents
@@ -85,9 +90,16 @@ hector call orchestrator "Research AI frameworks, analyze top 3, and write a com
 
 **Usage:**
 ```bash
-# Interactive mode
+# Start the server
 hector serve --config configs/coding.yaml
+
+# Interactive chat mode (shorthand)
+hector chat assistant
+
+# Or one-shot commands
 hector call assistant "Refactor the auth module to use JWT"
+hector call assistant "Add tests for the user service"
+hector call assistant "Fix the bug in payment processing"
 
 # Prerequisites:
 # - ANTHROPIC_API_KEY (required)

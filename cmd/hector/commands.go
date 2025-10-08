@@ -4,11 +4,24 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/a2a"
+)
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const (
+	clientIdentifier      = "hector-cli"
+	sessionIDDisplayLen   = 8
+	sessionCleanupTimeout = 5 * time.Second
+	defaultServerURL      = "http://localhost:8080"
+	envVarServer          = "HECTOR_SERVER"
 )
 
 // ============================================================================
@@ -114,9 +127,9 @@ func executeCallCommand(agentURL string, input string, token string, stream bool
 	client := createA2AClient(token, "")
 
 	// Get agent card
-	card, err := client.DiscoverAgent(context.Background(), agentURL)
+	card, err := discoverAgent(client, agentURL)
 	if err != nil {
-		return fmt.Errorf("failed to discover agent: %w", err)
+		return err
 	}
 
 	fmt.Printf("🤖 Calling %s...\n\n", card.Name)
@@ -194,9 +207,9 @@ func executeChatCommand(agentURL string, token string) error {
 	client := createA2AClient(token, "")
 
 	// Get agent card
-	card, err := client.DiscoverAgent(context.Background(), agentURL)
+	card, err := discoverAgent(client, agentURL)
 	if err != nil {
-		return fmt.Errorf("failed to discover agent: %w", err)
+		return err
 	}
 
 	fmt.Printf("💬 Chat with %s\n", card.Name)
@@ -208,22 +221,18 @@ func executeChatCommand(agentURL string, token string) error {
 	fmt.Println()
 
 	// Determine base server URL from agent card
-	// The agent URL format is: http://host:port/agents/{agentId}
-	// We need to extract: http://host:port
-	baseURL := card.URL
-	if idx := strings.Index(baseURL, "/agents/"); idx != -1 {
-		baseURL = baseURL[:idx]
-	} else {
-		// Fallback: derive from the agentURL we connected to
-		baseURL = agentURL
-		if idx := strings.Index(baseURL, "/agents/"); idx != -1 {
-			baseURL = baseURL[:idx]
+	baseURL, err := extractBaseURL(card.URL)
+	if err != nil {
+		// Fallback: try the provided agentURL
+		baseURL, err = extractBaseURL(agentURL)
+		if err != nil {
+			return fmt.Errorf("failed to extract base URL: %w", err)
 		}
 	}
 
 	// Create session for multi-turn conversation
 	metadata := map[string]interface{}{
-		"client": "hector-cli",
+		"client": clientIdentifier,
 	}
 
 	session, err := client.CreateSession(context.Background(), baseURL, card.Name, metadata)
@@ -231,11 +240,11 @@ func executeChatCommand(agentURL string, token string) error {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
 
-	fmt.Printf("🔗 Session: %s\n\n", session.ID[:8]+"...")
+	fmt.Printf("🔗 Session: %s\n\n", session.ID[:sessionIDDisplayLen]+"...")
 
 	// Ensure session cleanup on exit
 	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), sessionCleanupTimeout)
 		defer cancel()
 		client.DeleteSession(ctx, baseURL, session.ID)
 	}()
@@ -274,12 +283,12 @@ func executeChatCommand(agentURL string, token string) error {
 					continue
 				}
 				// Delete old session
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), sessionCleanupTimeout)
 				client.DeleteSession(ctx, baseURL, session.ID)
 				cancel()
 				// Use new session
 				session = newSession
-				fmt.Printf("💭 Conversation history cleared (new session: %s)\n\n", session.ID[:8]+"...")
+				fmt.Printf("💭 Conversation history cleared (new session: %s)\n\n", session.ID[:sessionIDDisplayLen]+"...")
 				continue
 			case "/info":
 				fmt.Printf("\n🤖 %s\n", card.Name)
@@ -349,6 +358,28 @@ func executeChatCommand(agentURL string, token string) error {
 // HELPER FUNCTIONS
 // ============================================================================
 
+// discoverAgent discovers an agent and returns its card
+func discoverAgent(client *a2a.Client, agentURL string) (*a2a.AgentCard, error) {
+	card, err := client.DiscoverAgent(context.Background(), agentURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to discover agent: %w", err)
+	}
+	return card, nil
+}
+
+// extractBaseURL extracts the base URL (scheme + host) from a full URL
+// Example: "http://localhost:8080/agents/my_agent" → "http://localhost:8080"
+func extractBaseURL(fullURL string) (string, error) {
+	parsed, err := url.Parse(fullURL)
+	if err != nil {
+		return "", err
+	}
+
+	// Build base URL with scheme and host only
+	baseURL := fmt.Sprintf("%s://%s", parsed.Scheme, parsed.Host)
+	return baseURL, nil
+}
+
 // createA2AClient creates an A2A client with authentication
 func createA2AClient(token string, apiKey string) *a2a.Client {
 	var auth *a2a.AuthCredentials
@@ -370,15 +401,20 @@ func createA2AClient(token string, apiKey string) *a2a.Client {
 	})
 }
 
-// resolveServerURL resolves the server URL with defaults
+// resolveServerURL resolves the server URL with defaults and smart fallbacks:
+// 1. Use provided serverURL if not empty
+// 2. Fall back to HECTOR_SERVER environment variable
+// 3. Fall back to http://localhost:8080
+// Also ensures the URL has a proper scheme (http:// or https://)
 func resolveServerURL(serverURL string) string {
 	if serverURL == "" {
 		// Check environment variable
-		if envServer := os.Getenv("HECTOR_SERVER"); envServer != "" {
-			return envServer
+		if envServer := os.Getenv(envVarServer); envServer != "" {
+			serverURL = envServer
+		} else {
+			// Default to localhost
+			return defaultServerURL
 		}
-		// Default to localhost
-		return "http://localhost:8080"
 	}
 
 	// Ensure has http:// or https://
@@ -389,14 +425,17 @@ func resolveServerURL(serverURL string) string {
 	return serverURL
 }
 
-// resolveAgentURL resolves agent URL, supporting shortcuts
-func resolveAgentURL(agentURL string, defaultServer string) string {
-	// If it's a full URL, use as-is
-	if strings.HasPrefix(agentURL, "http://") || strings.HasPrefix(agentURL, "https://") {
-		return agentURL
+// resolveAgentURL resolves agent URL, supporting two formats:
+// 1. Agent ID (shorthand): "my_agent" → "http://server:port/agents/my_agent"
+// 2. Full URL: "http://server:port/agents/my_agent" → used as-is
+// When using shorthand, the defaultServer parameter or environment variables determine the server
+func resolveAgentURL(agentID string, defaultServer string) string {
+	// If it's a full URL, use as-is (ignores defaultServer)
+	if strings.HasPrefix(agentID, "http://") || strings.HasPrefix(agentID, "https://") {
+		return agentID
 	}
 
-	// Otherwise, it's an agent ID - prepend default server
+	// Otherwise, it's an agent ID - construct full URL with default server
 	server := resolveServerURL(defaultServer)
-	return fmt.Sprintf("%s/agents/%s", strings.TrimSuffix(server, "/"), agentURL)
+	return fmt.Sprintf("%s/agents/%s", strings.TrimSuffix(server, "/"), agentID)
 }

@@ -15,6 +15,21 @@ import (
 )
 
 // ============================================================================
+// COMMON HELPERS
+// ============================================================================
+
+// createHTTPClient creates a configured HTTP client for LLM providers
+func createHTTPClient(cfg *config.LLMProviderConfig) *httpclient.Client {
+	return httpclient.New(
+		httpclient.WithHTTPClient(&http.Client{
+			Timeout: time.Duration(cfg.Timeout) * time.Second,
+		}),
+		httpclient.WithMaxRetries(cfg.MaxRetries),
+		httpclient.WithBaseDelay(time.Duration(cfg.RetryDelay)*time.Second),
+	)
+}
+
+// ============================================================================
 // OPENAI PROVIDER - CONSOLIDATED (Function Calling Only)
 // ============================================================================
 
@@ -170,16 +185,19 @@ func NewOpenAIProviderFromConfig(cfg *config.LLMProviderConfig) (*OpenAIProvider
 		return nil, err
 	}
 
+	// Create HTTP client with OpenAI-specific header parsing
+	httpClient := httpclient.New(
+		httpclient.WithHTTPClient(&http.Client{
+			Timeout: time.Duration(cfg.Timeout) * time.Second,
+		}),
+		httpclient.WithMaxRetries(cfg.MaxRetries),
+		httpclient.WithBaseDelay(time.Duration(cfg.RetryDelay)*time.Second),
+		httpclient.WithHeaderParser(httpclient.ParseOpenAIRateLimitHeaders),
+	)
+
 	return &OpenAIProvider{
-		config: cfg,
-		httpClient: httpclient.New(
-			httpclient.WithHTTPClient(&http.Client{
-				Timeout: time.Duration(cfg.Timeout) * time.Second,
-			}),
-			httpclient.WithMaxRetries(cfg.MaxRetries),
-			httpclient.WithBaseDelay(time.Duration(cfg.RetryDelay)*time.Second),
-			httpclient.WithHeaderParser(httpclient.ParseOpenAIRateLimitHeaders),
-		),
+		config:     cfg,
+		httpClient: httpClient,
 	}, nil
 }
 

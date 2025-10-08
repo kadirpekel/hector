@@ -191,11 +191,21 @@ export OPENAI_API_KEY="sk-..."
 # Start server
 ./hector serve --config my-agent.yaml
 
-# Chat with agent
+# In another terminal - Chat with agent (shorthand notation)
 ./hector chat assistant
+
+# Or call directly
+./hector call assistant "Explain quantum computing in simple terms"
+
+# Or list all agents
+./hector list
 ```
 
-**That's it!** You have a working AI agent with streaming, sessions, and A2A compliance.
+**That's it!** You have a working AI agent with:
+- ✅ Streaming output (enabled by default)
+- ✅ Multi-turn sessions  
+- ✅ A2A protocol compliance
+- ✅ Simple shorthand CLI
 
 ---
 
@@ -329,7 +339,14 @@ agents:
 
 **Usage:**
 ```bash
+# Start the multi-agent server
+./hector serve --config multi-agent.yaml
+
+# Call the orchestrator (shorthand notation)
 ./hector call orchestrator "Research AI frameworks, analyze top 3, translate summary to Spanish"
+
+# Or use interactive chat
+./hector chat orchestrator
 ```
 
 ---
@@ -363,19 +380,44 @@ agents:
 
 ```bash
 # Server Commands
-hector serve --config FILE [--debug]      # Start A2A server
+hector serve --config FILE [--debug]              # Start A2A server
 
-# Client Commands
-hector list [--server URL]                # List available agents
-hector call <agent> "prompt" [--stream]   # Call an agent
-hector chat <agent>                       # Interactive chat session
-hector version                            # Show version
+# Client Commands (Shorthand Notation)
+hector list                                       # List agents (default: localhost:8080)
+hector call my_agent "prompt"                     # Call agent (shorthand)
+hector chat my_agent                              # Interactive chat (shorthand)
+hector info my_agent                              # Get agent details
+
+# Client Commands (Full URL)
+hector call http://example.com/agents/my_agent "prompt"
+hector chat http://example.com/agents/my_agent
+
+# Client Commands (Custom Server)
+hector list --server https://agents.example.com
+hector call --server http://localhost:8081 my_agent "prompt"
+hector chat --server http://localhost:8081 my_agent
+
+# Streaming Control
+hector call my_agent "prompt"                     # Streaming enabled (default)
+hector call my_agent "prompt" --stream=false      # Streaming disabled
+
+# Authentication
+hector call my_agent "prompt" --token "bearer-token"
+
+# Help & Version
+hector help                                       # Show detailed help
+hector version                                    # Show version
 
 # Environment Variables
-export HECTOR_SERVER="http://localhost:8080"
-export OPENAI_API_KEY="sk-..."
-export ANTHROPIC_API_KEY="sk-..."
+export HECTOR_SERVER="http://localhost:8080"     # Default server for shorthand
+export OPENAI_API_KEY="sk-..."                   # OpenAI authentication
+export ANTHROPIC_API_KEY="sk-..."                # Anthropic authentication
 ```
+
+**Agent Specification Formats:**
+- **Shorthand**: `my_agent` → Uses default/configured server (localhost:8080 or HECTOR_SERVER)
+- **Full URL**: `http://host:port/agents/my_agent` → Direct URL (ignores --server flag)
+- **Custom Server**: `--server http://host:port my_agent` → Shorthand with custom server
 
 ---
 

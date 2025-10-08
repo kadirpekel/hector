@@ -32,6 +32,16 @@ import (
 )
 
 // ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const (
+	outputChannelBuffer        = 100
+	historyRetentionMultiplier = 10
+	defaultRetryWaitSeconds    = 120
+)
+
+// ============================================================================
 // AGENT - REASONING ORCHESTRATION + METADATA
 // Agent contains the reasoning loop (formerly in Orchestrator)
 // ============================================================================
@@ -251,7 +261,7 @@ func (a *Agent) execute(
 	input string,
 	strategy reasoning.ReasoningStrategy,
 ) (<-chan string, error) {
-	outputCh := make(chan string, 100)
+	outputCh := make(chan string, outputChannelBuffer)
 
 	go func() {
 		defer close(outputCh)
@@ -273,7 +283,7 @@ func (a *Agent) execute(
 			}
 
 			// Get recent history and restore to conversation
-			recentHistory := historyService.GetRecentHistory(sessionID, cfg.MaxIterations*10) // Get plenty of history
+			recentHistory := historyService.GetRecentHistory(sessionID, cfg.MaxIterations*historyRetentionMultiplier)
 			if len(recentHistory) > 0 {
 				state.Conversation = append(state.Conversation, recentHistory...)
 			}
@@ -351,7 +361,7 @@ func (a *Agent) execute(
 					// Use the exact retry time from the error
 					waitTime := retryErr.RetryAfter
 					if waitTime == 0 {
-						waitTime = 120 * time.Second // Fallback if not specified
+						waitTime = defaultRetryWaitSeconds * time.Second // Fallback if not specified
 					}
 
 					outputCh <- fmt.Sprintf("⏳ Rate limit exceeded (HTTP %d). Waiting %v before retry...\n",

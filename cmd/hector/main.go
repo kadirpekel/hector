@@ -24,6 +24,10 @@ import (
 const (
 	defaultConfigFile = "hector.yaml"
 	version           = "0.1.0-a2a"
+
+	// CLI flag descriptions
+	serverFlagDesc = "A2A server URL (default: localhost:8080)"
+	tokenFlagDesc  = "Authentication token"
 )
 
 // CommandType represents the type of command to execute
@@ -98,21 +102,21 @@ func parseArgs() *CLIArgs {
 	serveDebug := serveCmd.Bool("debug", false, "Enable debug mode")
 
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
-	listServer := listCmd.String("server", "", "A2A server URL (default: localhost:8080)")
-	listToken := listCmd.String("token", "", "Authentication token")
+	listServer := listCmd.String("server", "", serverFlagDesc)
+	listToken := listCmd.String("token", "", tokenFlagDesc)
 
 	infoCmd := flag.NewFlagSet("info", flag.ExitOnError)
-	infoServer := infoCmd.String("server", "", "A2A server URL (default: localhost:8080)")
-	infoToken := infoCmd.String("token", "", "Authentication token")
+	infoServer := infoCmd.String("server", "", serverFlagDesc)
+	infoToken := infoCmd.String("token", "", tokenFlagDesc)
 
 	callCmd := flag.NewFlagSet("call", flag.ExitOnError)
-	callServer := callCmd.String("server", "", "A2A server URL (default: localhost:8080)")
-	callToken := callCmd.String("token", "", "Authentication token")
-	callStream := callCmd.Bool("stream", true, "Enable streaming (use --stream=false to disable)")
+	callServer := callCmd.String("server", "", serverFlagDesc)
+	callToken := callCmd.String("token", "", tokenFlagDesc)
+	callStream := callCmd.Bool("stream", true, "Enable streaming (default: true, use --stream=false to disable)")
 
 	chatCmd := flag.NewFlagSet("chat", flag.ExitOnError)
-	chatServer := chatCmd.String("server", "", "A2A server URL (default: localhost:8080)")
-	chatToken := chatCmd.String("token", "", "Authentication token")
+	chatServer := chatCmd.String("server", "", serverFlagDesc)
+	chatToken := chatCmd.String("token", "", tokenFlagDesc)
 
 	// Parse command
 	if len(os.Args) < 2 {
@@ -138,7 +142,7 @@ func parseArgs() *CLIArgs {
 	case "info":
 		infoCmd.Parse(os.Args[2:])
 		if len(infoCmd.Args()) < 1 {
-			fatalf("Usage: hector info <agent-url>")
+			fatalf("Usage: hector info <agent> [--server URL]")
 		}
 		args.Command = CommandInfo
 		args.AgentURL = resolveAgentURL(infoCmd.Args()[0], *infoServer)
@@ -147,7 +151,7 @@ func parseArgs() *CLIArgs {
 	case "call":
 		callCmd.Parse(os.Args[2:])
 		if len(callCmd.Args()) < 2 {
-			fatalf("Usage: hector call <agent-url> \"prompt\"")
+			fatalf("Usage: hector call <agent> \"prompt\" [--server URL]")
 		}
 		args.Command = CommandCall
 		args.AgentURL = resolveAgentURL(callCmd.Args()[0], *callServer)
@@ -158,7 +162,7 @@ func parseArgs() *CLIArgs {
 	case "chat":
 		chatCmd.Parse(os.Args[2:])
 		if len(chatCmd.Args()) < 1 {
-			fatalf("Usage: hector chat <agent-url>")
+			fatalf("Usage: hector chat <agent> [--server URL]")
 		}
 		args.Command = CommandChat
 		args.AgentURL = resolveAgentURL(chatCmd.Args()[0], *chatServer)
@@ -459,7 +463,7 @@ USAGE:
 
 COMMANDS:
   serve              Start A2A server to host agents
-  list [server]      List available agents from A2A server
+  list               List available agents from A2A server
   info <agent>       Get detailed agent information
   call <agent> "..."  Execute a task on an agent
   chat <agent>       Start interactive chat with an agent
@@ -476,45 +480,73 @@ CLIENT MODE:
     --server URL     A2A server URL (default: localhost:8080)
     --token TOKEN    Authentication token
 
-  hector info <agent-url> [options]
+  hector info <agent> [options]
+    --server URL     A2A server URL (default: localhost:8080)
     --token TOKEN    Authentication token
 
   hector call <agent> "prompt" [options]
     --server URL     A2A server URL (default: localhost:8080)
     --token TOKEN    Authentication token
-    --stream         Enable streaming output
+    --stream BOOL    Enable streaming (default: true, use --stream=false to disable)
 
   hector chat <agent> [options]
     --server URL     A2A server URL (default: localhost:8080)
     --token TOKEN    Authentication token
 
+AGENT SHORTCUTS:
+  You can specify agents in two ways:
+
+  1. Agent ID (shorthand):
+     $ hector call my_agent "prompt"
+     Constructs: http://localhost:8080/agents/my_agent
+
+  2. Full URL:
+     $ hector call http://example.com:8080/agents/my_agent "prompt"
+     Uses the URL as-is
+
+  Use --server to change the default server for shorthand notation:
+     $ hector call --server http://localhost:8081 my_agent "prompt"
+     Constructs: http://localhost:8081/agents/my_agent
+
 EXAMPLES:
   # Start server
   $ hector serve --config hector.yaml
 
-  # List agents from local server
+  # List agents from local server (default)
   $ hector list
 
   # List agents from remote server
   $ hector list --server https://agents.example.com
 
-  # Get agent information
-  $ hector info http://localhost:8080/agents/my-agent
+  # Get agent info (shorthand)
+  $ hector info my_agent
 
-  # Execute task (full URL)
-  $ hector call http://localhost:8080/agents/my-agent "Analyze competitors"
+  # Get agent info (full URL)
+  $ hector info http://localhost:8080/agents/my_agent
 
-  # Execute task (shorthand - uses default server)
-  $ hector call my-agent "Analyze competitors"
+  # Call agent on default server (localhost:8080)
+  $ hector call my_agent "Analyze competitors"
 
-  # Interactive chat
-  $ hector chat my-agent
+  # Call agent on custom server
+  $ hector call --server http://localhost:8081 my_agent "Analyze competitors"
+
+  # Call agent with full URL (ignores --server flag)
+  $ hector call http://example.com/agents/my_agent "Analyze competitors"
+
+  # Interactive chat with shorthand
+  $ hector chat my_agent
+
+  # Interactive chat on custom server
+  $ hector chat --server https://agents.example.com my_agent
 
   # With authentication
-  $ hector call my-agent "prompt" --token "your-bearer-token"
+  $ hector call my_agent "prompt" --token "your-bearer-token"
+
+  # Disable streaming
+  $ hector call my_agent "prompt" --stream=false
 
 ENVIRONMENT VARIABLES:
-  HECTOR_SERVER    Default A2A server URL
+  HECTOR_SERVER    Default A2A server URL (overrides localhost:8080)
   HECTOR_TOKEN     Default authentication token
 
 For more information: https://github.com/kadirpekel/hector

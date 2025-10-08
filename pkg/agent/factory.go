@@ -56,6 +56,14 @@ func NewAgentServices(agentConfig *config.AgentConfig, componentManager *compone
 	// Create context service - only if document stores are configured
 	var contextService reasoning.ContextService
 	if len(agentConfig.DocumentStores) > 0 {
+		// Document stores require both database and embedder
+		if agentConfig.Database == "" {
+			return nil, fmt.Errorf("database is required when document stores are configured")
+		}
+		if agentConfig.Embedder == "" {
+			return nil, fmt.Errorf("embedder is required when document stores are configured")
+		}
+
 		// Get database and embedder for search engine
 		db, err := componentManager.GetDatabase(agentConfig.Database)
 		if err != nil {
