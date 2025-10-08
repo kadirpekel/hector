@@ -446,13 +446,21 @@ llms:
 
 ### License
 
-**AGPL-3.0** - Hector is free and open-source software. You can use, modify, and distribute it under the terms of the [AGPL-3.0 license]({{ site.hector.repo_url }}/blob/main/LICENSE.md), which requires:
+**Dual License** - Hector uses different licenses for different use cases:
 
-- ✅ **Use freely** - Commercial and non-commercial use
-- ✅ **Modify freely** - Adapt to your needs
-- ✅ **Distribute freely** - Share with others
-- ⚠️ **Share improvements** - Contribute back modifications if you distribute
-- ⚠️ **Network use** - If you run Hector as a service, source code must be available
+**🏠 Non-Commercial Use (AGPL-3.0):**
+- ✅ **Free for personal, educational, research use**
+- ✅ **Modify and redistribute freely**
+- ⚠️ **Must provide source code when distributing**
+- ⚠️ **Network services must offer source code**
+
+**💼 Commercial Use (Separate License):**
+- 💼 **For-profit companies and SaaS products**
+- 💼 **No source code disclosure requirements**
+- 💼 **Priority support and legal indemnification**
+- 📞 **Contact via [GitHub Issues]({{ site.hector.repo_url }}/issues) for licensing**
+
+See the [complete license details]({{ site.hector.repo_url }}/blob/main/LICENSE.md) for full terms and what constitutes commercial vs. non-commercial use.
 
 ---
 

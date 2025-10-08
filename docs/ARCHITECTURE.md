@@ -6,6 +6,28 @@ parent: Advanced
 description: "System design, multi-agent orchestration, and core components"
 ---
 
+<style>
+.architecture-diagram {
+  background: var(--code-background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+}
+
+.architecture-diagram pre {
+  margin: 0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  color: var(--body-text-color);
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+</style>
+
 # Hector Architecture
 
 **Design Philosophy:** Clean architecture with Strategy pattern, dependency injection, and single responsibility principle.
@@ -16,7 +38,8 @@ description: "System design, multi-agent orchestration, and core components"
 
 ### Single Agent Architecture
 
-```
+<div class="architecture-diagram">
+<pre>
 ┌─────────────────────────────────────────────────────────┐
 │                   USER INTERFACE                        │
 │                (CLI, Streaming Output)                  │
@@ -67,7 +90,8 @@ description: "System design, multi-agent orchestration, and core components"
 │  │  • Process isolation, auto-discovery            │   │
 │  └─────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
-```
+</pre>
+</div>
 
 ### Multi-Agent Orchestration (A2A Protocol)
 
