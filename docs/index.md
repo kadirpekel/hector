@@ -12,6 +12,8 @@ permalink: /
 Pure A2A-Native Declarative AI Agent Platform
 {: .fs-6 .fw-300 }
 
+![Hector Gopher](hector-gopher.png){: .float-right .ml-4 style="width: 120px; height: auto;"}
+
 Build powerful AI agents in pure YAML. Compose single agents, orchestrate multi-agent systems, and integrate external A2A agents—all through declarative configuration and industry-standard protocols.
 {: .fs-5 .fw-300 }
 
@@ -91,3 +93,10 @@ llms:
 - [📊 A2A Protocol Specification](https://a2a-protocol.org)
 - [🐛 Report Issues]({{ site.hector.repo_url }}/issues)
 - [🤝 Contributing Guide]({{ site.baseurl }}/CONTRIBUTING)
+
+---
+
+<div style="text-align: center; margin: 2rem 0;">
+  <img src="hector-gopher.png" alt="Hector Gopher Mascot" style="width: 80px; height: auto;">
+  <p><em>Meet Hector, your AI agent companion!</em></p>
+</div>
