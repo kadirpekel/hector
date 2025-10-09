@@ -175,12 +175,6 @@ func (s *DefaultPromptService) BuildMessages(
 
 	// Add conversation history from HistoryService if enabled
 	if s.promptConfig.IncludeHistory && s.historyService != nil {
-		// Fetch history from HistoryService
-		maxHistory := 10 // Default
-		if s.promptConfig.MaxHistoryMessages > 0 {
-			maxHistory = s.promptConfig.MaxHistoryMessages
-		}
-
 		// Extract sessionID from context (if available)
 		sessionID := ""
 		if sessionIDValue := ctx.Value("sessionID"); sessionIDValue != nil {
@@ -189,7 +183,10 @@ func (s *DefaultPromptService) BuildMessages(
 			}
 		}
 
-		historyMsgs := s.historyService.GetRecentHistory(sessionID, maxHistory)
+		historyMsgs, err := s.historyService.GetRecentHistory(sessionID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get recent history: %w", err)
+		}
 
 		// Already in llms.Message format - append directly
 		messages = append(messages, historyMsgs...)

@@ -94,6 +94,28 @@ memory:
 
 ---
 
+## Architecture
+
+Hector's memory system uses a **clean, layered architecture**:
+
+```
+MemoryService (pkg/memory/)
+├─ Manages sessions (lifecycle, isolation)
+└─ Delegates to: WorkingMemoryStrategy
+    ├─ SummaryBufferStrategy (token-based with summarization)
+    └─ BufferWindowStrategy (simple LIFO)
+```
+
+**Benefits:**
+- ✅ Clean separation: Service manages infrastructure, strategies implement algorithms
+- ✅ No duplication: Session management in one place
+- ✅ Testable: Each layer tested independently
+- ✅ Extensible: Easy to add long-term memory strategies
+
+**Note:** This is internal architecture - configuration and behavior remain unchanged.
+
+---
+
 ## Quick Start
 
 ### 1. Enable Memory Management

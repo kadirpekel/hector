@@ -118,17 +118,17 @@ Hector's clean architecture scales from single agents to complex multi-agent sys
 │  • Natural termination        |    • Task decomposition     │
 └─────────────────────────┬───────────────────────────────────┘
                           │
-      ┌───────────────────┼───────────────────┐
-      │                   │                   │
-      ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐   ┌──────────────┐
-│    TOOLS     │    │     LLM      │   │     RAG      │
-│              │    │              │   │              │
-│ • Command    │    │ • OpenAI     │   │ • Qdrant     │
-│ • File Ops   │    │ • Anthropic  │   │ • Semantic   │
-│ • Search     │    │ • Gemini     │   │   Search     │
-│ • MCP        │    │ • Plugins    │   │ • Documents  │
-└──────────────┘    └──────────────┘   └──────────────┘
+      ┌───────────────────┼───────────────────┬────────────────┐
+      │                   │                   │                │
+      ▼                   ▼                   ▼                ▼
+┌──────────────┐    ┌──────────────┐   ┌──────────────┐  ┌────────────┐
+│    TOOLS     │    │     LLM      │   │     RAG      │  │   MEMORY   │
+│              │    │              │   │              │  │            │
+│ • Command    │    │ • OpenAI     │   │ • Qdrant     │  │ • Working  │
+│ • File Ops   │    │ • Anthropic  │   │ • Semantic   │  │   (Session)│
+│ • Search     │    │ • Gemini     │   │   Search     │  │ • Long-term│
+│ • MCP        │    │ • Plugins    │   │ • Documents  │  │   (Future) │
+└──────────────┘    └──────────────┘   └──────────────┘  └────────────┘
 </pre>
 </div>
 
@@ -202,10 +202,10 @@ Hector provides comprehensive features through pure YAML configuration:
 <div class="capability-section">
   <h3>🧠 Memory Management</h3>
   <ul>
-    <li><strong>Intelligent context window management</strong> - Never lose important conversations</li>
-    <li><strong>Accurate token counting</strong> - 100% accurate, not estimates</li>
+    <li><strong>Working memory (short-term)</strong> - Pluggable strategies for session history: token-based with summarization (default) or simple LIFO</li>
+    <li><strong>Accurate token counting</strong> - 100% accurate using tiktoken, never exceed limits</li>
     <li><strong>Recency-based selection</strong> - Most recent messages preserved automatically</li>
-    <li><strong>Optional summarization</strong> - LLM condenses old messages for unlimited conversation length</li>
+    <li><strong>Long-term memory (future)</strong> - Foundation ready for cross-session persistent memory</li>
   </ul>
 </div>
 

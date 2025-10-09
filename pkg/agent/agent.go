@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
 	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/memory"
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
 
@@ -81,11 +83,12 @@ func NewAgent(agentConfig *config.AgentConfig, componentMgr interface{}) (*Agent
 // ============================================================================
 
 // ClearHistory clears the conversation history for a specific session
-func (a *Agent) ClearHistory(sessionID string) {
+func (a *Agent) ClearHistory(sessionID string) error {
 	history := a.services.History()
 	if history != nil {
-		history.ClearHistory(sessionID)
+		return history.ClearHistory(sessionID)
 	}
+	return nil
 }
 
 // ============================================================================
@@ -283,9 +286,8 @@ func (a *Agent) execute(
 			}
 
 			// Set up status notifier for summarization feedback
-			if adapter, ok := historyService.(*HistoryServiceAdapter); ok {
-				strategy := adapter.GetStrategy()
-				strategy.SetStatusNotifier(func(message string) {
+			if memService, ok := historyService.(*memory.MemoryService); ok {
+				memService.SetStatusNotifier(func(message string) {
 					if message != "" {
 						// Newline before, continue on same line after
 						outputCh <- "\n" + message + "\n"
@@ -294,8 +296,10 @@ func (a *Agent) execute(
 			}
 
 			// Get recent history and restore to conversation
-			recentHistory := historyService.GetRecentHistory(sessionID, cfg.MaxIterations*historyRetentionMultiplier)
-			if len(recentHistory) > 0 {
+			recentHistory, err := historyService.GetRecentHistory(sessionID)
+			if err != nil {
+				outputCh <- fmt.Sprintf("⚠️  Failed to load conversation history: %v\n", err)
+			} else if len(recentHistory) > 0 {
 				state.Conversation = append(state.Conversation, recentHistory...)
 			}
 		}
@@ -726,7 +730,11 @@ func (a *Agent) saveToHistory(
 	// We need to save only the NEW messages (after the loaded history)
 
 	// Get current history size to know where new messages start
-	existingHistory := history.GetRecentHistory(sessionID, 10000) // Get all history
+	existingHistory, err := history.GetRecentHistory(sessionID)
+	if err != nil {
+		log.Printf("⚠️  Failed to get existing history: %v", err)
+		return
+	}
 	existingCount := len(existingHistory)
 
 	// Save only the new messages (those added during this execution)
@@ -739,7 +747,10 @@ func (a *Agent) saveToHistory(
 		if msg.Role == "user" || msg.Role == "assistant" {
 			// Skip messages with empty content (e.g., when LLM calls tool without preamble)
 			if msg.Content != "" {
-				history.AddToHistory(sessionID, msg)
+				err := history.AddToHistory(sessionID, msg)
+				if err != nil {
+					log.Printf("⚠️  Failed to add message to history: %v", err)
+				}
 			}
 		}
 		// Skip system and tool messages - they're for LLM API, not user history

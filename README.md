@@ -68,17 +68,17 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 │  • Natural termination        |    • Task decomposition     │
 └─────────────────────────┬───────────────────────────────────┘
                           │
-      ┌───────────────────┼───────────────────┐
-      │                   │                   │
-      ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐   ┌──────────────┐
-│    TOOLS     │    │     LLM      │   │     RAG      │
-│              │    │              │   │              │
-│ • Command    │    │ • OpenAI     │   │ • Qdrant     │
-│ • File Ops   │    │ • Anthropic  │   │ • Semantic   │
-│ • Search     │    │ • Gemini     │   │   Search     │
-│ • MCP        │    │ • Plugins    │   │ • Documents  │
-└──────────────┘    └──────────────┘   └──────────────┘
+      ┌───────────────────┼───────────────────┬────────────────┐
+      │                   │                   │                │
+      ▼                   ▼                   ▼                ▼
+┌──────────────┐    ┌──────────────┐   ┌──────────────┐  ┌────────────┐
+│    TOOLS     │    │     LLM      │   │     RAG      │  │   MEMORY   │
+│              │    │              │   │              │  │            │
+│ • Command    │    │ • OpenAI     │   │ • Qdrant     │  │ • Working  │
+│ • File Ops   │    │ • Anthropic  │   │ • Semantic   │  │   (Session)│
+│ • Search     │    │ • Gemini     │   │   Search     │  │ • Long-term│
+│ • MCP        │    │ • Plugins    │   │ • Documents  │  │   (Future) │
+└──────────────┘    └──────────────┘   └──────────────┘  └────────────┘
 ```
 
 **Single Agent Capabilities:**
@@ -86,8 +86,8 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 - **Built-in Tools** - Command execution, file operations, search, todos
 - **MCP Integration** - 150+ apps (Composio, Mem0, custom servers)
 - **RAG Support** - Semantic search with Qdrant vector database
-- **Memory Management** - Token-aware with optional summarization for long conversations ([docs](docs/MEMORY.md))
-- **Multi-turn Sessions** - Conversation history and context
+- **Intelligent Memory** - Pluggable working memory strategies (token-based with summarization, simple LIFO) for conversation history ([docs](docs/MEMORY.md))
+- **Multi-turn Sessions** - Conversation context and history management
 - **Real-time Streaming** - Server-Sent Events (SSE) per A2A spec
 - **gRPC Plugin System** - Extend with custom LLMs, databases, tools (any language)
 

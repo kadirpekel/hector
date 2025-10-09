@@ -1,10 +1,9 @@
-package history
+package memory
 
 import (
 	"context"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	hectorcontext "github.com/kadirpekel/hector/pkg/context"
@@ -18,11 +17,9 @@ type SummarizationService interface {
 	SummarizeConversation(ctx context.Context, messages []llms.Message) (string, error)
 }
 
-// SummaryBufferStrategy implements token-based history with threshold-triggered summarization
-// This is the DEFAULT and RECOMMENDED strategy
+// SummaryBufferStrategy implements token-based memory with threshold-triggered summarization
+// This is the DEFAULT and RECOMMENDED strategy for working memory
 type SummaryBufferStrategy struct {
-	sessions       map[string]*hectorcontext.ConversationHistory
-	mu             sync.RWMutex
 	tokenBudget    int     // Default: 2000
 	threshold      float64 // Default: 0.8 (trigger at 80%)
 	target         float64 // Default: 0.6 (compress to 60%)
@@ -73,7 +70,6 @@ func NewSummaryBufferStrategy(config SummaryBufferConfig) (*SummaryBufferStrateg
 		config.Budget, config.Threshold*100, config.Target*100)
 
 	return &SummaryBufferStrategy{
-		sessions:     make(map[string]*hectorcontext.ConversationHistory),
 		tokenBudget:  config.Budget,
 		threshold:    config.Threshold,
 		target:       config.Target,
@@ -89,22 +85,13 @@ func (s *SummaryBufferStrategy) Name() string {
 
 // SetStatusNotifier sets a callback for status notifications
 func (s *SummaryBufferStrategy) SetStatusNotifier(notifier StatusNotifier) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.statusNotifier = notifier
 }
 
-// AddMessage adds a message to the session's history
+// AddMessage adds a message to the session's memory
 // May trigger summarization if threshold is exceeded (blocking operation)
-func (s *SummaryBufferStrategy) AddMessage(sessionID string, msg llms.Message) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if sessionID == "" {
-		sessionID = "default"
-	}
-
-	session := s.getOrCreateSession(sessionID)
+func (s *SummaryBufferStrategy) AddMessage(session *hectorcontext.ConversationHistory, msg llms.Message) error {
+	// Add message to session
 	_, err := session.AddMessage(msg.Role, msg.Content, nil)
 	if err != nil {
 		return fmt.Errorf("failed to add message: %w", err)
@@ -112,52 +99,16 @@ func (s *SummaryBufferStrategy) AddMessage(sessionID string, msg llms.Message) e
 
 	// Check if we need to summarize
 	if s.shouldSummarize(session) {
-		return s.summarize(session, sessionID)
+		return s.summarize(session)
 	}
 
 	return nil
 }
 
-// GetHistory returns messages for the session within token budget
-func (s *SummaryBufferStrategy) GetHistory(sessionID string) ([]llms.Message, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if sessionID == "" {
-		sessionID = "default"
-	}
-
-	session, exists := s.sessions[sessionID]
-	if !exists {
-		return []llms.Message{}, nil
-	}
-
-	// Get all messages (including summary if present)
-	return s.getAllMessages(session), nil
-}
-
-// Clear removes all history for a session
-func (s *SummaryBufferStrategy) Clear(sessionID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if sessionID == "" {
-		sessionID = "default"
-	}
-
-	if session, exists := s.sessions[sessionID]; exists {
-		session.Clear()
-	}
-
-	return nil
-}
-
-// GetSessionCount returns the number of active sessions
-func (s *SummaryBufferStrategy) GetSessionCount() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return len(s.sessions)
+// GetMessages returns messages from the session within token budget
+func (s *SummaryBufferStrategy) GetMessages(session *hectorcontext.ConversationHistory) ([]llms.Message, error) {
+	allMessages := s.getAllMessages(session)
+	return allMessages, nil
 }
 
 // shouldSummarize checks if summarization should be triggered
@@ -168,7 +119,7 @@ func (s *SummaryBufferStrategy) shouldSummarize(session *hectorcontext.Conversat
 		return false
 	}
 
-	// Convert to utils.Message for token counting
+	// Convert to utils.Message
 	utilMessages := make([]utils.Message, len(allMessages))
 	for i, msg := range allMessages {
 		utilMessages[i] = utils.Message{
@@ -177,6 +128,7 @@ func (s *SummaryBufferStrategy) shouldSummarize(session *hectorcontext.Conversat
 		}
 	}
 
+	// Count current tokens
 	currentTokens := s.tokenCounter.CountMessages(utilMessages)
 	thresholdTokens := int(float64(s.tokenBudget) * s.threshold)
 
@@ -184,7 +136,7 @@ func (s *SummaryBufferStrategy) shouldSummarize(session *hectorcontext.Conversat
 }
 
 // summarize performs blocking summarization and updates the session
-func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHistory, sessionID string) error {
+func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHistory) error {
 	// Calculate target tokens
 	targetTokens := int(float64(s.tokenBudget) * s.target)
 
@@ -201,8 +153,8 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 		return nil // Nothing to summarize
 	}
 
-	log.Printf("🧠 Session %s: Summarizing %d messages (keeping %d recent)...",
-		sessionID, len(oldMessages), len(recentMessages))
+	log.Printf("🧠 Summarizing %d messages (keeping %d recent)...",
+		len(oldMessages), len(recentMessages))
 
 	// Notify user if callback is set
 	if s.statusNotifier != nil {
@@ -213,7 +165,7 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 	// User is already waiting for response, so this is acceptable
 	summary, err := s.summarizer.SummarizeConversation(context.Background(), oldMessages)
 	if err != nil {
-		log.Printf("⚠️  Summarization failed for session %s: %v", sessionID, err)
+		log.Printf("⚠️  Summarization failed: %v", err)
 		// Notify user of failure
 		if s.statusNotifier != nil {
 			s.statusNotifier("⚠️  Summarization failed, continuing with full history")
@@ -221,8 +173,8 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 		return fmt.Errorf("summarization failed: %w", err)
 	}
 
-	log.Printf("✅ Session %s: Summarized %d messages into %d tokens",
-		sessionID, len(oldMessages), len(summary))
+	log.Printf("✅ Summarized %d messages into %d tokens",
+		len(oldMessages), len(summary))
 
 	// Reconstruct session: summary + recent messages
 	session.Clear()
@@ -244,7 +196,7 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 		}
 	}
 
-	log.Printf("🎉 Session %s: Summarization complete (kept %d recent messages)", sessionID, len(recentMessages))
+	log.Printf("🎉 Summarization complete (kept %d recent messages)", len(recentMessages))
 
 	return nil
 }
@@ -324,25 +276,6 @@ func (s *SummaryBufferStrategy) getAllMessages(session *hectorcontext.Conversati
 			Content: msg.Content,
 		}
 	}
-	return messages
-}
 
-// getOrCreateSession gets an existing session or creates a new one
-// Must be called with lock held
-func (s *SummaryBufferStrategy) getOrCreateSession(sessionID string) *hectorcontext.ConversationHistory {
-	session, exists := s.sessions[sessionID]
-	if !exists {
-		now := time.Now()
-		session = &hectorcontext.ConversationHistory{
-			SessionID:   sessionID,
-			Messages:    make([]hectorcontext.Message, 0),
-			Context:     make(map[string]interface{}),
-			LastUpdated: now,
-			MaxMessages: 1000, // High limit since we manage via tokens
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		}
-		s.sessions[sessionID] = session
-	}
-	return session
+	return messages
 }

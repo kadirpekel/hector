@@ -183,23 +183,22 @@ type MockHistoryService struct {
 	sessionID string
 }
 
-func (m *MockHistoryService) GetRecentHistory(sessionID string, count int) []llms.Message {
+func (m *MockHistoryService) GetRecentHistory(sessionID string) ([]llms.Message, error) {
 	m.sessionID = sessionID
-	if len(m.history) <= count {
-		return m.history
-	}
-	return m.history[len(m.history)-count:]
+	return m.history, nil
 }
 
-func (m *MockHistoryService) AddToHistory(sessionID string, msg llms.Message) {
+func (m *MockHistoryService) AddToHistory(sessionID string, msg llms.Message) error {
 	m.addCalls++
 	m.sessionID = sessionID
 	m.history = append(m.history, msg)
+	return nil
 }
 
-func (m *MockHistoryService) ClearHistory(sessionID string) {
+func (m *MockHistoryService) ClearHistory(sessionID string) error {
 	m.history = nil
 	m.sessionID = sessionID
+	return nil
 }
 
 type MockAgentServices struct {

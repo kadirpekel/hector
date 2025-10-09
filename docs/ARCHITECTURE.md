@@ -67,10 +67,14 @@ description: "System design, multi-agent orchestration, and core components"
 │  │    LLM    │  │  Tools   │  │ Prompt  │  │ Context │ │
 │  │ Service   │  │ Service  │  │ Service │  │ Service │ │
 │  └───────────┘  └──────────┘  └─────────┘  └─────────┘ │
-│  ┌───────────┐                                           │
-│  │  History  │                                           │
-│  │  Service  │                                           │
-│  └───────────┘                                           │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │  MemoryService (pkg/memory/)                      │  │
+│  │  ┌─────────────────────────────────────────────┐  │  │
+│  │  │ WorkingMemoryStrategy (injected)            │  │  │
+│  │  │ • SummaryBufferStrategy (default)           │  │  │
+│  │  │ • BufferWindowStrategy                      │  │  │
+│  │  └─────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────┐
@@ -283,7 +287,50 @@ type ReasoningStrategy interface {
 - Self-reflection after each iteration
 - Todo injection into context
 
-### 5. Services (`agent/services.go`)
+### 5. Memory Service (`pkg/memory/`)
+
+**Responsibility:** Manage conversation memory across sessions
+
+**Architecture:**
+
+```go
+// MemoryService orchestrates session management and delegates to strategies
+type MemoryService struct {
+	workingMemory WorkingMemoryStrategy
+	sessions      map[string]*ConversationHistory
+	mu            sync.RWMutex
+}
+
+// WorkingMemoryStrategy defines pluggable memory algorithms
+type WorkingMemoryStrategy interface {
+	AddMessage(session *ConversationHistory, msg llms.Message) error
+	GetMessages(session *ConversationHistory) ([]llms.Message, error)
+	Name() string
+	SetStatusNotifier(notifier StatusNotifier)
+}
+```
+
+**Strategies:**
+- **`SummaryBufferStrategy`** (default) - Token-based with LLM summarization
+- **`BufferWindowStrategy`** - Simple LIFO (last N messages)
+
+**Design Benefits:**
+- ✅ Clean separation: Service manages sessions, strategies implement algorithms
+- ✅ Strategy Pattern: Easy to add new memory strategies
+- ✅ No duplication: Session management centralized
+- ✅ Extensible: Foundation for long-term memory
+
+**File Structure:**
+```
+pkg/memory/
+├── memory.go            → MemoryService (orchestrator)
+├── working_strategy.go  → WorkingMemoryStrategy interface
+├── summary_buffer.go    → Token-based strategy
+├── buffer_window.go     → Simple LIFO strategy
+└── factory.go           → Strategy factory
+```
+
+### 6. Services (`agent/services.go`)
 
 **Service Architecture:**
 
@@ -294,7 +341,7 @@ type AgentServices interface {
 	Tools() ToolService
 	Context() ContextService
 	Prompt() PromptService
-	History() HistoryService
+	History() HistoryService  // Returns MemoryService
 }
 ```
 
@@ -529,8 +576,8 @@ LLM streams to channel              │
 ### `agent/`
 - Single-agent orchestration
 - Tool execution with dynamic labels
-- History management
-- Grayed-out debug output
+- Prompt services and customization
+- Agent factory and services
 
 ### `reasoning/`
 - Strategy interface
@@ -586,6 +633,14 @@ LLM streams to channel              │
 - Semantic search
 - Document stores
 - Vector operations
+
+### `memory/`
+- Conversation memory management
+- Pluggable working memory strategies
+- Session lifecycle management
+- SummaryBufferStrategy (token-based with LLM summarization)
+- BufferWindowStrategy (simple LIFO)
+- Foundation for long-term memory
 
 ---
 

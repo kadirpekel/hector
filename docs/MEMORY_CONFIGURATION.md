@@ -3,12 +3,12 @@ layout: default
 title: Memory Configuration
 nav_order: 2
 parent: Advanced
-description: "Advanced memory configuration options and tuning guide"
+description: "Memory strategy configuration guide and tuning options"
 ---
 
 # Memory Configuration Guide
 
-Simple guide for configuring Hector's memory management system.
+Configure Hector's pluggable memory management system.
 
 ---
 
@@ -16,7 +16,7 @@ Simple guide for configuring Hector's memory management system.
 
 ```yaml
 agents:
-  - name: my-assistant
+  my-assistant:
     llm: gpt4o
     memory:
       strategy: "summary_buffer"  # Optional, this is default
@@ -33,9 +33,9 @@ agents:
 
 ---
 
-## 📋 History Strategies
+## 📋 Working Memory Strategies
 
-Hector supports two pluggable history management strategies:
+Hector supports two pluggable **working memory strategies** for managing conversation history within a session:
 
 ### Summary Buffer (Default - Recommended)
 
@@ -56,10 +56,12 @@ memory:
 
 **How it works:**
 1. Accumulates messages until 80% of budget (1600 tokens)
-2. Summarizes oldest messages via LLM (blocking, 2-5 seconds)
-3. Compresses to 60% of budget (1200 tokens)
-4. Leaves 800 tokens breathing room
-5. Repeats when threshold hit again
+2. Notifies user: "💭 Summarizing conversation history..."
+3. Summarizes oldest messages via LLM (blocking, 2-5 seconds)
+4. Keeps minimum 3 recent messages for context
+5. Compresses to 60% of budget (1200 tokens)
+6. Leaves 800 tokens breathing room
+7. Repeats when threshold hit again
 
 **Best for:** Production applications (90% of users), long conversations, optimal token efficiency
 
@@ -117,137 +119,170 @@ memory:
 
 ---
 
-## 📊 What Each Setting Does
+## 📊 Configuration Reference
 
-### Core Options (Balanced for Most Cases)
+### Working Memory Settings
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `smart_memory` | bool | `false` | **Main switch** - enables all improvements |
-| `memory_budget` | int | `2000` | Token budget for conversation history |
-| `enable_summarization` | bool | `false` | Auto-summarize when approaching limit |
+| `strategy` | string | `"summary_buffer"` | Strategy type: `"summary_buffer"` or `"buffer_window"` |
+| `budget` | int | `2000` | Token budget for conversation history (summary_buffer) |
+| `threshold` | float | `0.8` | Trigger summarization at % of budget (summary_buffer) |
+| `target` | float | `0.6` | Compress to % of budget after summarization (summary_buffer) |
+| `window_size` | int | `20` | Number of messages to keep (buffer_window) |
 
-### Existing Options (Still Work)
+### Prompt Settings
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `include_history` | bool | `false` | Include conversation history in prompts |
-| `max_history_messages` | int | `10` | Fallback limit (when smart_memory is off) |
-
-### Advanced Options (Power Users Only)
-
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `use_token_counting` | bool | `false` | Manual token counting (use `smart_memory` instead) |
-| `max_tokens` | int | `0` | Manual token limit (use `memory_budget` instead) |
-| `token_counting_model` | string | auto | Override token counting model |
 
 ---
 
 ## 📖 Complete Examples
 
-### 1. Simple Assistant (Recommended)
+### 1. Simple Assistant (Most Users)
 
 ```yaml
 agents:
-  - name: assistant
+  assistant:
     llm: gpt4o
+    memory:
+      # Uses all defaults: strategy="summary_buffer", budget=2000
     prompt:
-      smart_memory: true
       include_history: true
 ```
 
-**Use for:** Most conversations, general assistance
+**Use for:** Most conversations, general assistance, production applications
 
 ### 2. Extended Conversations
 
 ```yaml
 agents:
-  - name: conversational-assistant
+  conversational-assistant:
     llm: gpt4o
+    memory:
+      strategy: "summary_buffer"
+      budget: 3000              # Larger context window
     prompt:
-      smart_memory: true
-      memory_budget: 3000
       include_history: true
 ```
 
-**Use for:** Longer conversations, detailed discussions
+**Use for:** Longer conversations, detailed discussions, complex topics
 
-### 3. Very Long Sessions
+### 3. Simple Testing Bot
 
 ```yaml
 agents:
-  - name: long-session-assistant
+  test-bot:
     llm: gpt4o
+    memory:
+      strategy: "buffer_window"
+      window_size: 15           # Keep last 15 messages
     prompt:
-      smart_memory: true
-      memory_budget: 3000
-      enable_summarization: true
       include_history: true
 ```
 
-**Use for:** Extended sessions (100+ messages), ongoing projects
+**Use for:** Testing, development, short conversations
+
+### 4. Custom Tuned Assistant
+
+```yaml
+agents:
+  custom-assistant:
+    llm: gpt4o
+    memory:
+      strategy: "summary_buffer"
+      budget: 2500
+      threshold: 0.75           # Trigger earlier
+      target: 0.5               # More aggressive compression
+    prompt:
+      include_history: true
+```
+
+**Use for:** Fine-tuned balance between context and performance
 
 ---
 
 ## 🎯 Decision Guide
 
-**Choose your settings based on usage:**
+**Choose your strategy based on usage:**
 
-### Short Conversations (5-20 messages)
+### Short Conversations (< 20 messages)
 ```yaml
-prompt:
-  smart_memory: true
-  memory_budget: 1000
+memory:
+  strategy: "buffer_window"
+  window_size: 20
 ```
+- Fast, no LLM overhead
+- Predictable behavior
+- No summarization needed
 
 ### Normal Conversations (20-50 messages) ⭐ **Most Common**
 ```yaml
-prompt:
-  smart_memory: true          # Uses default budget: 2000
-  # or
-  memory_budget: 2000         # Explicit
+memory:
+  # Uses defaults: summary_buffer with budget=2000
 ```
+- Optimal token efficiency
+- Automatic summarization if needed
+- Production-ready
 
 ### Long Conversations (50-100 messages)
 ```yaml
-prompt:
-  smart_memory: true
-  memory_budget: 3000
+memory:
+  strategy: "summary_buffer"
+  budget: 3000              # Increase budget
 ```
+- More context preserved
+- Less frequent summarization
+- Better for complex discussions
 
 ### Very Long Conversations (100+ messages)
 ```yaml
-prompt:
-  smart_memory: true
-  memory_budget: 3000
-  enable_summarization: true
+memory:
+  strategy: "summary_buffer"
+  budget: 3000
+  threshold: 0.75           # Summarize earlier
+  target: 0.5               # More compression
 ```
+- Aggressive memory management
+- Handles unlimited length
+- Preserves key context
 
 ---
 
-## 🔍 How It Works
+## 🏗️ Architecture
 
-### With `smart_memory: false` (default, backward compatible)
-- Uses simple character-based estimation
-- Keeps last N messages (max_history_messages)
-- May exceed token limits
-- Fast but less accurate
+### Layered Memory System
 
-### With `smart_memory: true` ✨
-1. **Accurate Token Counting**
-   - Uses tiktoken for precise counting
-   - Never exceeds your LLM's context window
-   
-2. **Recency-Based Selection**
-   - Keeps most recent messages that fit within budget
-   - Simple and fast (no complex scoring)
-   - Fits within token budget
+```
+MemoryService (pkg/memory/)
+├─ Manages sessions (lifecycle, isolation)
+└─ Delegates to: WorkingMemoryStrategy
+    ├─ SummaryBufferStrategy (token-based with summarization)
+    └─ BufferWindowStrategy (simple LIFO)
+```
 
-3. **Optional Summarization**
-   - Automatically triggers at 80% capacity
-   - Summarizes old messages
-   - Keeps recent messages intact
+**Benefits:**
+- ✅ Clean separation: Service manages infrastructure, strategies implement algorithms
+- ✅ No duplication: Session management in one place
+- ✅ Testable: Each layer tested independently
+- ✅ Extensible: Easy to add long-term memory strategies
+
+### How Strategies Work
+
+**Summary Buffer:**
+1. Tracks token count for session
+2. When threshold hit (80%), triggers summarization
+3. LLM condenses oldest messages
+4. Keeps recent messages intact
+5. Injects summary as system message
+
+**Buffer Window:**
+1. Maintains LIFO queue
+2. Adds new messages to end
+3. Drops oldest when size exceeded
+4. Simple, fast, predictable
 
 ---
 
@@ -255,17 +290,17 @@ prompt:
 
 ### ✅ Do
 
-- **Start simple:** Just set `smart_memory: true`
-- **Adjust budget:** Only if conversations are too short/long
-- **Enable summarization:** For sessions with 100+ messages
-- **Monitor logs:** Use `show_debug_info: true` to see token usage
+- **Start with defaults:** `summary_buffer` with `budget: 2000` works for 90% of cases
+- **Adjust budget if needed:** Increase for longer conversations, decrease for quick chats
+- **Use `buffer_window` for testing:** Simple, fast, predictable for development
+- **Monitor logs:** Watch for summarization triggers and token usage
 
 ### ❌ Don't
 
-- **Over-configure:** The defaults work well for 90% of cases
+- **Over-configure:** The defaults are carefully balanced
 - **Set budget too low:** Below 1000 tokens may lose too much context
 - **Set budget too high:** Above 4000 may slow down responses
-- **Enable summarization unnecessarily:** It adds LLM calls/cost
+- **Use `buffer_window` in production:** `summary_buffer` is better for most cases
 
 ---
 
@@ -273,101 +308,102 @@ prompt:
 
 ### "Context too short"
 **Problem:** Not enough history retained  
-**Solution:** Increase `memory_budget`
+**Solution:** Increase budget
 ```yaml
-memory_budget: 3000  # or 4000
+memory:
+  budget: 3000  # or 4000
 ```
 
 ### "Responses are slow"
-**Problem:** Too much context  
-**Solution:** Decrease `memory_budget`
+**Problem:** Too much context processing  
+**Solution:** Decrease budget
 ```yaml
-memory_budget: 1500
+memory:
+  budget: 1500
 ```
 
 ### "Old messages being dropped"
 **Problem:** Older messages not preserved  
-**Solution:** This is expected! Recency-based selection keeps most recent messages. For long conversations, enable summarization to preserve old context in summary form.
+**Solution:** This is expected with recency-based selection! For long conversations, `summary_buffer` will automatically summarize old messages to preserve context.
 
-### "Running out of tokens"
-**Problem:** Very long conversation  
-**Solution:** Enable summarization
+### "Summarization happening too often"
+**Problem:** Frequent summarization triggers  
+**Solution:** Increase threshold or budget
 ```yaml
-enable_summarization: true
+memory:
+  budget: 3000        # Larger window
+  threshold: 0.85     # Trigger later
 ```
 
 ---
 
-## 🔧 Advanced Usage
+## 🏃 Performance
 
-### Override Token Counting Model
+### Token Counting Overhead
+- **Cost:** <1ms per message
+- **Caching:** Tiktoken encoding cached
+- **Impact:** Negligible
 
-```yaml
-prompt:
-  smart_memory: true
-  token_counting_model: gpt-3.5-turbo  # Use different model for counting
-```
+### Summarization Overhead
+- **Cost:** 2-5 seconds (blocks user, intentional)
+- **Frequency:** Only when threshold exceeded
+- **Token cost:** ~200-500 tokens per summarization
+- **Savings:** 30-50% overall token reduction
 
-**When to use:** Rarely needed - auto-detection works for most cases
-
-### Manual Control (Not Recommended)
-
-```yaml
-prompt:
-  use_token_counting: true
-  max_tokens: 2500
-  enable_summarization: true
-```
-
-**When to use:** You need very specific control (use `smart_memory` instead)
+### Memory Usage
+- **Token counter:** ~5MB (encoding cache)
+- **History buffer:** ~1KB per message
+- **Total:** ~5-10MB for typical usage
 
 ---
 
 ## 📊 Comparison
 
-| Feature | Default (No Memory Management) | With Memory Management |
-|---------|---------------------------|-------------------|
-| Token counting | Character estimate (~25% error) | Accurate (0% error) |
-| Context limit | May exceed | Never exceeds |
-| Message selection | Last N messages | Recency-based (most recent preserved) |
-| Long conversations | Truncates | Summarizes (optional, blocking) |
-| Setup complexity | None | One setting: `memory.budget` |
-| Performance | Fastest | Fast (minimal overhead) |
+| Feature | Buffer Window | Summary Buffer (Default) |
+|---------|---------------|--------------------------|
+| **Token Efficiency** | Fixed count | Optimal |
+| **Max Conversation** | ~20 messages | Unlimited |
+| **LLM Overhead** | No | Yes (summarization) |
+| **Blocking** | No | Yes (2-5s on trigger) |
+| **Complexity** | Low | Medium |
+| **Best For** | Testing (10%) | Production (90%) |
 
 ---
 
 ## 🎓 Summary
 
-**For 90% of users:**
+**Most users (90%):**
 ```yaml
+memory:
+  # Uses defaults: summary_buffer, budget=2000
 prompt:
-  smart_memory: true
   include_history: true
 ```
 
-**For longer conversations:**
+**Extended conversations:**
 ```yaml
+memory:
+  strategy: "summary_buffer"
+  budget: 3000
 prompt:
-  smart_memory: true
-  memory_budget: 3000
   include_history: true
 ```
 
-**For very long sessions:**
+**Testing/Development:**
 ```yaml
+memory:
+  strategy: "buffer_window"
+  window_size: 20
 prompt:
-  smart_memory: true
-  memory_budget: 3000
-  enable_summarization: true
   include_history: true
 ```
 
-That's it! Simple, balanced, covers most use cases. 🎉
+That's it! Simple, balanced, production-ready. 🎉
 
 ---
 
 **See also:**
-- Complete implementation: `docs/MEMORY_CONFIGURATION.md`
-- Example config: `configs/smart-memory-simple.yaml`
-- Advanced features: `docs/VECTOR_MEMORY_DESIGN.md` (optional)
+- Main guide: [Memory Management](MEMORY.md)
+- Example configs: `configs/memory-strategies-example.yaml`
+- Future plans: [Vector Memory Design](FUTURE_VECTOR_MEMORY.md) (not yet implemented)
 

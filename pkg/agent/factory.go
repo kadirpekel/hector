@@ -3,72 +3,13 @@ package agent
 import (
 	"fmt"
 
-	"github.com/kadirpekel/hector/pkg/agent/history"
 	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
 	hectorcontext "github.com/kadirpekel/hector/pkg/context"
-	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/memory"
 	"github.com/kadirpekel/hector/pkg/reasoning"
 	"github.com/kadirpekel/hector/pkg/tools"
 )
-
-// Type aliases for convenience
-type (
-	HistoryStrategy       = history.HistoryStrategy
-	HistoryStrategyConfig = history.HistoryConfig
-)
-
-// NewHistoryStrategy creates a history strategy using the factory
-func NewHistoryStrategy(config HistoryStrategyConfig) (HistoryStrategy, error) {
-	return history.NewHistoryStrategy(config)
-}
-
-// HistoryServiceAdapter adapts a HistoryStrategy to the HistoryService interface
-// This provides compatibility with the existing reasoning.HistoryService interface
-type HistoryServiceAdapter struct {
-	strategy HistoryStrategy
-}
-
-// NewHistoryServiceAdapter creates a new adapter
-func NewHistoryServiceAdapter(strategy HistoryStrategy) *HistoryServiceAdapter {
-	return &HistoryServiceAdapter{strategy: strategy}
-}
-
-// GetStrategy returns the underlying history strategy
-// Used for accessing strategy-specific features like status notifiers
-func (a *HistoryServiceAdapter) GetStrategy() HistoryStrategy {
-	return a.strategy
-}
-
-// GetRecentHistory implements reasoning.HistoryService
-func (a *HistoryServiceAdapter) GetRecentHistory(sessionID string, count int) []llms.Message {
-	messages, err := a.strategy.GetHistory(sessionID)
-	if err != nil {
-		// Log error but return empty slice
-		fmt.Printf("Warning: Failed to get history: %v\n", err)
-		return []llms.Message{}
-	}
-
-	return messages
-}
-
-// AddToHistory implements reasoning.HistoryService
-func (a *HistoryServiceAdapter) AddToHistory(sessionID string, msg llms.Message) {
-	err := a.strategy.AddMessage(sessionID, msg)
-	if err != nil {
-		// Log error but don't fail
-		fmt.Printf("Warning: Failed to add message to history: %v\n", err)
-	}
-}
-
-// ClearHistory implements reasoning.HistoryService
-func (a *HistoryServiceAdapter) ClearHistory(sessionID string) {
-	err := a.strategy.Clear(sessionID)
-	if err != nil {
-		// Log error but don't fail
-		fmt.Printf("Warning: Failed to clear history: %v\n", err)
-	}
-}
 
 // NewAgentServices creates agent services with all dependencies wired up
 // Returns the configured agent services
@@ -149,23 +90,22 @@ func NewAgentServices(agentConfig *config.AgentConfig, componentManager *compone
 	llmService := NewLLMService(llm)
 	toolService := NewToolService(toolRegistry, agentConfig.Tools)
 
-	// Create history strategy based on memory configuration
-	var historyStrategy HistoryStrategy
-	var histErr error
+	// Create memory service with working memory strategy
+	var memErr error
 
 	// Create summarization service if needed for summary_buffer strategy
 	var summarizer *SummarizationService
 	if agentConfig.Memory.Strategy == "summary_buffer" || agentConfig.Memory.Strategy == "" {
-		summarizer, histErr = NewSummarizationService(llm, &SummarizationConfig{
+		summarizer, memErr = NewSummarizationService(llm, &SummarizationConfig{
 			Model: llm.GetModelName(),
 		})
-		if histErr != nil {
-			return nil, fmt.Errorf("failed to create summarization service: %w", histErr)
+		if memErr != nil {
+			return nil, fmt.Errorf("failed to create summarization service: %w", memErr)
 		}
 	}
 
-	// Create history strategy using the factory
-	historyStrategy, histErr = NewHistoryStrategy(HistoryStrategyConfig{
+	// Create working memory strategy using the factory
+	workingStrategy, memErr := memory.NewWorkingMemoryStrategy(memory.WorkingMemoryConfig{
 		Strategy:   agentConfig.Memory.Strategy,
 		WindowSize: agentConfig.Memory.WindowSize,
 		Budget:     agentConfig.Memory.Budget,
@@ -175,12 +115,12 @@ func NewAgentServices(agentConfig *config.AgentConfig, componentManager *compone
 		LLM:        llm,
 		Summarizer: summarizer,
 	})
-	if histErr != nil {
-		return nil, fmt.Errorf("failed to create history strategy: %w", histErr)
+	if memErr != nil {
+		return nil, fmt.Errorf("failed to create working memory strategy: %w", memErr)
 	}
 
-	// Wrap strategy as HistoryService for compatibility
-	historyService := NewHistoryServiceAdapter(historyStrategy)
+	// Create memory service (manages sessions + delegates to strategy)
+	historyService := memory.NewMemoryService(workingStrategy)
 
 	// contextService already created above based on document store availability
 	promptService := NewPromptService(agentConfig.Prompt, contextService, historyService)

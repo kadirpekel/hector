@@ -83,12 +83,12 @@ type PromptService interface {
 	BuildMessages(ctx context.Context, query string, slots PromptSlots, currentToolConversation []llms.Message, additionalContext string) ([]llms.Message, error)
 }
 
-// HistoryService defines history management capabilities
+// HistoryService defines memory management capabilities
 // All methods are session-aware (stateless API design)
 type HistoryService interface {
-	GetRecentHistory(sessionID string, count int) []llms.Message
-	AddToHistory(sessionID string, msg llms.Message)
-	ClearHistory(sessionID string)
+	GetRecentHistory(sessionID string) ([]llms.Message, error)
+	AddToHistory(sessionID string, msg llms.Message) error
+	ClearHistory(sessionID string) error
 }
 
 // ============================================================================
