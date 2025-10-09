@@ -1,3 +1,11 @@
+---
+layout: default
+title: Memory Configuration
+nav_order: 2
+parent: Advanced
+description: "Advanced memory configuration options and tuning guide"
+---
+
 # Memory Configuration Guide
 
 Simple guide for configuring Hector's memory management system.

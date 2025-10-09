@@ -1,3 +1,11 @@
+---
+layout: default
+title: "Future: Vector Memory"
+nav_order: 3
+parent: Advanced
+description: "Design proposal for vector database-backed memory system (not yet implemented)"
+---
+
 # Future: Vector Database-Backed Memory
 
 **Optional Enhancement - Not Yet Implemented**

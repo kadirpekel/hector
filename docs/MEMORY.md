@@ -1,3 +1,11 @@
+---
+layout: default
+title: Memory Management
+nav_order: 2
+parent: Core Guides
+description: "Intelligent memory management for AI agents - accurate token counting, smart selection, and automatic summarization"
+---
+
 # Memory Management - Never Lose Context 🧠
 
 > **Intelligent memory management for AI agents - accurate token counting, smart selection, and automatic summarization.**
