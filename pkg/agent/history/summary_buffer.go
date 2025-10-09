@@ -21,13 +21,14 @@ type SummarizationService interface {
 // SummaryBufferStrategy implements token-based history with threshold-triggered summarization
 // This is the DEFAULT and RECOMMENDED strategy
 type SummaryBufferStrategy struct {
-	sessions     map[string]*hectorcontext.ConversationHistory
-	mu           sync.RWMutex
-	tokenBudget  int     // Default: 2000
-	threshold    float64 // Default: 0.8 (trigger at 80%)
-	target       float64 // Default: 0.6 (compress to 60%)
-	tokenCounter *utils.TokenCounter
-	summarizer   SummarizationService
+	sessions       map[string]*hectorcontext.ConversationHistory
+	mu             sync.RWMutex
+	tokenBudget    int     // Default: 2000
+	threshold      float64 // Default: 0.8 (trigger at 80%)
+	target         float64 // Default: 0.6 (compress to 60%)
+	tokenCounter   *utils.TokenCounter
+	summarizer     SummarizationService
+	statusNotifier StatusNotifier // Optional callback for status updates
 }
 
 // SummaryBufferConfig configures the summary buffer strategy
@@ -84,6 +85,13 @@ func NewSummaryBufferStrategy(config SummaryBufferConfig) (*SummaryBufferStrateg
 // Name returns the strategy identifier
 func (s *SummaryBufferStrategy) Name() string {
 	return "summary_buffer"
+}
+
+// SetStatusNotifier sets a callback for status notifications
+func (s *SummaryBufferStrategy) SetStatusNotifier(notifier StatusNotifier) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.statusNotifier = notifier
 }
 
 // AddMessage adds a message to the session's history
@@ -183,9 +191,10 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 	// Get all messages
 	allMessages := s.getAllMessages(session)
 
-	// Determine how many messages to keep recent (40% of target for recent messages)
-	recentTokenBudget := int(float64(targetTokens) * 0.4)
-	recentMessages := s.selectRecentMessages(allMessages, recentTokenBudget)
+	// Determine how many messages to keep recent
+	// Strategy: Keep recent messages that fit within token budget
+	// If budget is very small, keep at least the last 2-3 messages
+	recentMessages := s.selectRecentMessagesWithMinimum(allMessages, targetTokens)
 	oldMessages := allMessages[:len(allMessages)-len(recentMessages)]
 
 	if len(oldMessages) == 0 {
@@ -195,11 +204,20 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 	log.Printf("🧠 Session %s: Summarizing %d messages (keeping %d recent)...",
 		sessionID, len(oldMessages), len(recentMessages))
 
+	// Notify user if callback is set
+	if s.statusNotifier != nil {
+		s.statusNotifier("💭 Summarizing conversation history...")
+	}
+
 	// BLOCKING CALL: Summarize old messages (takes 2-5 seconds)
 	// User is already waiting for response, so this is acceptable
 	summary, err := s.summarizer.SummarizeConversation(context.Background(), oldMessages)
 	if err != nil {
 		log.Printf("⚠️  Summarization failed for session %s: %v", sessionID, err)
+		// Notify user of failure
+		if s.statusNotifier != nil {
+			s.statusNotifier("⚠️  Summarization failed, continuing with full history")
+		}
 		return fmt.Errorf("summarization failed: %w", err)
 	}
 
@@ -229,6 +247,39 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 	log.Printf("🎉 Session %s: Summarization complete (kept %d recent messages)", sessionID, len(recentMessages))
 
 	return nil
+}
+
+// selectRecentMessagesWithMinimum selects recent messages with smart allocation
+// Guarantees keeping at least a minimum number of recent messages for context
+func (s *SummaryBufferStrategy) selectRecentMessagesWithMinimum(messages []llms.Message, targetTokens int) []llms.Message {
+	if len(messages) == 0 {
+		return []llms.Message{}
+	}
+
+	// Always keep at least the last 3 messages (or all if fewer)
+	// This ensures users don't lose immediate context
+	minMessages := 3
+	if len(messages) < minMessages {
+		return messages // Keep all if we have fewer than minimum
+	}
+
+	// Allocate 60% of target budget for recent messages
+	// Remaining 40% is for summary overhead
+	recentTokenBudget := int(float64(targetTokens) * 0.6)
+
+	// Try to fit messages within budget
+	recentMessages := s.selectRecentMessages(messages, recentTokenBudget)
+
+	// If we got fewer than minimum, take the last N messages regardless of tokens
+	if len(recentMessages) < minMessages {
+		startIdx := len(messages) - minMessages
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		return messages[startIdx:]
+	}
+
+	return recentMessages
 }
 
 // selectRecentMessages selects recent messages that fit within the token budget

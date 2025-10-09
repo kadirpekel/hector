@@ -38,6 +38,12 @@ func (s *BufferWindowStrategy) Name() string {
 	return "buffer_window"
 }
 
+// SetStatusNotifier sets a callback for status notifications (no-op for buffer window)
+func (s *BufferWindowStrategy) SetStatusNotifier(notifier StatusNotifier) {
+	// Buffer window strategy doesn't need status notifications
+	// This method exists to satisfy the HistoryStrategy interface
+}
+
 // AddMessage adds a message to the session's history
 func (s *BufferWindowStrategy) AddMessage(sessionID string, msg llms.Message) error {
 	s.mu.Lock()

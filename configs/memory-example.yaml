@@ -14,7 +14,7 @@ agents:
     llm: gpt4o
     
     reasoning:
-      engine: chain_of_thought
+      engine: chain-of-thought
       enable_streaming: true
     
     memory:
@@ -31,7 +31,7 @@ agents:
     llm: gpt4o
     
     reasoning:
-      engine: chain_of_thought
+      engine: chain-of-thought
     
     memory:
       budget: 3000      # Increase from default 2000 (for longer conversations)
@@ -45,7 +45,7 @@ agents:
     llm: gpt4o
     
     reasoning:
-      engine: chain_of_thought
+      engine: chain-of-thought
     
     memory:
       budget: 2000

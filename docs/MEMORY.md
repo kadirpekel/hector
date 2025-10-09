@@ -142,10 +142,24 @@ memory:
 
 **How it works:**
 1. Accumulates messages until 80% of budget (1600 tokens)
-2. Summarizes oldest messages via LLM (blocking, 2-5 seconds)
-3. Compresses to 60% of budget (1200 tokens)
-4. Leaves 800 tokens breathing room
-5. Repeats when threshold hit again
+2. Notifies user with status message (appears on new line)
+3. Summarizes oldest messages via LLM (blocking, 2-5 seconds)
+4. Keeps minimum 3 recent messages for context
+5. Compresses to 60% of budget (1200 tokens)
+6. Leaves 800 tokens breathing room
+7. Repeats when threshold hit again
+
+**User Experience:**
+```
+> What did I just ask?
+
+💭 Summarizing conversation history...
+You just asked about transformers in machine learning...
+```
+- Status notification appears on its own line
+- Brief 2-5 second delay during summarization
+- Response continues immediately after
+- Recent context is always preserved
 
 **Flow:**
 ```
@@ -297,10 +311,11 @@ memory:
 
 **How it works:**
 1. When conversation reaches 80% of budget (configurable threshold)
-2. LLM summarizes older messages (blocks for 2-5 seconds - user waits, which is acceptable)
-3. Summary replaces old messages
-4. Recent messages preserved intact
-5. Conversation continues with summary as context
+2. User is notified: "💭 Summarizing conversation history..."
+3. LLM summarizes older messages (blocks for 2-5 seconds)
+4. Summary replaces old messages
+5. Recent messages preserved intact
+6. Conversation continues with summary as context
 
 **Result:** Unlimited conversation length with preserved context.
 

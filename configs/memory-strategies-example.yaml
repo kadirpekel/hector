@@ -17,7 +17,7 @@ agents:
       # budget: 2000, threshold: 0.8, target: 0.6
     
     reasoning:
-      engine: chain_of_thought
+      engine: chain-of-thought
       enable_streaming: true
     
     prompt:
@@ -38,7 +38,7 @@ agents:
       target: 0.5       # More aggressive compression (to 50% = 1500 tokens)
     
     reasoning:
-      engine: chain_of_thought
+      engine: chain-of-thought
     
     prompt:
       include_history: true
@@ -54,7 +54,7 @@ agents:
       window_size: 15   # Keep last 15 messages
     
     reasoning:
-      engine: chain_of_thought
+      engine: chain-of-thought
     
     prompt:
       include_history: true

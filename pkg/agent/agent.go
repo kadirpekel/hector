@@ -282,6 +282,17 @@ func (a *Agent) execute(
 				}
 			}
 
+			// Set up status notifier for summarization feedback
+			if adapter, ok := historyService.(*HistoryServiceAdapter); ok {
+				strategy := adapter.GetStrategy()
+				strategy.SetStatusNotifier(func(message string) {
+					if message != "" {
+						// Newline before, continue on same line after
+						outputCh <- "\n" + message + "\n"
+					}
+				})
+			}
+
 			// Get recent history and restore to conversation
 			recentHistory := historyService.GetRecentHistory(sessionID, cfg.MaxIterations*historyRetentionMultiplier)
 			if len(recentHistory) > 0 {

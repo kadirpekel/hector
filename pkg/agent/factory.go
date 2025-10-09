@@ -30,8 +30,14 @@ type HistoryServiceAdapter struct {
 }
 
 // NewHistoryServiceAdapter creates a new adapter
-func NewHistoryServiceAdapter(strategy HistoryStrategy) reasoning.HistoryService {
+func NewHistoryServiceAdapter(strategy HistoryStrategy) *HistoryServiceAdapter {
 	return &HistoryServiceAdapter{strategy: strategy}
+}
+
+// GetStrategy returns the underlying history strategy
+// Used for accessing strategy-specific features like status notifiers
+func (a *HistoryServiceAdapter) GetStrategy() HistoryStrategy {
+	return a.strategy
 }
 
 // GetRecentHistory implements reasoning.HistoryService

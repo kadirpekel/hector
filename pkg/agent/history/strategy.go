@@ -4,6 +4,10 @@ import (
 	"github.com/kadirpekel/hector/pkg/llms"
 )
 
+// StatusNotifier is a callback for sending status updates during operations
+// like summarization (e.g., to inform users via streaming)
+type StatusNotifier func(message string)
+
 // HistoryStrategy defines pluggable conversation history management
 type HistoryStrategy interface {
 	// AddMessage adds a message to the session's history
@@ -21,4 +25,8 @@ type HistoryStrategy interface {
 
 	// Name returns the strategy identifier
 	Name() string
+
+	// SetStatusNotifier sets a callback for status notifications
+	// Used to inform users about background operations like summarization
+	SetStatusNotifier(notifier StatusNotifier)
 }
