@@ -462,6 +462,7 @@ type AgentConfig struct {
 	Embedder       string          `yaml:"embedder,omitempty"`        // Embedder provider reference
 	DocumentStores []string        `yaml:"document_stores,omitempty"` // Document store references
 	Prompt         PromptConfig    `yaml:"prompt,omitempty"`          // Prompt configuration
+	Memory         MemoryConfig    `yaml:"memory,omitempty"`          // Memory configuration
 	Reasoning      ReasoningConfig `yaml:"reasoning,omitempty"`       // Reasoning configuration
 	Search         SearchConfig    `yaml:"search,omitempty"`          // Search configuration
 	Tools          []string        `yaml:"tools,omitempty"`           // Tool references (defined globally in tools: section)
@@ -563,6 +564,7 @@ func (c *AgentConfig) SetDefaults() {
 		// Database, embedder, and document stores must be explicitly configured - no defaults
 
 		c.Prompt.SetDefaults()
+		c.Memory.SetDefaults()
 		c.Reasoning.SetDefaults()
 		c.Search.SetDefaults()
 
@@ -1211,6 +1213,24 @@ func (c *DocumentStoreConfig) SetDefaults() {
 // PROMPT CONFIGURATIONS
 // ============================================================================
 
+// MemoryConfig represents memory and conversation history configuration
+type MemoryConfig struct {
+	// Token budget for conversation history (required to enable memory management)
+	// When set, enables accurate token counting and intelligent message selection
+	// Default: 2000 tokens (~50 messages)
+	Budget int `yaml:"budget"`
+
+	// Enable LLM-based summarization for older messages
+	// Allows unlimited conversation length by summarizing old context
+	// Default: false
+	Summarization bool `yaml:"summarization,omitempty"`
+
+	// Percentage (0.0-1.0) of budget to trigger summarization
+	// When current tokens exceed this threshold, older messages are summarized
+	// Default: 0.8 (summarize when 80% full)
+	SummarizationThreshold float64 `yaml:"summarization_threshold,omitempty"`
+}
+
 // PromptConfig represents prompt configuration
 type PromptConfig struct {
 	// Slot-based customization (preferred)
@@ -1219,18 +1239,43 @@ type PromptConfig struct {
 	PromptSlots map[string]string `yaml:"prompt_slots"` // Override strategy's prompt slots
 
 	// Alternative: Full prompt override
-	SystemPrompt        string            `yaml:"system_prompt"`        // Full system prompt override (bypasses slots)
-	Instructions        string            `yaml:"instructions"`         // Instructions
-	FullTemplate        string            `yaml:"full_template"`        // Full template
-	Template            string            `yaml:"template"`             // Template
-	Variables           map[string]string `yaml:"variables"`            // Template variables
-	IncludeContext      bool              `yaml:"include_context"`      // Include context
-	IncludeHistory      bool              `yaml:"include_history"`      // Include history
-	MaxHistoryMessages  int               `yaml:"max_history_messages"` // Max history messages to include (default: 10)
-	EnableSummarization bool              `yaml:"enable_summarization"` // Enable LLM-based history summarization
-	SummarizeThreshold  float64           `yaml:"summarize_threshold"`  // Percentage (0.0-1.0) to trigger summarization (default: 0.8)
-	IncludeTools        bool              `yaml:"include_tools"`        // Include tools
-	MaxContextLength    int               `yaml:"max_context_length"`   // Max context length
+	SystemPrompt   string            `yaml:"system_prompt"`   // Full system prompt override (bypasses slots)
+	Instructions   string            `yaml:"instructions"`    // Instructions
+	FullTemplate   string            `yaml:"full_template"`   // Full template
+	Template       string            `yaml:"template"`        // Template
+	Variables      map[string]string `yaml:"variables"`       // Template variables
+	IncludeContext bool              `yaml:"include_context"` // Include context
+	IncludeHistory bool              `yaml:"include_history"` // Include history
+	IncludeTools   bool              `yaml:"include_tools"`   // Include tools
+
+	// Legacy fields (deprecated - use memory: section instead)
+	MaxHistoryMessages  int     `yaml:"max_history_messages,omitempty"` // Deprecated: use memory.budget
+	MaxContextLength    int     `yaml:"max_context_length,omitempty"`   // Max context length
+	EnableSummarization bool    `yaml:"enable_summarization,omitempty"` // Deprecated: use memory.summarization
+	SummarizeThreshold  float64 `yaml:"summarize_threshold,omitempty"`  // Deprecated: use memory.summarization_threshold
+	SmartMemory         bool    `yaml:"smart_memory,omitempty"`         // Deprecated: automatically enabled when memory.budget is set
+	MemoryBudget        int     `yaml:"memory_budget,omitempty"`        // Deprecated: use memory.budget
+}
+
+// Validate implements Config.Validate for MemoryConfig
+func (c *MemoryConfig) Validate() error {
+	if c.Budget < 0 {
+		return fmt.Errorf("budget must be non-negative")
+	}
+	if c.SummarizationThreshold < 0 || c.SummarizationThreshold > 1 {
+		return fmt.Errorf("summarization_threshold must be between 0.0 and 1.0")
+	}
+	return nil
+}
+
+// SetDefaults implements Config.SetDefaults for MemoryConfig
+func (c *MemoryConfig) SetDefaults() {
+	// Budget is required - no default
+	// User must explicitly set it to enable memory management
+
+	if c.SummarizationThreshold == 0 {
+		c.SummarizationThreshold = 0.8 // Trigger summarization at 80% capacity
+	}
 }
 
 // Validate implements Config.Validate for PromptConfig
@@ -1249,9 +1294,17 @@ func (c *PromptConfig) SetDefaults() {
 	if c.MaxContextLength == 0 {
 		c.MaxContextLength = 4000
 	}
-	// NOTE: Boolean flags (IncludeContext, IncludeHistory, IncludeTools) default to false
-	// Users must explicitly enable them in YAML if desired
-	// This allows explicit false values to work correctly
+
+	// Legacy field defaults (for backward compatibility)
+	if c.MaxHistoryMessages == 0 {
+		c.MaxHistoryMessages = 10
+	}
+	if c.SummarizeThreshold == 0 {
+		c.SummarizeThreshold = 0.8
+	}
+	if c.MemoryBudget == 0 && c.SmartMemory {
+		c.MemoryBudget = 2000
+	}
 }
 
 // ============================================================================

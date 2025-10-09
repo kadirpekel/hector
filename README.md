@@ -43,6 +43,31 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 
 ---
 
+## 🧠 Memory Management - Never Lose Context
+
+One simple setting gives your agents intelligent memory management:
+
+```yaml
+memory:
+  budget: 2000  # That's all you need!
+```
+
+**What you get:**
+- ✅ **Accurate token counting** - 100% accurate (not estimates)
+- ✅ **Never exceed limits** - Intelligent budget management
+- ✅ **Smart selection** - Keeps important messages automatically
+- ✅ **Optional summarization** - For unlimited conversation length
+
+**Perfect for:**
+- Long conversations (50+ messages)
+- Code reviews and analysis
+- Customer support
+- Extended sessions
+
+👉 **[Read the Memory Management Guide →](docs/MEMORY.md)**
+
+---
+
 ## Architecture
 
 ### Single Agent Architecture
@@ -502,8 +527,8 @@ export ANTHROPIC_API_KEY="sk-..."                # Anthropic authentication
 
 ### 📚 Core Guides  
 - **[Quick Start](https://gohector.dev/QUICK_START)** - Get running in 5 minutes
+- **[🧠 Memory Management](https://gohector.dev/MEMORY)** - Intelligent context management 🔥
 - **[Building Agents](https://gohector.dev/AGENTS)** - Complete single-agent guide  
-- **[Custom MCP Tools](https://gohector.dev/MCP_CUSTOM_TOOLS)** - Build custom tools in 5 minutes 🔥
 - **[Configuration](https://gohector.dev/CONFIGURATION)** - Complete config reference
 - **[CLI Guide](https://gohector.dev/CLI_GUIDE)** - Command-line interface
 
@@ -512,6 +537,7 @@ export ANTHROPIC_API_KEY="sk-..."                # Anthropic authentication
 - **[External Agents](https://gohector.dev/EXTERNAL_AGENTS)** - External agent integration
 - **[Tools & MCP](https://gohector.dev/TOOLS)** - Built-in tools and MCP protocol
 - **[Custom MCP Tools](https://gohector.dev/MCP_CUSTOM_TOOLS)** - Build custom tools in 5 minutes 🔥
+- **[Memory Configuration](https://gohector.dev/MEMORY_CONFIGURATION)** - Advanced memory options
 - **[Structured Output](https://gohector.dev/STRUCTURED_OUTPUT)** - Provider-aware JSON/XML/Enum output
 - **[Plugin Development](https://gohector.dev/PLUGINS)** - Custom LLMs, databases, tools
 
@@ -525,7 +551,6 @@ export ANTHROPIC_API_KEY="sk-..."                # Anthropic authentication
 - **[Testing Guide](https://gohector.dev/TESTING)** - Testing practices
 
 **[📚 Complete Documentation →](https://gohector.dev)**
-
 ---
 
 ## Contributing

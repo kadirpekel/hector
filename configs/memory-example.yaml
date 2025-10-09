@@ -1,0 +1,78 @@
+# Simple Memory Configuration Example
+# Most users only need to set memory.budget
+
+llm_providers:
+  - name: gpt4o
+    type: openai
+    model: gpt-4o
+    api_key: ${OPENAI_API_KEY}
+
+agents:
+  # Example 1: Simplest configuration (recommended)
+  - name: basic-assistant
+    description: Assistant with memory management (just one setting!)
+    llm: gpt4o
+    
+    reasoning:
+      engine: chain_of_thought
+      enable_streaming: true
+    
+    memory:
+      budget: 2000  # That's it! Enables token counting + intelligent selection
+      
+    prompt:
+      include_history: true
+      system_prompt: |
+        You are a helpful assistant with memory management.
+
+  # Example 2: With memory budget adjustment
+  - name: large-context-assistant
+    description: Assistant with larger memory budget
+    llm: gpt4o
+    
+    reasoning:
+      engine: chain_of_thought
+    
+    memory:
+      budget: 3000      # Increase from default 2000 (for longer conversations)
+    
+    prompt:
+      include_history: true
+
+  # Example 3: With automatic summarization (for very long conversations)
+  - name: conversational-assistant
+    description: Assistant for extended conversations
+    llm: gpt4o
+    
+    reasoning:
+      engine: chain_of_thought
+    
+    memory:
+      budget: 2000
+      summarization: true  # Auto-summarize when approaching limit
+    
+    prompt:
+      include_history: true
+
+# Configuration Guide:
+#
+# memory.budget: 2000 (required to enable memory management)
+#   - Enables accurate token counting (never exceed limits)
+#   - Intelligent message selection (keeps important messages)
+#   - Recommended values:
+#     * 1000: Short conversations, faster responses
+#     * 2000: Balanced (recommended for most use cases)
+#     * 3000: Longer conversations
+#     * 4000: Extended context (may be slower)
+#
+# memory.summarization: true (optional)
+#   - Only enable for very long conversations (100+ messages)
+#   - Automatically summarizes old messages
+#   - Preserves recent context
+#   - Requires additional LLM calls
+#
+# memory.summarization_threshold: 0.8 (optional)
+#   - Percentage (0.0-1.0) to trigger summarization
+#   - Default: 0.8 (summarize at 80% capacity)
+#
+# Clean API - Simple and powerful!

@@ -464,7 +464,7 @@ agents:
   
   # External A2A agent
   translator:
-    type: "a2a_external"  # NEW
+    type: "a2a_external"
     url: "https://translation-service.com/agents/translator"
     auth:
       type: "bearer"

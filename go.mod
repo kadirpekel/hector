@@ -7,11 +7,11 @@ toolchain go1.24.7
 require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.7.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lestrrat-go/jwx/v2 v2.1.6
+	github.com/pkoukk/tiktoken-go v0.1.7
 	github.com/qdrant/go-client v1.15.2
 	google.golang.org/grpc v1.66.0
 	google.golang.org/protobuf v1.36.6
@@ -20,6 +20,7 @@ require (
 
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
+	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/goccy/go-json v0.10.3 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
