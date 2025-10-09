@@ -16,6 +16,11 @@ Ready to take Hector to the next level? These guides cover advanced patterns, in
 - **[External Agents](EXTERNAL_AGENTS)** - Integrate remote A2A agents seamlessly
 - **[Plugin Development](PLUGINS)** - Build custom LLMs, databases, and tools
 
+## Memory & Context
+
+- **[Memory Configuration](MEMORY_CONFIGURATION)** - Advanced memory tuning options
+- **[Future: Vector Memory](FUTURE_VECTOR_MEMORY)** - Design proposal for vector-backed memory
+
 ## Production & Security
 
 - **[Authentication](AUTHENTICATION)** - JWT token validation and security
