@@ -202,10 +202,10 @@ Hector provides comprehensive features through pure YAML configuration:
 <div class="capability-section">
   <h3>🧠 Memory Management</h3>
   <ul>
-    <li><strong>Intelligent context window management</strong> - Never lose important conversations 🔥</li>
+    <li><strong>Intelligent context window management</strong> - Never lose important conversations</li>
     <li><strong>Accurate token counting</strong> - 100% accurate, not estimates</li>
-    <li><strong>Smart message selection</strong> - Keeps important messages automatically</li>
-    <li><strong>Optional summarization</strong> - For unlimited conversation length</li>
+    <li><strong>Recency-based selection</strong> - Most recent messages preserved automatically</li>
+    <li><strong>Optional summarization</strong> - LLM condenses old messages for unlimited conversation length</li>
   </ul>
 </div>
 
@@ -405,7 +405,7 @@ llms:
   <p>Essential knowledge for building production-ready agents.</p>
   <ul>
     <li><a href="AGENTS">Building Agents</a></li>
-    <li><a href="MEMORY">Memory Management</a> 🔥</li>
+    <li><a href="MEMORY">Memory Management</a></li>
     <li><a href="TOOLS">Tools & Extensions</a></li>
     <li><a href="MCP_CUSTOM_TOOLS">Custom MCP Tools</a></li>
   </ul>

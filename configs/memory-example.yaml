@@ -18,7 +18,7 @@ agents:
       enable_streaming: true
     
     memory:
-      budget: 2000  # That's it! Enables token counting + intelligent selection
+      budget: 2000  # That's it! Enables token counting + recency-based selection
       
     prompt:
       include_history: true
@@ -58,7 +58,7 @@ agents:
 #
 # memory.budget: 2000 (required to enable memory management)
 #   - Enables accurate token counting (never exceed limits)
-#   - Intelligent message selection (keeps important messages)
+#   - Recency-based message selection (most recent messages preserved)
 #   - Recommended values:
 #     * 1000: Short conversations, faster responses
 #     * 2000: Balanced (recommended for most use cases)

@@ -43,31 +43,6 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 
 ---
 
-## 🧠 Memory Management - Never Lose Context
-
-One simple setting gives your agents intelligent memory management:
-
-```yaml
-memory:
-  budget: 2000  # That's all you need!
-```
-
-**What you get:**
-- ✅ **Accurate token counting** - 100% accurate (not estimates)
-- ✅ **Never exceed limits** - Intelligent budget management
-- ✅ **Smart selection** - Keeps important messages automatically
-- ✅ **Optional summarization** - For unlimited conversation length
-
-**Perfect for:**
-- Long conversations (50+ messages)
-- Code reviews and analysis
-- Customer support
-- Extended sessions
-
-👉 **[Read the Memory Management Guide →](docs/MEMORY.md)**
-
----
-
 ## Architecture
 
 ### Single Agent Architecture
@@ -111,6 +86,7 @@ memory:
 - **Built-in Tools** - Command execution, file operations, search, todos
 - **MCP Integration** - 150+ apps (Composio, Mem0, custom servers)
 - **RAG Support** - Semantic search with Qdrant vector database
+- **Memory Management** - Token-aware with optional summarization for long conversations ([docs](docs/MEMORY.md))
 - **Multi-turn Sessions** - Conversation history and context
 - **Real-time Streaming** - Server-Sent Events (SSE) per A2A spec
 - **gRPC Plugin System** - Extend with custom LLMs, databases, tools (any language)
@@ -527,8 +503,8 @@ export ANTHROPIC_API_KEY="sk-..."                # Anthropic authentication
 
 ### 📚 Core Guides  
 - **[Quick Start](https://gohector.dev/QUICK_START)** - Get running in 5 minutes
-- **[🧠 Memory Management](https://gohector.dev/MEMORY)** - Intelligent context management 🔥
 - **[Building Agents](https://gohector.dev/AGENTS)** - Complete single-agent guide  
+- **[Memory Management](https://gohector.dev/MEMORY)** - Intelligent context management
 - **[Configuration](https://gohector.dev/CONFIGURATION)** - Complete config reference
 - **[CLI Guide](https://gohector.dev/CLI_GUIDE)** - Command-line interface
 

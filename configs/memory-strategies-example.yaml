@@ -1,0 +1,87 @@
+llms:
+  gpt4o:
+    type: openai
+    model: gpt-4o
+    api_key: ${OPENAI_API_KEY}
+
+agents:
+  # Example 1: Default (summary_buffer with defaults)
+  # This is the RECOMMENDED approach for most users
+  default-agent:
+    name: default-agent
+    llm: gpt4o
+    
+    memory:
+      strategy: "summary_buffer"  # Explicit (this is default)
+      # All other params use sensible defaults:
+      # budget: 2000, threshold: 0.8, target: 0.6
+    
+    reasoning:
+      engine: chain_of_thought
+      enable_streaming: true
+    
+    prompt:
+      include_history: true
+      system_prompt: |
+        You are a helpful assistant with advanced memory management.
+
+  # Example 2: Custom summary_buffer
+  # For users who want to tune the memory parameters
+  custom-agent:
+    name: custom-agent
+    llm: gpt4o
+    
+    memory:
+      strategy: "summary_buffer"
+      budget: 3000      # Larger budget for longer conversations
+      threshold: 0.75   # Earlier trigger (at 75% = 2250 tokens)
+      target: 0.5       # More aggressive compression (to 50% = 1500 tokens)
+    
+    reasoning:
+      engine: chain_of_thought
+    
+    prompt:
+      include_history: true
+
+  # Example 3: Simple buffer_window
+  # For simple bots, testing, or when no LLM summarization is needed
+  simple-agent:
+    name: simple-agent
+    llm: gpt4o
+    
+    memory:
+      strategy: "buffer_window"
+      window_size: 15   # Keep last 15 messages
+    
+    reasoning:
+      engine: chain_of_thought
+    
+    prompt:
+      include_history: true
+
+  # Example 4: Minimal (uses all defaults)
+  # This works perfectly fine for most use cases!
+  minimal-agent:
+    name: minimal-agent
+    llm: gpt4o
+    
+    memory:
+      strategy: "summary_buffer"  # Just specify strategy
+      # budget, threshold, target all use defaults
+    
+    prompt:
+      include_history: true
+
+  # Example 5: Legacy compatibility
+  # Old configs still work (auto-migrated to summary_buffer)
+  legacy-agent:
+    name: legacy-agent
+    llm: gpt4o
+    
+    memory:
+      budget: 2000
+      summarization: true  # Legacy field (still works)
+    
+    prompt:
+      include_history: true
+

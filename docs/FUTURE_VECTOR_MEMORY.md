@@ -18,7 +18,7 @@ This document outlines a proposed future enhancement to Hector's memory system u
 
 Currently, Hector provides:
 - ✅ Accurate token counting
-- ✅ Intelligent message selection
+- ✅ Recency-based message selection
 - ✅ Optional LLM summarization
 
 This proposal adds:

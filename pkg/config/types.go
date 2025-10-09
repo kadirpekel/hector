@@ -1215,20 +1215,24 @@ func (c *DocumentStoreConfig) SetDefaults() {
 
 // MemoryConfig represents memory and conversation history configuration
 type MemoryConfig struct {
-	// Token budget for conversation history (required to enable memory management)
-	// When set, enables accurate token counting and intelligent message selection
-	// Default: 2000 tokens (~50 messages)
-	Budget int `yaml:"budget"`
+	// Strategy selection: "buffer_window" or "summary_buffer" (default)
+	// - buffer_window: Simple LIFO, keeps last N messages
+	// - summary_buffer: Token-based with threshold-triggered summarization (DEFAULT)
+	Strategy string `yaml:"strategy,omitempty"`
 
-	// Enable LLM-based summarization for older messages
-	// Allows unlimited conversation length by summarizing old context
-	// Default: false
-	Summarization bool `yaml:"summarization,omitempty"`
+	// Common settings
+	Budget int `yaml:"budget,omitempty"` // Token budget (default: 2000)
 
-	// Percentage (0.0-1.0) of budget to trigger summarization
-	// When current tokens exceed this threshold, older messages are summarized
-	// Default: 0.8 (summarize when 80% full)
-	SummarizationThreshold float64 `yaml:"summarization_threshold,omitempty"`
+	// Buffer window settings (for buffer_window strategy)
+	WindowSize int `yaml:"window_size,omitempty"` // Number of messages to keep
+
+	// Summary buffer settings (for summary_buffer strategy)
+	Threshold float64 `yaml:"threshold,omitempty"` // Trigger at % of budget (default: 0.8)
+	Target    float64 `yaml:"target,omitempty"`    // Compress to % of budget (default: 0.6)
+
+	// Legacy fields (deprecated but kept for backward compatibility)
+	Summarization          bool    `yaml:"summarization,omitempty"`           // Deprecated: use strategy=summary_buffer
+	SummarizationThreshold float64 `yaml:"summarization_threshold,omitempty"` // Deprecated: use threshold
 }
 
 // PromptConfig represents prompt configuration
@@ -1262,19 +1266,56 @@ func (c *MemoryConfig) Validate() error {
 	if c.Budget < 0 {
 		return fmt.Errorf("budget must be non-negative")
 	}
-	if c.SummarizationThreshold < 0 || c.SummarizationThreshold > 1 {
-		return fmt.Errorf("summarization_threshold must be between 0.0 and 1.0")
+	if c.WindowSize < 0 {
+		return fmt.Errorf("window_size must be non-negative")
 	}
+	if c.Threshold < 0 || c.Threshold > 1 {
+		return fmt.Errorf("threshold must be between 0.0 and 1.0")
+	}
+	if c.Target < 0 || c.Target > 1 {
+		return fmt.Errorf("target must be between 0.0 and 1.0")
+	}
+
+	// Validate strategy
+	if c.Strategy != "" && c.Strategy != "buffer_window" && c.Strategy != "summary_buffer" {
+		return fmt.Errorf("invalid strategy '%s', must be 'buffer_window' or 'summary_buffer'", c.Strategy)
+	}
+
 	return nil
 }
 
 // SetDefaults implements Config.SetDefaults for MemoryConfig
 func (c *MemoryConfig) SetDefaults() {
-	// Budget is required - no default
-	// User must explicitly set it to enable memory management
+	// Default to summary_buffer strategy
+	if c.Strategy == "" {
+		c.Strategy = "summary_buffer"
+	}
 
-	if c.SummarizationThreshold == 0 {
-		c.SummarizationThreshold = 0.8 // Trigger summarization at 80% capacity
+	// Handle legacy config migration
+	if c.Summarization && c.Strategy == "summary_buffer" {
+		// Legacy summarization flag maps to summary_buffer
+		if c.SummarizationThreshold > 0 {
+			c.Threshold = c.SummarizationThreshold
+		}
+	}
+
+	// Strategy-specific defaults
+	switch c.Strategy {
+	case "buffer_window":
+		if c.WindowSize <= 0 {
+			c.WindowSize = 20 // Keep last 20 messages
+		}
+
+	case "summary_buffer":
+		if c.Budget <= 0 {
+			c.Budget = 2000 // ~50 messages
+		}
+		if c.Threshold <= 0 {
+			c.Threshold = 0.8 // Trigger at 80% capacity
+		}
+		if c.Target <= 0 {
+			c.Target = 0.6 // Compress to 60% capacity
+		}
 	}
 }
 
