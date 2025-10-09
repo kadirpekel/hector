@@ -302,7 +302,7 @@ That's it! Simple, balanced, covers most use cases. 🎉
 ---
 
 **See also:**
-- Complete implementation: `docs/IMMEDIATE_IMPROVEMENTS_COMPLETED.md`
+- Complete implementation: `docs/MEMORY_CONFIGURATION.md`
 - Example config: `configs/smart-memory-simple.yaml`
 - Advanced features: `docs/VECTOR_MEMORY_DESIGN.md` (optional)
 

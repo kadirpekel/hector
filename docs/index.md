@@ -50,8 +50,8 @@ Build powerful AI agents in pure YAML. Zero code required.
 | Topic | Description |
 |-------|-------------|
 | [Architecture](ARCHITECTURE.md) | System design and internals |
-| [Memory Internals](IMMEDIATE_IMPROVEMENTS_COMPLETED.md) | How Memory Management works |
 | [Memory Configuration](MEMORY_CONFIGURATION.md) | Advanced memory options |
+| [Future: Vector Memory](FUTURE_VECTOR_MEMORY.md) | Optional vector DB-backed memory (design proposal) |
 | [Testing](TESTING.md) | Testing your agents |
 | [Structured Output](STRUCTURED_OUTPUT.md) | JSON/XML/Enum output |
 | [Authentication](AUTHENTICATION.md) | Auth0 integration |
@@ -70,8 +70,8 @@ Build powerful AI agents in pure YAML. Zero code required.
 **One line of configuration for intelligent context management:**
 
 ```yaml
-prompt:
-  smart_memory: true
+memory:
+  budget: 2000
 ```
 
 **What you get:**
@@ -113,7 +113,8 @@ prompt:
 
 ### Learn
 - **How it works** → [Architecture](ARCHITECTURE.md)
-- **Memory Management internals** → [Implementation Details](IMMEDIATE_IMPROVEMENTS_COMPLETED.md)
+- **Memory Management configuration** → [Memory Configuration](MEMORY_CONFIGURATION.md)
+- **Future vector memory** → [Vector Memory Design](FUTURE_VECTOR_MEMORY.md)
 - **A2A Protocol** → [A2A Compliance](A2A_COMPLIANCE.md)
 - **Testing** → [Testing Guide](TESTING.md)
 
@@ -127,8 +128,11 @@ prompt:
 agents:
   assistant:
     llm: gpt4o
+    
+    memory:
+      budget: 2000  # One line!
+    
     prompt:
-      smart_memory: true  # One line!
       include_history: true
       system_prompt: You are a helpful assistant.
 ```

@@ -657,7 +657,7 @@ A: Enable `show_debug_info: true` to see token counts and strategy used.
 
 - **User Guide:** [Memory Configuration](MEMORY_CONFIGURATION.md)
 - **API Reference:** [Clean Memory API](CLEAN_MEMORY_API.md)
-- **Implementation:** [Immediate Improvements Completed](IMMEDIATE_IMPROVEMENTS_COMPLETED.md)
+- **Implementation:** [Immediate Improvements Completed](MEMORY_CONFIGURATION.md)
 - **Examples:** `configs/smart-memory-simple.yaml`
 - **Tests:** `configs/smoke-test-memory.yaml`
 
