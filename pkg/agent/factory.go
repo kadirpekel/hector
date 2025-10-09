@@ -89,12 +89,36 @@ func NewAgentServices(agentConfig *config.AgentConfig, componentManager *compone
 	llmService := NewLLMService(llm)
 	toolService := NewToolService(toolRegistry, agentConfig.Tools)
 
-	// Create session-aware history service
-	maxHistory := 10
-	if agentConfig.Prompt.MaxHistoryMessages > 0 {
-		maxHistory = agentConfig.Prompt.MaxHistoryMessages
+	// Create history service based on memory configuration
+	var historyService reasoning.HistoryService
+	var histErr error
+
+	if agentConfig.Memory.Budget > 0 {
+		// Token-aware mode enabled
+		historyService, histErr = NewHistoryService(&HistoryConfig{
+			MaxMessages:         agentConfig.Prompt.MaxHistoryMessages, // Fallback
+			TokenBudget:         agentConfig.Memory.Budget,
+			Model:               llm.GetModelName(),
+			EnableSummarization: agentConfig.Memory.Summarization,
+			SummarizeThreshold:  agentConfig.Memory.SummarizationThreshold,
+			LLM:                 llm,
+		})
+		if histErr != nil {
+			return nil, fmt.Errorf("failed to create token-aware history service: %w", histErr)
+		}
+	} else {
+		// Count-based mode (fallback)
+		maxHistory := 10
+		if agentConfig.Prompt.MaxHistoryMessages > 0 {
+			maxHistory = agentConfig.Prompt.MaxHistoryMessages
+		}
+		historyService, histErr = NewHistoryService(&HistoryConfig{
+			MaxMessages: maxHistory,
+		})
+		if histErr != nil {
+			return nil, fmt.Errorf("failed to create history service: %w", histErr)
+		}
 	}
-	historyService := NewSessionHistoryService(maxHistory)
 
 	// contextService already created above based on document store availability
 	promptService := NewPromptService(agentConfig.Prompt, contextService, historyService)

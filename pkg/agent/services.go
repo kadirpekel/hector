@@ -346,63 +346,7 @@ func (s *DefaultLLMService) SupportsStructuredOutput() bool {
 }
 
 // ============================================================================
-// HISTORY SERVICE
-// ============================================================================
-
-// DefaultHistoryService implements reasoning.HistoryService
-type DefaultHistoryService struct {
-	history []llms.Message
-	maxSize int
-}
-
-// NewHistoryService creates a new history service
-func NewHistoryService(maxSize int) reasoning.HistoryService {
-	if maxSize <= 0 {
-		maxSize = 10 // Default max size
-	}
-	return &DefaultHistoryService{
-		history: make([]llms.Message, 0),
-		maxSize: maxSize,
-	}
-}
-
-// AddToHistory implements reasoning.HistoryService
-func (s *DefaultHistoryService) AddToHistory(sessionID string, msg llms.Message) {
-	// Ignore sessionID for backward compatibility (non-session-aware)
-	s.history = append(s.history, msg)
-
-	// Simple FIFO truncation
-	if len(s.history) > s.maxSize {
-		s.history = s.history[len(s.history)-s.maxSize:]
-	}
-}
-
-// GetRecentHistory implements reasoning.HistoryService
-func (s *DefaultHistoryService) GetRecentHistory(sessionID string, count int) []llms.Message {
-	// Ignore sessionID for backward compatibility (non-session-aware)
-	if count <= 0 || len(s.history) == 0 {
-		return []llms.Message{}
-	}
-
-	start := len(s.history) - count
-	if start < 0 {
-		start = 0
-	}
-
-	// Return a copy to prevent external modification
-	result := make([]llms.Message, len(s.history[start:]))
-	copy(result, s.history[start:])
-	return result
-}
-
-// ClearHistory implements reasoning.HistoryService
-func (s *DefaultHistoryService) ClearHistory(sessionID string) {
-	// Ignore sessionID for backward compatibility (non-session-aware)
-	s.history = make([]llms.Message, 0)
-}
-
-// ============================================================================
-// OLD IMPLEMENTATIONS REMOVED - Using message-based implementations above
+// HISTORY SERVICE - See history.go for implementation
 // ============================================================================
 
 // ============================================================================
