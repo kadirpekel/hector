@@ -3,69 +3,63 @@ layout: default
 title: Memory Management
 nav_order: 2
 parent: Core Guides
-description: "Intelligent memory management for AI agents - accurate token counting and automatic summarization"
+description: "Dual-layer memory system for AI agents - working memory and long-term memory"
 ---
 
 # Memory Management - Never Lose Context 🧠
 
-> **Intelligent memory management for AI agents - accurate token counting and automatic summarization.**
+> **Dual-layer intelligent memory: Working memory for sessions + Long-term memory for persistent knowledge.**
 
 ---
 
-## Understanding Context Windows and Memory
+## Overview
 
-### What's a Context Window?
-
-The **context window** is your LLM's maximum input size - the total tokens it can process in one request:
-
-| Model | Context Window |
-|-------|----------------|
-| GPT-4o | 128K tokens |
-| Claude 3.5 Sonnet | 200K tokens |
-| Gemini 2.0 Flash | 1M tokens |
-
-### How Memory Budget Fits In
-
-Your LLM's context window contains multiple parts:
+Hector implements a **cognitive memory architecture** inspired by human memory systems:
 
 ```
 ┌─────────────────────────────────────────────┐
-│        LLM Context Window (128K tokens)      │
-│                                              │
-│  System Prompt:         500 tokens    (0.4%) │
-│  Tool Definitions:    1,000 tokens    (0.8%) │
-│  RAG Context:         2,000 tokens    (1.6%) │
-│  Conversation History: 2,000 tokens   (1.6%) ← memory.budget
-│  User Input:          1,500 tokens    (1.2%) │
-│  Response Buffer:   121,000 tokens   (94.5%) │
+│           HECTOR MEMORY SYSTEM              │
+├─────────────────────────────────────────────┤
+│                                             │
+│  ┌─────────────────────────────────────┐   │
+│  │  WORKING MEMORY (Session-Scoped)    │   │
+│  │                                     │   │
+│  │  • Current conversation context     │   │
+│  │  • Token-based management           │   │
+│  │  • Automatic summarization          │   │
+│  │  • Strategy: summary_buffer/buffer  │   │
+│  └─────────────────────────────────────┘   │
+│                    ↕                        │
+│  ┌─────────────────────────────────────┐   │
+│  │  LONG-TERM MEMORY (Persistent)      │   │
+│  │                                     │   │
+│  │  • Vector-based storage (Qdrant)    │   │
+│  │  • Semantic search & recall         │   │
+│  │  • Session-scoped persistence       │   │
+│  │  • Auto-recall or on-demand         │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
 └─────────────────────────────────────────────┘
 ```
 
-**Memory budget** controls how much of your context window is reserved for conversation history.
+**Two Memory Types:**
 
-### Why This Matters
+1. **Working Memory** - Manages conversation history within sessions (like human short-term memory)
+2. **Long-Term Memory** - Stores and recalls relevant context semantically (like human long-term memory)
 
-**Without memory management:**
-```yaml
-max_history_messages: 10  # Could be 500 or 50,000 tokens! 🤷
-```
-- Unpredictable token usage
-- Risk exceeding context window
-- Wastes available space
-
-**With memory management:**
-```yaml
-memory:
-  budget: 2000  # Exactly 2000 tokens for history ✅
-```
-- Predictable context window usage
-- Never exceeds your budget
-- Maximizes messages within budget
-- Leaves room for prompts, tools, and responses
+Both work together seamlessly to provide optimal context management.
 
 ---
 
-## The Problem
+## Memory Type 1: Working Memory
+
+**Purpose:** Manage conversation history within the current session
+
+**Lifespan:** Session-scoped (cleared when session ends)
+
+**Implementation:** Token-aware buffer with pluggable strategies
+
+### Why Working Memory Matters
 
 Traditional AI agents lose context in long conversations:
 - ❌ Exceed token limits without warning
@@ -75,9 +69,7 @@ Traditional AI agents lose context in long conversations:
 
 **Result:** Broken conversations, lost context, frustrated users.
 
----
-
-## The Solution: Intelligent Memory Management
+### The Solution
 
 One simple setting that changes everything:
 
@@ -92,64 +84,38 @@ memory:
 - ✅ **Automatic management** - No manual intervention
 - ✅ **Optional summarization** - LLM condenses old messages for unlimited conversation length
 
----
+### Understanding Context Windows
 
-## Architecture
+The **context window** is your LLM's maximum input size - the total tokens it can process in one request:
 
-Hector's memory system uses a **clean, layered architecture**:
+| Model | Context Window |
+|-------|----------------|
+| GPT-4o | 128K tokens |
+| Claude 3.5 Sonnet | 200K tokens |
+| Gemini 2.0 Flash | 1M tokens |
+
+Your LLM's context window contains multiple parts:
 
 ```
-MemoryService (pkg/memory/)
-├─ Manages sessions (lifecycle, isolation)
-└─ Delegates to: WorkingMemoryStrategy
-    ├─ SummaryBufferStrategy (token-based with summarization)
-    └─ BufferWindowStrategy (simple LIFO)
+┌─────────────────────────────────────────────┐
+│        LLM Context Window (128K tokens)      │
+│                                              │
+│  System Prompt:         500 tokens    (0.4%) │
+│  Tool Definitions:    1,000 tokens    (0.8%) │
+│  RAG Context:         2,000 tokens    (1.6%) │
+│  Working Memory:      2,000 tokens    (1.6%) ← memory.budget
+│  User Input:          1,500 tokens    (1.2%) │
+│  Response Buffer:   121,000 tokens   (94.5%) │
+└─────────────────────────────────────────────┘
 ```
 
-**Benefits:**
-- ✅ Clean separation: Service manages infrastructure, strategies implement algorithms
-- ✅ No duplication: Session management in one place
-- ✅ Testable: Each layer tested independently
-- ✅ Extensible: Easy to add long-term memory strategies
+**Memory budget** controls how much of your context window is reserved for conversation history.
 
-**Note:** This is internal architecture - configuration and behavior remain unchanged.
+### Working Memory Strategies
 
----
+Hector supports **two pluggable working memory strategies**. Choose based on your needs.
 
-## Quick Start
-
-### 1. Enable Memory Management
-
-```yaml
-agents:
-  my-assistant:
-    llm: gpt4o
-    memory:
-      budget: 2000      # That's all you need!
-      include_history: true
-```
-
-### 2. Run Your Agent
-
-```bash
-./hector serve --config config.yaml
-```
-
-### 3. Watch It Work
-
-Your agent now:
-- Accurately counts tokens (not estimates)
-- Never exceeds context window
-- Keeps important messages (system, errors, decisions)
-- Handles long conversations gracefully
-
----
-
-## History Strategies
-
-Hector supports two pluggable history management strategies. Choose based on your needs.
-
-### Summary Buffer (Default - Recommended)
+#### Strategy 1: Summary Buffer (Default - Recommended)
 
 **Token-based with threshold-triggered summarization.** Best for production and long conversations.
 
@@ -183,17 +149,6 @@ You just asked about transformers in machine learning...
 - Response continues immediately after
 - Recent context is always preserved
 
-**Flow:**
-```
-Messages accumulate: 0 → 400 → 800 → 1200 → 1600 → THRESHOLD HIT!
-                                                    ↓
-Summarize oldest messages (blocking, user waits 2-5s)
-                                                    ↓
-Back to 1200 tokens (40% for recent, 20% for summary)
-                                                    ↓
-Continue accumulating: 1200 → 1400 → 1600 → THRESHOLD HIT! → Repeat
-```
-
 **Benefits:**
 - Optimal token efficiency
 - Hierarchical compression (summary of summaries)
@@ -216,7 +171,7 @@ agents:
       # Uses all defaults (budget: 2000, threshold: 0.8, target: 0.6)
 ```
 
-### Buffer Window
+#### Strategy 2: Buffer Window
 
 **Simple LIFO, keeps last N messages.** Best for testing or simple bots.
 
@@ -255,7 +210,7 @@ agents:
       window_size: 15  # Keep last 15 messages
 ```
 
-### Comparison
+#### Strategy Comparison
 
 | Feature | Summary Buffer (Default) | Buffer Window |
 |---------|-------------------------|---------------|
@@ -266,7 +221,7 @@ agents:
 | **Complexity** | Medium | Low |
 | **Best For** | Production (90%) | Testing (10%) |
 
-### Which Strategy Should I Use?
+#### Which Strategy Should I Use?
 
 **Use Summary Buffer if:**
 - You want production-quality memory (recommended!)
@@ -282,72 +237,9 @@ agents:
 
 **Default:** If you don't specify a strategy, Hector uses `summary_buffer` with sensible defaults.
 
----
+### Working Memory Configuration
 
-## Features
-
-### 🎯 Accurate Token Counting
-
-**Before:**
-```
-"Hello world" → ~3 tokens (rough estimate, ±25% error)
-```
-
-**After:**
-```
-"Hello world" → 2 tokens (exact, using tiktoken)
-```
-
-**Impact:** Never exceed context limits, optimize token usage.
-
-### 🧠 Recency-Based Selection
-
-**Simple and effective:**
-- Keeps most recent messages that fit within budget
-- Counts backwards from newest to oldest
-- Stops when budget is reached
-- No complex scoring or ML models needed
-
-**Impact:** Most recent context is always preserved, older messages naturally drop off.
-
-### 📊 Token Budget Management
-
-```yaml
-memory:
-  budget: 2000
-  budget: 2000  # ~50 messages
-```
-
-**Default:** 2000 tokens (perfect for most conversations)
-**Adjust:** 1000-4000 based on your needs
-
-### 🔄 Automatic Summarization (Optional)
-
-For very long conversations (100+ messages):
-
-```yaml
-memory:
-  budget: 3000
-  summarization: true
-```
-
-**How it works:**
-1. When conversation reaches 80% of budget (configurable threshold)
-2. User is notified: "💭 Summarizing conversation history..."
-3. LLM summarizes older messages (blocks for 2-5 seconds)
-4. Summary replaces old messages
-5. Recent messages preserved intact
-6. Conversation continues with summary as context
-
-**Result:** Unlimited conversation length with preserved context.
-
-**Note:** Summarization is synchronous/blocking - the user waits during summarization, just like waiting for any AI response. This is the correct design (not a bug).
-
----
-
-## Configuration Guide
-
-### Tier 1: Most Users (90%)
+#### Tier 1: Most Users (90%)
 
 ```yaml
 memory:
@@ -366,11 +258,10 @@ memory:
 - Accurate counting
 - Recency-based selection
 
-### Tier 2: Extended Conversations (9%)
+#### Tier 2: Extended Conversations (9%)
 
 ```yaml
 memory:
-  budget: 2000
   budget: 3000
   include_history: true
 ```
@@ -386,13 +277,14 @@ memory:
 - More context retained
 - Same accuracy and recency-based selection
 
-### Tier 3: Very Long Sessions (1%)
+#### Tier 3: Very Long Sessions (1%)
 
 ```yaml
 memory:
-  budget: 2000
+  strategy: "summary_buffer"
   budget: 3000
-  summarization: true
+  threshold: 0.8
+  target: 0.6
   include_history: true
 ```
 
@@ -410,44 +302,374 @@ memory:
 
 ---
 
-## How It Works
+## Memory Type 2: Long-Term Memory
+
+**Purpose:** Store and recall relevant information semantically across the session
+
+**Lifespan:** Persistent within session (survives working memory summarization)
+
+**Implementation:** Vector database (Qdrant) with semantic search
+
+### Why Long-Term Memory Matters
+
+Even with working memory summarization, important details can be lost:
+- ❌ Summaries are lossy - specific facts may disappear
+- ❌ Old but relevant context gets compressed away
+- ❌ No semantic search - agent can't "remember" specific details from earlier
+
+**Long-term memory solves this** by:
+- ✅ Storing all messages persistently in a vector database
+- ✅ Enabling semantic recall - find relevant past context
+- ✅ Working alongside working memory automatically
+- ✅ Surviving working memory summarization
+
+### How It Works
+
+```
+User sends message
+       ↓
+┌──────────────────┐
+│ Working Memory   │ ← Manages current conversation (token-aware)
+└──────────────────┘
+       ↓
+┌──────────────────┐
+│ Long-Term Memory │ ← Stores messages in vector DB (Qdrant)
+└──────────────────┘
+       ↓
+When agent needs context:
+┌──────────────────┐
+│ Semantic Recall  │ ← Search vectors for relevant past messages
+└──────────────────┘
+       ↓
+Relevant memories + Working memory → LLM
+```
+
+**Key Insight:** Working memory handles *recent* context efficiently, while long-term memory provides *semantic* recall of *any* relevant past context.
 
 ### Architecture
 
 ```
-User Message
-    ↓
-AddToHistory
-    ↓
-┌─────────────────┐
-│ Token Counter   │ → Accurate counting (tiktoken-go)
-│                 │   - 100% accurate for OpenAI
-│                 │   - ~95% for Claude/Gemini
-└─────────────────┘
-    ↓
-┌─────────────────┐
-│ Check Threshold │ → Is conversation > 80% of budget?
-└─────────────────┘
-    ↓ (if yes)
-┌─────────────────┐
-│ Summarizer      │ → LLM summarizes old messages
-│ (Blocking)      │   - Takes 2-5 seconds
-│                 │   - User waits (acceptable)
-│                 │   - Keeps 5 recent messages
-└─────────────────┘
-    ↓
-GetRecentHistory (on next request)
-    ↓
-┌─────────────────┐
-│ Select Recent   │ → Count backwards from newest
-│                 │   - Until budget reached
-│                 │   - Simple and fast
-└─────────────────┘
-    ↓
-Context → LLM
+MemoryService (orchestrator)
+├─ Working Memory Strategy ─→ Token-aware session management
+└─ Long-Term Memory Strategy ─→ Vector-based persistent storage
+   ├─ Store: Embed messages and upsert to Qdrant
+   ├─ Recall: Semantic search for relevant context
+   └─ Filter: Session-scoped isolation
 ```
 
-### Token Counting
+**Design Benefits:**
+- ✅ Decoupled strategies - working and long-term are independent
+- ✅ MemoryService orchestrates both seamlessly
+- ✅ Session isolation - memories don't leak between sessions
+- ✅ Configurable storage and recall behavior
+
+### Configuration
+
+```yaml
+memory:
+  # Working memory (as before)
+  strategy: "summary_buffer"
+  budget: 2000
+  
+  # Long-term memory (NEW)
+  long_term:
+    enabled: true                     # Enable long-term memory
+    storage_scope: "all"              # What to store: "all", "conversational", "summaries_only"
+    batch_size: 1                     # Store immediately (default), or batch for performance
+    auto_recall: true                 # Automatically inject relevant memories before LLM calls
+    recall_limit: 5                   # Max memories to recall (default: 5)
+    collection: "hector_session_memory"  # Qdrant collection name
+
+# Required: Vector database and embedder
+databases:
+  qdrant:
+    type: "qdrant"
+    host: "localhost"
+    port: 6334  # gRPC port
+    use_tls: false
+
+embedders:
+  ollama:
+    type: "ollama"
+    model: "mxbai-embed-large"
+    host: "http://localhost:11434"
+    dimension: 1024
+```
+
+### Storage Scope Options
+
+**`storage_scope`** controls what messages are stored in long-term memory:
+
+| Scope | What Gets Stored | Use Case |
+|-------|------------------|----------|
+| `all` (default) | All messages (user, assistant, system, tool) | Maximum recall, comprehensive memory |
+| `conversational` | Only user and assistant messages | Focus on dialogue, ignore tool internals |
+| `summaries_only` | Only summary messages from working memory | Compressed semantic memory, lower storage |
+
+**Example:**
+```yaml
+long_term:
+  storage_scope: "conversational"  # Only store user/assistant dialogue
+```
+
+### Auto-Recall vs On-Demand Search
+
+**Two ways to use long-term memory:**
+
+#### 1. Auto-Recall (Recommended)
+
+```yaml
+long_term:
+  auto_recall: true
+  recall_limit: 5
+```
+
+**How it works:**
+- Before each LLM call, MemoryService automatically searches long-term memory
+- Uses the last user message as the search query
+- Retrieves top N relevant past messages semantically
+- Prepends them to working memory messages
+- LLM sees: `[recalled memories] + [working memory] + [current input]`
+
+**Benefits:**
+- Zero agent effort - happens automatically
+- Agent always has relevant context
+- Transparent to agent - just appears as available context
+
+**Best for:** Most agents (recommended!)
+
+#### 2. On-Demand Search Tool
+
+```yaml
+long_term:
+  auto_recall: false  # Disable auto-recall
+```
+
+The agent still has access to the `search` tool, which can search long-term memory on demand:
+
+```yaml
+# Agent can explicitly search long-term memory
+Tool: search(query="user's favorite color", type="memory")
+```
+
+**Benefits:**
+- Agent controls when to recall
+- Can use custom queries
+- More explicit reasoning
+
+**Best for:** Agents that need fine-grained control over memory recall
+
+### Batching for Performance
+
+```yaml
+long_term:
+  batch_size: 10  # Store every 10 messages
+```
+
+**How it works:**
+- Messages accumulate in a pending batch
+- When `batch_size` is reached, batch is stored to Qdrant
+- Flush also happens on `ClearHistory()` to ensure nothing is lost
+
+**Trade-offs:**
+- `batch_size: 1` (default) - Immediate storage, slightly more overhead
+- `batch_size: 10+` - Batched storage, better performance, slight recall lag
+
+**Recommendation:** Use default `batch_size: 1` unless you have high-throughput agents.
+
+### Session Isolation
+
+**Important:** Long-term memories are **session-scoped**, not global:
+
+```yaml
+# Session 1
+User: "My name is Alice"
+[Stored in long-term memory with session_id: "session-1"]
+
+# Session 2
+User: "What is my name?"
+Agent: "I don't know your name"  # Different session, no access to session-1 memories
+```
+
+**Benefits:**
+- Privacy - sessions don't leak information
+- Clean separation - each conversation is independent
+- Scalability - no cross-session contamination
+
+**Note:** Cross-session memory (e.g., user profiles) is a future feature.
+
+### Complete Example
+
+```yaml
+agents:
+  research-agent:
+    name: "Research Assistant"
+    llm: gpt4o
+    
+    memory:
+      # Working memory for current conversation
+      strategy: "summary_buffer"
+      budget: 2000
+      threshold: 0.8
+      target: 0.6
+      
+      # Long-term memory for semantic recall
+      long_term:
+        enabled: true
+        storage_scope: "all"
+        batch_size: 1
+        auto_recall: true
+        recall_limit: 5
+        collection: "research_agent_memory"
+    
+    document_stores:
+      - "research_docs"
+
+# Required infrastructure
+llms:
+  gpt4o:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+
+databases:
+  qdrant:
+    type: "qdrant"
+    host: "localhost"
+    port: 6334
+    use_tls: false
+
+embedders:
+  ollama:
+    type: "ollama"
+    model: "mxbai-embed-large"
+    host: "http://localhost:11434"
+    dimension: 1024
+```
+
+### User Experience
+
+```
+User: My favorite color is blue and I love hiking.
+Agent: Got it! I'll remember that.
+[Stored in working memory + long-term memory]
+
+... many messages later ...
+
+User: What outdoor activities do I enjoy?
+Agent: [Auto-recalls "I love hiking" from long-term memory]
+       Based on what you told me earlier, you enjoy hiking!
+```
+
+**Seamless:** The agent automatically recalls relevant context without explicit search.
+
+---
+
+## How Working and Long-Term Memory Work Together
+
+### The Orchestration
+
+```
+1. User sends message
+   ↓
+2. MemoryService.AddToHistory()
+   ├→ Store to long-term memory (if enabled)
+   └→ Add to working memory strategy
+   
+3. User requests response
+   ↓
+4. MemoryService.GetRecentHistory()
+   ├→ Auto-recall from long-term (if enabled)
+   ├→ Get working memory messages
+   └→ Return: [recalled] + [working memory]
+   
+5. LLM receives full context
+   ↓
+6. Response streamed to user
+```
+
+**Key Points:**
+- Long-term memory stores *before* working memory processes (no loss)
+- Auto-recall happens *before* LLM call (transparent)
+- Working memory summarization doesn't affect long-term storage
+- Both memories are session-scoped independently
+
+### Example Flow
+
+```yaml
+# Configuration
+memory:
+  budget: 2000
+  long_term:
+    enabled: true
+    auto_recall: true
+    recall_limit: 3
+```
+
+**Conversation:**
+
+```
+[Message 1]
+User: "My project deadline is March 15th"
+→ Working memory: [msg1]
+→ Long-term memory: [msg1 embedded + stored]
+
+[Messages 2-50]
+... conversation continues ...
+→ Working memory: summarizes to [summary] + [msg48, msg49, msg50]
+→ Long-term memory: [msg1...msg50 all stored]
+
+[Message 51]
+User: "When is my deadline again?"
+→ Auto-recall searches long-term: finds msg1 "deadline is March 15th"
+→ Working memory: [summary] + [msg48, msg49, msg50]
+→ LLM receives: [msg1] + [summary] + [msg48, msg49, msg50] + [msg51]
+Agent: "Your deadline is March 15th"
+```
+
+**Result:** Even though working memory summarized messages 1-47, long-term memory semantically recalled the relevant deadline message!
+
+---
+
+## Architecture
+
+Hector's memory system uses a **clean, layered architecture**:
+
+```
+MemoryService (pkg/memory/)
+├─ Manages sessions (lifecycle, isolation)
+├─ Orchestrates working + long-term strategies
+└─ Delegates to:
+   ├─ WorkingMemoryStrategy
+   │  ├─ SummaryBufferStrategy (token-based with summarization)
+   │  └─ BufferWindowStrategy (simple LIFO)
+   └─ LongTermMemoryStrategy
+      └─ VectorMemoryStrategy (Qdrant + embeddings)
+```
+
+**Benefits:**
+- ✅ Clean separation: Service manages infrastructure, strategies implement algorithms
+- ✅ Decoupled strategies: Working and long-term are independent
+- ✅ No duplication: Session management in one place
+- ✅ Testable: Each layer tested independently
+- ✅ Extensible: Easy to add new strategies
+
+**File Structure:**
+```
+pkg/memory/
+├── memory.go              → MemoryService (orchestrator)
+├── working_strategy.go    → WorkingMemoryStrategy interface
+├── summary_buffer.go      → Token-based strategy with summarization
+├── buffer_window.go       → Simple LIFO strategy
+├── longterm_strategy.go   → LongTermMemoryStrategy interface
+├── vector_memory.go       → Vector-based long-term memory
+├── types.go               → Configuration types
+└── factory.go             → Strategy factory
+```
+
+---
+
+## Token Counting
 
 Uses `tiktoken-go` for exact token counting:
 - **GPT-4o** - o200k_base encoding
@@ -458,40 +680,21 @@ Uses `tiktoken-go` for exact token counting:
 
 **Accuracy:** 100% for OpenAI models, ~95% for others
 
-### Recency-Based Selection
-
-**Simple and effective:**
-- Starts with most recent message
-- Counts backwards, adding messages
-- Stops when budget reached
-- No ML models, no complex scoring
-
-**Why recency works:**
-- Most relevant context is usually recent
-- Simple = fast and predictable
-- With summarization, old context is preserved in summary
-
-### Summarization (Optional)
-
-Powered by your configured LLM:
-
+**Before:**
 ```
-Trigger: 80% of token budget used
-↓
-Old messages → LLM → Summary
-↓
-Summary + Recent Messages → Context
+"Hello world" → ~3 tokens (rough estimate, ±25% error)
 ```
 
-**Quality:** Preserves facts, decisions, action items
-**Compression:** 30-50% token reduction
-**Cost:** Additional LLM call (only when needed)
+**After:**
+```
+"Hello world" → 2 tokens (exact, using tiktoken)
+```
 
 ---
 
 ## Examples
 
-### Example 1: Customer Support Bot
+### Example 1: Customer Support Bot (Working Memory Only)
 
 ```yaml
 agents:
@@ -509,44 +712,53 @@ agents:
 - Never loses context mid-conversation
 - Handles 50+ message conversations easily
 
-### Example 2: Code Review Assistant
+### Example 2: Research Agent (Both Memory Types)
+
+```yaml
+agents:
+  research-agent:
+    llm: gpt4o
+    memory:
+      strategy: "summary_buffer"
+      budget: 3000
+      
+      long_term:
+        enabled: true
+        storage_scope: "all"
+        auto_recall: true
+        recall_limit: 5
+```
+
+**Result:**
+- Working memory handles current research session
+- Long-term memory recalls specific facts from earlier
+- Can reference details from 100+ messages ago semantically
+- Agent: "As you mentioned earlier about X..." (recalls from long-term)
+
+### Example 3: Code Review Assistant (Long Conversations)
 
 ```yaml
 agents:
   code-reviewer:
     llm: gpt4o
     memory:
-      budget: 2000
-      budget: 3000  # More context for code
-      include_history: true
-      system_memory: |
-        You are an expert code reviewer.
+      strategy: "summary_buffer"
+      budget: 3000
+      threshold: 0.8
+      target: 0.6
+      
+      long_term:
+        enabled: true
+        storage_scope: "conversational"  # Only dialogue
+        auto_recall: true
+        recall_limit: 8  # More context for code
 ```
 
 **Result:**
 - Retains full context of code being reviewed
-- Remembers previous suggestions
+- Remembers previous suggestions semantically
 - Tracks changes across multiple files
-
-### Example 3: Long-Running Project Manager
-
-```yaml
-agents:
-  project-manager:
-    llm: gpt4o
-    memory:
-      budget: 2000
-      budget: 3000
-      summarization: true
-      include_history: true
-      system_memory: |
-        You are a project management assistant.
-```
-
-**Result:**
-- Handles multi-day conversations
-- Summarizes old discussions automatically
-- Maintains project context indefinitely
+- Can recall specific code snippets from earlier
 
 ---
 
@@ -558,34 +770,23 @@ agents:
 |-----------|------|-------|
 | Token counting | <1ms | Cached encoding |
 | Recency selection | <1ms | Simple backwards iteration |
-| Summarization | 2-5s | LLM call (blocking, when triggered) |
+| Working memory summarization | 2-5s | LLM call (blocking, when triggered) |
+| Long-term storage (single) | ~50ms | Embedding + Qdrant upsert |
+| Long-term storage (batch) | ~100ms | Batch of 10 messages |
+| Semantic recall | ~100ms | Embedding + Qdrant search |
 
 ### Memory Overhead
 
 | Component | Memory | Notes |
 |-----------|--------|-------|
 | Token counter | 5MB | Encoding cache |
-| History buffer | 1KB/msg | In-memory storage |
+| Working memory buffer | 1KB/msg | In-memory storage |
+| Long-term memory | 0KB | Stored in Qdrant |
 | Selection logic | <1KB | Simple iteration |
 
-**Total:** ~5-10MB for typical usage
+**Total:** ~5-10MB for typical usage (working memory)
 
-### Cost Analysis
-
-**Without summarization:**
-- Zero additional cost
-- Same token usage as before
-- Just accurate counting and recency-based selection
-
-**With summarization:**
-- 1 additional LLM call per trigger (80% threshold)
-- ~200-500 tokens per summarization
-- Saves 30-50% tokens overall
-
-**Example:** 100-message conversation
-- Old way: Truncates to 10 messages (loses 90%)
-- Memory Management (basic): Keeps 50 most recent messages within budget
-- Memory Management (+ summarization): All 100 messages compressed to ~75 message-equivalent
+**Long-term memory:** Stored in Qdrant (external), no in-process memory overhead
 
 ---
 
@@ -593,36 +794,76 @@ agents:
 
 ### vs. Character-Based Estimation
 
-| Feature | Character-Based | Memory Management |
+| Feature | Character-Based | Hector Memory |
 |---------|----------------|--------------|
 | **Accuracy** | ±25% error | 100% accurate |
 | **Context limits** | Often exceeded | Never exceeded |
-| **Message selection** | Lost randomly | Most recent preserved |
-| **Long conversations** | Truncated | Managed/summarized |
-
-### vs. Manual Token Management
-
-| Feature | Manual | Memory Management |
-|---------|--------|--------------|
-| **Configuration** | 5-7 options | 1-3 options |
-| **Setup complexity** | High | Low |
-| **Error-prone** | Yes | No |
-| **Auto-optimization** | No | Yes |
+| **Message selection** | Lost randomly | Most recent + semantic |
+| **Long conversations** | Truncated | Managed/summarized + recalled |
+| **Semantic recall** | No | Yes (long-term) |
 
 ### vs. Other AI Frameworks
 
-| Framework | Memory Approach | Memory Management Equivalent |
-|-----------|----------------|------------------------|
-| **LangChain** | Manual buffer management | ✅ Automatic |
-| **AutoGPT** | Fixed-size history | ✅ Dynamic + recency-based |
+| Framework | Memory Approach | Hector Equivalent |
+|-----------|----------------|-------------------|
+| **LangChain** | Manual buffer management | ✅ Automatic (working + long-term) |
+| **AutoGPT** | Fixed-size history | ✅ Dynamic + recency + semantic |
 | **Claude** | Built-in (some models) | ✅ Works with any LLM |
 | **OpenAI Assistant** | Managed by API | ✅ Self-hosted control |
+| **Mem0** | External memory service | ✅ Built-in, self-hosted |
+
+---
+
+## Troubleshooting
+
+### Working Memory Too Short
+
+**Problem:** Not enough history retained
+
+**Solution:**
+```yaml
+memory:
+  budget: 3000  # Increase budget
+```
+
+### Responses Slow
+
+**Problem:** Too much context processing
+
+**Solution:**
+```yaml
+memory:
+  budget: 1500  # Decrease budget
+  long_term:
+    recall_limit: 3  # Fewer recalled memories
+```
+
+### Agent Not Recalling Past Context
+
+**Problem:** Long-term memory not finding relevant messages
+
+**Solution:**
+```yaml
+long_term:
+  recall_limit: 10  # Increase recall limit
+  storage_scope: "all"  # Store everything
+```
+
+### Long-Term Memory Not Working
+
+**Problem:** Qdrant connection or embedder issues
+
+**Solution:**
+1. Check Qdrant is running: `docker ps | grep qdrant`
+2. Check embedder (Ollama): `curl http://localhost:11434/api/tags`
+3. Verify gRPC port: `6334` (not REST port `6333`)
+4. Check logs for embedding/storage errors
 
 ---
 
 ## Migration
 
-### From Character-Based (Old Default)
+### From Basic to Working Memory
 
 **Before:**
 ```yaml
@@ -638,227 +879,118 @@ memory:
   include_history: true
 ```
 
-**Changes:**
-- Accurate token counting (vs. character estimation)
-- 2000 tokens (vs. 10 messages)
-- Recency-based selection (vs. simple truncation)
+### Adding Long-Term Memory
 
-### From Other Frameworks
-
-#### From LangChain
-
-```python
-# LangChain
-memory = ConversationBufferWindowMemory(k=10)
-```
+**Step 1:** Add infrastructure
 
 ```yaml
-# Hector
-memory:
-  budget: 2000
-  budget: 2000
+databases:
+  qdrant:
+    type: "qdrant"
+    host: "localhost"
+    port: 6334
+    use_tls: false
+
+embedders:
+  ollama:
+    type: "ollama"
+    model: "mxbai-embed-large"
+    host: "http://localhost:11434"
+    dimension: 1024
 ```
 
-#### From AutoGPT
-
-```json
-{
-  "memory": {
-    "type": "short_term",
-    "max_messages": 50
-  }
-}
-```
+**Step 2:** Enable in agent
 
 ```yaml
-# Hector
-memory:
-  budget: 2000
-  # budget: 2000 (default)
+agents:
+  my-agent:
+    memory:
+      long_term:
+        enabled: true
 ```
 
----
+**Step 3:** Start Qdrant and Ollama
 
-## Troubleshooting
-
-### Context Too Short
-
-**Problem:** Not enough history retained
-
-**Solution:**
-```yaml
-memory:
-  budget: 2000
-  budget: 3000  # Increase budget
+```bash
+docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
+docker run -d -p 11434:11434 ollama/ollama
+ollama pull mxbai-embed-large
 ```
-
-### Responses Slow
-
-**Problem:** Too much context processing
-
-**Solution:**
-```yaml
-memory:
-  budget: 2000
-  budget: 1500  # Decrease budget
-```
-
-### Important Messages Lost
-
-**Problem:** System not recognizing importance
-
-**Solution:** Already handled! System messages, errors, tool calls, and decisions are automatically preserved.
-
-### Very Long Conversations
-
-**Problem:** Even with memory management, hitting limits
-
-**Solution:**
-```yaml
-memory:
-  budget: 2000
-  budget: 3000
-  summarization: true  # Add summarization
-```
-
----
-
-## Advanced Topics
-
-### Custom Selection Strategy
-
-For power users, you can influence selection through message metadata:
-
-```yaml
-# System messages are always preserved
-role: system
-
-# Tool responses are always preserved
-role: tool
-
-# Mark important user messages with keywords:
-# "decided", "choose", "concluded", "determined"
-```
-
-### Monitoring Token Usage
-
-Enable debug mode to see token statistics:
-
-```yaml
-reasoning:
-  show_debug_info: true
-```
-
-Output:
-```
-Token usage: 1234/2000 (62%)
-Messages: 35 total, 28 kept
-Strategy: balanced
-```
-
-### Fine-Tuning Budget
-
-Guidelines for different use cases:
-
-| Use Case | Recommended Budget | Rationale |
-|----------|-------------------|-----------|
-| Quick Q&A | 1000 tokens | Fast, focused |
-| General chat | 2000 tokens | Balanced (default) |
-| Code review | 3000 tokens | Need context |
-| Long projects | 3000 + summarization | Unlimited |
 
 ---
 
 ## API Reference
 
-### Configuration
+### Working Memory Configuration
 
 ```yaml
 memory:
-  # Main setting
-  budget: int                     # Token budget for history (required to enable)
+  # Strategy selection
+  strategy: "summary_buffer"  # or "buffer_window"
   
-  # Optional adjustments
-  budget: int              # Token budget (default: 2000)
-  summarization: bool      # Enable summarization (default: false)
+  # Summary buffer options
+  budget: 2000                # Token budget (default: 2000)
+  threshold: 0.8              # Trigger % (default: 0.8)
+  target: 0.6                 # Target % after summarization (default: 0.6)
   
-  # Advanced
-  summarize_threshold: float      # Trigger % (default: 0.8)
+  # Buffer window options
+  window_size: 20             # Number of messages (default: 20)
+  
+  # General
+  include_history: true       # Enable history in prompts
 ```
 
-### Programmatic Access (Go)
+### Long-Term Memory Configuration
 
-```go
-import "github.com/kadirpekel/hector/pkg/agent"
-
-// Create context manager
-manager, err := agent.NewContextManager(&agent.ContextManagerConfig{
-    Model:                "gpt-4o",
-    MaxTokens:            2000,
-    SummarizationEnabled: true,
-    LLM:                  llm,
-})
-
-// Prepare context
-prepared, err := manager.PrepareContext(ctx, messages)
-
-// Get statistics
-stats := manager.GetContextStats(messages)
-fmt.Printf("Tokens: %d/%d (%.1f%%)\n", 
-    stats.TokenCount, stats.MaxTokens, stats.Utilization)
+```yaml
+memory:
+  long_term:
+    enabled: false                          # Enable long-term memory
+    storage_scope: "all"                    # "all", "conversational", "summaries_only"
+    batch_size: 1                           # Store immediately (1) or batch (10+)
+    auto_recall: true                       # Auto-inject relevant memories
+    recall_limit: 5                         # Max memories to recall
+    collection: "hector_session_memory"     # Qdrant collection name
 ```
-
----
-
-## FAQ
-
-**Q: Does this work with all LLMs?**
-A: Yes! Works with OpenAI, Anthropic, Gemini, and any LLM provider.
-
-**Q: Is it accurate for non-OpenAI models?**
-A: ~95% accurate for Claude/Gemini (uses cl100k_base approximation).
-
-**Q: Does it cost more?**
-A: Without summarization: No extra cost. With summarization: 1 additional LLM call when triggered.
-
-**Q: Can I disable it?**
-A: Yes, just don't set `budget: 2000`. Default behavior unchanged.
-
-**Q: What about existing configs?**
-A: Fully backward compatible. Existing configs work without changes.
-
-**Q: How do I know it's working?**
-A: Enable `show_debug_info: true` to see token counts and strategy used.
 
 ---
 
 ## Resources
 
-- **User Guide:** [Memory Configuration](MEMORY_CONFIGURATION.md)
 - **Configuration Guide:** [Memory Configuration](MEMORY_CONFIGURATION.md)
-- **Examples:** `configs/memory-example.yaml`
-- **Tests:** `test-summarization.sh`
+- **Architecture Details:** [Architecture](ARCHITECTURE.md#memory-service)
+- **Examples:** `configs/long-term-memory-example.yaml`
 
 ---
 
 ## Summary
 
-**Memory Management gives you:**
+**Hector's Dual-Layer Memory gives you:**
+
+**Working Memory:**
 - ✅ Accurate token counting (100% for OpenAI, ~95% for others)
 - ✅ Never exceed context limits
-- ✅ Recency-based message selection (simple and fast)
-- ✅ Automatic summarization (optional, blocking/synchronous)
+- ✅ Recency-based message selection
+- ✅ Automatic summarization (optional)
 - ✅ Simple configuration (`memory.budget`)
-- ✅ Works with any LLM
+
+**Long-Term Memory:**
+- ✅ Vector-based persistent storage (Qdrant)
+- ✅ Semantic recall of past context
+- ✅ Session-scoped isolation
+- ✅ Auto-recall or on-demand search
+- ✅ Configurable storage and batching
 
 **Configuration:**
 ```yaml
-budget: 2000  # That's all you need!
+memory:
+  budget: 2000           # Working memory
+  long_term:
+    enabled: true        # Long-term memory
 ```
 
-**Result:** Better conversations, no context loss, happy users. 🎉
+**Result:** Comprehensive memory management for AI agents - both immediate context and semantic recall. 🎉
 
 ---
 
-*Feature introduced: October 2025*
-
+*Working Memory: October 2025 | Long-Term Memory: October 2025*
