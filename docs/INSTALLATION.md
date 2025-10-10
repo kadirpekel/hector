@@ -392,7 +392,7 @@ sudo chown hector:hector /etc/hector
 ### Google Cloud Run
 
 ```dockerfile
-FROM golang:1.21-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /app
 COPY . .
 RUN go build -o hector ./cmd/hector
