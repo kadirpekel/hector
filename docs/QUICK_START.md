@@ -13,7 +13,7 @@ Get up and running with Hector in 5 minutes! Build your first AI agent using pur
 ## Prerequisites
 
 1. **API Key** - OpenAI, Anthropic, or Gemini (set environment variable)
-2. **Go 1.25+** installed
+2. **Go 1.24+** installed
 3. **5 minutes** of your time
 
 ## Step 1: Install Hector

@@ -14,7 +14,7 @@ Thank you for your interest in contributing to Hector! Since we're in alpha, thi
 
 ### Prerequisites
 
-- Go 1.25 or later
+- Go 1.24 or later
 - Git
 - Basic understanding of the A2A protocol
 

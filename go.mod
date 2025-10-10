@@ -1,6 +1,6 @@
 module github.com/kadirpekel/hector
 
-go 1.25
+go 1.24
 
 require (
 	github.com/fsnotify/fsnotify v1.9.0

@@ -22,7 +22,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.25.x
+        go-version: 1.24.x
     
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -61,7 +61,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.25.x
+        go-version: 1.24.x
     
     - name: Build
       run: |

@@ -14,7 +14,7 @@ Multiple installation options for different environments and use cases.
 
 ### Prerequisites
 
-- Go 1.25+ (for building from source)
+- Go 1.24+ (for building from source)
 - OpenAI API key (or other LLM provider key)
 
 ### Option 1: Build from Source
@@ -290,7 +290,7 @@ air
 
 **GoLand:**
 - Enable Go modules support
-- Set GOROOT to Go 1.25+
+- Set GOROOT to Go 1.24+
 - Configure run configurations for `cmd/hector`
 
 ---
@@ -392,7 +392,7 @@ sudo chown hector:hector /etc/hector
 ### Google Cloud Run
 
 ```dockerfile
-FROM golang:1.25-alpine AS builder
+FROM golang:1.24-alpine AS builder
 WORKDIR /app
 COPY . .
 RUN go build -o hector ./cmd/hector

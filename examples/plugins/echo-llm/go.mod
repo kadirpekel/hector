@@ -1,6 +1,6 @@
 module github.com/kadirpekel/hector/examples/plugins/echo-llm
 
-go 1.25
+go 1.24
 
 require github.com/kadirpekel/hector v0.0.0
 
