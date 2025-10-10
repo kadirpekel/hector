@@ -1215,12 +1215,12 @@ func (c *DocumentStoreConfig) SetDefaults() {
 
 // MemoryConfig represents memory and conversation history configuration
 type MemoryConfig struct {
-	// Strategy selection: "buffer_window" or "summary_buffer" (default)
+	// Working memory strategy selection: "buffer_window" or "summary_buffer" (default)
 	// - buffer_window: Simple LIFO, keeps last N messages
 	// - summary_buffer: Token-based with threshold-triggered summarization (DEFAULT)
 	Strategy string `yaml:"strategy,omitempty"`
 
-	// Common settings
+	// Working memory settings
 	Budget int `yaml:"budget,omitempty"` // Token budget (default: 2000)
 
 	// Buffer window settings (for buffer_window strategy)
@@ -1230,9 +1230,22 @@ type MemoryConfig struct {
 	Threshold float64 `yaml:"threshold,omitempty"` // Trigger at % of budget (default: 0.8)
 	Target    float64 `yaml:"target,omitempty"`    // Compress to % of budget (default: 0.6)
 
+	// Long-term memory configuration (optional)
+	LongTerm LongTermMemoryConfig `yaml:"long_term,omitempty"`
+
 	// Legacy fields (deprecated but kept for backward compatibility)
 	Summarization          bool    `yaml:"summarization,omitempty"`           // Deprecated: use strategy=summary_buffer
 	SummarizationThreshold float64 `yaml:"summarization_threshold,omitempty"` // Deprecated: use threshold
+}
+
+// LongTermMemoryConfig configures long-term memory (semantic recall)
+type LongTermMemoryConfig struct {
+	Enabled      bool   `yaml:"enabled"`                 // Enable long-term memory (default: false)
+	StorageScope string `yaml:"storage_scope,omitempty"` // What to store: "all", "conversational", "summaries_only" (default: "all")
+	BatchSize    int    `yaml:"batch_size,omitempty"`    // Batch size for storage (default: 1 = immediate)
+	AutoRecall   bool   `yaml:"auto_recall,omitempty"`   // Auto-inject memories (default: true when enabled)
+	RecallLimit  int    `yaml:"recall_limit,omitempty"`  // Max memories to recall (default: 5)
+	Collection   string `yaml:"collection,omitempty"`    // Qdrant collection name (default: "hector_session_memory")
 }
 
 // PromptConfig represents prompt configuration

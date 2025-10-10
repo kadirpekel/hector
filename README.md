@@ -77,7 +77,7 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 │ • Command    │    │ • OpenAI     │   │ • Qdrant     │  │ • Working  │
 │ • File Ops   │    │ • Anthropic  │   │ • Semantic   │  │   (Session)│
 │ • Search     │    │ • Gemini     │   │   Search     │  │ • Long-term│
-│ • MCP        │    │ • Plugins    │   │ • Documents  │  │   (Future) │
+│ • MCP        │    │ • Plugins    │   │ • Documents  │  │            │
 └──────────────┘    └──────────────┘   └──────────────┘  └────────────┘
 ```
 

@@ -20,8 +20,14 @@ type DatabaseProvider interface {
 	// Search performs vector similarity search
 	Search(ctx context.Context, collection string, vector []float32, topK int) ([]SearchResult, error)
 
+	// SearchWithFilter performs vector similarity search with metadata filtering
+	SearchWithFilter(ctx context.Context, collection string, vector []float32, topK int, filter map[string]interface{}) ([]SearchResult, error)
+
 	// Delete removes a document from the database
 	Delete(ctx context.Context, collection string, id string) error
+
+	// DeleteByFilter removes documents matching the filter
+	DeleteByFilter(ctx context.Context, collection string, filter map[string]interface{}) error
 
 	// CreateCollection creates a new collection
 	CreateCollection(ctx context.Context, collection string, vectorSize uint64) error

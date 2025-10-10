@@ -549,24 +549,51 @@ func (b *databasePluginBridge) Upsert(ctx context.Context, collection string, id
 }
 
 func (b *databasePluginBridge) Search(ctx context.Context, collection string, vector []float32, topK int) ([]databases.SearchResult, error) {
-	pbResults, err := b.adapter.GetPlugin().Search(ctx, collection, vector, int32(topK))
+	return b.SearchWithFilter(ctx, collection, vector, topK, nil)
+}
+
+func (b *databasePluginBridge) SearchWithFilter(ctx context.Context, collection string, vector []float32, topK int, filter map[string]interface{}) ([]databases.SearchResult, error) {
+	// NOTE: Plugin interface doesn't support filters yet
+	// We fetch all results and filter client-side
+	pbResults, err := b.adapter.GetPlugin().Search(ctx, collection, vector, int32(topK*2)) // Fetch more to account for filtering
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert pb.SearchResult to databases.SearchResult
-	results := make([]databases.SearchResult, len(pbResults))
-	for i, pbResult := range pbResults {
+	// Convert pb.SearchResult to databases.SearchResult and apply filter
+	results := make([]databases.SearchResult, 0, len(pbResults))
+	for _, pbResult := range pbResults {
 		metadata := make(map[string]interface{})
 		for k, v := range pbResult.Metadata {
 			metadata[k] = v
 		}
 
-		results[i] = databases.SearchResult{
+		result := databases.SearchResult{
 			ID:       pbResult.Id,
 			Score:    pbResult.Score,
 			Content:  pbResult.Content,
 			Metadata: metadata,
+		}
+
+		// Apply filter if provided
+		if len(filter) > 0 {
+			match := true
+			for filterKey, filterValue := range filter {
+				if metadataValue, ok := result.Metadata[filterKey]; !ok || fmt.Sprintf("%v", metadataValue) != fmt.Sprintf("%v", filterValue) {
+					match = false
+					break
+				}
+			}
+			if !match {
+				continue // Skip this result
+			}
+		}
+
+		results = append(results, result)
+
+		// Respect topK limit after filtering
+		if len(results) >= topK {
+			break
 		}
 	}
 
@@ -575,6 +602,13 @@ func (b *databasePluginBridge) Search(ctx context.Context, collection string, ve
 
 func (b *databasePluginBridge) Delete(ctx context.Context, collection string, id string) error {
 	return b.adapter.GetPlugin().Delete(ctx, collection, id)
+}
+
+func (b *databasePluginBridge) DeleteByFilter(ctx context.Context, collection string, filter map[string]interface{}) error {
+	// NOTE: Plugin interface doesn't support DeleteByFilter yet
+	// This is a limitation - we can't efficiently delete by filter through plugins
+	// For now, return an error indicating this is not supported
+	return fmt.Errorf("DeleteByFilter not supported for database plugins (collection: %s)", collection)
 }
 
 func (b *databasePluginBridge) CreateCollection(ctx context.Context, collection string, vectorSize uint64) error {

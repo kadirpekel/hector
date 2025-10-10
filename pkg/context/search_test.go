@@ -34,6 +34,15 @@ func (m *mockDatabaseProvider) Delete(ctx context.Context, collection string, id
 	return nil
 }
 
+func (m *mockDatabaseProvider) SearchWithFilter(ctx context.Context, collection string, vector []float32, topK int, filter map[string]interface{}) ([]databases.SearchResult, error) {
+	// For testing purposes, delegate to Search
+	return m.Search(ctx, collection, vector, topK)
+}
+
+func (m *mockDatabaseProvider) DeleteByFilter(ctx context.Context, collection string, filter map[string]interface{}) error {
+	return nil
+}
+
 func (m *mockDatabaseProvider) CreateCollection(ctx context.Context, collection string, vectorSize uint64) error {
 	return nil
 }

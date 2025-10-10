@@ -405,5 +405,5 @@ That's it! Simple, balanced, production-ready. 🎉
 **See also:**
 - Main guide: [Memory Management](MEMORY.md)
 - Example configs: `configs/memory-strategies-example.yaml`
-- Future plans: [Vector Memory Design](FUTURE_VECTOR_MEMORY.md) (not yet implemented)
+- [Long-Term Memory Configuration](#long-term-memory-configuration) - Session-scoped persistent memory with vector storage
 

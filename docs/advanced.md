@@ -19,7 +19,7 @@ Ready to take Hector to the next level? These guides cover advanced patterns, in
 ## Memory & Context
 
 - **[Memory Configuration](MEMORY_CONFIGURATION)** - Advanced memory tuning options
-- **[Future: Vector Memory](FUTURE_VECTOR_MEMORY)** - Design proposal for vector-backed memory
+- **[Long-Term Memory](MEMORY_CONFIGURATION#long-term-memory-configuration)** - Session-scoped persistent memory with vector storage
 
 ## Production & Security
 

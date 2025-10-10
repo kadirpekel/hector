@@ -318,16 +318,19 @@ type WorkingMemoryStrategy interface {
 - ✅ Clean separation: Service manages sessions, strategies implement algorithms
 - ✅ Strategy Pattern: Easy to add new memory strategies
 - ✅ No duplication: Session management centralized
-- ✅ Extensible: Foundation for long-term memory
+- ✅ Dual-layer: Working memory (session) + long-term memory (persistent, vector-based)
 
 **File Structure:**
 ```
 pkg/memory/
-├── memory.go            → MemoryService (orchestrator)
-├── working_strategy.go  → WorkingMemoryStrategy interface
-├── summary_buffer.go    → Token-based strategy
-├── buffer_window.go     → Simple LIFO strategy
-└── factory.go           → Strategy factory
+├── memory.go              → MemoryService (orchestrator)
+├── working_strategy.go    → WorkingMemoryStrategy interface
+├── summary_buffer.go      → Token-based strategy with summarization
+├── buffer_window.go       → Simple LIFO strategy
+├── longterm_strategy.go   → LongTermMemoryStrategy interface
+├── vector_memory.go       → Vector-based long-term memory
+├── types.go               → Configuration types
+└── factory.go             → Strategy factory
 ```
 
 ### 6. Services (`agent/services.go`)
@@ -341,7 +344,7 @@ type AgentServices interface {
 	Tools() ToolService
 	Context() ContextService
 	Prompt() PromptService
-	History() HistoryService  // Returns MemoryService
+	History() HistoryService  // Implemented by MemoryService
 }
 ```
 
@@ -640,7 +643,7 @@ LLM streams to channel              │
 - Session lifecycle management
 - SummaryBufferStrategy (token-based with LLM summarization)
 - BufferWindowStrategy (simple LIFO)
-- Foundation for long-term memory
+- Long-term memory (session-scoped vector storage with semantic recall)
 
 ---
 

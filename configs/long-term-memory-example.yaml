@@ -1,0 +1,138 @@
+# Long-Term Memory Example Configuration
+#
+# This example demonstrates how to configure long-term memory (semantic recall)
+# for agents. Long-term memory stores conversation history in a vector database
+# for semantic search and retrieval beyond token budgets.
+
+# ============================================================================
+# INFRASTRUCTURE (Required for long-term memory)
+# ============================================================================
+
+# Vector database (Qdrant)
+databases:
+  main:
+    type: qdrant
+    host: localhost
+    port: 6334  # gRPC port (6333 is REST)
+
+# Embeddings provider (Ollama)
+embedders:
+  main:
+    type: ollama
+    host: http://localhost:11434
+    model: nomic-embed-text
+
+# LLM provider
+llms:
+  gpt4o:
+    type: openai
+    model: gpt-4o
+    api_key: ${OPENAI_API_KEY}
+
+# ============================================================================
+# AGENTS WITH LONG-TERM MEMORY
+# ============================================================================
+
+agents:
+  # Example 1: Default long-term memory
+  # All defaults explicitly specified
+  default-agent:
+    name: "Default Agent"
+    llm: gpt4o
+    database: main      # Required for long-term memory
+    embedder: main      # Required for long-term memory
+    
+    memory:
+      # Working memory (recent context)
+      strategy: "summary_buffer"
+      budget: 2000
+      
+      # Long-term memory (semantic recall)
+      long_term:
+        enabled: true
+        storage_scope: "all"        # Store all messages (default)
+        batch_size: 1               # Immediate storage (default)
+        auto_recall: true           # Auto-inject memories (default)
+        recall_limit: 5             # Max 5 memories recalled (default)
+        collection: "hector_session_memory"  # Collection name (default)
+
+  # Example 2: Optimized for high-volume conversations
+  optimized-agent:
+    name: "Optimized Agent"
+    llm: gpt4o
+    database: main
+    embedder: main
+    
+    memory:
+      strategy: "summary_buffer"
+      budget: 3000
+      
+      long_term:
+        enabled: true
+        storage_scope: "conversational"  # Store only user + assistant messages
+        batch_size: 10                   # Store every 10 messages (efficient)
+        auto_recall: true
+        recall_limit: 5
+        collection: "hector_optimized_memory"
+
+  # Example 3: Fine-tuned recall
+  precise-agent:
+    name: "Precise Agent"
+    llm: gpt4o
+    database: main
+    embedder: main
+    
+    memory:
+      strategy: "summary_buffer"
+      
+      long_term:
+        enabled: true
+        storage_scope: "all"
+        batch_size: 1                    # Immediate storage (default)
+        auto_recall: true
+        recall_limit: 10                 # Recall up to 10 relevant memories
+        collection: "hector_precise_memory"
+
+  # Example 4: Long-term disabled (working memory only)
+  simple-agent:
+    name: "Simple Agent"
+    llm: gpt4o
+    
+    memory:
+      strategy: "summary_buffer"
+      budget: 2000
+      # long_term not specified = disabled
+
+# ============================================================================
+# USAGE NOTES
+# ============================================================================
+
+# Long-term memory behavior:
+#
+# 1. Storage:
+#    - Messages stored to vector database (Qdrant)
+#    - Session-scoped (isolated per session)
+#    - Batch size 1 = immediate storage (default)
+#    - Batch size 10 = store every 10 messages (optimization)
+#
+# 2. Recall:
+#    - Automatic semantic search before each LLM call
+#    - Uses last user message as query
+#    - Returns top K relevant memories
+#    - Memories prepended to working memory context
+#
+# 3. Requirements:
+#    - Vector database (Qdrant) must be configured
+#    - Embeddings (Ollama) must be configured
+#    - Both database and embedder must be set in agent config
+#
+# 4. Storage Scope:
+#    - "all": Store all messages (default)
+#    - "conversational": Store user + assistant only
+#    - "summaries_only": Store summaries only (future)
+#
+# 5. Performance:
+#    - batch_size=1: Immediate, more Qdrant calls
+#    - batch_size=10: Efficient, fewer calls, slight delay
+#    - Start with default (1), optimize only if needed
+

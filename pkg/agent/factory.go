@@ -119,8 +119,58 @@ func NewAgentServices(agentConfig *config.AgentConfig, componentManager *compone
 		return nil, fmt.Errorf("failed to create working memory strategy: %w", memErr)
 	}
 
-	// Create memory service (manages sessions + delegates to strategy)
-	historyService := memory.NewMemoryService(workingStrategy)
+	// Create long-term memory strategy (optional)
+	var longTermStrategy memory.LongTermMemoryStrategy
+	if agentConfig.Memory.LongTerm.Enabled {
+		// Long-term memory requires database + embedder (direct access, not SearchEngine)
+		if agentConfig.Database == "" {
+			return nil, fmt.Errorf("long-term memory requires database to be configured")
+		}
+		if agentConfig.Embedder == "" {
+			return nil, fmt.Errorf("long-term memory requires embedder to be configured")
+		}
+
+		// Get database and embedder directly
+		db, err := componentManager.GetDatabase(agentConfig.Database)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get database '%s': %w", agentConfig.Database, err)
+		}
+
+		embedder, err := componentManager.GetEmbedder(agentConfig.Embedder)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get embedder '%s': %w", agentConfig.Embedder, err)
+		}
+
+		// Create vector memory strategy with direct database + embedder access
+		longTermStrategy, memErr = memory.NewVectorMemoryStrategy(
+			db,
+			embedder,
+			agentConfig.Memory.LongTerm.Collection,
+		)
+		if memErr != nil {
+			return nil, fmt.Errorf("failed to create long-term memory: %w", memErr)
+		}
+
+		fmt.Printf("✅ Long-term memory enabled (collection: %s, batch_size: %d, auto_recall: %t, recall_limit: %d)\n",
+			agentConfig.Memory.LongTerm.Collection,
+			agentConfig.Memory.LongTerm.BatchSize,
+			agentConfig.Memory.LongTerm.AutoRecall,
+			agentConfig.Memory.LongTerm.RecallLimit)
+	}
+
+	// Create memory service (orchestrates working + long-term memory)
+	historyService := memory.NewMemoryService(
+		workingStrategy,
+		longTermStrategy, // May be nil if not enabled
+		memory.LongTermConfig{
+			Enabled:      agentConfig.Memory.LongTerm.Enabled,
+			StorageScope: memory.StorageScope(agentConfig.Memory.LongTerm.StorageScope),
+			BatchSize:    agentConfig.Memory.LongTerm.BatchSize,
+			AutoRecall:   agentConfig.Memory.LongTerm.AutoRecall,
+			RecallLimit:  agentConfig.Memory.LongTerm.RecallLimit,
+			Collection:   agentConfig.Memory.LongTerm.Collection,
+		},
+	)
 
 	// contextService already created above based on document store availability
 	promptService := NewPromptService(agentConfig.Prompt, contextService, historyService)

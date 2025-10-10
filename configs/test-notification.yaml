@@ -1,0 +1,26 @@
+llms:
+  gpt4o:
+    type: openai
+    model: gpt-4o
+    api_key: ${OPENAI_API_KEY}
+
+agents:
+  # Test agent with very low token budget to quickly trigger summarization
+  test-agent:
+    name: test-agent
+    llm: gpt4o
+    
+    memory:
+      strategy: "summary_buffer"
+      budget: 200      # Very low budget to trigger summarization quickly
+      threshold: 0.8   # Trigger at 160 tokens
+      target: 0.6      # Compress to 120 tokens
+    
+    reasoning:
+      engine: chain-of-thought
+      enable_streaming: true
+    
+    prompt:
+      include_history: true
+      system_prompt: |
+        You are a helpful assistant. Give very brief responses (1-2 sentences).

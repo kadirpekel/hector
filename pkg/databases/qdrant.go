@@ -130,6 +130,11 @@ func (db *qdrantDatabaseProvider) Upsert(ctx context.Context, collection string,
 
 // Search performs vector similarity search
 func (db *qdrantDatabaseProvider) Search(ctx context.Context, collection string, queryVector []float32, topK int) ([]SearchResult, error) {
+	return db.SearchWithFilter(ctx, collection, queryVector, topK, nil)
+}
+
+// SearchWithFilter performs vector similarity search with metadata filtering
+func (db *qdrantDatabaseProvider) SearchWithFilter(ctx context.Context, collection string, queryVector []float32, topK int, filter map[string]interface{}) ([]SearchResult, error) {
 	// Create search request
 	searchRequest := &qdrant.SearchPoints{
 		CollectionName: collection,
@@ -137,6 +142,11 @@ func (db *qdrantDatabaseProvider) Search(ctx context.Context, collection string,
 		Limit:          uint64(topK),
 		WithPayload:    qdrant.NewWithPayload(true),
 		WithVectors:    qdrant.NewWithVectors(true),
+	}
+
+	// Add filter if provided
+	if len(filter) > 0 {
+		searchRequest.Filter = buildQdrantFilter(filter)
 	}
 
 	// Perform search using the Points client
@@ -147,8 +157,44 @@ func (db *qdrantDatabaseProvider) Search(ctx context.Context, collection string,
 	}
 
 	// Convert results
+	return convertQdrantResults(searchResult.Result), nil
+}
+
+// buildQdrantFilter converts a map filter to Qdrant filter format
+func buildQdrantFilter(filter map[string]interface{}) *qdrant.Filter {
+	conditions := make([]*qdrant.Condition, 0, len(filter))
+
+	for key, value := range filter {
+		// Create match condition for each filter key-value pair
+		val, err := qdrant.NewValue(value)
+		if err != nil {
+			continue // Skip invalid values
+		}
+
+		condition := &qdrant.Condition{
+			ConditionOneOf: &qdrant.Condition_Field{
+				Field: &qdrant.FieldCondition{
+					Key: key,
+					Match: &qdrant.Match{
+						MatchValue: &qdrant.Match_Keyword{
+							Keyword: val.GetStringValue(),
+						},
+					},
+				},
+			},
+		}
+		conditions = append(conditions, condition)
+	}
+
+	return &qdrant.Filter{
+		Must: conditions,
+	}
+}
+
+// convertQdrantResults converts Qdrant search results to our SearchResult format
+func convertQdrantResults(points []*qdrant.ScoredPoint) []SearchResult {
 	var results []SearchResult
-	for _, point := range searchResult.Result {
+	for _, point := range points {
 		// Extract ID
 		var id string
 		if point.Id != nil {
@@ -238,7 +284,7 @@ func (db *qdrantDatabaseProvider) Search(ctx context.Context, collection string,
 		})
 	}
 
-	return results, nil
+	return results
 }
 
 // CreateCollection creates a collection if it doesn't exist
@@ -286,6 +332,28 @@ func (db *qdrantDatabaseProvider) Delete(ctx context.Context, collection string,
 	_, err := db.client.Delete(ctx, deletePoints)
 	if err != nil {
 		return fmt.Errorf("failed to delete point %s from collection %s: %w", id, collection, err)
+	}
+	return nil
+}
+
+// DeleteByFilter removes documents matching the filter
+func (db *qdrantDatabaseProvider) DeleteByFilter(ctx context.Context, collection string, filter map[string]interface{}) error {
+	// Create filter condition
+	qdrantFilter := buildQdrantFilter(filter)
+
+	// Delete points matching filter
+	deletePoints := &qdrant.DeletePoints{
+		CollectionName: collection,
+		Points: &qdrant.PointsSelector{
+			PointsSelectorOneOf: &qdrant.PointsSelector_Filter{
+				Filter: qdrantFilter,
+			},
+		},
+	}
+
+	_, err := db.client.Delete(ctx, deletePoints)
+	if err != nil {
+		return fmt.Errorf("failed to delete points by filter from collection %s: %w", collection, err)
 	}
 	return nil
 }

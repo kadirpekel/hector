@@ -281,6 +281,20 @@ func (se *SearchEngine) SearchModels(ctx context.Context, query string, topKPerM
 
 // Search performs vector similarity search and returns flattened results with enhanced processing
 func (se *SearchEngine) Search(ctx context.Context, query string, limit int) ([]databases.SearchResult, error) {
+	return se.SearchWithFilter(ctx, query, limit, nil)
+}
+
+// SearchWithFilter performs vector similarity search with metadata filtering
+func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limit int, filter map[string]interface{}) ([]databases.SearchResult, error) {
+	se.mu.RLock()
+	defer se.mu.RUnlock()
+
+	// Validate and process query
+	if err := se.validateQuery(query); err != nil {
+		return nil, err
+	}
+	processedQuery := se.processQuery(query)
+
 	// Validate limit
 	if limit <= 0 {
 		limit = DefaultTopK
@@ -289,16 +303,43 @@ func (se *SearchEngine) Search(ctx context.Context, query string, limit int) ([]
 		limit = MaxTopK
 	}
 
-	// Use SearchModels with proper context
-	results, err := se.SearchModels(ctx, query, limit)
+	// Generate embedding
+	embedCtx, cancel := context.WithTimeout(ctx, DefaultSearchTimeout)
+	defer cancel()
+
+	vector, err := se.embedder.Embed(processedQuery)
+	if err != nil {
+		return nil, NewSearchError("SearchEngine", "SearchWithFilter", "failed to generate embedding", processedQuery, err)
+	}
+
+	// Get first collection
+	collection, err := se.getFirstCollection()
 	if err != nil {
 		return nil, err
 	}
 
-	// Flatten and enhance results
-	flatResults := se.flattenResults(results, limit)
+	// Search with filter
+	results, err := se.db.SearchWithFilter(embedCtx, collection, vector, limit, filter)
+	if err != nil {
+		return nil, NewSearchError("SearchEngine", "SearchWithFilter", "database search failed", processedQuery, err)
+	}
 
-	return flatResults, nil
+	return results, nil
+}
+
+// DeleteByFilter removes documents matching the filter from all collections
+func (se *SearchEngine) DeleteByFilter(ctx context.Context, filter map[string]interface{}) error {
+	se.mu.RLock()
+	defer se.mu.RUnlock()
+
+	// Get first collection
+	collection, err := se.getFirstCollection()
+	if err != nil {
+		return err
+	}
+
+	// Delete using filter
+	return se.db.DeleteByFilter(ctx, collection, filter)
 }
 
 // ============================================================================
@@ -372,29 +413,6 @@ func (se *SearchEngine) searchModel(ctx context.Context, modelName string, vecto
 	}
 
 	return convertedResults, nil
-}
-
-// flattenResults flattens model results and adds source information
-func (se *SearchEngine) flattenResults(results map[string][]databases.SearchResult, limit int) []databases.SearchResult {
-	flatResults := make([]databases.SearchResult, 0, limit)
-
-	for modelName, modelResults := range results {
-		for _, result := range modelResults {
-			// Add model name to metadata for source tracking
-			if result.Metadata == nil {
-				result.Metadata = make(map[string]interface{})
-			}
-			result.Metadata["search_source"] = modelName
-			flatResults = append(flatResults, result)
-
-			// Respect limit
-			if len(flatResults) >= limit {
-				return flatResults
-			}
-		}
-	}
-
-	return flatResults
 }
 
 // prepareMetadata prepares metadata for document ingestion

@@ -127,7 +127,7 @@ Hector's clean architecture scales from single agents to complex multi-agent sys
 │ • Command    │    │ • OpenAI     │   │ • Qdrant     │  │ • Working  │
 │ • File Ops   │    │ • Anthropic  │   │ • Semantic   │  │   (Session)│
 │ • Search     │    │ • Gemini     │   │   Search     │  │ • Long-term│
-│ • MCP        │    │ • Plugins    │   │ • Documents  │  │   (Future) │
+│ • MCP        │    │ • Plugins    │   │ • Documents  │  │            │
 └──────────────┘    └──────────────┘   └──────────────┘  └────────────┘
 </pre>
 </div>
@@ -205,7 +205,7 @@ Hector provides comprehensive features through pure YAML configuration:
     <li><strong>Working memory (short-term)</strong> - Pluggable strategies for session history: token-based with summarization (default) or simple LIFO</li>
     <li><strong>Accurate token counting</strong> - 100% accurate using tiktoken, never exceed limits</li>
     <li><strong>Recency-based selection</strong> - Most recent messages preserved automatically</li>
-    <li><strong>Long-term memory (future)</strong> - Foundation ready for cross-session persistent memory</li>
+    <li><strong>Long-term memory</strong> - Session-scoped persistent memory with vector storage and semantic recall</li>
   </ul>
 </div>
 
@@ -419,7 +419,7 @@ llms:
     <li><a href="MEMORY_CONFIGURATION">Memory Configuration</a></li>
     <li><a href="EXTERNAL_AGENTS">External Agents</a></li>
     <li><a href="AUTHENTICATION">Authentication</a></li>
-    <li><a href="FUTURE_VECTOR_MEMORY">Future: Vector Memory</a></li>
+    <li><a href="MEMORY_CONFIGURATION#long-term-memory-configuration">Long-Term Memory</a></li>
   </ul>
 </div>
 
