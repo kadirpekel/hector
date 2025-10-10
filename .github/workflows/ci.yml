@@ -22,15 +22,28 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.24.x
+        go-version: '1.24'
+        check-latest: false
     
-    - name: Install golangci-lint
+    - name: Verify Go version
       run: |
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
-        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+        go version
+        go env GOVERSION
     
-    - name: Run make quality
-      run: make quality
+    - name: Clean all caches
+      run: go clean -cache -modcache -testcache -fuzzcache
+    
+    - name: Format code
+      run: go fmt ./...
+    
+    - name: Run go vet
+      run: go vet ./...
+    
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: v1.62.2
+        args: --timeout=5m
     
     - name: Generate coverage report
       run: go test -v -coverprofile=coverage.out ./...
