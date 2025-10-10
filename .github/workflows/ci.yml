@@ -13,12 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  quality:
     runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        go-version: [1.24.x, 1.25.x]
     
     steps:
     - uses: actions/checkout@v4
@@ -26,7 +22,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version: 1.25.x
     
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -36,13 +32,15 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-go-
     
-    - name: Download dependencies
-      run: go mod download
+    - name: Install golangci-lint
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
+        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
     
-    - name: Run tests
-      run: go test -v ./...
+    - name: Run make quality
+      run: make quality
     
-    - name: Run tests with coverage
+    - name: Generate coverage report
       run: go test -v -coverprofile=coverage.out ./...
     
     - name: Upload coverage reports
@@ -52,27 +50,10 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
-    
-    - name: Run go vet
-      run: go vet ./...
-    
-    - name: Run gofmt
-      run: |
-        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-          echo "The following files are not formatted:"
-          gofmt -s -l .
-          exit 1
-        fi
-    
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v6
-      with:
-        version: v1.55.2
-        args: --timeout=5m --verbose
 
   build:
     runs-on: ubuntu-latest
-    needs: test
+    needs: quality
     
     steps:
     - uses: actions/checkout@v4
@@ -80,7 +61,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.24.x
+        go-version: 1.25.x
     
     - name: Build
       run: |

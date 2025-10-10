@@ -14,7 +14,7 @@ Multiple installation options for different environments and use cases.
 
 ### Prerequisites
 
-- Go 1.21+ (for building from source)
+- Go 1.25+ (for building from source)
 - OpenAI API key (or other LLM provider key)
 
 ### Option 1: Build from Source
@@ -290,7 +290,7 @@ air
 
 **GoLand:**
 - Enable Go modules support
-- Set GOROOT to Go 1.21+
+- Set GOROOT to Go 1.25+
 - Configure run configurations for `cmd/hector`
 
 ---
