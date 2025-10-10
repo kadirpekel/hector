@@ -317,47 +317,132 @@ func LoadConfigFromString(yamlContent string) (*Config, error) {
 	return &config, nil
 }
 
-// createZeroConfig creates a minimal default configuration for zero-config mode
-// Returns a config with one Ollama-based agent and no tools
-func createZeroConfig() *Config {
+// ZeroConfigOptions holds configuration options for zero-config mode
+type ZeroConfigOptions struct {
+	Model         string // Ollama model (default: llama3.2:3b)
+	EnableTools   bool   // Enable all local tools
+	MCPURL        string // MCP server URL for tool integration
+	DocsFolder    string // Document store folder path
+	EmbedderModel string // Embedder model (default: nomic-embed-text)
+	VectorDB      string // Vector DB connection (default: http://localhost:6333)
+}
+
+// CreateZeroConfig creates a configuration for zero-config mode with custom options
+// Returns a config with one Ollama-based agent and optional tools/RAG
+func CreateZeroConfig(opts ZeroConfigOptions) *Config {
+	// Set defaults for empty values
+	if opts.Model == "" {
+		opts.Model = "llama3.2:3b"
+	}
+	if opts.EmbedderModel == "" {
+		opts.EmbedderModel = "nomic-embed-text"
+	}
+	if opts.VectorDB == "" {
+		opts.VectorDB = "http://localhost:6333"
+	}
+
 	cfg := &Config{
 		Name: "Zero Config Mode",
 		LLMs: map[string]LLMProviderConfig{
 			"ollama": {
 				Type:        "ollama",
-				Model:       "llama3.2:3b",
+				Model:       opts.Model,
 				Host:        "http://localhost:11434/v1",
 				Temperature: 0.7,
 				MaxTokens:   2048,
 				Timeout:     120,
 			},
 		},
-		Databases: make(map[string]DatabaseProviderConfig),
-		Embedders: make(map[string]EmbedderProviderConfig),
-		Agents: map[string]AgentConfig{
-			"assistant": {
-				Name:        "assistant",
-				Description: "Default AI assistant powered by Ollama (llama3.2:3b)",
-				Type:        "native",
-				LLM:         "ollama",
-				Visibility:  "public",
-				Tools:       []string{}, // No tools in zero-config mode
-				Prompt: PromptConfig{
-					SystemPrompt: "You are a helpful AI assistant. Be concise and accurate in your responses.",
-				},
-				Reasoning: ReasoningConfig{
-					Engine:        "chain-of-thought",
-					MaxIterations: 10,
-				},
-			},
-		},
+		Databases:      make(map[string]DatabaseProviderConfig),
+		Embedders:      make(map[string]EmbedderProviderConfig),
 		DocumentStores: make(map[string]DocumentStoreConfig),
+	}
+
+	// Configure document store if folder provided
+	if opts.DocsFolder != "" {
+		// Add Qdrant database
+		cfg.Databases["qdrant"] = DatabaseProviderConfig{
+			Type:    "qdrant",
+			Host:    opts.VectorDB,
+			Timeout: 30,
+		}
+
+		// Add embedder
+		cfg.Embedders["ollama"] = EmbedderProviderConfig{
+			Type:    "ollama",
+			Model:   opts.EmbedderModel,
+			Host:    "http://localhost:11434",
+			Timeout: 30,
+		}
+
+		// Add document store
+		cfg.DocumentStores["docs"] = DocumentStoreConfig{
+			Name:   "docs",
+			Source: "directory",
+			Path:   opts.DocsFolder,
+		}
+	}
+
+	// Configure agent
+	agentConfig := AgentConfig{
+		Name:        "assistant",
+		Description: fmt.Sprintf("AI assistant powered by Ollama (%s)", opts.Model),
+		Type:        "native",
+		LLM:         "ollama",
+		Visibility:  "public",
+		Prompt: PromptConfig{
+			SystemPrompt: "You are a helpful AI assistant. Be concise and accurate in your responses.",
+		},
+		Reasoning: ReasoningConfig{
+			Engine:        "chain-of-thought",
+			MaxIterations: 10,
+		},
+	}
+
+	// Configure tools
+	if opts.EnableTools {
+		// Enable all local tools
+		agentConfig.Tools = nil // nil means all tools available
+	} else if opts.MCPURL != "" {
+		// Enable only MCP tools
+		agentConfig.Tools = []string{"mcp"}
+	} else {
+		// No tools
+		agentConfig.Tools = []string{}
+	}
+
+	// Add document stores if configured
+	if opts.DocsFolder != "" {
+		agentConfig.DocumentStores = []string{"docs"}
+		agentConfig.Database = "qdrant"
+		agentConfig.Embedder = "ollama"
+	}
+
+	cfg.Agents = map[string]AgentConfig{
+		"assistant": agentConfig,
+	}
+
+	// Configure MCP if URL provided
+	if opts.MCPURL != "" {
+		if cfg.Tools.Tools == nil {
+			cfg.Tools.Tools = make(map[string]ToolConfig)
+		}
+		cfg.Tools.Tools["mcp"] = ToolConfig{
+			Type:      "mcp",
+			Enabled:   true,
+			ServerURL: opts.MCPURL,
+		}
 	}
 
 	// Set defaults
 	cfg.SetDefaults()
 
 	return cfg
+}
+
+// createZeroConfig creates a minimal default configuration (for backward compatibility)
+func createZeroConfig() *Config {
+	return CreateZeroConfig(ZeroConfigOptions{})
 }
 
 // ============================================================================

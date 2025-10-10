@@ -64,6 +64,14 @@ type CLIArgs struct {
 	APIKey     string
 	Stream     bool
 	Debug      bool
+
+	// Zero-config mode options
+	Model         string
+	Tools         bool
+	MCPURL        string
+	DocsFolder    string
+	EmbedderModel string
+	VectorDB      string
 }
 
 // ============================================================================
@@ -112,6 +120,14 @@ func parseArgs() *CLIArgs {
 	serveConfig := serveCmd.String("config", defaultConfigFile, "Configuration file")
 	serveDebug := serveCmd.Bool("debug", false, "Enable debug mode")
 
+	// Zero-config mode flags
+	serveModel := serveCmd.String("model", "llama3.2:3b", "Ollama model to use in zero-config mode")
+	serveTools := serveCmd.Bool("tools", false, "Enable all local tools (file, command execution)")
+	serveMCP := serveCmd.String("mcp", "", "MCP server URL for tool integration")
+	serveDocs := serveCmd.String("docs", "", "Document store folder (enables RAG with Qdrant + Ollama embedder)")
+	serveEmbedder := serveCmd.String("embedder-model", "nomic-embed-text", "Embedder model for document store")
+	serveVectorDB := serveCmd.String("vectordb", "http://localhost:6333", "Vector database connection string")
+
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
 	listServer := listCmd.String("server", "", serverFlagDesc)
 	listToken := listCmd.String("token", "", tokenFlagDesc)
@@ -143,6 +159,12 @@ func parseArgs() *CLIArgs {
 		args.Command = CommandServe
 		args.ConfigFile = *serveConfig
 		args.Debug = *serveDebug
+		args.Model = *serveModel
+		args.Tools = *serveTools
+		args.MCPURL = *serveMCP
+		args.DocsFolder = *serveDocs
+		args.EmbedderModel = *serveEmbedder
+		args.VectorDB = *serveVectorDB
 
 	case "list":
 		_ = listCmd.Parse(os.Args[2:])
@@ -207,10 +229,44 @@ func executeServeCommand(args *CLIArgs) {
 		}
 	}
 
-	// Load configuration
-	hectorConfig, err := config.LoadConfig(args.ConfigFile)
-	if err != nil {
-		fatalf("Failed to load config: %v", err)
+	// Check if config file exists
+	var hectorConfig *config.Config
+	if _, err := os.Stat(args.ConfigFile); os.IsNotExist(err) {
+		// Zero-config mode - use CLI flags to create config
+		if args.Debug {
+			fmt.Println("🔧 No config file found, entering zero-config mode")
+		}
+
+		opts := config.ZeroConfigOptions{
+			Model:         args.Model,
+			EnableTools:   args.Tools,
+			MCPURL:        args.MCPURL,
+			DocsFolder:    args.DocsFolder,
+			EmbedderModel: args.EmbedderModel,
+			VectorDB:      args.VectorDB,
+		}
+
+		hectorConfig = config.CreateZeroConfig(opts)
+
+		if args.Debug {
+			fmt.Printf("  Model: %s\n", args.Model)
+			if args.Tools {
+				fmt.Println("  Tools: Enabled (all local tools)")
+			}
+			if args.MCPURL != "" {
+				fmt.Printf("  MCP: %s\n", args.MCPURL)
+			}
+			if args.DocsFolder != "" {
+				fmt.Printf("  Docs: %s (embedder: %s, vectordb: %s)\n",
+					args.DocsFolder, args.EmbedderModel, args.VectorDB)
+			}
+		}
+	} else {
+		// Load configuration from file
+		hectorConfig, err = config.LoadConfig(args.ConfigFile)
+		if err != nil {
+			fatalf("Failed to load config: %v", err)
+		}
 	}
 
 	// Set defaults
@@ -483,8 +539,16 @@ COMMANDS:
 
 SERVER MODE:
   hector serve [options]
-    --config FILE    Configuration file (default: hector.yaml)
-    --debug          Enable debug output
+    --config FILE            Configuration file (default: hector.yaml)
+    --debug                  Enable debug output
+    
+  Zero-Config Mode (when hector.yaml doesn't exist):
+    --model MODEL            Ollama model (default: llama3.2:3b)
+    --tools                  Enable all local tools (file, command execution)
+    --mcp URL                MCP server URL for tool integration
+    --docs FOLDER            Document store folder (enables RAG)
+    --embedder-model MODEL   Embedder model (default: nomic-embed-text)
+    --vectordb URL           Vector DB connection (default: http://localhost:6333)
 
 CLIENT MODE:
   hector list [options]
@@ -520,8 +584,26 @@ AGENT SHORTCUTS:
      Constructs: http://localhost:8081/agents/my_agent
 
 EXAMPLES:
-  # Start server
+  # Start server with config file
   $ hector serve --config hector.yaml
+  
+  # Start server in zero-config mode (no hector.yaml needed)
+  $ hector serve
+  
+  # Zero-config with different model
+  $ hector serve --model llama3.2:1b
+  
+  # Zero-config with all local tools enabled
+  $ hector serve --tools
+  
+  # Zero-config with MCP integration
+  $ hector serve --mcp https://mcp.example.com
+  
+  # Zero-config with document store (RAG)
+  $ hector serve --docs ./my-docs
+  
+  # Zero-config with custom embedder and vector DB
+  $ hector serve --docs ./my-docs --embedder-model all-minilm --vectordb http://localhost:6333
 
   # List agents from local server (default)
   $ hector list
