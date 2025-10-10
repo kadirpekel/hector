@@ -279,10 +279,6 @@ func TestConfig_HelperMethods(t *testing.T) {
 			"agent1": {Name: "Agent 1", LLM: "llm1"},
 			"agent2": {Name: "Agent 2", LLM: "llm2"},
 		},
-		Workflows: map[string]WorkflowConfig{
-			"workflow1": {Name: "Workflow 1"},
-			"workflow2": {Name: "Workflow 2"},
-		},
 		DocumentStores: map[string]DocumentStoreConfig{
 			"store1": {Name: "Store 1", Source: "directory", Path: "./docs"},
 			"store2": {Name: "Store 2", Source: "directory", Path: "./data"},
@@ -303,23 +299,6 @@ func TestConfig_HelperMethods(t *testing.T) {
 		_, exists = config.GetAgent("non-existing")
 		if exists {
 			t.Error("GetAgent() should return false for non-existing agent")
-		}
-	})
-
-	t.Run("GetWorkflow", func(t *testing.T) {
-		// Test existing workflow
-		workflow, exists := config.GetWorkflow("workflow1")
-		if !exists {
-			t.Error("GetWorkflow() should return true for existing workflow")
-		}
-		if workflow.Name != "Workflow 1" {
-			t.Errorf("GetWorkflow() name = %v, want %v", workflow.Name, "Workflow 1")
-		}
-
-		// Test non-existing workflow
-		_, exists = config.GetWorkflow("non-existing")
-		if exists {
-			t.Error("GetWorkflow() should return false for non-existing workflow")
 		}
 	})
 
@@ -356,22 +335,6 @@ func TestConfig_HelperMethods(t *testing.T) {
 		}
 	})
 
-	t.Run("ListWorkflows", func(t *testing.T) {
-		workflows := config.ListWorkflows()
-		if len(workflows) != 2 {
-			t.Errorf("ListWorkflows() length = %v, want %v", len(workflows), 2)
-		}
-
-		// Check that both workflows are in the list
-		workflowMap := make(map[string]bool)
-		for _, workflow := range workflows {
-			workflowMap[workflow] = true
-		}
-		if !workflowMap["workflow1"] || !workflowMap["workflow2"] {
-			t.Error("ListWorkflows() should contain both workflows")
-		}
-	})
-
 	t.Run("ListDocumentStores", func(t *testing.T) {
 		stores := config.ListDocumentStores()
 		if len(stores) != 2 {
@@ -392,7 +355,6 @@ func TestConfig_HelperMethods(t *testing.T) {
 func TestConfig_EmptyMaps(t *testing.T) {
 	config := &Config{
 		Agents:         make(map[string]AgentConfig),
-		Workflows:      make(map[string]WorkflowConfig),
 		DocumentStores: make(map[string]DocumentStoreConfig),
 	}
 
@@ -405,18 +367,6 @@ func TestConfig_EmptyMaps(t *testing.T) {
 		_, exists := config.GetAgent("non-existing")
 		if exists {
 			t.Error("GetAgent() should return false for empty map")
-		}
-	})
-
-	t.Run("EmptyWorkflows", func(t *testing.T) {
-		workflows := config.ListWorkflows()
-		if len(workflows) != 0 {
-			t.Errorf("ListWorkflows() length = %v, want %v", len(workflows), 0)
-		}
-
-		_, exists := config.GetWorkflow("non-existing")
-		if exists {
-			t.Error("GetWorkflow() should return false for empty map")
 		}
 	})
 
@@ -436,7 +386,6 @@ func TestConfig_EmptyMaps(t *testing.T) {
 func TestConfig_NilMaps(t *testing.T) {
 	config := &Config{
 		Agents:         nil,
-		Workflows:      nil,
 		DocumentStores: nil,
 	}
 
@@ -449,18 +398,6 @@ func TestConfig_NilMaps(t *testing.T) {
 		_, exists := config.GetAgent("non-existing")
 		if exists {
 			t.Error("GetAgent() should return false for nil map")
-		}
-	})
-
-	t.Run("NilWorkflows", func(t *testing.T) {
-		workflows := config.ListWorkflows()
-		if len(workflows) != 0 {
-			t.Errorf("ListWorkflows() length = %v, want %v", len(workflows), 0)
-		}
-
-		_, exists := config.GetWorkflow("non-existing")
-		if exists {
-			t.Error("GetWorkflow() should return false for nil map")
 		}
 	})
 

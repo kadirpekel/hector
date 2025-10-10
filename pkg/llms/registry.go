@@ -101,12 +101,15 @@ func (r *LLMRegistry) CreateLLMFromConfig(name string, config *config.LLMProvide
 	switch config.Type {
 	case "openai":
 		provider, err = NewOpenAIProviderFromConfig(config)
+	case "ollama":
+		// Ollama uses OpenAI-compatible API
+		provider, err = NewOpenAIProviderFromConfig(config)
 	case "anthropic":
 		provider, err = NewAnthropicProviderFromConfig(config)
 	case "gemini":
 		provider, err = NewGeminiProviderFromConfig(config)
 	default:
-		return nil, fmt.Errorf("unsupported LLM type: %s (supported: openai, anthropic, gemini)", config.Type)
+		return nil, fmt.Errorf("unsupported LLM type: %s (supported: openai, ollama, anthropic, gemini)", config.Type)
 	}
 
 	if err != nil {

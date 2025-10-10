@@ -384,6 +384,10 @@ func (s *DefaultToolService) ExecuteToolCall(ctx context.Context, toolCall llms.
 }
 
 // GetAvailableTools returns tools available to this agent (filtered by allowedTools)
+// Behavior:
+//   - allowedTools == nil (not set) → return all tools
+//   - allowedTools == []string{} (explicitly empty) → return no tools
+//   - allowedTools == []string{"tool1", "tool2"} → return only those tools
 func (s *DefaultToolService) GetAvailableTools() []llms.ToolDefinition {
 	if s.toolRegistry == nil {
 		return []llms.ToolDefinition{}
@@ -392,12 +396,17 @@ func (s *DefaultToolService) GetAvailableTools() []llms.ToolDefinition {
 	allToolInfos := s.toolRegistry.ListTools()
 	result := make([]llms.ToolDefinition, 0, len(allToolInfos))
 
-	// If no tool filter specified, return all tools
-	if len(s.allowedTools) == 0 {
+	// If allowedTools is nil (not set), return all tools
+	if s.allowedTools == nil {
 		for _, toolInfo := range allToolInfos {
 			result = append(result, convertToolInfoToToolDefinition(toolInfo))
 		}
 		return result
+	}
+
+	// If allowedTools is explicitly empty slice, return no tools
+	if len(s.allowedTools) == 0 {
+		return []llms.ToolDefinition{}
 	}
 
 	// Create a set of allowed tools for O(1) lookup

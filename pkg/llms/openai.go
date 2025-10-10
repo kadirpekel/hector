@@ -503,7 +503,10 @@ func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, er
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
+	// Only set Authorization header if API key is provided (not needed for Ollama, etc.)
+	if p.config.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
+	}
 
 	// Use generic HTTP client with smart retry
 	resp, err := p.httpClient.Do(req)
@@ -542,7 +545,10 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
+	// Only set Authorization header if API key is provided (not needed for Ollama, etc.)
+	if p.config.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
+	}
 
 	// For streaming, we need the underlying HTTP client (not the retry wrapper)
 	httpClient := &http.Client{Timeout: time.Duration(p.config.Timeout) * time.Second}

@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 )
 
 // ============================================================================
@@ -29,9 +30,6 @@ type Config struct {
 
 	// Agent definitions
 	Agents map[string]AgentConfig `yaml:"agents,omitempty"`
-
-	// Workflow definitions
-	Workflows map[string]WorkflowConfig `yaml:"workflows,omitempty"`
 
 	// Tool configurations
 	Tools ToolConfigs `yaml:"tools,omitempty"`
@@ -75,13 +73,6 @@ func (c *Config) Validate() error {
 	for name, agent := range c.Agents {
 		if err := agent.Validate(); err != nil {
 			return fmt.Errorf("agent '%s' validation failed: %w", name, err)
-		}
-	}
-
-	// Validate workflows
-	for name, workflow := range c.Workflows {
-		if err := workflow.Validate(); err != nil {
-			return fmt.Errorf("workflow '%s' validation failed: %w", name, err)
 		}
 	}
 
@@ -170,13 +161,6 @@ func (c *Config) SetDefaults() {
 		agent := c.Agents[name]
 		agent.SetDefaults()
 		c.Agents[name] = agent
-	}
-
-	// Set workflow defaults
-	for name := range c.Workflows {
-		workflow := c.Workflows[name]
-		workflow.SetDefaults()
-		c.Workflows[name] = workflow
 	}
 
 	// Set tool defaults
@@ -309,7 +293,14 @@ func (c *AuthConfig) SetDefaults() {
 
 // LoadConfig loads the complete configuration from a YAML file
 // This is the main entry point for configuration loading
+// If the file doesn't exist, returns a zero-config default
 func LoadConfig(filePath string) (*Config, error) {
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// File doesn't exist - return zero-config default
+		return createZeroConfig(), nil
+	}
+
 	var config Config
 	if err := loadConfig(filePath, &config); err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
@@ -326,6 +317,49 @@ func LoadConfigFromString(yamlContent string) (*Config, error) {
 	return &config, nil
 }
 
+// createZeroConfig creates a minimal default configuration for zero-config mode
+// Returns a config with one Ollama-based agent and no tools
+func createZeroConfig() *Config {
+	cfg := &Config{
+		Name: "Zero Config Mode",
+		LLMs: map[string]LLMProviderConfig{
+			"ollama": {
+				Type:        "ollama",
+				Model:       "llama3.2:3b",
+				Host:        "http://localhost:11434/v1",
+				Temperature: 0.7,
+				MaxTokens:   2048,
+				Timeout:     120,
+			},
+		},
+		Databases: make(map[string]DatabaseProviderConfig),
+		Embedders: make(map[string]EmbedderProviderConfig),
+		Agents: map[string]AgentConfig{
+			"assistant": {
+				Name:        "assistant",
+				Description: "Default AI assistant powered by Ollama (llama3.2:3b)",
+				Type:        "native",
+				LLM:         "ollama",
+				Visibility:  "public",
+				Tools:       []string{}, // No tools in zero-config mode
+				Prompt: PromptConfig{
+					SystemPrompt: "You are a helpful AI assistant. Be concise and accurate in your responses.",
+				},
+				Reasoning: ReasoningConfig{
+					Engine:        "chain-of-thought",
+					MaxIterations: 10,
+				},
+			},
+		},
+		DocumentStores: make(map[string]DocumentStoreConfig),
+	}
+
+	// Set defaults
+	cfg.SetDefaults()
+
+	return cfg
+}
+
 // ============================================================================
 // HELPER METHODS
 // ============================================================================
@@ -334,12 +368,6 @@ func LoadConfigFromString(yamlContent string) (*Config, error) {
 func (c *Config) GetAgent(name string) (*AgentConfig, bool) {
 	agent, exists := c.Agents[name]
 	return &agent, exists
-}
-
-// GetWorkflow returns a workflow configuration by name
-func (c *Config) GetWorkflow(name string) (*WorkflowConfig, bool) {
-	workflow, exists := c.Workflows[name]
-	return &workflow, exists
 }
 
 // GetDocumentStore returns a document store configuration by name
@@ -355,15 +383,6 @@ func (c *Config) ListAgents() []string {
 		agents = append(agents, name)
 	}
 	return agents
-}
-
-// ListWorkflows returns a list of all workflow names
-func (c *Config) ListWorkflows() []string {
-	workflows := make([]string, 0, len(c.Workflows))
-	for name := range c.Workflows {
-		workflows = append(workflows, name)
-	}
-	return workflows
 }
 
 // ListDocumentStores returns a list of all document store names

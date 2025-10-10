@@ -342,27 +342,39 @@ llms:
 
 func TestLoadConfig_FileErrors(t *testing.T) {
 	tests := []struct {
-		name     string
-		filePath string
-		wantErr  bool
+		name        string
+		filePath    string
+		wantZero    bool
+		description string
 	}{
 		{
-			name:     "non_existent_file",
-			filePath: "/non/existent/file.yaml",
-			wantErr:  true,
+			name:        "non_existent_file",
+			filePath:    "/non/existent/file.yaml",
+			wantZero:    true,
+			description: "should return zero-config when file doesn't exist",
 		},
 		{
-			name:     "empty_file_path",
-			filePath: "",
-			wantErr:  true,
+			name:        "empty_file_path",
+			filePath:    "",
+			wantZero:    true,
+			description: "should return zero-config when file path is empty",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := LoadConfig(tt.filePath)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("LoadConfig() error = %v, wantErr %v", err, tt.wantErr)
+			cfg, err := LoadConfig(tt.filePath)
+			if err != nil {
+				t.Errorf("LoadConfig() unexpected error = %v", err)
+				return
+			}
+			if tt.wantZero {
+				if cfg.Name != "Zero Config Mode" {
+					t.Errorf("LoadConfig() %s: got config name %v, want 'Zero Config Mode'", tt.description, cfg.Name)
+				}
+				if _, exists := cfg.Agents["assistant"]; !exists {
+					t.Errorf("LoadConfig() %s: expected 'assistant' agent to exist in zero-config", tt.description)
+				}
 			}
 		})
 	}
