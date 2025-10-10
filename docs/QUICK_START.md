@@ -6,415 +6,349 @@ parent: Getting Started
 description: "Get up and running with Hector in 5 minutes"
 ---
 
-# Hector Quick Start - Pure A2A
+# Hector Quick Start
 
-## Overview
-
-Hector is now a **pure A2A-native AI agent platform**. Everything communicates via the A2A protocol.
+Get up and running with Hector in 5 minutes! Build your first AI agent using pure YAML configuration.
 
 ## Prerequisites
 
-1. OpenAI API key (set `OPENAI_API_KEY` env var)
-2. Go 1.21+ installed
-3. Configuration file
+1. **API Key** - OpenAI, Anthropic, or Gemini (set environment variable)
+2. **Go 1.21+** installed
+3. **5 minutes** of your time
 
-## Quick Test (5 Minutes)
+## Step 1: Install Hector
 
-### Step 1: Build the CLI
+Choose your preferred installation method:
 
+**From Source:**
 ```bash
-cd /Users/kadirpekel/hector
+git clone https://github.com/kadirpekel/hector.git
+cd hector
 go build -o hector ./cmd/hector
 ```
 
-### Step 2: Create a Simple Config
+**Or use Go install:**
+```bash
+go install github.com/kadirpekel/hector/cmd/hector@latest
+```
 
-Create `test-config.yaml`:
+## Step 2: Create Your First Agent
+
+Create `my-agent.yaml`:
 
 ```yaml
-global:
-  a2a_server:
-    enabled: true
-    host: "0.0.0.0"
-    port: 8080
-
-agents:
-  hello:
-    name: "Hello Agent"
-    description: "A simple test agent"
-    llm: "test-llm"
-    reasoning:
-      engine: "react"
-      max_iterations: 5
-    prompt:
-      system_role: |
-        You are a friendly assistant. Keep responses concise.
-
+# LLM Configuration
 llms:
-  test-llm:
+  gpt-4o:
     type: "openai"
     model: "gpt-4o-mini"
     api_key: "${OPENAI_API_KEY}"
     temperature: 0.7
+    max_tokens: 2000
+
+# Your First Agent
+agents:
+  assistant:
+    name: "My Assistant"
+    description: "A helpful AI assistant"
+    llm: "gpt-4o"
+    
+    # Customize the agent's behavior
+    prompt:
+      system_role: |
+        You are a helpful assistant. Be concise and friendly.
+        Always explain your reasoning clearly.
+    
+    # Enable streaming for real-time responses
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 5
+      enable_streaming: true
+
+# Server Configuration
+global:
+  a2a_server:
+    enabled: true
+    host: "localhost"
+    port: 8080
 ```
 
-### Step 3: Start the A2A Server
+## Step 3: Start the Server
 
-Terminal 1:
+Set your API key and start Hector:
+
 ```bash
 export OPENAI_API_KEY="your-key-here"
-./hector serve --config test-config.yaml
+./hector serve --config my-agent.yaml
 ```
 
 You should see:
 ```
-🚀 Starting Hector A2A Server...
-
-📋 Registering agents...
-  ✅ Hello Agent (hello)
-
-🌐 A2A Server ready!
-📡 Agent directory: http://0.0.0.0:8080/agents
-
-💡 Test with Hector CLI:
-   hector list
-   hector call <agent-id> "your prompt"
+🚀 Starting Hector Server...
+✅ My Assistant (assistant) - Ready
+🌐 Server running at http://localhost:8080
 ```
 
-### Step 4: Test with CLI
+## Step 4: Test Your Agent
 
-Terminal 2:
+Open a new terminal and try these commands:
 
-**List agents:**
+**List available agents:**
 ```bash
 ./hector list
 ```
 
-Expected output:
-```
-📋 Available agents at http://localhost:8080:
-
-  🤖 Hello Agent
-     ID: hello
-     A simple test agent
-     Capabilities: text_generation, conversation, reasoning
-     Endpoint: http://0.0.0.0:8080/agents/hello/tasks
-```
-
-**Get agent info (shorthand notation):**
+**Have a conversation:**
 ```bash
-./hector info hello
+./hector chat assistant
 ```
 
-**Call the agent (shorthand notation):**
+**Single query:**
 ```bash
-./hector call hello "Say hello to the A2A protocol!"
+./hector call assistant "Explain quantum computing in simple terms"
 ```
 
-Expected output:
-```
-🤖 Calling Hello Agent...
-
-Hello! It's great to connect via the A2A protocol! How can I assist you today?
-
-📊 Tokens: 42 | Duration: 1234ms
-```
-
-**Interactive chat (shorthand notation):**
+**With streaming (real-time output):**
 ```bash
-./hector chat hello
+./hector call assistant "Write a Python function to calculate fibonacci" --stream
 ```
 
-> **Note**: Hector CLI now supports convenient shorthand notation! 
-> - Use just the agent ID: `hector call hello "prompt"`
-> - Or full URL: `hector call http://localhost:8080/agents/hello "prompt"`
-> - Or custom server: `hector call --server http://localhost:8081 hello "prompt"`
+## Adding Tools (Advanced Example)
 
-Try:
-```
-You: What is the A2A protocol?
-Bot: The A2A (Agent-to-Agent) protocol is...
-
-You: /quit
-```
-
-## Full Example with Tools
-
-Create `advanced-config.yaml`:
+Want your agent to perform actions? Add tools! Create `coding-assistant.yaml`:
 
 ```yaml
-global:
-  a2a_server:
-    enabled: true
-    host: "0.0.0.0"
-    port: 8080
-
-agents:
-  coder:
-    name: "Code Helper"
-    description: "Helps with coding tasks"
-    llm: "main-llm"
-    tools:
-      - write_file
-      - search_replace
-      - execute_command
-    reasoning:
-      engine: "react"
-      max_iterations: 10
-    prompt:
-      system_role: |
-        You are an expert programmer. You can:
-        - Write files
-        - Edit files
-        - Run commands
-        Help users with their coding tasks.
-
+# LLM Configuration
 llms:
-  main-llm:
+  gpt-4o:
     type: "openai"
     model: "gpt-4o"
     api_key: "${OPENAI_API_KEY}"
     temperature: 0.7
 
+# Coding Assistant with Tools
+agents:
+  coder:
+    name: "Coding Assistant"
+    description: "AI assistant that can write and execute code"
+    llm: "gpt-4o"
+    
+    prompt:
+      system_role: |
+        You are an expert programmer. You can write files, run commands,
+        and help users with coding tasks. Always explain what you're doing.
+      
+      tool_usage: |
+        Use write_file to create/modify files.
+        Use execute_command to run code and tests.
+        Always test the code you write.
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 10
+      enable_streaming: true
+
+# Tool Configuration
 tools:
   write_file:
-    type: file_system
-    path: "./workspace"
-    allowed_operations: ["write", "read"]
+    type: "write_file"
+    enabled: true
+    allowed_paths:
+      - "./workspace/"
+    max_file_size: "1MB"
   
   execute_command:
-    type: command
-    allowed_commands: ["ls", "cat", "grep", "find", "python3"]
+    type: "command"
+    enabled: true
+    allowed_commands:
+      - "python3"
+      - "node"
+      - "go run"
+      - "ls"
+      - "cat"
+    max_execution_time: "30s"
     working_directory: "./workspace"
+
+# Server Configuration
+global:
+  a2a_server:
+    enabled: true
+    host: "localhost"
+    port: 8080
 ```
 
-Start server:
+**Create workspace directory:**
 ```bash
-./hector serve --config advanced-config.yaml
+mkdir workspace
 ```
 
-Test with tools:
+**Start the server:**
 ```bash
-./hector call coder "Create a hello.py file that prints 'Hello A2A!'"
+./hector serve --config coding-assistant.yaml
 ```
 
-## Testing A2A Compliance
-
-### Test 1: Agent Discovery
-
+**Test with tools:**
 ```bash
-# Get agent directory
-curl http://localhost:8080/agents
-
-# Get specific agent card
-curl http://localhost:8080/agents/hello
+./hector call coder "Create a Python script that calculates prime numbers and test it"
 ```
 
-### Test 2: Execute Task (Pure A2A)
+The agent will:
+1. 🤖 Write a Python file with prime number logic
+2. 🏃 Execute the script to test it
+3. 📝 Show you the results
+4. 🔧 Fix any issues automatically
 
+## Memory & Sessions
+
+Hector supports persistent conversations and memory:
+
+```yaml
+agents:
+  smart_assistant:
+    name: "Smart Assistant"
+    description: "Assistant with memory"
+    llm: "gpt-4o"
+    
+    # Memory configuration
+    memory:
+      working_memory:
+        strategy: "token_based"
+        max_tokens: 4000
+        summarization_threshold: 0.8
+      
+      long_term_memory:
+        enabled: true
+        vector_store: "memory_store"
+    
+    reasoning:
+      engine: "chain-of-thought"
+      enable_streaming: true
+
+# Vector store for long-term memory
+document_stores:
+  memory_store:
+    type: "qdrant"
+    url: "http://localhost:6333"
+    collection: "agent_memory"
+```
+
+**Start a session:**
 ```bash
-curl -X POST http://localhost:8080/agents/hello/tasks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "taskId": "test-123",
-    "input": {
-      "type": "text/plain",
-      "content": "Hello from pure A2A protocol!"
-    }
-  }'
+./hector chat smart_assistant
 ```
 
-Expected response:
-```json
-{
-  "taskId": "test-123",
-  "status": "completed",
-  "output": {
-    "type": "text/plain",
-    "content": "Hello! Great to hear from you via the A2A protocol!"
-  },
-  "metadata": {
-    "tokens_used": 35,
-    "duration_ms": 1123
-  },
-  "startedAt": "2025-10-05T...",
-  "endedAt": "2025-10-05T..."
-}
-```
-
-### Test 3: External A2A Client
-
-Any A2A-compliant client can now talk to Hector!
-
-```python
-# Python example
-import requests
-
-# Discover agent
-card = requests.get("http://localhost:8080/agents/hello").json()
-print(f"Agent: {card['name']}")
-
-# Execute task
-task = {
-    "taskId": "py-test-1",
-    "input": {
-        "type": "text/plain",
-        "content": "Hello from Python!"
-    }
-}
-
-response = requests.post(
-    "http://localhost:8080/agents/hello/tasks",
-    json=task
-)
-
-result = response.json()
-print(f"Response: {result['output']['content']}")
-```
+The agent will remember your conversation across the session and store important information in long-term memory!
 
 ## CLI Commands Reference
 
-### Server Commands
+### Essential Commands
 
 ```bash
-# Start server
-hector serve --config hector.yaml
+# Start Hector server
+hector serve --config my-agent.yaml
 
-# Start with debug
-hector serve --config hector.yaml --debug
-```
-
-### Client Commands
-
-```bash
-# List all agents
+# List all available agents
 hector list
-hector list --server https://remote-server.com
 
-# Get agent info
-hector info http://localhost:8080/agents/hello
-hector info hello  # Shorthand (uses default server)
+# Get detailed agent information
+hector info assistant
 
-# Execute task
-hector call hello "Your prompt here"
-hector call http://localhost:8080/agents/hello "Your prompt"
-hector call hello "Prompt" --token "bearer-token"
+# Single query to an agent
+hector call assistant "Your question here"
 
-# Interactive chat
-hector chat hello
-hector chat hello --server https://remote.com
+# Interactive chat session
+hector chat assistant
+
+# Stream responses in real-time
+hector call assistant "Complex question" --stream
 ```
 
-## Environment Variables
+### Advanced Commands
 
 ```bash
-# Set default server
+# Use different server
+hector call --server http://remote-server.com assistant "question"
+
+# With authentication
+hector call assistant "question" --token "your-bearer-token"
+
+# Set default server (avoid typing --server every time)
 export HECTOR_SERVER="http://localhost:8080"
-
-# Set authentication token
-export HECTOR_TOKEN="your-bearer-token"
-
-# Now you can omit flags:
-hector list
-hector call hello "prompt"
+hector call assistant "question"  # Now uses default server
 ```
+
+## Next Steps
+
+🎉 **Congratulations!** You've built your first AI agent with Hector.
+
+### Ready for More?
+
+**🚀 [Multi-Agent Tutorial](tutorials/MULTI_AGENT_RESEARCH_PIPELINE)** - Build a 3-agent research system and see how Hector compares to LangChain (500+ lines Python → 120 lines YAML!)
+
+**🤖 [Build Cursor-like Assistant](tutorials/BUILD_YOUR_OWN_CURSOR)** - Create a powerful AI coding assistant with semantic search and chain-of-thought reasoning.
+
+### Explore Advanced Features
+
+1. **[Memory Management](MEMORY)** - Working memory, long-term memory, and session persistence
+2. **[Tools & Extensions](TOOLS)** - Built-in tools, MCP protocol, custom tools
+3. **[Multi-Agent Systems](ARCHITECTURE#orchestrator-pattern)** - Agent orchestration and coordination
+4. **[Authentication](AUTHENTICATION)** - JWT, OAuth2, API keys
+5. **[Deployment](INSTALLATION#production-deployment)** - Docker, Kubernetes, production setup
 
 ## Troubleshooting
 
-### Server won't start
+### Server Won't Start
 
-**Check config file:**
+**Check your configuration:**
 ```bash
-cat test-config.yaml
+# Validate YAML syntax
+cat my-agent.yaml
 ```
 
-**Check port availability:**
+**Check if port is available:**
 ```bash
 lsof -i :8080
 ```
 
-### CLI can't connect
+**Enable debug mode:**
+```bash
+hector serve --config my-agent.yaml --debug
+```
 
-**Check server is running:**
+### CLI Can't Connect
+
+**Test server manually:**
 ```bash
 curl http://localhost:8080/agents
 ```
 
-**Check URL:**
+**Check server URL:**
 ```bash
 hector list --server http://localhost:8080
 ```
 
-### Agent errors
+### Agent Errors
 
-**Check logs:**
-Server terminal will show execution details
-
-**Enable debug mode:**
+**Check API key:**
 ```bash
-hector serve --config test-config.yaml --debug
+echo $OPENAI_API_KEY
 ```
 
-## What's Working ✅
+**View server logs:**
+Server terminal shows detailed execution logs
 
-1. ✅ **Pure A2A protocol** - 100% compliant
-2. ✅ **A2A Server** - Hosts agents via A2A
-3. ✅ **A2A Client** - CLI uses A2A to communicate
-4. ✅ **Agent discovery** - List and inspect agents
-5. ✅ **Task execution** - Call agents via A2A TaskRequest/Response
-6. ✅ **Interactive chat** - Multi-turn conversations
-7. ✅ **Tool execution** - Agents can use tools
-8. ✅ **External clients** - Any A2A client can connect
+**Common issues:**
+- Missing API key environment variable
+- Invalid model name in configuration
+- Network connectivity issues
 
-## What's Next
+## What You've Learned
 
-**Ready for more advanced topics?**
+✅ **Pure YAML Configuration** - No code required to build AI agents  
+✅ **Streaming Responses** - Real-time output for better UX  
+✅ **Tool Integration** - Agents that can perform actions  
+✅ **Memory Management** - Persistent conversations and context  
+✅ **A2A Protocol** - Industry-standard agent communication  
 
-**🚀 [LangChain vs Hector: Multi-Agent Systems](tutorials/MULTI_AGENT_RESEARCH_PIPELINE.md)** - See how Hector transforms complex multi-agent implementations into simple YAML. Perfect next step after this quick start!
-
-**Other topics to explore:**
-
-1. **Streaming** - Server-Sent Events (SSE) streaming per A2A specification
-2. **Session management** - Proper A2A session support
-3. **Authentication** - Bearer token and API key auth
-4. **Multi-agent orchestration** - Using `agent_call` tool
-5. **Deployment** - Docker, Kubernetes examples
-
-## Architecture
-
-```
-┌─────────────────────────────────────────┐
-│  CLI (A2A Client)                       │
-│  • list, info, call, chat               │
-└────────────┬────────────────────────────┘
-             │ A2A Protocol (HTTP/JSON)
-┌────────────▼────────────────────────────┐
-│  A2A Server                             │
-│  • Agent discovery                      │
-│  • Task execution                       │
-│  • Session management                   │
-└────────────┬────────────────────────────┘
-             │
-┌────────────▼────────────────────────────┐
-│  Agents (Pure A2A)                      │
-│  • ExecuteTask()                        │
-│  • ExecuteTaskStreaming()               │
-│  • GetAgentCard()                       │
-└─────────────────────────────────────────┘
-```
-
-**Everything talks A2A - nothing else!** 🎉
-
----
-
-## Summary
-
-Hector is now a **pure A2A-native platform**:
-- ✅ Server exposes agents via A2A protocol
-- ✅ CLI communicates via A2A protocol  
-- ✅ Agents implement A2A interface directly
-- ✅ External A2A clients can connect
-- ✅ 100% protocol compliant
-
-**Ready to test!** Start the server and try the CLI commands above.
+**Ready to build something amazing? Check out the advanced tutorials!** 🚀
 
