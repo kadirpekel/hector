@@ -29,7 +29,7 @@ const (
 // ============================================================================
 
 // executeListCommand lists available agents from an A2A server
-func executeListCommand(serverURL string, token string) error {
+func executeListServer(serverURL string, token string) error {
 	client := createA2AClient(token, "")
 
 	// Ensure proper agents endpoint
@@ -75,7 +75,7 @@ func executeListCommand(serverURL string, token string) error {
 }
 
 // executeInfoCommand gets detailed information about an agent
-func executeInfoCommand(agentURL string, token string) error {
+func executeInfoServer(agentURL string, token string) error {
 	client := createA2AClient(token, "")
 
 	card, err := client.DiscoverAgent(context.Background(), agentURL)
@@ -123,7 +123,7 @@ func executeInfoCommand(agentURL string, token string) error {
 }
 
 // executeCallCommand executes a one-shot task on an agent
-func executeCallCommand(agentURL string, input string, token string, stream bool) error {
+func executeCallServer(agentURL string, input string, token string, stream bool) error {
 	client := createA2AClient(token, "")
 
 	// Get agent card
@@ -203,7 +203,7 @@ func executeCallCommand(agentURL string, input string, token string, stream bool
 }
 
 // executeChatCommand starts an interactive chat session with an agent
-func executeChatCommand(agentURL string, token string) error {
+func executeChatServer(agentURL string, token string) error {
 	client := createA2AClient(token, "")
 
 	// Get agent card
@@ -423,19 +423,4 @@ func resolveServerURL(serverURL string) string {
 	}
 
 	return serverURL
-}
-
-// resolveAgentURL resolves agent URL, supporting two formats:
-// 1. Agent ID (shorthand): "my_agent" → "http://server:port/agents/my_agent"
-// 2. Full URL: "http://server:port/agents/my_agent" → used as-is
-// When using shorthand, the defaultServer parameter or environment variables determine the server
-func resolveAgentURL(agentID string, defaultServer string) string {
-	// If it's a full URL, use as-is (ignores defaultServer)
-	if strings.HasPrefix(agentID, "http://") || strings.HasPrefix(agentID, "https://") {
-		return agentID
-	}
-
-	// Otherwise, it's an agent ID - construct full URL with default server
-	server := resolveServerURL(defaultServer)
-	return fmt.Sprintf("%s/agents/%s", strings.TrimSuffix(server, "/"), agentID)
 }

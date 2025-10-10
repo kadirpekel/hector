@@ -10,59 +10,158 @@ description: "Command-line interface reference for all hector commands"
 
 ## Overview
 
-Hector CLI has a clean, simple architecture:
-- **Server Mode** (`hector serve`) - Run as an A2A protocol server
-- **Client Mode** (all other commands) - Talk to ANY A2A server
+Hector CLI has **two modes of operation**:
 
-### Agent Specification Formats
+### 🚀 **Direct Mode** (Default)
 
-Hector CLI supports **two convenient ways** to specify agents:
+Agent runs in-process without an A2A server. Perfect for:
+- Quick experimentation
+- Single-agent workflows  
+- Local development
+- CI/CD scripts
 
-1. **Shorthand Notation** (Recommended for local/frequent use)
+```bash
+# No server needed!
+hector call assistant "hello"
+hector chat assistant
+hector list
+```
+
+### 🌐 **Server Mode** (with `--server` flag)
+
+Connects to an A2A protocol server (local or remote). Perfect for:
+- Multi-agent systems
+- Production deployments
+- Remote agents
+- Distributed systems
+
+```bash
+# Terminal 1: Start server
+hector serve
+
+# Terminal 2: Connect to server
+hector call --server http://localhost:8080 assistant "hello"
+hector chat --server http://localhost:8080 assistant
+```
+
+**The `--server` flag is the mode switch:**
+- **Without `--server`**: Direct mode (in-process)
+- **With `--server`**: Server mode (A2A protocol)
+
+**💡 Important:** Flags must come **before** positional arguments (agent name, prompt):
+```bash
+# ✅ Correct
+hector call --server http://localhost:8080 assistant "hello"
+hector chat --model gpt-4o assistant
+
+# ❌ Wrong - flags after agent name are ignored
+hector call assistant "hello" --server http://localhost:8080
+hector chat assistant --model gpt-4o
+```
+
+---
+
+## Zero-Config Mode
+
+**Start using Hector instantly without any configuration file!**
+
+```bash
+# Just set your API key
+export OPENAI_API_KEY="sk-..."
+
+# Start using immediately
+hector call assistant "Explain machine learning"
+hector chat assistant
+
+# Customize with flags
+hector call assistant "hello" --model gpt-4o --tools
+```
+
+**Quick flags:**
+- `--api-key KEY` - OpenAI API key (or use `OPENAI_API_KEY` env var)
+- `--model NAME` - Model to use (default: `gpt-4o-mini`)
+- `--tools` - Enable all local tools (file ops, commands, search)
+- `--mcp URL` - MCP server for tool integration
+- `--docs FOLDER` - Document folder for RAG
+
+**See [Zero-Config Mode Guide](ZERO_CONFIG_MODE) for complete documentation.**
+
+---
+
+## Agent Specification (Server Mode Only)
+
+When using `--server` flag, Hector supports **two convenient ways** to specify agents:
+
+1. **Shorthand Notation** (Recommended for frequent use)
    - Format: `agent_id`
-   - Example: `hector call my_agent "prompt"`
-   - Uses default server (`localhost:8080`) or `HECTOR_SERVER` environment variable
-   - Can override with `--server` flag
+   - Example: `hector call my_agent "prompt" --server http://localhost:8080`
+   - Uses provided server URL
 
-2. **Full URL** (For external/specific agents)
+2. **Full URL** (For specific agent endpoints)
    - Format: `http://host:port/agents/agent_id`
    - Example: `hector call http://example.com/agents/my_agent "prompt"`
-   - Uses URL as-is, ignores `--server` flag and environment variables
+   - Uses URL as-is, `--server` flag not needed
 
 **This makes Hector CLI ergonomic for daily use while maintaining full flexibility.**
 
 ## Quick Start
 
-### 1. Start a Server
+### Zero-Config Mode (Fastest)
 
 ```bash
-# Start local A2A server
-$ hector serve
+# Set API key
+$ export OPENAI_API_KEY="sk-..."
 
-# Or with custom config
-$ hector serve --config my-agents.yaml
+# Call agent directly (no server, no config)
+$ hector call assistant "Explain machine learning"
 
-# With debug output
-$ hector serve --config hector.yaml --debug
+# Interactive chat
+$ hector chat assistant
+
+# With tools
+$ hector call assistant "List files" --tools
+
+# Custom model
+$ hector call assistant "Write code" --model gpt-4o
 ```
 
-### 2. List Available Agents
+### With Config File
+
+#### Direct Mode (No Server)
 
 ```bash
-# List agents from default server (localhost:8080)
-$ hector list
+# Call agent directly
+$ hector call assistant "hello" --config my-agent.yaml
 
-# List agents from specific server
-$ hector list --server https://agents.example.com
+# Interactive chat
+$ hector chat assistant --config my-agent.yaml
+
+# List agents from config
+$ hector list --config my-agent.yaml
+```
+
+#### Server Mode
+
+```bash
+# Terminal 1: Start server
+$ hector serve --config my-agent.yaml
+
+# Or zero-config server
+$ hector serve --api-key $OPENAI_API_KEY --tools
+
+# Terminal 2: Connect to server
+$ hector list --server http://localhost:8080
+$ hector call assistant "hello" --server http://localhost:8080
+$ hector chat assistant --server http://localhost:8080
 
 # Output:
 📋 Available agents at http://localhost:8080:
 
-  🤖 Competitor Analysis Agent
-     ID: competitor_analyst
-     Analyzes market competitors and provides insights
+  🤖 My Assistant
+     ID: assistant
+     AI assistant powered by OpenAI (gpt-4o-mini)
      Capabilities: text_generation, conversation, reasoning
-     Endpoint: http://localhost:8080/agents/competitor_analyst/tasks
+     Endpoint: http://localhost:8080/agents/assistant/tasks
 ```
 
 ### 3. Get Agent Information

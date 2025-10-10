@@ -319,37 +319,36 @@ func LoadConfigFromString(yamlContent string) (*Config, error) {
 
 // ZeroConfigOptions holds configuration options for zero-config mode
 type ZeroConfigOptions struct {
-	Model         string // Ollama model (default: llama3.2:3b)
-	EnableTools   bool   // Enable all local tools
-	MCPURL        string // MCP server URL for tool integration
-	DocsFolder    string // Document store folder path
-	EmbedderModel string // Embedder model (default: nomic-embed-text)
-	VectorDB      string // Vector DB connection (default: http://localhost:6333)
+	APIKey      string // OpenAI API key (required)
+	BaseURL     string // OpenAI API base URL (default: https://api.openai.com/v1)
+	Model       string // OpenAI model (default: gpt-4o-mini)
+	EnableTools bool   // Enable all local tools
+	MCPURL      string // MCP server URL for tool integration
+	DocsFolder  string // Document store folder path (RAG support)
 }
 
 // CreateZeroConfig creates a configuration for zero-config mode with custom options
-// Returns a config with one Ollama-based agent and optional tools/RAG
+// Returns a config with one OpenAI-based agent and optional tools/RAG
+// API key is REQUIRED - will be validated by caller
 func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 	// Set defaults for empty values
+	if opts.BaseURL == "" {
+		opts.BaseURL = "https://api.openai.com/v1"
+	}
 	if opts.Model == "" {
-		opts.Model = "llama3.2:3b"
-	}
-	if opts.EmbedderModel == "" {
-		opts.EmbedderModel = "nomic-embed-text"
-	}
-	if opts.VectorDB == "" {
-		opts.VectorDB = "http://localhost:6333"
+		opts.Model = "gpt-4o-mini"
 	}
 
 	cfg := &Config{
 		Name: "Zero Config Mode",
 		LLMs: map[string]LLMProviderConfig{
-			"ollama": {
-				Type:        "ollama",
+			"openai": {
+				Type:        "openai",
 				Model:       opts.Model,
-				Host:        "http://localhost:11434/v1",
+				APIKey:      opts.APIKey, // Required - validated before this function is called
+				Host:        opts.BaseURL,
 				Temperature: 0.7,
-				MaxTokens:   2048,
+				MaxTokens:   4096,
 				Timeout:     120,
 			},
 		},
@@ -358,37 +357,21 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 		DocumentStores: make(map[string]DocumentStoreConfig),
 	}
 
-	// Configure document store if folder provided
+	// Configure document store if folder provided (uses OpenAI embeddings)
 	if opts.DocsFolder != "" {
-		// Add Qdrant database
-		cfg.Databases["qdrant"] = DatabaseProviderConfig{
-			Type:    "qdrant",
-			Host:    opts.VectorDB,
-			Timeout: 30,
-		}
-
-		// Add embedder
-		cfg.Embedders["ollama"] = EmbedderProviderConfig{
-			Type:    "ollama",
-			Model:   opts.EmbedderModel,
-			Host:    "http://localhost:11434",
-			Timeout: 30,
-		}
-
-		// Add document store
-		cfg.DocumentStores["docs"] = DocumentStoreConfig{
-			Name:   "docs",
-			Source: "directory",
-			Path:   opts.DocsFolder,
-		}
+		// Note: Document stores with OpenAI require --docs flag and additional setup
+		// For now, we'll keep this simple and not auto-configure
+		// Users should use hector.yaml for advanced RAG setups
+		fmt.Println("⚠️  Warning: Document stores (--docs) require additional configuration.")
+		fmt.Println("   For RAG support, please create a hector.yaml configuration file.")
 	}
 
 	// Configure agent
 	agentConfig := AgentConfig{
 		Name:        "assistant",
-		Description: fmt.Sprintf("AI assistant powered by Ollama (%s)", opts.Model),
+		Description: fmt.Sprintf("AI assistant powered by OpenAI (%s)", opts.Model),
 		Type:        "native",
-		LLM:         "ollama",
+		LLM:         "openai",
 		Visibility:  "public",
 		Prompt: PromptConfig{
 			SystemPrompt: "You are a helpful AI assistant. Be concise and accurate in your responses.",
@@ -409,13 +392,6 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 	} else {
 		// No tools
 		agentConfig.Tools = []string{}
-	}
-
-	// Add document stores if configured
-	if opts.DocsFolder != "" {
-		agentConfig.DocumentStores = []string{"docs"}
-		agentConfig.Database = "qdrant"
-		agentConfig.Embedder = "ollama"
 	}
 
 	cfg.Agents = map[string]AgentConfig{

@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Quick Start
-nav_order: 2
+nav_order: 3
 parent: Getting Started
 description: "Get up and running with Hector in 5 minutes"
 ---
@@ -12,11 +12,55 @@ Get up and running with Hector in 5 minutes! Build your first AI agent using pur
 
 ## Prerequisites
 
-1. **API Key** - OpenAI, Anthropic, or Gemini (set environment variable)
-2. **Go 1.24+** installed
-3. **5 minutes** of your time
+1. **API Key** - OpenAI API key (get one at [platform.openai.com](https://platform.openai.com))
+2. **Go 1.24+** installed (optional - only if building from source)
+3. **2 minutes** of your time
 
-## Step 1: Install Hector
+## Option A: Zero-Config Mode (Fastest!)
+
+**No installation, no config file - just instant AI assistance!**
+
+### Step 1: Get Hector
+
+```bash
+# Install via Go
+go install github.com/kadirpekel/hector/cmd/hector@latest
+
+# Or download pre-built binary (if available)
+# Or build from source (see Option B below)
+```
+
+### Step 2: Set API Key
+
+```bash
+export OPENAI_API_KEY="sk-..."
+```
+
+### Step 3: Start Using!
+
+```bash
+# Call agent directly (no config needed!)
+hector call assistant "Explain quantum computing in simple terms"
+
+# Interactive chat
+hector chat assistant
+
+# With tools
+hector call assistant "List files in current directory" --tools
+
+# Custom model
+hector call assistant "Write a haiku" --model gpt-4o
+```
+
+**🎉 That's it!** You're using Hector with zero configuration.
+
+---
+
+## Option B: Full Setup (For Advanced Features)
+
+When you need custom prompts, multiple agents, or RAG, use a config file.
+
+### Step 1: Install Hector
 
 Choose your preferred installation method:
 

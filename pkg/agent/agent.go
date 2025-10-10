@@ -417,7 +417,7 @@ func (a *Agent) execute(
 			var results []reasoning.ToolResult
 			if len(toolCalls) > 0 {
 				// IMPORTANT: Add assistant message WITH tool_calls BEFORE adding tool results
-				// This is required by OpenAI/Anthropic for proper tool calling round-trip
+				// This is required by OpenAI/Anthropic/Gemini for proper tool calling round-trip
 				assistantMsg := llms.Message{
 					Role:      "assistant",
 					Content:   text,
@@ -427,7 +427,8 @@ func (a *Agent) execute(
 
 				results = a.executeTools(ctx, toolCalls, outputCh, cfg)
 
-				// Add tool results to conversation
+				// Add tool results to conversation using standard role: "tool" format
+				// All supported providers (OpenAI, Anthropic, Gemini) support this format
 				for _, result := range results {
 					toolResultMsg := llms.Message{
 						Role:       "tool",

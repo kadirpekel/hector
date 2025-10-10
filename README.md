@@ -159,10 +159,31 @@ make build
 go install github.com/kadirpekel/hector/cmd/hector@latest
 ```
 
-### Create Your First Agent
+### Fastest Start - Zero-Config Mode
+
+No configuration file needed!
+
+```bash
+# Set API key
+export OPENAI_API_KEY="sk-..."
+
+# Start using immediately
+./hector call assistant "Explain quantum computing in simple terms"
+
+# Or interactive chat
+./hector chat assistant
+
+# With tools enabled
+./hector call assistant "List files in current directory" --tools
+```
+
+**That's it!** You're up and running with zero configuration.
+
+### With Config File (For Advanced Features)
+
+Create `my-agent.yaml`:
 
 ```yaml
-# my-agent.yaml
 agents:
   assistant:
     name: "My Assistant"
@@ -178,30 +199,37 @@ llms:
     api_key: "${OPENAI_API_KEY}"
 ```
 
-### Run
+Run in **Direct Mode** (no server):
 
 ```bash
 # Set API key
 export OPENAI_API_KEY="sk-..."
 
-# Start server
-./hector serve --config my-agent.yaml
+# Call agent directly
+./hector call assistant "Explain quantum computing" --config my-agent.yaml
 
-# In another terminal - Chat with agent (shorthand notation)
-./hector chat assistant
-
-# Or call directly
-./hector call assistant "Explain quantum computing in simple terms"
-
-# Or list all agents
-./hector list
+# Interactive chat
+./hector chat assistant --config my-agent.yaml
 ```
 
-**That's it!** You have a working AI agent with:
+Or run in **Server Mode** (for multi-agent):
+
+```bash
+# Terminal 1: Start server
+./hector serve --config my-agent.yaml
+
+# Terminal 2: Connect to server
+./hector chat --server http://localhost:8080 assistant
+./hector call --server http://localhost:8080 assistant "Explain quantum computing"
+./hector list --server http://localhost:8080
+```
+
+**Now you have:**
 - ✅ Streaming output (enabled by default)
 - ✅ Multi-turn sessions  
 - ✅ A2A protocol compliance
-- ✅ Simple shorthand CLI
+- ✅ Direct or Server mode
+- ✅ Zero-config or full configuration
 
 ---
 
@@ -429,46 +457,100 @@ agents:
 
 ## CLI Commands
 
+Hector has **two modes**: **Direct Mode** (in-process) and **Server Mode** (A2A protocol).
+
+### Direct Mode (Default)
+
+No server required - agent runs in-process:
+
 ```bash
-# Server Commands
-hector serve --config FILE [--debug]              # Start A2A server
+# Zero-Config Mode (no configuration file needed!)
+export OPENAI_API_KEY="sk-..."
+hector call assistant "Explain quantum computing"
+hector chat assistant
+hector list
 
-# Client Commands (Shorthand Notation)
-hector list                                       # List agents (default: localhost:8080)
-hector call my_agent "prompt"                     # Call agent (shorthand)
-hector chat my_agent                              # Interactive chat (shorthand)
-hector info my_agent                              # Get agent details
+# With Quick Flags
+hector call assistant "hello" --model gpt-4o --tools
+hector chat assistant --api-key sk-... --model gpt-4o-mini
 
-# Client Commands (Full URL)
-hector call http://example.com/agents/my_agent "prompt"
-hector chat http://example.com/agents/my_agent
-
-# Client Commands (Custom Server)
-hector list --server https://agents.example.com
-hector call --server http://localhost:8081 my_agent "prompt"
-hector chat --server http://localhost:8081 my_agent
-
-# Streaming Control
-hector call my_agent "prompt"                     # Streaming enabled (default)
-hector call my_agent "prompt" --stream=false      # Streaming disabled
-
-# Authentication
-hector call my_agent "prompt" --token "bearer-token"
-
-# Help & Version
-hector help                                       # Show detailed help
-hector version                                    # Show version
-
-# Environment Variables
-export HECTOR_SERVER="http://localhost:8080"     # Default server for shorthand
-export OPENAI_API_KEY="sk-..."                   # OpenAI authentication
-export ANTHROPIC_API_KEY="sk-..."                # Anthropic authentication
+# With Config File
+hector call assistant "hello" --config my-agent.yaml
+hector chat assistant --config my-agent.yaml
 ```
 
-**Agent Specification Formats:**
-- **Shorthand**: `my_agent` → Uses default/configured server (localhost:8080 or HECTOR_SERVER)
-- **Full URL**: `http://host:port/agents/my_agent` → Direct URL (ignores --server flag)
-- **Custom Server**: `--server http://host:port my_agent` → Shorthand with custom server
+### Server Mode
+
+Start A2A server and connect to it:
+
+```bash
+# Terminal 1: Start server
+hector serve --config FILE [--debug]
+
+# Or zero-config server
+hector serve --api-key $OPENAI_API_KEY --tools
+
+# Terminal 2: Connect to server
+hector list --server http://localhost:8080
+hector call --server http://localhost:8080 assistant "prompt"
+hector chat --server http://localhost:8080 assistant
+hector info --server http://localhost:8080 assistant
+```
+
+### Zero-Config Quick Flags
+
+```bash
+# Core flags
+--api-key KEY          OpenAI API key (or set OPENAI_API_KEY)
+--base-url URL         OpenAI API base URL
+--model NAME           Model (default: gpt-4o-mini)
+--tools                Enable all local tools
+--mcp URL              MCP server URL
+--docs FOLDER          Document store folder (RAG)
+
+# Mode selection
+--server URL           Connect to A2A server (enables server mode)
+                       Without this flag, uses direct mode
+
+# Other
+--config FILE          Use config file
+--debug                Enable debug output
+--stream               Enable streaming (default: true)
+--token TOKEN          Authentication token
+```
+
+**Note:** Flags must come **before** positional arguments (agent name, prompt):
+```bash
+# ✅ Correct
+hector call --server http://localhost:8080 assistant "hello"
+
+# ❌ Wrong (flags after agent name are ignored)
+hector call assistant "hello" --server http://localhost:8080
+```
+
+### Examples
+
+```bash
+# Quick start - no config needed
+export OPENAI_API_KEY="sk-..."
+hector call assistant "hello"
+
+# With tools
+hector call assistant "list files" --tools
+
+# Custom model
+hector call assistant "write code" --model gpt-4o
+
+# Server mode
+hector serve --api-key $OPENAI_API_KEY --tools
+hector call assistant "hello" --server http://localhost:8080
+
+# Help & Version
+hector help
+hector version
+```
+
+**📚 See [Zero-Config Mode Guide](https://gohector.dev/ZERO_CONFIG_MODE) for complete documentation.**
 
 ---
 

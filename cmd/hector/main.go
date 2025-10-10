@@ -61,17 +61,16 @@ type CLIArgs struct {
 	AgentURL   string
 	Input      string
 	Token      string
-	APIKey     string
 	Stream     bool
 	Debug      bool
 
-	// Zero-config mode options
-	Model         string
-	Tools         bool
-	MCPURL        string
-	DocsFolder    string
-	EmbedderModel string
-	VectorDB      string
+	// Zero-config mode options (OpenAI-based)
+	APIKey     string
+	BaseURL    string
+	Model      string
+	Tools      bool
+	MCPURL     string
+	DocsFolder string
 }
 
 // ============================================================================
@@ -81,24 +80,31 @@ type CLIArgs struct {
 func main() {
 	args := parseArgs()
 
+	// Load environment variables from .env files (for all commands)
+	if err := config.LoadEnvFiles(); err != nil {
+		if !os.IsNotExist(err) {
+			fatalf("Failed to load environment files: %v", err)
+		}
+	}
+
 	// Route to appropriate handler
 	switch args.Command {
 	case CommandServe:
 		executeServeCommand(args)
 	case CommandList:
-		if err := executeListCommand(args.ServerURL, args.Token); err != nil {
+		if err := executeListCommand(args); err != nil {
 			fatalf("List command failed: %v", err)
 		}
 	case CommandInfo:
-		if err := executeInfoCommand(args.AgentURL, args.Token); err != nil {
+		if err := executeInfoCommand(args, args.AgentURL); err != nil {
 			fatalf("Info command failed: %v", err)
 		}
 	case CommandCall:
-		if err := executeCallCommand(args.AgentURL, args.Input, args.Token, args.Stream); err != nil {
+		if err := executeCallCommand(args, args.AgentURL, args.Input); err != nil {
 			fatalf("Call command failed: %v", err)
 		}
 	case CommandChat:
-		if err := executeChatCommand(args.AgentURL, args.Token); err != nil {
+		if err := executeChatCommand(args, args.AgentURL); err != nil {
 			fatalf("Chat command failed: %v", err)
 		}
 	case CommandHelp:
@@ -120,30 +126,42 @@ func parseArgs() *CLIArgs {
 	serveConfig := serveCmd.String("config", defaultConfigFile, "Configuration file")
 	serveDebug := serveCmd.Bool("debug", false, "Enable debug mode")
 
-	// Zero-config mode flags
-	serveModel := serveCmd.String("model", "llama3.2:3b", "Ollama model to use in zero-config mode")
+	// Zero-config mode flags (OpenAI-based)
+	serveAPIKey := serveCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY environment variable)")
+	serveBaseURL := serveCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
+	serveModel := serveCmd.String("model", "gpt-4o-mini", "OpenAI model to use in zero-config mode")
 	serveTools := serveCmd.Bool("tools", false, "Enable all local tools (file, command execution)")
 	serveMCP := serveCmd.String("mcp", "", "MCP server URL for tool integration")
-	serveDocs := serveCmd.String("docs", "", "Document store folder (enables RAG with Qdrant + Ollama embedder)")
-	serveEmbedder := serveCmd.String("embedder-model", "nomic-embed-text", "Embedder model for document store")
-	serveVectorDB := serveCmd.String("vectordb", "http://localhost:6333", "Vector database connection string")
+	serveDocs := serveCmd.String("docs", "", "Document store folder (enables RAG)")
 
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
 	listServer := listCmd.String("server", "", serverFlagDesc)
 	listToken := listCmd.String("token", "", tokenFlagDesc)
+	listConfig := listCmd.String("config", defaultConfigFile, "Configuration file (direct mode)")
 
 	infoCmd := flag.NewFlagSet("info", flag.ExitOnError)
 	infoServer := infoCmd.String("server", "", serverFlagDesc)
 	infoToken := infoCmd.String("token", "", tokenFlagDesc)
+	infoConfig := infoCmd.String("config", defaultConfigFile, "Configuration file (direct mode)")
 
 	callCmd := flag.NewFlagSet("call", flag.ExitOnError)
 	callServer := callCmd.String("server", "", serverFlagDesc)
 	callToken := callCmd.String("token", "", tokenFlagDesc)
 	callStream := callCmd.Bool("stream", true, "Enable streaming (default: true, use --stream=false to disable)")
+	callConfig := callCmd.String("config", defaultConfigFile, "Configuration file (direct mode)")
+	callAPIKey := callCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY environment variable)")
+	callBaseURL := callCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
+	callModel := callCmd.String("model", "gpt-4o-mini", "OpenAI model (direct mode, zero-config)")
+	callTools := callCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
 
 	chatCmd := flag.NewFlagSet("chat", flag.ExitOnError)
 	chatServer := chatCmd.String("server", "", serverFlagDesc)
 	chatToken := chatCmd.String("token", "", tokenFlagDesc)
+	chatConfig := chatCmd.String("config", defaultConfigFile, "Configuration file (direct mode)")
+	chatAPIKey := chatCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY environment variable)")
+	chatBaseURL := chatCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
+	chatModel := chatCmd.String("model", "gpt-4o-mini", "OpenAI model (direct mode, zero-config)")
+	chatTools := chatCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
 
 	// Parse command
 	if len(os.Args) < 2 {
@@ -159,47 +177,73 @@ func parseArgs() *CLIArgs {
 		args.Command = CommandServe
 		args.ConfigFile = *serveConfig
 		args.Debug = *serveDebug
+		args.APIKey = *serveAPIKey
+		args.BaseURL = *serveBaseURL
 		args.Model = *serveModel
 		args.Tools = *serveTools
 		args.MCPURL = *serveMCP
 		args.DocsFolder = *serveDocs
-		args.EmbedderModel = *serveEmbedder
-		args.VectorDB = *serveVectorDB
 
 	case "list":
 		_ = listCmd.Parse(os.Args[2:])
 		args.Command = CommandList
-		args.ServerURL = resolveServerURL(*listServer)
+		args.ServerURL = *listServer // Don't resolve yet - let mode detection handle it
 		args.Token = *listToken
+		args.ConfigFile = *listConfig
 
 	case "info":
 		_ = infoCmd.Parse(os.Args[2:])
 		if len(infoCmd.Args()) < 1 {
-			fatalf("Usage: hector info <agent> [--server URL]")
+			fatalf("Usage: hector info <agent> [--server URL | --config FILE]")
 		}
 		args.Command = CommandInfo
-		args.AgentURL = resolveAgentURL(infoCmd.Args()[0], *infoServer)
+		args.AgentURL = infoCmd.Args()[0] // Store raw agent ID
+		args.ServerURL = *infoServer      // Store raw server URL
 		args.Token = *infoToken
+		args.ConfigFile = *infoConfig
 
 	case "call":
+		// Parse remaining args
+		// Note: Go's flag package requires flags BEFORE positional arguments
 		_ = callCmd.Parse(os.Args[2:])
-		if len(callCmd.Args()) < 2 {
-			fatalf("Usage: hector call <agent> \"prompt\" [--server URL]")
+
+		callArgs := callCmd.Args()
+		if len(callArgs) < 2 {
+			fatalf("Usage: hector call [OPTIONS] <agent> \"prompt\"\nNote: Flags must come before the agent name")
 		}
+
 		args.Command = CommandCall
-		args.AgentURL = resolveAgentURL(callCmd.Args()[0], *callServer)
-		args.Input = callCmd.Args()[1]
+		args.AgentURL = callArgs[0]  // Agent ID
+		args.Input = callArgs[1]     // Prompt
+		args.ServerURL = *callServer // Server URL from --server flag
 		args.Token = *callToken
 		args.Stream = *callStream
+		args.ConfigFile = *callConfig
+		args.APIKey = *callAPIKey
+		args.BaseURL = *callBaseURL
+		args.Model = *callModel
+		args.Tools = *callTools
 
 	case "chat":
+		// Parse remaining args
+		// Note: Go's flag package requires flags BEFORE positional arguments
 		_ = chatCmd.Parse(os.Args[2:])
-		if len(chatCmd.Args()) < 1 {
-			fatalf("Usage: hector chat <agent> [--server URL]")
+
+		// Get non-flag arguments (agent ID)
+		chatArgs := chatCmd.Args()
+		if len(chatArgs) < 1 {
+			fatalf("Usage: hector chat [OPTIONS] <agent>\nNote: Flags must come before the agent name")
 		}
+
 		args.Command = CommandChat
-		args.AgentURL = resolveAgentURL(chatCmd.Args()[0], *chatServer)
+		args.AgentURL = chatArgs[0]  // Agent ID (first non-flag arg)
+		args.ServerURL = *chatServer // Server URL from --server flag
 		args.Token = *chatToken
+		args.ConfigFile = *chatConfig
+		args.APIKey = *chatAPIKey
+		args.BaseURL = *chatBaseURL
+		args.Model = *chatModel
+		args.Tools = *chatTools
 
 	case "help", "--help", "-h":
 		args.Command = CommandHelp
@@ -229,26 +273,17 @@ func executeServeCommand(args *CLIArgs) {
 		}
 	}
 
-	// Check if config file exists
-	var hectorConfig *config.Config
-	if _, err := os.Stat(args.ConfigFile); os.IsNotExist(err) {
-		// Zero-config mode - use CLI flags to create config
-		if args.Debug {
-			fmt.Println("🔧 No config file found, entering zero-config mode")
-		}
+	// Load or create configuration using unified function
+	hectorConfig, err := loadConfigFromArgsOrFile(args, true)
+	if err != nil {
+		fatalf("Failed to load configuration: %v", err)
+	}
 
-		opts := config.ZeroConfigOptions{
-			Model:         args.Model,
-			EnableTools:   args.Tools,
-			MCPURL:        args.MCPURL,
-			DocsFolder:    args.DocsFolder,
-			EmbedderModel: args.EmbedderModel,
-			VectorDB:      args.VectorDB,
-		}
-
-		hectorConfig = config.CreateZeroConfig(opts)
-
-		if args.Debug {
+	// Print debug info if requested
+	if args.Debug {
+		isZeroConfig := !fileExists(args.ConfigFile) && args.ConfigFile == defaultConfigFile
+		if isZeroConfig {
+			fmt.Println("🔧 Zero-config mode")
 			fmt.Printf("  Model: %s\n", args.Model)
 			if args.Tools {
 				fmt.Println("  Tools: Enabled (all local tools)")
@@ -257,24 +292,11 @@ func executeServeCommand(args *CLIArgs) {
 				fmt.Printf("  MCP: %s\n", args.MCPURL)
 			}
 			if args.DocsFolder != "" {
-				fmt.Printf("  Docs: %s (embedder: %s, vectordb: %s)\n",
-					args.DocsFolder, args.EmbedderModel, args.VectorDB)
+				fmt.Printf("  Docs: %s\n", args.DocsFolder)
 			}
+		} else {
+			fmt.Printf("📄 Loaded config from: %s\n", args.ConfigFile)
 		}
-	} else {
-		// Load configuration from file
-		hectorConfig, err = config.LoadConfig(args.ConfigFile)
-		if err != nil {
-			fatalf("Failed to load config: %v", err)
-		}
-	}
-
-	// Set defaults
-	hectorConfig.SetDefaults()
-
-	// Validate configuration
-	if err := hectorConfig.Validate(); err != nil {
-		fatalf("Invalid configuration: %v", err)
 	}
 
 	// Create component manager
@@ -530,116 +552,133 @@ USAGE:
 
 COMMANDS:
   serve              Start A2A server to host agents
-  list               List available agents from A2A server
+  list               List available agents
   info <agent>       Get detailed agent information
   call <agent> "..."  Execute a task on an agent
   chat <agent>       Start interactive chat with an agent
   help               Show this help message
   version            Show version information
 
-SERVER MODE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EXECUTION MODES:
+
+  Direct Mode (default - no server needed)
+    Commands run in-process with local agent execution.
+    Fast, simple, perfect for development and experimentation.
+
+  Server Mode (with --server flag)
+    Commands communicate via A2A protocol with a remote server.
+    Use for production, multi-agent systems, or shared deployments.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SERVER HOSTING:
   hector serve [options]
     --config FILE            Configuration file (default: hector.yaml)
     --debug                  Enable debug output
     
   Zero-Config Mode (when hector.yaml doesn't exist):
-    --model MODEL            Ollama model (default: llama3.2:3b)
+    --api-key KEY            OpenAI API key (or set OPENAI_API_KEY env var) [REQUIRED]
+    --base-url URL           OpenAI API base URL (default: https://api.openai.com/v1)
+    --model MODEL            OpenAI model (default: gpt-4o-mini)
     --tools                  Enable all local tools (file, command execution)
     --mcp URL                MCP server URL for tool integration
-    --docs FOLDER            Document store folder (enables RAG)
-    --embedder-model MODEL   Embedder model (default: nomic-embed-text)
-    --vectordb URL           Vector DB connection (default: http://localhost:6333)
+    --docs FOLDER            Document store folder (requires additional config)
 
-CLIENT MODE:
-  hector list [options]
-    --server URL     A2A server URL (default: localhost:8080)
-    --token TOKEN    Authentication token
-
-  hector info <agent> [options]
-    --server URL     A2A server URL (default: localhost:8080)
-    --token TOKEN    Authentication token
-
+DIRECT MODE (In-Process Execution):
   hector call <agent> "prompt" [options]
-    --server URL     A2A server URL (default: localhost:8080)
-    --token TOKEN    Authentication token
-    --stream BOOL    Enable streaming (default: true, use --stream=false to disable)
+    --config FILE            Configuration file (default: hector.yaml)
+    --api-key KEY            OpenAI API key for zero-config [REQUIRED if no config]
+    --base-url URL           OpenAI API base URL (default: https://api.openai.com/v1)
+    --model MODEL            OpenAI model for zero-config (default: gpt-4o-mini)
+    --tools                  Enable tools for zero-config
+    --stream BOOL            Enable streaming (default: true)
 
   hector chat <agent> [options]
-    --server URL     A2A server URL (default: localhost:8080)
-    --token TOKEN    Authentication token
+    --config FILE            Configuration file
+    --api-key KEY            OpenAI API key for zero-config [REQUIRED if no config]
+    --base-url URL           OpenAI API base URL
+    --model MODEL            OpenAI model for zero-config
+    --tools                  Enable tools for zero-config
 
-AGENT SHORTCUTS:
-  You can specify agents in two ways:
+  hector list [options]
+    --config FILE            Configuration file
 
-  1. Agent ID (shorthand):
-     $ hector call my_agent "prompt"
-     Constructs: http://localhost:8080/agents/my_agent
+  hector info <agent> [options]
+    --config FILE            Configuration file
 
-  2. Full URL:
-     $ hector call http://example.com:8080/agents/my_agent "prompt"
-     Uses the URL as-is
+SERVER MODE (A2A Protocol):
+  hector call <agent> "prompt" --server URL [options]
+    --server URL             A2A server URL (enables server mode)
+    --token TOKEN            Authentication token
+    --stream BOOL            Enable streaming (default: true)
 
-  Use --server to change the default server for shorthand notation:
-     $ hector call --server http://localhost:8081 my_agent "prompt"
-     Constructs: http://localhost:8081/agents/my_agent
+  hector chat <agent> --server URL [options]
+    --server URL             A2A server URL (enables server mode)
+    --token TOKEN            Authentication token
+
+  hector list --server URL [options]
+    --server URL             A2A server URL (enables server mode)
+    --token TOKEN            Authentication token
+
+  hector info <agent> --server URL [options]
+    --server URL             A2A server URL (enables server mode)
+    --token TOKEN            Authentication token
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 EXAMPLES:
-  # Start server with config file
-  $ hector serve --config hector.yaml
-  
-  # Start server in zero-config mode (no hector.yaml needed)
-  $ hector serve
-  
-  # Zero-config with different model
-  $ hector serve --model llama3.2:1b
-  
-  # Zero-config with all local tools enabled
-  $ hector serve --tools
-  
-  # Zero-config with MCP integration
-  $ hector serve --mcp https://mcp.example.com
-  
-  # Zero-config with document store (RAG)
-  $ hector serve --docs ./my-docs
-  
-  # Zero-config with custom embedder and vector DB
-  $ hector serve --docs ./my-docs --embedder-model all-minilm --vectordb http://localhost:6333
 
-  # List agents from local server (default)
-  $ hector list
+  Direct Mode (Quick & Simple):
+  ─────────────────────────────
+  # Quick test with zero-config (API key from environment)
+  $ export OPENAI_API_KEY=sk-...
+  $ hector call assistant "what is 2+2?"
 
-  # List agents from remote server
-  $ hector list --server https://agents.example.com
+  # With API key as flag
+  $ hector call assistant "hello" --api-key sk-...
 
-  # Get agent info (shorthand)
-  $ hector info my_agent
+  # With tools enabled
+  $ hector call --api-key sk-... --tools assistant "list files"
 
-  # Get agent info (full URL)
-  $ hector info http://localhost:8080/agents/my_agent
+  # With custom model
+  $ hector call --api-key sk-... --model gpt-4 assistant "complex task"
 
-  # Call agent on default server (localhost:8080)
-  $ hector call my_agent "Analyze competitors"
+  # With config file
+  $ hector call researcher "analyze data" --config agents.yaml
 
-  # Call agent on custom server
-  $ hector call --server http://localhost:8081 my_agent "Analyze competitors"
+  # Interactive chat
+  $ export OPENAI_API_KEY=sk-...
+  $ hector chat assistant
 
-  # Call agent with full URL (ignores --server flag)
-  $ hector call http://example.com/agents/my_agent "Analyze competitors"
+  # List agents from config
+  $ hector list --config agents.yaml
 
-  # Interactive chat with shorthand
-  $ hector chat my_agent
+  Server Mode (Production):
+  ──────────────────────────
+  # Start server
+  $ hector serve --config agents.yaml
 
-  # Interactive chat on custom server
-  $ hector chat --server https://agents.example.com my_agent
+  # Connect to server
+  $ hector call assistant "hello" --server localhost:8080
+
+  # Connect to remote server
+  $ hector call assistant "hello" --server https://agents.example.com
+
+  # Interactive chat with server
+  $ hector chat assistant --server localhost:8080
+
+  # List server agents
+  $ hector list --server localhost:8080
 
   # With authentication
-  $ hector call my_agent "prompt" --token "your-bearer-token"
+  $ hector call assistant "prompt" --server https://prod.example.com --token abc123
 
-  # Disable streaming
-  $ hector call my_agent "prompt" --stream=false
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ENVIRONMENT VARIABLES:
-  HECTOR_SERVER    Default A2A server URL (overrides localhost:8080)
+  HECTOR_SERVER    Default A2A server URL
   HECTOR_TOKEN     Default authentication token
 
 For more information: https://github.com/kadirpekel/hector
