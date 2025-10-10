@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 
 	"github.com/kadirpekel/hector/pkg/a2a"
@@ -23,12 +24,22 @@ import (
 
 const (
 	defaultConfigFile = "hector.yaml"
-	version           = "0.1.0-a2a"
 
 	// CLI flag descriptions
 	serverFlagDesc = "A2A server URL (default: localhost:8080)"
 	tokenFlagDesc  = "Authentication token"
 )
+
+// getVersion returns the version from build info (Git tag) or "dev" if not available
+func getVersion() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		// If built with go install, this will be the Git tag
+		if info.Main.Version != "(devel)" && info.Main.Version != "" {
+			return info.Main.Version
+		}
+	}
+	return "dev"
+}
 
 // CommandType represents the type of command to execute
 type CommandType string
@@ -172,7 +183,7 @@ func parseArgs() *CLIArgs {
 		args.Command = CommandHelp
 
 	case "version", "--version", "-v":
-		fmt.Printf("Hector v%s (A2A-native)\n", version)
+		fmt.Printf("Hector %s\n", getVersion())
 		os.Exit(0)
 
 	default:
@@ -456,7 +467,7 @@ func initializeDocumentStores(hectorConfig *config.Config, componentManager *com
 
 func showHelp() {
 	fmt.Print(`
-Hector - A2A-Native AI Agent Platform
+Hector - AI Agent Platform
 
 USAGE:
   hector <command> [options]
