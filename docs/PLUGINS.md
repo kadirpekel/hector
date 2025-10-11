@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Plugin Development
-nav_order: 4
+nav_order: 6
 parent: Advanced
 description: "Build custom LLMs, databases, and tools via gRPC plugins"
 ---

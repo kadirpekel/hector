@@ -12,6 +12,7 @@ Ready to take Hector to the next level? These guides cover advanced patterns, in
 
 ## Multi-Agent & Integration
 
+- **[A2A Native Architecture](A2A_NATIVE_ARCHITECTURE)** - Deep A2A protocol integration and native implementation
 - **[Architecture](ARCHITECTURE)** - System design and multi-agent orchestration patterns
 - **[External Agents](EXTERNAL_AGENTS)** - Integrate remote A2A agents seamlessly
 - **[Plugin Development](PLUGINS)** - Build custom LLMs, databases, and tools

@@ -1,7 +1,7 @@
 ---
 layout: default
 title: External Agents
-nav_order: 2
+nav_order: 4
 parent: Advanced
 description: "Integrate external A2A agents with Hector seamlessly"
 ---

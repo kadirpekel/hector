@@ -287,6 +287,16 @@ Hector provides a comprehensive feature set through pure YAML configuration:
 - Task management - Create, get status, cancel tasks
 - Session support - Multi-turn conversations
 
+**🏆 Deep A2A Native Integration**
+- **Native Message Types** - Uses `a2a.Message` with rich content (`Parts[]`) throughout
+- **Native Tool Calls** - Uses `a2a.ToolCall` for seamless tool integration
+- **Native Task Management** - Uses `a2a.Task` for complete protocol compliance
+- **Zero Abstraction Layers** - No custom message types or compatibility layers
+- **True Protocol Compliance** - Every component uses A2A types directly
+- **Future-Ready** - Ready for multi-modal content, files, and rich data
+
+📖 **[Deep A2A Native Architecture →](https://gohector.dev/A2A_NATIVE_ARCHITECTURE)** - Technical deep dive into native A2A implementation
+
 ---
 
 ## Extend with Custom Tools in 5 Minutes

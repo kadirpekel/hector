@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Testing
-nav_order: 5
+nav_order: 7
 parent: Advanced
 description: "Testing practices and quality assurance for Hector agents"
 ---

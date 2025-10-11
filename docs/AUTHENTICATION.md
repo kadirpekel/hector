@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Authentication
-nav_order: 3
+nav_order: 5
 parent: Advanced
 description: "JWT token validation and security configuration"
 ---

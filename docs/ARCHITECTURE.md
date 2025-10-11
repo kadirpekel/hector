@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Architecture
-nav_order: 1
+nav_order: 2
 parent: Advanced
 description: "System design, multi-agent orchestration, and core components"
 ---
@@ -100,6 +100,8 @@ description: "System design, multi-agent orchestration, and core components"
 ### Multi-Agent Orchestration (A2A Protocol)
 
 Hector uses the **A2A (Agent-to-Agent) protocol** for multi-agent orchestration. All agents (native and external) are A2A-compliant peers that can be orchestrated through a supervisor agent. External agents can be integrated **declaratively via YAML configuration** without writing any code.
+
+**🏆 Deep A2A Native Integration:** Hector is built with genuine A2A-native architecture - every component uses A2A protocol types directly with zero abstraction layers. See [A2A Native Architecture](A2A_NATIVE_ARCHITECTURE.md) for technical details.
 
 **📖 Complete Multi-Agent Tutorial:** See our [LangChain vs Hector comparison](tutorials/MULTI_AGENT_RESEARCH_PIPELINE.md) for a detailed walkthrough of building a 3-agent research system, including direct code comparisons showing how Hector's YAML approach compares to traditional Python-based frameworks.
 

@@ -10,6 +10,8 @@ description: "100% A2A specification compliance details and implementation"
 
 Hector is a **100% A2A native agent platform** implementing the [Agent-to-Agent (A2A) Protocol specification](https://a2a-protocol.org/latest/specification/). This document describes how Hector implements each section of the A2A specification.
 
+**🏆 Deep A2A Native Integration:** For technical details on Hector's native A2A architecture, see [A2A Native Architecture](A2A_NATIVE_ARCHITECTURE.md).
+
 ## Table of Contents
 
 - [Overview](#overview)
