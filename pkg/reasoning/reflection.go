@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/llms"
 )
 
@@ -29,7 +30,7 @@ type ReflectionAnalysis struct {
 // When EnableStructuredReflection is true, uses LLM-based analysis; otherwise uses heuristics
 func AnalyzeToolResults(
 	ctx context.Context,
-	toolCalls []llms.ToolCall,
+	toolCalls []a2a.ToolCall,
 	results []ToolResult,
 	services AgentServices,
 ) (*ReflectionAnalysis, error) {
@@ -99,8 +100,8 @@ func AnalyzeToolResults(
 		}
 
 		// Make structured LLM call
-		messages := []llms.Message{
-			{Role: "user", Content: prompt},
+		messages := []a2a.Message{
+			a2a.CreateUserMessage(prompt),
 		}
 
 		text, _, _, err := llmService.GenerateStructured(messages, nil, config)
@@ -128,7 +129,7 @@ func AnalyzeToolResults(
 }
 
 // buildAnalysisPrompt creates the prompt for tool result analysis
-func buildAnalysisPrompt(toolCalls []llms.ToolCall, results []ToolResult) string {
+func buildAnalysisPrompt(toolCalls []a2a.ToolCall, results []ToolResult) string {
 	var prompt strings.Builder
 
 	prompt.WriteString("Analyze the following tool execution results and provide a structured assessment:\n\n")
@@ -156,7 +157,7 @@ Be strict: only mark tools as failed if they clearly indicate errors, not just e
 }
 
 // fallbackAnalysis provides heuristic-based analysis when structured output isn't available
-func fallbackAnalysis(toolCalls []llms.ToolCall, results []ToolResult) *ReflectionAnalysis {
+func fallbackAnalysis(toolCalls []a2a.ToolCall, results []ToolResult) *ReflectionAnalysis {
 	analysis := &ReflectionAnalysis{
 		SuccessfulTools: make([]string, 0),
 		FailedTools:     make([]string, 0),

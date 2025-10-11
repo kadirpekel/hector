@@ -1,19 +1,14 @@
 package llms
 
+import "github.com/kadirpekel/hector/pkg/a2a"
+
 // ============================================================================
 // COMMON FUNCTION CALLING TYPES
 // Shared across OpenAI and Anthropic providers
+// Uses A2A protocol Message types for true A2A-native architecture
 // ============================================================================
 
-// Message represents a single message in a conversation
-// This is the universal format for multi-turn conversations with tool support
-type Message struct {
-	Role       string     `json:"role"`                   // "user", "assistant", "system", "tool"
-	Content    string     `json:"content,omitempty"`      // Text content
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // Tool calls (from assistant)
-	ToolCallID string     `json:"tool_call_id,omitempty"` // Tool call ID (for tool role)
-	Name       string     `json:"name,omitempty"`         // Tool name (for tool role)
-}
+// Message type removed - use a2a.Message directly for true A2A-native architecture
 
 // ToolDefinition represents a tool/function that can be called
 type ToolDefinition struct {
@@ -22,21 +17,15 @@ type ToolDefinition struct {
 	Parameters  map[string]interface{} `json:"parameters"` // JSON Schema
 }
 
-// ToolCall represents a tool call requested by the LLM
-type ToolCall struct {
-	ID        string                 `json:"id"`        // Unique identifier for this call
-	Name      string                 `json:"name"`      // Tool name
-	Arguments map[string]interface{} `json:"arguments"` // Parsed arguments
-	RawArgs   string                 `json:"raw_args"`  // Original JSON string
-}
+// ToolCall type removed - use a2a.ToolCall directly for true A2A-native architecture
 
 // StreamChunk represents a chunk of streaming response
 type StreamChunk struct {
-	Type     string    // "text", "tool_call", "done", "error"
-	Text     string    // For text chunks
-	ToolCall *ToolCall // For tool_call chunks
-	Tokens   int       // For done chunks
-	Error    error     // For error chunks
+	Type     string        // "text", "tool_call", "done", "error"
+	Text     string        // For text chunks
+	ToolCall *a2a.ToolCall // For tool_call chunks
+	Tokens   int           // For done chunks
+	Error    error         // For error chunks
 }
 
 // ============================================================================

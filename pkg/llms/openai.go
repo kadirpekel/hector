@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
 )
@@ -207,7 +208,7 @@ func NewOpenAIProviderFromConfig(cfg *config.LLMProviderConfig) (*OpenAIProvider
 // ============================================================================
 
 // Generate generates a response with native function calling
-func (p *OpenAIProvider) Generate(messages []Message, tools []ToolDefinition) (string, []ToolCall, int, error) {
+func (p *OpenAIProvider) Generate(messages []a2a.Message, tools []ToolDefinition) (string, []a2a.ToolCall, int, error) {
 	request := p.buildRequest(messages, false, tools)
 
 	response, err := p.makeRequest(request)
@@ -233,7 +234,7 @@ func (p *OpenAIProvider) Generate(messages []Message, tools []ToolDefinition) (s
 	}
 
 	// Check if model wants to call tools
-	var toolCalls []ToolCall
+	var toolCalls []a2a.ToolCall
 	if len(choice.Message.ToolCalls) > 0 {
 		toolCalls, err = parseToolCalls(choice.Message.ToolCalls)
 		if err != nil {
@@ -246,7 +247,7 @@ func (p *OpenAIProvider) Generate(messages []Message, tools []ToolDefinition) (s
 }
 
 // GenerateStreaming generates a streaming response with function calling
-func (p *OpenAIProvider) GenerateStreaming(messages []Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
+func (p *OpenAIProvider) GenerateStreaming(messages []a2a.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	request := p.buildRequest(messages, true, tools)
 
 	outputCh := make(chan StreamChunk, 100)
@@ -290,7 +291,7 @@ func (p *OpenAIProvider) Close() error {
 // ============================================================================
 
 // GenerateStructured generates a response with structured output
-func (p *OpenAIProvider) GenerateStructured(messages []Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []ToolCall, int, error) {
+func (p *OpenAIProvider) GenerateStructured(messages []a2a.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []a2a.ToolCall, int, error) {
 	req := p.buildRequest(messages, false, tools)
 
 	// Add structured output configuration
@@ -334,7 +335,7 @@ func (p *OpenAIProvider) GenerateStructured(messages []Message, tools []ToolDefi
 	}
 
 	// Check if model wants to call tools
-	var toolCalls []ToolCall
+	var toolCalls []a2a.ToolCall
 	if len(choice.Message.ToolCalls) > 0 {
 		toolCalls, err = parseToolCalls(choice.Message.ToolCalls)
 		if err != nil {
@@ -346,7 +347,7 @@ func (p *OpenAIProvider) GenerateStructured(messages []Message, tools []ToolDefi
 }
 
 // GenerateStructuredStreaming generates a streaming response with structured output
-func (p *OpenAIProvider) GenerateStructuredStreaming(messages []Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
+func (p *OpenAIProvider) GenerateStructuredStreaming(messages []a2a.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, true, tools)
 
 	// Add structured output configuration
@@ -393,16 +394,16 @@ func (p *OpenAIProvider) SupportsStructuredOutput() bool {
 // ============================================================================
 
 // buildRequest builds an OpenAI request
-func (p *OpenAIProvider) buildRequest(messages []Message, stream bool, tools []ToolDefinition) OpenAIRequest {
+func (p *OpenAIProvider) buildRequest(messages []a2a.Message, stream bool, tools []ToolDefinition) OpenAIRequest {
 	// Convert universal Message to OpenAI-specific message format
 	openaiMessages := make([]OpenAIMessage, len(messages))
 	for i, msg := range messages {
 		// OpenAI requires content to always be present (even if empty string)
 		// Using pointer to ensure it's always included in JSON, never null
-		content := msg.Content
+		content := a2a.ExtractTextFromMessage(msg)
 
 		openaiMsg := OpenAIMessage{
-			Role:    msg.Role,
+			Role:    string(msg.Role),
 			Content: &content, // Always include content, even if empty
 		}
 
@@ -469,8 +470,8 @@ func convertToOpenAITools(tools []ToolDefinition) []OpenAITool {
 }
 
 // parseToolCalls extracts tool calls from OpenAI response
-func parseToolCalls(openaiToolCalls []OpenAIToolCall) ([]ToolCall, error) {
-	result := make([]ToolCall, len(openaiToolCalls))
+func parseToolCalls(openaiToolCalls []OpenAIToolCall) ([]a2a.ToolCall, error) {
+	result := make([]a2a.ToolCall, len(openaiToolCalls))
 
 	for i, tc := range openaiToolCalls {
 		// Parse arguments JSON string into map
@@ -479,7 +480,7 @@ func parseToolCalls(openaiToolCalls []OpenAIToolCall) ([]ToolCall, error) {
 			return nil, fmt.Errorf("failed to parse tool arguments: %w", err)
 		}
 
-		result[i] = ToolCall{
+		result[i] = a2a.ToolCall{
 			ID:        tc.ID,
 			Name:      tc.Function.Name,
 			Arguments: args,

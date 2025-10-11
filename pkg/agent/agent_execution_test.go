@@ -28,11 +28,11 @@ type MockLLMService struct {
 
 type mockLLMResponse struct {
 	text      string
-	toolCalls []llms.ToolCall
+	toolCalls []a2a.ToolCall
 	tokens    int
 }
 
-func (m *MockLLMService) Generate(messages []llms.Message, tools []llms.ToolDefinition) (string, []llms.ToolCall, int, error) {
+func (m *MockLLMService) Generate(messages []a2a.Message, tools []llms.ToolDefinition) (string, []a2a.ToolCall, int, error) {
 	if m.shouldError && m.callCount >= m.errorOnCall {
 		return "", nil, 0, fmt.Errorf("mock LLM error after %d calls", m.errorOnCall)
 	}
@@ -46,7 +46,7 @@ func (m *MockLLMService) Generate(messages []llms.Message, tools []llms.ToolDefi
 	return resp.text, resp.toolCalls, resp.tokens, nil
 }
 
-func (m *MockLLMService) GenerateStreaming(messages []llms.Message, tools []llms.ToolDefinition, outputCh chan<- string) ([]llms.ToolCall, int, error) {
+func (m *MockLLMService) GenerateStreaming(messages []a2a.Message, tools []llms.ToolDefinition, outputCh chan<- string) ([]a2a.ToolCall, int, error) {
 	m.streamingCalls++
 
 	if m.shouldError && m.callCount >= m.errorOnCall {
@@ -70,7 +70,7 @@ func (m *MockLLMService) GenerateStreaming(messages []llms.Message, tools []llms
 	return resp.toolCalls, resp.tokens, nil
 }
 
-func (m *MockLLMService) GenerateStructured(messages []llms.Message, tools []llms.ToolDefinition, cfg *llms.StructuredOutputConfig) (string, []llms.ToolCall, int, error) {
+func (m *MockLLMService) GenerateStructured(messages []a2a.Message, tools []llms.ToolDefinition, cfg *llms.StructuredOutputConfig) (string, []a2a.ToolCall, int, error) {
 	return m.Generate(messages, tools)
 }
 
@@ -98,7 +98,7 @@ func (m *MockToolService) AddTool(name string, result string, shouldError bool) 
 	}
 }
 
-func (m *MockToolService) ExecuteToolCall(ctx context.Context, toolCall llms.ToolCall) (string, error) {
+func (m *MockToolService) ExecuteToolCall(ctx context.Context, toolCall a2a.ToolCall) (string, error) {
 	m.executions = append(m.executions, toolCall.Name)
 
 	tool, exists := m.tools[toolCall.Name]
@@ -157,38 +157,35 @@ type MockPromptService struct {
 	buildCalls int
 }
 
-func (m *MockPromptService) BuildMessages(ctx context.Context, query string, slots reasoning.PromptSlots, conversation []llms.Message, additionalContext string) ([]llms.Message, error) {
+func (m *MockPromptService) BuildMessages(ctx context.Context, query string, slots reasoning.PromptSlots, conversation []a2a.Message, additionalContext string) ([]a2a.Message, error) {
 	m.buildCalls++
 
 	// Build a realistic message array
-	messages := []llms.Message{
-		{Role: "system", Content: "You are a helpful AI assistant"},
+	messages := []a2a.Message{
+		a2a.CreateTextMessage(a2a.MessageRoleSystem, "You are a helpful AI assistant"),
 	}
 
 	// Add conversation history
 	messages = append(messages, conversation...)
 
 	// Add current query
-	messages = append(messages, llms.Message{
-		Role:    "user",
-		Content: query,
-	})
+	messages = append(messages, a2a.CreateUserMessage(query))
 
 	return messages, nil
 }
 
 type MockHistoryService struct {
-	history   []llms.Message
+	history   []a2a.Message
 	addCalls  int
 	sessionID string
 }
 
-func (m *MockHistoryService) GetRecentHistory(sessionID string) ([]llms.Message, error) {
+func (m *MockHistoryService) GetRecentHistory(sessionID string) ([]a2a.Message, error) {
 	m.sessionID = sessionID
 	return m.history, nil
 }
 
-func (m *MockHistoryService) AddToHistory(sessionID string, msg llms.Message) error {
+func (m *MockHistoryService) AddToHistory(sessionID string, msg a2a.Message) error {
 	m.addCalls++
 	m.sessionID = sessionID
 	m.history = append(m.history, msg)
@@ -228,6 +225,10 @@ func NewMockAgentServices() *MockAgentServices {
 
 func (m *MockAgentServices) GetConfig() config.ReasoningConfig {
 	return m.config
+}
+
+func (m *MockAgentServices) Registry() reasoning.AgentRegistryService {
+	return nil // Mock doesn't need registry for these tests
 }
 
 func (m *MockAgentServices) LLM() reasoning.LLMService {
@@ -328,7 +329,7 @@ func TestAgent_ExecuteTask_WithToolCall(t *testing.T) {
 	services.llm.responses = []mockLLMResponse{
 		{
 			text: "Let me search for that",
-			toolCalls: []llms.ToolCall{
+			toolCalls: []a2a.ToolCall{
 				{Name: "search", Arguments: map[string]interface{}{"query": "test"}},
 			},
 			tokens: 10,
@@ -400,7 +401,7 @@ func TestAgent_ExecuteTask_ToolFailure(t *testing.T) {
 	services.llm.responses = []mockLLMResponse{
 		{
 			text: "Let me use the tool",
-			toolCalls: []llms.ToolCall{
+			toolCalls: []a2a.ToolCall{
 				{Name: "failing_tool", Arguments: map[string]interface{}{"input": "test"}},
 			},
 			tokens: 10,
@@ -463,10 +464,10 @@ func TestAgent_ExecuteTask_MaxIterations(t *testing.T) {
 
 	// LLM will keep suggesting tool calls
 	services.llm.responses = []mockLLMResponse{
-		{text: "Iteration 1", toolCalls: []llms.ToolCall{{Name: "endless_tool", Arguments: map[string]interface{}{}}}, tokens: 10},
-		{text: "Iteration 2", toolCalls: []llms.ToolCall{{Name: "endless_tool", Arguments: map[string]interface{}{}}}, tokens: 10},
-		{text: "Iteration 3", toolCalls: []llms.ToolCall{{Name: "endless_tool", Arguments: map[string]interface{}{}}}, tokens: 10},
-		{text: "Iteration 4", toolCalls: []llms.ToolCall{{Name: "endless_tool", Arguments: map[string]interface{}{}}}, tokens: 10},
+		{text: "Iteration 1", toolCalls: []a2a.ToolCall{{Name: "endless_tool", Arguments: map[string]interface{}{}}}, tokens: 10},
+		{text: "Iteration 2", toolCalls: []a2a.ToolCall{{Name: "endless_tool", Arguments: map[string]interface{}{}}}, tokens: 10},
+		{text: "Iteration 3", toolCalls: []a2a.ToolCall{{Name: "endless_tool", Arguments: map[string]interface{}{}}}, tokens: 10},
+		{text: "Iteration 4", toolCalls: []a2a.ToolCall{{Name: "endless_tool", Arguments: map[string]interface{}{}}}, tokens: 10},
 	}
 
 	agent := &Agent{

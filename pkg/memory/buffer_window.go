@@ -1,8 +1,8 @@
 package memory
 
 import (
+	"github.com/kadirpekel/hector/pkg/a2a"
 	hectorcontext "github.com/kadirpekel/hector/pkg/context"
-	"github.com/kadirpekel/hector/pkg/llms"
 )
 
 // BufferWindowStrategy implements simple LIFO memory management
@@ -39,23 +39,21 @@ func (s *BufferWindowStrategy) SetStatusNotifier(notifier StatusNotifier) {
 }
 
 // AddMessage adds a message to the session's memory
-func (s *BufferWindowStrategy) AddMessage(session *hectorcontext.ConversationHistory, msg llms.Message) error {
-	_, err := session.AddMessage(msg.Role, msg.Content, nil)
+func (s *BufferWindowStrategy) AddMessage(session *hectorcontext.ConversationHistory, msg a2a.Message) error {
+	textContent := a2a.ExtractTextFromMessage(msg)
+	_, err := session.AddMessage(string(msg.Role), textContent, nil)
 	return err
 }
 
 // GetMessages returns messages from the session within window size
-func (s *BufferWindowStrategy) GetMessages(session *hectorcontext.ConversationHistory) ([]llms.Message, error) {
+func (s *BufferWindowStrategy) GetMessages(session *hectorcontext.ConversationHistory) ([]a2a.Message, error) {
 	// Get recent messages within window size
 	contextMessages := session.GetRecentMessages(s.windowSize)
 
-	// Convert to llms.Message format
-	messages := make([]llms.Message, len(contextMessages))
+	// Convert to A2A Message format
+	messages := make([]a2a.Message, len(contextMessages))
 	for i, msg := range contextMessages {
-		messages[i] = llms.Message{
-			Role:    msg.Role,
-			Content: msg.Content,
-		}
+		messages[i] = a2a.CreateTextMessage(a2a.MessageRole(msg.Role), msg.Content)
 	}
 
 	return messages, nil

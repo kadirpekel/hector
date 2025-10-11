@@ -3,7 +3,7 @@ package reasoning
 import (
 	"fmt"
 
-	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/tools"
 )
 
@@ -30,7 +30,7 @@ func (s *ChainOfThoughtStrategy) PrepareIteration(iteration int, state *Reasonin
 
 // ShouldStop implements ReasoningStrategy
 // Stop when no tool calls OR when todos were complete and agent keeps looping
-func (s *ChainOfThoughtStrategy) ShouldStop(text string, toolCalls []llms.ToolCall, state *ReasoningState) bool {
+func (s *ChainOfThoughtStrategy) ShouldStop(text string, toolCalls []a2a.ToolCall, state *ReasoningState) bool {
 	// Stop if no tool calls (natural termination - this is the expected path)
 	if len(toolCalls) == 0 {
 		return true
@@ -72,7 +72,7 @@ func (s *ChainOfThoughtStrategy) allTodosComplete(todos []tools.TodoItem) bool {
 func (s *ChainOfThoughtStrategy) AfterIteration(
 	iteration int,
 	text string,
-	toolCalls []llms.ToolCall,
+	toolCalls []a2a.ToolCall,
 	results []ToolResult,
 	state *ReasoningState,
 ) error {
@@ -153,7 +153,7 @@ func (s *ChainOfThoughtStrategy) displayStructuredReflection(
 func (s *ChainOfThoughtStrategy) reflectOnProgress(
 	iteration int,
 	text string,
-	toolCalls []llms.ToolCall,
+	toolCalls []a2a.ToolCall,
 	results []ToolResult,
 	state *ReasoningState,
 ) {
@@ -210,7 +210,7 @@ func formatStringList(items []string) string {
 	return fmt.Sprintf("%d items", len(items))
 }
 
-func formatToolList(toolCalls []llms.ToolCall) string {
+func formatToolList(toolCalls []a2a.ToolCall) string {
 	if len(toolCalls) == 0 {
 		return "none"
 	}

@@ -11,9 +11,28 @@ import (
 	"github.com/kadirpekel/hector/pkg/tools"
 )
 
+// NewAgentServicesWithRegistry creates agent services with registry for orchestration
+func NewAgentServicesWithRegistry(agentConfig *config.AgentConfig, componentManager *component.ComponentManager, registry *AgentRegistry) (reasoning.AgentServices, error) {
+	// Create registry service (nil-safe)
+	var registryService reasoning.AgentRegistryService
+	if registry != nil {
+		registryService = NewRegistryService(registry)
+	} else {
+		registryService = NewNoOpRegistryService()
+	}
+
+	return newAgentServicesInternal(agentConfig, componentManager, registryService)
+}
+
 // NewAgentServices creates agent services with all dependencies wired up
 // Returns the configured agent services
+// Deprecated: Use NewAgentServicesWithRegistry instead
 func NewAgentServices(agentConfig *config.AgentConfig, componentManager *component.ComponentManager) (reasoning.AgentServices, error) {
+	return NewAgentServicesWithRegistry(agentConfig, componentManager, nil)
+}
+
+// newAgentServicesInternal is the internal implementation
+func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager *component.ComponentManager, registryService reasoning.AgentRegistryService) (reasoning.AgentServices, error) {
 	if agentConfig == nil {
 		return nil, fmt.Errorf("agent config cannot be nil")
 	}
@@ -184,6 +203,7 @@ func NewAgentServices(agentConfig *config.AgentConfig, componentManager *compone
 		contextService,
 		promptService,
 		historyService,
+		registryService,
 	)
 
 	return agentServices, nil
@@ -245,13 +265,16 @@ func NewAgentFactory(componentManager *component.ComponentManager) *AgentFactory
 }
 
 // CreateAgent creates a new agent with the given configuration
+// Registry will be nil for agents created through factory (typically tests)
+// For production multi-agent scenarios, use NewAgent directly with a registry
 func (f *AgentFactory) CreateAgent(agentConfig *config.AgentConfig) (*Agent, error) {
 	if agentConfig == nil {
 		return nil, fmt.Errorf("agent config cannot be nil")
 	}
 
 	// Single place for agent creation logic - delegates to NewAgent
-	return NewAgent(agentConfig, f.componentManager)
+	// Pass nil registry - orchestration won't be available
+	return NewAgent(agentConfig, f.componentManager, nil)
 }
 
 // CreateAgentWithServices creates an agent with pre-configured services (for testing)

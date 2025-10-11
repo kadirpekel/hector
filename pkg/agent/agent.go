@@ -57,15 +57,15 @@ type Agent struct {
 }
 
 // NewAgent creates a new agent with services
-func NewAgent(agentConfig *config.AgentConfig, componentMgr interface{}) (*Agent, error) {
+func NewAgent(agentConfig *config.AgentConfig, componentMgr interface{}, registry *AgentRegistry) (*Agent, error) {
 	// Type assert to get the component manager
 	compMgr, ok := componentMgr.(*component.ComponentManager)
 	if !ok {
 		return nil, fmt.Errorf("invalid component manager type")
 	}
 
-	// Create services
-	services, err := NewAgentServices(agentConfig, compMgr)
+	// Create services with registry
+	services, err := NewAgentServicesWithRegistry(agentConfig, compMgr, registry)
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +143,8 @@ func (a *Agent) ExecuteTask(ctx context.Context, task *a2a.Task) (*a2a.Task, err
 		return task, nil
 	}
 
+	// No special logic needed - strategies access registry via state.Services.AgentRegistry()
+
 	// Execute reasoning loop
 	streamCh, err := a.execute(ctx, userText, strategy)
 	if err != nil {
@@ -203,6 +205,8 @@ func (a *Agent) ExecuteTaskStreaming(ctx context.Context, task *a2a.Task) (<-cha
 	if err != nil {
 		return nil, err
 	}
+
+	// No special logic needed - strategies access registry via state.Services.AgentRegistry()
 
 	// Execute reasoning loop
 	hectorStream, err := a.execute(ctx, userText, strategy)
@@ -273,6 +277,14 @@ func (a *Agent) execute(
 		cfg := a.services.GetConfig()
 		state := reasoning.NewReasoningState()
 		state.Query = input // Original user query for strategies
+
+		// Pass agent context to state
+		state.CustomState["agent_name"] = a.name // Current agent name (for visibility filtering)
+
+		// Pass sub_agents config to state for supervisor strategies
+		if len(a.config.SubAgents) > 0 {
+			state.CustomState["sub_agents"] = a.config.SubAgents
+		}
 
 		// Restore conversation history from HistoryService (interactive mode)
 		historyService := a.services.History()
@@ -418,11 +430,8 @@ func (a *Agent) execute(
 			if len(toolCalls) > 0 {
 				// IMPORTANT: Add assistant message WITH tool_calls BEFORE adding tool results
 				// This is required by OpenAI/Anthropic/Gemini for proper tool calling round-trip
-				assistantMsg := llms.Message{
-					Role:      "assistant",
-					Content:   text,
-					ToolCalls: toolCalls,
-				}
+				assistantMsg := a2a.CreateTextMessage(a2a.MessageRoleAssistant, text)
+				assistantMsg.ToolCalls = toolCalls
 				state.Conversation = append(state.Conversation, assistantMsg)
 
 				results = a.executeTools(ctx, toolCalls, outputCh, cfg)
@@ -430,12 +439,9 @@ func (a *Agent) execute(
 				// Add tool results to conversation using standard role: "tool" format
 				// All supported providers (OpenAI, Anthropic, Gemini) support this format
 				for _, result := range results {
-					toolResultMsg := llms.Message{
-						Role:       "tool",
-						Content:    result.Content,
-						ToolCallID: result.ToolCallID,
-						Name:       result.ToolName,
-					}
+					toolResultMsg := a2a.CreateTextMessage(a2a.MessageRoleTool, result.Content)
+					toolResultMsg.ToolCallID = result.ToolCallID
+					toolResultMsg.Name = result.ToolName
 					state.Conversation = append(state.Conversation, toolResultMsg)
 				}
 			}
@@ -482,7 +488,7 @@ func (a *Agent) execute(
 			}
 		}
 
-		// Save to history (this now saves full llms.Message objects)
+		// Save to history (this now saves full a2a.Message objects)
 		a.saveToHistory(ctx, input, state, strategy, startTime)
 
 		if cfg.ShowDebugInfo {
@@ -531,11 +537,11 @@ func (a *Agent) isRetryableError(err error) bool {
 // callLLM calls the LLM service (streaming or non-streaming)
 func (a *Agent) callLLM(
 	ctx context.Context,
-	messages []llms.Message,
+	messages []a2a.Message,
 	toolDefs []llms.ToolDefinition,
 	outputCh chan<- string,
 	cfg config.ReasoningConfig,
-) (string, []llms.ToolCall, int, error) {
+) (string, []a2a.ToolCall, int, error) {
 	llm := a.services.LLM()
 
 	if cfg.EnableStreaming {
@@ -591,7 +597,7 @@ func (a *Agent) callLLM(
 // executeTools executes all tool calls sequentially
 func (a *Agent) executeTools(
 	ctx context.Context,
-	toolCalls []llms.ToolCall,
+	toolCalls []a2a.ToolCall,
 	outputCh chan<- string,
 	cfg config.ReasoningConfig,
 ) []reasoning.ToolResult {
@@ -701,11 +707,8 @@ func (a *Agent) saveToHistory(
 	}
 
 	// Add user's input message to conversation (if not already there)
-	if len(state.Conversation) == 0 || state.Conversation[len(state.Conversation)-1].Role != "user" {
-		userMsg := llms.Message{
-			Role:    "user",
-			Content: input,
-		}
+	if len(state.Conversation) == 0 || state.Conversation[len(state.Conversation)-1].Role != a2a.MessageRoleUser {
+		userMsg := a2a.CreateUserMessage(input)
 		state.Conversation = append(state.Conversation, userMsg)
 	}
 
@@ -714,14 +717,11 @@ func (a *Agent) saveToHistory(
 	if finalResponse != "" {
 		// Check if the last message is already an assistant message
 		// (it would have been added in-loop if there were tool calls in the final iteration)
-		lastIsAssistant := len(state.Conversation) > 0 && state.Conversation[len(state.Conversation)-1].Role == "assistant"
+		lastIsAssistant := len(state.Conversation) > 0 && state.Conversation[len(state.Conversation)-1].Role == a2a.MessageRoleAssistant
 
 		if !lastIsAssistant {
 			// Final iteration had no tool calls - add the response message here
-			assistantMsg := llms.Message{
-				Role:    "assistant",
-				Content: finalResponse,
-			}
+			assistantMsg := a2a.CreateTextMessage(a2a.MessageRoleAssistant, finalResponse)
 			state.Conversation = append(state.Conversation, assistantMsg)
 		}
 	}
@@ -745,9 +745,10 @@ func (a *Agent) saveToHistory(
 		msg := state.Conversation[i]
 
 		// Only save user/assistant messages with content
-		if msg.Role == "user" || msg.Role == "assistant" {
+		if msg.Role == a2a.MessageRoleUser || msg.Role == a2a.MessageRoleAssistant {
 			// Skip messages with empty content (e.g., when LLM calls tool without preamble)
-			if msg.Content != "" {
+			textContent := a2a.ExtractTextFromMessage(msg)
+			if textContent != "" {
 				err := history.AddToHistory(sessionID, msg)
 				if err != nil {
 					log.Printf("⚠️  Failed to add message to history: %v", err)

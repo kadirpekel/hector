@@ -1,8 +1,8 @@
 package memory
 
 import (
+	"github.com/kadirpekel/hector/pkg/a2a"
 	hectorcontext "github.com/kadirpekel/hector/pkg/context"
-	"github.com/kadirpekel/hector/pkg/llms"
 )
 
 // StatusNotifier is a callback for sending status updates during operations
@@ -17,10 +17,10 @@ type WorkingMemoryStrategy interface {
 
 	// AddMessage adds a message to the session's memory
 	// May trigger operations like summarization depending on strategy
-	AddMessage(session *hectorcontext.ConversationHistory, msg llms.Message) error
+	AddMessage(session *hectorcontext.ConversationHistory, msg a2a.Message) error
 
 	// GetMessages returns messages from the session within the strategy's constraints
-	GetMessages(session *hectorcontext.ConversationHistory) ([]llms.Message, error)
+	GetMessages(session *hectorcontext.ConversationHistory) ([]a2a.Message, error)
 
 	// SetStatusNotifier sets a callback for status notifications
 	// Used to inform users about background operations like summarization

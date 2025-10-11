@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/databases"
 	"github.com/kadirpekel/hector/pkg/embedders"
@@ -402,13 +403,14 @@ type llmPluginBridge struct {
 	adapter *plugingrpc.LLMPluginAdapter
 }
 
-func (b *llmPluginBridge) Generate(messages []llms.Message, tools []llms.ToolDefinition) (text string, toolCalls []llms.ToolCall, tokens int, err error) {
-	// Convert llms.Message to pb.Message
+func (b *llmPluginBridge) Generate(messages []a2a.Message, tools []llms.ToolDefinition) (text string, toolCalls []a2a.ToolCall, tokens int, err error) {
+	// Convert a2a.Message to pb.Message
 	pbMessages := make([]*plugingrpc.Message, len(messages))
 	for i, msg := range messages {
+		textContent := a2a.ExtractTextFromMessage(msg)
 		pbMessages[i] = &plugingrpc.Message{
-			Role:    msg.Role,
-			Content: msg.Content,
+			Role:    string(msg.Role),
+			Content: textContent,
 		}
 	}
 
@@ -430,8 +432,8 @@ func (b *llmPluginBridge) Generate(messages []llms.Message, tools []llms.ToolDef
 		return "", nil, 0, err
 	}
 
-	// Convert pb.ToolCall back to llms.ToolCall
-	llmToolCalls := make([]llms.ToolCall, len(response.ToolCalls))
+	// Convert pb.ToolCall back to a2a.ToolCall
+	llmToolCalls := make([]a2a.ToolCall, len(response.ToolCalls))
 	for i, tc := range response.ToolCalls {
 		// Deserialize arguments from JSON
 		var args map[string]interface{}
@@ -439,7 +441,7 @@ func (b *llmPluginBridge) Generate(messages []llms.Message, tools []llms.ToolDef
 			args = make(map[string]interface{})
 		}
 
-		llmToolCalls[i] = llms.ToolCall{
+		llmToolCalls[i] = a2a.ToolCall{
 			ID:        tc.Id,
 			Name:      tc.Name,
 			Arguments: args,
@@ -450,13 +452,14 @@ func (b *llmPluginBridge) Generate(messages []llms.Message, tools []llms.ToolDef
 	return response.Text, llmToolCalls, int(response.TokensUsed), nil
 }
 
-func (b *llmPluginBridge) GenerateStreaming(messages []llms.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
+func (b *llmPluginBridge) GenerateStreaming(messages []a2a.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
 	// Convert messages and tools
 	pbMessages := make([]*plugingrpc.Message, len(messages))
 	for i, msg := range messages {
+		textContent := a2a.ExtractTextFromMessage(msg)
 		pbMessages[i] = &plugingrpc.Message{
-			Role:    msg.Role,
-			Content: msg.Content,
+			Role:    string(msg.Role),
+			Content: textContent,
 		}
 	}
 

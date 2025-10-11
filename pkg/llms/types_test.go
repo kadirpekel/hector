@@ -2,6 +2,8 @@ package llms
 
 import (
 	"testing"
+
+	"github.com/kadirpekel/hector/pkg/a2a"
 )
 
 func TestConvertToolInfoToDefinition(t *testing.T) {
@@ -230,21 +232,16 @@ func TestConvertToolInfoToDefinition_InvalidParameters(t *testing.T) {
 }
 
 func TestMessage_Structure(t *testing.T) {
-	// Test Message struct creation and field access
-	msg := Message{
-		Role:       "user",
-		Content:    "Hello, world!",
-		ToolCalls:  []ToolCall{},
-		ToolCallID: "",
-		Name:       "",
-	}
+	// Test A2A Message struct creation and field access
+	msg := a2a.CreateUserMessage("Hello, world!")
 
-	if msg.Role != "user" {
+	if msg.Role != a2a.MessageRoleUser {
 		t.Errorf("Message.Role = %v, want user", msg.Role)
 	}
 
-	if msg.Content != "Hello, world!" {
-		t.Errorf("Message.Content = %v, want Hello, world!", msg.Content)
+	textContent := a2a.ExtractTextFromMessage(msg)
+	if textContent != "Hello, world!" {
+		t.Errorf("Message.Content = %v, want Hello, world!", textContent)
 	}
 
 	if len(msg.ToolCalls) != 0 {
@@ -281,8 +278,8 @@ func TestToolDefinition_Structure(t *testing.T) {
 }
 
 func TestToolCall_Structure(t *testing.T) {
-	// Test ToolCall struct creation and field access
-	toolCall := ToolCall{
+	// Test A2A ToolCall struct creation and field access
+	toolCall := a2a.ToolCall{
 		ID:        "call_123",
 		Name:      "test_tool",
 		Arguments: map[string]interface{}{"param1": "value1"},

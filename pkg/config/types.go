@@ -466,6 +466,7 @@ type AgentConfig struct {
 	Reasoning      ReasoningConfig `yaml:"reasoning,omitempty"`       // Reasoning configuration
 	Search         SearchConfig    `yaml:"search,omitempty"`          // Search configuration
 	Tools          []string        `yaml:"tools,omitempty"`           // Tool references (defined globally in tools: section)
+	SubAgents      []string        `yaml:"sub_agents,omitempty"`      // For supervisor agents: which agents can be orchestrated (empty = all)
 }
 
 // Validate implements Config.Validate for AgentConfig

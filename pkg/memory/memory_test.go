@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,10 +22,10 @@ func TestMemoryService_BufferWindow_BasicOperations(t *testing.T) {
 	sessionID := "test-session"
 
 	// Add messages
-	messages := []llms.Message{
-		{Role: "user", Content: "Message 1"},
-		{Role: "assistant", Content: "Response 1"},
-		{Role: "user", Content: "Message 2"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Message 1"),
+		a2a.CreateAssistantMessage("Response 1"),
+		a2a.CreateUserMessage("Message 2"),
 	}
 
 	for _, msg := range messages {
@@ -48,10 +48,7 @@ func TestMemoryService_BufferWindow_WindowEnforcement(t *testing.T) {
 
 	// Add 5 messages (exceeds window of 3)
 	for i := 1; i <= 5; i++ {
-		err := service.AddToHistory(sessionID, llms.Message{
-			Role:    "user",
-			Content: "Message " + string(rune('0'+i)),
-		})
+		err := service.AddToHistory(sessionID, a2a.CreateUserMessage("Message "+string(rune('0'+i))))
 		require.NoError(t, err)
 	}
 
@@ -68,11 +65,11 @@ func TestMemoryService_BufferWindow_SessionIsolation(t *testing.T) {
 	service := NewMemoryService(strategy, nil, LongTermConfig{})
 
 	// Add to session 1
-	service.AddToHistory("session1", llms.Message{Role: "user", Content: "S1-M1"})
-	service.AddToHistory("session1", llms.Message{Role: "user", Content: "S1-M2"})
+	service.AddToHistory("session1", a2a.CreateUserMessage("S1-M1"))
+	service.AddToHistory("session1", a2a.CreateUserMessage("S1-M2"))
 
 	// Add to session 2
-	service.AddToHistory("session2", llms.Message{Role: "user", Content: "S2-M1"})
+	service.AddToHistory("session2", a2a.CreateUserMessage("S2-M1"))
 
 	// Verify isolation
 	h1, _ := service.GetRecentHistory("session1")
@@ -91,10 +88,7 @@ func TestMemoryService_BufferWindow_Clear(t *testing.T) {
 
 	// Add messages
 	for i := 1; i <= 3; i++ {
-		service.AddToHistory(sessionID, llms.Message{
-			Role:    "user",
-			Content: "Message " + string(rune('0'+i)),
-		})
+		service.AddToHistory(sessionID, a2a.CreateUserMessage("Message "+string(rune('0'+i))))
 	}
 
 	// Clear
@@ -127,10 +121,7 @@ func TestMemoryService_SummaryBuffer_BasicOperations(t *testing.T) {
 	sessionID := "test-session"
 
 	// Add a message
-	err = service.AddToHistory(sessionID, llms.Message{
-		Role:    "user",
-		Content: "Hello, this is a test message.",
-	})
+	err = service.AddToHistory(sessionID, a2a.CreateUserMessage("Hello, this is a test message."))
 	require.NoError(t, err)
 
 	// Get history
@@ -156,10 +147,7 @@ func TestMemoryService_SummaryBuffer_Summarization(t *testing.T) {
 
 	// Add messages until we exceed threshold
 	for i := 1; i <= 15; i++ {
-		err := service.AddToHistory(sessionID, llms.Message{
-			Role:    "user",
-			Content: fmt.Sprintf("This is test message number %d with some content to increase token count", i),
-		})
+		err := service.AddToHistory(sessionID, a2a.CreateUserMessage(fmt.Sprintf("This is test message number %d with some content to increase token count", i)))
 		require.NoError(t, err)
 	}
 
@@ -187,12 +175,12 @@ func TestMemoryService_SummaryBuffer_SessionIsolation(t *testing.T) {
 	service := NewMemoryService(strategy, nil, LongTermConfig{})
 
 	// Add to different sessions
-	service.AddToHistory("session1", llms.Message{Role: "user", Content: "S1-M1"})
-	service.AddToHistory("session1", llms.Message{Role: "assistant", Content: "S1-R1"})
+	service.AddToHistory("session1", a2a.CreateUserMessage("S1-M1"))
+	service.AddToHistory("session1", a2a.CreateAssistantMessage("S1-R1"))
 
-	service.AddToHistory("session2", llms.Message{Role: "user", Content: "S2-M1"})
-	service.AddToHistory("session2", llms.Message{Role: "assistant", Content: "S2-R1"})
-	service.AddToHistory("session2", llms.Message{Role: "user", Content: "S2-M2"})
+	service.AddToHistory("session2", a2a.CreateUserMessage("S2-M1"))
+	service.AddToHistory("session2", a2a.CreateAssistantMessage("S2-R1"))
+	service.AddToHistory("session2", a2a.CreateUserMessage("S2-M2"))
 
 	// Verify each session has correct messages
 	h1, _ := service.GetRecentHistory("session1")
@@ -219,10 +207,7 @@ func TestMemoryService_SummaryBuffer_MinimumMessages(t *testing.T) {
 
 	// Add enough messages to trigger summarization
 	for i := 1; i <= 12; i++ {
-		err := service.AddToHistory(sessionID, llms.Message{
-			Role:    "user",
-			Content: fmt.Sprintf("Message number %d with content for token counting", i),
-		})
+		err := service.AddToHistory(sessionID, a2a.CreateUserMessage(fmt.Sprintf("Message number %d with content for token counting", i)))
 		require.NoError(t, err)
 	}
 
@@ -248,9 +233,9 @@ func TestMemoryService_GetSessionCount(t *testing.T) {
 	assert.Equal(t, 0, service.GetSessionCount())
 
 	// Add to different sessions
-	service.AddToHistory("A", llms.Message{Role: "user", Content: "Test"})
-	service.AddToHistory("B", llms.Message{Role: "user", Content: "Test"})
-	service.AddToHistory("A", llms.Message{Role: "user", Content: "Test"})
+	service.AddToHistory("A", a2a.CreateUserMessage("Test"))
+	service.AddToHistory("B", a2a.CreateUserMessage("Test"))
+	service.AddToHistory("A", a2a.CreateUserMessage("Test"))
 
 	// Should have 2 sessions
 	assert.Equal(t, 2, service.GetSessionCount())
@@ -263,7 +248,7 @@ func TestMemoryService_DefaultSessionID(t *testing.T) {
 	service := NewMemoryService(strategy, nil, LongTermConfig{})
 
 	// Empty string should default to "default"
-	err = service.AddToHistory("", llms.Message{Role: "user", Content: "Test"})
+	err = service.AddToHistory("", a2a.CreateUserMessage("Test"))
 	require.NoError(t, err)
 
 	history, err := service.GetRecentHistory("")
@@ -295,10 +280,7 @@ func TestMemoryService_StatusNotifier(t *testing.T) {
 
 	// Add messages to trigger summarization
 	for i := 1; i <= 15; i++ {
-		service.AddToHistory("test", llms.Message{
-			Role:    "user",
-			Content: fmt.Sprintf("Message %d with content to trigger summarization", i),
-		})
+		service.AddToHistory("test", a2a.CreateUserMessage(fmt.Sprintf("Message %d with content to trigger summarization", i)))
 	}
 
 	// Should have been notified
@@ -334,8 +316,8 @@ func TestMemoryService_LongTermMemory_BasicStorage(t *testing.T) {
 	sessionID := "test-session"
 
 	// Add messages
-	service.AddToHistory(sessionID, llms.Message{Role: "user", Content: "Test message 1"})
-	service.AddToHistory(sessionID, llms.Message{Role: "assistant", Content: "Response 1"})
+	service.AddToHistory(sessionID, a2a.CreateUserMessage("Test message 1"))
+	service.AddToHistory(sessionID, a2a.CreateAssistantMessage("Response 1"))
 
 	// Verify stored in long-term memory
 	assert.Equal(t, 2, db.GetStoredCount("test_collection"))
@@ -366,21 +348,21 @@ func TestMemoryService_LongTermMemory_Batching(t *testing.T) {
 	sessionID := "batch-session"
 
 	// Add 2 messages (should not flush yet)
-	service.AddToHistory(sessionID, llms.Message{Role: "user", Content: "Message 1"})
-	service.AddToHistory(sessionID, llms.Message{Role: "assistant", Content: "Response 1"})
+	service.AddToHistory(sessionID, a2a.CreateUserMessage("Message 1"))
+	service.AddToHistory(sessionID, a2a.CreateAssistantMessage("Response 1"))
 	assert.Equal(t, 0, db.GetStoredCount("batch_collection"), "Should not flush before batch size")
 
 	// Add 3rd message (should flush)
-	service.AddToHistory(sessionID, llms.Message{Role: "user", Content: "Message 2"})
+	service.AddToHistory(sessionID, a2a.CreateUserMessage("Message 2"))
 	assert.Equal(t, 3, db.GetStoredCount("batch_collection"), "Should flush at batch size")
 
 	// Add 2 more (should not flush)
-	service.AddToHistory(sessionID, llms.Message{Role: "assistant", Content: "Response 2"})
-	service.AddToHistory(sessionID, llms.Message{Role: "user", Content: "Message 3"})
+	service.AddToHistory(sessionID, a2a.CreateAssistantMessage("Response 2"))
+	service.AddToHistory(sessionID, a2a.CreateUserMessage("Message 3"))
 	assert.Equal(t, 3, db.GetStoredCount("batch_collection"), "Should not flush before next batch")
 
 	// Add 3rd message (should flush again)
-	service.AddToHistory(sessionID, llms.Message{Role: "assistant", Content: "Response 3"})
+	service.AddToHistory(sessionID, a2a.CreateAssistantMessage("Response 3"))
 	assert.Equal(t, 6, db.GetStoredCount("batch_collection"), "Should flush second batch")
 }
 
@@ -409,9 +391,9 @@ func TestMemoryService_LongTermMemory_FlushOnClear(t *testing.T) {
 	sessionID := "flush-session"
 
 	// Add messages (not enough to trigger flush)
-	err = service.AddToHistory(sessionID, llms.Message{Role: "user", Content: "Message 1"})
+	err = service.AddToHistory(sessionID, a2a.CreateUserMessage("Message 1"))
 	require.NoError(t, err)
-	err = service.AddToHistory(sessionID, llms.Message{Role: "user", Content: "Message 2"})
+	err = service.AddToHistory(sessionID, a2a.CreateUserMessage("Message 2"))
 	require.NoError(t, err)
 
 	count := db.GetStoredCount("flush_collection")
@@ -450,9 +432,9 @@ func TestMemoryService_LongTermMemory_AutoRecall(t *testing.T) {
 	sessionID := "recall-session"
 
 	// Add messages
-	service.AddToHistory(sessionID, llms.Message{Role: "user", Content: "What is Go programming language?"})
-	service.AddToHistory(sessionID, llms.Message{Role: "assistant", Content: "Go is a statically typed compiled language."})
-	service.AddToHistory(sessionID, llms.Message{Role: "user", Content: "Tell me more about Go"})
+	service.AddToHistory(sessionID, a2a.CreateUserMessage("What is Go programming language?"))
+	service.AddToHistory(sessionID, a2a.CreateAssistantMessage("Go is a statically typed compiled language."))
+	service.AddToHistory(sessionID, a2a.CreateUserMessage("Tell me more about Go"))
 
 	// Get history (should include auto-recalled messages)
 	history, err := service.GetRecentHistory(sessionID)
@@ -487,10 +469,10 @@ func TestMemoryService_LongTermMemory_StorageScope_Conversational(t *testing.T) 
 	sessionID := "scope-session"
 
 	// Add different types of messages
-	service.AddToHistory(sessionID, llms.Message{Role: "system", Content: "System message"})
-	service.AddToHistory(sessionID, llms.Message{Role: "user", Content: "User message"})
-	service.AddToHistory(sessionID, llms.Message{Role: "assistant", Content: "Assistant message"})
-	service.AddToHistory(sessionID, llms.Message{Role: "tool", Content: "Tool output"})
+	service.AddToHistory(sessionID, a2a.CreateTextMessage(a2a.MessageRoleSystem, "System message"))
+	service.AddToHistory(sessionID, a2a.CreateUserMessage("User message"))
+	service.AddToHistory(sessionID, a2a.CreateAssistantMessage("Assistant message"))
+	service.AddToHistory(sessionID, a2a.CreateTextMessage(a2a.MessageRoleTool, "Tool output"))
 
 	// Should only store user and assistant messages (2 messages)
 	assert.Equal(t, 2, db.GetStoredCount("scope_collection"), "Should only store conversational messages")
@@ -519,8 +501,8 @@ func TestMemoryService_LongTermMemory_SessionIsolation(t *testing.T) {
 	)
 
 	// Add to different sessions
-	service.AddToHistory("session1", llms.Message{Role: "user", Content: "Session 1 message"})
-	service.AddToHistory("session2", llms.Message{Role: "user", Content: "Session 2 message"})
+	service.AddToHistory("session1", a2a.CreateUserMessage("Session 1 message"))
+	service.AddToHistory("session2", a2a.CreateUserMessage("Session 2 message"))
 
 	// Verify both sessions have their messages in long-term memory
 	recalled1, _ := longTermStrategy.Recall("session1", "message", 10)
@@ -557,7 +539,7 @@ func TestMemoryService_LongTermMemory_Disabled(t *testing.T) {
 	sessionID := "no-longterm"
 
 	// Add messages (should not crash)
-	err = service.AddToHistory(sessionID, llms.Message{Role: "user", Content: "Test"})
+	err = service.AddToHistory(sessionID, a2a.CreateUserMessage("Test"))
 	require.NoError(t, err)
 
 	// Get history (should work normally)
@@ -591,8 +573,8 @@ func TestMemoryService_LongTermMemory_EmptyContent(t *testing.T) {
 	sessionID := "empty-session"
 
 	// Add messages with empty content
-	service.AddToHistory(sessionID, llms.Message{Role: "user", Content: ""})
-	service.AddToHistory(sessionID, llms.Message{Role: "user", Content: "Valid message"})
+	service.AddToHistory(sessionID, a2a.CreateUserMessage(""))
+	service.AddToHistory(sessionID, a2a.CreateUserMessage("Valid message"))
 
 	// Should only store non-empty message
 	assert.Equal(t, 1, db.GetStoredCount("empty_collection"), "Should skip empty messages")

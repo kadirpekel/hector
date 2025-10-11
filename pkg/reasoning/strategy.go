@@ -1,7 +1,7 @@
 package reasoning
 
 import (
-	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/a2a"
 )
 
 // ============================================================================
@@ -19,13 +19,13 @@ type ReasoningStrategy interface {
 
 	// ShouldStop determines if reasoning should stop
 	// Different strategies have different stopping conditions
-	ShouldStop(text string, toolCalls []llms.ToolCall, state *ReasoningState) bool
+	ShouldStop(text string, toolCalls []a2a.ToolCall, state *ReasoningState) bool
 
 	// AfterIteration is called after each iteration completes (OPTIONAL)
 	// Use for meta-cognition, reflection, goal tracking, etc.
 	// The core protocol (adding assistant + tool messages) is already handled by Agent
 	// This is for ADDITIONAL strategy-specific processing
-	AfterIteration(iteration int, text string, toolCalls []llms.ToolCall, results []ToolResult, state *ReasoningState) error
+	AfterIteration(iteration int, text string, toolCalls []a2a.ToolCall, results []ToolResult, state *ReasoningState) error
 
 	// GetContextInjection returns additional context to inject into LLM prompt
 	// Strategy-specific: ChainOfThought injects todos, StructuredReasoning might inject goals
@@ -59,7 +59,7 @@ type RequiredTool struct {
 
 // ToolResult represents the result of executing a tool
 type ToolResult struct {
-	ToolCall   llms.ToolCall
+	ToolCall   a2a.ToolCall
 	Content    string
 	Error      error
 	ToolCallID string

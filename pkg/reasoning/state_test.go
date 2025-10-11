@@ -3,7 +3,7 @@ package reasoning
 import (
 	"testing"
 
-	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/a2a"
 )
 
 // ============================================================================
@@ -76,15 +76,9 @@ func TestReasoningState_Conversation(t *testing.T) {
 	state := NewReasoningState()
 
 	// Add messages to conversation
-	state.Conversation = append(state.Conversation, llms.Message{
-		Role:    "user",
-		Content: "Hello",
-	})
+	state.Conversation = append(state.Conversation, a2a.CreateUserMessage("Hello"))
 
-	state.Conversation = append(state.Conversation, llms.Message{
-		Role:    "assistant",
-		Content: "Hi there",
-	})
+	state.Conversation = append(state.Conversation, a2a.CreateAssistantMessage("Hi there"))
 
 	if len(state.Conversation) != 2 {
 		t.Errorf("Expected 2 messages, got %d", len(state.Conversation))
@@ -119,12 +113,12 @@ func TestReasoningState_FirstIterationToolCalls(t *testing.T) {
 	state := NewReasoningState()
 
 	// Add tool calls
-	state.FirstIterationToolCalls = append(state.FirstIterationToolCalls, llms.ToolCall{
+	state.FirstIterationToolCalls = append(state.FirstIterationToolCalls, a2a.ToolCall{
 		ID:   "call-1",
 		Name: "search",
 	})
 
-	state.FirstIterationToolCalls = append(state.FirstIterationToolCalls, llms.ToolCall{
+	state.FirstIterationToolCalls = append(state.FirstIterationToolCalls, a2a.ToolCall{
 		ID:   "call-2",
 		Name: "write_file",
 	})

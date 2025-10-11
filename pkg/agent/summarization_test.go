@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/llms"
 )
 
@@ -13,17 +14,17 @@ import (
 // ============================================================================
 
 type MockLLM struct {
-	GenerateFunc func(messages []llms.Message, tools []llms.ToolDefinition) (string, []llms.ToolCall, int, error)
+	GenerateFunc func(messages []a2a.Message, tools []llms.ToolDefinition) (string, []a2a.ToolCall, int, error)
 }
 
-func (m *MockLLM) Generate(messages []llms.Message, tools []llms.ToolDefinition) (string, []llms.ToolCall, int, error) {
+func (m *MockLLM) Generate(messages []a2a.Message, tools []llms.ToolDefinition) (string, []a2a.ToolCall, int, error) {
 	if m.GenerateFunc != nil {
 		return m.GenerateFunc(messages, tools)
 	}
 	return "This is a test summary of the conversation.", nil, 10, nil
 }
 
-func (m *MockLLM) GenerateStreaming(messages []llms.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
+func (m *MockLLM) GenerateStreaming(messages []a2a.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
 	return nil, nil
 }
 
@@ -94,7 +95,7 @@ func TestNewSummarizationService(t *testing.T) {
 
 func TestSummarizationService_SummarizeConversation(t *testing.T) {
 	mockLLM := &MockLLM{
-		GenerateFunc: func(messages []llms.Message, tools []llms.ToolDefinition) (string, []llms.ToolCall, int, error) {
+		GenerateFunc: func(messages []a2a.Message, tools []llms.ToolDefinition) (string, []a2a.ToolCall, int, error) {
 			// Check that summarization prompt is used
 			if len(messages) < 2 {
 				t.Error("Expected system and user messages")
@@ -109,11 +110,11 @@ func TestSummarizationService_SummarizeConversation(t *testing.T) {
 		t.Fatalf("Failed to create service: %v", err)
 	}
 
-	messages := []llms.Message{
-		{Role: "user", Content: "What is AI?"},
-		{Role: "assistant", Content: "AI stands for Artificial Intelligence."},
-		{Role: "user", Content: "Tell me more."},
-		{Role: "assistant", Content: "AI involves creating intelligent machines."},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("What is AI?"),
+		a2a.CreateAssistantMessage("AI stands for Artificial Intelligence."),
+		a2a.CreateUserMessage("Tell me more."),
+		a2a.CreateAssistantMessage("AI involves creating intelligent machines."),
 	}
 
 	ctx := context.Background()
@@ -140,7 +141,7 @@ func TestSummarizationService_SummarizeConversation_EmptyMessages(t *testing.T) 
 	}
 
 	ctx := context.Background()
-	summary, err := service.SummarizeConversation(ctx, []llms.Message{})
+	summary, err := service.SummarizeConversation(ctx, []a2a.Message{})
 	if err != nil {
 		t.Errorf("SummarizeConversation() error = %v, want nil", err)
 	}
@@ -157,13 +158,13 @@ func TestSummarizationService_SummarizeWithRecentContext(t *testing.T) {
 		t.Fatalf("Failed to create service: %v", err)
 	}
 
-	messages := []llms.Message{
-		{Role: "user", Content: "Message 1"},
-		{Role: "assistant", Content: "Response 1"},
-		{Role: "user", Content: "Message 2"},
-		{Role: "assistant", Content: "Response 2"},
-		{Role: "user", Content: "Message 3"},
-		{Role: "assistant", Content: "Response 3"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Message 1"),
+		a2a.CreateAssistantMessage("Response 1"),
+		a2a.CreateUserMessage("Message 2"),
+		a2a.CreateAssistantMessage("Response 2"),
+		a2a.CreateUserMessage("Message 3"),
+		a2a.CreateAssistantMessage("Response 3"),
 	}
 
 	ctx := context.Background()
@@ -182,7 +183,8 @@ func TestSummarizationService_SummarizeWithRecentContext(t *testing.T) {
 	}
 
 	// Recent messages should be the last 2
-	if result.RecentMessages[0].Content != "Message 3" {
+	textContent := a2a.ExtractTextFromMessage(result.RecentMessages[0])
+	if textContent != "Message 3" {
 		t.Error("Recent messages should be the last ones")
 	}
 }
@@ -194,9 +196,9 @@ func TestSummarizationService_SummarizeWithRecentContext_AllRecent(t *testing.T)
 		t.Fatalf("Failed to create service: %v", err)
 	}
 
-	messages := []llms.Message{
-		{Role: "user", Content: "Message 1"},
-		{Role: "assistant", Content: "Response 1"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Message 1"),
+		a2a.CreateAssistantMessage("Response 1"),
 	}
 
 	ctx := context.Background()
@@ -224,22 +226,22 @@ func TestSummarizationService_ShouldSummarize(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		messages  []llms.Message
+		messages  []a2a.Message
 		maxTokens int
 		threshold float64
 		want      bool
 	}{
 		{
 			name:      "Empty messages",
-			messages:  []llms.Message{},
+			messages:  []a2a.Message{},
 			maxTokens: 1000,
 			threshold: 0.8,
 			want:      false,
 		},
 		{
 			name: "Below threshold",
-			messages: []llms.Message{
-				{Role: "user", Content: "Hi"},
+			messages: []a2a.Message{
+				a2a.CreateUserMessage("Hi"),
 			},
 			maxTokens: 1000,
 			threshold: 0.8,
@@ -247,8 +249,8 @@ func TestSummarizationService_ShouldSummarize(t *testing.T) {
 		},
 		{
 			name: "Above threshold",
-			messages: []llms.Message{
-				{Role: "user", Content: strings.Repeat("This is a long message. ", 100)},
+			messages: []a2a.Message{
+				a2a.CreateUserMessage(strings.Repeat("This is a long message. ", 100)),
 			},
 			maxTokens: 100,
 			threshold: 0.8,
@@ -276,8 +278,8 @@ func TestSummarizedHistory_ToMessages(t *testing.T) {
 			name: "With summary",
 			history: &SummarizedHistory{
 				Summary: "Previous conversation about AI",
-				RecentMessages: []llms.Message{
-					{Role: "user", Content: "Tell me more"},
+				RecentMessages: []a2a.Message{
+					a2a.CreateUserMessage("Tell me more"),
 				},
 			},
 			want: 2, // Summary message + 1 recent
@@ -286,8 +288,8 @@ func TestSummarizedHistory_ToMessages(t *testing.T) {
 			name: "Without summary",
 			history: &SummarizedHistory{
 				Summary: "",
-				RecentMessages: []llms.Message{
-					{Role: "user", Content: "Hello"},
+				RecentMessages: []a2a.Message{
+					a2a.CreateUserMessage("Hello"),
 				},
 			},
 			want: 1, // Just recent messages
@@ -306,7 +308,8 @@ func TestSummarizedHistory_ToMessages(t *testing.T) {
 				if got[0].Role != "system" {
 					t.Error("First message should be system when summary exists")
 				}
-				if !strings.Contains(got[0].Content, tt.history.Summary) {
+				textContent := a2a.ExtractTextFromMessage(got[0])
+				if !strings.Contains(textContent, tt.history.Summary) {
 					t.Error("System message should contain summary")
 				}
 			}
@@ -322,9 +325,9 @@ func TestSummarizationService_EstimateTokenSavings(t *testing.T) {
 	}
 
 	// Long messages that would benefit from summarization
-	messages := []llms.Message{
-		{Role: "user", Content: strings.Repeat("This is a long message. ", 20)},
-		{Role: "assistant", Content: strings.Repeat("This is a long response. ", 20)},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage(strings.Repeat("This is a long message. ", 20)),
+		a2a.CreateAssistantMessage(strings.Repeat("This is a long response. ", 20)),
 	}
 
 	summary := "User asked a question, assistant provided an answer."
@@ -344,9 +347,9 @@ func TestSummarizationService_formatConversation(t *testing.T) {
 		t.Fatalf("Failed to create service: %v", err)
 	}
 
-	messages := []llms.Message{
-		{Role: "user", Content: "Hello"},
-		{Role: "assistant", Content: "Hi there!"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
+		a2a.CreateAssistantMessage("Hi there!"),
 	}
 
 	formatted := service.formatConversation(messages)

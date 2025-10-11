@@ -2,6 +2,7 @@ package llms
 
 import (
 	"encoding/json"
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -169,8 +170,8 @@ func TestOpenAIProvider_Generate_Success(t *testing.T) {
 	}
 
 	// Test Generate
-	messages := []Message{
-		{Role: "user", Content: "Hello"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -255,8 +256,8 @@ func TestOpenAIProvider_Generate_WithTools(t *testing.T) {
 	}
 
 	// Test Generate with tools
-	messages := []Message{
-		{Role: "user", Content: "Use the test tool"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Use the test tool"),
 	}
 	tools := []ToolDefinition{
 		{
@@ -317,8 +318,8 @@ func TestOpenAIProvider_Generate_HTTPError(t *testing.T) {
 	}
 
 	// Test Generate with HTTP error
-	messages := []Message{
-		{Role: "user", Content: "Hello"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -351,8 +352,8 @@ func TestOpenAIProvider_Generate_InvalidJSON(t *testing.T) {
 	}
 
 	// Test Generate with invalid JSON
-	messages := []Message{
-		{Role: "user", Content: "Hello"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -418,8 +419,8 @@ func TestOpenAIProvider_GenerateStreaming_Success(t *testing.T) {
 	}
 
 	// Test GenerateStreaming
-	messages := []Message{
-		{Role: "user", Content: "Hello"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -474,8 +475,8 @@ func TestOpenAIProvider_GenerateStreaming_Error(t *testing.T) {
 	}
 
 	// Test GenerateStreaming with error
-	messages := []Message{
-		{Role: "user", Content: "Hello"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -549,8 +550,8 @@ func TestOpenAIProvider_WithCustomHTTPClient(t *testing.T) {
 	provider.httpClient = customClient
 
 	// Test Generate with custom client
-	messages := []Message{
-		{Role: "user", Content: "Hello"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 

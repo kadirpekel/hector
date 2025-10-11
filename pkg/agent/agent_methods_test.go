@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/llms"
 )
@@ -26,8 +27,8 @@ func TestAgent_callLLM_NonStreaming(t *testing.T) {
 		services: services,
 	}
 
-	messages := []llms.Message{
-		{Role: "user", Content: "test"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("test"),
 	}
 	toolDefs := []llms.ToolDefinition{}
 	outputCh := make(chan string, 10)
@@ -71,8 +72,8 @@ func TestAgent_callLLM_Streaming(t *testing.T) {
 		services: services,
 	}
 
-	messages := []llms.Message{
-		{Role: "user", Content: "test"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("test"),
 	}
 	toolDefs := []llms.ToolDefinition{}
 	outputCh := make(chan string, 100)
@@ -110,7 +111,7 @@ func TestAgent_callLLM_WithToolCalls(t *testing.T) {
 	services.llm.responses = []mockLLMResponse{
 		{
 			text: "Using tool",
-			toolCalls: []llms.ToolCall{
+			toolCalls: []a2a.ToolCall{
 				{Name: "test_tool", Arguments: map[string]interface{}{"arg": "value"}},
 			},
 			tokens: 20,
@@ -123,8 +124,8 @@ func TestAgent_callLLM_WithToolCalls(t *testing.T) {
 		services: services,
 	}
 
-	messages := []llms.Message{
-		{Role: "user", Content: "test"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("test"),
 	}
 	toolDefs := []llms.ToolDefinition{
 		{Name: "test_tool", Description: "Test tool"},
@@ -162,7 +163,7 @@ func TestAgent_executeTools_Success(t *testing.T) {
 		services: services,
 	}
 
-	toolCalls := []llms.ToolCall{
+	toolCalls := []a2a.ToolCall{
 		{Name: "test_tool", Arguments: map[string]interface{}{"input": "test"}},
 	}
 	outputCh := make(chan string, 100)
@@ -206,7 +207,7 @@ func TestAgent_executeTools_Failure(t *testing.T) {
 		services: services,
 	}
 
-	toolCalls := []llms.ToolCall{
+	toolCalls := []a2a.ToolCall{
 		{Name: "failing_tool", Arguments: map[string]interface{}{"input": "test"}},
 	}
 	outputCh := make(chan string, 100)
@@ -247,7 +248,7 @@ func TestAgent_executeTools_ContextCancellation(t *testing.T) {
 		services: services,
 	}
 
-	toolCalls := []llms.ToolCall{
+	toolCalls := []a2a.ToolCall{
 		{Name: "slow_tool", Arguments: map[string]interface{}{"input": "test"}},
 		{Name: "slow_tool", Arguments: map[string]interface{}{"input": "test2"}},
 	}
@@ -277,7 +278,7 @@ func TestAgent_executeTools_NoToolsShown(t *testing.T) {
 		services: services,
 	}
 
-	toolCalls := []llms.ToolCall{
+	toolCalls := []a2a.ToolCall{
 		{Name: "test_tool", Arguments: map[string]interface{}{"input": "test"}},
 	}
 	outputCh := make(chan string, 100)

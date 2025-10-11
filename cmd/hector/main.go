@@ -380,7 +380,7 @@ func executeServeCommand(args *CLIArgs) {
 		switch agentConfig.Type {
 		case "native", "":
 			// Native Hector agent - directly implements a2a.Agent
-			agentInstance, err = agent.NewAgent(&agentConfig, componentManager)
+			agentInstance, err = agent.NewAgent(&agentConfig, componentManager, agentRegistry)
 			if err != nil {
 				fmt.Printf("❌ Failed to create native agent '%s': %v\n", agentID, err)
 				continue
@@ -435,6 +435,24 @@ func executeServeCommand(args *CLIArgs) {
 				fmt.Printf("      → Source: %s\n", agentConfig.URL)
 			}
 			fmt.Printf("      → Endpoint: %s/agents/%s\n", serverCfg.BaseURL, agentID)
+		}
+	}
+
+	// ✅ Agent registry configured during agent creation
+	if args.Debug && len(agentRegistry.List()) > 0 {
+		supervisorCount := 0
+		for _, entry := range agentRegistry.List() {
+			if entry.Config.Reasoning.Engine == "supervisor" {
+				supervisorCount++
+				subAgentInfo := "all agents"
+				if len(entry.Config.SubAgents) > 0 {
+					subAgentInfo = fmt.Sprintf("%v", entry.Config.SubAgents)
+				}
+				fmt.Printf("  🧠 Supervisor '%s' can orchestrate: %s\n", entry.Name, subAgentInfo)
+			}
+		}
+		if supervisorCount > 0 {
+			fmt.Printf("\n🔗 Agent orchestration ready: %d supervisor(s) configured\n", supervisorCount)
 		}
 	}
 
@@ -689,7 +707,6 @@ For more information: https://github.com/kadirpekel/hector
 // ORCHESTRATION TOOLS REGISTRATION
 // ============================================================================
 
-// registerOrchestrationTools registers agent_call and other orchestration tools
 func registerOrchestrationTools(componentManager *component.ComponentManager, agentRegistry *agent.AgentRegistry, debug bool) error {
 	toolRegistry := componentManager.GetToolRegistry()
 

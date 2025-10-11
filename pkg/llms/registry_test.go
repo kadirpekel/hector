@@ -2,6 +2,8 @@ package llms
 
 import (
 	"testing"
+
+	"github.com/kadirpekel/hector/pkg/a2a"
 )
 
 func TestNewLLMRegistry(t *testing.T) {
@@ -197,11 +199,11 @@ type MockLLMProvider struct {
 	model string
 }
 
-func (m *MockLLMProvider) Generate(messages []Message, tools []ToolDefinition) (string, []ToolCall, int, error) {
-	return "Mock response", []ToolCall{}, 10, nil
+func (m *MockLLMProvider) Generate(messages []a2a.Message, tools []ToolDefinition) (string, []a2a.ToolCall, int, error) {
+	return "Mock response", []a2a.ToolCall{}, 10, nil
 }
 
-func (m *MockLLMProvider) GenerateStreaming(messages []Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
+func (m *MockLLMProvider) GenerateStreaming(messages []a2a.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	ch := make(chan StreamChunk, 1)
 	ch <- StreamChunk{Text: "Mock streaming response"}
 	close(ch)

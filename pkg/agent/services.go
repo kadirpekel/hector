@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/config"
 	hectorcontext "github.com/kadirpekel/hector/pkg/context"
 	"github.com/kadirpekel/hector/pkg/databases"
@@ -121,10 +122,10 @@ func (s *DefaultPromptService) BuildMessages(
 	ctx context.Context,
 	query string,
 	slots reasoning.PromptSlots,
-	currentToolConversation []llms.Message,
+	currentToolConversation []a2a.Message,
 	additionalContext string,
-) ([]llms.Message, error) {
-	messages := make([]llms.Message, 0)
+) ([]a2a.Message, error) {
+	messages := make([]a2a.Message, 0)
 
 	// Compose system prompt from slots (if provided) or use config
 	var systemPrompt string
@@ -136,18 +137,12 @@ func (s *DefaultPromptService) BuildMessages(
 	}
 
 	if systemPrompt != "" {
-		messages = append(messages, llms.Message{
-			Role:    "system",
-			Content: systemPrompt,
-		})
+		messages = append(messages, a2a.CreateTextMessage(a2a.MessageRoleSystem, systemPrompt))
 	}
 
 	// ⭐ INJECT STRATEGY-SPECIFIC CONTEXT (e.g., todos, goals)
 	if additionalContext != "" {
-		messages = append(messages, llms.Message{
-			Role:    "system",
-			Content: additionalContext,
-		})
+		messages = append(messages, a2a.CreateTextMessage(a2a.MessageRoleSystem, additionalContext))
 	}
 
 	// Add context if enabled
@@ -166,10 +161,7 @@ func (s *DefaultPromptService) BuildMessages(
 				}
 				contextText.WriteString(fmt.Sprintf("- %s\n", content))
 			}
-			messages = append(messages, llms.Message{
-				Role:    "system",
-				Content: contextText.String(),
-			})
+			messages = append(messages, a2a.CreateTextMessage(a2a.MessageRoleSystem, contextText.String()))
 		}
 	}
 
@@ -188,7 +180,7 @@ func (s *DefaultPromptService) BuildMessages(
 			return nil, fmt.Errorf("failed to get recent history: %w", err)
 		}
 
-		// Already in llms.Message format - append directly
+		// Already in a2a.Message format - append directly
 		messages = append(messages, historyMsgs...)
 	}
 
@@ -201,16 +193,14 @@ func (s *DefaultPromptService) BuildMessages(
 	needsUserQuery := true
 	if len(messages) > 0 {
 		lastMsg := messages[len(messages)-1]
-		if lastMsg.Role == "user" && lastMsg.Content == query {
+		lastMsgText := a2a.ExtractTextFromMessage(lastMsg)
+		if lastMsg.Role == a2a.MessageRoleUser && lastMsgText == query {
 			needsUserQuery = false
 		}
 	}
 
 	if needsUserQuery {
-		messages = append(messages, llms.Message{
-			Role:    "user",
-			Content: query,
-		})
+		messages = append(messages, a2a.CreateUserMessage(query))
 	}
 
 	return messages, nil
@@ -280,18 +270,18 @@ func NewLLMService(llmProvider llms.LLMProvider) reasoning.LLMService {
 
 // Generate implements reasoning.LLMService
 // Note: Non-streaming mode doesn't show tool labels in real-time (they're shown after execution)
-func (s *DefaultLLMService) Generate(messages []llms.Message, tools []llms.ToolDefinition) (string, []llms.ToolCall, int, error) {
+func (s *DefaultLLMService) Generate(messages []a2a.Message, tools []llms.ToolDefinition) (string, []a2a.ToolCall, int, error) {
 	return s.llmProvider.Generate(messages, tools)
 }
 
 // GenerateStreaming implements reasoning.LLMService
-func (s *DefaultLLMService) GenerateStreaming(messages []llms.Message, tools []llms.ToolDefinition, outputCh chan<- string) ([]llms.ToolCall, int, error) {
+func (s *DefaultLLMService) GenerateStreaming(messages []a2a.Message, tools []llms.ToolDefinition, outputCh chan<- string) ([]a2a.ToolCall, int, error) {
 	streamCh, err := s.llmProvider.GenerateStreaming(messages, tools)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	var toolCalls []llms.ToolCall
+	var toolCalls []a2a.ToolCall
 	var tokens int
 
 	for chunk := range streamCh {
@@ -316,7 +306,7 @@ func (s *DefaultLLMService) GenerateStreaming(messages []llms.Message, tools []l
 }
 
 // GenerateStructured implements reasoning.LLMService
-func (s *DefaultLLMService) GenerateStructured(messages []llms.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []llms.ToolCall, int, error) {
+func (s *DefaultLLMService) GenerateStructured(messages []a2a.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []a2a.ToolCall, int, error) {
 	// Check if provider supports structured output
 	structProvider, ok := s.llmProvider.(llms.StructuredOutputProvider)
 	if !ok {
@@ -366,7 +356,7 @@ func NewToolService(toolRegistry *tools.ToolRegistry, allowedTools []string) rea
 }
 
 // ExecuteToolCall executes a single tool call and returns the result
-func (s *DefaultToolService) ExecuteToolCall(ctx context.Context, toolCall llms.ToolCall) (string, error) {
+func (s *DefaultToolService) ExecuteToolCall(ctx context.Context, toolCall a2a.ToolCall) (string, error) {
 	if s.toolRegistry == nil {
 		return "", fmt.Errorf("tool registry not available")
 	}

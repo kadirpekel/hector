@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
 	hectorcontext "github.com/kadirpekel/hector/pkg/context"
-	"github.com/kadirpekel/hector/pkg/llms"
 )
 
 // MemoryService manages conversation memory across sessions
@@ -17,11 +17,11 @@ type MemoryService struct {
 	sessions       map[string]*hectorcontext.ConversationHistory
 
 	// Long-term memory batching
-	pendingBatch map[string][]llms.Message // sessionID -> messages
-	batchSize    int                       // Default: 1 (immediate storage)
-	storageScope StorageScope              // What messages to store
-	autoRecall   bool                      // Auto-inject memories before LLM calls
-	recallLimit  int                       // Max memories to recall
+	pendingBatch map[string][]a2a.Message // sessionID -> messages
+	batchSize    int                      // Default: 1 (immediate storage)
+	storageScope StorageScope             // What messages to store
+	autoRecall   bool                     // Auto-inject memories before LLM calls
+	recallLimit  int                      // Max memories to recall
 
 	mu sync.RWMutex
 }
@@ -48,7 +48,7 @@ func NewMemoryService(
 		workingMemory:  working,
 		longTermMemory: longTerm,
 		sessions:       make(map[string]*hectorcontext.ConversationHistory),
-		pendingBatch:   make(map[string][]llms.Message),
+		pendingBatch:   make(map[string][]a2a.Message),
 		batchSize:      longTermConfig.BatchSize,
 		storageScope:   longTermConfig.StorageScope,
 		autoRecall:     autoRecall,
@@ -57,7 +57,7 @@ func NewMemoryService(
 }
 
 // AddToHistory adds a message to memory (orchestrates working + long-term)
-func (s *MemoryService) AddToHistory(sessionID string, msg llms.Message) error {
+func (s *MemoryService) AddToHistory(sessionID string, msg a2a.Message) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -85,7 +85,7 @@ func (s *MemoryService) AddToHistory(sessionID string, msg llms.Message) error {
 }
 
 // GetRecentHistory returns messages (orchestrates working + long-term recall)
-func (s *MemoryService) GetRecentHistory(sessionID string) ([]llms.Message, error) {
+func (s *MemoryService) GetRecentHistory(sessionID string) ([]a2a.Message, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -95,7 +95,7 @@ func (s *MemoryService) GetRecentHistory(sessionID string) ([]llms.Message, erro
 
 	session, exists := s.sessions[sessionID]
 	if !exists {
-		return []llms.Message{}, nil
+		return []a2a.Message{}, nil
 	}
 
 	// 1. Get working memory (recent context)
@@ -177,14 +177,14 @@ func (s *MemoryService) flushBatch(sessionID string) error {
 }
 
 // shouldStoreLongTerm decides if a message should be stored in long-term memory
-func (s *MemoryService) shouldStoreLongTerm(msg llms.Message) bool {
+func (s *MemoryService) shouldStoreLongTerm(msg a2a.Message) bool {
 	switch s.storageScope {
 	case StorageScopeAll:
 		return true
 	case StorageScopeConversational:
 		return msg.Role == "user" || msg.Role == "assistant"
 	case StorageScopeSummariesOnly:
-		// Check if message has is_summary metadata (not currently supported in llms.Message)
+		// Check if message has is_summary metadata (not currently supported in a2a.Message)
 		// For now, treat as conversational
 		return msg.Role == "user" || msg.Role == "assistant"
 	default:
@@ -193,10 +193,10 @@ func (s *MemoryService) shouldStoreLongTerm(msg llms.Message) bool {
 }
 
 // getLastUserMessage extracts the last user message as a query for recall
-func (s *MemoryService) getLastUserMessage(messages []llms.Message) string {
+func (s *MemoryService) getLastUserMessage(messages []a2a.Message) string {
 	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" {
-			return messages[i].Content
+		if messages[i].Role == a2a.MessageRoleUser {
+			return a2a.ExtractTextFromMessage(messages[i])
 		}
 	}
 	return ""

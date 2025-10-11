@@ -3,6 +3,7 @@ package llms
 import (
 	"fmt"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/registry"
 )
@@ -13,19 +14,20 @@ import (
 
 // LLMProvider interface for language model generation with native function calling
 // All providers must support native function calling
+// Uses A2A protocol Message types for true A2A-native architecture
 type LLMProvider interface {
 	// Generate generates a response with native function calling support
-	// Takes a conversation history as an array of messages (proper multi-turn support)
+	// Takes a conversation history as an array of A2A messages (proper multi-turn support)
 	// Returns: text content, tool calls, tokens used, error
 	// - text: The LLM's text response (may be empty if only tool calls)
 	// - toolCalls: Structured tool calls from the LLM (may be empty if only text)
 	// - tokens: Total tokens used
-	Generate(messages []Message, tools []ToolDefinition) (text string, toolCalls []ToolCall, tokens int, err error)
+	Generate(messages []a2a.Message, tools []ToolDefinition) (text string, toolCalls []a2a.ToolCall, tokens int, err error)
 
 	// GenerateStreaming generates a streaming response with function calling
-	// Takes a conversation history as an array of messages (proper multi-turn support)
+	// Takes a conversation history as an array of A2A messages (proper multi-turn support)
 	// Returns a channel that streams text chunks and eventually tool calls
-	GenerateStreaming(messages []Message, tools []ToolDefinition) (<-chan StreamChunk, error)
+	GenerateStreaming(messages []a2a.Message, tools []ToolDefinition) (<-chan StreamChunk, error)
 
 	// GetModelName returns the model name
 	GetModelName() string
@@ -47,10 +49,12 @@ type StructuredOutputProvider interface {
 
 	// GenerateStructured generates a response with structured output
 	// config specifies the desired output format (JSON schema, enum, etc.)
-	GenerateStructured(messages []Message, tools []ToolDefinition, config *StructuredOutputConfig) (text string, toolCalls []ToolCall, tokens int, err error)
+	// Uses A2A protocol Message types for true A2A-native architecture
+	GenerateStructured(messages []a2a.Message, tools []ToolDefinition, config *StructuredOutputConfig) (text string, toolCalls []a2a.ToolCall, tokens int, err error)
 
 	// GenerateStructuredStreaming generates a streaming response with structured output
-	GenerateStructuredStreaming(messages []Message, tools []ToolDefinition, config *StructuredOutputConfig) (<-chan StreamChunk, error)
+	// Uses A2A protocol Message types for true A2A-native architecture
+	GenerateStructuredStreaming(messages []a2a.Message, tools []ToolDefinition, config *StructuredOutputConfig) (<-chan StreamChunk, error)
 
 	// SupportsStructuredOutput returns true if the provider supports structured output
 	SupportsStructuredOutput() bool

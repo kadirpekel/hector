@@ -3,6 +3,8 @@ package llms
 import (
 	"testing"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
+
 	"github.com/kadirpekel/hector/pkg/config"
 )
 
@@ -210,38 +212,38 @@ func TestGeminiProvider_ConvertMessages(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		messages []Message
+		messages []a2a.Message
 		wantLen  int
 	}{
 		{
 			name: "single user message",
-			messages: []Message{
-				{Role: "user", Content: "Hello"},
+			messages: []a2a.Message{
+				a2a.CreateUserMessage("Hello"),
 			},
 			wantLen: 1,
 		},
 		{
 			name: "user and assistant messages",
-			messages: []Message{
-				{Role: "user", Content: "Hello"},
-				{Role: "assistant", Content: "Hi there!"},
+			messages: []a2a.Message{
+				a2a.CreateUserMessage("Hello"),
+				a2a.CreateAssistantMessage("Hi there!"),
 			},
 			wantLen: 2,
 		},
 		{
 			name: "system message converts to user",
-			messages: []Message{
-				{Role: "system", Content: "You are helpful"},
-				{Role: "user", Content: "Hello"},
+			messages: []a2a.Message{
+				a2a.CreateTextMessage(a2a.MessageRoleSystem, "You are helpful"),
+				a2a.CreateUserMessage("Hello"),
 			},
 			wantLen: 2,
 		},
 		{
 			name: "with tool calls",
-			messages: []Message{
+			messages: []a2a.Message{
 				{
 					Role: "assistant",
-					ToolCalls: []ToolCall{
+					ToolCalls: []a2a.ToolCall{
 						{Name: "get_weather", Arguments: map[string]interface{}{"city": "NYC"}},
 					},
 				},

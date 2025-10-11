@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/llms"
 )
 
@@ -140,8 +141,8 @@ func ExtractGoals(
 	}
 
 	// Make structured LLM call
-	messages := []llms.Message{
-		{Role: "user", Content: prompt},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage(prompt),
 	}
 
 	text, _, _, err := llmService.GenerateStructured(messages, nil, config)

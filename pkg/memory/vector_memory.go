@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/databases"
 	"github.com/kadirpekel/hector/pkg/embedders"
-	"github.com/kadirpekel/hector/pkg/llms"
 )
 
 // VectorMemoryStrategy stores conversation messages in vector database for semantic recall
@@ -48,19 +48,20 @@ func (v *VectorMemoryStrategy) Name() string {
 
 // Store adds messages to long-term memory (batch operation)
 // Each message is stored as a separate vector document in Qdrant
-func (v *VectorMemoryStrategy) Store(sessionID string, messages []llms.Message) error {
+func (v *VectorMemoryStrategy) Store(sessionID string, messages []a2a.Message) error {
 	if len(messages) == 0 {
 		return nil
 	}
 
 	for i, msg := range messages {
 		// Skip messages with no content
-		if msg.Content == "" {
+		textContent := a2a.ExtractTextFromMessage(msg)
+		if textContent == "" {
 			continue
 		}
 
 		// Generate embedding
-		vector, err := v.embedder.Embed(msg.Content)
+		vector, err := v.embedder.Embed(textContent)
 		if err != nil {
 			return fmt.Errorf("failed to embed message %d: %w", i, err)
 		}
@@ -71,8 +72,8 @@ func (v *VectorMemoryStrategy) Store(sessionID string, messages []llms.Message) 
 		// Prepare metadata
 		metadata := map[string]interface{}{
 			"session_id":    sessionID,
-			"role":          msg.Role,
-			"content":       msg.Content, // Store content for retrieval
+			"role":          string(msg.Role),
+			"content":       textContent, // Store content for retrieval
 			"message_index": i,
 		}
 
@@ -88,9 +89,9 @@ func (v *VectorMemoryStrategy) Store(sessionID string, messages []llms.Message) 
 
 // Recall retrieves relevant context from long-term memory using semantic search
 // Filters by sessionID to ensure session isolation
-func (v *VectorMemoryStrategy) Recall(sessionID string, query string, limit int) ([]llms.Message, error) {
+func (v *VectorMemoryStrategy) Recall(sessionID string, query string, limit int) ([]a2a.Message, error) {
 	if query == "" {
-		return []llms.Message{}, nil
+		return []a2a.Message{}, nil
 	}
 
 	// Generate query embedding
@@ -109,7 +110,7 @@ func (v *VectorMemoryStrategy) Recall(sessionID string, query string, limit int)
 	}
 
 	// Convert search results to messages
-	messages := make([]llms.Message, 0, len(results))
+	messages := make([]a2a.Message, 0, len(results))
 	for _, result := range results {
 		// Extract role from metadata
 		role, ok := result.Metadata["role"].(string)
@@ -123,10 +124,7 @@ func (v *VectorMemoryStrategy) Recall(sessionID string, query string, limit int)
 			content = result.Content // Fallback to result content
 		}
 
-		messages = append(messages, llms.Message{
-			Role:    role,
-			Content: content,
-		})
+		messages = append(messages, a2a.CreateTextMessage(a2a.MessageRole(role), content))
 	}
 
 	return messages, nil

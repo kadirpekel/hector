@@ -160,8 +160,11 @@ type TaskError struct {
 
 // Message represents a message in a conversation
 type Message struct {
-	Role  MessageRole `json:"role"`  // "user" or "assistant"
-	Parts []Part      `json:"parts"` // Message content parts
+	Role       MessageRole `json:"role"`                   // "user", "assistant", "system", "tool"
+	Parts      []Part      `json:"parts"`                  // Message content parts
+	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`   // Tool calls (for assistant messages)
+	ToolCallID string      `json:"tool_call_id,omitempty"` // Tool call ID (for tool messages)
+	Name       string      `json:"name,omitempty"`         // Tool name (for tool messages)
 }
 
 // MessageRole represents the role of a message sender
@@ -170,7 +173,17 @@ type MessageRole string
 const (
 	MessageRoleUser      MessageRole = "user"
 	MessageRoleAssistant MessageRole = "assistant"
+	MessageRoleSystem    MessageRole = "system" // System prompt messages
+	MessageRoleTool      MessageRole = "tool"   // Tool result messages
 )
+
+// ToolCall represents a tool call in an A2A message
+type ToolCall struct {
+	ID        string                 `json:"id"`        // Unique identifier for this call
+	Name      string                 `json:"name"`      // Tool name
+	Arguments map[string]interface{} `json:"arguments"` // Parsed arguments
+	RawArgs   string                 `json:"raw_args"`  // Original JSON string
+}
 
 // ============================================================================
 // PART - Message Content Parts

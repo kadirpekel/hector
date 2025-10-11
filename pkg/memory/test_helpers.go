@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/a2a"
 )
 
 // ============================================================================
@@ -16,25 +16,23 @@ import (
 // DeterministicSummarizer provides predictable summarization for testing
 type DeterministicSummarizer struct {
 	CallCount    int
-	SummaryCalls [][]llms.Message // Track what was summarized
+	SummaryCalls [][]a2a.Message // Track what was summarized
 }
 
 // SummarizeConversation creates deterministic summaries
-func (d *DeterministicSummarizer) SummarizeConversation(ctx context.Context, messages []llms.Message) (string, error) {
+func (d *DeterministicSummarizer) SummarizeConversation(ctx context.Context, messages []a2a.Message) (string, error) {
 	d.CallCount++
 	d.SummaryCalls = append(d.SummaryCalls, messages)
 
 	// Create deterministic summary
 	var parts []string
 	for _, msg := range messages {
-		parts = append(parts, fmt.Sprintf("%s:%s", msg.Role, msg.Content[:min(10, len(msg.Content))]))
+		textContent := a2a.ExtractTextFromMessage(msg)
+		contentPreview := textContent
+		if len(textContent) > 10 {
+			contentPreview = textContent[:10]
+		}
+		parts = append(parts, fmt.Sprintf("%s:%s", string(msg.Role), contentPreview))
 	}
 	return fmt.Sprintf("SUMMARY#%d[%s]", d.CallCount, strings.Join(parts, ",")), nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

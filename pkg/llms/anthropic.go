@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
 )
@@ -162,7 +163,7 @@ func (p *AnthropicProvider) Close() error {
 }
 
 // Generate generates a response given conversation messages
-func (p *AnthropicProvider) Generate(messages []Message, tools []ToolDefinition) (string, []ToolCall, int, error) {
+func (p *AnthropicProvider) Generate(messages []a2a.Message, tools []ToolDefinition) (string, []a2a.ToolCall, int, error) {
 	request := p.buildRequest(messages, false, tools)
 
 	response, err := p.makeRequest(request)
@@ -178,7 +179,7 @@ func (p *AnthropicProvider) Generate(messages []Message, tools []ToolDefinition)
 
 	// Extract text and tool calls from content
 	var text string
-	var toolCalls []ToolCall
+	var toolCalls []a2a.ToolCall
 
 	for _, content := range response.Content {
 		if content.Type == "text" {
@@ -186,7 +187,7 @@ func (p *AnthropicProvider) Generate(messages []Message, tools []ToolDefinition)
 		} else if content.Type == "tool_use" {
 			// Convert to ToolCall
 			rawArgs, _ := json.Marshal(content.Input)
-			toolCalls = append(toolCalls, ToolCall{
+			toolCalls = append(toolCalls, a2a.ToolCall{
 				ID:        content.ID,
 				Name:      content.Name,
 				Arguments: content.Input,
@@ -199,7 +200,7 @@ func (p *AnthropicProvider) Generate(messages []Message, tools []ToolDefinition)
 }
 
 // GenerateStreaming generates a streaming response given conversation messages
-func (p *AnthropicProvider) GenerateStreaming(messages []Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
+func (p *AnthropicProvider) GenerateStreaming(messages []a2a.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	request := p.buildRequest(messages, true, tools)
 
 	outputCh := make(chan StreamChunk, 100)
@@ -219,7 +220,7 @@ func (p *AnthropicProvider) GenerateStreaming(messages []Message, tools []ToolDe
 }
 
 // buildRequest builds an Anthropic request with tool support
-func (p *AnthropicProvider) buildRequest(messages []Message, stream bool, tools []ToolDefinition) AnthropicRequest {
+func (p *AnthropicProvider) buildRequest(messages []a2a.Message, stream bool, tools []ToolDefinition) AnthropicRequest {
 	// Extract system prompt (Anthropic requires it in a separate field)
 	var systemPrompt string
 	anthropicMessages := make([]AnthropicMessage, 0, len(messages))
@@ -230,7 +231,7 @@ func (p *AnthropicProvider) buildRequest(messages []Message, stream bool, tools 
 			if systemPrompt != "" {
 				systemPrompt += "\n\n" // Concatenate multiple system messages
 			}
-			systemPrompt += msg.Content
+			systemPrompt += a2a.ExtractTextFromMessage(msg)
 			continue
 		}
 
@@ -242,7 +243,7 @@ func (p *AnthropicProvider) buildRequest(messages []Message, stream bool, tools 
 					{
 						Type:      "tool_result",
 						ToolUseID: msg.ToolCallID,
-						Content:   msg.Content,
+						Content:   a2a.ExtractTextFromMessage(msg),
 					},
 				},
 			})
@@ -252,10 +253,11 @@ func (p *AnthropicProvider) buildRequest(messages []Message, stream bool, tools 
 			contents := []AnthropicContent{}
 
 			// Add text content if present
-			if msg.Content != "" {
+			textContent := a2a.ExtractTextFromMessage(msg)
+			if textContent != "" {
 				contents = append(contents, AnthropicContent{
 					Type: "text",
-					Text: msg.Content,
+					Text: textContent,
 				})
 			}
 
@@ -276,8 +278,8 @@ func (p *AnthropicProvider) buildRequest(messages []Message, stream bool, tools 
 		} else {
 			// Regular user/assistant messages
 			anthropicMessages = append(anthropicMessages, AnthropicMessage{
-				Role:    msg.Role,
-				Content: msg.Content,
+				Role:    string(msg.Role),
+				Content: a2a.ExtractTextFromMessage(msg),
 			})
 		}
 	}
@@ -378,7 +380,7 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 	}
 
 	// Track tool calls being accumulated across deltas
-	toolCalls := make(map[int]*ToolCall) // index -> accumulated ToolCall
+	toolCalls := make(map[int]*a2a.ToolCall) // index -> accumulated ToolCall
 	var totalTokens int
 
 	// Read streaming response line by line (SSE format)
@@ -410,7 +412,7 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 			// New content block started (could be text or tool_use)
 			if streamResp.ContentBlock != nil && streamResp.ContentBlock.Type == "tool_use" {
 				// Initialize tool call accumulator
-				toolCalls[streamResp.Index] = &ToolCall{
+				toolCalls[streamResp.Index] = &a2a.ToolCall{
 					ID:        streamResp.ContentBlock.ID,
 					Name:      streamResp.ContentBlock.Name,
 					Arguments: make(map[string]interface{}),
@@ -480,13 +482,10 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 // ============================================================================
 
 // GenerateStructured generates a response with structured output
-func (p *AnthropicProvider) GenerateStructured(messages []Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []ToolCall, int, error) {
+func (p *AnthropicProvider) GenerateStructured(messages []a2a.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []a2a.ToolCall, int, error) {
 	// Apply prefill if configured (Anthropic-specific optimization)
 	if structConfig != nil && structConfig.Prefill != "" {
-		messages = append(messages, Message{
-			Role:    "assistant",
-			Content: structConfig.Prefill,
-		})
+		messages = append(messages, a2a.CreateAssistantMessage(structConfig.Prefill))
 	}
 
 	// Build system prompt with schema instructions
@@ -506,13 +505,10 @@ func (p *AnthropicProvider) GenerateStructured(messages []Message, tools []ToolD
 }
 
 // GenerateStructuredStreaming generates a streaming response with structured output
-func (p *AnthropicProvider) GenerateStructuredStreaming(messages []Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
+func (p *AnthropicProvider) GenerateStructuredStreaming(messages []a2a.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
 	// Apply prefill if configured
 	if structConfig != nil && structConfig.Prefill != "" {
-		messages = append(messages, Message{
-			Role:    "assistant",
-			Content: structConfig.Prefill,
-		})
+		messages = append(messages, a2a.CreateAssistantMessage(structConfig.Prefill))
 	}
 
 	// Build system prompt with schema instructions

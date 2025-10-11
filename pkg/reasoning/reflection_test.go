@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/config"
-	"github.com/kadirpekel/hector/pkg/llms"
 )
 
 func TestFallbackAnalysis(t *testing.T) {
 	tests := []struct {
 		name           string
-		toolCalls      []llms.ToolCall
+		toolCalls      []a2a.ToolCall
 		results        []ToolResult
 		wantSuccessful int
 		wantFailed     int
@@ -19,7 +19,7 @@ func TestFallbackAnalysis(t *testing.T) {
 	}{
 		{
 			name: "all successful",
-			toolCalls: []llms.ToolCall{
+			toolCalls: []a2a.ToolCall{
 				{Name: "tool1", Arguments: map[string]interface{}{}},
 				{Name: "tool2", Arguments: map[string]interface{}{}},
 			},
@@ -33,7 +33,7 @@ func TestFallbackAnalysis(t *testing.T) {
 		},
 		{
 			name: "one failure",
-			toolCalls: []llms.ToolCall{
+			toolCalls: []a2a.ToolCall{
 				{Name: "tool1", Arguments: map[string]interface{}{}},
 				{Name: "tool2", Arguments: map[string]interface{}{}},
 			},
@@ -47,7 +47,7 @@ func TestFallbackAnalysis(t *testing.T) {
 		},
 		{
 			name: "majority failures should pivot",
-			toolCalls: []llms.ToolCall{
+			toolCalls: []a2a.ToolCall{
 				{Name: "tool1", Arguments: map[string]interface{}{}},
 				{Name: "tool2", Arguments: map[string]interface{}{}},
 				{Name: "tool3", Arguments: map[string]interface{}{}},
@@ -63,7 +63,7 @@ func TestFallbackAnalysis(t *testing.T) {
 		},
 		{
 			name:           "empty results",
-			toolCalls:      []llms.ToolCall{},
+			toolCalls:      []a2a.ToolCall{},
 			results:        []ToolResult{},
 			wantSuccessful: 0,
 			wantFailed:     0,
@@ -107,7 +107,7 @@ func TestFallbackAnalysis(t *testing.T) {
 }
 
 func TestBuildAnalysisPrompt(t *testing.T) {
-	toolCalls := []llms.ToolCall{
+	toolCalls := []a2a.ToolCall{
 		{
 			Name: "test_tool",
 			Arguments: map[string]interface{}{
@@ -180,7 +180,7 @@ func TestAnalyzeToolResults_EmptyResults(t *testing.T) {
 
 	analysis, err := AnalyzeToolResults(
 		context.Background(),
-		[]llms.ToolCall{},
+		[]a2a.ToolCall{},
 		[]ToolResult{},
 		services,
 	)
@@ -226,6 +226,10 @@ func (m *mockAgentServices) Prompt() PromptService {
 }
 
 func (m *mockAgentServices) History() HistoryService {
+	return nil
+}
+
+func (m *mockAgentServices) Registry() AgentRegistryService {
 	return nil
 }
 

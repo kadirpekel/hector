@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
 )
@@ -170,8 +171,8 @@ func TestAnthropicProvider_Generate_Success(t *testing.T) {
 	}
 
 	// Test Generate
-	messages := []Message{
-		{Role: "user", Content: "Hello"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -245,8 +246,8 @@ func TestAnthropicProvider_Generate_WithTools(t *testing.T) {
 	}
 
 	// Test Generate with tools
-	messages := []Message{
-		{Role: "user", Content: "Use the test tool"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Use the test tool"),
 	}
 	tools := []ToolDefinition{
 		{
@@ -307,8 +308,8 @@ func TestAnthropicProvider_Generate_HTTPError(t *testing.T) {
 	}
 
 	// Test Generate with HTTP error
-	messages := []Message{
-		{Role: "user", Content: "Hello"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -341,8 +342,8 @@ func TestAnthropicProvider_Generate_InvalidJSON(t *testing.T) {
 	}
 
 	// Test Generate with invalid JSON
-	messages := []Message{
-		{Role: "user", Content: "Hello"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -416,8 +417,8 @@ data: {"type": "message_stop"}`,
 	}
 
 	// Test GenerateStreaming
-	messages := []Message{
-		{Role: "user", Content: "Hello"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -472,8 +473,8 @@ func TestAnthropicProvider_GenerateStreaming_Error(t *testing.T) {
 	}
 
 	// Test GenerateStreaming with error
-	messages := []Message{
-		{Role: "user", Content: "Hello"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -542,8 +543,8 @@ func TestAnthropicProvider_WithCustomHTTPClient(t *testing.T) {
 	provider.httpClient = customClient
 
 	// Test Generate with custom client
-	messages := []Message{
-		{Role: "user", Content: "Hello"},
+	messages := []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -562,10 +563,10 @@ func TestAnthropicProvider_WithCustomHTTPClient(t *testing.T) {
 
 func TestAnthropicProvider_MessageConversion(t *testing.T) {
 	// Test conversion from universal Message format to Anthropic format
-	_ = []Message{
-		{Role: "user", Content: "Hello"},
-		{Role: "assistant", Content: "Hi there!"},
-		{Role: "system", Content: "You are a helpful assistant"},
+	_ = []a2a.Message{
+		a2a.CreateUserMessage("Hello"),
+		a2a.CreateAssistantMessage("Hi there!"),
+		a2a.CreateTextMessage(a2a.MessageRoleSystem, "You are a helpful assistant"),
 	}
 
 	// This would be tested through the actual Generate method

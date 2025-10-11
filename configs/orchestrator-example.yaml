@@ -78,6 +78,8 @@ agents:
     reasoning:
       engine: "supervisor"  # Optimized for multi-agent orchestration!
       max_iterations: 20  # More iterations for complex orchestration
+    # sub_agents: ["researcher", "analyst", "writer"]  # Optional: specify which agents to orchestrate (omit = all agents)
+
     prompt:
       system_role: |
         You are an orchestrator agent that coordinates specialized agents 

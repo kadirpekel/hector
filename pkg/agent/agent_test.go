@@ -41,7 +41,7 @@ func TestNewAgent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			agent, err := NewAgent(tt.agentConfig, tt.componentMgr)
+			agent, err := NewAgent(tt.agentConfig, tt.componentMgr, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewAgent() error = %v, wantErr %v", err, tt.wantErr)
 				return

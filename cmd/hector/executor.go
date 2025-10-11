@@ -42,8 +42,8 @@ func (e *DirectExecutor) ExecuteTask(ctx context.Context, agentName string, prom
 		return fmt.Errorf("agent '%s' not found in configuration", agentName)
 	}
 
-	// Create agent instance
-	agentInstance, err := agent.NewAgent(&agentConfig, e.componentManager)
+	// Create agent instance (nil registry for single-agent direct mode)
+	agentInstance, err := agent.NewAgent(&agentConfig, e.componentManager, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create agent: %w", err)
 	}
@@ -151,8 +151,8 @@ func (e *DirectExecutor) Chat(ctx context.Context, agentName string) error {
 		return fmt.Errorf("agent '%s' not found in configuration", agentName)
 	}
 
-	// Create agent instance
-	agentInstance, err := agent.NewAgent(&agentConfig, e.componentManager)
+	// Create agent instance (nil registry for single-agent direct mode)
+	agentInstance, err := agent.NewAgent(&agentConfig, e.componentManager, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create agent: %w", err)
 	}
