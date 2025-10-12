@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
+
 	"github.com/kadirpekel/hector/pkg/databases"
 )
 
@@ -203,7 +204,7 @@ func NewMockSummarizer() *MockSummarizer {
 	}
 }
 
-func (m *MockSummarizer) SummarizeConversation(ctx context.Context, messages []a2a.Message) (string, error) {
+func (m *MockSummarizer) SummarizeConversation(ctx context.Context, messages []*pb.Message) (string, error) {
 	summary := fmt.Sprintf("Summary of %d messages", len(messages))
 	m.summaries = append(m.summaries, summary)
 	return summary, nil

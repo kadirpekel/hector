@@ -4,36 +4,33 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"strings"
 	"syscall"
+	"time"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
+
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/auth"
+	"github.com/kadirpekel/hector/pkg/cli"
 	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
-	hectorcontext "github.com/kadirpekel/hector/pkg/context"
-	"github.com/kadirpekel/hector/pkg/tools"
+	"github.com/kadirpekel/hector/pkg/transport"
 )
 
 // ============================================================================
-// TYPES AND CONSTANTS
+// VERSION
 // ============================================================================
 
-const (
-	defaultConfigFile = "hector.yaml"
-
-	// CLI flag descriptions
-	serverFlagDesc = "A2A server URL (default: localhost:8080)"
-	tokenFlagDesc  = "Authentication token"
-)
-
-// getVersion returns the version from build info (Git tag) or "dev" if not available
 func getVersion() string {
 	if info, ok := debug.ReadBuildInfo(); ok {
-		// If built with go install, this will be the Git tag
 		if info.Main.Version != "(devel)" && info.Main.Version != "" {
 			return info.Main.Version
 		}
@@ -41,7 +38,10 @@ func getVersion() string {
 	return "dev"
 }
 
-// CommandType represents the type of command to execute
+// ============================================================================
+// COMMAND TYPES
+// ============================================================================
+
 type CommandType string
 
 const (
@@ -58,19 +58,234 @@ type CLIArgs struct {
 	Command    CommandType
 	ConfigFile string
 	ServerURL  string
-	AgentURL   string
+	AgentID    string
 	Input      string
 	Token      string
 	Stream     bool
 	Debug      bool
+	Port       int
 
 	// Zero-config mode options (OpenAI-based)
-	APIKey     string
-	BaseURL    string
-	Model      string
-	Tools      bool
-	MCPURL     string
-	DocsFolder string
+	APIKey        string
+	BaseURL       string
+	Model         string
+	Tools         bool
+	MCPURL        string
+	DocsFolder    string
+	EmbedderModel string
+	VectorDB      string
+}
+
+// ============================================================================
+// MULTI-AGENT SERVICE
+// ============================================================================
+
+type MultiAgentService struct {
+	pb.UnimplementedA2AServiceServer
+	agents   map[string]pb.A2AServiceServer
+	metadata map[string]*transport.AgentMetadata
+	registry *agent.AgentRegistry
+}
+
+func NewMultiAgentService(registry *agent.AgentRegistry) *MultiAgentService {
+	return &MultiAgentService{
+		agents:   make(map[string]pb.A2AServiceServer),
+		metadata: make(map[string]*transport.AgentMetadata),
+		registry: registry,
+	}
+}
+
+func (s *MultiAgentService) RegisterAgent(agentID string, agentSvc pb.A2AServiceServer) {
+	s.agents[agentID] = agentSvc
+	log.Printf("  ✅ Registered agent: %s", agentID)
+}
+
+// RegisterAgentWithMetadata registers an agent with its metadata
+func (s *MultiAgentService) RegisterAgentWithMetadata(agentID string, agentSvc pb.A2AServiceServer, meta *transport.AgentMetadata) {
+	s.agents[agentID] = agentSvc
+	s.metadata[agentID] = meta
+	log.Printf("  ✅ Registered agent: %s (visibility: %s)", agentID, meta.Visibility)
+}
+
+// GetAgentMetadata returns metadata for a specific agent (for discovery)
+func (s *MultiAgentService) GetAgentMetadata(agentID string) (*transport.AgentMetadata, error) {
+	if meta, ok := s.metadata[agentID]; ok {
+		return meta, nil
+	}
+
+	// Fallback: create metadata from agent card
+	if agentSvc, ok := s.agents[agentID]; ok {
+		card, err := agentSvc.GetAgentCard(context.Background(), &pb.GetAgentCardRequest{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get agent card: %w", err)
+		}
+
+		return &transport.AgentMetadata{
+			ID:              agentID,
+			Name:            card.Name,
+			Description:     card.Description,
+			Version:         card.Version,
+			Visibility:      "public", // Default visibility
+			Capabilities:    card.Capabilities,
+			SecuritySchemes: card.SecuritySchemes,
+			Security:        card.Security,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("agent not found: %s", agentID)
+}
+
+// ListAgents returns all registered agents (discovery)
+func (s *MultiAgentService) ListAgents() []string {
+	agents := make([]string, 0, len(s.agents))
+	for agentID := range s.agents {
+		agents = append(agents, agentID)
+	}
+	return agents
+}
+
+// GetAgent returns a specific agent by ID
+func (s *MultiAgentService) GetAgent(agentID string) (pb.A2AServiceServer, bool) {
+	agent, ok := s.agents[agentID]
+	return agent, ok
+}
+
+// SendMessage routes to the appropriate agent
+func (s *MultiAgentService) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
+	agentID := s.extractAgentID(req)
+
+	if agentID == "" && len(s.agents) == 1 {
+		for id := range s.agents {
+			agentID = id
+			break
+		}
+	}
+
+	if agentID == "" {
+		return nil, status.Error(codes.InvalidArgument, "agent_id not specified (use context_id format: agent_id:session_id)")
+	}
+
+	agentSvc, ok := s.agents[agentID]
+	if !ok {
+		return nil, status.Errorf(codes.NotFound, "agent '%s' not found", agentID)
+	}
+
+	return agentSvc.SendMessage(ctx, req)
+}
+
+// SendStreamingMessage routes to the appropriate agent
+func (s *MultiAgentService) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2AService_SendStreamingMessageServer) error {
+	agentID := s.extractAgentID(req)
+
+	if agentID == "" && len(s.agents) == 1 {
+		for id := range s.agents {
+			agentID = id
+			break
+		}
+	}
+
+	if agentID == "" {
+		return status.Error(codes.InvalidArgument, "agent_id not specified")
+	}
+
+	agentSvc, ok := s.agents[agentID]
+	if !ok {
+		return status.Errorf(codes.NotFound, "agent '%s' not found", agentID)
+	}
+
+	return agentSvc.SendStreamingMessage(req, stream)
+}
+
+// GetAgentCard returns card for specific agent or multi-agent summary
+func (s *MultiAgentService) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (*pb.AgentCard, error) {
+	if len(s.agents) == 1 {
+		for _, agentSvc := range s.agents {
+			return agentSvc.GetAgentCard(ctx, req)
+		}
+	}
+
+	agentNames := make([]string, 0, len(s.agents))
+	for id := range s.agents {
+		agentNames = append(agentNames, id)
+	}
+
+	return &pb.AgentCard{
+		Name:        "Hector Multi-Agent Server",
+		Description: fmt.Sprintf("Multi-agent server with %d agents: %s", len(s.agents), strings.Join(agentNames, ", ")),
+		Version:     getVersion(),
+		Capabilities: &pb.AgentCapabilities{
+			Streaming: true,
+		},
+	}, nil
+}
+
+// Implement other A2A methods by routing to appropriate agent
+func (s *MultiAgentService) GetTask(ctx context.Context, req *pb.GetTaskRequest) (*pb.Task, error) {
+	// Try to extract agent from task name
+	// For now, route to first agent if single agent
+	if len(s.agents) == 1 {
+		for _, agentSvc := range s.agents {
+			return agentSvc.GetTask(ctx, req)
+		}
+	}
+	return nil, status.Error(codes.Unimplemented, "GetTask requires agent specification in multi-agent mode")
+}
+
+func (s *MultiAgentService) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) (*pb.Task, error) {
+	if len(s.agents) == 1 {
+		for _, agentSvc := range s.agents {
+			return agentSvc.CancelTask(ctx, req)
+		}
+	}
+	return nil, status.Error(codes.Unimplemented, "CancelTask requires agent specification in multi-agent mode")
+}
+
+func (s *MultiAgentService) TaskSubscription(req *pb.TaskSubscriptionRequest, stream pb.A2AService_TaskSubscriptionServer) error {
+	if len(s.agents) == 1 {
+		for _, agentSvc := range s.agents {
+			return agentSvc.TaskSubscription(req, stream)
+		}
+	}
+	return status.Error(codes.Unimplemented, "TaskSubscription requires agent specification in multi-agent mode")
+}
+
+func (s *MultiAgentService) CreateTaskPushNotificationConfig(ctx context.Context, req *pb.CreateTaskPushNotificationConfigRequest) (*pb.TaskPushNotificationConfig, error) {
+	return nil, status.Error(codes.Unimplemented, "push notifications not implemented")
+}
+
+func (s *MultiAgentService) GetTaskPushNotificationConfig(ctx context.Context, req *pb.GetTaskPushNotificationConfigRequest) (*pb.TaskPushNotificationConfig, error) {
+	return nil, status.Error(codes.Unimplemented, "push notifications not implemented")
+}
+
+func (s *MultiAgentService) ListTaskPushNotificationConfig(ctx context.Context, req *pb.ListTaskPushNotificationConfigRequest) (*pb.ListTaskPushNotificationConfigResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "push notifications not implemented")
+}
+
+func (s *MultiAgentService) DeleteTaskPushNotificationConfig(ctx context.Context, req *pb.DeleteTaskPushNotificationConfigRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "push notifications not implemented")
+}
+
+func (s *MultiAgentService) extractAgentID(req *pb.SendMessageRequest) string {
+	if req.Request == nil {
+		return ""
+	}
+
+	// Try context_id format: "agent_id:session_id"
+	if req.Request.ContextId != "" {
+		parts := strings.SplitN(req.Request.ContextId, ":", 2)
+		if len(parts) >= 1 {
+			return parts[0]
+		}
+	}
+
+	// Try metadata
+	if req.Request.Metadata != nil {
+		if agentID, ok := req.Request.Metadata.Fields["agent_id"]; ok {
+			return agentID.GetStringValue()
+		}
+	}
+
+	return ""
 }
 
 // ============================================================================
@@ -78,33 +293,51 @@ type CLIArgs struct {
 // ============================================================================
 
 func main() {
-	args := parseArgs()
-
-	// Load environment variables from .env files (for all commands)
-	if err := config.LoadEnvFiles(); err != nil {
-		if !os.IsNotExist(err) {
-			fatalf("Failed to load environment files: %v", err)
-		}
+	// Load environment variables
+	if err := config.LoadEnvFiles(); err != nil && !os.IsNotExist(err) {
+		fatalf("Failed to load environment files: %v", err)
 	}
 
-	// Route to appropriate handler
+	args := parseArgs()
+
+	// Convert CLIArgs to cli.Args
+	cliArgs := cli.Args{
+		ConfigFile: args.ConfigFile,
+		ServerURL:  args.ServerURL,
+		Token:      args.Token,
+		AgentID:    args.AgentID,
+		Input:      args.Input,
+		Stream:     args.Stream,
+		Debug:      args.Debug,
+		Port:       args.Port,
+		Provider:   "openai", // Default provider
+		APIKey:     args.APIKey,
+		BaseURL:    args.BaseURL,
+		Model:      args.Model,
+		Tools:      args.Tools,
+		MCPURL:     args.MCPURL,
+		DocsFolder: args.DocsFolder,
+	}
+
+	// Route to appropriate handler using new CLI package
 	switch args.Command {
 	case CommandServe:
+		// Serve command still uses old implementation for server lifecycle management
 		executeServeCommand(args)
 	case CommandList:
-		if err := executeListCommand(args); err != nil {
+		if err := cli.ListCommand(cliArgs); err != nil {
 			fatalf("List command failed: %v", err)
 		}
 	case CommandInfo:
-		if err := executeInfoCommand(args, args.AgentURL); err != nil {
+		if err := cli.InfoCommand(cliArgs); err != nil {
 			fatalf("Info command failed: %v", err)
 		}
 	case CommandCall:
-		if err := executeCallCommand(args, args.AgentURL, args.Input); err != nil {
+		if err := cli.CallCommand(cliArgs); err != nil {
 			fatalf("Call command failed: %v", err)
 		}
 	case CommandChat:
-		if err := executeChatCommand(args, args.AgentURL); err != nil {
+		if err := cli.ChatCommand(cliArgs); err != nil {
 			fatalf("Chat command failed: %v", err)
 		}
 	case CommandHelp:
@@ -121,47 +354,51 @@ func main() {
 func parseArgs() *CLIArgs {
 	args := &CLIArgs{}
 
-	// Define flags
+	// Define subcommands
 	serveCmd := flag.NewFlagSet("serve", flag.ExitOnError)
-	serveConfig := serveCmd.String("config", defaultConfigFile, "Configuration file")
+	serveConfig := serveCmd.String("config", "hector.yaml", "Configuration file")
+	servePort := serveCmd.Int("port", 50051, "gRPC server port")
 	serveDebug := serveCmd.Bool("debug", false, "Enable debug mode")
 
 	// Zero-config mode flags (OpenAI-based)
-	serveAPIKey := serveCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY environment variable)")
+	serveAPIKey := serveCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY)")
 	serveBaseURL := serveCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
 	serveModel := serveCmd.String("model", "gpt-4o-mini", "OpenAI model to use in zero-config mode")
 	serveTools := serveCmd.Bool("tools", false, "Enable all local tools (file, command execution)")
 	serveMCP := serveCmd.String("mcp", "", "MCP server URL for tool integration")
 	serveDocs := serveCmd.String("docs", "", "Document store folder (enables RAG)")
+	serveEmbedder := serveCmd.String("embedder-model", "nomic-embed-text", "Embedder model for document store")
+	serveVectorDB := serveCmd.String("vectordb", "http://localhost:6333", "Vector database connection string")
 
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
-	listServer := listCmd.String("server", "", serverFlagDesc)
-	listToken := listCmd.String("token", "", tokenFlagDesc)
-	listConfig := listCmd.String("config", defaultConfigFile, "Configuration file (direct mode)")
+	listServer := listCmd.String("server", "", "A2A server URL (enables server mode)")
+	listToken := listCmd.String("token", "", "Authentication token")
+	listConfig := listCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
 
 	infoCmd := flag.NewFlagSet("info", flag.ExitOnError)
-	infoServer := infoCmd.String("server", "", serverFlagDesc)
-	infoToken := infoCmd.String("token", "", tokenFlagDesc)
-	infoConfig := infoCmd.String("config", defaultConfigFile, "Configuration file (direct mode)")
+	infoServer := infoCmd.String("server", "", "A2A server URL (enables server mode)")
+	infoToken := infoCmd.String("token", "", "Authentication token")
+	infoConfig := infoCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
 
 	callCmd := flag.NewFlagSet("call", flag.ExitOnError)
-	callServer := callCmd.String("server", "", serverFlagDesc)
-	callToken := callCmd.String("token", "", tokenFlagDesc)
-	callStream := callCmd.Bool("stream", true, "Enable streaming (default: true, use --stream=false to disable)")
-	callConfig := callCmd.String("config", defaultConfigFile, "Configuration file (direct mode)")
-	callAPIKey := callCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY environment variable)")
+	callServer := callCmd.String("server", "", "A2A server URL (enables server mode)")
+	callToken := callCmd.String("token", "", "Authentication token")
+	callStream := callCmd.Bool("stream", true, "Enable streaming (default: true)")
+	callConfig := callCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
+	callAPIKey := callCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY)")
 	callBaseURL := callCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
 	callModel := callCmd.String("model", "gpt-4o-mini", "OpenAI model (direct mode, zero-config)")
 	callTools := callCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
 
 	chatCmd := flag.NewFlagSet("chat", flag.ExitOnError)
-	chatServer := chatCmd.String("server", "", serverFlagDesc)
-	chatToken := chatCmd.String("token", "", tokenFlagDesc)
-	chatConfig := chatCmd.String("config", defaultConfigFile, "Configuration file (direct mode)")
-	chatAPIKey := chatCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY environment variable)")
+	chatServer := chatCmd.String("server", "", "A2A server URL (enables server mode)")
+	chatToken := chatCmd.String("token", "", "Authentication token")
+	chatConfig := chatCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
+	chatAPIKey := chatCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY)")
 	chatBaseURL := chatCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
 	chatModel := chatCmd.String("model", "gpt-4o-mini", "OpenAI model (direct mode, zero-config)")
 	chatTools := chatCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
+	chatNoStream := chatCmd.Bool("no-stream", false, "Disable streaming (default: streaming enabled)")
 
 	// Parse command
 	if len(os.Args) < 2 {
@@ -176,6 +413,7 @@ func parseArgs() *CLIArgs {
 		_ = serveCmd.Parse(os.Args[2:])
 		args.Command = CommandServe
 		args.ConfigFile = *serveConfig
+		args.Port = *servePort
 		args.Debug = *serveDebug
 		args.APIKey = *serveAPIKey
 		args.BaseURL = *serveBaseURL
@@ -183,39 +421,36 @@ func parseArgs() *CLIArgs {
 		args.Tools = *serveTools
 		args.MCPURL = *serveMCP
 		args.DocsFolder = *serveDocs
+		args.EmbedderModel = *serveEmbedder
+		args.VectorDB = *serveVectorDB
 
 	case "list":
 		_ = listCmd.Parse(os.Args[2:])
 		args.Command = CommandList
-		args.ServerURL = *listServer // Don't resolve yet - let mode detection handle it
+		args.ServerURL = *listServer // Don't resolve yet - let command detect mode
 		args.Token = *listToken
 		args.ConfigFile = *listConfig
 
 	case "info":
 		_ = infoCmd.Parse(os.Args[2:])
 		if len(infoCmd.Args()) < 1 {
-			fatalf("Usage: hector info <agent> [--server URL | --config FILE]")
+			fatalf("Usage: hector info <agent> [OPTIONS]")
 		}
 		args.Command = CommandInfo
-		args.AgentURL = infoCmd.Args()[0] // Store raw agent ID
-		args.ServerURL = *infoServer      // Store raw server URL
+		args.AgentID = infoCmd.Args()[0]
+		args.ServerURL = *infoServer // Don't resolve yet
 		args.Token = *infoToken
 		args.ConfigFile = *infoConfig
 
 	case "call":
-		// Parse remaining args
-		// Note: Go's flag package requires flags BEFORE positional arguments
 		_ = callCmd.Parse(os.Args[2:])
-
-		callArgs := callCmd.Args()
-		if len(callArgs) < 2 {
-			fatalf("Usage: hector call [OPTIONS] <agent> \"prompt\"\nNote: Flags must come before the agent name")
+		if len(callCmd.Args()) < 2 {
+			fatalf("Usage: hector call <agent> \"prompt\" [OPTIONS]")
 		}
-
 		args.Command = CommandCall
-		args.AgentURL = callArgs[0]  // Agent ID
-		args.Input = callArgs[1]     // Prompt
-		args.ServerURL = *callServer // Server URL from --server flag
+		args.AgentID = callCmd.Args()[0]
+		args.Input = callCmd.Args()[1]
+		args.ServerURL = *callServer // Don't resolve yet
 		args.Token = *callToken
 		args.Stream = *callStream
 		args.ConfigFile = *callConfig
@@ -225,25 +460,20 @@ func parseArgs() *CLIArgs {
 		args.Tools = *callTools
 
 	case "chat":
-		// Parse remaining args
-		// Note: Go's flag package requires flags BEFORE positional arguments
 		_ = chatCmd.Parse(os.Args[2:])
-
-		// Get non-flag arguments (agent ID)
-		chatArgs := chatCmd.Args()
-		if len(chatArgs) < 1 {
-			fatalf("Usage: hector chat [OPTIONS] <agent>\nNote: Flags must come before the agent name")
+		if len(chatCmd.Args()) < 1 {
+			fatalf("Usage: hector chat <agent> [OPTIONS]")
 		}
-
 		args.Command = CommandChat
-		args.AgentURL = chatArgs[0]  // Agent ID (first non-flag arg)
-		args.ServerURL = *chatServer // Server URL from --server flag
+		args.AgentID = chatCmd.Args()[0]
+		args.ServerURL = *chatServer // Don't resolve yet
 		args.Token = *chatToken
 		args.ConfigFile = *chatConfig
 		args.APIKey = *chatAPIKey
 		args.BaseURL = *chatBaseURL
 		args.Model = *chatModel
 		args.Tools = *chatTools
+		args.Stream = !*chatNoStream // Streaming is default, --no-stream disables it
 
 	case "help", "--help", "-h":
 		args.Command = CommandHelp
@@ -262,31 +492,45 @@ func parseArgs() *CLIArgs {
 }
 
 // ============================================================================
-// SERVE COMMAND - Start A2A Server
+// SERVE COMMAND
 // ============================================================================
 
 func executeServeCommand(args *CLIArgs) {
-	// Load environment variables
-	if err := config.LoadEnvFiles(); err != nil {
-		if !os.IsNotExist(err) {
-			fatalf("Failed to load environment files: %v", err)
+
+	// Check if config file exists
+	var hectorConfig *config.Config
+	if _, err := os.Stat(args.ConfigFile); os.IsNotExist(err) {
+		// Zero-config mode
+		if args.Debug {
+			fmt.Println("🔧 No config file found, entering zero-config mode")
 		}
-	}
 
-	// Load or create configuration using unified function
-	hectorConfig, err := loadConfigFromArgsOrFile(args, true)
-	if err != nil {
-		fatalf("Failed to load configuration: %v", err)
-	}
+		// Get API key from flag or environment
+		apiKey := args.APIKey
+		if apiKey == "" {
+			apiKey = os.Getenv("OPENAI_API_KEY")
+		}
+		if apiKey == "" {
+			fatalf("OpenAI API key required for zero-config mode (use --api-key or set OPENAI_API_KEY environment variable)")
+		}
 
-	// Print debug info if requested
-	if args.Debug {
-		isZeroConfig := !fileExists(args.ConfigFile) && args.ConfigFile == defaultConfigFile
-		if isZeroConfig {
-			fmt.Println("🔧 Zero-config mode")
+		opts := config.ZeroConfigOptions{
+			APIKey:      apiKey,
+			BaseURL:     args.BaseURL,
+			Model:       args.Model,
+			EnableTools: args.Tools,
+			MCPURL:      args.MCPURL,
+			DocsFolder:  args.DocsFolder,
+		}
+
+		hectorConfig = config.CreateZeroConfig(opts)
+
+		if args.Debug {
+			fmt.Printf("  Provider: OpenAI\n")
 			fmt.Printf("  Model: %s\n", args.Model)
+			fmt.Printf("  Base URL: %s\n", args.BaseURL)
 			if args.Tools {
-				fmt.Println("  Tools: Enabled (all local tools)")
+				fmt.Println("  Tools: Enabled")
 			}
 			if args.MCPURL != "" {
 				fmt.Printf("  MCP: %s\n", args.MCPURL)
@@ -294,9 +538,20 @@ func executeServeCommand(args *CLIArgs) {
 			if args.DocsFolder != "" {
 				fmt.Printf("  Docs: %s\n", args.DocsFolder)
 			}
-		} else {
-			fmt.Printf("📄 Loaded config from: %s\n", args.ConfigFile)
 		}
+	} else {
+		// Load configuration from file
+		var err error
+		hectorConfig, err = config.LoadConfig(args.ConfigFile)
+		if err != nil {
+			fatalf("Failed to load config: %v", err)
+		}
+	}
+
+	// Set defaults and validate
+	hectorConfig.SetDefaults()
+	if err := hectorConfig.Validate(); err != nil {
+		fatalf("Invalid configuration: %v", err)
 	}
 
 	// Create component manager
@@ -305,256 +560,215 @@ func executeServeCommand(args *CLIArgs) {
 		fatalf("Component initialization failed: %v", err)
 	}
 
-	// Initialize document stores if configured
-	if err := initializeDocumentStores(hectorConfig, componentManager); err != nil {
-		fatalf("Document store initialization failed: %v", err)
-	}
-
 	fmt.Println("🚀 Starting Hector A2A Server...")
 	if hectorConfig.Name != "" {
 		fmt.Printf("📋 Configuration: %s\n", hectorConfig.Name)
 	}
 
-	// Get server config
-	serverCfg := &hectorConfig.Global.A2AServer
-	serverCfg.Enabled = true
-	serverCfg.SetDefaults()
+	// Create agent registry
+	agentRegistry := agent.NewAgentRegistry()
 
-	if args.Debug {
-		fmt.Printf("🐛 Debug Mode: Enabled\n")
-		fmt.Printf("🌐 Host: %s\n", serverCfg.Host)
-		fmt.Printf("🔌 Port: %d\n", serverCfg.Port)
-		fmt.Printf("📊 Agents to register: %d\n", len(hectorConfig.Agents))
+	// Create multi-agent service
+	multiAgentSvc := NewMultiAgentService(agentRegistry)
+
+	// Register all configured agents
+	fmt.Println("\n📋 Registering agents...")
+	for agentID, agentCfg := range hectorConfig.Agents {
+		cfg := agentCfg
+
+		// Create agent based on type (native vs external)
+		var agentInstance pb.A2AServiceServer
+		var err error
+
+		if cfg.Type == "a2a" {
+			// External A2A agent - create client proxy
+			externalAgent, extErr := agent.NewExternalA2AAgent(&cfg)
+			if extErr != nil {
+				log.Printf("  ⚠️  Failed to create external agent '%s': %v", agentID, extErr)
+				continue
+			}
+			agentInstance = externalAgent
+			log.Printf("  ✅ External agent '%s' connected to %s", agentID, cfg.URL)
+		} else {
+			// Native agent - create local instance
+			agentInstance, err = agent.NewAgent(&cfg, componentManager, agentRegistry)
+			if err != nil {
+				log.Printf("  ⚠️  Failed to create native agent '%s': %v", agentID, err)
+				continue
+			}
+			log.Printf("  ✅ Native agent '%s' created", agentID)
+		}
+
+		// Get agent card for metadata
+		card, cardErr := agentInstance.GetAgentCard(context.Background(), &pb.GetAgentCardRequest{})
+		if cardErr != nil {
+			log.Printf("  ⚠️  Failed to get agent card for '%s': %v", agentID, cardErr)
+			continue
+		}
+
+		// Set default visibility
+		visibility := cfg.Visibility
+		if visibility == "" {
+			visibility = "public" // Default to public
+		}
+
+		// Register with metadata
+		metadata := &transport.AgentMetadata{
+			ID:              agentID,
+			Name:            cfg.Name,
+			Description:     cfg.Description,
+			Version:         "1.0.0",
+			Visibility:      visibility,
+			Capabilities:    card.GetCapabilities(),
+			SecuritySchemes: card.SecuritySchemes,
+			Security:        card.Security,
+		}
+		multiAgentSvc.RegisterAgentWithMetadata(agentID, agentInstance, metadata)
+
+		if err := agentRegistry.RegisterAgent(agentID, agentInstance, &cfg, nil); err != nil {
+			log.Printf("  ⚠️  Failed to register agent '%s' in registry: %v", agentID, err)
+		}
 	}
 
-	// Create A2A server
-	a2aServerCfg := &a2a.ServerConfig{
-		Host:    serverCfg.Host,
-		Port:    serverCfg.Port,
-		BaseURL: serverCfg.BaseURL,
+	if len(multiAgentSvc.agents) == 0 {
+		log.Fatalf("❌ No agents successfully registered")
 	}
 
-	server := a2a.NewServer(a2aServerCfg)
+	// Determine addresses
+	grpcAddr := fmt.Sprintf(":%d", args.Port)
+	restAddr := fmt.Sprintf(":%d", args.Port+1)
+	jsonrpcAddr := fmt.Sprintf(":%d", args.Port+2)
 
-	// Initialize authentication if enabled
+	// Configure authentication
+	var authConfig *transport.AuthConfig
+	var jwtValidator *auth.JWTValidator
 	if hectorConfig.Global.Auth.Enabled {
-		fmt.Println("\n🔒 Initializing authentication...")
-
-		authValidator, err := auth.NewJWTValidator(
+		var err error
+		jwtValidator, err = auth.NewJWTValidator(
 			hectorConfig.Global.Auth.JWKSURL,
 			hectorConfig.Global.Auth.Issuer,
 			hectorConfig.Global.Auth.Audience,
 		)
 		if err != nil {
-			fmt.Printf("❌ Failed to initialize JWT validator: %v\n", err)
-			fmt.Println("Please check your auth configuration:")
-			fmt.Printf("   - JWKS URL: %s\n", hectorConfig.Global.Auth.JWKSURL)
-			fmt.Printf("   - Issuer: %s\n", hectorConfig.Global.Auth.Issuer)
-			fmt.Printf("   - Audience: %s\n", hectorConfig.Global.Auth.Audience)
-			return
-		}
-
-		server.SetAuthValidator(authValidator)
-		fmt.Println("  ✅ JWT validator initialized")
-		fmt.Printf("     Provider: %s\n", hectorConfig.Global.Auth.Issuer)
-		if args.Debug {
-			fmt.Printf("     JWKS URL: %s\n", hectorConfig.Global.Auth.JWKSURL)
-			fmt.Printf("     Audience: %s\n", hectorConfig.Global.Auth.Audience)
+			log.Printf("⚠️  Failed to initialize JWT validator: %v", err)
+		} else {
+			authConfig = &transport.AuthConfig{
+				Enabled:   true,
+				Validator: jwtValidator,
+			}
+			log.Printf("✅ Authentication configured (JWT)")
 		}
 	}
 
-	// Create agent registry for orchestration
-	agentRegistry := agent.NewAgentRegistry()
+	// Create gRPC server with auth interceptors
+	grpcConfig := transport.Config{
+		Address: grpcAddr,
+	}
+	if jwtValidator != nil {
+		grpcConfig.UnaryInterceptor = jwtValidator.UnaryServerInterceptor()
+		grpcConfig.StreamInterceptor = jwtValidator.StreamServerInterceptor()
+	}
+	grpcServer := transport.NewServer(multiAgentSvc, grpcConfig)
 
-	// Register all configured agents
-	fmt.Println("\n📋 Registering agents...")
-
-	// Create A2A client for external agents
-	a2aClient := a2a.NewClient(&a2a.ClientConfig{})
-
-	for agentID, agentConfig := range hectorConfig.Agents {
-		var agentInstance a2a.Agent
-		var err error
-
-		// Create agent based on type
-		switch agentConfig.Type {
-		case "native", "":
-			// Native Hector agent - directly implements a2a.Agent
-			agentInstance, err = agent.NewAgent(&agentConfig, componentManager, agentRegistry)
-			if err != nil {
-				fmt.Printf("❌ Failed to create native agent '%s': %v\n", agentID, err)
-				continue
-			}
-			if args.Debug {
-				fmt.Printf("  🔧 Created native agent: %s\n", agentID)
-			}
-
-		case "a2a":
-			// External A2A agent - discover immediately
-			agentInstance, err = agent.NewA2AAgentFromURL(context.Background(), agentConfig.URL, a2aClient)
-			if err != nil {
-				fmt.Printf("⚠️  Failed to discover external agent '%s' at %s: %v\n", agentID, agentConfig.URL, err)
-				fmt.Printf("    Make sure the external A2A server is running and accessible.\n")
-				fmt.Printf("    Skipping registration for '%s'.\n", agentID)
-				continue
-			}
-			if args.Debug {
-				fmt.Printf("  🌐 Discovered external agent: %s → %s\n", agentID, agentConfig.URL)
-			}
-
-		default:
-			fmt.Printf("❌ Invalid agent type '%s' for agent '%s'\n", agentConfig.Type, agentID)
-			continue
-		}
-
-		// Register in A2A server (both native and external agents)
-		// Pass visibility to control public exposure
-		if err := server.RegisterAgent(agentID, agentInstance, agentConfig.Visibility); err != nil {
-			fmt.Printf("❌ Failed to register agent '%s': %v\n", agentID, err)
-			continue
-		}
-
-		// Register in agent registry for orchestration (both types)
-		if err := agentRegistry.RegisterAgent(agentID, agentInstance, &agentConfig, nil); err != nil {
-			fmt.Printf("⚠️  Failed to register agent '%s' in orchestration registry: %v\n", agentID, err)
-		}
-
-		// Show registration confirmation with visibility
-		agentTypeLabel := "native"
-		if agentConfig.Type == "a2a" {
-			agentTypeLabel = "external"
-		}
-		visibilityLabel := agentConfig.Visibility
-		if visibilityLabel == "" {
-			visibilityLabel = "public"
-		}
-		fmt.Printf("  ✅ %s (%s) [%s, %s]\n", agentConfig.Name, agentID, agentTypeLabel, visibilityLabel)
-
-		if args.Debug {
-			if agentConfig.Type == "a2a" {
-				fmt.Printf("      → Source: %s\n", agentConfig.URL)
-			}
-			fmt.Printf("      → Endpoint: %s/agents/%s\n", serverCfg.BaseURL, agentID)
-		}
+	// Create REST gateway with auth
+	restGateway := transport.NewRESTGateway(transport.RESTGatewayConfig{
+		HTTPAddress: restAddr,
+	})
+	if authConfig != nil {
+		restGateway.SetAuth(authConfig)
 	}
 
-	// ✅ Agent registry configured during agent creation
-	if args.Debug && len(agentRegistry.List()) > 0 {
-		supervisorCount := 0
-		for _, entry := range agentRegistry.List() {
-			if entry.Config.Reasoning.Engine == "supervisor" {
-				supervisorCount++
-				subAgentInfo := "all agents"
-				if len(entry.Config.SubAgents) > 0 {
-					subAgentInfo = fmt.Sprintf("%v", entry.Config.SubAgents)
-				}
-				fmt.Printf("  🧠 Supervisor '%s' can orchestrate: %s\n", entry.Name, subAgentInfo)
-			}
-		}
-		if supervisorCount > 0 {
-			fmt.Printf("\n🔗 Agent orchestration ready: %d supervisor(s) configured\n", supervisorCount)
-		}
+	// Set up agent discovery endpoint
+	discovery := transport.NewAgentDiscovery(multiAgentSvc, authConfig)
+	restGateway.SetDiscovery(discovery)
+
+	jsonrpcHandler := transport.NewJSONRPCHandler(
+		transport.JSONRPCConfig{HTTPAddress: jsonrpcAddr},
+		multiAgentSvc,
+	)
+	if authConfig != nil {
+		jsonrpcHandler.SetAuth(authConfig)
 	}
 
-	// Register agent_call tool for orchestration
-	if err := registerOrchestrationTools(componentManager, agentRegistry, args.Debug); err != nil {
-		fmt.Printf("⚠️  Warning: Failed to register orchestration tools: %v\n", err)
-	}
+	// Start all servers
+	errChan := make(chan error, 3)
 
-	fmt.Println("\n🌐 A2A Server ready!")
-	fmt.Printf("📡 Agent directory: %s/agents\n", serverCfg.BaseURL)
-	fmt.Println("\n💡 Test with Hector CLI:")
-	fmt.Printf("   hector list\n")
-	fmt.Printf("   hector call <agent-id> \"your prompt\"\n")
-	fmt.Println("\nPress Ctrl+C to stop")
-
-	// Setup graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
-	errCh := make(chan error, 1)
 	go func() {
-		if err := server.Start(); err != nil {
-			errCh <- err
+		if err := grpcServer.Start(); err != nil {
+			errChan <- fmt.Errorf("gRPC server error: %w", err)
 		}
 	}()
 
-	// Wait for shutdown signal or error
+	go func() {
+		if err := restGateway.Start(context.Background()); err != nil {
+			errChan <- fmt.Errorf("REST gateway error: %w", err)
+		}
+	}()
+
+	go func() {
+		if err := jsonrpcHandler.Start(); err != nil {
+			errChan <- fmt.Errorf("JSON-RPC handler error: %w", err)
+		}
+	}()
+
+	log.Printf("\n🎉 Hector v%s - All transports started!", getVersion())
+	log.Printf("📡 Agents available: %d", len(multiAgentSvc.agents))
+	for agentID := range multiAgentSvc.agents {
+		log.Printf("   • %s", agentID)
+	}
+	log.Printf("\n🌐 Endpoints:")
+	log.Printf("   → gRPC:     %s", grpcServer.Address())
+	log.Printf("   → REST:     http://0.0.0.0%s", restAddr)
+	log.Printf("   → JSON-RPC: http://0.0.0.0%s/rpc", jsonrpcAddr)
+	log.Printf("\n📋 Discovery & Agent Cards:")
+	log.Printf("   → Service Card: http://0.0.0.0%s/.well-known/agent-card.json", restAddr)
+	log.Printf("   → Agent List:   http://0.0.0.0%s/v1/agents", restAddr)
+	log.Printf("   → Agent Cards:  http://0.0.0.0%s/v1/agents/{agent_id}/.well-known/agent-card.json", restAddr)
+	log.Printf("\n💡 A2A-compliant endpoints (per agent):")
+	log.Printf("   POST http://0.0.0.0%s/v1/agents/{agent_id}/message:send", restAddr)
+	log.Printf("   POST http://0.0.0.0%s/v1/agents/{agent_id}/message:stream", restAddr)
+	log.Printf("\n💡 Test commands:")
+	log.Printf("   hector list")
+	log.Printf("   hector info <agent>")
+	log.Printf("   hector call <agent> \"your prompt\"")
+	log.Printf("   hector chat <agent>")
+	log.Println("\nPress Ctrl+C to stop")
+
+	// Wait for signal or error
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
 	select {
 	case <-sigCh:
-		fmt.Println("\n\n🛑 Shutting down gracefully...")
-		if err := server.Stop(ctx); err != nil {
-			fmt.Printf("Error during shutdown: %v\n", err)
+		log.Println("\n🛑 Shutting down...")
+	case err := <-errChan:
+		log.Printf("\n❌ Server error: %v", err)
+	}
+
+	// Graceful shutdown
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var shutdownErrors []error
+	if err := grpcServer.Stop(shutdownCtx); err != nil {
+		shutdownErrors = append(shutdownErrors, fmt.Errorf("gRPC: %w", err))
+	}
+	if err := restGateway.Stop(shutdownCtx); err != nil {
+		shutdownErrors = append(shutdownErrors, fmt.Errorf("REST: %w", err))
+	}
+	if err := jsonrpcHandler.Stop(shutdownCtx); err != nil {
+		shutdownErrors = append(shutdownErrors, fmt.Errorf("JSON-RPC: %w", err))
+	}
+
+	if len(shutdownErrors) > 0 {
+		log.Printf("⚠️  Errors during shutdown:")
+		for _, err := range shutdownErrors {
+			log.Printf("   - %v", err)
 		}
-		fmt.Println("✅ Server stopped")
-	case err := <-errCh:
-		fatalf("Server error: %v", err)
-	}
-}
-
-// initializeDocumentStores initializes document stores from configuration
-func initializeDocumentStores(hectorConfig *config.Config, componentManager *component.ComponentManager) error {
-	if len(hectorConfig.DocumentStores) == 0 {
-		return nil
+		os.Exit(1)
 	}
 
-	var dbName, embedderName string
-	for _, agentConfig := range hectorConfig.Agents {
-		if len(agentConfig.DocumentStores) > 0 {
-			dbName = agentConfig.Database
-			embedderName = agentConfig.Embedder
-			break
-		}
-	}
-
-	if dbName == "" {
-		for name := range hectorConfig.Databases {
-			dbName = name
-			break
-		}
-	}
-	if embedderName == "" {
-		for name := range hectorConfig.Embedders {
-			embedderName = name
-			break
-		}
-	}
-
-	if dbName == "" || embedderName == "" {
-		return fmt.Errorf("document stores require a database and embedder to be configured")
-	}
-
-	db, err := componentManager.GetDatabase(dbName)
-	if err != nil {
-		return fmt.Errorf("failed to get database '%s': %w", dbName, err)
-	}
-
-	embedder, err := componentManager.GetEmbedder(embedderName)
-	if err != nil {
-		return fmt.Errorf("failed to get embedder '%s': %w", embedderName, err)
-	}
-
-	searchConfig := config.SearchConfig{}
-	searchConfig.SetDefaults()
-	searchEngine, err := hectorcontext.NewSearchEngine(db, embedder, searchConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create search engine: %w", err)
-	}
-
-	docStores := make([]config.DocumentStoreConfig, 0, len(hectorConfig.DocumentStores))
-	for _, storeConfig := range hectorConfig.DocumentStores {
-		docStores = append(docStores, storeConfig)
-	}
-
-	err = hectorcontext.InitializeDocumentStoresFromConfig(docStores, searchEngine)
-	if err != nil {
-		return fmt.Errorf("failed to initialize document stores: %w", err)
-	}
-
-	return nil
+	log.Printf("👋 All servers shut down gracefully")
 }
 
 // ============================================================================
@@ -571,165 +785,72 @@ USAGE:
 COMMANDS:
   serve              Start A2A server to host agents
   list               List available agents
-  info <agent>       Get detailed agent information
+  info <agent>       Get agent information
   call <agent> "..."  Execute a task on an agent
-  chat <agent>       Start interactive chat with an agent
+  chat <agent>       Start interactive chat
   help               Show this help message
   version            Show version information
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-EXECUTION MODES:
-
-  Direct Mode (default - no server needed)
-    Commands run in-process with local agent execution.
-    Fast, simple, perfect for development and experimentation.
-
-  Server Mode (with --server flag)
-    Commands communicate via A2A protocol with a remote server.
-    Use for production, multi-agent systems, or shared deployments.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-SERVER HOSTING:
+SERVER MODE:
   hector serve [options]
     --config FILE            Configuration file (default: hector.yaml)
+    --port PORT              gRPC server port (default: 50051)
     --debug                  Enable debug output
     
   Zero-Config Mode (when hector.yaml doesn't exist):
-    --api-key KEY            OpenAI API key (or set OPENAI_API_KEY env var) [REQUIRED]
-    --base-url URL           OpenAI API base URL (default: https://api.openai.com/v1)
-    --model MODEL            OpenAI model (default: gpt-4o-mini)
-    --tools                  Enable all local tools (file, command execution)
-    --mcp URL                MCP server URL for tool integration
-    --docs FOLDER            Document store folder (requires additional config)
+    --model MODEL            Ollama model (default: llama3.2:3b)
+    --tools                  Enable all local tools
+    --mcp URL                MCP server URL
+    --docs FOLDER            Document store folder (RAG)
+    --embedder-model MODEL   Embedder model (default: nomic-embed-text)
+    --vectordb URL           Vector DB (default: http://localhost:6333)
 
-DIRECT MODE (In-Process Execution):
-  hector call <agent> "prompt" [options]
-    --config FILE            Configuration file (default: hector.yaml)
-    --api-key KEY            OpenAI API key for zero-config [REQUIRED if no config]
-    --base-url URL           OpenAI API base URL (default: https://api.openai.com/v1)
-    --model MODEL            OpenAI model for zero-config (default: gpt-4o-mini)
-    --tools                  Enable tools for zero-config
-    --stream BOOL            Enable streaming (default: true)
-
-  hector chat <agent> [options]
-    --config FILE            Configuration file
-    --api-key KEY            OpenAI API key for zero-config [REQUIRED if no config]
-    --base-url URL           OpenAI API base URL
-    --model MODEL            OpenAI model for zero-config
-    --tools                  Enable tools for zero-config
-
+CLIENT MODE:
   hector list [options]
-    --config FILE            Configuration file
+    --server URL     Server URL (default: localhost:50052)
+    --token TOKEN    Authentication token
 
   hector info <agent> [options]
-    --config FILE            Configuration file
+    --server URL     Server URL (default: localhost:50052)
+    --token TOKEN    Authentication token
 
-SERVER MODE (A2A Protocol):
-  hector call <agent> "prompt" --server URL [options]
-    --server URL             A2A server URL (enables server mode)
-    --token TOKEN            Authentication token
-    --stream BOOL            Enable streaming (default: true)
+  hector call <agent> "prompt" [options]
+    --server URL     Server URL (default: localhost:50052)
+    --token TOKEN    Authentication token
+    --stream BOOL    Enable streaming (default: true)
 
-  hector chat <agent> --server URL [options]
-    --server URL             A2A server URL (enables server mode)
-    --token TOKEN            Authentication token
-
-  hector list --server URL [options]
-    --server URL             A2A server URL (enables server mode)
-    --token TOKEN            Authentication token
-
-  hector info <agent> --server URL [options]
-    --server URL             A2A server URL (enables server mode)
-    --token TOKEN            Authentication token
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  hector chat <agent> [options]
+    --server URL     Server URL (default: localhost:50052)
+    --token TOKEN    Authentication token
 
 EXAMPLES:
+  # Start server
+  $ hector serve
 
-  Direct Mode (Quick & Simple):
-  ─────────────────────────────
-  # Quick test with zero-config (API key from environment)
-  $ export OPENAI_API_KEY=sk-...
-  $ hector call assistant "what is 2+2?"
+  # Start with zero-config
+  $ hector serve --model llama3.2:1b --tools
 
-  # With API key as flag
-  $ hector call assistant "hello" --api-key sk-...
+  # List agents
+  $ hector list
 
-  # With tools enabled
-  $ hector call --api-key sk-... --tools assistant "list files"
+  # Get agent info
+  $ hector info my_agent
 
-  # With custom model
-  $ hector call --api-key sk-... --model gpt-4 assistant "complex task"
-
-  # With config file
-  $ hector call researcher "analyze data" --config agents.yaml
+  # Call agent
+  $ hector call my_agent "Analyze this"
 
   # Interactive chat
-  $ export OPENAI_API_KEY=sk-...
-  $ hector chat assistant
+  $ hector chat my_agent
 
-  # List agents from config
-  $ hector list --config agents.yaml
-
-  Server Mode (Production):
-  ──────────────────────────
-  # Start server
-  $ hector serve --config agents.yaml
-
-  # Connect to server
-  $ hector call assistant "hello" --server localhost:8080
-
-  # Connect to remote server
-  $ hector call assistant "hello" --server https://agents.example.com
-
-  # Interactive chat with server
-  $ hector chat assistant --server localhost:8080
-
-  # List server agents
-  $ hector list --server localhost:8080
-
-  # With authentication
-  $ hector call assistant "prompt" --server https://prod.example.com --token abc123
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Use remote server
+  $ hector call --server http://remote:50052 my_agent "prompt"
 
 ENVIRONMENT VARIABLES:
-  HECTOR_SERVER    Default A2A server URL
+  HECTOR_SERVER    Default server URL
   HECTOR_TOKEN     Default authentication token
 
 For more information: https://github.com/kadirpekel/hector
 `)
-}
-
-// ============================================================================
-// ORCHESTRATION TOOLS REGISTRATION
-// ============================================================================
-
-func registerOrchestrationTools(componentManager *component.ComponentManager, agentRegistry *agent.AgentRegistry, debug bool) error {
-	toolRegistry := componentManager.GetToolRegistry()
-
-	// Create orchestration tool source
-	orchestrationSource := tools.NewLocalToolSource("orchestration")
-
-	// Register agent_call tool
-	agentCallTool := agent.NewAgentCallTool(agentRegistry)
-	if err := orchestrationSource.RegisterTool(agentCallTool); err != nil {
-		return fmt.Errorf("failed to register agent_call tool: %w", err)
-	}
-
-	// Register the orchestration source in the tool registry
-	if err := toolRegistry.RegisterSource(orchestrationSource); err != nil {
-		return fmt.Errorf("failed to register orchestration tool source: %w", err)
-	}
-
-	if debug {
-		fmt.Println("\n🔧 Orchestration tools registered:")
-		fmt.Println("  ✅ agent_call - Enables multi-agent orchestration")
-	}
-
-	return nil
 }
 
 // ============================================================================

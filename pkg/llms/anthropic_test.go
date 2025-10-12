@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 func TestNewAnthropicProvider(t *testing.T) {
@@ -171,8 +172,8 @@ func TestAnthropicProvider_Generate_Success(t *testing.T) {
 	}
 
 	// Test Generate
-	messages := []a2a.Message{
-		a2a.CreateUserMessage("Hello"),
+	messages := []*pb.Message{
+		protocol.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -246,8 +247,8 @@ func TestAnthropicProvider_Generate_WithTools(t *testing.T) {
 	}
 
 	// Test Generate with tools
-	messages := []a2a.Message{
-		a2a.CreateUserMessage("Use the test tool"),
+	messages := []*pb.Message{
+		protocol.CreateUserMessage("Use the test tool"),
 	}
 	tools := []ToolDefinition{
 		{
@@ -308,8 +309,8 @@ func TestAnthropicProvider_Generate_HTTPError(t *testing.T) {
 	}
 
 	// Test Generate with HTTP error
-	messages := []a2a.Message{
-		a2a.CreateUserMessage("Hello"),
+	messages := []*pb.Message{
+		protocol.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -342,8 +343,8 @@ func TestAnthropicProvider_Generate_InvalidJSON(t *testing.T) {
 	}
 
 	// Test Generate with invalid JSON
-	messages := []a2a.Message{
-		a2a.CreateUserMessage("Hello"),
+	messages := []*pb.Message{
+		protocol.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -417,8 +418,8 @@ data: {"type": "message_stop"}`,
 	}
 
 	// Test GenerateStreaming
-	messages := []a2a.Message{
-		a2a.CreateUserMessage("Hello"),
+	messages := []*pb.Message{
+		protocol.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -473,8 +474,8 @@ func TestAnthropicProvider_GenerateStreaming_Error(t *testing.T) {
 	}
 
 	// Test GenerateStreaming with error
-	messages := []a2a.Message{
-		a2a.CreateUserMessage("Hello"),
+	messages := []*pb.Message{
+		protocol.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -543,8 +544,8 @@ func TestAnthropicProvider_WithCustomHTTPClient(t *testing.T) {
 	provider.httpClient = customClient
 
 	// Test Generate with custom client
-	messages := []a2a.Message{
-		a2a.CreateUserMessage("Hello"),
+	messages := []*pb.Message{
+		protocol.CreateUserMessage("Hello"),
 	}
 	tools := []ToolDefinition{}
 
@@ -563,10 +564,10 @@ func TestAnthropicProvider_WithCustomHTTPClient(t *testing.T) {
 
 func TestAnthropicProvider_MessageConversion(t *testing.T) {
 	// Test conversion from universal Message format to Anthropic format
-	_ = []a2a.Message{
-		a2a.CreateUserMessage("Hello"),
-		a2a.CreateAssistantMessage("Hi there!"),
-		a2a.CreateTextMessage(a2a.MessageRoleSystem, "You are a helpful assistant"),
+	_ = []*pb.Message{
+		protocol.CreateUserMessage("Hello"),
+		protocol.CreateTextMessage(pb.Role_ROLE_AGENT, "Hi there!"),
+		protocol.CreateTextMessage(pb.Role_ROLE_USER, "You are a helpful assistant"),
 	}
 
 	// This would be tested through the actual Generate method

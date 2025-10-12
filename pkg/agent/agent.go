@@ -24,12 +24,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
 	"github.com/kadirpekel/hector/pkg/llms"
 	"github.com/kadirpekel/hector/pkg/memory"
+	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
 
@@ -48,33 +49,45 @@ const (
 // Agent contains the reasoning loop (formerly in Orchestrator)
 // ============================================================================
 
-// Agent executes reasoning with strategies
+// Agent executes reasoning with strategies and implements pb.A2AServiceServer
 type Agent struct {
+	pb.UnimplementedA2AServiceServer
+
 	name        string
 	description string
 	config      *config.AgentConfig
 	services    reasoning.AgentServices
+	taskWorkers chan struct{}
 }
 
 // NewAgent creates a new agent with services
 func NewAgent(agentConfig *config.AgentConfig, componentMgr interface{}, registry *AgentRegistry) (*Agent, error) {
-	// Type assert to get the component manager
 	compMgr, ok := componentMgr.(*component.ComponentManager)
 	if !ok {
 		return nil, fmt.Errorf("invalid component manager type")
 	}
 
-	// Create services with registry
+	agentConfig.Task.SetDefaults()
+
 	services, err := NewAgentServicesWithRegistry(agentConfig, compMgr, registry)
 	if err != nil {
 		return nil, err
 	}
+
+	var taskWorkers chan struct{}
+	if services.Task() != nil && agentConfig.Task.WorkerPool > 0 {
+		// Bounded worker pool: limits concurrent task processing
+		// Prevents resource exhaustion when many async tasks are submitted
+		taskWorkers = make(chan struct{}, agentConfig.Task.WorkerPool)
+	}
+	// If WorkerPool is 0 (unlimited), taskWorkers remains nil = no limit
 
 	return &Agent{
 		name:        agentConfig.Name,
 		description: agentConfig.Description,
 		config:      agentConfig,
 		services:    services,
+		taskWorkers: taskWorkers,
 	}, nil
 }
 
@@ -91,170 +104,17 @@ func (a *Agent) ClearHistory(sessionID string) error {
 	return nil
 }
 
-// ============================================================================
-// PURE A2A INTERFACE IMPLEMENTATION
-// Agent implements a2a.Agent interface directly - no wrapper needed!
-// ============================================================================
-
-// GetAgentCard returns the agent's capability card
-func (a *Agent) GetAgentCard() *a2a.AgentCard {
-	return &a2a.AgentCard{
-		Name:               a.name,
-		Description:        a.description,
-		Version:            "1.0.0",
-		PreferredTransport: "http+json",
-		Capabilities: a2a.AgentCapabilities{
+// GetAgentCardSimple returns a simple agent card (for registry, not gRPC)
+// This is a convenience method that doesn't require context/request
+func (a *Agent) GetAgentCardSimple() *pb.AgentCard {
+	return &pb.AgentCard{
+		Name:        a.name,
+		Description: a.description,
+		Version:     "1.0.0",
+		Capabilities: &pb.AgentCapabilities{
 			Streaming: true,
-			MultiTurn: true,
 		},
 	}
-}
-
-// ExecuteTask implements a2a.Agent.ExecuteTask
-func (a *Agent) ExecuteTask(ctx context.Context, task *a2a.Task) (*a2a.Task, error) {
-	// Extract user message text
-	userText := a2a.ExtractTextFromTask(task)
-	if userText == "" && len(task.Messages) > 0 {
-		// Get the last user message
-		for i := len(task.Messages) - 1; i >= 0; i-- {
-			if task.Messages[i].Role == a2a.MessageRoleUser {
-				for _, part := range task.Messages[i].Parts {
-					if part.Type == a2a.PartTypeText {
-						userText = part.Text
-						break
-					}
-				}
-				if userText != "" {
-					break
-				}
-			}
-		}
-	}
-
-	// Create strategy based on config
-	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
-	if err != nil {
-		task.Status.State = a2a.TaskStateFailed
-		task.Status.UpdatedAt = time.Now()
-		task.Error = &a2a.TaskError{
-			Code:    "strategy_error",
-			Message: err.Error(),
-		}
-		return task, nil
-	}
-
-	// No special logic needed - strategies access registry via state.Services.AgentRegistry()
-
-	// Execute reasoning loop
-	streamCh, err := a.execute(ctx, userText, strategy)
-	if err != nil {
-		task.Status.State = a2a.TaskStateFailed
-		task.Status.UpdatedAt = time.Now()
-		task.Error = &a2a.TaskError{
-			Code:    "execution_error",
-			Message: err.Error(),
-		}
-		return task, nil
-	}
-
-	// Collect all streaming output
-	var fullResponse strings.Builder
-	for chunk := range streamCh {
-		fullResponse.WriteString(chunk)
-	}
-
-	// Add assistant response to task
-	task.Messages = append(task.Messages, a2a.Message{
-		Role: a2a.MessageRoleAssistant,
-		Parts: []a2a.Part{
-			{
-				Type: a2a.PartTypeText,
-				Text: fullResponse.String(),
-			},
-		},
-	})
-	task.Status.State = a2a.TaskStateCompleted
-	task.Status.UpdatedAt = time.Now()
-
-	return task, nil
-}
-
-// ExecuteTaskStreaming implements a2a.Agent.ExecuteTaskStreaming
-func (a *Agent) ExecuteTaskStreaming(ctx context.Context, task *a2a.Task) (<-chan a2a.StreamEvent, error) {
-	// Extract user message text
-	userText := a2a.ExtractTextFromTask(task)
-	if userText == "" && len(task.Messages) > 0 {
-		// Get the last user message
-		for i := len(task.Messages) - 1; i >= 0; i-- {
-			if task.Messages[i].Role == a2a.MessageRoleUser {
-				for _, part := range task.Messages[i].Parts {
-					if part.Type == a2a.PartTypeText {
-						userText = part.Text
-						break
-					}
-				}
-				if userText != "" {
-					break
-				}
-			}
-		}
-	}
-
-	// Create strategy based on config
-	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
-	if err != nil {
-		return nil, err
-	}
-
-	// No special logic needed - strategies access registry via state.Services.AgentRegistry()
-
-	// Execute reasoning loop
-	hectorStream, err := a.execute(ctx, userText, strategy)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert to A2A StreamEvents
-	eventCh := make(chan a2a.StreamEvent, 10)
-
-	go func() {
-		defer close(eventCh)
-
-		var fullText strings.Builder
-
-		for chunk := range hectorStream {
-			fullText.WriteString(chunk)
-
-			// Send text chunk as message event
-			eventCh <- a2a.StreamEvent{
-				Type:   a2a.StreamEventTypeMessage,
-				TaskID: task.ID,
-				Message: &a2a.Message{
-					Role: a2a.MessageRoleAssistant,
-					Parts: []a2a.Part{
-						{
-							Type: a2a.PartTypeText,
-							Text: chunk,
-						},
-					},
-				},
-				Timestamp: time.Now(),
-			}
-		}
-
-		// Send completion status
-		eventCh <- a2a.StreamEvent{
-			Type:   a2a.StreamEventTypeStatus,
-			TaskID: task.ID,
-			Status: &a2a.TaskStatus{
-				State:     a2a.TaskStateCompleted,
-				UpdatedAt: time.Now(),
-			},
-			Timestamp: time.Now(),
-		}
-	}()
-
-	return eventCh, nil
 }
 
 // ============================================================================
@@ -428,21 +288,47 @@ func (a *Agent) execute(
 			// Execute tools if any
 			var results []reasoning.ToolResult
 			if len(toolCalls) > 0 {
-				// IMPORTANT: Add assistant message WITH tool_calls BEFORE adding tool results
-				// This is required by OpenAI/Anthropic/Gemini for proper tool calling round-trip
-				assistantMsg := a2a.CreateTextMessage(a2a.MessageRoleAssistant, text)
-				assistantMsg.ToolCalls = toolCalls
+				// Create assistant message with text + tool call parts (pure A2A protocol)
+				assistantMsg := &pb.Message{
+					Role:    pb.Role_ROLE_AGENT,
+					Content: []*pb.Part{},
+				}
+
+				// Add text part if present
+				if text != "" {
+					assistantMsg.Content = append(assistantMsg.Content,
+						&pb.Part{Part: &pb.Part_Text{Text: text}})
+				}
+
+				// Add tool call parts using DataPart (native A2A protocol)
+				for _, tc := range toolCalls {
+					assistantMsg.Content = append(assistantMsg.Content,
+						protocol.CreateToolCallPart(tc))
+				}
+
 				state.Conversation = append(state.Conversation, assistantMsg)
 
 				results = a.executeTools(ctx, toolCalls, outputCh, cfg)
 
-				// Add tool results to conversation using standard role: "tool" format
-				// All supported providers (OpenAI, Anthropic, Gemini) support this format
+				// Add tool result messages using DataPart (native A2A protocol)
 				for _, result := range results {
-					toolResultMsg := a2a.CreateTextMessage(a2a.MessageRoleTool, result.Content)
-					toolResultMsg.ToolCallID = result.ToolCallID
-					toolResultMsg.Name = result.ToolName
-					state.Conversation = append(state.Conversation, toolResultMsg)
+					// Convert reasoning.ToolResult to protocol.ToolResult
+					errorStr := ""
+					if result.Error != nil {
+						errorStr = result.Error.Error()
+					}
+					a2aResult := &protocol.ToolResult{
+						ToolCallID: result.ToolCallID,
+						Content:    result.Content,
+						Error:      errorStr,
+					}
+					resultMsg := &pb.Message{
+						Role: pb.Role_ROLE_AGENT,
+						Content: []*pb.Part{
+							protocol.CreateToolResultPart(a2aResult),
+						},
+					}
+					state.Conversation = append(state.Conversation, resultMsg)
 				}
 			}
 
@@ -537,11 +423,11 @@ func (a *Agent) isRetryableError(err error) bool {
 // callLLM calls the LLM service (streaming or non-streaming)
 func (a *Agent) callLLM(
 	ctx context.Context,
-	messages []a2a.Message,
+	messages []*pb.Message,
 	toolDefs []llms.ToolDefinition,
 	outputCh chan<- string,
 	cfg config.ReasoningConfig,
-) (string, []a2a.ToolCall, int, error) {
+) (string, []*protocol.ToolCall, int, error) {
 	llm := a.services.LLM()
 
 	if cfg.EnableStreaming {
@@ -597,7 +483,7 @@ func (a *Agent) callLLM(
 // executeTools executes all tool calls sequentially
 func (a *Agent) executeTools(
 	ctx context.Context,
-	toolCalls []a2a.ToolCall,
+	toolCalls []*protocol.ToolCall,
 	outputCh chan<- string,
 	cfg config.ReasoningConfig,
 ) []reasoning.ToolResult {
@@ -621,7 +507,7 @@ func (a *Agent) executeTools(
 		// Show tool label before execution (both streaming and non-streaming)
 		// This ensures clean "🔧 tool ✅" pairing for each tool
 		if cfg.ShowToolExecution {
-			label := formatToolLabel(toolCall.Name, toolCall.Arguments)
+			label := formatToolLabel(toolCall.Name, toolCall.Args)
 			outputCh <- fmt.Sprintf("🔧 %s", label)
 		}
 
@@ -707,8 +593,8 @@ func (a *Agent) saveToHistory(
 	}
 
 	// Add user's input message to conversation (if not already there)
-	if len(state.Conversation) == 0 || state.Conversation[len(state.Conversation)-1].Role != a2a.MessageRoleUser {
-		userMsg := a2a.CreateUserMessage(input)
+	if len(state.Conversation) == 0 || state.Conversation[len(state.Conversation)-1].Role != pb.Role_ROLE_USER {
+		userMsg := protocol.CreateUserMessage(input)
 		state.Conversation = append(state.Conversation, userMsg)
 	}
 
@@ -717,11 +603,11 @@ func (a *Agent) saveToHistory(
 	if finalResponse != "" {
 		// Check if the last message is already an assistant message
 		// (it would have been added in-loop if there were tool calls in the final iteration)
-		lastIsAssistant := len(state.Conversation) > 0 && state.Conversation[len(state.Conversation)-1].Role == a2a.MessageRoleAssistant
+		lastIsAssistant := len(state.Conversation) > 0 && state.Conversation[len(state.Conversation)-1].Role == pb.Role_ROLE_AGENT
 
 		if !lastIsAssistant {
 			// Final iteration had no tool calls - add the response message here
-			assistantMsg := a2a.CreateTextMessage(a2a.MessageRoleAssistant, finalResponse)
+			assistantMsg := protocol.CreateTextMessage(pb.Role_ROLE_AGENT, finalResponse)
 			state.Conversation = append(state.Conversation, assistantMsg)
 		}
 	}
@@ -745,9 +631,9 @@ func (a *Agent) saveToHistory(
 		msg := state.Conversation[i]
 
 		// Only save user/assistant messages with content
-		if msg.Role == a2a.MessageRoleUser || msg.Role == a2a.MessageRoleAssistant {
+		if msg.Role == pb.Role_ROLE_USER || msg.Role == pb.Role_ROLE_AGENT {
 			// Skip messages with empty content (e.g., when LLM calls tool without preamble)
-			textContent := a2a.ExtractTextFromMessage(msg)
+			textContent := protocol.ExtractTextFromMessage(msg)
 			if textContent != "" {
 				err := history.AddToHistory(sessionID, msg)
 				if err != nil {
@@ -824,5 +710,5 @@ func (a *Agent) GetServices() reasoning.AgentServices {
 // COMPILE-TIME CHECK
 // ============================================================================
 
-// Ensure Agent implements a2a.Agent interface directly
-var _ a2a.Agent = (*Agent)(nil)
+// Agent implements pb.A2AServiceServer interface (checked by embedding)
+// See agent_a2a_methods.go for the implementation

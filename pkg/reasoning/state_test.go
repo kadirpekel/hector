@@ -3,7 +3,8 @@ package reasoning
 import (
 	"testing"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 // ============================================================================
@@ -76,19 +77,21 @@ func TestReasoningState_Conversation(t *testing.T) {
 	state := NewReasoningState()
 
 	// Add messages to conversation
-	state.Conversation = append(state.Conversation, a2a.CreateUserMessage("Hello"))
-
-	state.Conversation = append(state.Conversation, a2a.CreateAssistantMessage("Hi there"))
+	state.Conversation = append(state.Conversation, protocol.CreateUserMessage("Hello"))
+	state.Conversation = append(state.Conversation, &pb.Message{
+		Role:    pb.Role_ROLE_AGENT,
+		Content: []*pb.Part{{Part: &pb.Part_Text{Text: "Hi there"}}},
+	})
 
 	if len(state.Conversation) != 2 {
 		t.Errorf("Expected 2 messages, got %d", len(state.Conversation))
 	}
 
-	if state.Conversation[0].Role != "user" {
+	if state.Conversation[0].Role != pb.Role_ROLE_USER {
 		t.Error("First message should be user")
 	}
 
-	if state.Conversation[1].Role != "assistant" {
+	if state.Conversation[1].Role != pb.Role_ROLE_AGENT {
 		t.Error("Second message should be assistant")
 	}
 }
@@ -113,12 +116,12 @@ func TestReasoningState_FirstIterationToolCalls(t *testing.T) {
 	state := NewReasoningState()
 
 	// Add tool calls
-	state.FirstIterationToolCalls = append(state.FirstIterationToolCalls, a2a.ToolCall{
+	state.FirstIterationToolCalls = append(state.FirstIterationToolCalls, &protocol.ToolCall{
 		ID:   "call-1",
 		Name: "search",
 	})
 
-	state.FirstIterationToolCalls = append(state.FirstIterationToolCalls, a2a.ToolCall{
+	state.FirstIterationToolCalls = append(state.FirstIterationToolCalls, &protocol.ToolCall{
 		ID:   "call-2",
 		Name: "write_file",
 	})

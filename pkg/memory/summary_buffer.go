@@ -4,21 +4,21 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	hectorcontext "github.com/kadirpekel/hector/pkg/context"
-	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/utils"
 )
 
 // SummarizationService interface for summarizing conversations
 // This avoids circular dependency with pkg/agent
 type SummarizationService interface {
-	SummarizeConversation(ctx context.Context, messages []a2a.Message) (string, error)
+	SummarizeConversation(ctx context.Context, messages []*pb.Message) (string, error)
 }
 
 // SummaryBufferStrategy implements token-based memory with threshold-triggered summarization
+// Uses NATIVE pb.Message storage (no conversion)
 // This is the DEFAULT and RECOMMENDED strategy for working memory
 type SummaryBufferStrategy struct {
 	tokenBudget    int     // Default: 2000
@@ -35,7 +35,6 @@ type SummaryBufferConfig struct {
 	Threshold  float64              // Trigger at % of budget (default: 0.8)
 	Target     float64              // Compress to % of budget (default: 0.6)
 	Model      string               // Model for token counting
-	LLM        llms.LLMProvider     // LLM for summarization
 	Summarizer SummarizationService // Summarization service
 }
 
@@ -67,8 +66,9 @@ func NewSummaryBufferStrategy(config SummaryBufferConfig) (*SummaryBufferStrateg
 		return nil, fmt.Errorf("summarization service is required")
 	}
 
-	log.Printf("✅ Summary buffer strategy initialized (budget: %d, threshold: %.0f%%, target: %.0f%%)",
-		config.Budget, config.Threshold*100, config.Target*100)
+	// Debug logging removed for cleaner output
+	// log.Printf("✅ Summary buffer strategy initialized (budget: %d, threshold: %.0f%%, target: %.0f%%)",
+	// 	config.Budget, config.Threshold*100, config.Target*100)
 
 	return &SummaryBufferStrategy{
 		tokenBudget:  config.Budget,
@@ -91,11 +91,10 @@ func (s *SummaryBufferStrategy) SetStatusNotifier(notifier StatusNotifier) {
 
 // AddMessage adds a message to the session's memory
 // May trigger summarization if threshold is exceeded (blocking operation)
-func (s *SummaryBufferStrategy) AddMessage(session *hectorcontext.ConversationHistory, msg a2a.Message) error {
+// NO CONVERSION - stores pb.Message directly
+func (s *SummaryBufferStrategy) AddMessage(session *hectorcontext.ConversationHistory, msg *pb.Message) error {
 	// Add message to session
-	textContent := a2a.ExtractTextFromMessage(msg)
-	_, err := session.AddMessage(string(msg.Role), textContent, nil)
-	if err != nil {
+	if err := session.AddMessage(msg); err != nil {
 		return fmt.Errorf("failed to add message: %w", err)
 	}
 
@@ -108,25 +107,25 @@ func (s *SummaryBufferStrategy) AddMessage(session *hectorcontext.ConversationHi
 }
 
 // GetMessages returns messages from the session within token budget
-func (s *SummaryBufferStrategy) GetMessages(session *hectorcontext.ConversationHistory) ([]a2a.Message, error) {
-	allMessages := s.getAllMessages(session)
-	return allMessages, nil
+// NO CONVERSION - returns pb.Message directly
+func (s *SummaryBufferStrategy) GetMessages(session *hectorcontext.ConversationHistory) ([]*pb.Message, error) {
+	return session.GetAllMessages(), nil
 }
 
 // shouldSummarize checks if summarization should be triggered
 func (s *SummaryBufferStrategy) shouldSummarize(session *hectorcontext.ConversationHistory) bool {
-	allMessages := s.getAllMessages(session)
+	allMessages := session.GetAllMessages()
 	if len(allMessages) < 10 {
 		// Need at least 10 messages for summarization to be worthwhile
 		return false
 	}
 
-	// Convert to utils.Message
+	// Convert to utils.Message for token counting
 	utilMessages := make([]utils.Message, len(allMessages))
 	for i, msg := range allMessages {
-		textContent := a2a.ExtractTextFromMessage(msg)
+		textContent := protocol.ExtractTextFromMessage(msg)
 		utilMessages[i] = utils.Message{
-			Role:    string(msg.Role),
+			Role:    msg.Role.String(),
 			Content: textContent,
 		}
 	}
@@ -144,11 +143,9 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 	targetTokens := int(float64(s.tokenBudget) * s.target)
 
 	// Get all messages
-	allMessages := s.getAllMessages(session)
+	allMessages := session.GetAllMessages()
 
 	// Determine how many messages to keep recent
-	// Strategy: Keep recent messages that fit within token budget
-	// If budget is very small, keep at least the last 2-3 messages
 	recentMessages := s.selectRecentMessagesWithMinimum(allMessages, targetTokens)
 	oldMessages := allMessages[:len(allMessages)-len(recentMessages)]
 
@@ -165,11 +162,9 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 	}
 
 	// BLOCKING CALL: Summarize old messages (takes 2-5 seconds)
-	// User is already waiting for response, so this is acceptable
 	summary, err := s.summarizer.SummarizeConversation(context.Background(), oldMessages)
 	if err != nil {
 		log.Printf("⚠️  Summarization failed: %v", err)
-		// Notify user of failure
 		if s.statusNotifier != nil {
 			s.statusNotifier("⚠️  Summarization failed, continuing with full history")
 		}
@@ -183,19 +178,19 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 	session.Clear()
 
 	// Add summary as system message
-	_, err = session.AddMessage("system", fmt.Sprintf("Previous conversation summary: %s", summary), map[string]interface{}{
-		"is_summary":    true,
-		"summarized_at": time.Now().Format(time.RFC3339),
-	})
-	if err != nil {
+	summaryMsg := &pb.Message{
+		Role: pb.Role_ROLE_UNSPECIFIED, // System-like
+		Content: []*pb.Part{
+			{Part: &pb.Part_Text{Text: fmt.Sprintf("Previous conversation summary: %s", summary)}},
+		},
+	}
+	if err := session.AddMessage(summaryMsg); err != nil {
 		return fmt.Errorf("failed to add summary: %w", err)
 	}
 
 	// Re-add recent messages
 	for _, msg := range recentMessages {
-		textContent := a2a.ExtractTextFromMessage(msg)
-		_, err := session.AddMessage(string(msg.Role), textContent, nil)
-		if err != nil {
+		if err := session.AddMessage(msg); err != nil {
 			log.Printf("⚠️  Failed to re-add message: %v", err)
 		}
 	}
@@ -206,21 +201,18 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 }
 
 // selectRecentMessagesWithMinimum selects recent messages with smart allocation
-// Guarantees keeping at least a minimum number of recent messages for context
-func (s *SummaryBufferStrategy) selectRecentMessagesWithMinimum(messages []a2a.Message, targetTokens int) []a2a.Message {
+func (s *SummaryBufferStrategy) selectRecentMessagesWithMinimum(messages []*pb.Message, targetTokens int) []*pb.Message {
 	if len(messages) == 0 {
-		return []a2a.Message{}
+		return []*pb.Message{}
 	}
 
-	// Always keep at least the last 3 messages (or all if fewer)
-	// This ensures users don't lose immediate context
+	// Always keep at least the last 3 messages
 	minMessages := 3
 	if len(messages) < minMessages {
-		return messages // Keep all if we have fewer than minimum
+		return messages
 	}
 
 	// Allocate 60% of target budget for recent messages
-	// Remaining 40% is for summary overhead
 	recentTokenBudget := int(float64(targetTokens) * 0.6)
 
 	// Try to fit messages within budget
@@ -239,42 +231,30 @@ func (s *SummaryBufferStrategy) selectRecentMessagesWithMinimum(messages []a2a.M
 }
 
 // selectRecentMessages selects recent messages that fit within the token budget
-func (s *SummaryBufferStrategy) selectRecentMessages(messages []a2a.Message, tokenBudget int) []a2a.Message {
+func (s *SummaryBufferStrategy) selectRecentMessages(messages []*pb.Message, tokenBudget int) []*pb.Message {
 	if len(messages) == 0 {
-		return []a2a.Message{}
+		return []*pb.Message{}
 	}
 
-	// Convert to utils.Message
-	utilMessages := make([]utils.Message, len(messages))
-	for i, msg := range messages {
-		textContent := a2a.ExtractTextFromMessage(msg)
-		utilMessages[i] = utils.Message{
-			Role:    string(msg.Role),
-			Content: textContent,
+	// Convert to utils.Message for token counting
+	var selected []*pb.Message
+	currentTokens := 0
+
+	// Work backwards from most recent
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+		textContent := protocol.ExtractTextFromMessage(msg)
+		msgTokens := s.tokenCounter.CountMessages([]utils.Message{
+			{Role: msg.Role.String(), Content: textContent},
+		})
+
+		if currentTokens+msgTokens <= tokenBudget {
+			selected = append([]*pb.Message{msg}, selected...)
+			currentTokens += msgTokens
+		} else {
+			break
 		}
 	}
 
-	// Use token counter to fit within budget
-	fitted := s.tokenCounter.FitWithinLimit(utilMessages, tokenBudget)
-
-	// Convert back to A2A Message
-	result := make([]a2a.Message, len(fitted))
-	for i, msg := range fitted {
-		result[i] = a2a.CreateTextMessage(a2a.MessageRole(msg.Role), msg.Content)
-	}
-
-	return result
-}
-
-// getAllMessages retrieves all messages from a session
-func (s *SummaryBufferStrategy) getAllMessages(session *hectorcontext.ConversationHistory) []a2a.Message {
-	contextMessages := session.GetRecentMessages(100000) // Get all messages
-
-	// Convert to A2A Message format
-	messages := make([]a2a.Message, len(contextMessages))
-	for i, msg := range contextMessages {
-		messages[i] = a2a.CreateTextMessage(a2a.MessageRole(msg.Role), msg.Content)
-	}
-
-	return messages
+	return selected
 }

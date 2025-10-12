@@ -110,32 +110,30 @@ func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager 
 	toolService := NewToolService(toolRegistry, agentConfig.Tools)
 
 	// Create memory service with working memory strategy
-	var memErr error
-
 	// Create summarization service if needed for summary_buffer strategy
 	var summarizer *SummarizationService
 	if agentConfig.Memory.Strategy == "summary_buffer" || agentConfig.Memory.Strategy == "" {
-		summarizer, memErr = NewSummarizationService(llm, &SummarizationConfig{
+		var err error
+		summarizer, err = NewSummarizationService(llm, &SummarizationConfig{
 			Model: llm.GetModelName(),
 		})
-		if memErr != nil {
-			return nil, fmt.Errorf("failed to create summarization service: %w", memErr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create summarization service: %w", err)
 		}
 	}
 
 	// Create working memory strategy using the factory
-	workingStrategy, memErr := memory.NewWorkingMemoryStrategy(memory.WorkingMemoryConfig{
+	workingStrategy, err := memory.NewWorkingMemoryStrategy(memory.WorkingMemoryConfig{
 		Strategy:   agentConfig.Memory.Strategy,
 		WindowSize: agentConfig.Memory.WindowSize,
 		Budget:     agentConfig.Memory.Budget,
 		Threshold:  agentConfig.Memory.Threshold,
 		Target:     agentConfig.Memory.Target,
 		Model:      llm.GetModelName(),
-		LLM:        llm,
 		Summarizer: summarizer,
 	})
-	if memErr != nil {
-		return nil, fmt.Errorf("failed to create working memory strategy: %w", memErr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create working memory strategy: %w", err)
 	}
 
 	// Create long-term memory strategy (optional)
@@ -161,13 +159,13 @@ func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager 
 		}
 
 		// Create vector memory strategy with direct database + embedder access
-		longTermStrategy, memErr = memory.NewVectorMemoryStrategy(
+		longTermStrategy, err = memory.NewVectorMemoryStrategy(
 			db,
 			embedder,
 			agentConfig.Memory.LongTerm.Collection,
 		)
-		if memErr != nil {
-			return nil, fmt.Errorf("failed to create long-term memory: %w", memErr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create long-term memory: %w", err)
 		}
 
 		fmt.Printf("✅ Long-term memory enabled (collection: %s, batch_size: %d, auto_recall: %t, recall_limit: %d)\n",
@@ -177,33 +175,62 @@ func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager 
 			agentConfig.Memory.LongTerm.RecallLimit)
 	}
 
-	// Create memory service (orchestrates working + long-term memory)
+	// Build long-term config
+	longTermConfig := memory.LongTermConfig{
+		Enabled:      agentConfig.Memory.LongTerm.Enabled,
+		StorageScope: memory.StorageScope(agentConfig.Memory.LongTerm.StorageScope),
+		BatchSize:    agentConfig.Memory.LongTerm.BatchSize,
+		AutoRecall:   agentConfig.Memory.LongTerm.AutoRecall,
+		RecallLimit:  agentConfig.Memory.LongTerm.RecallLimit,
+		Collection:   agentConfig.Memory.LongTerm.Collection,
+	}
+
+	// Create in-memory session service for session management
+	sessionService := memory.NewInMemorySessionService()
+
+	// Create memory service (using in-memory session service)
 	historyService := memory.NewMemoryService(
+		sessionService,
 		workingStrategy,
-		longTermStrategy, // May be nil if not enabled
-		memory.LongTermConfig{
-			Enabled:      agentConfig.Memory.LongTerm.Enabled,
-			StorageScope: memory.StorageScope(agentConfig.Memory.LongTerm.StorageScope),
-			BatchSize:    agentConfig.Memory.LongTerm.BatchSize,
-			AutoRecall:   agentConfig.Memory.LongTerm.AutoRecall,
-			RecallLimit:  agentConfig.Memory.LongTerm.RecallLimit,
-			Collection:   agentConfig.Memory.LongTerm.Collection,
-		},
+		longTermStrategy,
+		longTermConfig,
 	)
 
 	// contextService already created above based on document store availability
 	promptService := NewPromptService(agentConfig.Prompt, contextService, historyService)
 
+	// Create task service if enabled
+	var taskService reasoning.TaskService
+	if agentConfig.Task.Enabled {
+		switch agentConfig.Task.Backend {
+		case "memory":
+			taskService = NewInMemoryTaskService()
+		case "sql":
+			if agentConfig.Task.SQL == nil {
+				return nil, fmt.Errorf("SQL configuration is required for SQL backend")
+			}
+			sqlService, err := NewSQLTaskServiceFromConfig(agentConfig.Task.SQL)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create SQL task service: %w", err)
+			}
+			taskService = sqlService
+		default:
+			return nil, fmt.Errorf("unsupported task backend: %s", agentConfig.Task.Backend)
+		}
+	}
+
 	// Create agent services for dependency injection
-	// Note: promptService already has contextService and historyService as dependencies
+	// Note: SessionService is the in-memory implementation, HistoryService is the MemoryService
 	agentServices := reasoning.NewAgentServices(
 		agentConfig.Reasoning,
 		llmService,
 		toolService,
 		contextService,
 		promptService,
-		historyService,
+		sessionService, // SessionService (in-memory)
+		historyService, // HistoryService (memory service)
 		registryService,
+		taskService, // TaskService (may be nil)
 	)
 
 	return agentServices, nil

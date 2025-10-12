@@ -195,10 +195,10 @@ func (c *ProviderConfigs) SetDefaults() {
 
 // LLMProviderConfig represents LLM provider configuration
 type LLMProviderConfig struct {
-	Type        string  `yaml:"type"`        // "ollama", "openai", "anthropic", "gemini"
+	Type        string  `yaml:"type"`        // "openai", "anthropic", "gemini"
 	Model       string  `yaml:"model"`       // Model name
 	APIKey      string  `yaml:"api_key"`     // API key (for OpenAI, Anthropic, Gemini)
-	Host        string  `yaml:"host"`        // Host for ollama or custom OpenAI endpoint
+	Host        string  `yaml:"host"`        // Host for custom OpenAI-compatible endpoint
 	Temperature float64 `yaml:"temperature"` // Temperature setting
 	MaxTokens   int     `yaml:"max_tokens"`  // Max tokens
 	Timeout     int     `yaml:"timeout"`     // Request timeout in seconds
@@ -454,19 +454,23 @@ type AgentConfig struct {
 	Visibility string `yaml:"visibility,omitempty"` // Agent visibility: "public" (default), "internal", or "private"
 
 	// External A2A agent fields (when type="a2a")
-	URL string `yaml:"url,omitempty"` // A2A agent URL (e.g., "https://server.com/agents/specialist")
+	URL         string            `yaml:"url,omitempty"`         // A2A agent URL (e.g., "https://server.com/agents/specialist")
+	Credentials *AgentCredentials `yaml:"credentials,omitempty"` // Authentication credentials for calling this external agent
 
 	// Native agent fields (when type="native" or omitted)
 	LLM            string          `yaml:"llm,omitempty"`             // LLM provider reference
 	Database       string          `yaml:"database,omitempty"`        // Database provider reference
 	Embedder       string          `yaml:"embedder,omitempty"`        // Embedder provider reference
+	SessionStore   string          `yaml:"session_store,omitempty"`   // Session store reference (defaults to "default")
 	DocumentStores []string        `yaml:"document_stores,omitempty"` // Document store references
 	Prompt         PromptConfig    `yaml:"prompt,omitempty"`          // Prompt configuration
 	Memory         MemoryConfig    `yaml:"memory,omitempty"`          // Memory configuration
 	Reasoning      ReasoningConfig `yaml:"reasoning,omitempty"`       // Reasoning configuration
 	Search         SearchConfig    `yaml:"search,omitempty"`          // Search configuration
+	Task           TaskConfig      `yaml:"task,omitempty"`            // Task configuration
 	Tools          []string        `yaml:"tools,omitempty"`           // Tool references (defined globally in tools: section)
 	SubAgents      []string        `yaml:"sub_agents,omitempty"`      // For supervisor agents: which agents can be orchestrated (empty = all)
+	Security       SecurityConfig  `yaml:"security,omitempty"`        // Security configuration
 }
 
 // Validate implements Config.Validate for AgentConfig
@@ -504,6 +508,12 @@ func (c *AgentConfig) Validate() error {
 		if c.LLM != "" {
 			return fmt.Errorf("llm should not be specified for external A2A agents (agent has its own LLM)")
 		}
+		// Validate credentials if provided
+		if c.Credentials != nil {
+			if err := c.Credentials.Validate(); err != nil {
+				return fmt.Errorf("invalid credentials for external agent: %w", err)
+			}
+		}
 
 	case "native":
 		// Native agent - LLM is required
@@ -528,6 +538,12 @@ func (c *AgentConfig) Validate() error {
 		}
 		if err := c.Search.Validate(); err != nil {
 			return fmt.Errorf("search configuration validation failed: %w", err)
+		}
+		if err := c.Task.Validate(); err != nil {
+			return fmt.Errorf("task configuration validation failed: %w", err)
+		}
+		if err := c.Security.Validate(); err != nil {
+			return fmt.Errorf("security configuration validation failed: %w", err)
 		}
 
 	default:
@@ -568,6 +584,8 @@ func (c *AgentConfig) SetDefaults() {
 		c.Memory.SetDefaults()
 		c.Reasoning.SetDefaults()
 		c.Search.SetDefaults()
+		c.Task.SetDefaults()
+		c.Security.SetDefaults()
 
 	case "a2a":
 		// External A2A agent - minimal defaults
@@ -577,7 +595,10 @@ func (c *AgentConfig) SetDefaults() {
 		if c.Description == "" {
 			c.Description = "External A2A-compliant agent"
 		}
-		// No other defaults needed - external agent has its own config
+		// Set defaults for credentials if provided
+		if c.Credentials != nil {
+			c.Credentials.SetDefaults()
+		}
 	}
 }
 
@@ -922,6 +943,233 @@ func (c *DocumentStoreConfig) SetDefaults() {
 // ============================================================================
 // PROMPT CONFIGURATIONS
 // ============================================================================
+
+// TaskConfig represents task service configuration
+type TaskConfig struct {
+	Enabled    bool           `yaml:"enabled"`               // Enable task tracking (default: false)
+	Backend    string         `yaml:"backend,omitempty"`     // Backend type: "memory" (default) or "sql"
+	WorkerPool int            `yaml:"worker_pool,omitempty"` // Max concurrent async tasks (default: 100, 0 = unlimited)
+	SQL        *TaskSQLConfig `yaml:"sql,omitempty"`         // SQL configuration (required if backend=sql)
+}
+
+// TaskSQLConfig represents SQL backend configuration for tasks
+type TaskSQLConfig struct {
+	Driver   string `yaml:"driver"`              // Database driver: "postgres", "mysql", or "sqlite"
+	Host     string `yaml:"host,omitempty"`      // Database host (not needed for sqlite)
+	Port     int    `yaml:"port,omitempty"`      // Database port (not needed for sqlite)
+	Database string `yaml:"database"`            // Database name or file path (for sqlite)
+	Username string `yaml:"username,omitempty"`  // Database username (not needed for sqlite)
+	Password string `yaml:"password,omitempty"`  // Database password (not needed for sqlite)
+	SSLMode  string `yaml:"ssl_mode,omitempty"`  // SSL mode for postgres: "disable", "require", "verify-ca", "verify-full"
+	MaxConns int    `yaml:"max_conns,omitempty"` // Maximum number of open connections (default: 25)
+	MaxIdle  int    `yaml:"max_idle,omitempty"`  // Maximum number of idle connections (default: 5)
+}
+
+// SetDefaults sets default values for TaskConfig
+func (c *TaskConfig) SetDefaults() {
+	if c.Backend == "" {
+		c.Backend = "memory"
+	}
+	if c.WorkerPool == 0 {
+		c.WorkerPool = 100 // Default: 100 concurrent tasks
+	}
+	if c.SQL != nil {
+		c.SQL.SetDefaults()
+	}
+}
+
+// SetDefaults sets default values for TaskSQLConfig
+func (c *TaskSQLConfig) SetDefaults() {
+	if c.Driver == "" {
+		c.Driver = "postgres"
+	}
+	if c.Host == "" && c.Driver != "sqlite" {
+		c.Host = "localhost"
+	}
+	if c.Port == 0 {
+		switch c.Driver {
+		case "postgres":
+			c.Port = 5432
+		case "mysql":
+			c.Port = 3306
+		}
+	}
+	if c.SSLMode == "" && c.Driver == "postgres" {
+		c.SSLMode = "disable"
+	}
+	if c.MaxConns == 0 {
+		c.MaxConns = 25
+	}
+	if c.MaxIdle == 0 {
+		c.MaxIdle = 5
+	}
+}
+
+// AgentCredentials represents authentication credentials for calling external A2A agents
+type AgentCredentials struct {
+	Type         string `yaml:"type"`                     // Credential type: "bearer", "api_key", "basic"
+	Token        string `yaml:"token,omitempty"`          // For bearer tokens (JWT)
+	APIKey       string `yaml:"api_key,omitempty"`        // For API key authentication
+	APIKeyHeader string `yaml:"api_key_header,omitempty"` // Header name for API key (default: "X-API-Key")
+	Username     string `yaml:"username,omitempty"`       // For basic auth
+	Password     string `yaml:"password,omitempty"`       // For basic auth
+}
+
+// SetDefaults sets default values for AgentCredentials
+func (c *AgentCredentials) SetDefaults() {
+	if c.Type == "" {
+		c.Type = "bearer" // Default to bearer token
+	}
+	if c.Type == "api_key" && c.APIKeyHeader == "" {
+		c.APIKeyHeader = "X-API-Key"
+	}
+}
+
+// Validate validates the agent credentials configuration
+func (c *AgentCredentials) Validate() error {
+	if c.Type == "" {
+		return fmt.Errorf("credential type is required")
+	}
+
+	switch c.Type {
+	case "bearer":
+		if c.Token == "" {
+			return fmt.Errorf("token is required for bearer authentication")
+		}
+	case "api_key":
+		if c.APIKey == "" {
+			return fmt.Errorf("api_key is required for api_key authentication")
+		}
+	case "basic":
+		if c.Username == "" || c.Password == "" {
+			return fmt.Errorf("username and password are required for basic authentication")
+		}
+	default:
+		return fmt.Errorf("unsupported credential type '%s' (supported: bearer, api_key, basic)", c.Type)
+	}
+	return nil
+}
+
+// SecurityConfig represents security configuration for an agent
+type SecurityConfig struct {
+	Enabled  bool                      `yaml:"enabled"`            // Whether authentication is required (default: false)
+	Schemes  map[string]SecurityScheme `yaml:"schemes,omitempty"`  // Security schemes by name (e.g., "BearerAuth")
+	Require  []map[string][]string     `yaml:"require,omitempty"`  // Security requirements (list of OR'd AND sets)
+	JWKSURL  string                    `yaml:"jwks_url,omitempty"` // JWKS URL for JWT validation
+	Issuer   string                    `yaml:"issuer,omitempty"`   // Expected JWT issuer
+	Audience string                    `yaml:"audience,omitempty"` // Expected JWT audience
+}
+
+// SecurityScheme represents a single security scheme definition
+type SecurityScheme struct {
+	Type         string `yaml:"type"`                    // Scheme type: "http", "apiKey", "oauth2", "openIdConnect", "mutualTLS"
+	Scheme       string `yaml:"scheme,omitempty"`        // For HTTP auth: "bearer", "basic"
+	BearerFormat string `yaml:"bearer_format,omitempty"` // For bearer tokens: "JWT"
+	Description  string `yaml:"description,omitempty"`   // Human-readable description
+	// For API Key auth
+	In   string `yaml:"in,omitempty"`   // "header", "query", or "cookie"
+	Name string `yaml:"name,omitempty"` // Parameter name for API key
+}
+
+// SetDefaults sets default values for SecurityConfig
+func (c *SecurityConfig) SetDefaults() {
+	// No defaults needed - security is opt-in
+}
+
+// Validate validates the security configuration
+func (c *SecurityConfig) Validate() error {
+	if !c.Enabled {
+		return nil // Skip validation if security is disabled
+	}
+	for name, scheme := range c.Schemes {
+		if scheme.Type == "" {
+			return fmt.Errorf("security scheme '%s' must have a type", name)
+		}
+		// Validate based on type
+		switch scheme.Type {
+		case "http":
+			if scheme.Scheme != "bearer" && scheme.Scheme != "basic" {
+				return fmt.Errorf("http security scheme '%s' must have scheme 'bearer' or 'basic'", name)
+			}
+		case "apiKey":
+			if scheme.In == "" || scheme.Name == "" {
+				return fmt.Errorf("apiKey security scheme '%s' must have 'in' and 'name' fields", name)
+			}
+		case "oauth2", "openIdConnect", "mutualTLS":
+			// More complex validation can be added here
+		default:
+			return fmt.Errorf("unsupported security scheme type '%s' for '%s'", scheme.Type, name)
+		}
+	}
+	return nil
+}
+
+// Validate validates the task configuration
+func (c *TaskConfig) Validate() error {
+	if c.Backend != "" && c.Backend != "memory" && c.Backend != "sql" {
+		return fmt.Errorf("invalid task backend '%s', must be 'memory' or 'sql'", c.Backend)
+	}
+	if c.WorkerPool < 0 {
+		return fmt.Errorf("worker_pool must be non-negative")
+	}
+	if c.Backend == "sql" && c.SQL == nil {
+		return fmt.Errorf("sql configuration is required when backend is 'sql'")
+	}
+	if c.SQL != nil {
+		if err := c.SQL.Validate(); err != nil {
+			return fmt.Errorf("sql config validation failed: %w", err)
+		}
+	}
+	return nil
+}
+
+// Validate validates the SQL configuration
+func (c *TaskSQLConfig) Validate() error {
+	if c.Driver == "" {
+		return fmt.Errorf("driver is required")
+	}
+	if c.Driver != "postgres" && c.Driver != "mysql" && c.Driver != "sqlite" {
+		return fmt.Errorf("invalid driver '%s', must be 'postgres', 'mysql', or 'sqlite'", c.Driver)
+	}
+	if c.Database == "" {
+		return fmt.Errorf("database is required")
+	}
+	if c.Driver != "sqlite" {
+		if c.Host == "" {
+			return fmt.Errorf("host is required for %s", c.Driver)
+		}
+		if c.Port <= 0 {
+			return fmt.Errorf("port must be positive for %s", c.Driver)
+		}
+	}
+	if c.MaxConns <= 0 {
+		return fmt.Errorf("max_conns must be positive")
+	}
+	if c.MaxIdle < 0 {
+		return fmt.Errorf("max_idle must be non-negative")
+	}
+	return nil
+}
+
+// ConnectionString builds a connection string for the database
+func (c *TaskSQLConfig) ConnectionString() string {
+	switch c.Driver {
+	case "postgres":
+		sslMode := c.SSLMode
+		if sslMode == "" {
+			sslMode = "disable"
+		}
+		return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			c.Host, c.Port, c.Username, c.Password, c.Database, sslMode)
+	case "mysql":
+		return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
+			c.Username, c.Password, c.Host, c.Port, c.Database)
+	case "sqlite":
+		return c.Database
+	default:
+		return ""
+	}
+}
 
 // MemoryConfig represents memory and conversation history configuration
 type MemoryConfig struct {

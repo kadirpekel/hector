@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
 
@@ -34,7 +35,14 @@ func (s *RegistryService) ListAgents() []reasoning.AgentRegistryEntry {
 
 	for _, entry := range entries {
 		// Get A2A AgentCard from the agent
-		card := entry.Agent.GetAgentCard()
+		// Cast to *Agent to access GetAgentCardSimple()
+		var card *pb.AgentCard
+		if agent, ok := entry.Agent.(*Agent); ok {
+			card = agent.GetAgentCardSimple()
+		} else {
+			// Fallback for non-Agent types
+			card = &pb.AgentCard{Name: entry.Name}
+		}
 
 		result = append(result, reasoning.AgentRegistryEntry{
 			ID:         entry.Name,
@@ -58,7 +66,14 @@ func (s *RegistryService) GetAgent(id string) (reasoning.AgentRegistryEntry, boo
 	}
 
 	// Get A2A AgentCard from the agent
-	card := entry.Agent.GetAgentCard()
+	// Cast to *Agent to access GetAgentCardSimple()
+	var card *pb.AgentCard
+	if agent, ok := entry.Agent.(*Agent); ok {
+		card = agent.GetAgentCardSimple()
+	} else {
+		// Fallback for non-Agent types
+		card = &pb.AgentCard{Name: entry.Name}
+	}
 
 	return reasoning.AgentRegistryEntry{
 		ID:         entry.Name,

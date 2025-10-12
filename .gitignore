@@ -59,4 +59,4 @@ test-docs/
 
 # Hector binary (but not cmd/hector directory)
 /hector
-code-index.json
+a2a-python

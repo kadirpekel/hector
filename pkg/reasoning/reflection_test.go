@@ -4,14 +4,15 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 func TestFallbackAnalysis(t *testing.T) {
 	tests := []struct {
 		name           string
-		toolCalls      []a2a.ToolCall
+		toolCalls      []*protocol.ToolCall
 		results        []ToolResult
 		wantSuccessful int
 		wantFailed     int
@@ -19,9 +20,9 @@ func TestFallbackAnalysis(t *testing.T) {
 	}{
 		{
 			name: "all successful",
-			toolCalls: []a2a.ToolCall{
-				{Name: "tool1", Arguments: map[string]interface{}{}},
-				{Name: "tool2", Arguments: map[string]interface{}{}},
+			toolCalls: []*protocol.ToolCall{
+				{Name: "tool1", Args: map[string]interface{}{}},
+				{Name: "tool2", Args: map[string]interface{}{}},
 			},
 			results: []ToolResult{
 				{Content: "Success: operation completed", Error: nil},
@@ -33,9 +34,9 @@ func TestFallbackAnalysis(t *testing.T) {
 		},
 		{
 			name: "one failure",
-			toolCalls: []a2a.ToolCall{
-				{Name: "tool1", Arguments: map[string]interface{}{}},
-				{Name: "tool2", Arguments: map[string]interface{}{}},
+			toolCalls: []*protocol.ToolCall{
+				{Name: "tool1", Args: map[string]interface{}{}},
+				{Name: "tool2", Args: map[string]interface{}{}},
 			},
 			results: []ToolResult{
 				{Content: "Success: operation completed", Error: nil},
@@ -47,10 +48,10 @@ func TestFallbackAnalysis(t *testing.T) {
 		},
 		{
 			name: "majority failures should pivot",
-			toolCalls: []a2a.ToolCall{
-				{Name: "tool1", Arguments: map[string]interface{}{}},
-				{Name: "tool2", Arguments: map[string]interface{}{}},
-				{Name: "tool3", Arguments: map[string]interface{}{}},
+			toolCalls: []*protocol.ToolCall{
+				{Name: "tool1", Args: map[string]interface{}{}},
+				{Name: "tool2", Args: map[string]interface{}{}},
+				{Name: "tool3", Args: map[string]interface{}{}},
 			},
 			results: []ToolResult{
 				{Content: "Error: failed", Error: nil},
@@ -63,7 +64,7 @@ func TestFallbackAnalysis(t *testing.T) {
 		},
 		{
 			name:           "empty results",
-			toolCalls:      []a2a.ToolCall{},
+			toolCalls:      []*protocol.ToolCall{},
 			results:        []ToolResult{},
 			wantSuccessful: 0,
 			wantFailed:     0,
@@ -107,10 +108,10 @@ func TestFallbackAnalysis(t *testing.T) {
 }
 
 func TestBuildAnalysisPrompt(t *testing.T) {
-	toolCalls := []a2a.ToolCall{
+	toolCalls := []*protocol.ToolCall{
 		{
 			Name: "test_tool",
-			Arguments: map[string]interface{}{
+			Args: map[string]interface{}{
 				"arg1": "value1",
 			},
 		},
@@ -180,7 +181,7 @@ func TestAnalyzeToolResults_EmptyResults(t *testing.T) {
 
 	analysis, err := AnalyzeToolResults(
 		context.Background(),
-		[]a2a.ToolCall{},
+		[]*protocol.ToolCall{},
 		[]ToolResult{},
 		services,
 	)
@@ -223,6 +224,39 @@ func (m *mockAgentServices) Tools() ToolService {
 
 func (m *mockAgentServices) Prompt() PromptService {
 	return nil
+}
+
+func (m *mockAgentServices) Session() SessionService {
+	// Return a mock that implements all methods including UpdateSession
+	return &mockSessionService{}
+}
+
+func (m *mockAgentServices) Task() TaskService {
+	return nil
+}
+
+// mockSessionService is a minimal mock for testing (updated for message-level interface)
+type mockSessionService struct{}
+
+func (m *mockSessionService) AppendMessage(sessionID string, message *pb.Message) error {
+	return nil
+}
+
+func (m *mockSessionService) GetMessages(sessionID string, limit int) ([]*pb.Message, error) {
+	return nil, nil
+}
+
+func (m *mockSessionService) GetMessageCount(sessionID string) (int, error) {
+	return 0, nil
+}
+func (m *mockSessionService) GetOrCreateSessionMetadata(sessionID string) (*SessionMetadata, error) {
+	return nil, nil
+}
+func (m *mockSessionService) DeleteSession(sessionID string) error {
+	return nil
+}
+func (m *mockSessionService) SessionCount() int {
+	return 0
 }
 
 func (m *mockAgentServices) History() HistoryService {

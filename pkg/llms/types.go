@@ -1,6 +1,8 @@
 package llms
 
-import "github.com/kadirpekel/hector/pkg/a2a"
+import (
+	"github.com/kadirpekel/hector/pkg/protocol"
+)
 
 // ============================================================================
 // COMMON FUNCTION CALLING TYPES
@@ -17,15 +19,15 @@ type ToolDefinition struct {
 	Parameters  map[string]interface{} `json:"parameters"` // JSON Schema
 }
 
-// ToolCall type removed - use a2a.ToolCall directly for true A2A-native architecture
+// ToolCall type removed - use protocol.ToolCall directly for true A2A-native architecture
 
 // StreamChunk represents a chunk of streaming response
 type StreamChunk struct {
-	Type     string        // "text", "tool_call", "done", "error"
-	Text     string        // For text chunks
-	ToolCall *a2a.ToolCall // For tool_call chunks
-	Tokens   int           // For done chunks
-	Error    error         // For error chunks
+	Type     string             // "text", "tool_call", "done", "error"
+	Text     string             // For text chunks
+	ToolCall *protocol.ToolCall // For tool_call chunks
+	Tokens   int                // For done chunks
+	Error    error              // For error chunks
 }
 
 // ============================================================================

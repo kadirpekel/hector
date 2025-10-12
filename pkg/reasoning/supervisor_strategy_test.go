@@ -1,7 +1,7 @@
 package reasoning
 
 import (
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/protocol"
 	"testing"
 )
 
@@ -28,14 +28,14 @@ func TestSupervisorStrategy_ShouldStop(t *testing.T) {
 	state := NewReasoningState()
 
 	// ShouldStop should return true when no tool calls
-	shouldStop := strategy.ShouldStop("test text", []a2a.ToolCall{}, state)
+	shouldStop := strategy.ShouldStop("test text", []*protocol.ToolCall{}, state)
 	if !shouldStop {
 		t.Error("ShouldStop() should return true when no tool calls")
 	}
 
 	// ShouldStop should return false when there are tool calls
-	toolCalls := []a2a.ToolCall{
-		{Name: "test_tool", Arguments: map[string]interface{}{}},
+	toolCalls := []*protocol.ToolCall{
+		{Name: "test_tool", Args: map[string]interface{}{}},
 	}
 	shouldStop = strategy.ShouldStop("test text", toolCalls, state)
 	if shouldStop {
@@ -48,7 +48,7 @@ func TestSupervisorStrategy_AfterIteration(t *testing.T) {
 	state := NewReasoningState()
 
 	// AfterIteration should not return an error
-	err := strategy.AfterIteration(1, "test text", []a2a.ToolCall{}, []ToolResult{}, state)
+	err := strategy.AfterIteration(1, "test text", []*protocol.ToolCall{}, []ToolResult{}, state)
 	if err != nil {
 		t.Errorf("AfterIteration() error = %v", err)
 	}

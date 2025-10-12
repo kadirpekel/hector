@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/databases"
 	"github.com/kadirpekel/hector/pkg/embedders"
 	"github.com/kadirpekel/hector/pkg/llms"
 	"github.com/kadirpekel/hector/pkg/plugins"
 	plugingrpc "github.com/kadirpekel/hector/pkg/plugins/grpc"
+	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/tools"
 	yaml "gopkg.in/yaml.v3"
 )
@@ -403,13 +404,13 @@ type llmPluginBridge struct {
 	adapter *plugingrpc.LLMPluginAdapter
 }
 
-func (b *llmPluginBridge) Generate(messages []a2a.Message, tools []llms.ToolDefinition) (text string, toolCalls []a2a.ToolCall, tokens int, err error) {
-	// Convert a2a.Message to pb.Message
+func (b *llmPluginBridge) Generate(messages []*pb.Message, tools []llms.ToolDefinition) (text string, toolCalls []*protocol.ToolCall, tokens int, err error) {
+	// Convert pb.Message to plugin Message
 	pbMessages := make([]*plugingrpc.Message, len(messages))
 	for i, msg := range messages {
-		textContent := a2a.ExtractTextFromMessage(msg)
+		textContent := protocol.ExtractTextFromMessage(msg)
 		pbMessages[i] = &plugingrpc.Message{
-			Role:    string(msg.Role),
+			Role:    msg.Role.String(),
 			Content: textContent,
 		}
 	}
@@ -432,8 +433,8 @@ func (b *llmPluginBridge) Generate(messages []a2a.Message, tools []llms.ToolDefi
 		return "", nil, 0, err
 	}
 
-	// Convert pb.ToolCall back to a2a.ToolCall
-	llmToolCalls := make([]a2a.ToolCall, len(response.ToolCalls))
+	// Convert pb.ToolCall back to protocol.ToolCall
+	llmToolCalls := make([]*protocol.ToolCall, len(response.ToolCalls))
 	for i, tc := range response.ToolCalls {
 		// Deserialize arguments from JSON
 		var args map[string]interface{}
@@ -441,24 +442,23 @@ func (b *llmPluginBridge) Generate(messages []a2a.Message, tools []llms.ToolDefi
 			args = make(map[string]interface{})
 		}
 
-		llmToolCalls[i] = a2a.ToolCall{
-			ID:        tc.Id,
-			Name:      tc.Name,
-			Arguments: args,
-			RawArgs:   tc.ArgumentsJson,
+		llmToolCalls[i] = &protocol.ToolCall{
+			ID:   tc.Id,
+			Name: tc.Name,
+			Args: args,
 		}
 	}
 
 	return response.Text, llmToolCalls, int(response.TokensUsed), nil
 }
 
-func (b *llmPluginBridge) GenerateStreaming(messages []a2a.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
+func (b *llmPluginBridge) GenerateStreaming(messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
 	// Convert messages and tools
 	pbMessages := make([]*plugingrpc.Message, len(messages))
 	for i, msg := range messages {
-		textContent := a2a.ExtractTextFromMessage(msg)
+		textContent := protocol.ExtractTextFromMessage(msg)
 		pbMessages[i] = &plugingrpc.Message{
-			Role:    string(msg.Role),
+			Role:    msg.Role.String(),
 			Content: textContent,
 		}
 	}

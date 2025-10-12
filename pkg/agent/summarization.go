@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/utils"
 )
 
@@ -56,7 +57,7 @@ func NewSummarizationService(llm llms.LLMProvider, config *SummarizationConfig) 
 
 // SummarizeConversation summarizes a conversation while preserving key information
 // The summary is designed to be used in place of old messages in the context window
-func (s *SummarizationService) SummarizeConversation(ctx context.Context, messages []a2a.Message) (string, error) {
+func (s *SummarizationService) SummarizeConversation(ctx context.Context, messages []*pb.Message) (string, error) {
 	if len(messages) == 0 {
 		return "", nil
 	}
@@ -85,9 +86,9 @@ Format your summary as a coherent narrative, not bullet points unless the conver
 Provide a comprehensive summary that preserves all important context:`, conversationText)
 
 	// Generate summary
-	text, _, _, err := s.llm.Generate([]a2a.Message{
-		a2a.CreateTextMessage(a2a.MessageRoleSystem, systemPrompt),
-		a2a.CreateUserMessage(userPrompt),
+	text, _, _, err := s.llm.Generate([]*pb.Message{
+		protocol.CreateTextMessage(pb.Role_ROLE_UNSPECIFIED, systemPrompt),
+		protocol.CreateUserMessage(userPrompt),
 	}, []llms.ToolDefinition{})
 
 	if err != nil {
@@ -104,7 +105,7 @@ Provide a comprehensive summary that preserves all important context:`, conversa
 
 // SummarizeConversationChunked summarizes a long conversation in chunks
 // This is useful for very long conversations that exceed the LLM's context window
-func (s *SummarizationService) SummarizeConversationChunked(ctx context.Context, messages []a2a.Message, chunkSize int) (string, error) {
+func (s *SummarizationService) SummarizeConversationChunked(ctx context.Context, messages []*pb.Message, chunkSize int) (string, error) {
 	if len(messages) == 0 {
 		return "", nil
 	}
@@ -150,9 +151,9 @@ Preserve ALL key information from all summaries while eliminating redundancy.`
 
 Provide a unified summary:`, combinedText)
 
-		text, _, _, err := s.llm.Generate([]a2a.Message{
-			a2a.CreateTextMessage(a2a.MessageRoleSystem, systemPrompt),
-			a2a.CreateUserMessage(userPrompt),
+		text, _, _, err := s.llm.Generate([]*pb.Message{
+			protocol.CreateTextMessage(pb.Role_ROLE_UNSPECIFIED, systemPrompt),
+			protocol.CreateUserMessage(userPrompt),
 		}, []llms.ToolDefinition{})
 
 		if err != nil {
@@ -169,7 +170,7 @@ Provide a unified summary:`, combinedText)
 // This is the recommended approach for maintaining conversation quality
 func (s *SummarizationService) SummarizeWithRecentContext(
 	ctx context.Context,
-	messages []a2a.Message,
+	messages []*pb.Message,
 	keepRecentCount int,
 ) (*SummarizedHistory, error) {
 	if len(messages) <= keepRecentCount {
@@ -197,11 +198,11 @@ func (s *SummarizationService) SummarizeWithRecentContext(
 }
 
 // EstimateTokenSavings estimates how many tokens would be saved by summarizing
-func (s *SummarizationService) EstimateTokenSavings(messages []a2a.Message, summary string) int {
+func (s *SummarizationService) EstimateTokenSavings(messages []*pb.Message, summary string) int {
 	// Convert to utils.Message format
 	utilsMessages := make([]utils.Message, len(messages))
 	for i, msg := range messages {
-		textContent := a2a.ExtractTextFromMessage(msg)
+		textContent := protocol.ExtractTextFromMessage(msg)
 		utilsMessages[i] = utils.Message{
 			Role:    string(msg.Role),
 			Content: textContent,
@@ -220,7 +221,7 @@ func (s *SummarizationService) EstimateTokenSavings(messages []a2a.Message, summ
 
 // ShouldSummarize determines if messages should be summarized based on token budget
 // Returns true if summarization would be beneficial
-func (s *SummarizationService) ShouldSummarize(messages []a2a.Message, maxTokens int, threshold float64) bool {
+func (s *SummarizationService) ShouldSummarize(messages []*pb.Message, maxTokens int, threshold float64) bool {
 	if len(messages) == 0 {
 		return false
 	}
@@ -232,7 +233,7 @@ func (s *SummarizationService) ShouldSummarize(messages []a2a.Message, maxTokens
 	// Convert to utils.Message
 	utilsMessages := make([]utils.Message, len(messages))
 	for i, msg := range messages {
-		textContent := a2a.ExtractTextFromMessage(msg)
+		textContent := protocol.ExtractTextFromMessage(msg)
 		utilsMessages[i] = utils.Message{
 			Role:    string(msg.Role),
 			Content: textContent,
@@ -246,7 +247,7 @@ func (s *SummarizationService) ShouldSummarize(messages []a2a.Message, maxTokens
 }
 
 // formatConversation formats messages into a readable conversation text
-func (s *SummarizationService) formatConversation(messages []a2a.Message) string {
+func (s *SummarizationService) formatConversation(messages []*pb.Message) string {
 	var sb strings.Builder
 
 	for _, msg := range messages {
@@ -255,7 +256,7 @@ func (s *SummarizationService) formatConversation(messages []a2a.Message) string
 		if len(role) > 0 {
 			role = strings.ToUpper(string(role[0])) + role[1:]
 		}
-		textContent := a2a.ExtractTextFromMessage(msg)
+		textContent := protocol.ExtractTextFromMessage(msg)
 		sb.WriteString(fmt.Sprintf("%s: %s\n\n", role, textContent))
 	}
 
@@ -269,21 +270,21 @@ func (s *SummarizationService) formatConversation(messages []a2a.Message) string
 // SummarizedHistory represents a conversation with a summary and recent messages
 type SummarizedHistory struct {
 	Summary        string        // Summary of old messages
-	RecentMessages []a2a.Message // Recent messages (kept intact)
+	RecentMessages []*pb.Message // Recent messages (kept intact)
 }
 
 // ToMessages converts a summarized history back to message list format
 // The summary is included as a system message at the beginning
-func (sh *SummarizedHistory) ToMessages() []a2a.Message {
+func (sh *SummarizedHistory) ToMessages() []*pb.Message {
 	if sh.Summary == "" {
 		return sh.RecentMessages
 	}
 
 	// Create summary message
-	summaryMsg := a2a.CreateTextMessage(a2a.MessageRoleSystem, fmt.Sprintf("Previous conversation summary:\n\n%s", sh.Summary))
+	summaryMsg := protocol.CreateTextMessage(pb.Role_ROLE_UNSPECIFIED, fmt.Sprintf("Previous conversation summary:\n\n%s", sh.Summary))
 
 	// Combine summary with recent messages
-	result := make([]a2a.Message, 0, 1+len(sh.RecentMessages))
+	result := make([]*pb.Message, 0, 1+len(sh.RecentMessages))
 	result = append(result, summaryMsg)
 	result = append(result, sh.RecentMessages...)
 

@@ -1,0 +1,36 @@
+providers:
+  llms:
+    default:
+      type: openai
+      model: gpt-4
+      host: https://api.openai.com/v1
+      api_key: ${OPENAI_API_KEY}
+      temperature: 0.7
+      max_tokens: 2000
+
+agents:
+  async_agent:
+    name: "Async Task Agent"
+    description: "Agent demonstrating async task processing with A2A protocol"
+    llm: default
+    
+    task:
+      enabled: true
+      backend: memory
+    
+    memory:
+      strategy: buffer_window
+      window_size: 20
+    
+    reasoning:
+      engine: react
+      max_iterations: 5
+    
+    tools:
+      - web_search
+
+server:
+  host: "0.0.0.0"
+  port: 50051
+  mode: multi
+

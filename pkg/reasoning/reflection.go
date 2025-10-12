@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 // ============================================================================
@@ -30,7 +31,7 @@ type ReflectionAnalysis struct {
 // When EnableStructuredReflection is true, uses LLM-based analysis; otherwise uses heuristics
 func AnalyzeToolResults(
 	ctx context.Context,
-	toolCalls []a2a.ToolCall,
+	toolCalls []*protocol.ToolCall,
 	results []ToolResult,
 	services AgentServices,
 ) (*ReflectionAnalysis, error) {
@@ -100,8 +101,8 @@ func AnalyzeToolResults(
 		}
 
 		// Make structured LLM call
-		messages := []a2a.Message{
-			a2a.CreateUserMessage(prompt),
+		messages := []*pb.Message{
+			{Role: pb.Role_ROLE_USER, Content: []*pb.Part{{Part: &pb.Part_Text{Text: prompt}}}},
 		}
 
 		text, _, _, err := llmService.GenerateStructured(messages, nil, config)
@@ -129,7 +130,7 @@ func AnalyzeToolResults(
 }
 
 // buildAnalysisPrompt creates the prompt for tool result analysis
-func buildAnalysisPrompt(toolCalls []a2a.ToolCall, results []ToolResult) string {
+func buildAnalysisPrompt(toolCalls []*protocol.ToolCall, results []ToolResult) string {
 	var prompt strings.Builder
 
 	prompt.WriteString("Analyze the following tool execution results and provide a structured assessment:\n\n")
@@ -138,7 +139,7 @@ func buildAnalysisPrompt(toolCalls []a2a.ToolCall, results []ToolResult) string 
 		if i < len(toolCalls) {
 			toolName := toolCalls[i].Name
 			prompt.WriteString(fmt.Sprintf("Tool: %s\n", toolName))
-			prompt.WriteString(fmt.Sprintf("Arguments: %v\n", toolCalls[i].Arguments))
+			prompt.WriteString(fmt.Sprintf("Arguments: %v\n", toolCalls[i].Args))
 			prompt.WriteString(fmt.Sprintf("Result: %s\n\n", truncateString(result.Content, 500)))
 		}
 	}
@@ -157,7 +158,7 @@ Be strict: only mark tools as failed if they clearly indicate errors, not just e
 }
 
 // fallbackAnalysis provides heuristic-based analysis when structured output isn't available
-func fallbackAnalysis(toolCalls []a2a.ToolCall, results []ToolResult) *ReflectionAnalysis {
+func fallbackAnalysis(toolCalls []*protocol.ToolCall, results []ToolResult) *ReflectionAnalysis {
 	analysis := &ReflectionAnalysis{
 		SuccessfulTools: make([]string, 0),
 		FailedTools:     make([]string, 0),

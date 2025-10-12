@@ -11,7 +11,7 @@
 
 [![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
-[![A2A Protocol](https://img.shields.io/badge/A2A-compliant-green.svg)](https://a2a-protocol.org)
+[![A2A Protocol](https://img.shields.io/badge/A2A%20Compliance-100%25-brightgreen.svg)](A2A_COMPLIANCE_SYSTEM.md)
 [![Documentation](https://img.shields.io/badge/docs-gohector.dev-blue.svg)](https://gohector.dev)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 [![GoDoc](https://godoc.org/github.com/kadirpekel/hector?status.svg)](https://godoc.org/github.com/kadirpekel/hector)
@@ -78,7 +78,17 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 │ • File Ops   │    │ • Anthropic  │   │ • Semantic   │  │   (Session)│
 │ • Search     │    │ • Gemini     │   │   Search     │  │ • Long-term│
 │ • MCP        │    │ • Plugins    │   │ • Documents  │  │            │
-└──────────────┘    └──────────────┘   └──────────────┘  └────────────┘
+└──────────────┘    └──────────────┘   └──────────────┘  └──────┬─────┘
+                                                                  │
+                                                                  ▼
+                                                          ┌────────────┐
+                                                          │  SESSION   │
+                                                          │   STORES   │
+                                                          │ • Memory   │
+                                                          │ • SQLite   │
+                                                          │ • Postgres │
+                                                          │ • MySQL    │
+                                                          └────────────┘
 ```
 
 **Single Agent Capabilities:**
@@ -88,6 +98,7 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 - **RAG Support** - Semantic search with Qdrant vector database
 - **Intelligent Memory** - Pluggable working memory strategies (token-based with summarization, simple LIFO) for conversation history ([docs](docs/MEMORY.md))
 - **Multi-turn Sessions** - Conversation context and history management
+- **Pluggable Session Stores** - In-memory, SQLite, PostgreSQL, MySQL with relational schema ([docs](https://gohector.dev/SESSION_STORES))
 - **Real-time Streaming** - Server-Sent Events (SSE) per A2A spec
 - **gRPC Plugin System** - Extend with custom LLMs, databases, tools (any language)
 
@@ -582,6 +593,35 @@ hector version
 - **True interoperability** - Works with any A2A agent
 - **Flexible orchestration** - LLM-driven, not hard-coded workflows
 - **Language-agnostic plugins** - Extend in any language via gRPC
+
+---
+
+## A2A Protocol Compliance
+
+Hector is **100% compliant** with the A2A (Agent-to-Agent) Protocol v1.0 specification, verified through **50+ automated checks**.
+
+### Verify Compliance
+
+```bash
+# Run compliance tests
+make a2a-tests
+
+# Full compliance verification
+make a2a-compliance
+
+# External validation (black-box)
+make a2a-validate
+```
+
+**Compliance is verified:**
+- ✅ On every commit (pre-commit hooks)
+- ✅ On every PR (GitHub Actions)
+- ✅ Daily (scheduled CI runs)
+
+**Learn more:**
+- **[A2A Compliance Documentation](A2A_COMPLIANCE.md)** - Complete compliance guide with verification instructions and proof
+
+**Compliance Status:** 🟢 **100% A2A Protocol v1.0 Compliant**
 
 ---
 

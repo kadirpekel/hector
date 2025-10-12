@@ -1,36 +1,33 @@
 package memory
 
 import (
+	"fmt"
 	"log"
-	"sync"
-	"time"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	hectorcontext "github.com/kadirpekel/hector/pkg/context"
+	"github.com/kadirpekel/hector/pkg/protocol"
+	"github.com/kadirpekel/hector/pkg/reasoning"
 )
 
-// MemoryService manages conversation memory across sessions
-// It orchestrates working memory (recent context) and long-term memory (semantic recall)
+// MemoryService manages conversation memory using SessionService
+// Session lifecycle is delegated to SessionService (cleaner separation of concerns)
 type MemoryService struct {
+	sessionService reasoning.SessionService
 	workingMemory  WorkingMemoryStrategy
 	longTermMemory LongTermMemoryStrategy // Optional (can be nil)
-	sessions       map[string]*hectorcontext.ConversationHistory
 
-	// Long-term memory batching
-	pendingBatch map[string][]a2a.Message // sessionID -> messages
-	batchSize    int                      // Default: 1 (immediate storage)
-	storageScope StorageScope             // What messages to store
-	autoRecall   bool                     // Auto-inject memories before LLM calls
-	recallLimit  int                      // Max memories to recall
+	// Long-term memory configuration
+	longTermConfig LongTermConfig
 
-	mu sync.RWMutex
+	// Pending batches per session (for long-term memory batching)
+	// Key: sessionID, Value: pending messages to be flushed
+	pendingBatches map[string][]*pb.Message
 }
 
-// NewMemoryService creates a new memory service
-// working: Working memory strategy (required)
-// longTerm: Long-term memory strategy (optional, can be nil)
-// longTermConfig: Configuration for long-term memory
+// NewMemoryService creates a new memory service using SessionService
 func NewMemoryService(
+	sessionService reasoning.SessionService,
 	working WorkingMemoryStrategy,
 	longTerm LongTermMemoryStrategy,
 	longTermConfig LongTermConfig,
@@ -38,120 +35,171 @@ func NewMemoryService(
 	// Apply defaults
 	longTermConfig.SetDefaults()
 
-	// Handle AutoRecall default (since bool zero value is false)
-	autoRecall := true // Default to true
+	// Handle AutoRecall default
 	if longTerm == nil {
-		autoRecall = false // Disable if no long-term memory
+		longTermConfig.AutoRecall = false
+	} else if longTermConfig.AutoRecall {
+		longTermConfig.AutoRecall = true // Default to true when long-term is enabled
 	}
 
 	return &MemoryService{
+		sessionService: sessionService,
 		workingMemory:  working,
 		longTermMemory: longTerm,
-		sessions:       make(map[string]*hectorcontext.ConversationHistory),
-		pendingBatch:   make(map[string][]a2a.Message),
-		batchSize:      longTermConfig.BatchSize,
-		storageScope:   longTermConfig.StorageScope,
-		autoRecall:     autoRecall,
-		recallLimit:    longTermConfig.RecallLimit,
+		longTermConfig: longTermConfig,
+		pendingBatches: make(map[string][]*pb.Message),
 	}
 }
 
-// AddToHistory adds a message to memory (orchestrates working + long-term)
-func (s *MemoryService) AddToHistory(sessionID string, msg a2a.Message) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+// AddToHistory adds a message to memory
+func (s *MemoryService) AddToHistory(sessionID string, msg *pb.Message) error {
 	if sessionID == "" {
 		sessionID = "default"
 	}
 
-	session := s.getOrCreateSession(sessionID)
+	// 1. Append message directly to session store (efficient!)
+	// This replaces the old bulk update approach
+	if err := s.sessionService.AppendMessage(sessionID, msg); err != nil {
+		log.Printf("⚠️  Failed to append message to session: %v", err)
+		return fmt.Errorf("failed to append message: %w", err)
+	}
 
-	// 1. Accumulate for long-term batch (if enabled)
+	// 2. Let working memory strategy process the message (for summarization, etc.)
+	// Get current history state and let strategy process it
+	allMessages, err := s.sessionService.GetMessages(sessionID, 0)
+	if err == nil {
+		history := s.messagesToConversationHistory(sessionID, allMessages)
+		if err := s.workingMemory.AddMessage(history, msg); err != nil {
+			log.Printf("⚠️  Working memory strategy AddMessage failed: %v", err)
+		}
+	}
+
+	// 3. Store in long-term memory (if enabled and should store)
 	if s.longTermMemory != nil && s.shouldStoreLongTerm(msg) {
-		s.pendingBatch[sessionID] = append(s.pendingBatch[sessionID], msg)
+		// Add to pending batch
+		if _, exists := s.pendingBatches[sessionID]; !exists {
+			s.pendingBatches[sessionID] = make([]*pb.Message, 0, s.longTermConfig.BatchSize)
+		}
+		s.pendingBatches[sessionID] = append(s.pendingBatches[sessionID], msg)
 
-		// Flush when batch size reached
-		// With batchSize=1, this flushes every message (immediate)
-		if len(s.pendingBatch[sessionID]) >= s.batchSize {
-			if err := s.flushBatch(sessionID); err != nil {
+		// Flush if batch size reached
+		if len(s.pendingBatches[sessionID]) >= s.longTermConfig.BatchSize {
+			if err := s.flushLongTermBatch(sessionID); err != nil {
 				log.Printf("⚠️  Long-term storage failed: %v", err)
 			}
 		}
 	}
 
-	// 2. Add to working memory (may trigger internal summarization)
-	return s.workingMemory.AddMessage(session, msg)
+	return nil
 }
 
-// GetRecentHistory returns messages (orchestrates working + long-term recall)
-func (s *MemoryService) GetRecentHistory(sessionID string) ([]a2a.Message, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
+// GetRecentHistory returns messages from memory
+// Applies working memory strategy to filter/transform messages
+func (s *MemoryService) GetRecentHistory(sessionID string) ([]*pb.Message, error) {
 	if sessionID == "" {
 		sessionID = "default"
 	}
 
-	session, exists := s.sessions[sessionID]
-	if !exists {
-		return []a2a.Message{}, nil
-	}
-
-	// 1. Get working memory (recent context)
-	messages, err := s.workingMemory.GetMessages(session)
+	// 1. Get all messages from session store
+	// limit=0 means get all messages
+	allMessages, err := s.sessionService.GetMessages(sessionID, 0)
 	if err != nil {
-		return nil, err
+		log.Printf("⚠️  Failed to get messages from session: %v", err)
+		return []*pb.Message{}, nil
 	}
 
-	// 2. Auto-recall from long-term (if enabled)
-	if s.longTermMemory != nil && s.autoRecall && len(messages) > 0 {
-		// Use last user message as query
-		query := s.getLastUserMessage(messages)
+	// 2. Apply working memory strategy to filter/transform messages
+	// Convert to ConversationHistory for strategy compatibility
+	history := s.messagesToConversationHistory(sessionID, allMessages)
+
+	// Let the strategy decide which messages to return
+	filteredMessages, err := s.workingMemory.GetMessages(history)
+	if err != nil {
+		log.Printf("⚠️  Working memory strategy failed: %v", err)
+		// Fallback to all messages if strategy fails
+		filteredMessages = allMessages
+	}
+
+	// 3. Auto-recall from long-term (if enabled)
+	if s.longTermMemory != nil && s.longTermConfig.AutoRecall && len(filteredMessages) > 0 {
+		query := s.getLastUserMessage(filteredMessages)
 		if query != "" {
-			recalled, err := s.longTermMemory.Recall(sessionID, query, s.recallLimit)
+			recalled, err := s.longTermMemory.Recall(sessionID, query, s.longTermConfig.RecallLimit)
 			if err != nil {
 				log.Printf("⚠️  Long-term recall failed: %v", err)
 			} else if len(recalled) > 0 {
-				// Prepend recalled memories (older context first)
-				messages = append(recalled, messages...)
+				// Prepend recalled memories
+				filteredMessages = append(recalled, filteredMessages...)
 			}
 		}
 	}
 
-	return messages, nil
+	return filteredMessages, nil
 }
 
-// ClearHistory clears memory for a session (orchestrates both)
-func (s *MemoryService) ClearHistory(sessionID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// messagesToConversationHistory converts messages to ConversationHistory for strategy compatibility
+func (s *MemoryService) messagesToConversationHistory(sessionID string, messages []*pb.Message) *hectorcontext.ConversationHistory {
+	history, err := hectorcontext.NewConversationHistory(sessionID)
+	if err != nil {
+		log.Printf("⚠️  Failed to create conversation history: %v", err)
+		// Return empty history if creation fails
+		history, _ = hectorcontext.NewConversationHistory(sessionID)
+		return history
+	}
 
+	// Add native pb.Messages directly (no conversion needed)
+	for _, msg := range messages {
+		if err := history.AddMessage(msg); err != nil {
+			log.Printf("⚠️  Failed to add message to conversation history: %v", err)
+		}
+	}
+
+	return history
+}
+
+// ClearHistory clears memory for a session
+func (s *MemoryService) ClearHistory(sessionID string) error {
 	if sessionID == "" {
 		sessionID = "default"
 	}
 
-	// 1. Flush any pending batch
-	if err := s.flushBatch(sessionID); err != nil {
-		log.Printf("⚠️  Failed to flush batch on clear: %v", err)
+	// Flush any pending long-term memory batch
+	if s.longTermMemory != nil && len(s.pendingBatches[sessionID]) > 0 {
+		if err := s.flushLongTermBatch(sessionID); err != nil {
+			log.Printf("⚠️  Failed to flush pending batch on clear: %v", err)
+		}
 	}
 
-	// 2. Clear working memory
-	delete(s.sessions, sessionID)
-
-	// Note: We do NOT clear long-term memory here
-	// Long-term memories persist across sessions for future recall
-	// If you need to clear long-term memory, call longTermMemory.Clear() directly
-
-	return nil
+	// Delete session via SessionService
+	// This automatically handles cleanup
+	return s.sessionService.DeleteSession(sessionID)
 }
 
-// GetSessionCount returns the number of active sessions
-func (s *MemoryService) GetSessionCount() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+// Removed getConversationHistory - no longer needed with message-level architecture
+// Messages are stored/retrieved directly via SessionStore, not bulk session state
 
-	return len(s.sessions)
+// shouldStoreLongTerm decides if a message should be stored in long-term memory
+func (s *MemoryService) shouldStoreLongTerm(msg *pb.Message) bool {
+	switch s.longTermConfig.StorageScope {
+	case StorageScopeAll:
+		return true
+	case StorageScopeConversational:
+		return msg.Role == pb.Role_ROLE_USER || msg.Role == pb.Role_ROLE_AGENT
+	case StorageScopeSummariesOnly:
+		return msg.Role == pb.Role_ROLE_USER || msg.Role == pb.Role_ROLE_AGENT
+	default:
+		return msg.Role == pb.Role_ROLE_USER || msg.Role == pb.Role_ROLE_AGENT
+	}
+}
+
+// getLastUserMessage extracts the last user message as a query for recall
+func (s *MemoryService) getLastUserMessage(messages []*pb.Message) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == pb.Role_ROLE_USER {
+			return protocol.ExtractTextFromMessage(messages[i])
+		}
+	}
+	return ""
 }
 
 // SetStatusNotifier sets a status notifier on the working memory strategy
@@ -159,65 +207,19 @@ func (s *MemoryService) SetStatusNotifier(notifier StatusNotifier) {
 	s.workingMemory.SetStatusNotifier(notifier)
 }
 
-// flushBatch flushes pending batch to long-term memory
-// Must be called with lock held
-func (s *MemoryService) flushBatch(sessionID string) error {
-	if s.longTermMemory == nil || len(s.pendingBatch[sessionID]) == 0 {
+// flushLongTermBatch flushes pending messages to long-term memory
+func (s *MemoryService) flushLongTermBatch(sessionID string) error {
+	batch := s.pendingBatches[sessionID]
+	if len(batch) == 0 {
 		return nil
 	}
 
-	err := s.longTermMemory.Store(sessionID, s.pendingBatch[sessionID])
-	if err != nil {
+	// Store the batch
+	if err := s.longTermMemory.Store(sessionID, batch); err != nil {
 		return err
 	}
 
-	// Clear batch after successful storage
-	s.pendingBatch[sessionID] = nil
+	// Clear the pending batch
+	delete(s.pendingBatches, sessionID)
 	return nil
-}
-
-// shouldStoreLongTerm decides if a message should be stored in long-term memory
-func (s *MemoryService) shouldStoreLongTerm(msg a2a.Message) bool {
-	switch s.storageScope {
-	case StorageScopeAll:
-		return true
-	case StorageScopeConversational:
-		return msg.Role == "user" || msg.Role == "assistant"
-	case StorageScopeSummariesOnly:
-		// Check if message has is_summary metadata (not currently supported in a2a.Message)
-		// For now, treat as conversational
-		return msg.Role == "user" || msg.Role == "assistant"
-	default:
-		return msg.Role == "user" || msg.Role == "assistant"
-	}
-}
-
-// getLastUserMessage extracts the last user message as a query for recall
-func (s *MemoryService) getLastUserMessage(messages []a2a.Message) string {
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == a2a.MessageRoleUser {
-			return a2a.ExtractTextFromMessage(messages[i])
-		}
-	}
-	return ""
-}
-
-// getOrCreateSession gets an existing session or creates a new one
-// Must be called with lock held
-func (s *MemoryService) getOrCreateSession(sessionID string) *hectorcontext.ConversationHistory {
-	session, exists := s.sessions[sessionID]
-	if !exists {
-		now := time.Now()
-		session = &hectorcontext.ConversationHistory{
-			SessionID:   sessionID,
-			Messages:    make([]hectorcontext.Message, 0),
-			Context:     make(map[string]interface{}),
-			LastUpdated: now,
-			MaxMessages: 1000, // Max 1000 messages per session
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		}
-		s.sessions[sessionID] = session
-	}
-	return session
 }

@@ -4,10 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/databases"
 	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/tools"
 )
 
@@ -37,17 +38,17 @@ type LLMService interface {
 	// Returns (text, toolCalls, tokens, error)
 	// If toolCalls is non-empty, those should be executed
 	// If toolCalls is empty, text contains the final response
-	Generate(messages []a2a.Message, tools []llms.ToolDefinition) (string, []a2a.ToolCall, int, error)
+	Generate(messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, error)
 
 	// GenerateStreaming generates a streaming response with tool support (message-based)
 	// Text chunks are streamed to outputCh as they arrive
 	// Returns (toolCalls, tokens, error)
-	GenerateStreaming(messages []a2a.Message, tools []llms.ToolDefinition, outputCh chan<- string) ([]a2a.ToolCall, int, error)
+	GenerateStreaming(messages []*pb.Message, tools []llms.ToolDefinition, outputCh chan<- string) ([]*protocol.ToolCall, int, error)
 
 	// GenerateStructured generates a response with structured output (JSON schema)
 	// This is used internally for reliable reflection and meta-cognitive analysis
 	// Returns (text, toolCalls, tokens, error)
-	GenerateStructured(messages []a2a.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []a2a.ToolCall, int, error)
+	GenerateStructured(messages []*pb.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []*protocol.ToolCall, int, error)
 
 	// SupportsStructuredOutput checks if the underlying provider supports structured output
 	// Returns false for providers that don't implement StructuredOutputProvider
@@ -57,7 +58,7 @@ type LLMService interface {
 // ToolService defines tool execution capabilities - only tool responsibilities
 type ToolService interface {
 	// ExecuteToolCall executes a single tool call and returns the result
-	ExecuteToolCall(ctx context.Context, toolCall a2a.ToolCall) (string, error)
+	ExecuteToolCall(ctx context.Context, toolCall *protocol.ToolCall) (string, error)
 
 	// GetAvailableTools returns all available tools as ToolDefinition
 	GetAvailableTools() []llms.ToolDefinition
@@ -83,7 +84,32 @@ type PromptService interface {
 	//   - slots: Prompt slots (from strategy + user config)
 	//   - currentToolConversation: Tool loop messages
 	//   - additionalContext: Strategy-specific context (e.g., todos, goals)
-	BuildMessages(ctx context.Context, query string, slots PromptSlots, currentToolConversation []a2a.Message, additionalContext string) ([]a2a.Message, error)
+	BuildMessages(ctx context.Context, query string, slots PromptSlots, currentToolConversation []*pb.Message, additionalContext string) ([]*pb.Message, error)
+}
+
+// SessionService defines the interface for A2A-native session management
+// Uses message-level operations for efficient relational storage
+// Aligns with A2A protocol's native session handling
+type SessionService interface {
+	// Message-level operations (efficient for relational stores)
+	// These operations work with individual messages, not bulk session state
+	AppendMessage(sessionID string, message *pb.Message) error
+	GetMessages(sessionID string, limit int) ([]*pb.Message, error)
+	GetMessageCount(sessionID string) (int, error)
+
+	// Session metadata operations
+	// Create/retrieve session metadata (timestamps, agent info)
+	GetOrCreateSessionMetadata(sessionID string) (*SessionMetadata, error)
+	DeleteSession(sessionID string) error
+	SessionCount() int
+}
+
+// SessionMetadata holds session-level information (not messages)
+type SessionMetadata struct {
+	ID        string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Metadata  map[string]interface{}
 }
 
 // HistoryService defines the interface for memory management
@@ -91,8 +117,8 @@ type PromptService interface {
 // All methods are session-aware (stateless API design)
 // Uses A2A protocol Message types for true A2A-native architecture
 type HistoryService interface {
-	GetRecentHistory(sessionID string) ([]a2a.Message, error)
-	AddToHistory(sessionID string, msg a2a.Message) error
+	GetRecentHistory(sessionID string) ([]*pb.Message, error)
+	AddToHistory(sessionID string, msg *pb.Message) error
 	ClearHistory(sessionID string) error
 }
 
@@ -104,9 +130,9 @@ type HistoryService interface {
 // AgentRegistryEntry represents an agent entry for orchestration
 // Wraps A2A AgentCard with additional orchestration metadata
 type AgentRegistryEntry struct {
-	ID         string         // Agent ID (key in registry)
-	Card       *a2a.AgentCard // A2A protocol agent card
-	Visibility string         // "public", "internal", or "private" (for visibility filtering)
+	ID         string        // Agent ID (key in registry)
+	Card       *pb.AgentCard // A2A protocol agent card
+	Visibility string        // "public", "internal", or "private" (for visibility filtering)
 }
 
 // AgentRegistryService provides access to registered agents
@@ -126,6 +152,23 @@ type AgentRegistryService interface {
 }
 
 // ============================================================================
+// TASK SERVICE INTERFACE
+// ============================================================================
+
+// TaskService defines the interface for task lifecycle management
+type TaskService interface {
+	CreateTask(ctx context.Context, contextID string, initialMessage *pb.Message) (*pb.Task, error)
+	GetTask(ctx context.Context, taskID string) (*pb.Task, error)
+	UpdateTaskStatus(ctx context.Context, taskID string, state pb.TaskState, message *pb.Message) error
+	AddTaskArtifact(ctx context.Context, taskID string, artifact *pb.Artifact) error
+	AddTaskMessage(ctx context.Context, taskID string, message *pb.Message) error
+	CancelTask(ctx context.Context, taskID string) (*pb.Task, error)
+	ListTasksByContext(ctx context.Context, contextID string) ([]*pb.Task, error)
+	SubscribeToTask(ctx context.Context, taskID string) (<-chan *pb.StreamResponse, error)
+	Close() error
+}
+
+// ============================================================================
 // AGENT SERVICES INTERFACE - DEPENDENCY INJECTION
 // ============================================================================
 
@@ -140,8 +183,10 @@ type AgentServices interface {
 	Tools() ToolService
 	Context() ContextService
 	Prompt() PromptService
+	Session() SessionService // Session lifecycle management
 	History() HistoryService
 	Registry() AgentRegistryService // Agent registry for orchestration (may be nil)
+	Task() TaskService              // Task lifecycle management (may be nil)
 }
 
 // DefaultAgentServices provides a concrete implementation of AgentServices
@@ -151,8 +196,10 @@ type DefaultAgentServices struct {
 	toolService     ToolService
 	contextService  ContextService
 	promptService   PromptService
+	sessionService  SessionService
 	historyService  HistoryService
 	registryService AgentRegistryService
+	taskService     TaskService
 }
 
 // NewAgentServices creates a new AgentServices implementation
@@ -162,8 +209,10 @@ func NewAgentServices(
 	toolService ToolService,
 	contextService ContextService,
 	promptService PromptService,
+	sessionService SessionService,
 	historyService HistoryService,
 	registryService AgentRegistryService,
+	taskService TaskService,
 ) AgentServices {
 	return &DefaultAgentServices{
 		config:          config,
@@ -171,8 +220,10 @@ func NewAgentServices(
 		toolService:     toolService,
 		contextService:  contextService,
 		promptService:   promptService,
+		sessionService:  sessionService,
 		historyService:  historyService,
 		registryService: registryService,
+		taskService:     taskService,
 	}
 }
 
@@ -201,6 +252,11 @@ func (s *DefaultAgentServices) Prompt() PromptService {
 	return s.promptService
 }
 
+// Session returns the session service
+func (s *DefaultAgentServices) Session() SessionService {
+	return s.sessionService
+}
+
 // History returns the history service
 func (s *DefaultAgentServices) History() HistoryService {
 	return s.historyService
@@ -209,4 +265,9 @@ func (s *DefaultAgentServices) History() HistoryService {
 // Registry returns the agent registry service
 func (s *DefaultAgentServices) Registry() AgentRegistryService {
 	return s.registryService
+}
+
+// Task returns the task service
+func (s *DefaultAgentServices) Task() TaskService {
+	return s.taskService
 }

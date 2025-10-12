@@ -24,6 +24,8 @@ Ready to take Hector to the next level? These guides cover advanced patterns, in
 
 ## Production & Security
 
+- **[Agent Lifecycle](AGENT_LIFECYCLE)** - Thread-safe session management and scalability patterns
+- **[Session Stores](SESSION_STORES)** - Pluggable session storage backends (memory, SQL, Redis)
 - **[Authentication](AUTHENTICATION)** - JWT token validation and security
 - **[Structured Output](STRUCTURED_OUTPUT)** - Provider-aware JSON/XML/Enum output
 - **[Testing](TESTING)** - Testing practices and guidelines

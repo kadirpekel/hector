@@ -40,7 +40,7 @@
 //
 //	import (
 //	    "github.com/kadirpekel/hector/pkg/agent"
-//	    "github.com/kadirpekel/hector/pkg/a2a"
+//	    "github.com/kadirpekel/hector/pkg/a2a/pb"
 //	    "github.com/kadirpekel/hector/pkg/config"
 //	)
 //

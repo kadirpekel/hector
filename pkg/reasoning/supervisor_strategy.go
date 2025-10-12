@@ -3,7 +3,7 @@ package reasoning
 import (
 	"fmt"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 // ============================================================================
@@ -75,7 +75,7 @@ func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecompo
 
 // ShouldStop implements ReasoningStrategy
 // Supervisor uses same stopping logic as chain-of-thought
-func (s *SupervisorStrategy) ShouldStop(text string, toolCalls []a2a.ToolCall, state *ReasoningState) bool {
+func (s *SupervisorStrategy) ShouldStop(text string, toolCalls []*protocol.ToolCall, state *ReasoningState) bool {
 	// Stop when no more tool calls (including agent_call)
 	return s.ChainOfThoughtStrategy.ShouldStop(text, toolCalls, state)
 }
@@ -85,7 +85,7 @@ func (s *SupervisorStrategy) ShouldStop(text string, toolCalls []a2a.ToolCall, s
 func (s *SupervisorStrategy) AfterIteration(
 	iteration int,
 	text string,
-	toolCalls []a2a.ToolCall,
+	toolCalls []*protocol.ToolCall,
 	results []ToolResult,
 	state *ReasoningState,
 ) error {

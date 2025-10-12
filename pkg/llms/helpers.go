@@ -1,28 +1,29 @@
 package llms
 
-import "github.com/kadirpekel/hector/pkg/a2a"
+import (
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"github.com/kadirpekel/hector/pkg/protocol"
+)
 
 // ============================================================================
 // A2A MESSAGE HELPER FUNCTIONS
 // Shared utilities for working with A2A protocol messages in LLM providers
 // ============================================================================
 
-// ExtractTextFromMessage extracts text content from an A2A message
-func ExtractTextFromMessage(msg a2a.Message) string {
-	for _, part := range msg.Parts {
-		if part.Type == a2a.PartTypeText {
-			return part.Text
-		}
-	}
-	return ""
+// These helper functions are deprecated - use protocol.ExtractTextFromMessage and protocol.GetToolCallsFromMessage instead
+// Keeping them for backward compatibility during migration
+
+// ExtractTextFromMessage is deprecated - use protocol.ExtractTextFromMessage instead
+func ExtractTextFromMessage(msg *pb.Message) string {
+	return protocol.ExtractTextFromMessage(msg)
 }
 
-// ExtractToolCallsFromMessage extracts tool calls from an A2A message
-func ExtractToolCallsFromMessage(msg a2a.Message) []a2a.ToolCall {
-	return msg.ToolCalls
+// ExtractToolCallsFromMessage is deprecated - use protocol.GetToolCallsFromMessage instead
+func ExtractToolCallsFromMessage(msg *pb.Message) []*protocol.ToolCall {
+	return protocol.GetToolCallsFromMessage(msg)
 }
 
-// ExtractToolCallIDFromMessage extracts tool call ID from an A2A message
-func ExtractToolCallIDFromMessage(msg a2a.Message) string {
-	return msg.ToolCallID
+// ExtractToolCallIDFromMessage is deprecated
+func ExtractToolCallIDFromMessage(msg *pb.Message) string {
+	return msg.MessageId
 }

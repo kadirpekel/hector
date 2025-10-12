@@ -5,14 +5,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/registry"
 )
 
 // AgentEntry represents a complete agent entry with all metadata
 type AgentEntry struct {
-	Agent        a2a.Agent           `json:"agent"` // Pure A2A Agent interface
+	Agent        pb.A2AServiceServer `json:"agent"` // A2A gRPC service interface
 	Config       *config.AgentConfig `json:"config"`
 	Capabilities []string            `json:"capabilities"`
 	AgentType    string              `json:"agent_type"`
@@ -20,18 +20,18 @@ type AgentEntry struct {
 }
 
 // AgentRegistry manages agents with single source of truth
-// Stores pure A2A-compliant agents (via a2a.Agent interface)
+// Stores A2A-compliant agents (via pb.A2AServiceServer interface)
 type AgentRegistry struct {
 	*registry.BaseRegistry[AgentEntry]
 	mu        sync.RWMutex
-	instances map[string][]a2a.Agent // agent_type -> instance pool
+	instances map[string][]pb.A2AServiceServer // agent_type -> instance pool
 }
 
 // NewAgentRegistry creates a new agent registry
 func NewAgentRegistry() *AgentRegistry {
 	return &AgentRegistry{
 		BaseRegistry: registry.NewBaseRegistry[AgentEntry](),
-		instances:    make(map[string][]a2a.Agent),
+		instances:    make(map[string][]pb.A2AServiceServer),
 	}
 }
 
@@ -60,8 +60,8 @@ func NewAgentRegistryError(component, action, message string, err error) *AgentR
 }
 
 // RegisterAgent registers an agent with the registry
-// Accepts pure a2a.Agent interface (use A2AAdapter for Hector agents)
-func (r *AgentRegistry) RegisterAgent(name string, agent a2a.Agent, agentConfig *config.AgentConfig, capabilities []string) error {
+// Accepts pb.A2AServiceServer interface
+func (r *AgentRegistry) RegisterAgent(name string, agent pb.A2AServiceServer, agentConfig *config.AgentConfig, capabilities []string) error {
 	if name == "" {
 		return NewAgentRegistryError("AgentRegistry", "RegisterAgent", "agent name cannot be empty", nil)
 	}
@@ -93,7 +93,7 @@ func (r *AgentRegistry) RegisterAgent(name string, agent a2a.Agent, agentConfig 
 
 	// Add to instance pool by agent type
 	if r.instances[agentType] == nil {
-		r.instances[agentType] = make([]a2a.Agent, 0)
+		r.instances[agentType] = make([]pb.A2AServiceServer, 0)
 	}
 	r.instances[agentType] = append(r.instances[agentType], agent)
 
@@ -101,8 +101,8 @@ func (r *AgentRegistry) RegisterAgent(name string, agent a2a.Agent, agentConfig 
 }
 
 // GetAgent retrieves a specific agent by name
-// Returns pure a2a.Agent interface
-func (r *AgentRegistry) GetAgent(name string) (a2a.Agent, error) {
+// Returns pb.A2AServiceServer interface
+func (r *AgentRegistry) GetAgent(name string) (pb.A2AServiceServer, error) {
 	entry, exists := r.Get(name)
 	if !exists {
 		return nil, NewAgentRegistryError("AgentRegistry", "GetAgent",
@@ -112,9 +112,9 @@ func (r *AgentRegistry) GetAgent(name string) (a2a.Agent, error) {
 }
 
 // GetAllAgents returns all registered agents
-// Returns pure a2a.Agent interface
-func (r *AgentRegistry) GetAllAgents() map[string]a2a.Agent {
-	agents := make(map[string]a2a.Agent)
+// Returns pb.A2AServiceServer interface
+func (r *AgentRegistry) GetAllAgents() map[string]pb.A2AServiceServer {
+	agents := make(map[string]pb.A2AServiceServer)
 
 	for _, entry := range r.List() {
 		agents[entry.Name] = entry.Agent
@@ -133,17 +133,17 @@ func (r *AgentRegistry) GetAgentConfig(name string) (*config.AgentConfig, error)
 }
 
 // GetAgentsByType returns agents of a specific type
-// Returns pure a2a.Agent interface
-func (r *AgentRegistry) GetAgentsByType(agentType string) ([]a2a.Agent, error) {
+// Returns pb.A2AServiceServer interface
+func (r *AgentRegistry) GetAgentsByType(agentType string) ([]pb.A2AServiceServer, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	instances, exists := r.instances[agentType]
 	if !exists {
-		return []a2a.Agent{}, nil
+		return []pb.A2AServiceServer{}, nil
 	}
 
-	result := make([]a2a.Agent, len(instances))
+	result := make([]pb.A2AServiceServer, len(instances))
 	copy(result, instances)
 	return result, nil
 }
@@ -159,8 +159,8 @@ func (r *AgentRegistry) GetCapabilities(name string) ([]string, error) {
 }
 
 // GetAgentsByCapability retrieves agents that have a specific capability
-// Returns pure a2a.Agent interface
-func (r *AgentRegistry) GetAgentsByCapability(capability string) ([]a2a.Agent, error) {
+// Returns pb.A2AServiceServer interface
+func (r *AgentRegistry) GetAgentsByCapability(capability string) ([]pb.A2AServiceServer, error) {
 	if capability == "" {
 		return nil, NewAgentRegistryError("AgentRegistry", "GetAgentsByCapability", "capability cannot be empty", nil)
 	}
@@ -168,7 +168,7 @@ func (r *AgentRegistry) GetAgentsByCapability(capability string) ([]a2a.Agent, e
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var agents []a2a.Agent
+	var agents []pb.A2AServiceServer
 	for _, entry := range r.List() {
 		for _, cap := range entry.Capabilities {
 			if cap == capability {

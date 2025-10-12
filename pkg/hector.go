@@ -24,7 +24,6 @@ package hector
 
 import (
 	// Re-export commonly used types and functions
-	"github.com/kadirpekel/hector/pkg/a2a"
 	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/config"
 )
@@ -36,17 +35,6 @@ type (
 	AgentConfig   = config.AgentConfig
 	AgentRegistry = agent.AgentRegistry
 
-	// A2AAgent represents an agent-to-agent communication agent
-	A2AAgent = agent.A2AAgent
-	// A2AServer is the A2A protocol server
-	A2AServer = a2a.Server
-	// A2AClient is the A2A protocol client
-	A2AClient = a2a.Client
-	// ServerConfig configures the A2A server
-	ServerConfig = a2a.ServerConfig
-	// ClientConfig configures the A2A client
-	ClientConfig = a2a.ClientConfig
-
 	// Config is the main Hector configuration
 	Config = config.Config
 )
@@ -56,11 +44,6 @@ var (
 	// Agent functions
 	NewAgent         = agent.NewAgent
 	NewAgentRegistry = agent.NewAgentRegistry
-	NewA2AAgent      = agent.NewA2AAgent
-
-	// A2A functions
-	NewA2AServer = a2a.NewServer
-	NewA2AClient = a2a.NewClient
 
 	// Config functions
 	LoadConfig     = config.LoadConfig

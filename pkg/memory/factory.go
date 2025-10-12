@@ -2,20 +2,17 @@ package memory
 
 import (
 	"fmt"
-
-	"github.com/kadirpekel/hector/pkg/llms"
 )
 
 // WorkingMemoryConfig contains configuration for creating a working memory strategy
 type WorkingMemoryConfig struct {
-	Strategy   string
-	WindowSize int
-	Budget     int
-	Threshold  float64
-	Target     float64
-	Model      string
-	LLM        llms.LLMProvider
-	Summarizer SummarizationService
+	Strategy   string               // Strategy name: "buffer_window", "summary_buffer"
+	WindowSize int                  // For buffer_window: number of messages to keep
+	Budget     int                  // For summary_buffer: token budget
+	Threshold  float64              // For summary_buffer: trigger threshold
+	Target     float64              // For summary_buffer: compression target
+	Model      string               // Model name for token counting
+	Summarizer SummarizationService // Summarization service (for summary_buffer)
 }
 
 // NewWorkingMemoryStrategy creates a new working memory strategy based on configuration
@@ -46,7 +43,6 @@ func NewWorkingMemoryStrategy(config WorkingMemoryConfig) (WorkingMemoryStrategy
 			Threshold:  config.Threshold,
 			Target:     config.Target,
 			Model:      config.Model,
-			LLM:        config.LLM,
 			Summarizer: config.Summarizer,
 		})
 

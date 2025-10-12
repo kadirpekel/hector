@@ -1,0 +1,38 @@
+# Example: Task Service with MySQL backend
+# This configuration enables task tracking with MySQL database
+
+agents:
+  assistant:
+    name: "SQL Task Assistant (MySQL)"
+    description: "Agent with MySQL task persistence"
+    llm: "gpt"
+    
+    task:
+      enabled: true
+      backend: sql
+      worker_pool: 100  # Max concurrent async tasks
+      sql:
+        driver: mysql
+        host: localhost
+        port: 3306
+        database: hector_tasks
+        username: hector
+        password: your_password_here
+        max_conns: 25
+        max_idle: 5
+
+    reasoning:
+      engine: react
+      max_iterations: 5
+
+    memory:
+      strategy: buffer_window
+      window_size: 20
+
+providers:
+  llms:
+    gpt:
+      type: openai
+      model: gpt-4o-mini
+      api_key: ${OPENAI_API_KEY}
+

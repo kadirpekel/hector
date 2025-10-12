@@ -1,5 +1,34 @@
 package memory
 
+import (
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	hectorcontext "github.com/kadirpekel/hector/pkg/context"
+)
+
+// ============================================================================
+// A2A-NATIVE MEMORY INTERFACES
+// All interfaces work directly with pb.Message (no conversion)
+// ============================================================================
+
+// StatusNotifier is a callback for status updates during summarization
+type StatusNotifier func(message string)
+
+// WorkingMemoryStrategy defines how recent conversation context is managed
+// Uses NATIVE pb.Message storage without any conversion
+type WorkingMemoryStrategy interface {
+	// AddMessage stores a pb.Message directly (no conversion)
+	AddMessage(session *hectorcontext.ConversationHistory, message *pb.Message) error
+
+	// GetMessages retrieves pb.Message directly (no conversion)
+	GetMessages(session *hectorcontext.ConversationHistory) ([]*pb.Message, error)
+
+	// SetStatusNotifier sets callback for status updates during operations
+	SetStatusNotifier(notifier StatusNotifier)
+
+	// Name returns the strategy identifier
+	Name() string
+}
+
 // LongTermConfig configures long-term memory behavior
 type LongTermConfig struct {
 	Enabled      bool         `yaml:"enabled"`       // Enable long-term memory (default: false)
@@ -21,7 +50,6 @@ const (
 	StorageScopeConversational StorageScope = "conversational"
 
 	// StorageScopeSummariesOnly stores only summary messages
-	// This is useful with SummaryBufferStrategy to store condensed context
 	StorageScopeSummariesOnly StorageScope = "summaries_only"
 )
 
@@ -39,6 +67,4 @@ func (c *LongTermConfig) SetDefaults() {
 	if c.Collection == "" {
 		c.Collection = "hector_session_memory"
 	}
-	// Note: AutoRecall defaults to true, but we need to handle this carefully
-	// because the zero value for bool is false. We'll handle this in the constructor.
 }

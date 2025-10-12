@@ -12,9 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 // ============================================================================
@@ -34,9 +35,10 @@ type GeminiProvider struct {
 
 // GeminiRequest represents the request payload for Gemini API
 type GeminiRequest struct {
-	Contents         []GeminiContent         `json:"contents"`
-	GenerationConfig *GeminiGenerationConfig `json:"generationConfig,omitempty"`
-	Tools            []GeminiToolSet         `json:"tools,omitempty"`
+	Contents          []GeminiContent         `json:"contents"`
+	SystemInstruction *GeminiContent          `json:"systemInstruction,omitempty"` // System instructions (Gemini 1.5+)
+	GenerationConfig  *GeminiGenerationConfig `json:"generationConfig,omitempty"`
+	Tools             []GeminiToolSet         `json:"tools,omitempty"`
 }
 
 // GeminiGenerationConfig configures generation parameters
@@ -112,8 +114,7 @@ func NewGeminiProviderFromConfig(cfg *config.LLMProviderConfig) (*GeminiProvider
 }
 
 // Generate generates a response with function calling support
-func (p *GeminiProvider) Generate(messages []a2a.Message, tools []ToolDefinition) (string, []a2a.ToolCall, int, error) {
-	log.Printf("[GEMINI DEBUG] Generate called with %d messages, %d tools\n", len(messages), len(tools))
+func (p *GeminiProvider) Generate(messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
 
 	req := p.buildRequest(messages, tools, nil)
 
@@ -121,7 +122,6 @@ func (p *GeminiProvider) Generate(messages []a2a.Message, tools []ToolDefinition
 		p.config.Host, p.config.Model, p.config.APIKey)
 
 	reqBody, _ := json.Marshal(req)
-	log.Printf("[GEMINI DEBUG] Request body size: %d bytes\n", len(reqBody))
 
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(reqBody))
 	if err != nil {
@@ -135,38 +135,29 @@ func (p *GeminiProvider) Generate(messages []a2a.Message, tools []ToolDefinition
 	}
 	defer resp.Body.Close()
 
-	log.Printf("[GEMINI DEBUG] HTTP Status: %d\n", resp.StatusCode)
-
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	log.Printf("[GEMINI DEBUG] Response body size: %d bytes\n", len(respBody))
-
 	var geminiResp GeminiResponse
 	if err := json.Unmarshal(respBody, &geminiResp); err != nil {
-		log.Printf("[GEMINI DEBUG] Failed to parse response: %v\nBody: %s\n", err, string(respBody))
 		return "", nil, 0, fmt.Errorf("failed to parse Gemini response: %w", err)
 	}
 
 	if geminiResp.Error != nil {
-		log.Printf("[GEMINI DEBUG] Gemini returned error: %+v\n", geminiResp.Error)
 		return "", nil, 0, fmt.Errorf("gemini API error: %s", geminiResp.Error.Message)
 	}
 
 	if len(geminiResp.Candidates) == 0 {
-		log.Printf("[GEMINI DEBUG] No candidates in response\n")
 		return "", nil, 0, fmt.Errorf("no candidates in response")
 	}
-
-	log.Printf("[GEMINI DEBUG] Candidates: %d\n", len(geminiResp.Candidates))
 
 	return p.parseResponse(&geminiResp)
 }
 
 // GenerateStreaming generates a streaming response
-func (p *GeminiProvider) GenerateStreaming(messages []a2a.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
+func (p *GeminiProvider) GenerateStreaming(messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, tools, nil)
 
 	url := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?key=%s&alt=sse",
@@ -211,7 +202,7 @@ func (p *GeminiProvider) GenerateStreaming(messages []a2a.Message, tools []ToolD
 }
 
 // GenerateStructured generates a response with structured output
-func (p *GeminiProvider) GenerateStructured(messages []a2a.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []a2a.ToolCall, int, error) {
+func (p *GeminiProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
 	req := p.buildRequest(messages, tools, structConfig)
 
 	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent?key=%s",
@@ -248,7 +239,7 @@ func (p *GeminiProvider) GenerateStructured(messages []a2a.Message, tools []Tool
 }
 
 // GenerateStructuredStreaming generates a streaming response with structured output
-func (p *GeminiProvider) GenerateStructuredStreaming(messages []a2a.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
+func (p *GeminiProvider) GenerateStructuredStreaming(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, tools, structConfig)
 
 	url := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?key=%s&alt=sse",
@@ -322,10 +313,12 @@ func (p *GeminiProvider) Close() error {
 // ============================================================================
 
 // buildRequest builds a Gemini API request
-func (p *GeminiProvider) buildRequest(messages []a2a.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) *GeminiRequest {
+func (p *GeminiProvider) buildRequest(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) *GeminiRequest {
+	contents, systemInstruction := p.convertMessages(messages)
 	req := &GeminiRequest{
-		Contents:         p.convertMessages(messages),
-		GenerationConfig: p.buildGenerationConfig(structConfig),
+		Contents:          contents,
+		SystemInstruction: systemInstruction,
+		GenerationConfig:  p.buildGenerationConfig(structConfig),
 	}
 
 	if len(tools) > 0 {
@@ -382,44 +375,55 @@ func (p *GeminiProvider) convertSchemaToGemini(schema interface{}, propertyOrder
 }
 
 // convertMessages converts our Message format to Gemini format
-func (p *GeminiProvider) convertMessages(messages []a2a.Message) []GeminiContent {
+// Returns (contents, systemInstruction)
+func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiContent, *GeminiContent) {
 	var contents []GeminiContent
+	var systemParts []GeminiPart
 
 	for _, msg := range messages {
-		role := msg.Role
-		if role == "assistant" {
-			role = "model"
+		// Extract system messages for systemInstruction field
+		if msg.Role == pb.Role_ROLE_UNSPECIFIED {
+			textContent := protocol.ExtractTextFromMessage(msg)
+			if textContent != "" {
+				systemParts = append(systemParts, GeminiPart{"text": textContent})
+			}
+			continue
 		}
-		if role == "system" {
-			// Gemini doesn't have system role, convert to user message
+
+		var role string
+		if msg.Role == pb.Role_ROLE_AGENT {
+			role = "model"
+		} else {
+			// ROLE_USER
 			role = "user"
 		}
 
 		var parts []GeminiPart
 
 		// Text content
-		textContent := a2a.ExtractTextFromMessage(msg)
+		textContent := protocol.ExtractTextFromMessage(msg)
 		if textContent != "" {
 			parts = append(parts, GeminiPart{"text": textContent})
 		}
 
 		// Tool calls (function calls)
-		for _, tc := range msg.ToolCalls {
+		for _, tc := range protocol.GetToolCallsFromMessage(msg) {
 			parts = append(parts, GeminiPart{
 				"functionCall": map[string]interface{}{
 					"name": tc.Name,
-					"args": tc.Arguments,
+					"args": tc.Args,
 				},
 			})
 		}
 
-		// Tool results
-		if msg.Role == "tool" {
+		// Tool results (check parts for tool results)
+		toolResults := protocol.GetToolResultsFromMessage(msg)
+		for _, toolResult := range toolResults {
 			parts = append(parts, GeminiPart{
 				"functionResponse": map[string]interface{}{
-					"name": msg.Name,
+					"name": toolResult.ToolCallID,
 					"response": map[string]interface{}{
-						"content": a2a.ExtractTextFromMessage(msg),
+						"content": toolResult.Content,
 					},
 				},
 			})
@@ -433,7 +437,15 @@ func (p *GeminiProvider) convertMessages(messages []a2a.Message) []GeminiContent
 		}
 	}
 
-	return contents
+	// Create system instruction if we have system parts
+	var systemInstruction *GeminiContent
+	if len(systemParts) > 0 {
+		systemInstruction = &GeminiContent{
+			Parts: systemParts,
+		}
+	}
+
+	return contents, systemInstruction
 }
 
 // convertTools converts our ToolDefinition format to Gemini format
@@ -441,32 +453,23 @@ func (p *GeminiProvider) convertTools(tools []ToolDefinition) []GeminiFunctionDe
 	var funcs []GeminiFunctionDeclaration
 
 	for _, tool := range tools {
-		funcs = append(funcs, GeminiFunctionDeclaration{
-			Name:        tool.Name,
-			Description: tool.Description,
-			Parameters:  tool.Parameters,
-		})
+		funcs = append(funcs, (GeminiFunctionDeclaration)(tool))
 	}
 
 	return funcs
 }
 
 // parseResponse parses a Gemini response and extracts text and tool calls
-func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []a2a.ToolCall, int, error) {
+func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []*protocol.ToolCall, int, error) {
 	if len(resp.Candidates) == 0 {
 		return "", nil, 0, fmt.Errorf("no candidates in response")
 	}
 
 	candidate := resp.Candidates[0]
 	var textParts []string
-	var toolCalls []a2a.ToolCall
+	var toolCalls []*protocol.ToolCall
 
-	// Debug logging
-	log.Printf("[GEMINI DEBUG] finishReason: %s, parts count: %d\n", candidate.FinishReason, len(candidate.Content.Parts))
-
-	for i, part := range candidate.Content.Parts {
-		log.Printf("[GEMINI DEBUG] Part %d: %+v\n", i, part)
-
+	for _, part := range candidate.Content.Parts {
 		// Extract text
 		if text, ok := part["text"].(string); ok {
 			textParts = append(textParts, text)
@@ -477,10 +480,10 @@ func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []a2a.Tool
 			name, _ := fc["name"].(string)
 			args, _ := fc["args"].(map[string]interface{})
 
-			toolCalls = append(toolCalls, a2a.ToolCall{
-				ID:        fmt.Sprintf("call_%d", len(toolCalls)),
-				Name:      name,
-				Arguments: args,
+			toolCalls = append(toolCalls, &protocol.ToolCall{
+				ID:   fmt.Sprintf("call_%d", len(toolCalls)),
+				Name: name,
+				Args: args,
 			})
 		}
 	}
@@ -491,7 +494,6 @@ func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []a2a.Tool
 	}
 
 	finalText := strings.Join(textParts, "")
-	log.Printf("[GEMINI DEBUG] Final text length: %d, tool calls: %d, tokens: %d\n", len(finalText), len(toolCalls), tokens)
 
 	return finalText, toolCalls, tokens, nil
 }
@@ -504,46 +506,36 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 	lineCount := 0
 	chunkCount := 0
 
-	log.Printf("[GEMINI DEBUG STREAM] Starting to parse streaming response\n")
-
 	for scanner.Scan() {
 		line := scanner.Text()
 		lineCount++
 
 		// Skip empty lines and non-data lines
 		if !strings.HasPrefix(line, "data: ") {
-			log.Printf("[GEMINI DEBUG STREAM] Line %d: skipped (not data: prefix)\n", lineCount)
 			continue
 		}
 
 		data := strings.TrimPrefix(line, "data: ")
-		log.Printf("[GEMINI DEBUG STREAM] Line %d: data length %d bytes\n", lineCount, len(data))
 
 		var resp GeminiResponse
 		if err := json.Unmarshal([]byte(data), &resp); err != nil {
-			log.Printf("[GEMINI DEBUG STREAM] Line %d: failed to parse JSON: %v\n", lineCount, err)
 			continue
 		}
 
 		if resp.Error != nil {
-			log.Printf("[GEMINI DEBUG STREAM] Error in response: %+v\n", resp.Error)
 			chunks <- StreamChunk{Type: "error", Error: fmt.Errorf("%s", resp.Error.Message)}
 			return
 		}
 
 		if len(resp.Candidates) > 0 {
 			candidate := resp.Candidates[0]
-			log.Printf("[GEMINI DEBUG STREAM] Line %d: finishReason=%s, parts=%d\n", lineCount, candidate.FinishReason, len(candidate.Content.Parts))
 
-			for i, part := range candidate.Content.Parts {
-				log.Printf("[GEMINI DEBUG STREAM] Part %d: %+v\n", i, part)
-
+			for _, part := range candidate.Content.Parts {
 				// Stream text
 				if text, ok := part["text"].(string); ok {
 					accumulatedText.WriteString(text)
 					chunks <- StreamChunk{Type: "text", Text: text}
 					chunkCount++
-					log.Printf("[GEMINI DEBUG STREAM] Sent text chunk %d: %d chars\n", chunkCount, len(text))
 				}
 
 				// Stream function calls
@@ -553,27 +545,21 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 
 					chunks <- StreamChunk{
 						Type: "tool_call",
-						ToolCall: &a2a.ToolCall{
-							ID:        fmt.Sprintf("call_%d", time.Now().UnixNano()),
-							Name:      name,
-							Arguments: args,
+						ToolCall: &protocol.ToolCall{
+							ID:   fmt.Sprintf("call_%d", time.Now().UnixNano()),
+							Name: name,
+							Args: args,
 						},
 					}
 					chunkCount++
-					log.Printf("[GEMINI DEBUG STREAM] Sent tool_call chunk %d: %s\n", chunkCount, name)
 				}
 			}
-		} else {
-			log.Printf("[GEMINI DEBUG STREAM] Line %d: NO CANDIDATES\n", lineCount)
 		}
 
 		if resp.UsageMetadata != nil {
 			totalTokens = resp.UsageMetadata.TotalTokenCount
-			log.Printf("[GEMINI DEBUG STREAM] Tokens: %d\n", totalTokens)
 		}
 	}
-
-	log.Printf("[GEMINI DEBUG STREAM] Done parsing. Lines: %d, Chunks sent: %d, Total tokens: %d\n", lineCount, chunkCount, totalTokens)
 
 	// Send done chunk
 	chunks <- StreamChunk{Type: "done", Tokens: totalTokens}

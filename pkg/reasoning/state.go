@@ -4,7 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 // ============================================================================
@@ -25,13 +26,13 @@ type ReasoningState struct {
 	Query string
 
 	// Current conversation messages (for multi-turn tool calling)
-	Conversation []a2a.Message
+	Conversation []*pb.Message
 
 	// Accumulated assistant response text
 	AssistantResponse strings.Builder
 
 	// Tool calls made in first iteration (for history metadata)
-	FirstIterationToolCalls []a2a.ToolCall
+	FirstIterationToolCalls []*protocol.ToolCall
 
 	// Custom state for strategy-specific data
 	// Strategies can store anything here (goals, confidence, etc.)
@@ -59,8 +60,8 @@ func NewReasoningState() *ReasoningState {
 	return &ReasoningState{
 		Iteration:               0,
 		TotalTokens:             0,
-		Conversation:            make([]a2a.Message, 0),
-		FirstIterationToolCalls: make([]a2a.ToolCall, 0),
+		Conversation:            make([]*pb.Message, 0),
+		FirstIterationToolCalls: make([]*protocol.ToolCall, 0),
 		CustomState:             make(map[string]interface{}),
 	}
 }

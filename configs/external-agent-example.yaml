@@ -1,0 +1,59 @@
+# Example configuration for calling external A2A agents with authentication
+
+# Provider configurations
+providers:
+  llms:
+    default-llm:
+      type: "openai"
+      model: "gpt-4o"
+      api_key: "${OPENAI_API_KEY}"
+
+# Agent configurations
+agents:
+  # Native agent that orchestrates other agents
+  orchestrator:
+    name: "Orchestrator Agent"
+    description: "Main agent that can delegate to specialized external agents"
+    llm: "default-llm"
+    sub_agents:
+      - external-specialist
+      - api-key-agent
+      - basic-auth-agent
+
+  # External A2A agent with Bearer token authentication
+  external-specialist:
+    type: "a2a"
+    name: "External Specialist"
+    description: "External A2A agent that requires JWT authentication"
+    url: "https://specialist-agent.example.com"
+    credentials:
+      type: "bearer"
+      token: "${EXTERNAL_AGENT_JWT_TOKEN}"
+
+  # External A2A agent with API key authentication
+  api-key-agent:
+    type: "a2a"
+    name: "API Key Agent"
+    description: "External agent that uses API key authentication"
+    url: "https://api-agent.example.com"
+    credentials:
+      type: "api_key"
+      api_key: "${EXTERNAL_API_KEY}"
+      api_key_header: "X-API-Key"  # Optional, defaults to X-API-Key
+
+  # External A2A agent with Basic authentication
+  basic-auth-agent:
+    type: "a2a"
+    name: "Basic Auth Agent"
+    description: "External agent that uses HTTP Basic auth"
+    url: "https://basic-agent.example.com"
+    credentials:
+      type: "basic"
+      username: "${AGENT_USERNAME}"
+      password: "${AGENT_PASSWORD}"
+
+# Server configuration
+server:
+  auth:
+    enabled: false  # Orchestrator doesn't require auth for incoming requests
+

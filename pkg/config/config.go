@@ -37,6 +37,9 @@ type Config struct {
 	// Document store configurations
 	DocumentStores map[string]DocumentStoreConfig `yaml:"document_stores,omitempty"`
 
+	// Session store configurations (shared across agents) - REMOVED for now
+	// SessionStores map[string]SessionStoreConfig `yaml:"session_stores,omitempty"`
+
 	// Plugin configurations
 	Plugins PluginConfigs `yaml:"plugins,omitempty"`
 }
@@ -319,31 +322,62 @@ func LoadConfigFromString(yamlContent string) (*Config, error) {
 
 // ZeroConfigOptions holds configuration options for zero-config mode
 type ZeroConfigOptions struct {
-	APIKey      string // OpenAI API key (required)
-	BaseURL     string // OpenAI API base URL (default: https://api.openai.com/v1)
-	Model       string // OpenAI model (default: gpt-4o-mini)
+	Provider    string // LLM provider: "openai" (default), "anthropic", "gemini"
+	APIKey      string // API key for the selected provider (required)
+	BaseURL     string // API base URL (provider-specific defaults)
+	Model       string // Model name (provider-specific defaults)
 	EnableTools bool   // Enable all local tools
 	MCPURL      string // MCP server URL for tool integration
 	DocsFolder  string // Document store folder path (RAG support)
 }
 
 // CreateZeroConfig creates a configuration for zero-config mode with custom options
-// Returns a config with one OpenAI-based agent and optional tools/RAG
+// Supports openai (default), anthropic, and gemini providers
 // API key is REQUIRED - will be validated by caller
 func CreateZeroConfig(opts ZeroConfigOptions) *Config {
-	// Set defaults for empty values
-	if opts.BaseURL == "" {
-		opts.BaseURL = "https://api.openai.com/v1"
+	// Default to OpenAI if provider not specified
+	if opts.Provider == "" {
+		opts.Provider = "openai"
 	}
-	if opts.Model == "" {
-		opts.Model = "gpt-4o-mini"
+
+	// Set provider-specific defaults
+	switch opts.Provider {
+	case "openai":
+		if opts.BaseURL == "" {
+			opts.BaseURL = "https://api.openai.com/v1"
+		}
+		if opts.Model == "" {
+			opts.Model = "gpt-4o-mini"
+		}
+	case "anthropic":
+		if opts.BaseURL == "" {
+			opts.BaseURL = "https://api.anthropic.com"
+		}
+		if opts.Model == "" {
+			opts.Model = "claude-3-5-sonnet-20241022"
+		}
+	case "gemini":
+		if opts.BaseURL == "" {
+			opts.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
+		}
+		if opts.Model == "" {
+			opts.Model = "gemini-2.0-flash-exp"
+		}
+	default:
+		// Unknown provider, use as-is with OpenAI defaults
+		if opts.BaseURL == "" {
+			opts.BaseURL = "https://api.openai.com/v1"
+		}
+		if opts.Model == "" {
+			opts.Model = "gpt-4o-mini"
+		}
 	}
 
 	cfg := &Config{
 		Name: "Zero Config Mode",
 		LLMs: map[string]LLMProviderConfig{
-			"openai": {
-				Type:        "openai",
+			opts.Provider: {
+				Type:        opts.Provider,
 				Model:       opts.Model,
 				APIKey:      opts.APIKey, // Required - validated before this function is called
 				Host:        opts.BaseURL,
@@ -357,9 +391,9 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 		DocumentStores: make(map[string]DocumentStoreConfig),
 	}
 
-	// Configure document store if folder provided (uses OpenAI embeddings)
+	// Configure document store if folder provided
 	if opts.DocsFolder != "" {
-		// Note: Document stores with OpenAI require --docs flag and additional setup
+		// Note: Document stores require additional setup
 		// For now, we'll keep this simple and not auto-configure
 		// Users should use hector.yaml for advanced RAG setups
 		fmt.Println("⚠️  Warning: Document stores (--docs) require additional configuration.")
@@ -367,11 +401,16 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 	}
 
 	// Configure agent
+	providerName := opts.Provider
+	if providerName == "" {
+		providerName = "OpenAI"
+	}
+
 	agentConfig := AgentConfig{
 		Name:        "assistant",
-		Description: fmt.Sprintf("AI assistant powered by OpenAI (%s)", opts.Model),
+		Description: fmt.Sprintf("AI assistant powered by %s (%s)", providerName, opts.Model),
 		Type:        "native",
-		LLM:         "openai",
+		LLM:         opts.Provider,
 		Visibility:  "public",
 		Prompt: PromptConfig{
 			SystemPrompt: "You are a helpful AI assistant. Be concise and accurate in your responses.",
@@ -386,6 +425,46 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 	if opts.EnableTools {
 		// Enable all local tools
 		agentConfig.Tools = nil // nil means all tools available
+
+		// Initialize tools config with local tool sources
+		if cfg.Tools.Tools == nil {
+			cfg.Tools.Tools = make(map[string]ToolConfig)
+		}
+
+		// Add default local tools with proper configurations
+		cfg.Tools.Tools["command"] = ToolConfig{
+			Type:    "command",
+			Enabled: true,
+			AllowedCommands: []string{
+				"ls", "cat", "head", "tail", "pwd", "find", "grep", "wc",
+				"date", "echo", "tree", "du", "df", "git", "npm", "go",
+				"curl", "wget", "chmod", "mkdir", "rm", "mv", "cp",
+			},
+			WorkingDirectory: "./",
+			MaxExecutionTime: "30s",
+			EnableSandboxing: false, // Disable for easier development
+		}
+
+		cfg.Tools.Tools["file_writer"] = ToolConfig{
+			Type:              "file_writer",
+			Enabled:           true,
+			MaxFileSize:       1048576, // 1MB
+			AllowedExtensions: []string{".go", ".yaml", ".yml", ".md", ".json", ".txt", ".sh", ".py", ".js", ".ts"},
+			WorkingDirectory:  "./",
+		}
+
+		cfg.Tools.Tools["search_replace"] = ToolConfig{
+			Type:             "search_replace",
+			Enabled:          true,
+			MaxReplacements:  100,
+			WorkingDirectory: "./",
+			BackupEnabled:    true,
+		}
+
+		cfg.Tools.Tools["todo"] = ToolConfig{
+			Type:    "todo",
+			Enabled: true,
+		}
 	} else if opts.MCPURL != "" {
 		// Enable only MCP tools
 		agentConfig.Tools = []string{"mcp"}

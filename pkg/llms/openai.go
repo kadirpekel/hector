@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 // ============================================================================
@@ -208,7 +209,7 @@ func NewOpenAIProviderFromConfig(cfg *config.LLMProviderConfig) (*OpenAIProvider
 // ============================================================================
 
 // Generate generates a response with native function calling
-func (p *OpenAIProvider) Generate(messages []a2a.Message, tools []ToolDefinition) (string, []a2a.ToolCall, int, error) {
+func (p *OpenAIProvider) Generate(messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
 	request := p.buildRequest(messages, false, tools)
 
 	response, err := p.makeRequest(request)
@@ -234,7 +235,7 @@ func (p *OpenAIProvider) Generate(messages []a2a.Message, tools []ToolDefinition
 	}
 
 	// Check if model wants to call tools
-	var toolCalls []a2a.ToolCall
+	var toolCalls []*protocol.ToolCall
 	if len(choice.Message.ToolCalls) > 0 {
 		toolCalls, err = parseToolCalls(choice.Message.ToolCalls)
 		if err != nil {
@@ -247,7 +248,7 @@ func (p *OpenAIProvider) Generate(messages []a2a.Message, tools []ToolDefinition
 }
 
 // GenerateStreaming generates a streaming response with function calling
-func (p *OpenAIProvider) GenerateStreaming(messages []a2a.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
+func (p *OpenAIProvider) GenerateStreaming(messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	request := p.buildRequest(messages, true, tools)
 
 	outputCh := make(chan StreamChunk, 100)
@@ -291,7 +292,7 @@ func (p *OpenAIProvider) Close() error {
 // ============================================================================
 
 // GenerateStructured generates a response with structured output
-func (p *OpenAIProvider) GenerateStructured(messages []a2a.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []a2a.ToolCall, int, error) {
+func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
 	req := p.buildRequest(messages, false, tools)
 
 	// Add structured output configuration
@@ -335,7 +336,7 @@ func (p *OpenAIProvider) GenerateStructured(messages []a2a.Message, tools []Tool
 	}
 
 	// Check if model wants to call tools
-	var toolCalls []a2a.ToolCall
+	var toolCalls []*protocol.ToolCall
 	if len(choice.Message.ToolCalls) > 0 {
 		toolCalls, err = parseToolCalls(choice.Message.ToolCalls)
 		if err != nil {
@@ -347,7 +348,7 @@ func (p *OpenAIProvider) GenerateStructured(messages []a2a.Message, tools []Tool
 }
 
 // GenerateStructuredStreaming generates a streaming response with structured output
-func (p *OpenAIProvider) GenerateStructuredStreaming(messages []a2a.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
+func (p *OpenAIProvider) GenerateStructuredStreaming(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, true, tools)
 
 	// Add structured output configuration
@@ -393,41 +394,69 @@ func (p *OpenAIProvider) SupportsStructuredOutput() bool {
 // INTERNAL HELPERS
 // ============================================================================
 
+// roleToOpenAI converts protobuf Role to OpenAI role string
+func roleToOpenAI(role pb.Role) string {
+	switch role {
+	case pb.Role_ROLE_USER:
+		return "user"
+	case pb.Role_ROLE_AGENT:
+		return "assistant"
+	case pb.Role_ROLE_UNSPECIFIED:
+		// ROLE_UNSPECIFIED is used for system messages throughout the codebase
+		return "system"
+	default:
+		return "system"
+	}
+}
+
 // buildRequest builds an OpenAI request
-func (p *OpenAIProvider) buildRequest(messages []a2a.Message, stream bool, tools []ToolDefinition) OpenAIRequest {
+func (p *OpenAIProvider) buildRequest(messages []*pb.Message, stream bool, tools []ToolDefinition) OpenAIRequest {
 	// Convert universal Message to OpenAI-specific message format
-	openaiMessages := make([]OpenAIMessage, len(messages))
-	for i, msg := range messages {
+	openaiMessages := make([]OpenAIMessage, 0, len(messages))
+	for _, msg := range messages {
+		// Check for tool results first (OpenAI requires role="tool" for these)
+		toolResults := protocol.GetToolResultsFromMessage(msg)
+		if len(toolResults) > 0 {
+			// OpenAI expects one tool result per message with role="tool"
+			for _, tr := range toolResults {
+				content := tr.Content
+				openaiMsg := OpenAIMessage{
+					Role:       "tool",
+					Content:    &content,
+					ToolCallID: tr.ToolCallID,
+				}
+				openaiMessages = append(openaiMessages, openaiMsg)
+			}
+			continue
+		}
+
 		// OpenAI requires content to always be present (even if empty string)
 		// Using pointer to ensure it's always included in JSON, never null
-		content := a2a.ExtractTextFromMessage(msg)
+		content := protocol.ExtractTextFromMessage(msg)
 
 		openaiMsg := OpenAIMessage{
-			Role:    string(msg.Role),
+			Role:    roleToOpenAI(msg.Role),
 			Content: &content, // Always include content, even if empty
 		}
 
-		// Handle tool calls (from assistant)
-		if len(msg.ToolCalls) > 0 {
-			openaiMsg.ToolCalls = make([]OpenAIToolCall, len(msg.ToolCalls))
-			for j, tc := range msg.ToolCalls {
+		// Handle tool calls (from assistant via metadata)
+		toolCalls := protocol.GetToolCallsFromMessage(msg)
+		if len(toolCalls) > 0 {
+			openaiMsg.ToolCalls = make([]OpenAIToolCall, len(toolCalls))
+			for j, tc := range toolCalls {
+				argsJSON, _ := json.Marshal(tc.Args)
 				openaiMsg.ToolCalls[j] = OpenAIToolCall{
 					ID:   tc.ID,
 					Type: "function",
 					Function: OpenAIFunctionCall{
 						Name:      tc.Name,
-						Arguments: tc.RawArgs,
+						Arguments: string(argsJSON),
 					},
 				}
 			}
 		}
 
-		// Handle tool results (role: "tool")
-		if msg.ToolCallID != "" {
-			openaiMsg.ToolCallID = msg.ToolCallID
-		}
-
-		openaiMessages[i] = openaiMsg
+		openaiMessages = append(openaiMessages, openaiMsg)
 	}
 
 	request := OpenAIRequest{
@@ -458,20 +487,16 @@ func convertToOpenAITools(tools []ToolDefinition) []OpenAITool {
 	result := make([]OpenAITool, len(tools))
 	for i, tool := range tools {
 		result[i] = OpenAITool{
-			Type: "function",
-			Function: OpenAIToolFunction{
-				Name:        tool.Name,
-				Description: tool.Description,
-				Parameters:  tool.Parameters,
-			},
+			Type:     "function",
+			Function: (OpenAIToolFunction)(tool),
 		}
 	}
 	return result
 }
 
 // parseToolCalls extracts tool calls from OpenAI response
-func parseToolCalls(openaiToolCalls []OpenAIToolCall) ([]a2a.ToolCall, error) {
-	result := make([]a2a.ToolCall, len(openaiToolCalls))
+func parseToolCalls(openaiToolCalls []OpenAIToolCall) ([]*protocol.ToolCall, error) {
+	result := make([]*protocol.ToolCall, len(openaiToolCalls))
 
 	for i, tc := range openaiToolCalls {
 		// Parse arguments JSON string into map
@@ -480,11 +505,10 @@ func parseToolCalls(openaiToolCalls []OpenAIToolCall) ([]a2a.ToolCall, error) {
 			return nil, fmt.Errorf("failed to parse tool arguments: %w", err)
 		}
 
-		result[i] = a2a.ToolCall{
-			ID:        tc.ID,
-			Name:      tc.Function.Name,
-			Arguments: args,
-			RawArgs:   tc.Function.Arguments,
+		result[i] = &protocol.ToolCall{
+			ID:   tc.ID,
+			Name: tc.Function.Name,
+			Args: args,
 		}
 	}
 
@@ -663,7 +687,7 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 					for _, tc := range toolCalls {
 						outputCh <- StreamChunk{
 							Type:     "tool_call",
-							ToolCall: &tc,
+							ToolCall: tc,
 						}
 					}
 				}

@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 // ============================================================================
@@ -16,18 +17,18 @@ import (
 // DeterministicSummarizer provides predictable summarization for testing
 type DeterministicSummarizer struct {
 	CallCount    int
-	SummaryCalls [][]a2a.Message // Track what was summarized
+	SummaryCalls [][]*pb.Message // Track what was summarized
 }
 
 // SummarizeConversation creates deterministic summaries
-func (d *DeterministicSummarizer) SummarizeConversation(ctx context.Context, messages []a2a.Message) (string, error) {
+func (d *DeterministicSummarizer) SummarizeConversation(ctx context.Context, messages []*pb.Message) (string, error) {
 	d.CallCount++
 	d.SummaryCalls = append(d.SummaryCalls, messages)
 
 	// Create deterministic summary
 	var parts []string
 	for _, msg := range messages {
-		textContent := a2a.ExtractTextFromMessage(msg)
+		textContent := protocol.ExtractTextFromMessage(msg)
 		contentPreview := textContent
 		if len(textContent) > 10 {
 			contentPreview = textContent[:10]

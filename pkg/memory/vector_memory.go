@@ -5,9 +5,10 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/kadirpekel/hector/pkg/a2a"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/databases"
 	"github.com/kadirpekel/hector/pkg/embedders"
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 // VectorMemoryStrategy stores conversation messages in vector database for semantic recall
@@ -48,14 +49,14 @@ func (v *VectorMemoryStrategy) Name() string {
 
 // Store adds messages to long-term memory (batch operation)
 // Each message is stored as a separate vector document in Qdrant
-func (v *VectorMemoryStrategy) Store(sessionID string, messages []a2a.Message) error {
+func (v *VectorMemoryStrategy) Store(sessionID string, messages []*pb.Message) error {
 	if len(messages) == 0 {
 		return nil
 	}
 
 	for i, msg := range messages {
 		// Skip messages with no content
-		textContent := a2a.ExtractTextFromMessage(msg)
+		textContent := protocol.ExtractTextFromMessage(msg)
 		if textContent == "" {
 			continue
 		}
@@ -69,10 +70,21 @@ func (v *VectorMemoryStrategy) Store(sessionID string, messages []a2a.Message) e
 		// Create unique document ID using UUID
 		docID := uuid.New().String()
 
+		// Convert pb.Role enum to string
+		roleStr := "unknown"
+		switch msg.Role {
+		case pb.Role_ROLE_USER:
+			roleStr = "user"
+		case pb.Role_ROLE_AGENT:
+			roleStr = "agent"
+		case pb.Role_ROLE_UNSPECIFIED:
+			roleStr = "system"
+		}
+
 		// Prepare metadata
 		metadata := map[string]interface{}{
 			"session_id":    sessionID,
-			"role":          string(msg.Role),
+			"role":          roleStr,
 			"content":       textContent, // Store content for retrieval
 			"message_index": i,
 		}
@@ -89,9 +101,9 @@ func (v *VectorMemoryStrategy) Store(sessionID string, messages []a2a.Message) e
 
 // Recall retrieves relevant context from long-term memory using semantic search
 // Filters by sessionID to ensure session isolation
-func (v *VectorMemoryStrategy) Recall(sessionID string, query string, limit int) ([]a2a.Message, error) {
+func (v *VectorMemoryStrategy) Recall(sessionID string, query string, limit int) ([]*pb.Message, error) {
 	if query == "" {
-		return []a2a.Message{}, nil
+		return []*pb.Message{}, nil
 	}
 
 	// Generate query embedding
@@ -110,21 +122,39 @@ func (v *VectorMemoryStrategy) Recall(sessionID string, query string, limit int)
 	}
 
 	// Convert search results to messages
-	messages := make([]a2a.Message, 0, len(results))
+	messages := make([]*pb.Message, 0, len(results))
 	for _, result := range results {
 		// Extract role from metadata
-		role, ok := result.Metadata["role"].(string)
+		roleStr, ok := result.Metadata["role"].(string)
 		if !ok {
-			role = "assistant" // Default fallback
+			roleStr = "assistant" // Default fallback
 		}
 
 		// Extract content from metadata
-		content, ok := result.Metadata["content"].(string)
+		contentStr, ok := result.Metadata["content"].(string)
 		if !ok {
-			content = result.Content // Fallback to result content
+			contentStr = result.Content // Fallback to result content
 		}
 
-		messages = append(messages, a2a.CreateTextMessage(a2a.MessageRole(role), content))
+		// Convert role string to pb.Role enum
+		var pbRole pb.Role
+		switch roleStr {
+		case "user":
+			pbRole = pb.Role_ROLE_USER
+		case "assistant", "agent":
+			pbRole = pb.Role_ROLE_AGENT
+		default:
+			pbRole = pb.Role_ROLE_UNSPECIFIED
+		}
+
+		// Create pb.Message
+		msg := &pb.Message{
+			Role: pbRole,
+			Content: []*pb.Part{
+				{Part: &pb.Part_Text{Text: contentStr}},
+			},
+		}
+		messages = append(messages, msg)
 	}
 
 	return messages, nil

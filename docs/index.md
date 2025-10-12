@@ -38,7 +38,7 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 <div class="feature-card">
   <h4>🌐 100% A2A Native</h4>
   <p>Built on the <a href="https://a2a-protocol.org">Agent-to-Agent protocol</a> for true interoperability and standardization.</p>
-  <p><a href="A2A_NATIVE_ARCHITECTURE">🏆 Deep A2A Native Architecture →</a></p>
+  <p><a href="../A2A_COMPLIANCE">🏆 100% A2A Compliant →</a></p>
 </div>
 
 <div class="feature-card">
@@ -53,7 +53,8 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 
 <div class="feature-card">
   <h4>⚡ Production Ready</h4>
-  <p>Authentication, streaming, sessions, monitoring. Built for enterprise from day one.</p>
+  <p>Authentication, streaming, pluggable session stores (SQL/Redis/Memory), monitoring. Built for enterprise from day one.</p>
+  <p><a href="SESSION_STORES">📦 Session Stores →</a></p>
 </div>
 
 <div class="feature-card">
