@@ -45,11 +45,13 @@ agents:
       - "agent_call"  # Required for orchestration
   
   # External agent reference (A2A)
+  # NOTE: For local A2A agents, use gRPC address format: "localhost:PORT" 
+  # For remote agents, use full HTTPS URLs: "https://remote-server.com"
   weather_expert:
     name: "Weather Expert (External)"
     description: "External weather expert agent via A2A protocol"
     type: "a2a"  # External A2A agent
-    url: "http://localhost:8081/agents/weather_expert"  # Points to the server (REST port)
+    url: "localhost:8080"  # gRPC endpoint for A2A communication
     visibility: "internal"  # Not exposed, only for internal use
 
 # LLM Configuration

@@ -17,6 +17,11 @@ type RegistryService struct {
 	registry *AgentRegistry
 }
 
+// GetRegistry returns the underlying AgentRegistry for tools that need direct access
+func (s *RegistryService) GetRegistry() *AgentRegistry {
+	return s.registry
+}
+
 // NewRegistryService creates a new agent registry service
 func NewRegistryService(registry *AgentRegistry) reasoning.AgentRegistryService {
 	return &RegistryService{

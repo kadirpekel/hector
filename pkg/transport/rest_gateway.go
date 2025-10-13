@@ -302,7 +302,8 @@ func (g *RESTGateway) createAgentRoutingHandler(next http.Handler) http.Handler 
 
 		// Add agent-name to gRPC metadata so RegistryService can route correctly
 		// The grpc-gateway runtime will convert this header to gRPC metadata
-		r.Header.Set("agent-name", agentID)
+		// Use grpc-metadata- prefix for proper conversion
+		r.Header.Set("grpc-metadata-agent-name", agentID)
 
 		// Forward to grpc-gateway mux
 		next.ServeHTTP(w, r)

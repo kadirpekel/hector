@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
@@ -156,14 +157,16 @@ func (s *MultiAgentService) GetAgent(agentID string) (pb.A2AServiceServer, bool)
 
 // SendMessage routes to the appropriate agent
 func (s *MultiAgentService) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
-	agentID := s.extractAgentID(req)
+	// First try to get agent ID from gRPC metadata (set by REST gateway)
+	agentID := s.extractAgentIDFromContext(ctx)
 
-	if agentID == "" && len(s.agents) == 1 {
-		for id := range s.agents {
-			agentID = id
-			break
-		}
+	// If not found, try extracting from request payload
+	if agentID == "" {
+		agentID = s.extractAgentID(req)
 	}
+
+	// REMOVED DANGEROUS FALLBACK: Do not auto-route to single agent if agentID is empty
+	// This was causing wrong agent names to work incorrectly
 
 	if agentID == "" {
 		return nil, status.Error(codes.InvalidArgument, "agent_id not specified (use context_id format: agent_id:session_id)")
@@ -179,14 +182,16 @@ func (s *MultiAgentService) SendMessage(ctx context.Context, req *pb.SendMessage
 
 // SendStreamingMessage routes to the appropriate agent
 func (s *MultiAgentService) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2AService_SendStreamingMessageServer) error {
-	agentID := s.extractAgentID(req)
+	// First try to get agent ID from gRPC metadata (set by REST gateway)
+	agentID := s.extractAgentIDFromContext(stream.Context())
 
-	if agentID == "" && len(s.agents) == 1 {
-		for id := range s.agents {
-			agentID = id
-			break
-		}
+	// If not found, try extracting from request payload
+	if agentID == "" {
+		agentID = s.extractAgentID(req)
 	}
+
+	// REMOVED DANGEROUS FALLBACK: Do not auto-route to single agent if agentID is empty
+	// This was causing wrong agent names to work incorrectly
 
 	if agentID == "" {
 		return status.Error(codes.InvalidArgument, "agent_id not specified")
@@ -290,6 +295,21 @@ func (s *MultiAgentService) extractAgentID(req *pb.SendMessageRequest) string {
 	}
 
 	return ""
+}
+
+// extractAgentIDFromContext extracts agent ID from gRPC metadata (set by REST gateway)
+func (s *MultiAgentService) extractAgentIDFromContext(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+
+	agentNames := md.Get("agent-name")
+	if len(agentNames) == 0 {
+		return ""
+	}
+
+	return agentNames[0]
 }
 
 // ============================================================================
@@ -564,19 +584,14 @@ func executeServeCommand(args *CLIArgs) {
 		fatalf("Invalid configuration: %v", err)
 	}
 
-	// Create component manager
-	componentManager, err := component.NewComponentManager(hectorConfig)
+	// Create agent registry
+	agentRegistry := agent.NewAgentRegistry()
+
+	// Create component manager with agent registry for agent_call tool
+	componentManager, err := component.NewComponentManagerWithAgentRegistry(hectorConfig, agentRegistry)
 	if err != nil {
 		fatalf("Component initialization failed: %v", err)
 	}
-
-	fmt.Println("🚀 Starting Hector A2A Server...")
-	if hectorConfig.Name != "" {
-		fmt.Printf("📋 Configuration: %s\n", hectorConfig.Name)
-	}
-
-	// Create agent registry
-	agentRegistry := agent.NewAgentRegistry()
 
 	// Create multi-agent service
 	multiAgentSvc := NewMultiAgentService(agentRegistry)
@@ -745,6 +760,7 @@ func executeServeCommand(args *CLIArgs) {
 	// Create REST gateway with auth
 	restGateway := transport.NewRESTGateway(transport.RESTGatewayConfig{
 		HTTPAddress: restAddr,
+		GRPCAddress: grpcAddr, // Point to the correct gRPC server
 	})
 	if authConfig != nil {
 		restGateway.SetAuth(authConfig)

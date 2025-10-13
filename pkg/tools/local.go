@@ -33,6 +33,11 @@ func NewLocalToolSource(name string) *LocalToolSource {
 
 // NewLocalToolSourceWithConfig creates a new local tool source from configuration
 func NewLocalToolSourceWithConfig(toolConfigs map[string]config.ToolConfig) (*LocalToolSource, error) {
+	return NewLocalToolSourceWithConfigAndAgentRegistry(toolConfigs, nil)
+}
+
+// NewLocalToolSourceWithConfigAndAgentRegistry creates a local tool source with agent registry for agent_call tool
+func NewLocalToolSourceWithConfigAndAgentRegistry(toolConfigs map[string]config.ToolConfig, agentRegistry interface{}) (*LocalToolSource, error) {
 	source := &LocalToolSource{
 		name:  "local",
 		tools: make(map[string]Tool),
@@ -58,6 +63,19 @@ func NewLocalToolSourceWithConfig(toolConfigs map[string]config.ToolConfig) (*Lo
 			tool, err = NewSearchReplaceToolWithConfig(toolName, toolConfig)
 		case "todo":
 			tool = NewTodoTool()
+		case "agent_call":
+			// Create agent_call tool with registry reference
+			var registry AgentRegistry
+			if agentRegistry != nil {
+				if ar, ok := agentRegistry.(AgentRegistry); ok {
+					registry = ar
+				}
+			}
+			// Validate registry is available
+			if registry == nil {
+				return nil, fmt.Errorf("agent_call tool requires agent registry but none was provided")
+			}
+			tool = NewAgentCallTool(registry)
 		default:
 			fmt.Printf("Warning: Unknown local tool type '%s' for tool '%s', skipping\n", toolConfig.Type, toolName)
 			continue

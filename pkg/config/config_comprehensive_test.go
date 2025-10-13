@@ -59,9 +59,8 @@ func TestConfig_Validate(t *testing.T) {
 						Timeout:        15 * time.Minute,
 					},
 					A2AServer: A2AServerConfig{
-						Enabled: true,
-						Host:    "0.0.0.0",
-						Port:    8080,
+						Host: "0.0.0.0",
+						Port: 8080,
 					},
 				},
 			},

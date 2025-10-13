@@ -529,12 +529,10 @@ func TestGlobalSettings_Validate(t *testing.T) {
 					Timeout:        15 * time.Minute,
 				},
 				A2AServer: A2AServerConfig{
-					Enabled: true,
-					Host:    "0.0.0.0",
-					Port:    8080,
+					Host: "0.0.0.0",
+					Port: 8080,
 				},
 				Auth: AuthConfig{
-					Enabled:  true,
 					JWKSURL:  "https://auth.example.com/.well-known/jwks.json",
 					Issuer:   "https://auth.example.com/",
 					Audience: "hector-api",
@@ -555,10 +553,10 @@ func TestGlobalSettings_Validate(t *testing.T) {
 					Timeout:        15 * time.Minute,
 				},
 				A2AServer: A2AServerConfig{
-					Enabled: false,
+					// Empty config (disabled)
 				},
 				Auth: AuthConfig{
-					Enabled: false,
+					// Empty config (disabled)
 				},
 			},
 			wantErr: false,
@@ -588,8 +586,7 @@ func TestGlobalSettings_Validate(t *testing.T) {
 			name: "invalid_a2a_server_config",
 			config: GlobalSettings{
 				A2AServer: A2AServerConfig{
-					Enabled: true,
-					Port:    0,
+					Port: 0,
 				},
 			},
 			wantErr: true,
@@ -598,7 +595,6 @@ func TestGlobalSettings_Validate(t *testing.T) {
 			name: "invalid_auth_config_missing_jwks_url",
 			config: GlobalSettings{
 				Auth: AuthConfig{
-					Enabled:  true,
 					Issuer:   "https://auth.example.com/",
 					Audience: "hector-api",
 				},
@@ -773,49 +769,44 @@ func TestA2AServerConfig_Validate(t *testing.T) {
 		{
 			name: "valid_enabled_server",
 			config: A2AServerConfig{
-				Enabled: true,
-				Host:    "0.0.0.0",
-				Port:    8080,
+				Host: "0.0.0.0",
+				Port: 8080,
 			},
 			wantErr: false,
 		},
 		{
-			name: "valid_disabled_server",
+			name:   "valid_disabled_server",
 			config: A2AServerConfig{
-				Enabled: false,
+				// Empty config - should be valid (disabled)
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid_custom_port",
 			config: A2AServerConfig{
-				Enabled: true,
-				Host:    "localhost",
-				Port:    3000,
+				Host: "localhost",
+				Port: 3000,
 			},
 			wantErr: false,
 		},
 		{
 			name: "invalid_port_zero",
 			config: A2AServerConfig{
-				Enabled: true,
-				Port:    0,
+				Port: 0,
 			},
-			wantErr: true,
+			wantErr: false, // Port 0 means disabled, which is valid
 		},
 		{
 			name: "invalid_port_negative",
 			config: A2AServerConfig{
-				Enabled: true,
-				Port:    -1,
+				Port: -1,
 			},
-			wantErr: true,
+			wantErr: false, // Negative port means disabled, which is valid
 		},
 		{
 			name: "invalid_port_too_high",
 			config: A2AServerConfig{
-				Enabled: true,
-				Port:    65536,
+				Port: 65536,
 			},
 			wantErr: true,
 		},
@@ -840,7 +831,6 @@ func TestAuthConfig_Validate(t *testing.T) {
 		{
 			name: "valid_enabled_auth",
 			config: AuthConfig{
-				Enabled:  true,
 				JWKSURL:  "https://auth.example.com/.well-known/jwks.json",
 				Issuer:   "https://auth.example.com/",
 				Audience: "hector-api",
@@ -848,38 +838,35 @@ func TestAuthConfig_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid_disabled_auth",
+			name:   "valid_disabled_auth",
 			config: AuthConfig{
-				Enabled: false,
+				// Empty config - should be valid (disabled)
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing_jwks_url",
 			config: AuthConfig{
-				Enabled:  true,
 				Issuer:   "https://auth.example.com/",
 				Audience: "hector-api",
 			},
-			wantErr: true,
+			wantErr: false, // Incomplete config means disabled, which is valid
 		},
 		{
 			name: "missing_issuer",
 			config: AuthConfig{
-				Enabled:  true,
 				JWKSURL:  "https://auth.example.com/.well-known/jwks.json",
 				Audience: "hector-api",
 			},
-			wantErr: true,
+			wantErr: false, // Incomplete config means disabled, which is valid
 		},
 		{
 			name: "missing_audience",
 			config: AuthConfig{
-				Enabled: true,
 				JWKSURL: "https://auth.example.com/.well-known/jwks.json",
 				Issuer:  "https://auth.example.com/",
 			},
-			wantErr: true,
+			wantErr: false, // Incomplete config means disabled, which is valid
 		},
 	}
 

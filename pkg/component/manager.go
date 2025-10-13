@@ -39,10 +39,15 @@ type ComponentManager struct {
 
 // NewComponentManager creates a new component manager and initializes all components
 func NewComponentManager(globalConfig *config.Config) (*ComponentManager, error) {
+	return NewComponentManagerWithAgentRegistry(globalConfig, nil)
+}
+
+// NewComponentManagerWithAgentRegistry creates a component manager with agent registry for agent_call tool
+func NewComponentManagerWithAgentRegistry(globalConfig *config.Config, agentRegistry interface{}) (*ComponentManager, error) {
 	ctx := context.Background()
 
-	// Initialize tool registry with configuration
-	toolRegistry, err := tools.NewToolRegistryWithConfig(&globalConfig.Tools)
+	// Initialize tool registry with configuration and agent registry
+	toolRegistry, err := tools.NewToolRegistryWithConfigAndAgentRegistry(&globalConfig.Tools, agentRegistry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool registry: %w", err)
 	}

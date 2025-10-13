@@ -45,20 +45,22 @@ agents:
   
   # ============================================================================
   # EXTERNAL A2A AGENTS - Remote agents accessed via A2A protocol
+  # NOTE: For local testing, use gRPC format: "localhost:PORT"
+  # For production, use HTTPS format: "https://remote-server.com"
   # ============================================================================
   
   external_specialist:
     type: "a2a"  # External A2A agent
     name: "External Specialist"
     description: "External A2A agent with specialized capabilities"
-    url: "https://external-server.com/agents/specialist"
+    url: "localhost:8080"  # Local gRPC endpoint for testing
     # No LLM, reasoning, or tools needed - external agent has its own!
   
   partner_analyst:
     type: "a2a"
     name: "Partner Analysis Agent"
     description: "Third-party A2A agent for data analysis"
-    url: "https://partner-service.ai/agents/analyst"
+    url: "localhost:8082"  # Local gRPC endpoint for testing
     # Hector transparently integrates it - users see it like any other agent
   
   # ============================================================================

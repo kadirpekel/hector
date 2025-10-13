@@ -55,7 +55,7 @@ func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager 
 		return nil, fmt.Errorf("failed to create reasoning strategy: %w", err)
 	}
 
-	// Auto-register strategy-required tools (e.g., todo_write for ChainOfThought)
+	// Auto-register strategy-required tools (e.g., todo_write for ChainOfThought, agent_call for Supervisor)
 	requiredTools := strategy.GetRequiredTools()
 	for _, reqTool := range requiredTools {
 		// Check if tool already exists
@@ -66,7 +66,15 @@ func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager 
 
 		// Tool doesn't exist - auto-create if requested
 		if reqTool.AutoCreate {
-			if err := registerRequiredTool(toolRegistry, reqTool); err != nil {
+			// Extract agent registry from registry service
+			var agentReg interface{}
+			if registryService != nil {
+				if regSvc, ok := registryService.(*RegistryService); ok {
+					agentReg = regSvc.GetRegistry()
+				}
+			}
+
+			if err := registerRequiredToolWithAgentRegistry(toolRegistry, reqTool, agentReg); err != nil {
 				return nil, fmt.Errorf("failed to register required tool '%s': %w", reqTool.Name, err)
 			}
 			fmt.Printf("Info: Auto-registered strategy-required tool '%s' (%s)\n", reqTool.Name, reqTool.Description)
@@ -237,7 +245,7 @@ func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager 
 }
 
 // registerRequiredTool creates and registers a required tool in the registry
-func registerRequiredTool(registry *tools.ToolRegistry, reqTool reasoning.RequiredTool) error {
+func registerRequiredToolWithAgentRegistry(registry *tools.ToolRegistry, reqTool reasoning.RequiredTool, agentRegistry interface{}) error {
 	// Create a local tool source for the required tool
 	localSource := tools.NewLocalToolSource("strategy-required")
 
@@ -246,6 +254,18 @@ func registerRequiredTool(registry *tools.ToolRegistry, reqTool reasoning.Requir
 	switch reqTool.Type {
 	case "todo":
 		tool = tools.NewTodoTool()
+	case "agent_call":
+		var registry tools.AgentRegistry
+		if agentRegistry != nil {
+			if ar, ok := agentRegistry.(tools.AgentRegistry); ok {
+				registry = ar
+			}
+		}
+		// Validate registry is available
+		if registry == nil {
+			return fmt.Errorf("agent_call tool requires agent registry but none was provided")
+		}
+		tool = tools.NewAgentCallTool(registry)
 	case "command":
 		// Create a basic command tool with safe defaults
 		cmdTool, err := tools.NewCommandToolWithConfig(reqTool.Name, config.ToolConfig{

@@ -132,8 +132,7 @@ func (s *SupervisorStrategy) buildAvailableAgentsContext(state *ReasoningState) 
 }
 
 // GetRequiredTools implements ReasoningStrategy
-// Supervisor requires todo_write (from base) but NOT agent_call
-// Note: agent_call must be registered separately after agent registry is populated
+// Supervisor requires both todo_write and agent_call for orchestration
 func (s *SupervisorStrategy) GetRequiredTools() []RequiredTool {
 	return []RequiredTool{
 		{
@@ -142,10 +141,12 @@ func (s *SupervisorStrategy) GetRequiredTools() []RequiredTool {
 			Description: "Required for breaking down orchestration tasks",
 			AutoCreate:  true,
 		},
-		// NOTE: agent_call is NOT listed here because:
-		// - It requires AgentRegistry which doesn't exist at strategy creation time
-		// - It's registered separately in cmd/hector/main.go after all agents are created
-		// - User must explicitly add it to orchestrator agent's tools config
+		{
+			Name:        "agent_call",
+			Type:        "agent_call",
+			Description: "Required for delegating tasks to other agents in multi-agent orchestration",
+			AutoCreate:  true, // Can be auto-created when registry is available
+		},
 	}
 }
 

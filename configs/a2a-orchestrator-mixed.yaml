@@ -63,11 +63,13 @@ agents:
       enable_streaming: true
   
   # External agent reference (A2A)
+  # NOTE: For local A2A agents, use gRPC address format: "localhost:PORT"
+  # For remote agents, use full HTTPS URLs: "https://remote-server.com" 
   weather_expert:
     name: "Weather Expert (External)"
     description: "External weather data provider via A2A protocol"
     type: "a2a"
-    url: "http://localhost:8080/agents/weather_expert"
+    url: "localhost:8080"  # gRPC endpoint for A2A communication
     visibility: "internal"
 
 # LLM Configuration

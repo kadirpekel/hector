@@ -60,13 +60,18 @@ func NewToolRegistry() *ToolRegistry {
 
 // NewToolRegistryWithConfig creates a new tool registry and initializes it with configuration
 func NewToolRegistryWithConfig(toolConfig *config.ToolConfigs) (*ToolRegistry, error) {
+	return NewToolRegistryWithConfigAndAgentRegistry(toolConfig, nil)
+}
+
+// NewToolRegistryWithConfigAndAgentRegistry creates a tool registry with agent registry for agent_call tool
+func NewToolRegistryWithConfigAndAgentRegistry(toolConfig *config.ToolConfigs, agentRegistry interface{}) (*ToolRegistry, error) {
 	registry := &ToolRegistry{
 		BaseRegistry: registry.NewBaseRegistry[ToolEntry](),
 	}
 
 	// Initialize with configuration if provided
 	if toolConfig != nil {
-		if err := registry.initializeFromConfig(toolConfig); err != nil {
+		if err := registry.initializeFromConfigWithAgentRegistry(toolConfig, agentRegistry); err != nil {
 			return nil, fmt.Errorf("failed to initialize tool registry from config: %w", err)
 		}
 	}
@@ -159,6 +164,11 @@ func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 
 // initializeFromConfig initializes the tool registry with configuration
 func (r *ToolRegistry) initializeFromConfig(toolConfig *config.ToolConfigs) error {
+	return r.initializeFromConfigWithAgentRegistry(toolConfig, nil)
+}
+
+// initializeFromConfigWithAgentRegistry initializes the tool registry with configuration and agent registry
+func (r *ToolRegistry) initializeFromConfigWithAgentRegistry(toolConfig *config.ToolConfigs, agentRegistry interface{}) error {
 	// Separate MCP tools from local tools
 	localTools := make(map[string]config.ToolConfig)
 	mcpTools := make(map[string]config.ToolConfig)
@@ -171,9 +181,9 @@ func (r *ToolRegistry) initializeFromConfig(toolConfig *config.ToolConfigs) erro
 		}
 	}
 
-	// Create and register local tool source with non-MCP tools
+	// Create and register local tool source with non-MCP tools and agent registry
 	if len(localTools) > 0 {
-		repo, err := NewLocalToolSourceWithConfig(localTools)
+		repo, err := NewLocalToolSourceWithConfigAndAgentRegistry(localTools, agentRegistry)
 		if err != nil {
 			return fmt.Errorf("failed to create local tool source: %w", err)
 		}
