@@ -206,7 +206,7 @@ func TestMockClient_Close(t *testing.T) {
 }
 
 func TestNewHTTPClient(t *testing.T) {
-	client := NewHTTPClient("http://localhost:50052", "test-token")
+	client := NewHTTPClient("http://localhost:8081", "test-token")
 	if client == nil {
 		t.Error("NewHTTPClient() returned nil")
 	}
@@ -218,7 +218,7 @@ func TestNewHTTPClient(t *testing.T) {
 }
 
 func TestHTTPClient_Close(t *testing.T) {
-	client := NewHTTPClient("http://localhost:50052", "test-token")
+	client := NewHTTPClient("http://localhost:8081", "test-token")
 	err := client.Close()
 	if err != nil {
 		t.Errorf("Close() error = %v", err)
@@ -230,7 +230,7 @@ func TestAgentInfo(t *testing.T) {
 		ID:          "agent1",
 		Name:        "Agent 1",
 		Description: "Test agent",
-		Endpoint:    "http://localhost:50052",
+		Endpoint:    "http://localhost:8081",
 	}
 
 	if info.ID != "agent1" {
@@ -242,7 +242,7 @@ func TestAgentInfo(t *testing.T) {
 	if info.Description != "Test agent" {
 		t.Error("Failed to set Description")
 	}
-	if info.Endpoint != "http://localhost:50052" {
+	if info.Endpoint != "http://localhost:8081" {
 		t.Error("Failed to set Endpoint")
 	}
 }

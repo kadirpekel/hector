@@ -361,7 +361,7 @@ func parseArgs() *CLIArgs {
 	// Define subcommands
 	serveCmd := flag.NewFlagSet("serve", flag.ExitOnError)
 	serveConfig := serveCmd.String("config", "hector.yaml", "Configuration file")
-	servePort := serveCmd.Int("port", 50051, "gRPC server port")
+	servePort := serveCmd.Int("port", 8080, "gRPC server port (matches A2A server default)")
 	serveDebug := serveCmd.Bool("debug", false, "Enable debug mode")
 
 	// A2A Server override flags
@@ -651,7 +651,7 @@ func executeServeCommand(args *CLIArgs) {
 	var overrides []string
 
 	// Start with defaults
-	basePort = 50051
+	basePort = 8080 // Match A2A server default
 	serverHost = "0.0.0.0"
 	baseURL = ""
 
@@ -670,7 +670,7 @@ func executeServeCommand(args *CLIArgs) {
 	}
 
 	// CLI flags override config (conventional behavior)
-	if args.Port != 50051 { // User specified --port
+	if args.Port != 8080 { // User specified --port (different from default)
 		if hasA2AConfig && hectorConfig.Global.A2AServer.Port > 0 && args.Port != hectorConfig.Global.A2AServer.Port {
 			overrides = append(overrides, fmt.Sprintf("port: %d (config: %d)", args.Port, hectorConfig.Global.A2AServer.Port))
 		}
@@ -876,7 +876,7 @@ COMMANDS:
 SERVER MODE:
   hector serve [options]
     --config FILE            Configuration file (default: hector.yaml)
-    --port PORT              gRPC server port (default: 50051, overrides config)
+    --port PORT              gRPC server port (default: 8080, overrides config)
     --host HOST              Server host (overrides config)
     --a2a-base-url URL       A2A base URL for discovery (overrides config)
     --debug                  Enable debug output
@@ -892,20 +892,20 @@ SERVER MODE:
 
 CLIENT MODE:
   hector list [options]
-    --server URL     Server URL (default: localhost:50052)
+    --server URL     Server URL (default: localhost:8081)
     --token TOKEN    Authentication token
 
   hector info <agent> [options]
-    --server URL     Server URL (default: localhost:50052)
+    --server URL     Server URL (default: localhost:8081)
     --token TOKEN    Authentication token
 
   hector call <agent> "prompt" [options]
-    --server URL     Server URL (default: localhost:50052)
+    --server URL     Server URL (default: localhost:8081)
     --token TOKEN    Authentication token
     --stream BOOL    Enable streaming (default: true)
 
   hector chat <agent> [options]
-    --server URL     Server URL (default: localhost:50052)
+    --server URL     Server URL (default: localhost:8081)
     --token TOKEN    Authentication token
 
 EXAMPLES:
@@ -928,7 +928,7 @@ EXAMPLES:
   $ hector chat my_agent
 
   # Use remote server
-  $ hector call --server http://remote:50052 my_agent "prompt"
+  $ hector call --server http://remote:8081 my_agent "prompt"
 
 ENVIRONMENT VARIABLES:
   HECTOR_SERVER    Default server URL

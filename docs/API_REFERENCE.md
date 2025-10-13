@@ -22,17 +22,17 @@
 
 Hector provides three transport protocols, all implementing the same [A2A Protocol specification](https://a2a-protocol.org/latest/specification/):
 
-| Transport | Port | Use Case | Features |
-|-----------|------|----------|----------|
-| **gRPC** | 50051 | High-performance services | Binary protocol, bidirectional streaming, HTTP/2 |
-| **REST** | 50052 | Web applications, browsers | JSON over HTTP, SSE streaming, RESTful |
-| **JSON-RPC** | 50053 | Simple integrations | Single endpoint, JSON-RPC 2.0, easy to use |
+| Transport | Default Port | Use Case | Features |
+|-----------|--------------|----------|----------|
+| **gRPC** | 8080 | High-performance services | Binary protocol, bidirectional streaming, HTTP/2 |
+| **REST** | 8081 | Web applications, browsers | JSON over HTTP, SSE streaming, RESTful |
+| **JSON-RPC** | 8082 | Simple integrations | Single endpoint, JSON-RPC 2.0, easy to use |
 
 **Base URLs**:
 ```
-gRPC:     localhost:50051
-REST:     http://localhost:50052
-JSON-RPC: http://localhost:50053/rpc
+gRPC:     localhost:8080
+REST:     http://localhost:8081
+JSON-RPC: http://localhost:8082/rpc
 ```
 
 ---
@@ -64,7 +64,7 @@ service A2AService {
 grpcurl -plaintext \
   -d '{"request":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}' \
   -H 'agent-name: assistant' \
-  localhost:50051 \
+  localhost:8080 \
   a2a.v1.A2AService/SendMessage
 ```
 
@@ -133,7 +133,7 @@ X-API-Key: <api_key>
 
 **REST**:
 ```bash
-curl -X POST http://localhost:50052/v1/agents/assistant/message:send \
+curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
   -H "Authorization: Bearer eyJhbGc..." \
   -H "Content-Type: application/json" \
   -d '{"message":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}'
@@ -145,7 +145,7 @@ grpcurl -plaintext \
   -H 'authorization: Bearer eyJhbGc...' \
   -H 'agent-name: assistant' \
   -d '{"request":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}' \
-  localhost:50051 \
+  localhost:8080 \
   a2a.v1.A2AService/SendMessage
 ```
 
@@ -175,16 +175,16 @@ GET /.well-known/agent-card.json
     "multi_agent": true
   },
   "transports": [
-    {"protocol": "grpc", "url": "grpc://localhost:50051"},
-    {"protocol": "http", "url": "http://localhost:50052"},
-    {"protocol": "jsonrpc", "url": "http://localhost:50053/rpc"}
+    {"protocol": "grpc", "url": "grpc://localhost:8080"},
+    {"protocol": "http", "url": "http://localhost:8081"},
+    {"protocol": "jsonrpc", "url": "http://localhost:8082/rpc"}
   ]
 }
 ```
 
 **Example**:
 ```bash
-curl http://localhost:50052/.well-known/agent-card.json
+curl http://localhost:8081/.well-known/agent-card.json
 ```
 
 ### List All Agents
@@ -220,7 +220,7 @@ GET /v1/agents
 
 **Example**:
 ```bash
-curl http://localhost:50052/v1/agents
+curl http://localhost:8081/v1/agents
 ```
 
 ### Get Agent-Specific Card
@@ -287,7 +287,7 @@ rpc GetAgentCard(GetAgentCardRequest) returns (AgentCard)
 
 **REST**:
 ```bash
-curl http://localhost:50052/v1/agents/assistant/.well-known/agent-card.json
+curl http://localhost:8081/v1/agents/assistant/.well-known/agent-card.json
 ```
 
 **gRPC**:
@@ -295,13 +295,13 @@ curl http://localhost:50052/v1/agents/assistant/.well-known/agent-card.json
 grpcurl -plaintext \
   -H 'agent-name: assistant' \
   -d '{}' \
-  localhost:50051 \
+  localhost:8080 \
   a2a.v1.A2AService/GetAgentCard
 ```
 
 **JSON-RPC**:
 ```bash
-curl -X POST http://localhost:50053/rpc \
+curl -X POST http://localhost:8082/rpc \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -382,7 +382,7 @@ rpc SendMessage(SendMessageRequest) returns (SendMessageResponse)
 
 **REST**:
 ```bash
-curl -X POST http://localhost:50052/v1/agents/assistant/message:send \
+curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
   -H "Content-Type: application/json" \
   -d '{
     "message": {
@@ -402,13 +402,13 @@ grpcurl -plaintext \
       "content": [{"text": "What is 2+2?"}]
     }
   }' \
-  localhost:50051 \
+  localhost:8080 \
   a2a.v1.A2AService/SendMessage
 ```
 
 **JSON-RPC**:
 ```bash
-curl -X POST http://localhost:50053/rpc \
+curl -X POST http://localhost:8082/rpc \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -463,7 +463,7 @@ data: {"result":{"statusUpdate":{"taskId":"task-123","status":{"state":"TASK_STA
 
 **REST** (curl):
 ```bash
-curl -N -X POST http://localhost:50052/v1/agents/assistant/message:stream \
+curl -N -X POST http://localhost:8081/v1/agents/assistant/message:stream \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{
@@ -477,7 +477,7 @@ curl -N -X POST http://localhost:50052/v1/agents/assistant/message:stream \
 **REST** (JavaScript):
 ```javascript
 const eventSource = new EventSource(
-  'http://localhost:50052/v1/agents/assistant/message:stream',
+  'http://localhost:8081/v1/agents/assistant/message:stream',
   {
     method: 'POST',
     headers: {
@@ -591,12 +591,12 @@ rpc GetTask(GetTaskRequest) returns (Task)
 
 **REST**:
 ```bash
-curl http://localhost:50052/v1/tasks/task-123
+curl http://localhost:8081/v1/tasks/task-123
 ```
 
 **JSON-RPC**:
 ```bash
-curl -X POST http://localhost:50053/rpc \
+curl -X POST http://localhost:8082/rpc \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -638,7 +638,7 @@ rpc CancelTask(CancelTaskRequest) returns (Task)
 
 **REST**:
 ```bash
-curl -X POST http://localhost:50052/v1/tasks/task-123:cancel \
+curl -X POST http://localhost:8081/v1/tasks/task-123:cancel \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -673,7 +673,7 @@ data: {"result":{"statusUpdate":{"taskId":"task-123","status":{"state":"TASK_STA
 **Example**:
 ```bash
 curl -N -H "Accept: text/event-stream" \
-  http://localhost:50052/v1/tasks/task-123:subscribe
+  http://localhost:8081/v1/tasks/task-123:subscribe
 ```
 
 ---
@@ -789,16 +789,16 @@ Built-in CLI for all operations:
 
 ```bash
 # List agents
-hector list --server http://localhost:50052
+hector list --server http://localhost:8081
 
 # Get agent info
-hector info assistant --server http://localhost:50052
+hector info assistant --server http://localhost:8081
 
 # Send message
-hector call assistant "What is 2+2?" --server http://localhost:50052
+hector call assistant "What is 2+2?" --server http://localhost:8081
 
 # Interactive chat
-hector chat assistant --server http://localhost:50052
+hector chat assistant --server http://localhost:8081
 ```
 
 ### Go Client
@@ -807,7 +807,7 @@ hector chat assistant --server http://localhost:50052
 import "github.com/kadirpekel/hector/pkg/a2a/client"
 
 // Create HTTP client
-c := client.NewHTTPClient("http://localhost:50052", "token")
+c := client.NewHTTPClient("http://localhost:8081", "token")
 
 // Send message
 resp, err := c.SendMessage(ctx, "assistant", &pb.Message{
@@ -831,7 +831,7 @@ import grpc
 from a2a.v1 import a2a_pb2, a2a_pb2_grpc
 
 # Create channel
-channel = grpc.insecure_channel('localhost:50051')
+channel = grpc.insecure_channel('localhost:8080')
 client = a2a_pb2_grpc.A2AServiceStub(channel)
 
 # Create metadata with agent name
@@ -857,7 +857,7 @@ for chunk in stream:
 
 ```typescript
 // Send message
-const response = await fetch('http://localhost:50052/v1/agents/assistant/message:send', {
+const response = await fetch('http://localhost:8081/v1/agents/assistant/message:send', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -876,7 +876,7 @@ console.log(data.message.content[0].text);
 
 // Stream messages
 const eventSource = new EventSource(
-  'http://localhost:50052/v1/agents/assistant/message:stream',
+  'http://localhost:8081/v1/agents/assistant/message:stream',
   {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -929,7 +929,7 @@ Configure webhooks for task completion:
 
 **Create Webhook**:
 ```bash
-curl -X POST http://localhost:50052/v1/tasks/task-123/pushNotificationConfigs \
+curl -X POST http://localhost:8081/v1/tasks/task-123/pushNotificationConfigs \
   -H "Content-Type: application/json" \
   -d '{
     "config": {

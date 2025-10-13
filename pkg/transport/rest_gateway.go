@@ -18,7 +18,7 @@ import (
 // RESTGatewayConfig holds configuration for the REST gateway
 type RESTGatewayConfig struct {
 	HTTPAddress string // e.g., ":8080"
-	GRPCAddress string // e.g., "localhost:50051" - the gRPC server to proxy to
+	GRPCAddress string // e.g., "localhost:8080" - the gRPC server to proxy to
 }
 
 // RESTGateway wraps the grpc-gateway runtime to provide REST API
@@ -37,7 +37,7 @@ func NewRESTGateway(config RESTGatewayConfig) *RESTGateway {
 		config.HTTPAddress = ":8080"
 	}
 	if config.GRPCAddress == "" {
-		config.GRPCAddress = "localhost:50051"
+		config.GRPCAddress = "localhost:8080"
 	}
 
 	// Create grpc-gateway mux with custom options

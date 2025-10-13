@@ -74,7 +74,7 @@ Hector is built from the ground up with the [A2A Protocol](https://a2a-protocol.
 │  │  • Native    │  • Auto-gen      │  • Custom HTTP      │ │
 │  │  • Binary    │  • JSON          │  • Simple RPC       │ │
 │  │  • Streaming │  • SSE           │  • JSON             │ │
-│  │  Port: 50051 │  Port: 50052     │  Port: 50053        │ │
+│  │  Port: 8080  │  Port: 8081      │  Port: 8082         │ │
 │  └──────────────┴──────────────────┴─────────────────────┘ │
 ├──────────────────────────────────────────────────────────────┤
 │                      SERVER LAYER                            │
@@ -260,28 +260,28 @@ High-performance binary protocol with native streaming support.
 grpcurl -plaintext \
   -H 'agent-name: assistant' \
   -d '{"request":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}' \
-  localhost:50051 a2a.v1.A2AService/SendMessage
+  localhost:8080 a2a.v1.A2AService/SendMessage
 ```
 
-### REST (Port 50052)
+### REST (Port 8081)
 Auto-generated JSON API with Server-Sent Events (SSE) for streaming.
 ```bash
 # Send message
-curl -X POST http://localhost:50052/v1/agents/assistant/message:send \
+curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
   -H "Content-Type: application/json" \
   -d '{"message":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}'
 
 # Streaming
-curl -N -X POST http://localhost:50052/v1/agents/assistant/message:stream \
+curl -N -X POST http://localhost:8081/v1/agents/assistant/message:stream \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{"message":{"role":"ROLE_USER","content":[{"text":"Tell me a story"}]}}'
 ```
 
-### JSON-RPC (Port 50053)
+### JSON-RPC (Port 8082)
 Simple RPC over HTTP for easy integration.
 ```bash
-curl -X POST http://localhost:50053/rpc \
+curl -X POST http://localhost:8082/rpc \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -298,13 +298,13 @@ curl -X POST http://localhost:50053/rpc \
 Hector implements RFC 8615 well-known URIs for agent discovery:
 ```bash
 # Service-level discovery
-curl http://localhost:50052/.well-known/agent-card.json
+curl http://localhost:8081/.well-known/agent-card.json
 
 # List all agents
-curl http://localhost:50052/v1/agents
+curl http://localhost:8081/v1/agents
 
 # Agent-specific card
-curl http://localhost:50052/v1/agents/assistant/.well-known/agent-card.json
+curl http://localhost:8081/v1/agents/assistant/.well-known/agent-card.json
 ```
 
 📖 **Complete API Reference**: [docs/API_REFERENCE.md](docs/API_REFERENCE.md)  

@@ -10,8 +10,8 @@ func TestArgs_SetDefaults(t *testing.T) {
 	if args.ConfigFile != "hector.yaml" {
 		t.Errorf("Expected ConfigFile 'hector.yaml', got '%s'", args.ConfigFile)
 	}
-	if args.Port != 50051 {
-		t.Errorf("Expected Port 50051, got %d", args.Port)
+	if args.Port != 8080 {
+		t.Errorf("Expected Port 8080, got %d", args.Port)
 	}
 	if args.BaseURL != "https://api.openai.com/v1" {
 		t.Errorf("Expected BaseURL 'https://api.openai.com/v1', got '%s'", args.BaseURL)
@@ -53,7 +53,7 @@ func TestArgs_AllFields(t *testing.T) {
 	args := Args{
 		ConfigFile:    "test.yaml",
 		Debug:         true,
-		ServerURL:     "http://localhost:50052",
+		ServerURL:     "http://localhost:8081",
 		Token:         "token",
 		Port:          8080,
 		Provider:      "openai",

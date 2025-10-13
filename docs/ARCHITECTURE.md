@@ -189,10 +189,10 @@ service A2AService {
 
 **Usage**:
 ```bash
-# gRPC port (default: 50051)
+# gRPC port (default: 8080)
 grpcurl -plaintext \
   -d '{"request":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}' \
-  localhost:50051 \
+  localhost:8080 \
   a2a.v1.A2AService/SendMessage
 ```
 
@@ -227,7 +227,7 @@ GET    /v1/tasks/{task_id}:subscribe         # Subscribe to updates (SSE)
 **Example**:
 ```bash
 # Send message
-curl -X POST http://localhost:50052/v1/agents/assistant/message:send \
+curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
   -H "Content-Type: application/json" \
   -d '{
     "message": {
@@ -237,7 +237,7 @@ curl -X POST http://localhost:50052/v1/agents/assistant/message:send \
   }'
 
 # Streaming
-curl -N -X POST http://localhost:50052/v1/agents/assistant/message:stream \
+curl -N -X POST http://localhost:8081/v1/agents/assistant/message:stream \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{
@@ -278,7 +278,7 @@ POST /rpc   # All methods
 
 **Example**:
 ```bash
-curl -X POST http://localhost:50053/rpc \
+curl -X POST http://localhost:8082/rpc \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -325,9 +325,9 @@ curl -X POST http://localhost:50053/rpc \
 # Default ports
 global:
   a2a_server:
-    grpc_port: 50051      # gRPC
-    rest_port: 50052      # REST/HTTP
-    jsonrpc_port: 50053   # JSON-RPC
+    grpc_port: 8080      # gRPC
+    rest_port: 8081      # REST/HTTP
+    jsonrpc_port: 8082   # JSON-RPC
 ```
 
 ---
@@ -395,7 +395,7 @@ func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message 
 **Usage**:
 ```go
 // Connect to remote server
-client := client.NewHTTPClient("http://localhost:50052", "token")
+client := client.NewHTTPClient("http://localhost:8081", "token")
 
 // Send message
 response, err := client.SendMessage(ctx, "assistant", message)
@@ -579,13 +579,13 @@ type HectorServer struct {
 
 // Start all transports
 func (s *HectorServer) Start(ctx context.Context) error {
-    // Start gRPC (port 50051)
+    // Start gRPC (port 8080)
     go s.grpc.Start()
     
-    // Start REST gateway (port 50052)  
+    // Start REST gateway (port 8081)  
     go s.rest.Start(ctx)
     
-    // Start JSON-RPC (port 50053)
+    // Start JSON-RPC (port 8082)
     go s.jsonrpc.Start()
     
     // Wait for shutdown signal

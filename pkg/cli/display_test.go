@@ -33,7 +33,7 @@ func TestDisplayAgentList(t *testing.T) {
 			ID:          "agent1",
 			Name:        "Test Agent 1",
 			Description: "Test description 1",
-			Endpoint:    "http://localhost:50052",
+			Endpoint:    "http://localhost:8081",
 		},
 		{
 			ID:          "agent2",

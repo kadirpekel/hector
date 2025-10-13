@@ -307,7 +307,7 @@ func TestLoadOrCreateConfig_Defaults(t *testing.T) {
 }
 
 func TestNewHTTPClient(t *testing.T) {
-	client := NewHTTPClient("http://localhost:50052", "test-token")
+	client := NewHTTPClient("http://localhost:8081", "test-token")
 	if client == nil {
 		t.Error("NewHTTPClient() returned nil")
 	}

@@ -39,7 +39,7 @@ func (a *Args) SetDefaults() {
 		a.ConfigFile = "hector.yaml"
 	}
 	if a.Port == 0 {
-		a.Port = 50051
+		a.Port = 8080 // Match A2A server default
 	}
 	if a.BaseURL == "" {
 		a.BaseURL = "https://api.openai.com/v1"

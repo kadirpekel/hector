@@ -23,7 +23,7 @@ type Server struct {
 
 // Config holds configuration for the server
 type Config struct {
-	Address           string                       // e.g., ":50051" or "0.0.0.0:50051"
+	Address           string                       // e.g., ":8080" or "0.0.0.0:8080"
 	UnaryInterceptor  grpc.UnaryServerInterceptor  // Optional: auth interceptor
 	StreamInterceptor grpc.StreamServerInterceptor // Optional: auth interceptor
 }
@@ -31,7 +31,7 @@ type Config struct {
 // NewServer creates a new gRPC server with the given A2A service implementation
 func NewServer(service pb.A2AServiceServer, config Config) *Server {
 	if config.Address == "" {
-		config.Address = ":50051" // Default port
+		config.Address = ":8080" // Default to A2A server default port
 	}
 
 	return &Server{
