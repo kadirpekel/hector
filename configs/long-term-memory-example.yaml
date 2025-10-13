@@ -49,7 +49,6 @@ agents:
       
       # Long-term memory (semantic recall)
       long_term:
-        enabled: true
         storage_scope: "all"        # Store all messages (default)
         batch_size: 1               # Immediate storage (default)
         auto_recall: true           # Auto-inject memories (default)
@@ -68,7 +67,6 @@ agents:
       budget: 3000
       
       long_term:
-        enabled: true
         storage_scope: "conversational"  # Store only user + assistant messages
         batch_size: 10                   # Store every 10 messages (efficient)
         auto_recall: true
@@ -86,7 +84,6 @@ agents:
       strategy: "summary_buffer"
       
       long_term:
-        enabled: true
         storage_scope: "all"
         batch_size: 1                    # Immediate storage (default)
         auto_recall: true

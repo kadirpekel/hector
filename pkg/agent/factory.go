@@ -138,7 +138,7 @@ func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager 
 
 	// Create long-term memory strategy (optional)
 	var longTermStrategy memory.LongTermMemoryStrategy
-	if agentConfig.Memory.LongTerm.Enabled {
+	if agentConfig.Memory.LongTerm.IsEnabled() {
 		// Long-term memory requires database + embedder (direct access, not SearchEngine)
 		if agentConfig.Database == "" {
 			return nil, fmt.Errorf("long-term memory requires database to be configured")
@@ -177,7 +177,7 @@ func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager 
 
 	// Build long-term config
 	longTermConfig := memory.LongTermConfig{
-		Enabled:      agentConfig.Memory.LongTerm.Enabled,
+		Enabled:      agentConfig.Memory.LongTerm.IsEnabled(),
 		StorageScope: memory.StorageScope(agentConfig.Memory.LongTerm.StorageScope),
 		BatchSize:    agentConfig.Memory.LongTerm.BatchSize,
 		AutoRecall:   agentConfig.Memory.LongTerm.AutoRecall,
@@ -201,7 +201,7 @@ func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager 
 
 	// Create task service if enabled
 	var taskService reasoning.TaskService
-	if agentConfig.Task.Enabled {
+	if agentConfig.Task.IsEnabled() {
 		switch agentConfig.Task.Backend {
 		case "memory":
 			taskService = NewInMemoryTaskService()

@@ -945,11 +945,16 @@ func (c *DocumentStoreConfig) SetDefaults() {
 // ============================================================================
 
 // TaskConfig represents task service configuration
+// Presence of configuration implies enabled (no explicit enabled field needed)
 type TaskConfig struct {
-	Enabled    bool           `yaml:"enabled"`               // Enable task tracking (default: false)
 	Backend    string         `yaml:"backend,omitempty"`     // Backend type: "memory" (default) or "sql"
 	WorkerPool int            `yaml:"worker_pool,omitempty"` // Max concurrent async tasks (default: 100, 0 = unlimited)
 	SQL        *TaskSQLConfig `yaml:"sql,omitempty"`         // SQL configuration (required if backend=sql)
+}
+
+// IsEnabled returns true if task configuration is present
+func (c *TaskConfig) IsEnabled() bool {
+	return c.Backend != "" || c.WorkerPool > 0 || c.SQL != nil
 }
 
 // TaskSQLConfig represents SQL backend configuration for tasks
@@ -1051,13 +1056,18 @@ func (c *AgentCredentials) Validate() error {
 }
 
 // SecurityConfig represents security configuration for an agent
+// Presence of configuration implies enabled (no explicit enabled field needed)
 type SecurityConfig struct {
-	Enabled  bool                      `yaml:"enabled"`            // Whether authentication is required (default: false)
 	Schemes  map[string]SecurityScheme `yaml:"schemes,omitempty"`  // Security schemes by name (e.g., "BearerAuth")
 	Require  []map[string][]string     `yaml:"require,omitempty"`  // Security requirements (list of OR'd AND sets)
 	JWKSURL  string                    `yaml:"jwks_url,omitempty"` // JWKS URL for JWT validation
 	Issuer   string                    `yaml:"issuer,omitempty"`   // Expected JWT issuer
 	Audience string                    `yaml:"audience,omitempty"` // Expected JWT audience
+}
+
+// IsEnabled returns true if security configuration is present
+func (c *SecurityConfig) IsEnabled() bool {
+	return len(c.Schemes) > 0 || len(c.Require) > 0 || c.JWKSURL != "" || c.Issuer != "" || c.Audience != ""
 }
 
 // SecurityScheme represents a single security scheme definition
@@ -1078,7 +1088,7 @@ func (c *SecurityConfig) SetDefaults() {
 
 // Validate validates the security configuration
 func (c *SecurityConfig) Validate() error {
-	if !c.Enabled {
+	if !c.IsEnabled() {
 		return nil // Skip validation if security is disabled
 	}
 	for name, scheme := range c.Schemes {
@@ -1197,13 +1207,18 @@ type MemoryConfig struct {
 }
 
 // LongTermMemoryConfig configures long-term memory (semantic recall)
+// Presence of configuration implies enabled (no explicit enabled field needed)
 type LongTermMemoryConfig struct {
-	Enabled      bool   `yaml:"enabled"`                 // Enable long-term memory (default: false)
 	StorageScope string `yaml:"storage_scope,omitempty"` // What to store: "all", "conversational", "summaries_only" (default: "all")
 	BatchSize    int    `yaml:"batch_size,omitempty"`    // Batch size for storage (default: 1 = immediate)
 	AutoRecall   bool   `yaml:"auto_recall,omitempty"`   // Auto-inject memories (default: true when enabled)
 	RecallLimit  int    `yaml:"recall_limit,omitempty"`  // Max memories to recall (default: 5)
 	Collection   string `yaml:"collection,omitempty"`    // Qdrant collection name (default: "hector_session_memory")
+}
+
+// IsEnabled returns true if long-term memory configuration is present
+func (c *LongTermMemoryConfig) IsEnabled() bool {
+	return c.StorageScope != "" || c.BatchSize > 0 || c.RecallLimit > 0 || c.Collection != ""
 }
 
 // PromptConfig represents prompt configuration

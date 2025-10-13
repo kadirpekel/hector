@@ -229,16 +229,21 @@ func (c *GlobalSettings) SetDefaults() {
 // ============================================================================
 
 // A2AServerConfig contains configuration for the A2A protocol server
+// Presence of configuration implies enabled (no explicit enabled field needed)
 type A2AServerConfig struct {
-	Enabled bool   `yaml:"enabled"`
 	Host    string `yaml:"host"`
 	Port    int    `yaml:"port"`
 	BaseURL string `yaml:"base_url,omitempty"` // Public URL for agent cards
 }
 
+// IsEnabled returns true if A2A server configuration is present and valid
+func (c *A2AServerConfig) IsEnabled() bool {
+	return c.Port > 0 || c.Host != ""
+}
+
 // Validate validates the A2A server configuration
 func (c *A2AServerConfig) Validate() error {
-	if c.Enabled {
+	if c.IsEnabled() {
 		if c.Port <= 0 || c.Port > 65535 {
 			return fmt.Errorf("invalid port: %d", c.Port)
 		}
@@ -262,24 +267,29 @@ func (c *A2AServerConfig) SetDefaults() {
 
 // AuthConfig contains authentication configuration
 // Hector is a JWT consumer - it validates tokens from external auth providers
+// Presence of configuration implies enabled (no explicit enabled field needed)
 type AuthConfig struct {
-	Enabled  bool   `yaml:"enabled"`  // Enable authentication
 	JWKSURL  string `yaml:"jwks_url"` // JWKS URL from auth provider (e.g., https://auth0.com/.well-known/jwks.json)
 	Issuer   string `yaml:"issuer"`   // Expected token issuer (e.g., https://auth0.com/)
 	Audience string `yaml:"audience"` // Expected token audience (e.g., "hector-api")
 }
 
+// IsEnabled returns true if authentication configuration is present and valid
+func (c *AuthConfig) IsEnabled() bool {
+	return c.JWKSURL != "" && c.Issuer != "" && c.Audience != ""
+}
+
 // Validate validates the authentication configuration
 func (c *AuthConfig) Validate() error {
-	if c.Enabled {
+	if c.IsEnabled() {
 		if c.JWKSURL == "" {
-			return fmt.Errorf("jwks_url is required when auth is enabled")
+			return fmt.Errorf("jwks_url is required for authentication")
 		}
 		if c.Issuer == "" {
-			return fmt.Errorf("issuer is required when auth is enabled")
+			return fmt.Errorf("issuer is required for authentication")
 		}
 		if c.Audience == "" {
-			return fmt.Errorf("audience is required when auth is enabled")
+			return fmt.Errorf("audience is required for authentication")
 		}
 	}
 	return nil

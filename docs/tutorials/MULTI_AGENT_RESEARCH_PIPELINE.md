@@ -973,7 +973,6 @@ tools:
 # Expose agents via standard A2A protocol
 global:
   a2a_server:
-    enabled: true
     host: "0.0.0.0"
     port: 8080
 

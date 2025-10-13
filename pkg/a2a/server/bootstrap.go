@@ -96,7 +96,7 @@ func Bootstrap(opts BootstrapOptions) (*HectorServer, error) {
 	// Configure authentication
 	var authConfig *transport.AuthConfig
 	var jwtValidator *auth.JWTValidator
-	if opts.Config.Global.Auth.Enabled {
+	if opts.Config.Global.Auth.IsEnabled() {
 		var err error
 		jwtValidator, err = auth.NewJWTValidator(
 			opts.Config.Global.Auth.JWKSURL,
@@ -154,7 +154,7 @@ func Bootstrap(opts BootstrapOptions) (*HectorServer, error) {
 			GRPCAddress:    grpcAddr,
 			RESTAddress:    restAddr,
 			JSONRPCAddress: jsonrpcAddr,
-			EnableAuth:     opts.Config.Global.Auth.Enabled,
+			EnableAuth:     opts.Config.Global.Auth.IsEnabled(),
 			JWKSURL:        opts.Config.Global.Auth.JWKSURL,
 			Issuer:         opts.Config.Global.Auth.Issuer,
 			Audience:       opts.Config.Global.Auth.Audience,

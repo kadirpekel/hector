@@ -211,7 +211,6 @@ mkdir -p ~/.hector
 cat > ~/.hector/config.yaml << EOF
 global:
   a2a_server:
-    enabled: true
     host: "0.0.0.0"
     port: 8080
 

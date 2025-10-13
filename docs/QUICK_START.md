@@ -112,7 +112,6 @@ agents:
 # Server Configuration
 global:
   a2a_server:
-    enabled: true
     host: "localhost"
     port: 8080
 ```
@@ -216,7 +215,6 @@ tools:
 # Server Configuration
 global:
   a2a_server:
-    enabled: true
     host: "localhost"
     port: 8080
 ```
@@ -261,7 +259,6 @@ agents:
         summarization_threshold: 0.8
       
       long_term_memory:
-        enabled: true
         vector_store: "memory_store"
     
     reasoning:

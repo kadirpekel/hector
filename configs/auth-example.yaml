@@ -4,7 +4,6 @@
 global:
   # A2A Server Configuration
   a2a_server:
-    enabled: true
     host: "0.0.0.0"
     port: 8080
     base_url: "http://localhost:8080"
@@ -13,8 +12,6 @@ global:
   # Hector is a JWT consumer - it validates tokens from external auth providers
   # Works with: Auth0, Keycloak, Authura, Okta, Google, or any OAuth2/OIDC provider
   auth:
-    enabled: true
-    
     # JWKS URL - Where Hector fetches public keys to validate JWTs
     # This URL is auto-refreshed every 15 minutes to handle key rotation
     jwks_url: "https://your-auth-provider.com/.well-known/jwks.json"

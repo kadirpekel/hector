@@ -65,6 +65,10 @@ type CLIArgs struct {
 	Debug      bool
 	Port       int
 
+	// A2A Server options (override config)
+	Host       string
+	A2ABaseURL string
+
 	// Zero-config mode options (OpenAI-based)
 	APIKey        string
 	BaseURL       string
@@ -360,6 +364,10 @@ func parseArgs() *CLIArgs {
 	servePort := serveCmd.Int("port", 50051, "gRPC server port")
 	serveDebug := serveCmd.Bool("debug", false, "Enable debug mode")
 
+	// A2A Server override flags
+	serveHost := serveCmd.String("host", "", "Server host (overrides config)")
+	serveA2ABaseURL := serveCmd.String("a2a-base-url", "", "A2A base URL for discovery (overrides config)")
+
 	// Zero-config mode flags (OpenAI-based)
 	serveAPIKey := serveCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY)")
 	serveBaseURL := serveCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
@@ -415,6 +423,8 @@ func parseArgs() *CLIArgs {
 		args.ConfigFile = *serveConfig
 		args.Port = *servePort
 		args.Debug = *serveDebug
+		args.Host = *serveHost
+		args.A2ABaseURL = *serveA2ABaseURL
 		args.APIKey = *serveAPIKey
 		args.BaseURL = *serveBaseURL
 		args.Model = *serveModel
@@ -634,15 +644,77 @@ func executeServeCommand(args *CLIArgs) {
 		log.Fatalf("❌ No agents successfully registered")
 	}
 
-	// Determine addresses
-	grpcAddr := fmt.Sprintf(":%d", args.Port)
-	restAddr := fmt.Sprintf(":%d", args.Port+1)
-	jsonrpcAddr := fmt.Sprintf(":%d", args.Port+2)
+	// Determine addresses - CLI flags override config (conventional pattern)
+	var basePort int
+	var serverHost string
+	var baseURL string
+	var overrides []string
+
+	// Start with defaults
+	basePort = 50051
+	serverHost = "0.0.0.0"
+	baseURL = ""
+
+	// Load config values if A2A server is configured (presence implies enabled)
+	hasA2AConfig := hectorConfig.Global.A2AServer.IsEnabled()
+	if hasA2AConfig {
+		if hectorConfig.Global.A2AServer.Port > 0 {
+			basePort = hectorConfig.Global.A2AServer.Port
+		}
+		if hectorConfig.Global.A2AServer.Host != "" {
+			serverHost = hectorConfig.Global.A2AServer.Host
+		}
+		if hectorConfig.Global.A2AServer.BaseURL != "" {
+			baseURL = hectorConfig.Global.A2AServer.BaseURL
+		}
+	}
+
+	// CLI flags override config (conventional behavior)
+	if args.Port != 50051 { // User specified --port
+		if hasA2AConfig && hectorConfig.Global.A2AServer.Port > 0 && args.Port != hectorConfig.Global.A2AServer.Port {
+			overrides = append(overrides, fmt.Sprintf("port: %d (config: %d)", args.Port, hectorConfig.Global.A2AServer.Port))
+		}
+		basePort = args.Port
+	}
+
+	if args.Host != "" { // User specified --host
+		if hasA2AConfig && hectorConfig.Global.A2AServer.Host != "" && args.Host != hectorConfig.Global.A2AServer.Host {
+			overrides = append(overrides, fmt.Sprintf("host: %s (config: %s)", args.Host, hectorConfig.Global.A2AServer.Host))
+		}
+		serverHost = args.Host
+	}
+
+	if args.A2ABaseURL != "" { // User specified --a2a-base-url
+		if hasA2AConfig && hectorConfig.Global.A2AServer.BaseURL != "" && args.A2ABaseURL != hectorConfig.Global.A2AServer.BaseURL {
+			overrides = append(overrides, fmt.Sprintf("base_url: %s (config: %s)", args.A2ABaseURL, hectorConfig.Global.A2AServer.BaseURL))
+		}
+		baseURL = args.A2ABaseURL
+	}
+
+	if args.Debug {
+		if hasA2AConfig {
+			fmt.Printf("🔧 A2A server config loaded:\n")
+			fmt.Printf("   Host: %s\n", serverHost)
+			fmt.Printf("   Port: %d\n", basePort)
+			if baseURL != "" {
+				fmt.Printf("   Base URL: %s\n", baseURL)
+			}
+			if len(overrides) > 0 {
+				fmt.Printf("🚨 CLI overrides: %s\n", strings.Join(overrides, ", "))
+			}
+		} else {
+			fmt.Printf("🔧 Using defaults with CLI port: %s:%d\n", serverHost, basePort)
+		}
+	}
+
+	grpcAddr := fmt.Sprintf("%s:%d", serverHost, basePort)
+	restAddr := fmt.Sprintf("%s:%d", serverHost, basePort+1)
+	jsonrpcAddr := fmt.Sprintf("%s:%d", serverHost, basePort+2)
 
 	// Configure authentication
 	var authConfig *transport.AuthConfig
 	var jwtValidator *auth.JWTValidator
-	if hectorConfig.Global.Auth.Enabled {
+	if hectorConfig.Global.Auth.IsEnabled() {
 		var err error
 		jwtValidator, err = auth.NewJWTValidator(
 			hectorConfig.Global.Auth.JWKSURL,
@@ -718,15 +790,25 @@ func executeServeCommand(args *CLIArgs) {
 	}
 	log.Printf("\n🌐 Endpoints:")
 	log.Printf("   → gRPC:     %s", grpcServer.Address())
-	log.Printf("   → REST:     http://0.0.0.0%s", restAddr)
-	log.Printf("   → JSON-RPC: http://0.0.0.0%s/rpc", jsonrpcAddr)
+	log.Printf("   → REST:     http://%s:%d", serverHost, basePort+1)
+	log.Printf("   → JSON-RPC: http://%s:%d/rpc", serverHost, basePort+2)
 	log.Printf("\n📋 Discovery & Agent Cards:")
-	log.Printf("   → Service Card: http://0.0.0.0%s/.well-known/agent-card.json", restAddr)
-	log.Printf("   → Agent List:   http://0.0.0.0%s/v1/agents", restAddr)
-	log.Printf("   → Agent Cards:  http://0.0.0.0%s/v1/agents/{agent_id}/.well-known/agent-card.json", restAddr)
+	if baseURL != "" {
+		log.Printf("   → Service Card: %s/.well-known/agent-card.json", baseURL)
+		log.Printf("   → Agent List:   %s/v1/agents", baseURL)
+		log.Printf("   → Agent Cards:  %s/v1/agents/{agent_id}/.well-known/agent-card.json", baseURL)
+	} else {
+		log.Printf("   → Service Card: http://%s:%d/.well-known/agent-card.json", serverHost, basePort+1)
+		log.Printf("   → Agent List:   http://%s:%d/v1/agents", serverHost, basePort+1)
+		log.Printf("   → Agent Cards:  http://%s:%d/v1/agents/{agent_id}/.well-known/agent-card.json", serverHost, basePort+1)
+	}
 	log.Printf("\n💡 A2A-compliant endpoints (per agent):")
-	log.Printf("   POST http://0.0.0.0%s/v1/agents/{agent_id}/message:send", restAddr)
-	log.Printf("   POST http://0.0.0.0%s/v1/agents/{agent_id}/message:stream", restAddr)
+	endpointBase := baseURL
+	if endpointBase == "" {
+		endpointBase = fmt.Sprintf("http://%s:%d", serverHost, basePort+1)
+	}
+	log.Printf("   POST %s/v1/agents/{agent_id}/message:send", endpointBase)
+	log.Printf("   POST %s/v1/agents/{agent_id}/message:stream", endpointBase)
 	log.Printf("\n💡 Test commands:")
 	log.Printf("   hector list")
 	log.Printf("   hector info <agent>")
@@ -794,11 +876,14 @@ COMMANDS:
 SERVER MODE:
   hector serve [options]
     --config FILE            Configuration file (default: hector.yaml)
-    --port PORT              gRPC server port (default: 50051)
+    --port PORT              gRPC server port (default: 50051, overrides config)
+    --host HOST              Server host (overrides config)
+    --a2a-base-url URL       A2A base URL for discovery (overrides config)
     --debug                  Enable debug output
     
   Zero-Config Mode (when hector.yaml doesn't exist):
-    --model MODEL            Ollama model (default: llama3.2:3b)
+    --model MODEL            OpenAI model (default: gpt-4o-mini)
+    --api-key KEY            OpenAI API key (or set OPENAI_API_KEY)
     --tools                  Enable all local tools
     --mcp URL                MCP server URL
     --docs FOLDER            Document store folder (RAG)

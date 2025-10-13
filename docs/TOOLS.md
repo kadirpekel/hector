@@ -19,6 +19,8 @@ Hector provides a **powerful, extensible tool system** that gives agents capabil
 - **MCP Servers** - Connect to 150+ integrations via Model Context Protocol
 - **gRPC Plugins** - Build custom tools in any language
 
+> **📝 Note:** Individual tools use `enabled: true/false` for easy toggling. This is different from service-level configurations (A2A server, auth, memory) where presence of configuration implies it's enabled.
+
 ### Architecture
 
 ```
@@ -1053,7 +1055,7 @@ Error: tool 'my_tool' not found
 ```
 
 **Solutions:**
-1. Check tool is enabled: `enabled: true`
+1. Check tool is configured properly
 2. Verify tool type is correct
 3. Check MCP server URL is reachable
 4. Restart Hector after config changes

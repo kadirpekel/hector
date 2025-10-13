@@ -987,7 +987,6 @@ Hector implements comprehensive security based on A2A protocol recommendations.
 ```yaml
 global:
   auth:
-    enabled: true
     jwks_url: "https://auth.example.com/.well-known/jwks.json"
     issuer: "https://auth.example.com"
     audience: "hector-api"
@@ -1230,7 +1229,6 @@ hector chat assistant --tools --provider openai --api-key sk-...
 ```yaml
 global:
   auth:
-    enabled: true
     jwks_url: "https://your-auth-provider/.well-known/jwks.json"
     issuer: "https://your-auth-provider"
     audience: "your-api"

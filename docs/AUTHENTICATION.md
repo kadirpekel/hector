@@ -34,13 +34,11 @@ Hector implements JWT-based authentication as a **consumer** of external authent
 # hector-config.yaml
 global:
   a2a_server:
-    enabled: true
     host: "0.0.0.0"
     port: 8080
   
-  # Enable JWT authentication
+  # JWT authentication (presence of config enables it)
   auth:
-    enabled: true
     jwks_url: "https://your-auth-provider.com/.well-known/jwks.json"
     issuer: "https://your-auth-provider.com"
     audience: "hector-api"
@@ -147,7 +145,6 @@ Hector works with **ANY** provider that exposes a JWKS endpoint and issues stand
 
 ```yaml
 auth:
-  enabled: true
   jwks_url: "https://YOUR-TENANT.auth0.com/.well-known/jwks.json"
   issuer: "https://YOUR-TENANT.auth0.com/"
   audience: "hector-api"
@@ -162,7 +159,6 @@ auth:
 
 ```yaml
 auth:
-  enabled: true
   jwks_url: "https://keycloak.example.com/realms/hector/protocol/openid-connect/certs"
   issuer: "https://keycloak.example.com/realms/hector"
   audience: "hector-api"
@@ -178,7 +174,6 @@ auth:
 
 ```yaml
 auth:
-  enabled: true
   jwks_url: "https://www.googleapis.com/oauth2/v3/certs"
   issuer: "https://accounts.google.com"
   audience: "YOUR-CLIENT-ID.apps.googleusercontent.com"
@@ -188,7 +183,6 @@ auth:
 
 ```yaml
 auth:
-  enabled: true
   jwks_url: "https://YOUR-DOMAIN.okta.com/oauth2/default/v1/keys"
   issuer: "https://YOUR-DOMAIN.okta.com/oauth2/default"
   audience: "hector-api"
@@ -200,7 +194,6 @@ Any provider that exposes JWKS and issues standard JWTs:
 
 ```yaml
 auth:
-  enabled: true
   jwks_url: "https://your-auth.com/jwks.json"
   issuer: "https://your-auth.com"
   audience: "hector-api"
@@ -450,12 +443,10 @@ agents:
 ```yaml
 global:
   a2a_server:
-    enabled: true
     host: "0.0.0.0"
     port: 8080
   
-  auth:
-    enabled: false  # Default
+  # No auth config = authentication disabled
 ```
 
 ### Production (With Auth0)
@@ -463,12 +454,10 @@ global:
 ```yaml
 global:
   a2a_server:
-    enabled: true
     host: "0.0.0.0"
     port: 8080
   
   auth:
-    enabled: true
     jwks_url: "https://your-tenant.auth0.com/.well-known/jwks.json"
     issuer: "https://your-tenant.auth0.com/"
     audience: "hector-api"
@@ -479,12 +468,10 @@ global:
 ```yaml
 global:
   a2a_server:
-    enabled: true
     host: "0.0.0.0"
     port: 8080
   
   auth:
-    enabled: true
     jwks_url: "https://keycloak.company.com/realms/hector/protocol/openid-connect/certs"
     issuer: "https://keycloak.company.com/realms/hector"
     audience: "hector-api"

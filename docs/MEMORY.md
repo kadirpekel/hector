@@ -373,7 +373,6 @@ memory:
   
   # Long-term memory (NEW)
   long_term:
-    enabled: true                     # Enable long-term memory
     storage_scope: "all"              # What to store: "all", "conversational", "summaries_only"
     batch_size: 1                     # Store immediately (default), or batch for performance
     auto_recall: true                 # Automatically inject relevant memories before LLM calls
@@ -515,7 +514,6 @@ agents:
       
       # Long-term memory for semantic recall
       long_term:
-        enabled: true
         storage_scope: "all"
         batch_size: 1
         auto_recall: true
@@ -601,7 +599,6 @@ Agent: [Auto-recalls "I love hiking" from long-term memory]
 memory:
   budget: 2000
   long_term:
-    enabled: true
     auto_recall: true
     recall_limit: 3
 ```
@@ -723,7 +720,6 @@ agents:
       budget: 3000
       
       long_term:
-        enabled: true
         storage_scope: "all"
         auto_recall: true
         recall_limit: 5
@@ -748,7 +744,6 @@ agents:
       target: 0.6
       
       long_term:
-        enabled: true
         storage_scope: "conversational"  # Only dialogue
         auto_recall: true
         recall_limit: 8  # More context for code
@@ -906,7 +901,6 @@ agents:
   my-agent:
     memory:
       long_term:
-        enabled: true
 ```
 
 **Step 3:** Start Qdrant and Ollama
@@ -943,9 +937,14 @@ memory:
 ### Long-Term Memory Configuration
 
 ```yaml
+# Disabled (no long_term config)
+memory:
+  strategy: "summary_buffer"
+  budget: 2000
+
+# Enabled (presence of long_term config)
 memory:
   long_term:
-    enabled: false                          # Enable long-term memory
     storage_scope: "all"                    # "all", "conversational", "summaries_only"
     batch_size: 1                           # Store immediately (1) or batch (10+)
     auto_recall: true                       # Auto-inject relevant memories
@@ -985,8 +984,7 @@ memory:
 ```yaml
 memory:
   budget: 2000           # Working memory
-  long_term:
-    enabled: true        # Long-term memory
+  long_term:             # Long-term memory (presence enables it)
 ```
 
 **Result:** Comprehensive memory management for AI agents - both immediate context and semantic recall. 🎉

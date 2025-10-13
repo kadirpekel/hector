@@ -49,7 +49,7 @@ agents:
     name: "Weather Expert (External)"
     description: "External weather expert agent via A2A protocol"
     type: "a2a"  # External A2A agent
-    url: "http://localhost:8080/agents/weather_expert"  # Points to the server
+    url: "http://localhost:50052/agents/weather_expert"  # Points to the server
     visibility: "internal"  # Not exposed, only for internal use
 
 # LLM Configuration

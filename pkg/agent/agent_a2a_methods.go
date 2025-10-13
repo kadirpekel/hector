@@ -285,7 +285,7 @@ func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (
 	}
 
 	// Populate security information from config
-	if a.config != nil && a.config.Security.Enabled && len(a.config.Security.Schemes) > 0 {
+	if a.config != nil && a.config.Security.IsEnabled() && len(a.config.Security.Schemes) > 0 {
 		card.SecuritySchemes = make(map[string]*pb.SecurityScheme)
 		for name, scheme := range a.config.Security.Schemes {
 			pbScheme := convertConfigSecurityScheme(scheme)
