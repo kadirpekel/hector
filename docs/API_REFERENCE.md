@@ -1,1017 +1,979 @@
----
-layout: default
-title: API Reference
-nav_order: 1
-parent: Reference
-description: "Complete A2A protocol HTTP/SSE API documentation"
----
+# API Reference
 
-# Hector A2A API Reference
-
-**A2A Protocol Implementation - HTTP+JSON/SSE API**
-
-This document provides a complete reference for Hector's A2A (Agent-to-Agent) protocol implementation. Hector follows the [A2A specification](https://a2a-protocol.org) to enable standardized agent interoperability.
+**Complete A2A Protocol API Reference for Hector**
 
 ---
 
 ## Table of Contents
 
-1. [Introduction](#introduction)
-2. [Base URL & Authentication](#base-url--authentication)
-3. [Agent Discovery](#agent-discovery)
-4. [Task Execution](#task-execution)
-5. [Session Management](#session-management)
-6. [Streaming](#streaming)
-7. [Schemas](#schemas)
-8. [Error Handling](#error-handling)
-9. [Examples](#examples)
+- [Overview](#overview)
+- [Transport Protocols](#transport-protocols)
+- [Authentication](#authentication)
+- [Discovery Endpoints](#discovery-endpoints)
+- [Messaging Endpoints](#messaging-endpoints)
+- [Task Management](#task-management)
+- [Streaming](#streaming)
+- [Error Handling](#error-handling)
+- [Client SDKs](#client-sdks)
 
 ---
 
-## Introduction
+## Overview
 
-### A2A Protocol Overview
+Hector provides three transport protocols, all implementing the same [A2A Protocol specification](https://a2a-protocol.org/latest/specification/):
 
-The A2A (Agent-to-Agent) protocol is an open standard for agent interoperability. It defines:
+| Transport | Port | Use Case | Features |
+|-----------|------|----------|----------|
+| **gRPC** | 50051 | High-performance services | Binary protocol, bidirectional streaming, HTTP/2 |
+| **REST** | 50052 | Web applications, browsers | JSON over HTTP, SSE streaming, RESTful |
+| **JSON-RPC** | 50053 | Simple integrations | Single endpoint, JSON-RPC 2.0, easy to use |
 
-- **Agent Cards** - Capability discovery and metadata
-- **Task Execution** - Standardized request/response model
-- **Sessions** - Multi-turn conversation state management
-- **Streaming** - Real-time output via Server-Sent Events (SSE)
-
-### Hector's A2A Implementation
-
-Hector implements the A2A specification with the following features:
-
-✅ **Full A2A Core Compliance** - Discovery, task execution, status  
-✅ **Session Management** - Stateful multi-turn conversations  
-✅ **SSE Streaming** - Real-time output via Server-Sent Events  
-✅ **JWT Authentication** - Optional OAuth2/OIDC integration  
-✅ **Visibility Control** - Public, internal, and private agents  
-
-### Protocol Version
-
-- **A2A Version**: 1.0 (compatible)
-- **Hector API Version**: 1.0
+**Base URLs**:
+```
+gRPC:     localhost:50051
+REST:     http://localhost:50052
+JSON-RPC: http://localhost:50053/rpc
+```
 
 ---
 
-## Base URL & Authentication
+## Transport Protocols
 
-### Base URL
+### gRPC
 
+**Protocol**: HTTP/2 with Protocol Buffers
+
+**Service Definition**:
+```protobuf
+service A2AService {
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+  rpc SendStreamingMessage(SendMessageRequest) returns (stream StreamResponse);
+  rpc GetTask(GetTaskRequest) returns (Task);
+  rpc CancelTask(CancelTaskRequest) returns (Task);
+  rpc TaskSubscription(TaskSubscriptionRequest) returns (stream StreamResponse);
+  rpc GetAgentCard(GetAgentCardRequest) returns (AgentCard);
+  rpc CreateTaskPushNotificationConfig(CreateTaskPushNotificationConfigRequest) returns (TaskPushNotificationConfig);
+  rpc GetTaskPushNotificationConfig(GetTaskPushNotificationConfigRequest) returns (TaskPushNotificationConfig);
+  rpc ListTaskPushNotificationConfig(ListTaskPushNotificationConfigRequest) returns (ListTaskPushNotificationConfigResponse);
+  rpc DeleteTaskPushNotificationConfig(DeleteTaskPushNotificationConfigRequest) returns (google.protobuf.Empty);
+}
 ```
-http://localhost:8080
-```
 
-For production deployments, use your server's public URL:
-```
-https://agents.example.com
-```
-
-### Authentication
-
-Hector supports **optional JWT-based authentication**:
-
-**Without Authentication** (default):
+**Example** (using grpcurl):
 ```bash
-curl http://localhost:8080/agents
+grpcurl -plaintext \
+  -d '{"request":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}' \
+  -H 'agent-name: assistant' \
+  localhost:50051 \
+  a2a.v1.A2AService/SendMessage
 ```
 
-**With Authentication** (when enabled):
-```bash
-curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  http://localhost:8080/agents
-```
+### REST (grpc-gateway)
 
-See [Authentication Guide](AUTHENTICATION.md) for setup details.
+**Protocol**: HTTP/1.1 with JSON
 
-### Protected Endpoints
+**Features**:
+- Auto-generated from protobuf definitions
+- RESTful URL patterns
+- Server-Sent Events (SSE) for streaming
+- OpenAPI/Swagger compatible
 
-When authentication is enabled:
-- ✅ `GET /agents` - **Public** (no auth required)
-- 🔒 `GET /agents/{agentId}` - **Protected** (auth required)
-- 🔒 `POST /agents/{agentId}/tasks` - **Protected**
-- 🔒 All `/sessions/*` endpoints - **Protected**
+**Agent Routing**: Uses path-based routing with `agent_id` in URL
+
+### JSON-RPC
+
+**Protocol**: HTTP/1.1 with JSON-RPC 2.0
+
+**Endpoint**: `POST /rpc`
+
+**Methods**:
+- `SendMessage` - Send non-streaming message
+- `GetAgentCard` - Get agent metadata
+- `GetTask` - Get task status
+- `CancelTask` - Cancel a task
 
 ---
 
-## Agent Discovery
+## Authentication
+
+All transports support JWT-based authentication (when enabled).
+
+### Bearer Token (JWT)
+
+**HTTP Header**:
+```
+Authorization: Bearer <jwt_token>
+```
+
+**gRPC Metadata**:
+```
+authorization: Bearer <jwt_token>
+```
+
+**Token Structure**:
+```json
+{
+  "sub": "user-123",
+  "iss": "https://auth.example.com",
+  "aud": "hector-api",
+  "roles": ["user", "admin"],
+  "tenant_id": "org-456",
+  "exp": 1234567890
+}
+```
+
+### API Key
+
+**HTTP Header**:
+```
+X-API-Key: <api_key>
+```
+
+### Example Authenticated Request
+
+**REST**:
+```bash
+curl -X POST http://localhost:50052/v1/agents/assistant/message:send \
+  -H "Authorization: Bearer eyJhbGc..." \
+  -H "Content-Type: application/json" \
+  -d '{"message":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}'
+```
+
+**gRPC**:
+```bash
+grpcurl -plaintext \
+  -H 'authorization: Bearer eyJhbGc...' \
+  -H 'agent-name: assistant' \
+  -d '{"request":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}' \
+  localhost:50051 \
+  a2a.v1.A2AService/SendMessage
+```
+
+---
+
+## Discovery Endpoints
+
+### Get Service-Level Agent Card
+
+Get information about the Hector service and list of available agents.
+
+**REST**:
+```
+GET /.well-known/agent-card.json
+```
+
+**Response**:
+```json
+{
+  "name": "Hector A2A Server",
+  "description": "Multi-agent AI platform",
+  "version": "1.0.0",
+  "capabilities": {
+    "streaming": true,
+    "task_tracking": true,
+    "session_support": true,
+    "multi_agent": true
+  },
+  "transports": [
+    {"protocol": "grpc", "url": "grpc://localhost:50051"},
+    {"protocol": "http", "url": "http://localhost:50052"},
+    {"protocol": "jsonrpc", "url": "http://localhost:50053/rpc"}
+  ]
+}
+```
+
+**Example**:
+```bash
+curl http://localhost:50052/.well-known/agent-card.json
+```
 
 ### List All Agents
 
-**Endpoint**: `GET /agents`
+Get a list of all available agents.
 
-Returns a directory of all publicly discoverable agents (visibility="public").
-
-**Request**:
-```bash
-curl http://localhost:8080/agents
+**REST**:
+```
+GET /v1/agents
 ```
 
-**Response** (200 OK):
+**Response**:
 ```json
 {
   "agents": [
     {
-      "agentId": "competitor_analyst",
-      "name": "Competitor Analysis Agent",
-      "description": "Analyzes market competitors and provides strategic insights",
-      "version": "1.0.0",
-      "capabilities": ["text_generation", "reasoning", "analysis"],
-      "endpoints": {
-        "task": "http://localhost:8080/agents/competitor_analyst/tasks",
-        "stream": "http://localhost:8080/agents/competitor_analyst/stream",
-        "status": "http://localhost:8080/agents/competitor_analyst/tasks/{taskId}"
-      },
-      "inputTypes": ["text/plain", "application/json"],
-      "outputTypes": ["text/plain", "application/json"],
-      "metadata": {
-        "llm": "gpt-4o",
-        "temperature": "0.7"
-      }
+      "id": "assistant",
+      "name": "Assistant",
+      "description": "Helpful AI assistant",
+      "agent_card_url": "/v1/agents/assistant/.well-known/agent-card.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "researcher",
+      "name": "Research Assistant",
+      "description": "Research and analysis agent",
+      "agent_card_url": "/v1/agents/researcher/.well-known/agent-card.json",
+      "version": "1.0.0"
     }
-  ],
-  "total": 1
+  ]
 }
 ```
 
-**Notes**:
-- Only agents with `visibility: "public"` are listed
-- Internal and private agents are hidden from discovery
-- No authentication required for this endpoint
-
----
-
-### Get Agent Card
-
-**Endpoint**: `GET /agents/{agentId}`
-
-Returns detailed information about a specific agent (the agent's "business card").
-
-**Request**:
+**Example**:
 ```bash
-curl http://localhost:8080/agents/competitor_analyst
+curl http://localhost:50052/v1/agents
 ```
 
-**Response** (200 OK):
+### Get Agent-Specific Card
+
+Get detailed information about a specific agent.
+
+**REST**:
+```
+GET /v1/agents/{agent_id}/.well-known/agent-card.json
+```
+
+**gRPC**:
+```protobuf
+rpc GetAgentCard(GetAgentCardRequest) returns (AgentCard)
+```
+
+**JSON-RPC**:
 ```json
 {
-  "agentId": "competitor_analyst",
-  "name": "Competitor Analysis Agent",
-  "description": "Analyzes market competitors and provides strategic insights",
+  "jsonrpc": "2.0",
+  "method": "GetAgentCard",
+  "params": {
+    "agentId": "assistant"
+  },
+  "id": 1
+}
+```
+
+**Response**:
+```json
+{
+  "name": "Assistant",
+  "description": "Helpful AI assistant",
   "version": "1.0.0",
-  "capabilities": [
-    "text_generation",
-    "reasoning",
-    "analysis",
-    "web_search"
+  "capabilities": {
+    "streaming": true,
+    "tool_calling": true,
+    "document_search": false
+  },
+  "input_modalities": ["text"],
+  "output_modalities": ["text"],
+  "tools": [
+    {
+      "name": "command",
+      "description": "Execute shell commands",
+      "input_schema": {...}
+    },
+    {
+      "name": "file_writer",
+      "description": "Write files to disk",
+      "input_schema": {...}
+    }
   ],
-  "endpoints": {
-    "task": "http://localhost:8080/agents/competitor_analyst/tasks",
-    "stream": "http://localhost:8080/agents/competitor_analyst/stream",
-    "status": "http://localhost:8080/agents/competitor_analyst/tasks/{taskId}"
-  },
-  "inputTypes": ["text/plain", "application/json"],
-  "outputTypes": ["text/plain", "application/json"],
-  "auth": {
-    "type": "bearer",
-    "schemes": ["Bearer"]
-  },
-  "metadata": {
-    "llm": "gpt-4o",
-    "temperature": "0.7",
-    "reasoning": "chain-of-thought"
+  "security_schemes": {
+    "bearer": {
+      "type": "http",
+      "scheme": "bearer"
+    }
   }
 }
 ```
 
-**Errors**:
-- `404 Not Found` - Agent does not exist or is private
-- `401 Unauthorized` - Authentication required but not provided
+**Examples**:
+
+**REST**:
+```bash
+curl http://localhost:50052/v1/agents/assistant/.well-known/agent-card.json
+```
+
+**gRPC**:
+```bash
+grpcurl -plaintext \
+  -H 'agent-name: assistant' \
+  -d '{}' \
+  localhost:50051 \
+  a2a.v1.A2AService/GetAgentCard
+```
+
+**JSON-RPC**:
+```bash
+curl -X POST http://localhost:50053/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "GetAgentCard",
+    "params": {"agentId": "assistant"},
+    "id": 1
+  }'
+```
 
 ---
 
-## Task Execution
+## Messaging Endpoints
 
-### Execute Task
+### Send Message (Non-Streaming)
 
-**Endpoint**: `POST /agents/{agentId}/tasks`
+Send a message to an agent and receive a complete response.
 
-Executes a task on the specified agent.
+**REST**:
+```
+POST /v1/agents/{agent_id}/message:send
+```
 
-**Request**:
+**gRPC**:
+```protobuf
+rpc SendMessage(SendMessageRequest) returns (SendMessageResponse)
+```
+
+**JSON-RPC**:
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "SendMessage",
+  "params": {...},
+  "id": 1
+}
+```
+
+**Request Body**:
+```json
+{
+  "message": {
+    "role": "ROLE_USER",
+    "content": [
+      {
+        "text": "What is the capital of France?"
+      }
+    ],
+    "metadata": {
+      "user_id": "user-123",
+      "session_id": "session-456"
+    }
+  },
+  "configuration": {
+    "accepted_output_modes": ["text"],
+    "blocking": true,
+    "history_length": 10
+  }
+}
+```
+
+**Response**:
+```json
+{
+  "message": {
+    "messageId": "msg-789",
+    "contextId": "ctx-456",
+    "role": "ROLE_AGENT",
+    "content": [
+      {
+        "text": "The capital of France is Paris."
+      }
+    ]
+  }
+}
+```
+
+**Examples**:
+
+**REST**:
 ```bash
-curl -X POST http://localhost:8080/agents/competitor_analyst/tasks \
+curl -X POST http://localhost:50052/v1/agents/assistant/message:send \
   -H "Content-Type: application/json" \
   -d '{
-    "taskId": "task-123",
-    "input": {
-      "type": "text/plain",
-      "content": "Analyze the top 3 AI agent frameworks"
-    },
-    "parameters": {
-      "temperature": 0.7,
-      "max_tokens": 2000
+    "message": {
+      "role": "ROLE_USER",
+      "content": [{"text": "What is 2+2?"}]
     }
   }'
 ```
 
-**Request Body** (TaskRequest):
-```json
-{
-  "taskId": "task-123",
-  "input": {
-    "type": "text/plain",
-    "content": "Analyze the top 3 AI agent frameworks"
-  },
-  "parameters": {
-    "temperature": 0.7,
-    "max_tokens": 2000
-  },
-  "context": {
-    "sessionId": "session-456",
-    "userId": "user-789",
-    "metadata": {
-      "source": "web-app"
+**gRPC**:
+```bash
+grpcurl -plaintext \
+  -H 'agent-name: assistant' \
+  -d '{
+    "request": {
+      "role": "ROLE_USER",
+      "content": [{"text": "What is 2+2?"}]
     }
+  }' \
+  localhost:50051 \
+  a2a.v1.A2AService/SendMessage
+```
+
+**JSON-RPC**:
+```bash
+curl -X POST http://localhost:50053/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "SendMessage",
+    "params": {
+      "agentId": "assistant",
+      "message": {
+        "role": "ROLE_USER",
+        "content": [{"text": "What is 2+2?"}]
+      }
+    },
+    "id": 1
+  }'
+```
+
+### Send Streaming Message
+
+Send a message and receive streaming responses in real-time.
+
+**REST**:
+```
+POST /v1/agents/{agent_id}/message:stream
+Accept: text/event-stream
+```
+
+**gRPC**:
+```protobuf
+rpc SendStreamingMessage(SendMessageRequest) returns (stream StreamResponse)
+```
+
+**Request Body**: Same as non-streaming
+
+**Response** (Server-Sent Events):
+```
+event: message
+data: {"result":{"message":{"role":"ROLE_AGENT","content":[{"text":"The"}]}}}
+
+event: message
+data: {"result":{"message":{"role":"ROLE_AGENT","content":[{"text":" capital"}]}}}
+
+event: message
+data: {"result":{"message":{"role":"ROLE_AGENT","content":[{"text":" is"}]}}}
+
+event: message
+data: {"result":{"message":{"role":"ROLE_AGENT","content":[{"text":" Paris."}]}}}
+
+event: status
+data: {"result":{"statusUpdate":{"taskId":"task-123","status":{"state":"TASK_STATE_COMPLETED"}}}}
+```
+
+**Examples**:
+
+**REST** (curl):
+```bash
+curl -N -X POST http://localhost:50052/v1/agents/assistant/message:stream \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{
+    "message": {
+      "role": "ROLE_USER",
+      "content": [{"text": "Tell me a short story"}]
+    }
+  }'
+```
+
+**REST** (JavaScript):
+```javascript
+const eventSource = new EventSource(
+  'http://localhost:50052/v1/agents/assistant/message:stream',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      message: {
+        role: 'ROLE_USER',
+        content: [{text: 'Tell me a story'}]
+      }
+    })
   }
-}
+);
+
+eventSource.addEventListener('message', (event) => {
+  const data = JSON.parse(event.data);
+  const msg = data.result.message;
+  if (msg && msg.content) {
+    console.log(msg.content[0].text);
+  }
+});
+
+eventSource.addEventListener('status', (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Status:', data.result.statusUpdate.status.state);
+});
 ```
 
-**Response** (200 OK):
-```json
-{
-  "taskId": "task-123",
-  "status": "completed",
-  "output": {
-    "type": "text/plain",
-    "content": "Based on my analysis of the top AI agent frameworks:\n\n1. **LangChain**..."
-  },
-  "metadata": {
-    "tokens_used": 1247,
-    "execution_time_ms": 3421
-  },
-  "startedAt": "2025-10-05T10:30:00Z",
-  "endedAt": "2025-10-05T10:30:03Z"
+**gRPC** (Go):
+```go
+stream, err := client.SendStreamingMessage(ctx, &pb.SendMessageRequest{
+    Request: &pb.Message{
+        Role: pb.Role_ROLE_USER,
+        Content: []*pb.Part{{Part: &pb.Part_Text{Text: "Tell me a story"}}},
+    },
+})
+
+for {
+    resp, err := stream.Recv()
+    if err == io.EOF {
+        break
+    }
+    if msg := resp.GetMsg(); msg != nil {
+        fmt.Print(msg.Content[0].GetText())
+    }
 }
 ```
-
-**For Asynchronous Tasks** (202 Accepted):
-```json
-{
-  "taskId": "task-123",
-  "status": "running",
-  "startedAt": "2025-10-05T10:30:00Z"
-}
-```
-
-**Errors**:
-- `400 Bad Request` - Invalid request body
-- `404 Not Found` - Agent does not exist
-- `401 Unauthorized` - Authentication required
-
-**Notes**:
-- `taskId` is optional; server generates one if not provided
-- If task is long-running, check status using GET endpoint
 
 ---
+
+## Task Management
 
 ### Get Task Status
 
-**Endpoint**: `GET /agents/{agentId}/tasks/{taskId}`
+Retrieve the current status of a task.
 
-Retrieves the current status and result of a task.
-
-**Request**:
-```bash
-curl http://localhost:8080/agents/competitor_analyst/tasks/task-123
+**REST**:
+```
+GET /v1/tasks/{task_id}
 ```
 
-**Response** (200 OK):
+**gRPC**:
+```protobuf
+rpc GetTask(GetTaskRequest) returns (Task)
+```
 
-**Completed Task**:
+**JSON-RPC**:
 ```json
 {
-  "taskId": "task-123",
-  "status": "completed",
-  "output": {
-    "type": "text/plain",
-    "content": "Analysis complete..."
+  "jsonrpc": "2.0",
+  "method": "GetTask",
+  "params": {
+    "name": "tasks/task-123"
   },
-  "startedAt": "2025-10-05T10:30:00Z",
-  "endedAt": "2025-10-05T10:30:03Z"
+  "id": 1
 }
 ```
 
-**Running Task**:
+**Response**:
 ```json
 {
-  "taskId": "task-123",
-  "status": "running",
-  "startedAt": "2025-10-05T10:30:00Z"
-}
-```
-
-**Failed Task**:
-```json
-{
-  "taskId": "task-123",
-  "status": "failed",
-  "error": {
-    "code": "EXECUTION_ERROR",
-    "message": "LLM service unavailable",
-    "details": "Connection timeout after 30s"
+  "id": "task-123",
+  "contextId": "ctx-456",
+  "status": {
+    "state": "TASK_STATE_RUNNING",
+    "message": "Processing your request...",
+    "progress": 0.5
   },
-  "startedAt": "2025-10-05T10:30:00Z",
-  "endedAt": "2025-10-05T10:30:30Z"
-}
-```
-
-**Task Status Values**:
-- `pending` - Task queued but not started
-- `running` - Task currently executing
-- `completed` - Task finished successfully
-- `failed` - Task encountered an error
-- `cancelled` - Task was cancelled
-
-**Errors**:
-- `404 Not Found` - Task or agent does not exist
-
----
-
-## Session Management
-
-Sessions enable multi-turn conversations with agents, maintaining state across multiple tasks.
-
-### Create Session
-
-**Endpoint**: `POST /sessions`
-
-Creates a new session for multi-turn conversations.
-
-**Request**:
-```bash
-curl -X POST http://localhost:8080/sessions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "agentId": "competitor_analyst",
-    "metadata": {
-      "user": "john@example.com",
-      "purpose": "market-research"
-    }
-  }'
-```
-
-**Response** (201 Created):
-```json
-{
-  "sessionId": "sess-abc123",
-  "agentId": "competitor_analyst",
-  "createdAt": "2025-10-05T10:30:00Z",
-  "lastActivityAt": "2025-10-05T10:30:00Z",
-  "state": {},
-  "metadata": {
-    "user": "john@example.com",
-    "purpose": "market-research"
-  }
-}
-```
-
-**Errors**:
-- `400 Bad Request` - Invalid request body
-- `404 Not Found` - Agent does not exist
-
----
-
-### Execute Task in Session
-
-**Endpoint**: `POST /sessions/{sessionId}/tasks`
-
-Executes a task within a session context, preserving conversation history.
-
-**Request**:
-```bash
-curl -X POST http://localhost:8080/sessions/sess-abc123/tasks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "taskId": "task-456",
-    "input": {
-      "type": "text/plain",
-      "content": "What about their pricing models?"
-    }
-  }'
-```
-
-**Response** (200 OK):
-```json
-{
-  "taskId": "task-456",
-  "status": "completed",
-  "output": {
-    "type": "text/plain",
-    "content": "Based on our previous discussion about the top frameworks, here's a pricing comparison..."
-  },
-  "startedAt": "2025-10-05T10:31:00Z",
-  "endedAt": "2025-10-05T10:31:02Z"
-}
-```
-
-**Notes**:
-- Agent has access to all previous tasks in the session
-- Session state is automatically maintained
-- Use this for chatbot-like interactions
-
----
-
-### Get Session Info
-
-**Endpoint**: `GET /sessions/{sessionId}`
-
-Retrieves session metadata and state.
-
-**Request**:
-```bash
-curl http://localhost:8080/sessions/sess-abc123
-```
-
-**Response** (200 OK):
-```json
-{
-  "sessionId": "sess-abc123",
-  "agentId": "competitor_analyst",
-  "createdAt": "2025-10-05T10:30:00Z",
-  "lastActivityAt": "2025-10-05T10:31:02Z",
-  "state": {
-    "message_count": 2,
-    "topics": ["AI frameworks", "pricing"]
-  },
-  "metadata": {
-    "user": "john@example.com",
-    "purpose": "market-research"
-  }
-}
-```
-
-**Errors**:
-- `404 Not Found` - Session does not exist
-
----
-
-### List Sessions
-
-**Endpoint**: `GET /sessions`
-
-Lists all sessions, optionally filtered by agent.
-
-**Request**:
-```bash
-# All sessions
-curl http://localhost:8080/sessions
-
-# Sessions for specific agent
-curl http://localhost:8080/sessions?agent_id=competitor_analyst
-```
-
-**Response** (200 OK):
-```json
-{
-  "sessions": [
+  "artifacts": [],
+  "history": [
     {
-      "sessionId": "sess-abc123",
-      "agentId": "competitor_analyst",
-      "createdAt": "2025-10-05T10:30:00Z",
-      "lastActivityAt": "2025-10-05T10:31:02Z"
+      "role": "ROLE_USER",
+      "content": [{"text": "User input"}]
+    },
+    {
+      "role": "ROLE_AGENT",
+      "content": [{"text": "Agent response"}]
     }
-  ],
-  "total": 1
+  ]
 }
 ```
 
----
+**Task States**:
+- `TASK_STATE_SUBMITTED` - Task received
+- `TASK_STATE_RUNNING` - Task in progress
+- `TASK_STATE_COMPLETED` - Task finished successfully
+- `TASK_STATE_FAILED` - Task failed with error
+- `TASK_STATE_CANCELLED` - Task cancelled by user
 
-### Delete Session
+**Examples**:
 
-**Endpoint**: `DELETE /sessions/{sessionId}`
-
-Ends a session and clears its state.
-
-**Request**:
+**REST**:
 ```bash
-curl -X DELETE http://localhost:8080/sessions/sess-abc123
+curl http://localhost:50052/v1/tasks/task-123
 ```
 
-**Response** (204 No Content):
-```
-(empty body)
+**JSON-RPC**:
+```bash
+curl -X POST http://localhost:50053/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "GetTask",
+    "params": {"name": "tasks/task-123"},
+    "id": 1
+  }'
 ```
 
-**Errors**:
-- `404 Not Found` - Session does not exist
+### Cancel Task
+
+Cancel a running task.
+
+**REST**:
+```
+POST /v1/tasks/{task_id}:cancel
+```
+
+**gRPC**:
+```protobuf
+rpc CancelTask(CancelTaskRequest) returns (Task)
+```
+
+**JSON-RPC**:
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "CancelTask",
+  "params": {
+    "name": "tasks/task-123"
+  },
+  "id": 1
+}
+```
+
+**Response**: Updated task with `TASK_STATE_CANCELLED` status
+
+**Examples**:
+
+**REST**:
+```bash
+curl -X POST http://localhost:50052/v1/tasks/task-123:cancel \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+### Subscribe to Task Updates
+
+Subscribe to real-time updates for a task.
+
+**REST**:
+```
+GET /v1/tasks/{task_id}:subscribe
+Accept: text/event-stream
+```
+
+**gRPC**:
+```protobuf
+rpc TaskSubscription(TaskSubscriptionRequest) returns (stream StreamResponse)
+```
+
+**Response** (SSE):
+```
+event: status
+data: {"result":{"statusUpdate":{"taskId":"task-123","status":{"state":"TASK_STATE_RUNNING"}}}}
+
+event: message
+data: {"result":{"message":{"role":"ROLE_AGENT","content":[{"text":"Progress update"}]}}}
+
+event: status
+data: {"result":{"statusUpdate":{"taskId":"task-123","status":{"state":"TASK_STATE_COMPLETED"}}}}
+```
+
+**Example**:
+```bash
+curl -N -H "Accept: text/event-stream" \
+  http://localhost:50052/v1/tasks/task-123:subscribe
+```
 
 ---
 
 ## Streaming
 
-Real-time streaming of task output via **Server-Sent Events (SSE)** per A2A specification.
+### Server-Sent Events (SSE)
 
-### Stream Task Execution
+REST endpoints use SSE for server-to-client streaming.
 
-**Endpoint**: `POST /agents/{agentId}/message/stream`
+**Event Types**:
+- `message` - Message chunk from agent
+- `status` - Task status update
+- `error` - Error message
 
-Server-Sent Events endpoint for streaming task execution.
-
-**Request**:
-```bash
-curl -N -H "Accept: text/event-stream" \
-  -H "Content-Type: application/json" \
-  -d '{"message":{"role":"user","parts":[{"type":"text","text":"Analyze LangChain vs CrewAI"}]}}' \
-  http://localhost:8080/agents/competitor_analyst/message/stream
+**Format**:
 ```
-
-**Response Headers**:
-```
-Content-Type: text/event-stream
-Cache-Control: no-cache
-Connection: keep-alive
-```
-
-**Event Stream Format**:
-
-**Status Event**:
-```
-event: status
-data: {"task_id":"task-789","status":{"state":"working","message":"Processing..."}}
+event: <event_type>
+data: <json_payload>
 
 ```
 
-**Message Event** (incremental content):
-```
-event: message
-data: {"task_id":"task-789","message":{"role":"assistant","parts":[{"type":"text","text":"LangChain is a framework"}]}}
+### gRPC Streaming
 
-```
+gRPC provides native bidirectional streaming.
 
-**Artifact Event** (tool execution):
-```
-event: artifact
-data: {"task_id":"task-789","artifact":{"type":"tool_call","name":"search","result":"..."}}
-
-```
-
-**Completion**:
-```
-event: status
-data: {"task_id":"task-789","status":{"state":"completed"}}
-
-[connection closes]
-```
-
-### Resume Streaming (Resubscribe)
-
-**Endpoint**: `POST /agents/{agentId}/tasks/{taskId}/resubscribe`
-
-Resume streaming for an existing task from a specific event.
-
-**Request**:
-```bash
-curl -N -H "Accept: text/event-stream" \
-  -H "Content-Type: application/json" \
-  -d '{"lastEventId":"evt-123"}' \
-  http://localhost:8080/agents/competitor_analyst/tasks/task-789/resubscribe
-```
-
-**Event Types** (per A2A spec):
-- `status` - Task status updates (working, completed, failed)
-- `message` - Incremental message content
-- `artifact` - Tool executions, attachments, metadata
-
-**Notes**:
-- Follows A2A SSE specification (Section 7)
-- Events arrive in real-time as generated
-- Connection closes automatically on completion or error
-- Use `lastEventId` to resume from specific point
-
----
-
-## Schemas
-
-### AgentCard
-
-Agent capability card for discovery.
-
-```typescript
-{
-  agentId: string;           // Unique agent identifier
-  name: string;              // Human-readable name
-  description: string;       // Agent description
-  version?: string;          // Agent version (optional)
-  capabilities: string[];    // List of capabilities
-  endpoints: {
-    task: string;            // POST endpoint for tasks
-    stream?: string;         // SSE endpoint (optional)
-    status?: string;         // GET endpoint for status (optional)
-  };
-  inputTypes: string[];      // Accepted MIME types
-  outputTypes: string[];     // Produced MIME types
-  auth?: {                   // Authentication requirements (optional)
-    type: string;            // "bearer", "apiKey", "oauth2", "mtls"
-    schemes?: string[];      // Supported schemes
-    tokenUrl?: string;       // OAuth2 token URL
-  };
-  metadata?: Record<string, string>; // Additional metadata
-}
-```
-
----
-
-### TaskRequest
-
-Request to execute a task.
-
-```typescript
-{
-  taskId?: string;           // Optional unique task ID (generated if not provided)
-  input: {
-    type: string;            // MIME type: "text/plain", "application/json"
-    content: any;            // Input content (string, object, etc.)
-  };
-  parameters?: Record<string, any>; // Optional execution parameters
-  context?: {
-    sessionId?: string;      // Session ID for multi-turn
-    conversationId?: string; // Conversation ID
-    userId?: string;         // User identifier
-    metadata?: Record<string, string>; // Additional context
-  };
-}
-```
-
----
-
-### TaskResponse
-
-Response from task execution.
-
-```typescript
-{
-  taskId: string;            // Task identifier
-  status: TaskStatus;        // "pending" | "running" | "completed" | "failed" | "cancelled"
-  output?: {
-    type: string;            // MIME type of output
-    content: any;            // Output content
-  };
-  error?: {
-    code: string;            // Error code
-    message: string;         // Error message
-    details?: string;        // Additional error details
-  };
-  metadata?: Record<string, any>; // Execution metadata
-  startedAt?: string;        // ISO 8601 timestamp
-  endedAt?: string;          // ISO 8601 timestamp
-}
-```
-
----
-
-### Session
-
-Multi-turn conversation session.
-
-```typescript
-{
-  sessionId: string;         // Unique session identifier
-  agentId: string;           // Associated agent
-  createdAt: string;         // ISO 8601 timestamp
-  lastActivityAt: string;    // ISO 8601 timestamp
-  state?: Record<string, any>; // Session state
-  metadata?: Record<string, string>; // Session metadata
-}
-```
-
----
-
-### StreamChunk
-
-Real-time streaming chunk.
-
-```typescript
-{
-  taskId: string;            // Task identifier
-  chunkType: ChunkType;      // "text" | "data" | "error" | "metadata" | "done"
-  content: any;              // Chunk content
-  timestamp: string;         // ISO 8601 timestamp
-  final: boolean;            // True for last chunk
-}
-```
+**Stream Types**:
+- **Server Streaming**: `SendStreamingMessage`, `TaskSubscription`
+- **Client Streaming**: Not currently used
+- **Bidirectional**: Future support for interactive sessions
 
 ---
 
 ## Error Handling
 
-### HTTP Status Codes
+### REST Errors
 
-| Code | Meaning | Description |
-|------|---------|-------------|
-| 200 | OK | Request succeeded |
-| 201 | Created | Resource created (session) |
-| 202 | Accepted | Task accepted (async) |
-| 204 | No Content | Resource deleted |
-| 400 | Bad Request | Invalid request body or parameters |
-| 401 | Unauthorized | Authentication required |
-| 403 | Forbidden | Insufficient permissions |
-| 404 | Not Found | Agent, task, or session not found |
-| 405 | Method Not Allowed | HTTP method not supported |
-| 500 | Internal Server Error | Server error |
+**HTTP Status Codes**:
+- `200` - Success
+- `400` - Bad Request (invalid input)
+- `401` - Unauthorized (authentication required)
+- `403` - Forbidden (insufficient permissions)
+- `404` - Not Found (agent or task not found)
+- `429` - Too Many Requests (rate limited)
+- `500` - Internal Server Error
+- `503` - Service Unavailable
 
----
-
-### Error Response Format
-
+**Error Response**:
 ```json
 {
   "error": {
-    "code": "ERROR_CODE",
-    "message": "Human-readable error message",
-    "details": "Additional error details or stack trace"
+    "code": 400,
+    "message": "Invalid message format",
+    "details": [
+      {
+        "field": "message.content",
+        "issue": "content cannot be empty"
+      }
+    ]
   }
 }
 ```
 
-### Common Error Codes
+### gRPC Errors
 
-| Code | Description |
-|------|-------------|
-| `AGENT_NOT_FOUND` | Agent does not exist or is private |
-| `TASK_NOT_FOUND` | Task ID not found |
-| `SESSION_NOT_FOUND` | Session ID not found |
-| `INVALID_INPUT` | Invalid request body or parameters |
-| `EXECUTION_ERROR` | Task execution failed |
-| `AUTH_REQUIRED` | Authentication token required |
-| `INVALID_TOKEN` | JWT token invalid or expired |
-| `INSUFFICIENT_PERMISSIONS` | User lacks required permissions |
+**Status Codes**:
+- `OK (0)` - Success
+- `INVALID_ARGUMENT (3)` - Invalid input
+- `UNAUTHENTICATED (16)` - Authentication required
+- `PERMISSION_DENIED (7)` - Insufficient permissions
+- `NOT_FOUND (5)` - Agent or task not found
+- `UNAVAILABLE (14)` - Service unavailable
+
+**Error Details**:
+```
+code: INVALID_ARGUMENT
+message: "message text cannot be empty"
+details: [...]
+```
+
+### JSON-RPC Errors
+
+**Error Codes**:
+- `-32700` - Parse error
+- `-32600` - Invalid request
+- `-32601` - Method not found
+- `-32602` - Invalid params
+- `-32603` - Internal error
+
+**Error Response**:
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32602,
+    "message": "Invalid params",
+    "data": {
+      "field": "agentId",
+      "issue": "Agent not found"
+    }
+  },
+  "id": 1
+}
+```
 
 ---
 
-## Examples
+## Client SDKs
 
-### Python Client
+### Hector CLI
+
+Built-in CLI for all operations:
+
+```bash
+# List agents
+hector list --server http://localhost:50052
+
+# Get agent info
+hector info assistant --server http://localhost:50052
+
+# Send message
+hector call assistant "What is 2+2?" --server http://localhost:50052
+
+# Interactive chat
+hector chat assistant --server http://localhost:50052
+```
+
+### Go Client
+
+```go
+import "github.com/kadirpekel/hector/pkg/a2a/client"
+
+// Create HTTP client
+c := client.NewHTTPClient("http://localhost:50052", "token")
+
+// Send message
+resp, err := c.SendMessage(ctx, "assistant", &pb.Message{
+    Role: pb.Role_ROLE_USER,
+    Content: []*pb.Part{{Part: &pb.Part_Text{Text: "Hello"}}},
+})
+
+// Stream messages
+stream, err := c.StreamMessage(ctx, "assistant", message)
+for chunk := range stream {
+    if msg := chunk.GetMsg(); msg != nil {
+        fmt.Print(msg.Content[0].GetText())
+    }
+}
+```
+
+### Python Client (grpcio)
 
 ```python
-import requests
-import json
+import grpc
+from a2a.v1 import a2a_pb2, a2a_pb2_grpc
 
-# Base URL
-base_url = "http://localhost:8080"
+# Create channel
+channel = grpc.insecure_channel('localhost:50051')
+client = a2a_pb2_grpc.A2AServiceStub(channel)
 
-# 1. Discover agents
-response = requests.get(f"{base_url}/agents")
-agents = response.json()["agents"]
-print(f"Found {len(agents)} agents")
+# Create metadata with agent name
+metadata = [('agent-name', 'assistant')]
 
-# 2. Get agent card
-agent_id = "competitor_analyst"
-response = requests.get(f"{base_url}/agents/{agent_id}")
-card = response.json()
-print(f"Agent: {card['name']}")
-
-# 3. Execute task
-task_request = {
-    "input": {
-        "type": "text/plain",
-        "content": "Analyze the AI agent market"
-    }
-}
-response = requests.post(
-    f"{base_url}/agents/{agent_id}/tasks",
-    json=task_request
+# Send message
+request = a2a_pb2.SendMessageRequest(
+    request=a2a_pb2.Message(
+        role=a2a_pb2.ROLE_USER,
+        content=[a2a_pb2.Part(text="Hello")]
+    )
 )
-result = response.json()
-print(f"Status: {result['status']}")
-print(f"Output: {result['output']['content']}")
+response = client.SendMessage(request, metadata=metadata)
 
-# 4. Create session
-session_request = {
-    "agentId": agent_id,
-    "metadata": {"user": "john@example.com"}
-}
-response = requests.post(f"{base_url}/sessions", json=session_request)
-session = response.json()
-session_id = session["sessionId"]
-
-# 5. Execute in session
-task_request = {
-    "input": {
-        "type": "text/plain",
-        "content": "What are the key players?"
-    }
-}
-response = requests.post(
-    f"{base_url}/sessions/{session_id}/tasks",
-    json=task_request
-)
-result = response.json()
-print(f"Response: {result['output']['content']}")
-
-# 6. Clean up
-requests.delete(f"{base_url}/sessions/{session_id}")
+# Stream messages
+stream = client.SendStreamingMessage(request, metadata=metadata)
+for chunk in stream:
+    if chunk.HasField('msg'):
+        print(chunk.msg.content[0].text, end='', flush=True)
 ```
 
----
+### JavaScript/TypeScript (fetch)
 
-### JavaScript Client
+```typescript
+// Send message
+const response = await fetch('http://localhost:50052/v1/agents/assistant/message:send', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer <token>'
+  },
+  body: JSON.stringify({
+    message: {
+      role: 'ROLE_USER',
+      content: [{text: 'Hello'}]
+    }
+  })
+});
 
-```javascript
-// Base URL
-const baseUrl = 'http://localhost:8080';
+const data = await response.json();
+console.log(data.message.content[0].text);
 
-// 1. Discover agents
-async function discoverAgents() {
-  const response = await fetch(`${baseUrl}/agents`);
-  const data = await response.json();
-  console.log(`Found ${data.total} agents`);
-  return data.agents;
-}
-
-// 2. Execute task
-async function executeTask(agentId, prompt) {
-  const response = await fetch(`${baseUrl}/agents/${agentId}/tasks`, {
+// Stream messages
+const eventSource = new EventSource(
+  'http://localhost:50052/v1/agents/assistant/message:stream',
+  {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      input: {
-        type: 'text/plain',
-        content: prompt
-      }
-    })
-  });
-  
-  const result = await response.json();
-  return result;
-}
-
-// 3. Stream task execution with SSE
-async function streamTask(agentId, prompt) {
-  const response = await fetch(`${baseUrl}/agents/${agentId}/message/stream`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'text/event-stream'
-    },
+    headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       message: {
-        role: 'user',
-        parts: [{type: 'text', text: prompt}]
+        role: 'ROLE_USER',
+        content: [{text: 'Tell me a story'}]
       }
     })
-  });
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-
-  while (true) {
-    const {done, value} = await reader.read();
-    if (done) break;
-    
-    const chunk = decoder.decode(value);
-    const lines = chunk.split('\n');
-    
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = JSON.parse(line.slice(6));
-        if (data.message && data.message.parts) {
-          for (const part of data.message.parts) {
-            if (part.text) process.stdout.write(part.text);
-          }
-        }
-      }
-    }
   }
-  console.log('\n\nStream complete');
-}
+);
 
-// 4. Session management
-async function chatSession(agentId) {
-  // Create session
-  const sessionRes = await fetch(`${baseUrl}/sessions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agentId })
-  });
-  const session = await sessionRes.json();
-  
-  // Execute multiple tasks
-  const tasks = [
-    "Analyze AI frameworks",
-    "What about their pricing?",
-    "Which is best for enterprise?"
-  ];
-  
-  for (const prompt of tasks) {
-    const response = await fetch(
-      `${baseUrl}/sessions/${session.sessionId}/tasks`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: { type: 'text/plain', content: prompt }
-        })
-      }
-    );
-    const result = await response.json();
-    console.log(`Q: ${prompt}`);
-    console.log(`A: ${result.output.content}\n`);
+eventSource.addEventListener('message', (event) => {
+  const data = JSON.parse(event.data);
+  console.log(data.result.message.content[0].text);
+});
+```
+
+---
+
+## Rate Limiting
+
+Configure rate limiting per agent or globally:
+
+```yaml
+global:
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 100
+    burst: 20
+
+agents:
+  expensive_agent:
+    rate_limiting:
+      requests_per_minute: 10  # Override global limit
+```
+
+**Rate Limit Headers** (REST):
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1640000000
+```
+
+---
+
+## Webhooks (Push Notifications)
+
+Configure webhooks for task completion:
+
+**Create Webhook**:
+```bash
+curl -X POST http://localhost:50052/v1/tasks/task-123/pushNotificationConfigs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "config": {
+      "url": "https://your-app.com/webhook",
+      "headers": {
+        "Authorization": "Bearer webhook-token"
+      },
+      "events": ["TASK_STATE_COMPLETED", "TASK_STATE_FAILED"]
+    }
+  }'
+```
+
+**Webhook Payload**:
+```json
+{
+  "event": "TASK_STATE_COMPLETED",
+  "task": {
+    "id": "task-123",
+    "status": {
+      "state": "TASK_STATE_COMPLETED"
+    },
+    "artifacts": [...]
   }
-  
-  // Clean up
-  await fetch(`${baseUrl}/sessions/${session.sessionId}`, {
-    method: 'DELETE'
-  });
 }
-
-// Usage
-(async () => {
-  const agents = await discoverAgents();
-  const result = await executeTask('competitor_analyst', 'Analyze market');
-  console.log(result.output.content);
-})();
 ```
 
 ---
 
-### cURL Examples
+## Summary
 
-**Discover agents**:
-```bash
-curl http://localhost:8080/agents
-```
+Hector provides a **complete, production-ready A2A Protocol API** with:
 
-**Get agent card**:
-```bash
-curl http://localhost:8080/agents/competitor_analyst
-```
+✅ **Three Transports** - gRPC, REST, JSON-RPC  
+✅ **Full Spec Compliance** - A2A protocol compliant  
+✅ **Authentication** - JWT, API keys, basic auth  
+✅ **Streaming** - Real-time responses  
+✅ **Discovery** - RFC 8615 well-known endpoints  
+✅ **Task Management** - Async processing with status tracking  
+✅ **Error Handling** - Comprehensive error responses  
+✅ **Client SDKs** - Built-in CLI, Go, Python, JavaScript examples  
 
-**Execute task**:
-```bash
-curl -X POST http://localhost:8080/agents/competitor_analyst/tasks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "type": "text/plain",
-      "content": "Analyze the AI agent market"
-    }
-  }'
-```
+**Start building with Hector's API today!** 🚀
 
-**Create session**:
-```bash
-curl -X POST http://localhost:8080/sessions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "agentId": "competitor_analyst",
-    "metadata": {"user": "john@example.com"}
-  }'
-```
-
-**Execute in session**:
-```bash
-curl -X POST http://localhost:8080/sessions/sess-abc123/tasks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "type": "text/plain",
-      "content": "What are the key players?"
-    }
-  }'
-```
-
-**With authentication**:
-```bash
-curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  http://localhost:8080/agents/competitor_analyst/tasks \
-  -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"input": {"type": "text/plain", "content": "Analyze market"}}'
-```
-
----
-
-## Additional Resources
-
-- [A2A Protocol Specification](https://a2a-protocol.org)
-- [Hector Architecture](ARCHITECTURE.md)
-- [Authentication Guide](AUTHENTICATION.md)
-- [Configuration Reference](CONFIGURATION.md)
-- [CLI Guide](CLI_GUIDE.md)
-
----
-
-## Protocol Compliance
-
-Hector implements:
-- ✅ **A2A Core**: Agent discovery, task execution, status
-- ✅ **Sessions**: Multi-turn conversation state management
-- ✅ **Streaming**: Real-time SSE output
-- ✅ **Authentication**: Optional JWT/OAuth2
-- ✅ **Visibility**: Public, internal, private agents
-
-For the complete A2A specification, see [a2a-protocol.org](https://a2a-protocol.org).
+For more information:
+- [Architecture Guide](ARCHITECTURE.md)
+- [Getting Started](getting-started.md)
+- [A2A Protocol Specification](https://a2a-protocol.org/latest/specification/)

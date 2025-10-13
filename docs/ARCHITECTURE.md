@@ -1,1152 +1,1281 @@
----
-layout: default
-title: Architecture
-nav_order: 2
-parent: Advanced
-description: "System design, multi-agent orchestration, and core components"
----
-
-<style>
-.architecture-diagram {
-  background: var(--code-background-color);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin: 1.5rem 0;
-  overflow-x: auto;
-}
-
-.architecture-diagram pre {
-  margin: 0;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 0.85rem;
-  line-height: 1.2;
-  color: var(--body-text-color);
-  background: transparent;
-  border: none;
-  padding: 0;
-}
-</style>
-
 # Hector Architecture
 
-**Design Philosophy:** Clean architecture with Strategy pattern, dependency injection, and single responsibility principle.
+**100% A2A Protocol Native • Multi-Transport • Production-Ready**
 
 ---
 
-## System Overview
+## Table of Contents
 
-### Single Agent Architecture
+- [Overview](#overview)
+- [A2A Protocol Native Architecture](#a2a-protocol-native-architecture)
+- [Transport Layer](#transport-layer)
+- [Client Architecture](#client-architecture)
+- [Server Architecture](#server-architecture)
+- [Runtime System](#runtime-system)
+- [Core Components](#core-components)
+- [Multi-Agent Orchestration](#multi-agent-orchestration)
+- [Security & Authentication](#security--authentication)
+- [Extension Points](#extension-points)
 
-<div class="architecture-diagram">
-<pre>
-┌─────────────────────────────────────────────────────────┐
-│                   USER INTERFACE                        │
-│                (CLI, Streaming Output)                  │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│                      AGENT                              │
-│  • Orchestrates reasoning loop                          │
-│  • Manages conversation state                           │
-│  • Coordinates services                                 │
-│  • Executes tool calls                                  │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│              REASONING STRATEGY                         │
-│  • ChainOfThoughtStrategy (production)                  │
-│  • Hooks: Prepare, ShouldStop, AfterIteration           │
-│  • GetContextInjection (todos, goals)                   │
-│  • GetPromptSlots (customizable prompts)                │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│                   SERVICES                              │
-│  ┌───────────┐  ┌──────────┐  ┌─────────┐  ┌─────────┐ │
-│  │    LLM    │  │  Tools   │  │ Prompt  │  │ Context │ │
-│  │ Service   │  │ Service  │  │ Service │  │ Service │ │
-│  └───────────┘  └──────────┘  └─────────┘  └─────────┘ │
-│  ┌───────────────────────────────────────────────────┐  │
-│  │  MemoryService (pkg/memory/)                      │  │
-│  │  ┌─────────────────────────────────────────────┐  │  │
-│  │  │ WorkingMemoryStrategy (injected)            │  │  │
-│  │  │ • SummaryBufferStrategy (default)           │  │  │
-│  │  │ • BufferWindowStrategy                      │  │  │
-│  │  └─────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│              PROVIDERS & PLUGINS                        │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │  Built-in Providers:                            │   │
-│  │  • Anthropic (Claude)                           │   │
-│  │  • OpenAI (GPT-4)                               │   │
-│  │  • Qdrant (Vector DB)                           │   │
-│  │  • Ollama (Embeddings)                          │   │
-│  └─────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │  Plugin System (gRPC):                          │   │
-│  │  • Custom LLM Providers                         │   │
-│  │  • Custom Database Providers                    │   │
-│  │  • Custom Embedder Providers                    │   │
-│  │  • Process isolation, auto-discovery            │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-</pre>
-</div>
+---
 
-### Multi-Agent Orchestration (A2A Protocol)
+## Overview
 
-Hector uses the **A2A (Agent-to-Agent) protocol** for multi-agent orchestration. All agents (native and external) are A2A-compliant peers that can be orchestrated through a supervisor agent. External agents can be integrated **declaratively via YAML configuration** without writing any code.
+Hector is a **100% A2A Protocol Native** AI agent platform built from the ground up with the [Agent-to-Agent (A2A) Protocol](https://a2a-protocol.org/) at its core.
 
-**🏆 Deep A2A Native Integration:** Hector is built with genuine A2A-native architecture - every component uses A2A protocol types directly with zero abstraction layers. See [A2A Native Architecture](A2A_NATIVE_ARCHITECTURE.md) for technical details.
+### Design Principles
 
-**📖 Complete Multi-Agent Tutorial:** See our [LangChain vs Hector comparison](tutorials/MULTI_AGENT_RESEARCH_PIPELINE.md) for a detailed walkthrough of building a 3-agent research system, including direct code comparisons showing how Hector's YAML approach compares to traditional Python-based frameworks.
+1. **Protocol Native**: Every component speaks A2A natively using protobuf types - zero abstraction layers
+2. **Multi-Transport**: gRPC (native), REST (grpc-gateway), JSON-RPC (custom adapter)
+3. **Clean Architecture**: Clear separation of concerns (transport, runtime, client, server, agents)
+4. **Interface-Based**: Dependency injection and strategy patterns throughout
+5. **Production-Ready**: Authentication, discovery, streaming, task management
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                   USER / CLIENT                         │
-│            (CLI, API, External A2A Client)              │
-└──────────────────────┬──────────────────────────────────┘
-                       │ A2A Protocol (HTTP/JSON)
-┌──────────────────────▼──────────────────────────────────┐
-│                   A2A SERVER                            │
-│  • Agent discovery (/agents endpoint)                   │
-│  • Task execution (/agents/{id}/tasks)                  │
-│  • Session management                                   │
-│  • Pure protocol compliance                             │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-         ┌─────────────┼─────────────────────┐
-         │             │                     │
-         ▼             ▼                     ▼
-┌─────────────┐  ┌─────────────┐    ┌─────────────┐
-│ Orchestrator│  │  Specialist │    │  Specialist │
-│   Agent     │  │   Agent 1   │    │   Agent 2   │
-│             │  │             │    │             │
-│ Tools:      │  │ Tools:      │    │ Tools:      │
-│ • agent_call│  │ • domain    │    │ • domain    │
-│             │  │   specific  │    │   specific  │
-└──────┬──────┘  └─────────────┘    └─────────────┘
-       │
-       │ agent_call(agent_id, task)
-       │
-       └──────────┐
-                  ▼
-          ┌────────────────┐
-          │  AgentRegistry │
-          │  (all agents)  │
-          └────────────────┘
+### Key Features
 
-ORCHESTRATION FLOW:
-1. User calls Orchestrator Agent
-2. Orchestrator analyzes task, decomposes into subtasks
-3. Orchestrator delegates via agent_call tool
-4. Target agents execute (native or remote A2A agents)
-5. Orchestrator synthesizes results
-6. Returns unified response
+- ✅ **100% Protobuf-Based**: All message types use `pb.*` (protobuf) directly
+- ✅ **Multi-Transport**: Single codebase, three protocols (gRPC, REST, JSON-RPC)
+- ✅ **Spec-Compliant**: Fully compliant with [A2A Protocol Specification](https://a2a-protocol.org/latest/specification/)
+- ✅ **Discovery**: RFC 8615 `.well-known` endpoints for agent discovery
+- ✅ **Authentication**: JWT-based security with configurable schemes
+- ✅ **Streaming**: Real-time response streaming via gRPC streams and SSE
+- ✅ **Task Management**: Async task processing with status tracking
+- ✅ **External Agents**: Native support for calling remote A2A agents
+
+---
+
+## A2A Protocol Native Architecture
+
+Hector is built with **genuine A2A-native architecture**. Unlike platforms that add A2A as an afterthought, Hector uses A2A protocol types directly throughout the entire stack.
+
+### What Makes Hector A2A Native?
+
+```go
+// ✅ NATIVE: Direct use of protobuf types everywhere
+import "github.com/kadirpekel/hector/pkg/a2a/pb"
+
+// Agent interface uses pb.* types directly
+func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error)
+func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2AService_SendStreamingMessageServer) error
+func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (*pb.AgentCard, error)
+
+// ❌ NOT NATIVE: Internal types with conversion layers
+type InternalMessage struct { ... }
+func convertToA2A(internal InternalMessage) A2AMessage { ... } // Extra layer!
 ```
 
-**Key Features:**
-- **Pure A2A Protocol**: All agents comply with A2A specification
-- **Transparent Delegation**: Orchestrator uses `agent_call` tool
-- **Native + Remote**: Supports both in-process and remote A2A agents
-- **Declarative External Agents**: Define external agents via URL in YAML config
-- **LLM-Driven Routing**: Orchestrator decides delegation dynamically
-- **Composable**: Orchestrators can call other orchestrators
-- **Agent Ecosystem Ready**: Enables interoperability within organizations and the broader agent internet
+### Complete A2A Stack
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      APPLICATION                             │
+│                 (Your Agents & Logic)                        │
+├──────────────────────────────────────────────────────────────┤
+│                     HECTOR RUNTIME                           │
+│  • Configuration Loading  • Agent Initialization             │
+│  • Component Management   • Lifecycle Management             │
+├──────────────────────────────────────────────────────────────┤
+│                      CLIENT LAYER                            │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │         A2AClient Interface (Protocol Native)           ││
+│  ├─────────────────────────────────────────────────────────┤│
+│  │  HTTPClient           │          DirectClient           ││
+│  │  • Remote agents      │          • In-process agents    ││
+│  │  • Uses protojson     │          • No network calls     ││
+│  │  • Multi-transport    │          • Direct protobuf      ││
+│  └─────────────────────────────────────────────────────────┘│
+├──────────────────────────────────────────────────────────────┤
+│                      TRANSPORT LAYER                         │
+│  ┌──────────────┬──────────────────┬─────────────────────┐ │
+│  │  gRPC (Core) │  REST (Gateway)  │  JSON-RPC (Adapter) │ │
+│  │  • Native    │  • Auto-gen      │  • Custom HTTP      │ │
+│  │  • Binary    │  • JSON          │  • Simple RPC       │ │
+│  │  • Streaming │  • SSE           │  • JSON             │ │
+│  └──────────────┴──────────────────┴─────────────────────┘ │
+├──────────────────────────────────────────────────────────────┤
+│                      SERVER LAYER                            │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │            RegistryService (Multi-Agent Hub)            ││
+│  │  • Agent registration    • Request routing              ││
+│  │  • Metadata management   • Discovery endpoints          ││
+│  │  • Authentication        • Well-known endpoints         ││
+│  └─────────────────────────────────────────────────────────┘│
+├──────────────────────────────────────────────────────────────┤
+│                       AGENT LAYER                            │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  Agent (pb.A2AServiceServer interface)                  ││
+│  │  • SendMessage          • GetAgentCard                  ││
+│  │  • SendStreamingMessage • GetTask/CancelTask            ││
+│  │  • Task subscriptions   • Push notifications            ││
+│  └─────────────────────────────────────────────────────────┘│
+├──────────────────────────────────────────────────────────────┤
+│                        CORE SERVICES                         │
+│  ┌───────────┬──────────┬──────────┬──────────┬──────────┐ │
+│  │    LLM    │   Tools  │   Memory │    RAG   │   Tasks  │ │
+│  │  • OpenAI │ • Local  │ • Buffer │ • Qdrant │ • Async  │ │
+│  │• Anthropic│ • MCP    │ • Summary│ • Search │ • Status │ │
+│  │  • Gemini │ • Plugin │ • Session│ • Embed  │ • Track  │ │
+│  └───────────┴──────────┴──────────┴──────────┴──────────┘ │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Protobuf Message Flow
+
+Every message in Hector uses protobuf types:
+
+```go
+// 1. Client creates message using pb types
+message := &pb.Message{
+    Role: pb.Role_ROLE_USER,
+    Content: []*pb.Part{
+        {Part: &pb.Part_Text{Text: "Hello"}},
+    },
+}
+
+// 2. Serialized with protojson for HTTP/REST
+jsonData, _ := protojson.Marshal(&pb.SendMessageRequest{
+    Request: message,
+})
+
+// 3. Server receives and processes as pb types
+func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
+    // req.Request is already *pb.Message
+    // No conversion needed!
+}
+
+// 4. Response uses pb types
+return &pb.SendMessageResponse{
+    Payload: &pb.SendMessageResponse_Msg{
+        Msg: &pb.Message{
+            Role: pb.Role_ROLE_AGENT,
+            Content: []*pb.Part{
+                {Part: &pb.Part_Text{Text: "Hi!"}},
+            },
+        },
+    },
+}, nil
+```
+
+---
+
+## Transport Layer
+
+Hector provides three transport protocols, all serving the same A2A protocol specification:
+
+### 1. gRPC (Native)
+
+**Status**: Core transport, auto-generated from `.proto` files
+
+**Features**:
+- ✅ Binary protocol (protobuf)
+- ✅ Built-in streaming (bidirectional)
+- ✅ HTTP/2 multiplexing
+- ✅ Efficient for high-throughput
+- ✅ Strong typing via protobuf
+- ✅ Cross-language support
+
+**Endpoints**:
+```protobuf
+service A2AService {
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+  rpc SendStreamingMessage(SendMessageRequest) returns (stream StreamResponse);
+  rpc GetTask(GetTaskRequest) returns (Task);
+  rpc CancelTask(CancelTaskRequest) returns (Task);
+  rpc TaskSubscription(TaskSubscriptionRequest) returns (stream StreamResponse);
+  rpc GetAgentCard(GetAgentCardRequest) returns (AgentCard);
+  // ... more methods
+}
+```
+
+**Usage**:
+```bash
+# gRPC port (default: 50051)
+grpcurl -plaintext \
+  -d '{"request":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}' \
+  localhost:50051 \
+  a2a.v1.A2AService/SendMessage
+```
+
+### 2. REST (grpc-gateway)
+
+**Status**: Auto-generated from protobuf annotations, zero custom code
+
+**Features**:
+- ✅ JSON over HTTP
+- ✅ RESTful semantics
+- ✅ Server-Sent Events (SSE) for streaming
+- ✅ Browser-friendly
+- ✅ 100% generated from proto definitions
+
+**Key Endpoints**:
+```
+# Agent Discovery
+GET    /.well-known/agent-card.json          # Service-level card
+GET    /v1/agents                            # List all agents
+GET    /v1/agents/{agent_id}/.well-known/agent-card.json  # Agent card
+
+# Messaging
+POST   /v1/agents/{agent_id}/message:send    # Non-streaming
+POST   /v1/agents/{agent_id}/message:stream  # Streaming (SSE)
+
+# Task Management
+GET    /v1/tasks/{task_id}                   # Get task status
+POST   /v1/tasks/{task_id}:cancel            # Cancel task
+GET    /v1/tasks/{task_id}:subscribe         # Subscribe to updates (SSE)
+```
+
+**Example**:
+```bash
+# Send message
+curl -X POST http://localhost:50052/v1/agents/assistant/message:send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": {
+      "role": "ROLE_USER",
+      "content": [{"text": "Hello"}]
+    }
+  }'
+
+# Streaming
+curl -N -X POST http://localhost:50052/v1/agents/assistant/message:stream \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{
+    "message": {
+      "role": "ROLE_USER",
+      "content": [{"text": "Tell me a story"}]
+    }
+  }'
+
+# Output (SSE format):
+# event: message
+# data: {"result":{"message":{"role":"ROLE_AGENT","content":[{"text":"Once"}]}}}
+#
+# event: message  
+# data: {"result":{"message":{"role":"ROLE_AGENT","content":[{"text":" upon"}]}}}
+```
+
+### 3. JSON-RPC
+
+**Status**: Custom adapter over gRPC
+
+**Features**:
+- ✅ Simple RPC over HTTP POST
+- ✅ JSON-RPC 2.0 compliant
+- ✅ Single endpoint for all methods
+- ✅ Easy integration for simple clients
+
+**Endpoint**:
+```
+POST /rpc   # All methods
+```
+
+**Methods**:
+- `SendMessage` - Send a message (non-streaming)
+- `GetAgentCard` - Get agent metadata
+- `GetTask` - Get task status
+- `CancelTask` - Cancel a task
+
+**Example**:
+```bash
+curl -X POST http://localhost:50053/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "SendMessage",
+    "params": {
+      "agentId": "assistant",
+      "message": {
+        "role": "ROLE_USER",
+        "content": [{"text": "Hello"}]
+      }
+    },
+    "id": 1
+  }'
+
+# Response:
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "message": {
+      "role": "ROLE_AGENT",
+      "content": [{"text": "Hi there!"}]
+    }
+  },
+  "id": 1
+}
+```
+
+### Transport Comparison
+
+| Feature | gRPC | REST | JSON-RPC |
+|---------|------|------|----------|
+| **Protocol** | HTTP/2 Binary | HTTP/1.1 JSON | HTTP/1.1 JSON |
+| **Streaming** | Bidirectional | SSE (server→client) | Not supported |
+| **Performance** | Highest | Medium | Medium |
+| **Browser Support** | Via grpc-web | Native | Native |
+| **Simplicity** | Medium | Medium | Highest |
+| **Type Safety** | Strongest | Strong | Strong |
+| **Code Generation** | Full | Full (grpc-gateway) | Partial |
+| **Best For** | Services, high-throughput | Web apps, APIs | Simple integrations |
+
+### Port Configuration
+
+```yaml
+# Default ports
+global:
+  a2a_server:
+    grpc_port: 50051      # gRPC
+    rest_port: 50052      # REST/HTTP
+    jsonrpc_port: 50053   # JSON-RPC
+```
+
+---
+
+## Client Architecture
+
+The client layer provides a unified interface for interacting with A2A agents, abstracting away transport details.
+
+### A2AClient Interface
+
+```go
+// pkg/a2a/client/client.go
+type A2AClient interface {
+    // Agent Discovery
+    ListAgents(ctx context.Context) ([]AgentInfo, error)
+    GetAgentCard(ctx context.Context, agentID string) (*pb.AgentCard, error)
+    
+    // Messaging
+    SendMessage(ctx context.Context, agentID string, message *pb.Message) (*pb.SendMessageResponse, error)
+    StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error)
+    
+    // Lifecycle
+    Close() error
+}
+```
+
+### Client Implementations
+
+#### 1. HTTPClient (Remote Agents)
+
+**Purpose**: Connect to remote A2A servers over HTTP/REST
+
+**Features**:
+- ✅ Uses `protojson` for proper protobuf↔JSON serialization
+- ✅ Supports streaming via SSE
+- ✅ Authentication via bearer tokens
+- ✅ Configurable timeouts
+
+**Implementation**:
+```go
+// pkg/a2a/client/http.go
+type HTTPClient struct {
+    baseURL string
+    token   string
+    client  *http.Client
+}
+
+func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error) {
+    // Build request using protojson (NOT json.Marshal!)
+    reqProto := &pb.SendMessageRequest{Request: message}
+    jsonData, _ := protojson.Marshal(reqProto)  // ✅ Correct protobuf serialization
+    
+    // Make HTTP request
+    resp, _ := c.client.Post(url, "application/json", bytes.NewReader(jsonData))
+    
+    // Parse streaming responses with protojson
+    for scanner.Scan() {
+        var streamResp pb.StreamResponse
+        protojson.Unmarshal(line, &streamResp)  // ✅ Correct deserialization
+        streamChan <- &streamResp
+    }
+}
+```
+
+**Usage**:
+```go
+// Connect to remote server
+client := client.NewHTTPClient("http://localhost:50052", "token")
+
+// Send message
+response, err := client.SendMessage(ctx, "assistant", message)
+
+// Stream responses
+stream, err := client.StreamMessage(ctx, "assistant", message)
+for chunk := range stream {
+    if msg := chunk.GetMsg(); msg != nil {
+        fmt.Print(msg.Content[0].GetText())
+    }
+}
+```
+
+#### 2. DirectClient (In-Process Agents)
+
+**Purpose**: Execute agents in the same process (zero network overhead)
+
+**Features**:
+- ✅ No serialization overhead
+- ✅ Direct protobuf type usage
+- ✅ Useful for embedded scenarios
+- ✅ Development and testing
+
+**Implementation**:
+```go
+// pkg/a2a/client/direct.go
+type DirectClient struct {
+    config     *config.Config
+    components *component.ComponentManager
+    registry   *agent.AgentRegistry
+}
+
+func (c *DirectClient) SendMessage(ctx context.Context, agentID string, message *pb.Message) (*pb.SendMessageResponse, error) {
+    // Get agent from local registry
+    agentEntry, _ := c.registry.Get(agentID)
+    
+    // Call directly (no network!)
+    return agentEntry.Agent.SendMessage(ctx, &pb.SendMessageRequest{
+        Request: message,
+    })
+}
+```
+
+**Usage**:
+```go
+// Create direct client
+client, err := client.NewDirectClient(config)
+
+// Same interface as HTTP client!
+response, err := client.SendMessage(ctx, "assistant", message)
+```
+
+### Client Selection Logic
+
+The CLI automatically chooses the right client:
+
+```go
+// pkg/cli/commands.go
+func createClient(args Args) (client.A2AClient, error) {
+    if args.ServerURL != "" {
+        // Server mode: use HTTP client
+        return runtime.NewHTTPClient(args.ServerURL, args.Token), nil
+    }
+    
+    // Direct mode: use in-process client
+    rt, err := runtime.New(runtime.Options{
+        ConfigFile: args.ConfigFile,
+        Provider:   args.Provider,
+        APIKey:     args.APIKey,
+        // ... more options
+    })
+    return rt.Client(), nil
+}
+```
+
+---
+
+## Server Architecture
+
+The server layer hosts multiple agents and routes requests using A2A protocol.
+
+### RegistryService (Multi-Agent Hub)
+
+**Purpose**: Central registry and router for all agents
+
+```go
+// pkg/transport/registry_server.go
+type RegistryService struct {
+    pb.UnimplementedA2AServiceServer
+    registry *agent.AgentRegistry
+}
+```
+
+**Responsibilities**:
+1. **Agent Registration**: Register native and remote agents
+2. **Request Routing**: Route requests to correct agent based on `agent-name` header
+3. **Discovery**: Provide agent listing and metadata
+4. **Authentication**: Apply security policies
+5. **Streaming**: Handle streaming responses
+
+**Key Methods**:
+```go
+// Register an agent
+func (s *RegistryService) RegisterAgent(agentID string, agent pb.A2AServiceServer, config *config.AgentConfig) error
+
+// List all agents
+func (s *RegistryService) ListAgents() []string
+
+// Get agent metadata
+func (s *RegistryService) GetAgentMetadata(agentID string) (*AgentMetadata, error)
+
+// Route message to agent
+func (s *RegistryService) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
+    // Extract agent ID from metadata
+    md, _ := metadata.FromIncomingContext(ctx)
+    agentID := md.Get("agent-name")[0]
+    
+    // Get agent
+    agentEntry, _ := s.registry.Get(agentID)
+    
+    // Forward request
+    return agentEntry.Agent.SendMessage(ctx, req)
+}
+```
+
+### Agent Discovery Endpoints
+
+Hector implements [RFC 8615](https://tools.ietf.org/html/rfc8615) well-known URIs for agent discovery:
+
+```
+# Service-level discovery
+GET /.well-known/agent-card.json
+Response: {
+  "name": "Hector A2A Server",
+  "description": "Multi-agent AI platform",
+  "version": "1.0.0",
+  "agents": [
+    {"id": "assistant", "name": "Assistant", "agent_card_url": "/v1/agents/assistant/.well-known/agent-card.json"},
+    {"id": "researcher", "name": "Researcher", "agent_card_url": "/v1/agents/researcher/.well-known/agent-card.json"}
+  ]
+}
+
+# Agent-specific discovery
+GET /v1/agents/{agent_id}/.well-known/agent-card.json
+Response: {
+  "name": "Assistant",
+  "description": "Helpful AI assistant",
+  "version": "1.0.0",
+  "capabilities": {
+    "streaming": true,
+    "task_tracking": true,
+    "session_support": true
+  },
+  "security_schemes": {
+    "bearer": {
+      "type": "http",
+      "scheme": "bearer"
+    }
+  }
+}
+
+# List all agents
+GET /v1/agents
+Response: {
+  "agents": [
+    {"id": "assistant", "name": "Assistant", "description": "...", "agent_card_url": "..."},
+    {"id": "researcher", "name": "Researcher", "description": "...", "agent_card_url": "..."}
+  ]
+}
+```
+
+### Server Lifecycle
+
+```go
+// pkg/a2a/server/server.go
+type HectorServer struct {
+    grpc    *transport.Server           // gRPC server
+    rest    *transport.RESTGateway      // REST gateway
+    jsonrpc *transport.JSONRPCHandler   // JSON-RPC handler
+}
+
+// Start all transports
+func (s *HectorServer) Start(ctx context.Context) error {
+    // Start gRPC (port 50051)
+    go s.grpc.Start()
+    
+    // Start REST gateway (port 50052)  
+    go s.rest.Start(ctx)
+    
+    // Start JSON-RPC (port 50053)
+    go s.jsonrpc.Start()
+    
+    // Wait for shutdown signal
+    <-ctx.Done()
+    return s.Stop(ctx)
+}
+
+// Graceful shutdown
+func (s *HectorServer) Stop(ctx context.Context) error {
+    s.grpc.Stop(ctx)
+    s.rest.Stop(ctx)
+    s.jsonrpc.Stop(ctx)
+    return nil
+}
+```
+
+**Bootstrap Process**:
+```go
+// pkg/a2a/server/bootstrap.go
+func Bootstrap(opts BootstrapOptions) (*HectorServer, error) {
+    // 1. Create component manager
+    componentManager, _ := component.NewComponentManager(config)
+    
+    // 2. Create agent registry
+    agentRegistry := agent.NewAgentRegistry()
+    registryService := transport.NewRegistryService(agentRegistry)
+    
+    // 3. Register all agents
+    for agentID, agentCfg := range config.Agents {
+        if agentCfg.Type == "a2a" {
+            // External A2A agent
+            agent, _ := agent.NewExternalA2AAgent(&agentCfg)
+        } else {
+            // Native agent
+            agent, _ := agent.NewAgent(&agentCfg, componentManager, agentRegistry)
+        }
+        registryService.RegisterAgent(agentID, agent, &agentCfg)
+    }
+    
+    // 4. Create transports
+    grpcServer := transport.NewServer(registryService, grpcConfig)
+    restGateway := transport.NewRESTGateway(restConfig)
+    jsonrpcHandler := transport.NewJSONRPCHandler(jsonrpcConfig, registryService)
+    
+    // 5. Apply authentication
+    if config.Global.Auth.Enabled {
+        jwtValidator, _ := auth.NewJWTValidator(...)
+        grpcServer.SetInterceptors(jwtValidator)
+        restGateway.SetAuth(&transport.AuthConfig{Validator: jwtValidator})
+        jsonrpcHandler.SetAuth(&transport.AuthConfig{Validator: jwtValidator})
+    }
+    
+    return NewHectorServer(grpcServer, restGateway, jsonrpcHandler), nil
+}
+```
+
+---
+
+## Runtime System
+
+The runtime system manages configuration loading, initialization, and client creation.
+
+### Runtime Package
+
+```go
+// pkg/runtime/runtime.go
+type Runtime struct {
+    config *config.Config
+    client client.A2AClient
+}
+
+// Initialize runtime
+func New(opts Options) (*Runtime, error) {
+    // 1. Load or create config
+    cfg, _ := loadOrCreateConfig(opts)
+    
+    // 2. Create appropriate client
+    var a2aClient client.A2AClient
+    if opts.ConfigFile != "" {
+        // Use HTTPClient for server mode
+        a2aClient = client.NewHTTPClient(serverURL, token)
+    } else {
+        // Use DirectClient for zero-config mode
+        a2aClient, _ = client.NewDirectClient(cfg)
+    }
+    
+    return &Runtime{
+        config: cfg,
+        client: a2aClient,
+    }, nil
+}
+```
+
+### Configuration Loading
+
+```go
+func loadOrCreateConfig(opts Options) (*config.Config, error) {
+    // Try to load from file
+    if fileExists(opts.ConfigFile) {
+        cfg, _ := config.LoadConfig(opts.ConfigFile)
+        cfg.SetDefaults()
+        cfg.Validate()
+        return cfg, nil
+    }
+    
+    // Create zero-config
+    return config.CreateZeroConfig(config.ZeroConfigOptions{
+        Provider:   opts.Provider,   // openai, anthropic, gemini
+        APIKey:     opts.APIKey,
+        BaseURL:    opts.BaseURL,
+        Model:      opts.Model,
+        EnableTools: opts.Tools,
+        MCPURL:     opts.MCPURL,
+        DocsFolder: opts.DocsFolder,
+    }), nil
+}
+```
+
+### Zero-Config Mode
+
+Hector supports zero-configuration mode for quick starts:
+
+```bash
+# Just provide API key, everything else is automatic
+export OPENAI_API_KEY=sk-...
+hector chat assistant --tools
+
+# Or specify provider explicitly
+hector chat assistant --provider anthropic --api-key sk-ant-... --tools
+```
+
+**Generated Configuration**:
+```go
+func CreateZeroConfig(opts ZeroConfigOptions) *Config {
+    // Provider-specific defaults
+    switch opts.Provider {
+    case "openai":
+        opts.BaseURL = "https://api.openai.com/v1"
+        opts.Model = "gpt-4o-mini"
+    case "anthropic":
+        opts.BaseURL = "https://api.anthropic.com"
+        opts.Model = "claude-3-5-sonnet-20241022"
+    case "gemini":
+        opts.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
+        opts.Model = "gemini-2.0-flash-exp"
+    }
+    
+    // Create config with single agent
+    return &Config{
+        Agents: map[string]AgentConfig{
+            "assistant": {
+                Name: "Assistant",
+                LLM:  opts.Provider,
+                // ... tool config if opts.EnableTools
+            },
+        },
+        LLMs: map[string]LLMProviderConfig{
+            opts.Provider: {
+                Type:   opts.Provider,
+                Model:  opts.Model,
+                APIKey: opts.APIKey,
+                Host:   opts.BaseURL,
+            },
+        },
+    }
+}
+```
 
 ---
 
 ## Core Components
 
-### 1. A2A Server (`a2a/server.go`)
+### 1. Agent
 
-**Responsibility:** Host agents via A2A protocol
+**File**: `pkg/agent/agent.go`
 
-**Key Features:**
-- Agent discovery (GET /agents)
-- Task execution (POST /agents/{id}/tasks)
-- Session management
-- Streaming support
-- Pure protocol compliance
+**Purpose**: Execute reasoning tasks and implement A2A protocol
 
-**Core Methods:**
-```go
-func (s *Server) RegisterAgent(agentID string, agent Agent) error
-func (s *Server) Start() error
-func (s *Server) Stop(ctx context.Context) error
-```
-
-### 2. Agent (`agent/agent.go`)
-
-**Responsibility:** Execute reasoning tasks via A2A protocol
-
-**A2A Interface Implementation:**
-```go
-// Pure A2A Agent interface
-func (a *Agent) GetAgentCard() *a2a.AgentCard
-func (a *Agent) ExecuteTask(ctx context.Context, request *a2a.TaskRequest) (*a2a.TaskResponse, error)
-func (a *Agent) ExecuteTaskStreaming(ctx context.Context, request *a2a.TaskRequest) (<-chan *a2a.StreamChunk, error)
-```
-
-**Internal Methods:**
-- `execute()` - Main reasoning loop
-- `callLLM()` - LLM interaction
-- `executeTools()` - Tool execution
-- `saveToHistory()` - Conversation persistence
-
-**Design Pattern:** Strategy Pattern
-
+**Interface Implementation**:
 ```go
 type Agent struct {
-	name        string
-	description string
-	config      *config.AgentConfig
-	services    reasoning.AgentServices
+    config   *config.AgentConfig
+    llm      llms.LLMProvider
+    tools    tools.ToolRegistry
+    memory   memory.MemoryService
+    services *AgentServices
 }
+
+// A2A Protocol Methods (pb.A2AServiceServer interface)
+func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error)
+func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2AService_SendStreamingMessageServer) error
+func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (*pb.AgentCard, error)
+func (a *Agent) GetTask(ctx context.Context, req *pb.GetTaskRequest) (*pb.Task, error)
+func (a *Agent) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) (*pb.Task, error)
+func (a *Agent) TaskSubscription(req *pb.TaskSubscriptionRequest, stream pb.A2AService_TaskSubscriptionServer) error
 ```
 
-**Key Features:**
-- Pure A2A compliance (no legacy Query/QueryStreaming)
-- Direct protocol implementation
-- Transparent to clients (native or remote)
-- Tool-based orchestration via `agent_call`
+### 2. LLM Providers
 
-### 3. Orchestration Tools (`agent/agent_call_tool.go`)
+**File**: `pkg/llms/*.go`
 
-**Responsibility:** Enable multi-agent coordination
+**Providers**:
+- `openai.go` - OpenAI (GPT-4o, GPT-4, GPT-3.5)
+- `anthropic.go` - Anthropic (Claude 3.5 Sonnet, Opus, Haiku)
+- `gemini.go` - Google Gemini (Gemini 2.0 Flash, 1.5 Pro)
 
-**`agent_call` Tool:**
+**Interface**:
 ```go
-type AgentCallTool struct {
-	registry *AgentRegistry
+type LLMProvider interface {
+    Generate(messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error)
+    GenerateStreaming(messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error)
+    Close() error
 }
-
-// Delegates task to another agent
-func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}) (tools.ToolResult, error)
 ```
 
-**Features:**
-- Transparent delegation to any registered agent
-- Works with both native and remote A2A agents
-- Pure A2A protocol communication
-- Enables LLM-driven orchestration
+### 3. Tool System
 
-**Usage:**
+**File**: `pkg/tools/*.go`
+
+**Tool Sources**:
+- `local.go` - Built-in tools (command, file_writer, search_replace, todo)
+- `mcp.go` - Model Context Protocol tools
+- `registry.go` - Tool registration and discovery
+
+**Built-in Tools**:
+```go
+// Command execution
+type CommandTool struct {
+    allowedCommands []string
+    workingDir      string
+}
+
+// File operations
+type FileWriterTool struct {
+    allowedPaths []string
+    maxFileSize  int64
+}
+
+// Find and replace
+type SearchReplaceTool struct {
+    workingDir string
+}
+
+// Task management
+type TodoTool struct {
+    todos []*TodoItem
+}
+```
+
+### 4. Memory System
+
+**File**: `pkg/memory/*.go`
+
+**Strategies**:
+- `buffer_window.go` - Fixed-size message window
+- `summary_buffer.go` - Automatic summarization
+- `session_service.go` - Session management
+
+**Interface**:
+```go
+type MemoryStrategy interface {
+    AddToHistory(ctx context.Context, message *pb.Message) error
+    GetHistory(ctx context.Context) ([]*pb.Message, error)
+    Clear(ctx context.Context) error
+}
+```
+
+### 5. Task Service
+
+**File**: `pkg/agent/task_service.go`
+
+**Purpose**: Manage async task processing and tracking
+
+**Implementations**:
+- `memory_task_service.go` - In-memory task storage
+- `sql_task_service.go` - SQL-based task storage (PostgreSQL, MySQL, SQLite)
+
+**Interface**:
+```go
+type TaskService interface {
+    CreateTask(ctx context.Context, agentID string) (*pb.Task, error)
+    GetTask(ctx context.Context, taskID string) (*pb.Task, error)
+    UpdateTask(ctx context.Context, task *pb.Task) error
+    ListTasks(ctx context.Context, agentID string) ([]*pb.Task, error)
+    DeleteTask(ctx context.Context, taskID string) error
+}
+```
+
+---
+
+## Multi-Agent Orchestration
+
+Hector supports sophisticated multi-agent workflows via the A2A protocol.
+
+### Orchestrator Pattern
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                       USER / CLIENT                        │
+│                  (CLI, API, External System)               │
+└─────────────────────────┬──────────────────────────────────┘
+                          │ A2A Protocol
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  ORCHESTRATOR AGENT                         │
+│  • Task decomposition                                       │
+│  • Agent selection (LLM-driven)                             │
+│  • Result synthesis                                         │
+│  • Tool: agent_call(agent_id, task)                         │
+└─────────────────┬───────────────────────────────────────────┘
+                  │
+         ┌────────┴────────┬────────────┐
+         │                 │            │
+         ▼                 ▼            ▼
+┌─────────────────┐ ┌─────────────┐ ┌────────────────┐
+│  Weather Agent  │ │Travel Agent │ │  Search Agent  │
+│  (External A2A) │ │  (Native)   │ │    (Native)    │
+└─────────────────┘ └─────────────┘ └────────────────┘
+```
+
+### Configuration Example
+
+```yaml
+# Orchestrator agent
+agents:
+  orchestrator:
+    name: "Orchestrator"
+    description: "Coordinates multiple specialist agents"
+    llm: "gpt-4o"
+    reasoning:
+      engine: "supervisor"  # Supervisor reasoning for orchestration
+      max_iterations: 20
+    tools:
+      - "agent_call"  # Built-in tool for calling other agents
+
+  # Specialist agents
+  weather:
+    type: "a2a"  # External A2A agent
+    url: "https://weather-agent.example.com"
+    credentials:
+      type: "bearer"
+      token: "${WEATHER_API_TOKEN}"
+  
+  travel:
+    name: "Travel Specialist"
+    llm: "gpt-4o"
+    document_stores:
+      - "travel_docs"
+  
+  search:
+    name: "Web Researcher"
+    llm: "gpt-4o"
+    tools:
+      - "search"
+```
+
+### Agent Call Tool
+
+**Built-in tool for agent-to-agent communication**:
+
+```yaml
+# Automatically available when multiple agents configured
+tools:
+  agent_call:
+    type: "agent_call"
+    enabled: true
+```
+
+**Usage by orchestrator**:
+```
+User: "Plan a trip to Paris and check the weather"
+
+Orchestrator:
+1. Breaking down task...
+   - Subtask 1: Get weather for Paris
+   - Subtask 2: Plan travel itinerary
+
+2. Calling weather agent...
+   Tool: agent_call(agent_id="weather", task="What's the weather in Paris next week?")
+   Result: "Sunny, 20°C average"
+
+3. Calling travel agent...
+   Tool: agent_call(agent_id="travel", task="Plan 3-day Paris itinerary")
+   Result: "Day 1: Eiffel Tower, Day 2: Louvre..."
+
+4. Synthesizing results...
+   "Here's your Paris trip plan with weather forecast..."
+```
+
+---
+
+## Security & Authentication
+
+Hector implements comprehensive security based on A2A protocol recommendations.
+
+### JWT Authentication
+
+**Configuration**:
+```yaml
+global:
+  auth:
+    enabled: true
+    jwks_url: "https://auth.example.com/.well-known/jwks.json"
+    issuer: "https://auth.example.com"
+    audience: "hector-api"
+```
+
+**Supported Schemes**:
+- **Bearer Token** (JWT)
+- **API Key** (via HTTP headers)
+- **Basic Auth** (for development)
+
+**Implementation**:
+```go
+// pkg/auth/middleware.go
+type JWTValidator struct {
+    jwks     *keyfunc.JWKS
+    issuer   string
+    audience string
+}
+
+// Validate JWT token
+func (v *JWTValidator) ValidateToken(ctx context.Context, tokenString string) (*Claims, error) {
+    token, err := jwt.Parse(tokenString, v.jwks.Keyfunc)
+    // Extract claims
+    claims := &Claims{
+        Subject:  token.Claims["sub"].(string),
+        Issuer:   token.Claims["iss"].(string),
+        Audience: token.Claims["aud"].(string),
+        Roles:    token.Claims["roles"].([]string),
+        TenantID: token.Claims["tenant_id"].(string),
+    }
+    return claims, nil
+}
+
+// HTTP Middleware
+func (v *JWTValidator) HTTPMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // Extract token from Authorization header
+        auth := r.Header.Get("Authorization")
+        token := strings.TrimPrefix(auth, "Bearer ")
+        
+        // Validate
+        claims, err := v.ValidateToken(r.Context(), token)
+        if err != nil {
+            http.Error(w, "Unauthorized", http.StatusUnauthorized)
+            return
+        }
+        
+        // Add claims to context
+        ctx := context.WithValue(r.Context(), "claims", claims)
+        next.ServeHTTP(w, r.WithContext(ctx))
+    })
+}
+
+// gRPC Interceptors
+func (v *JWTValidator) UnaryServerInterceptor() grpc.UnaryServerInterceptor
+func (v *JWTValidator) StreamServerInterceptor() grpc.StreamServerInterceptor
+```
+
+### Agent-to-Agent Authentication
+
+For external A2A agents:
+
 ```yaml
 agents:
-  # Native agent
-  researcher:
-    name: "Research Agent"
-    llm: "gpt-4"
-    reasoning:
-      engine: "chain-of-thought"
-  
-  # External A2A agent (pure interoperability!)
-  partner_specialist:
+  external_agent:
     type: "a2a"
-    url: "https://partner-ai.com/agents/specialist"
-  
-  # Orchestrator coordinates both
-  orchestrator:
-    name: "Hybrid Orchestrator"
-    llm: "gpt-4"
-    tools:
-      - agent_call  # Can call native AND external agents
-    reasoning:
-      engine: "supervisor"  # Optimized for delegation
+    url: "https://external-agent.example.com"
+    credentials:
+      type: "bearer"
+      token: "${EXTERNAL_AGENT_TOKEN}"
+      # OR
+      type: "api_key"
+      key: "${EXTERNAL_API_KEY}"
+      # OR
+      type: "basic"
+      username: "${USERNAME}"
+      password: "${PASSWORD}"
 ```
 
-**Benefits:**
-- 🌍 **Agent Internet**: Connect to the emerging agent ecosystem
-- 🏢 **Enterprise Interoperability**: Integrate partner/vendor agents without code
-- 📝 **Declarative**: External agents defined in YAML like native ones
-- 🔌 **Zero Code**: No API integration, no custom connectors
-
-### 4. Reasoning Strategy (`reasoning/chain_of_thought_strategy.go`, `reasoning/supervisor_strategy.go`)
-
-**Responsibility:** Define reasoning behavior
-
-**Interface:**
+**Client-side authentication**:
 ```go
-type ReasoningStrategy interface {
-	PrepareIteration(iteration int, state *ReasoningState) error
-	ShouldStop(text string, toolCalls []ToolCall, state *ReasoningState) bool
-	AfterIteration(iteration int, text string, toolCalls []ToolCall, results []ToolResult, state *ReasoningState) error
-	GetContextInjection(state *ReasoningState) string
-	GetPromptSlots() PromptSlots
-	GetName() string
-	GetDescription() string
+// pkg/agent/a2a_client.go
+func NewExternalA2AAgent(cfg *config.AgentConfig) (pb.A2AServiceServer, error) {
+    // Create authenticated gRPC connection
+    conn, err := auth.NewAuthenticatedClientConn(
+        cfg.URL,
+        auth.NewTokenProviderFromCredentials(cfg.Credentials),
+    )
+    
+    // Create A2A client
+    client := pb.NewA2AServiceClient(conn)
+    
+    return &ExternalA2AAgent{
+        client: client,
+        config: cfg,
+    }, nil
 }
 ```
-
-**ChainOfThoughtStrategy:**
-- Simple iterative reasoning
-- Stops when no tool calls
-- Self-reflection after each iteration
-- Todo injection into context
-
-### 5. Memory Service (`pkg/memory/`)
-
-**Responsibility:** Manage conversation memory across sessions
-
-**Architecture:**
-
-```go
-// MemoryService orchestrates session management and delegates to strategies
-type MemoryService struct {
-	workingMemory WorkingMemoryStrategy
-	sessions      map[string]*ConversationHistory
-	mu            sync.RWMutex
-}
-
-// WorkingMemoryStrategy defines pluggable memory algorithms
-type WorkingMemoryStrategy interface {
-	AddMessage(session *ConversationHistory, msg llms.Message) error
-	GetMessages(session *ConversationHistory) ([]llms.Message, error)
-	Name() string
-	SetStatusNotifier(notifier StatusNotifier)
-}
-```
-
-**Strategies:**
-- **`SummaryBufferStrategy`** (default) - Token-based with LLM summarization
-- **`BufferWindowStrategy`** - Simple LIFO (last N messages)
-
-**Design Benefits:**
-- ✅ Clean separation: Service manages sessions, strategies implement algorithms
-- ✅ Strategy Pattern: Easy to add new memory strategies
-- ✅ No duplication: Session management centralized
-- ✅ Dual-layer: Working memory (session) + long-term memory (persistent, vector-based)
-
-**File Structure:**
-```
-pkg/memory/
-├── memory.go              → MemoryService (orchestrator)
-├── working_strategy.go    → WorkingMemoryStrategy interface
-├── summary_buffer.go      → Token-based strategy with summarization
-├── buffer_window.go       → Simple LIFO strategy
-├── longterm_strategy.go   → LongTermMemoryStrategy interface
-├── vector_memory.go       → Vector-based long-term memory
-├── types.go               → Configuration types
-└── factory.go             → Strategy factory
-```
-
-### 6. Services (`agent/services.go`)
-
-**Service Architecture:**
-
-```go
-type AgentServices interface {
-	Config() config.ReasoningConfig
-	LLM() LLMService
-	Tools() ToolService
-	Context() ContextService
-	Prompt() PromptService
-	History() HistoryService  // Implemented by MemoryService
-}
-```
-
-**Why Services?**
-- ✅ Dependency Injection
-- ✅ Easy testing (mock services)
-- ✅ Single Responsibility
-- ✅ Clean interfaces
-
----
-
-## Key Design Patterns
-
-### 1. Strategy Pattern
-
-**Problem:** Different reasoning approaches need different logic
-
-**Solution:** `ReasoningStrategy` interface with implementations
-
-```go
-// Agent doesn't know HOW to reason
-agent := NewAgent(config, services)
-
-// Strategy defines HOW
-strategy := NewChainOfThoughtStrategy()
-
-// Agent uses strategy hooks
-strategy.PrepareIteration(...)
-strategy.ShouldStop(...)
-strategy.AfterIteration(...)
-```
-
-**Benefits:**
-- Easy to add new reasoning strategies
-- Agent code stays simple
-- Strategies are isolated and testable
-
-### 2. Dependency Injection
-
-**Problem:** Components need access to services
-
-**Solution:** Inject services through constructor
-
-```go
-// Bad: Hard-coded dependencies
-agent := &Agent{
-	llm: openai.New(),  // Tightly coupled!
-}
-
-// Good: Injected dependencies
-services := NewAgentServices(config, componentManager)
-agent := NewAgent(config, services)
-```
-
-**Benefits:**
-- Easy to test (inject mocks)
-- Loose coupling
-- Flexible composition
-
-### 3. Service Locator
-
-**Problem:** Need centralized service management
-
-**Solution:** `ComponentManager` + Service Interfaces
-
-```go
-type ComponentManager struct {
-	llmRegistry      *llms.LLMRegistry
-	dbRegistry       *databases.DatabaseRegistry
-	embedderRegistry *embedders.EmbedderRegistry
-	toolRegistry     *tools.ToolRegistry
-	pluginRegistry   *plugins.PluginRegistry
-}
-
-// Usage
-llm, _ := componentManager.GetLLM("main-llm")
-tools := componentManager.GetToolRegistry()
-```
-
-**Benefits:**
-- Single source of truth
-- Lazy initialization
-- Easy to swap implementations
-
-### 4. Plugin Architecture
-
-**Problem:** Need to extend Hector without modifying core code
-
-**Solution:** gRPC-based plugin system with HashiCorp go-plugin
-
-```go
-// Plugin interface
-type Plugin interface {
-	Initialize(ctx context.Context, config map[string]string) error
-	Shutdown(ctx context.Context) error
-	Health(ctx context.Context) error
-}
-
-// Example: LLM Plugin
-type LLMProvider interface {
-	Plugin
-	Generate(ctx context.Context, messages []*Message, tools []*ToolDefinition) (*GenerateResponse, error)
-	GenerateStreaming(ctx context.Context, messages []*Message, tools []*ToolDefinition) (<-chan *StreamChunk, error)
-	GetModelInfo(ctx context.Context) (*ModelInfo, error)
-}
-```
-
-**Architecture:**
-```
-┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-│   Hector     │         │  go-plugin   │         │   Plugin     │
-│   Core       │         │   Framework  │         │   Process    │
-└──────┬───────┘         └──────┬───────┘         └──────┬───────┘
-       │                        │                        │
-       │ 1. Load                │                        │
-       ├───────────────────────>│                        │
-       │                        │ 2. Start Process       │
-       │                        ├───────────────────────>│
-       │                        │                        │
-       │                        │ 3. gRPC Handshake      │
-       │                        │<═══════════════════════│
-       │                        │                        │
-       │ 4. Interface           │                        │
-       │<───────────────────────┤                        │
-       │                        │                        │
-       │ 5. RPC Call            │                        │
-       ├───────────────────────>│ 6. gRPC               │
-       │                        ├═══════════════════════>│
-       │                        │ 7. Response            │
-       │ 8. Result              │<═══════════════════════│
-       │<───────────────────────┤                        │
-```
-
-**Benefits:**
-- ✅ **Process Isolation**: Plugin crashes don't affect Hector
-- ✅ **Language Agnostic**: Plugins can be in any language (via gRPC)
-- ✅ **Auto-Discovery**: Drop plugins in directory, Hector finds them
-- ✅ **Hot-Pluggable**: Add providers via configuration only
-- ✅ **Production Proven**: Built on HashiCorp go-plugin (used by Terraform, Vault)
-
----
-
-## Data Flow
-
-### Request Flow
-
-```
-User Input
-    │
-    ▼
-┌─────────────────────┐
-│  Agent.Query()      │
-│  Agent.execute()    │  ← Main Loop
-└──────┬──────────────┘
-       │
-       ▼
-┌─────────────────────┐
-│ Strategy.Prepare()  │  ← Hook: Prepare iteration
-└──────┬──────────────┘
-       │
-       ▼
-┌─────────────────────┐
-│ PromptService       │  ← Build messages with slots
-│ .BuildMessages()    │
-└──────┬──────────────┘
-       │
-       ▼
-┌─────────────────────┐
-│ LLMService          │  ← Call LLM (Anthropic/OpenAI)
-│ .Generate()         │
-└──────┬──────────────┘
-       │
-       ▼
-┌─────────────────────┐
-│ ToolService         │  ← Execute tools if any
-│ .ExecuteToolCall()  │
-└──────┬──────────────┘
-       │
-       ▼
-┌─────────────────────┐
-│ Strategy            │  ← Hook: Self-reflection
-│ .AfterIteration()   │
-└──────┬──────────────┘
-       │
-       ▼
-┌─────────────────────┐
-│ Strategy            │  ← Hook: Check if done
-│ .ShouldStop()       │
-└──────┬──────────────┘
-       │
-       ▼ (loop or done)
-   Response
-```
-
-### Streaming Flow
-
-```
-User Input
-    │
-    ▼
-Agent creates channel ──────────────┐
-    │                               │
-    ▼                               │
-LLM streams to channel              │
-    │                               │
-    ├─► Text chunks ────────────────┤
-    ├─► Tool call chunks ───────────┤
-    └─► Done signal ────────────────┤
-                                    │
-                                    ▼
-                            User sees output
-                            (real-time)
-```
-
----
-
-## Module Responsibilities
-
-### `team/`
-- Multi-agent orchestration
-- Workflow coordination
-- Context sharing between agents
-- Team services (workflow, agent, coordination)
-
-### `workflow/`
-- Workflow executors (DAG, Autonomous)
-- Dependency management
-- Variable substitution
-- Streaming events
-- Executor registry and factory
-
-### `agent/`
-- Single-agent orchestration
-- Tool execution with dynamic labels
-- Prompt services and customization
-- Agent factory and services
-
-### `reasoning/`
-- Strategy interface
-- ChainOfThoughtStrategy
-- State management
-- Prompt slots
-
-### `llms/`
-- Provider implementations (Anthropic, OpenAI)
-- Native function calling
-- Streaming support
-- Rate limit handling
-- LLM registry
-
-### `databases/`
-- Database provider implementations (Qdrant)
-- Vector operations
-- Database registry
-
-### `embedders/`
-- Embedder provider implementations (Ollama)
-- Text embedding
-- Embedder registry
-
-### `tools/`
-- Tool implementations
-- Tool registry
-- Local tools (execute_command, write_file, etc.)
-- MCP tool integration (foundation)
-
-### `plugins/`
-- Plugin system core (registry, discovery, types)
-- gRPC plugin implementation
-- Protocol Buffer definitions
-- Plugin adapters (LLM, Database, Embedder)
-- Plugin lifecycle management
-- Health monitoring and restart
-
-### `component/`
-- ComponentManager (service locator)
-- Registry management
-- Plugin initialization
-- Global configuration
-
-### `config/`
-- Configuration types
-- Workflow configuration
-- Plugin configuration
-- Validation
-- Defaults
-
-### `context/`
-- Semantic search
-- Document stores
-- Vector operations
-
-### `memory/`
-- Conversation memory management
-- Pluggable working memory strategies
-- Session lifecycle management
-- SummaryBufferStrategy (token-based with LLM summarization)
-- BufferWindowStrategy (simple LIFO)
-- Long-term memory (session-scoped vector storage with semantic recall)
 
 ---
 
 ## Extension Points
 
-### 1. Plugin System (Recommended for Providers)
+Hector is designed for extensibility via plugins and configuration.
 
-**For LLM, Database, and Embedder providers, use the plugin system instead of code-level extensions.**
+### 1. Plugin System
 
-#### Create an LLM Plugin
+**gRPC-based plugins** for custom providers:
 
-```go
-// Separate executable
-package main
-
-import (
-	"context"
-	"github.com/kadirpekel/hector/plugins/grpc"
-)
-
-type MyLLMProvider struct{}
-
-func (p *MyLLMProvider) Initialize(ctx context.Context, config map[string]string) error {
-	// Initialize your LLM client
-	return nil
-}
-
-func (p *MyLLMProvider) Generate(ctx context.Context, messages []*grpc.Message, tools []*grpc.ToolDefinition) (*grpc.GenerateResponse, error) {
-	// Your LLM implementation
-	return &grpc.GenerateResponse{Text: "response"}, nil
-}
-
-func (p *MyLLMProvider) GenerateStreaming(ctx context.Context, messages []*grpc.Message, tools []*grpc.ToolDefinition) (<-chan *grpc.StreamChunk, error) {
-	// Your streaming implementation
-}
-
-func (p *MyLLMProvider) GetModelInfo(ctx context.Context) (*grpc.ModelInfo, error) {
-	return &grpc.ModelInfo{ModelName: "my-model"}, nil
-}
-
-func (p *MyLLMProvider) Shutdown(ctx context.Context) error {
-	return nil
-}
-
-func (p *MyLLMProvider) Health(ctx context.Context) error {
-	return nil
-}
-
-func main() {
-	grpc.ServeLLMPlugin(&MyLLMProvider{})
-}
+```
+┌────────────────────────────────────────┐
+│         HECTOR CORE                    │
+├────────────────────────────────────────┤
+│  Plugin Registry                       │
+│  • Discovery      • Lifecycle          │
+│  • Hot-reload     • Sandboxing         │
+└─────────┬──────────────────────────────┘
+          │ gRPC
+     ┌────┴────┬────────┬────────┐
+     ▼         ▼        ▼        ▼
+┌─────────┐ ┌────────┐ ┌──────┐ ┌──────┐
+│LLM      │ │Database│ │Tool  │ │Other │
+│Plugin   │ │Plugin  │ │Plugin│ │Plugin│
+└─────────┘ └────────┘ └──────┘ └──────┘
 ```
 
-**Configuration:**
+**Configuration**:
 ```yaml
 plugins:
   llm_providers:
-    my-llm:
-      type: grpc
+    my_custom_llm:
+      type: "grpc"
       path: "./plugins/my-llm"
       enabled: true
       config:
-        api_key: "${MY_API_KEY}"
+        custom_param: "value"
+```
 
+### 2. Tool Extensions
+
+**MCP (Model Context Protocol)**:
+```yaml
+tools:
+  mcp_tools:
+    type: "mcp"
+    url: "http://localhost:3000"
+    enabled: true
+```
+
+**Custom Local Tools**:
+```go
+// Implement tools.Tool interface
+type CustomTool struct{}
+
+func (t *CustomTool) GetInfo() tools.ToolInfo {
+    return tools.ToolInfo{
+        Name: "custom_tool",
+        Description: "Does something custom",
+        InputSchema: {...},
+    }
+}
+
+func (t *CustomTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+    // Implementation
+}
+
+// Register
+toolRegistry.RegisterTool(source, &CustomTool{})
+```
+
+### 3. Memory Strategies
+
+**Custom Memory Strategy**:
+```go
+type CustomMemoryStrategy struct{}
+
+func (m *CustomMemoryStrategy) AddToHistory(ctx context.Context, message *pb.Message) error
+func (m *CustomMemoryStrategy) GetHistory(ctx context.Context) ([]*pb.Message, error)
+func (m *CustomMemoryStrategy) Clear(ctx context.Context) error
+
+// Register
+memoryRegistry.Register("custom", &CustomMemoryStrategy{})
+```
+
+**Usage**:
+```yaml
 agents:
-  my-agent:
-    llm: "my-llm"
+  my_agent:
+    memory:
+      strategy: "custom"
+      config:
+        custom_param: "value"
 ```
 
-**Benefits:**
-- ✅ Zero changes to Hector core
-- ✅ Isolated process (crash-safe)
-- ✅ Language agnostic
-- ✅ Hot-pluggable via config
+---
 
-**See**: [Plugin Development Guide](examples/plugins/README.md) | [Echo LLM Example](examples/plugins/echo-llm/)
+## Performance & Scalability
 
-### 2. New Reasoning Strategy (Code-Level)
+### Streaming Performance
 
-```go
-type MyStrategy struct{}
+- **gRPC**: Native bidirectional streaming with HTTP/2 multiplexing
+- **REST/SSE**: Server-Sent Events for efficient server→client streaming
+- **Chunked Transfer**: Minimal latency for first token
 
-func (s *MyStrategy) PrepareIteration(...) error {
-	// Your logic
-}
+### Task Management
 
-func (s *MyStrategy) ShouldStop(...) bool {
-	// Your stopping condition
-}
+- **Async Processing**: Background workers for long-running tasks
+- **Status Tracking**: Real-time task status updates
+- **Push Notifications**: Optional webhooks for task completion
 
-func (s *MyStrategy) AfterIteration(...) error {
-	// Your post-processing
-}
+### Resource Management
 
-func (s *MyStrategy) GetPromptSlots() PromptSlots {
-	// Your default prompts
-}
-
-// Register in reasoning/factory.go
+```yaml
+global:
+  performance:
+    max_concurrent_requests: 100
+    request_timeout: "120s"
+    task_workers: 10  # Async task processing workers
 ```
-
-### 3. New Tool (Code-Level)
-
-```go
-type MyTool struct{}
-
-func (t *MyTool) GetInfo() ToolInfo {
-	return ToolInfo{
-		Name: "my_tool",
-		Description: "Does something useful",
-		Parameters: []ToolParameter{...},
-	}
-}
-
-func (t *MyTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
-	// Your tool logic
-}
-
-// Register in tools/local.go
-```
-
-### 4. Built-in Provider (Advanced, Not Recommended)
-
-Only for providers that need deep integration with Hector internals.
-
-```go
-// llms/myprovider.go
-type MyProvider struct {
-	config config.LLMProviderConfig
-	client *http.Client
-}
-
-func (p *MyProvider) Generate(messages []Message, tools []ToolDefinition) (string, []ToolCall, int, error) {
-	// Your implementation
-}
-
-func (p *MyProvider) GenerateStreaming(...) (<-chan StreamChunk, error) {
-	// Your streaming implementation
-}
-
-// Register in llms/registry.go
-```
-
-**Note:** Prefer plugins for extensibility. Built-in providers require modifying Hector core.
 
 ---
 
 ## Best Practices
 
-### 1. Separation of Concerns
+### 1. Choose the Right Transport
 
-**Good:**
-```go
-// Agent: Orchestration only
-func (a *Agent) execute() {
-	strategy.PrepareIteration()
-	llm.Generate()
-	tools.Execute()
-	strategy.AfterIteration()
-}
+- **gRPC**: Internal services, high-performance needs
+- **REST**: Web applications, browser clients
+- **JSON-RPC**: Simple integrations, minimal setup
 
-// Strategy: Reasoning logic only
-func (s *ChainOfThoughtStrategy) ShouldStop(...) bool {
-	return len(toolCalls) == 0
-}
-```
+### 2. Use Direct Client for Development
 
-**Bad:**
-```go
-// Agent doing everything (❌)
-func (a *Agent) execute() {
-	// Reasoning logic mixed with orchestration
-	if iteration > 5 && confidence > 0.8 {
-		return
-	}
-	// Tool execution logic
-	// Reflection logic
-	// ...
-}
-```
-
-### 2. Dependency Direction
-
-```
-Low-level (concrete) → High-level (abstract)
-
-llms/anthropic.go  ────►  llms/types.go
-                           (interfaces)
-                              ▲
-                              │
-agent/services.go  ───────────┘
-(implementations)
-
-reasoning/strategy.go  ────►  reasoning/interfaces.go
-                               (interfaces)
-                                  ▲
-                                  │
-agent/agent.go  ───────────────────┘
-(uses strategies)
-```
-
-**Rule:** High-level modules depend on abstractions, not concretions.
-
-### 3. Interface Segregation
-
-**Good:**
-```go
-// Small, focused interfaces
-type LLMService interface {
-	Generate(...) (string, []ToolCall, int, error)
-	GenerateStreaming(...) (<-chan StreamChunk, error)
-}
-
-type ToolService interface {
-	ExecuteToolCall(...) (string, error)
-	GetAvailableTools() ([]ToolDefinition, error)
-}
-```
-
-**Bad:**
-```go
-// Huge, monolithic interface (❌)
-type Service interface {
-	Generate(...)
-	GenerateStreaming(...)
-	ExecuteToolCall(...)
-	GetTools(...)
-	BuildPrompt(...)
-	SaveHistory(...)
-	// ... 20 more methods
-}
-```
-
----
-
-## Performance Considerations
-
-### 1. Streaming Optimization
-
-```go
-// Use buffered channels
-outputCh := make(chan string, 100)  // Buffer size matters
-
-// Stream chunks immediately
-for chunk := range llmChunks {
-	outputCh <- chunk.Text  // Don't accumulate, stream!
-}
-```
-
-### 2. Tool Execution
-
-```go
-// Tools run sequentially (current)
-for _, toolCall := range toolCalls {
-	result := tools.ExecuteToolCall(toolCall)
-	results = append(results, result)
-}
-
-// Future: Parallel execution
-results := executeToolsInParallel(toolCalls)
-```
-
-### 3. Context Management
-
-```go
-// Limit history to prevent token overflow
-maxHistory := 10
-recentMessages := history.GetRecentHistory(maxHistory)
-
-// Use semantic search only when needed
-if config.IncludeContext {
-	context := contextService.SearchContext(query)
-}
-```
-
----
-
-## Testing Strategy
-
-### Unit Tests
-
-```go
-// Test services with mocks
-func TestAgent_Execute(t *testing.T) {
-	mockLLM := &MockLLMService{}
-	mockTools := &MockToolService{}
-	services := NewMockServices(mockLLM, mockTools)
-	
-	agent := NewAgent(config, services)
-	response := agent.Query("test")
-	
-	assert.NotEmpty(t, response)
-}
-```
-
-### Integration Tests
-
-```go
-// Test with real providers
-func TestRealLLM(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test")
-	}
-	
-	config := loadTestConfig()
-	agent := CreateAgent(config)
-	response := agent.Query("What is 2+2?")
-	
-	assert.Contains(t, response, "4")
-}
-```
-
----
-
-## Sessions and Streaming
-
-### Session Management
-
-**Full A2A Protocol Support:**
-
-```
-POST   /sessions              # Create new session
-GET    /sessions              # List sessions
-GET    /sessions/{id}         # Get session details
-DELETE /sessions/{id}         # End session
-POST   /sessions/{id}/tasks   # Execute task in session context
-```
-
-**Features:**
-- ✅ Multi-turn conversations with context
-- ✅ Session state management
-- ✅ Per-session conversation history
-- ✅ Metadata support
-- ✅ Activity tracking (lastActivityAt)
-
-**Implementation:**
-- **Storage:** In-memory (`map[string]*Session`)
-- **Lifecycle:** Sessions survive until explicitly deleted or server restart
-- **Future:** Persistent storage (Redis, PostgreSQL)
-
-**Example:**
 ```bash
-# Create session
-SESSION=$(curl -s -X POST http://localhost:8080/sessions \
-  -d '{"agentId": "assistant"}' | jq -r '.sessionId')
-
-# Chat with context
-curl -X POST http://localhost:8080/sessions/$SESSION/tasks \
-  -d '{"input":{"type":"text/plain","content":"My name is Alice"}}'
-
-# Agent remembers context
-curl -X POST http://localhost:8080/sessions/$SESSION/tasks \
-  -d '{"input":{"type":"text/plain","content":"What is my name?"}}'
+# Zero-config direct mode
+hector chat assistant --tools --provider openai --api-key sk-...
 ```
 
-### SSE Streaming (A2A Compliant)
+### 3. Enable Authentication in Production
 
-**Real-Time Output:**
-
-```
-POST /agents/{agentId}/message/stream
-```
-
-**Features:**
-- ✅ Real-time output streaming per A2A specification
-- ✅ Token-by-token delivery (for LLM streaming)
-- ✅ Server-Sent Events (SSE) protocol
-- ✅ Multiple event types (status, message, artifact)
-
-**Implementation:**
-- **Protocol:** Server-Sent Events (SSE) per A2A spec Section 7
-- **Format:** SSE event stream with JSON data payloads
-- **Events:** status, message, artifact
-- **Backpressure:** Go channels handle it naturally
-
-**Example:**
-```bash
-curl -N -H "Accept: text/event-stream" \
-  -H "Content-Type: application/json" \
-  -d '{"message":{"role":"user","parts":[{"type":"text","text":"Write a poem"}]}}' \
-  http://localhost:8080/agents/assistant/message/stream
-
-# Output:
-# event: status
-# data: {"task_id":"task-123","status":{"state":"working"}}
-#
-# event: message
-# data: {"task_id":"task-123","message":{"role":"assistant","parts":[{"type":"text","text":"Roses are red..."}]}}
-#
-# event: status
-# data: {"task_id":"task-123","status":{"state":"completed"}}
-```
-
-**Resume Streaming:**
-```
-POST /agents/{agentId}/tasks/{taskId}/resubscribe
-```
-
-Allows reconnecting to an in-progress task and resuming from a specific event.
-
----
-
-## Orchestrator Pattern
-
-### Design Decision: Regular Agent + `agent_call` Tool
-
-**Why not a special orchestrator implementation?**
-
-1. **Industry Alignment** - OpenAI, Anthropic use function calling, not special agent types
-2. **Pure A2A Philosophy** - All agents implement the same interface
-3. **Composability** - Any agent can become an orchestrator with `agent_call` tool
-
-**Configuration:**
 ```yaml
+global:
+  auth:
+    enabled: true
+    jwks_url: "https://your-auth-provider/.well-known/jwks.json"
+    issuer: "https://your-auth-provider"
+    audience: "your-api"
+```
+
+### 4. Configure Task Storage
+
+```yaml
+# In-memory (development)
 agents:
-  researcher:
-    name: "Research Agent"
-    llm: "gpt-4o-mini"
-  
-  analyst:
-    name: "Analysis Agent"
-    llm: "gpt-4o-mini"
-  
-  orchestrator:
-    name: "Orchestrator"
-    llm: "gpt-4o"  # More capable model
-    tools:
-      - agent_call  # Enable delegation
-    reasoning:
-      engine: "supervisor"  # Optimized for orchestration
-    prompt:
-      system_role: |
-        You are an orchestrator that coordinates other agents.
-        Available agents: researcher, analyst
-        Use agent_call to delegate tasks.
+  my_agent:
+    task:
+      backend: "memory"
+
+# SQL (production)
+agents:
+  my_agent:
+    task:
+      backend: "sql"
+      driver: "postgres"
+      dsn: "${DATABASE_URL}"
 ```
 
-**Execution Flow:**
+### 5. Monitor and Log
+
+```yaml
+global:
+  logging:
+    level: "info"
+    format: "json"
+    output: "stdout"
 ```
-User Request
-    ↓
-Orchestrator Agent (supervisor reasoning)
-    ↓
-Decides: "Need research first"
-    ↓
-agent_call("researcher", task="Research topic X")
-    ↓
-Researcher executes via A2A protocol
-    ↓
-Returns results to Orchestrator
-    ↓
-Orchestrator decides: "Now analyze"
-    ↓
-agent_call("analyst", task="Analyze: [research results]")
-    ↓
-Analyst executes
-    ↓
-Orchestrator synthesizes final answer
-```
-
-**Benefits:**
-- ✅ No special orchestrator class needed
-- ✅ Native and external agents treated identically
-- ✅ LLM makes routing decisions dynamically
-- ✅ Same code path for all agents
-
-## Future Enhancements
-
-### Short Term
-- Production-ready DAG executor testing
-- Autonomous mode improvements
-- Better error recovery in workflows
-- More example plugins (OpenRouter, Cohere, etc.)
-
-### Medium Term
-- Conditional workflow steps (if/else)
-- Loop constructs (for-each agent)
-- Workflow templates and reuse
-- MCP tool examples and documentation
-- Plugin marketplace/registry
-- Plugin sandboxing/permissions
-
-### Long Term
-- Visual workflow designer
-- Workflow marketplace
-- Advanced reasoning strategies (ToT, Reflexion)
-- Plugin hot-reload
-- Plugin metrics and observability
 
 ---
 
-## References
+## Summary
 
-- **SOLID Principles**: https://en.wikipedia.org/wiki/SOLID
-- **Strategy Pattern**: https://refactoring.guru/design-patterns/strategy
-- **Dependency Injection**: https://martinfowler.com/articles/injection.html
-- **Clean Architecture**: https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
-- **Plugin Architecture**: [PLUGIN_ARCHITECTURE.md](PLUGIN_ARCHITECTURE.md)
-- **HashiCorp go-plugin**: https://github.com/hashicorp/go-plugin
+Hector provides a **complete, production-ready A2A protocol implementation** with:
 
----
+✅ **100% Protobuf Native** - No abstraction layers  
+✅ **Multi-Transport** - gRPC, REST, JSON-RPC  
+✅ **Spec-Compliant** - Full A2A protocol support  
+✅ **Extensible** - Plugins, tools, memory strategies  
+✅ **Secure** - JWT authentication, role-based access  
+✅ **Scalable** - Async tasks, streaming, clustering  
+✅ **Developer-Friendly** - Zero-config mode, clear APIs  
 
-**Last Updated:** October 5, 2025
-
+**Start building A2A-native agents today!** 🚀

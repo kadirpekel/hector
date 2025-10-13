@@ -45,53 +45,78 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 
 ## Architecture
 
-### Single Agent Architecture
+### 100% A2A Protocol Native
+
+Hector is built from the ground up with the [A2A Protocol](https://a2a-protocol.org) at its core - every component uses protobuf types directly with zero abstraction layers.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        USER / CLIENT                        │
-│                  (CLI, HTTP, A2A Protocol)                  │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          │ HTTP+JSON / SSE
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      A2A INTERFACE                          │
-│      GetAgentCard() • ExecuteTask() • Streaming (SSE)       │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    REASONING ENGINE                         │
-│  Chain-of-Thought Strategy    |    Supervisor Strategy      │
-│  • Step-by-step reasoning     |    • Multi-agent coord      │
-│  • Natural termination        |    • Task decomposition     │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-      ┌───────────────────┼───────────────────┬────────────────┐
-      │                   │                   │                │
-      ▼                   ▼                   ▼                ▼
-┌──────────────┐    ┌──────────────┐   ┌──────────────┐  ┌────────────┐
-│    TOOLS     │    │     LLM      │   │     RAG      │  │   MEMORY   │
-│              │    │              │   │              │  │            │
-│ • Command    │    │ • OpenAI     │   │ • Qdrant     │  │ • Working  │
-│ • File Ops   │    │ • Anthropic  │   │ • Semantic   │  │   (Session)│
-│ • Search     │    │ • Gemini     │   │   Search     │  │ • Long-term│
-│ • MCP        │    │ • Plugins    │   │ • Documents  │  │            │
-└──────────────┘    └──────────────┘   └──────────────┘  └──────┬─────┘
-                                                                  │
-                                                                  ▼
-                                                          ┌────────────┐
-                                                          │  SESSION   │
-                                                          │   STORES   │
-                                                          │ • Memory   │
-                                                          │ • SQLite   │
-                                                          │ • Postgres │
-                                                          │ • MySQL    │
-                                                          └────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      APPLICATION                             │
+│                 (Your Agents & Logic)                        │
+├──────────────────────────────────────────────────────────────┤
+│                     HECTOR RUNTIME                           │
+│  • Configuration Loading  • Agent Initialization             │
+│  • Component Management   • Lifecycle Management             │
+├──────────────────────────────────────────────────────────────┤
+│                      CLIENT LAYER                            │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │         A2AClient Interface (Protocol Native)           ││
+│  ├─────────────────────────────────────────────────────────┤│
+│  │  HTTPClient           │          DirectClient           ││
+│  │  • Remote agents      │          • In-process agents    ││
+│  │  • Uses protojson     │          • No network calls     ││
+│  │  • Multi-transport    │          • Direct protobuf      ││
+│  └─────────────────────────────────────────────────────────┘│
+├──────────────────────────────────────────────────────────────┤
+│                      TRANSPORT LAYER                         │
+│  ┌──────────────┬──────────────────┬─────────────────────┐ │
+│  │  gRPC (Core) │  REST (Gateway)  │  JSON-RPC (Adapter) │ │
+│  │  • Native    │  • Auto-gen      │  • Custom HTTP      │ │
+│  │  • Binary    │  • JSON          │  • Simple RPC       │ │
+│  │  • Streaming │  • SSE           │  • JSON             │ │
+│  │  Port: 50051 │  Port: 50052     │  Port: 50053        │ │
+│  └──────────────┴──────────────────┴─────────────────────┘ │
+├──────────────────────────────────────────────────────────────┤
+│                      SERVER LAYER                            │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │            RegistryService (Multi-Agent Hub)            ││
+│  │  • Agent registration    • Request routing              ││
+│  │  • Metadata management   • Discovery endpoints          ││
+│  │  • Authentication        • Well-known endpoints         ││
+│  └─────────────────────────────────────────────────────────┘│
+├──────────────────────────────────────────────────────────────┤
+│                       AGENT LAYER                            │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  Agent (pb.A2AServiceServer interface)                  ││
+│  │  • SendMessage          • GetAgentCard                  ││
+│  │  • SendStreamingMessage • GetTask/CancelTask            ││
+│  │  • Task subscriptions   • Push notifications            ││
+│  └─────────────────────────────────────────────────────────┘│
+├──────────────────────────────────────────────────────────────┤
+│                    REASONING ENGINE                          │
+│  Chain-of-Thought Strategy    |    Supervisor Strategy       │
+│  • Step-by-step reasoning     |    • Multi-agent coord       │
+│  • Natural termination        |    • Task decomposition      │
+├──────────────────────────────────────────────────────────────┤
+│                        CORE SERVICES                         │
+│  ┌───────────┬──────────┬──────────┬──────────┬──────────┐ │
+│  │    LLM    │   Tools  │   Memory │    RAG   │   Tasks  │ │
+│  │  • OpenAI │ • Local  │ • Buffer │ • Qdrant │ • Async  │ │
+│  │• Anthropic│ • MCP    │ • Summary│ • Search │ • Status │ │
+│  │  • Gemini │ • Plugin │ • Session│ • Embed  │ • Track  │ │
+│  └───────────┴──────────┴──────────┴──────────┴──────────┘ │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-**Single Agent Capabilities:**
+**Key Capabilities:**
+- **100% Protobuf Native** - All components use protobuf types directly (no abstraction layers)
+- **Multi-Transport** - gRPC (native), REST (auto-generated), JSON-RPC (adapter)
+- **A2A Spec Compliant** - Full compliance with [A2A Protocol specification](https://a2a-protocol.org)
+- **Client/Server Architecture** - HTTPClient (remote) and DirectClient (in-process)
+- **Agent Discovery** - RFC 8615 `.well-known` endpoints for agent discovery
+- **JWT Authentication** - Secure agent-to-agent communication
+- **Streaming** - Real-time responses via gRPC streams and SSE
+- **Task Management** - Async processing with status tracking (in-memory & SQL)
 - **6-Slot Prompt System** - Fine-tune role, reasoning, tools, output, style, additional
 - **Built-in Tools** - Command execution, file operations, search, todos
 - **MCP Integration** - 150+ apps (Composio, Mem0, custom servers)
@@ -222,6 +247,68 @@ export OPENAI_API_KEY="sk-..."
 # Interactive chat
 ./hector chat assistant --config my-agent.yaml
 ```
+
+---
+
+## API & Transport Protocols
+
+Hector provides three transport protocols for maximum flexibility:
+
+### gRPC (Port 50051)
+High-performance binary protocol with native streaming support.
+```bash
+grpcurl -plaintext \
+  -H 'agent-name: assistant' \
+  -d '{"request":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}' \
+  localhost:50051 a2a.v1.A2AService/SendMessage
+```
+
+### REST (Port 50052)
+Auto-generated JSON API with Server-Sent Events (SSE) for streaming.
+```bash
+# Send message
+curl -X POST http://localhost:50052/v1/agents/assistant/message:send \
+  -H "Content-Type: application/json" \
+  -d '{"message":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}'
+
+# Streaming
+curl -N -X POST http://localhost:50052/v1/agents/assistant/message:stream \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"message":{"role":"ROLE_USER","content":[{"text":"Tell me a story"}]}}'
+```
+
+### JSON-RPC (Port 50053)
+Simple RPC over HTTP for easy integration.
+```bash
+curl -X POST http://localhost:50053/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "SendMessage",
+    "params": {
+      "agentId": "assistant",
+      "message": {"role": "ROLE_USER", "content": [{"text": "Hello"}]}
+    },
+    "id": 1
+  }'
+```
+
+### Discovery Endpoints
+Hector implements RFC 8615 well-known URIs for agent discovery:
+```bash
+# Service-level discovery
+curl http://localhost:50052/.well-known/agent-card.json
+
+# List all agents
+curl http://localhost:50052/v1/agents
+
+# Agent-specific card
+curl http://localhost:50052/v1/agents/assistant/.well-known/agent-card.json
+```
+
+📖 **Complete API Reference**: [docs/API_REFERENCE.md](docs/API_REFERENCE.md)  
+🏗️ **Architecture Details**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 Or run in **Server Mode** (for multi-agent):
 
