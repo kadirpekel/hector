@@ -273,7 +273,7 @@ Hector extracts standard and custom claims from validated tokens:
 
 ```bash
 # Start server
-./hector serve --config configs/a2a-server.yaml
+./hector serve --config configs/auth-example.yaml
 
 # No authentication required
 curl http://localhost:8080/agents/test_agent/tasks \
