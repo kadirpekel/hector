@@ -162,11 +162,6 @@ func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 	return nil
 }
 
-// initializeFromConfig initializes the tool registry with configuration
-func (r *ToolRegistry) initializeFromConfig(toolConfig *config.ToolConfigs) error {
-	return r.initializeFromConfigWithAgentRegistry(toolConfig, nil)
-}
-
 // initializeFromConfigWithAgentRegistry initializes the tool registry with configuration and agent registry
 func (r *ToolRegistry) initializeFromConfigWithAgentRegistry(toolConfig *config.ToolConfigs, agentRegistry interface{}) error {
 	// Separate MCP tools from local tools
