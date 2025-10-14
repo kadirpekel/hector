@@ -30,7 +30,8 @@ Once you've completed the getting started guides, explore:
 - **[Building Agents](AGENTS)** - Deep dive into agent configuration and customization
 - **[Memory Management](MEMORY)** - Learn about context window management and long-term memory
 - **[Tools & Extensions](TOOLS)** - Discover built-in tools and MCP protocol integration
-- **[Tutorials](tutorials/)** - Follow hands-on tutorials for real-world use cases
+- **[Multi-Agent Tutorial](TUTORIAL_MULTI_AGENT)** - LangChain vs Hector comparison
+- **[Coding Assistant Tutorial](TUTORIAL_CURSOR)** - Build a Cursor-like AI assistant
 
 ---
 

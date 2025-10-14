@@ -71,7 +71,7 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 <div class="featured-tutorials">
 
 <div class="tutorial-card">
-  <h3>🔥 <a href="tutorials/MULTI_AGENT_RESEARCH_PIPELINE">LangChain vs Hector</a></h3>
+  <h3>🔥 <a href="TUTORIAL_MULTI_AGENT">LangChain vs Hector</a></h3>
   <p><strong>Most Popular!</strong> See how Hector transforms complex LangChain multi-agent implementations into simple YAML configuration.</p>
   <div class="tutorial-stats">
     <span class="stat">📊 500+ lines Python → 120 lines YAML</span>
@@ -80,7 +80,7 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 </div>
 
 <div class="tutorial-card">
-  <h3>🤖 <a href="tutorials/BUILD_YOUR_OWN_CURSOR">Build Cursor-like AI Assistant</a></h3>
+  <h3>🤖 <a href="TUTORIAL_CURSOR">Build Cursor-like AI Assistant</a></h3>
   <p><strong>Build Your Own AI Coding Assistant!</strong> Create a powerful Cursor-like AI coding assistant with semantic search and chain-of-thought reasoning—all in pure YAML.</p>
   <div class="tutorial-stats">
     <span class="stat">💻 Full IDE-like capabilities</span>
@@ -305,7 +305,7 @@ agents:
     tools: ["execute_command"]
 ```
 
-**Want to see the complete comparison?** Check out our [**LangChain vs Hector Tutorial**](tutorials/MULTI_AGENT_RESEARCH_PIPELINE) 🔥
+**Want to see the complete comparison?** Check out our [**LangChain vs Hector Tutorial**](TUTORIAL_MULTI_AGENT) 🔥
 
 ---
 
@@ -359,9 +359,9 @@ llms:
 <h3>🔄 <strong>Coming from LangChain/AutoGen?</strong></h3>
 <p>See how Hector simplifies what you already know.</p>
 <ol>
-<li><strong><a href="tutorials/MULTI_AGENT_RESEARCH_PIPELINE">LangChain vs Hector</a></strong> - Direct comparison</li>
+<li><strong><a href="TUTORIAL_MULTI_AGENT">LangChain vs Hector</a></strong> - Direct comparison</li>
 <li><strong><a href="ARCHITECTURE#multi-agent-orchestration-a2a-protocol">Multi-Agent Systems</a></strong> - Orchestration patterns</li>
-<li><strong><a href="tutorials/MULTI_AGENT_RESEARCH_PIPELINE#the-dramatic-difference">Migration Benefits</a></strong> - Why switch?</li>
+<li><strong><a href="TUTORIAL_MULTI_AGENT#the-dramatic-difference">Migration Benefits</a></strong> - Why switch?</li>
 </ol>
 </div>
 
@@ -394,11 +394,11 @@ llms:
 </div>
 
 <div class="doc-section">
-  <h3><a href="tutorials/">🎓 Tutorials</a></h3>
+  <h3>🎓 Tutorials</h3>
   <p>Hands-on learning with real-world examples and comparisons.</p>
   <ul>
-    <li><a href="tutorials/MULTI_AGENT_RESEARCH_PIPELINE">LangChain vs Hector</a></li>
-    <li><a href="tutorials/BUILD_YOUR_OWN_CURSOR">Build Cursor-like Assistant</a></li>
+    <li><a href="TUTORIAL_MULTI_AGENT">LangChain vs Hector</a></li>
+    <li><a href="TUTORIAL_CURSOR">Build Cursor-like Assistant</a></li>
   </ul>
 </div>
 

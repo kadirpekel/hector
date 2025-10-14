@@ -358,7 +358,7 @@ reasoning:
 
 See [Multi-Agent Orchestration](ARCHITECTURE.md#orchestrator-pattern) for details.
 
-**💡 Want to see a complete multi-agent system in action?** Check out our [**LangChain vs Hector Tutorial**](tutorials/MULTI_AGENT_RESEARCH_PIPELINE.md) to see how Hector transforms complex multi-agent workflows that would require 500+ lines of Python code into simple YAML configuration.
+**💡 Want to see a complete multi-agent system in action?** Check out our [**LangChain vs Hector Tutorial**](TUTORIAL_MULTI_AGENT.md) to see how Hector transforms complex multi-agent workflows that would require 500+ lines of Python code into simple YAML configuration.
 
 ---
 
