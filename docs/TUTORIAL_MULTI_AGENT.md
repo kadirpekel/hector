@@ -1,7 +1,8 @@
 ---
 layout: default
-title: "Tutorial: Multi-Agent Systems"
-nav_order: 20
+title: "Multi-Agent Systems"
+nav_order: 1
+parent: Tutorials
 description: "Build a multi-agent research system - LangChain vs Hector comparison"
 ---
 

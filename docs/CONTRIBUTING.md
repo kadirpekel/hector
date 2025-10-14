@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Contributing
-nav_order: 30
+nav_order: 18
 description: "How to contribute to Hector development"
 ---
 

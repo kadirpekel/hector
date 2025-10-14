@@ -1,7 +1,8 @@
 ---
 layout: default
-title: "Tutorial: AI Coding Assistant"
-nav_order: 21
+title: "AI Coding Assistant"
+nav_order: 2
+parent: Tutorials
 description: "Build a Cursor-like AI coding assistant with semantic search and chain-of-thought reasoning"
 ---
 
