@@ -964,24 +964,3 @@ curl -X POST http://localhost:8081/v1/tasks/task-123/pushNotificationConfigs \
 }
 ```
 
----
-
-## Summary
-
-Hector provides a **complete, production-ready A2A Protocol API** with:
-
-✅ **Three Transports** - gRPC, REST, JSON-RPC  
-✅ **Full Spec Compliance** - A2A protocol compliant  
-✅ **Authentication** - JWT, API keys, basic auth  
-✅ **Streaming** - Real-time responses  
-✅ **Discovery** - RFC 8615 well-known endpoints  
-✅ **Task Management** - Async processing with status tracking  
-✅ **Error Handling** - Comprehensive error responses  
-✅ **Client SDKs** - Built-in CLI, Go, Python, JavaScript examples  
-
-**Start building with Hector's API today!** 🚀
-
-For more information:
-- [Architecture Guide](ARCHITECTURE.md)
-- [CLI Guide](CLI_GUIDE.md)
-- [A2A Protocol Specification](https://a2a-protocol.org/latest/specification/)

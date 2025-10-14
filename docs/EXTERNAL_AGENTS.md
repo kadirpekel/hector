@@ -355,66 +355,6 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 
 ---
 
-## Use Cases
-
-### Use Case 1: Specialized External Service
-
-```go
-// External service provides domain-specific expertise
-externalAgent, _ := agent.NewA2AAgentFromURL(
-    ctx,
-    "https://medical-ai.example.com/agents/diagnosis",
-    client,
-)
-
-registry.RegisterAgent("medical_expert", externalAgent, config, []string{"medical"})
-
-// Orchestrator can now delegate medical queries
-// to the specialized external service!
-```
-
-### Use Case 2: Load Distribution
-
-```go
-// Multiple instances of an external agent for load balancing
-for i := 0; i < 3; i++ {
-    externalAgent, _ := agent.NewA2AAgentFromURL(
-        ctx,
-        fmt.Sprintf("https://workers.example.com/agents/worker-%d", i),
-        client,
-    )
-    registry.RegisterAgent(
-        fmt.Sprintf("worker_%d", i),
-        externalAgent,
-        config,
-        []string{"computation"},
-    )
-}
-
-// Orchestrator can distribute work across all workers
-```
-
-### Use Case 3: Third-Party AI Services
-
-```go
-// Integrate with third-party A2A-compliant AI services
-services := []string{
-    "https://openai-a2a.example.com/agents/gpt4",
-    "https://anthropic-a2a.example.com/agents/claude",
-    "https://google-a2a.example.com/agents/gemini",
-}
-
-for _, serviceURL := range services {
-    externalAgent, _ := agent.NewA2AAgentFromURL(ctx, serviceURL, client)
-    // Register each external service
-    registry.RegisterAgent(extractName(serviceURL), externalAgent, config, caps)
-}
-
-// Orchestrator can now route to the best service for each task!
-```
-
----
-
 ## Authentication
 
 ### Bearer Token
@@ -531,31 +471,6 @@ result, _ := tool.Execute(ctx, map[string]interface{}{
 
 ---
 
-## Performance Considerations
-
-### Native Agents
-- **Latency:** ~0ms (in-process)
-- **Throughput:** Very high
-- **Best for:** Frequently called agents, simple tasks
-
-### External A2A Agents
-- **Latency:** ~50-200ms (network + remote execution)
-- **Throughput:** Depends on remote service
-- **Best for:** Specialized expertise, distributed load, third-party services
-
-### Optimization Strategy
-```
-Orchestrator
-├─ researcher (native)     → Fast, frequent queries
-├─ analyst (native)        → Fast, frequent analysis
-├─ medical_expert (A2A)    → Specialized, less frequent
-└─ legal_expert (A2A)      → Specialized, less frequent
-```
-
-**Use native for speed, external for specialization!
-
----
-
 ## Discovery & Registration Flow
 
 ```
@@ -584,41 +499,4 @@ Orchestrator
 
 **All automatic, all transparent!** ✅
 
----
-
-## Summary
-
-### External Agent Support: ✅ COMPLETE
-
-**What works:
-- Discover external A2A agents
-- Wrap them in A2AAgent
-- Register in AgentRegistry
-- Use in orchestration via agent_call
-- Pure A2A protocol communication
-- Transparent to orchestrator
-- Authentication support
-- Same interface as native agents
-
-**Architecture:
-- `agent.A2AAgent` - Wraps external agents
-- `agent.AgentRegistry` - Stores `a2a.Agent` interface
-- `agent.AgentCallTool` - Uses `a2a.Agent` interface
-- Pure protocol-driven design
-
-**Result:
-- **Native and external agents are completely interchangeable
-- **Orchestrator treats them identically
-- **Full A2A ecosystem compatibility
-
----
-
-**Hector's orchestration system fully supports external A2A agents!** 🚀
-
-**Try it:
-```go
-externalAgent, _ := agent.NewA2AAgentFromURL(ctx, "https://...", client)
-registry.RegisterAgent("external", externalAgent, config, caps)
-// Orchestrator can now use it via agent_call!
-```
 

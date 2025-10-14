@@ -207,56 +207,6 @@ config := &llms.StructuredOutputConfig{
 // Properties will appear in this exact order in the response
 ```
 
-## Best Practices
-
-### 1. Use Descriptive Field Names
-
-```go
-// ❌ Bad
-"f1": {"type": "string"}
-
-// ✅ Good
-"first_name": {
-    "type": "string",
-    "description": "Person's given name"
-}
-```
-
-### 2. Mark Required Fields
-
-```go
-"required": []string{"name", "email", "age"}
-```
-
-### 3. Add Constraints
-
-```go
-"age": {
-    "type": "number",
-    "minimum": 0,
-    "maximum": 150
-},
-"email": {
-    "type": "string",
-    "pattern": "^[^@]+@[^@]+\\.[^@]+$"
-}
-```
-
-### 4. Use Enums for Categorical Data
-
-```go
-"category": {
-    "type": "string",
-    "enum": ["technology", "business", "entertainment", "sports"]
-}
-```
-
-### 5. Provider Selection Strategy
-
-- **OpenAI**: Best for strict validation and complex schemas
-- **Anthropic**: Best when you need prefill control or don't need strict validation
-- **Gemini**: Best when property ordering matters or working with enum formats
-
 ## Examples
 
 ### Example 1: Sentiment Analysis
@@ -407,42 +357,4 @@ agents:
           required: ["sentiment", "confidence"]
 ```
 
-## Testing Structured Output
-
-```go
-func TestStructuredOutput(t *testing.T) {
-    config := &llms.StructuredOutputConfig{
-        Format: "json",
-        Schema: testSchema,
-    }
-    
-    messages := []llms.Message{
-        {Role: "user", Content: "Analyze: Great product!"},
-    }
-    
-    text, _, _, err := provider.GenerateStructured(messages, nil, config)
-    require.NoError(t, err)
-    
-    // Verify it's valid JSON
-    var result map[string]interface{}
-    err = json.Unmarshal([]byte(text), &result)
-    require.NoError(t, err)
-    
-    // Verify schema compliance
-    assert.Contains(t, result, "sentiment")
-    assert.Contains(t, result, "confidence")
-}
-```
-
-## Related Documentation
-
-- [LLM Providers](./LLMS.md) - General LLM provider configuration
-- [Agent Configuration](./CONFIGURATION.md) - Agent setup and configuration
-- [Tool System](./TOOLS.md) - Using tools with structured output
-
-## References
-
-- [OpenAI Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs)
-- [Anthropic Prefill Technique](https://docs.anthropic.com/en/docs/test-and-evaluate/strengthen-guardrails/increase-consistency)
-- [Gemini Structured Output](https://ai.google.dev/gemini-api/docs/structured-output)
 
