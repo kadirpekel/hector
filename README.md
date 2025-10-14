@@ -39,6 +39,8 @@ make build
 go install github.com/kadirpekel/hector/cmd/hector@latest
 ```
 
+**📦 For all installation options (binary releases, Docker, etc.), see [Installation Guide](https://gohector.dev/INSTALLATION.html)**
+
 ### Fastest Start - Zero-Config Mode
 
 No configuration file needed!
