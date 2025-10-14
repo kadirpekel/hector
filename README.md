@@ -83,7 +83,7 @@ llms:
     api_key: "${OPENAI_API_KEY}"
 ```
 
-Run in **Direct Mode** (no server):
+Run in **Direct Mode** (in-process, no server):
 
 ```bash
 # Set API key
@@ -162,7 +162,8 @@ Hector provides a comprehensive AI agent platform through pure YAML configuratio
 
 **Deployment & Operations**
 - Multi-transport - gRPC, REST gateway, JSON-RPC
-- Zero-config mode - Get started with just an API key
+- Three CLI modes - Server (host agents), Client (connect to remote), Direct (in-process)
+- Zero-config support - Get started with just an API key (Server & Direct modes)
 - Docker support - Production-ready containerization
 - Task persistence - In-memory or SQL backend (PostgreSQL, MySQL, SQLite)
 

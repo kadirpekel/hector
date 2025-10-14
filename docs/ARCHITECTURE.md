@@ -464,11 +464,11 @@ The CLI automatically chooses the right client:
 // pkg/cli/commands.go
 func createClient(args Args) (client.A2AClient, error) {
     if args.ServerURL != "" {
-        // Server mode: use HTTP client
+        // Client mode: connect to remote server via HTTP
         return runtime.NewHTTPClient(args.ServerURL, args.Token), nil
     }
     
-    // Direct mode: use in-process client
+    // Direct mode: use in-process client (no server)
     rt, err := runtime.New(runtime.Options{
         ConfigFile: args.ConfigFile,
         Provider:   args.Provider,
@@ -673,10 +673,10 @@ func New(opts Options) (*Runtime, error) {
     // 2. Create appropriate client
     var a2aClient client.A2AClient
     if opts.ConfigFile != "" {
-        // Use HTTPClient for server mode
+        // Client mode: connect to remote server
         a2aClient = client.NewHTTPClient(serverURL, token)
     } else {
-        // Use DirectClient for zero-config mode
+        // Direct mode: in-process with zero-config
         a2aClient, _ = client.NewDirectClient(cfg)
     }
     
