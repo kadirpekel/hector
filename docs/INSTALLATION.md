@@ -1,3 +1,11 @@
+---
+layout: default
+title: Installation
+nav_order: 1
+parent: Getting Started
+description: "Essential installation methods for Hector"
+---
+
 # Installing Hector
 
 Essential installation methods for the Hector AI Agent Platform.

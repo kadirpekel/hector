@@ -1,3 +1,11 @@
+---
+layout: default
+title: API Reference
+nav_order: 2
+parent: Reference
+description: "Complete A2A Protocol API reference"
+---
+
 # API Reference
 
 **Complete A2A Protocol API Reference for Hector**
@@ -975,5 +983,5 @@ Hector provides a **complete, production-ready A2A Protocol API** with:
 
 For more information:
 - [Architecture Guide](ARCHITECTURE.md)
-- [Getting Started](getting-started.md)
+- [CLI Guide](CLI_GUIDE.md)
 - [A2A Protocol Specification](https://a2a-protocol.org/latest/specification/)

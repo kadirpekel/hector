@@ -17,7 +17,7 @@ Pure A2A-Native Declarative AI Agent Platform
 Build powerful AI agents in pure YAML. Compose single agents, orchestrate multi-agent systems, and integrate external A2A agents—all through declarative configuration and industry-standard protocols.
 {: .fs-5 .fw-300 }
 
-[Get started now](getting-started){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
+[Get started now](QUICK_START){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [View on GitHub]({{ site.hector.repo_url }}){: .btn .fs-5 .mb-4 .mb-md-0 }
 
 ---
@@ -348,7 +348,7 @@ llms:
 <p>Start with the fundamentals and build your first agent.</p>
 <ol>
 <li><strong><a href="INSTALLATION">Installation</a></strong> - Complete installation options</li>
-<li><strong><a href="getting-started">Getting Started</a></strong> - Set up Hector in 5 minutes</li>
+<li><strong><a href="QUICK_START">Quick Start</a></strong> - Set up Hector in 5 minutes</li>
 <li><strong><a href="QUICK_START">Quick Start</a></strong> - Run your first agent</li>
 <li><strong><a href="AGENTS">Building Agents</a></strong> - Learn core concepts</li>
 <li><strong><a href="TOOLS">Tools & Extensions</a></strong> - Add capabilities</li>
@@ -385,11 +385,11 @@ llms:
 <div class="doc-grid">
 
 <div class="doc-section">
-  <h3><a href="getting-started">🎯 Getting Started</a></h3>
+  <h3><a href="QUICK_START">🎯 Getting Started</a></h3>
   <p>New to Hector? Start here for quick setup and your first agent.</p>
   <ul>
     <li><a href="INSTALLATION">Installation Guide</a></li>
-    <li><a href="QUICK_START">Quick Start Guide</a></li>
+    <li><a href="CLI_GUIDE">CLI Guide</a></li>
   </ul>
 </div>
 

@@ -1,3 +1,11 @@
+---
+layout: default
+title: Configuration Reference
+nav_order: 1
+parent: Reference
+description: "Complete YAML configuration reference for Hector"
+---
+
 # Hector Configuration Reference
 
 Complete configuration reference for Hector AI Agent Platform.

@@ -16,7 +16,7 @@ Master the fundamentals of building AI agents with Hector.
 - **[Memory Management](MEMORY)** - Intelligent context window management 🔥
 - **[Tools & Extensions](TOOLS)** - Built-in tools, MCP protocol, integrations
 - **[Custom MCP Tools](MCP_CUSTOM_TOOLS)** - Build custom tools in 5 minutes
-- **[CLI Guide](CLI_GUIDE)** - Command-line interface and commands
+- **[CLI Guide](CLI_GUIDE)** - Command-line interface and workflows
 - **[Structured Output](STRUCTURED_OUTPUT)** - Reliable JSON/XML/Enum output
 
 ## Popular Features

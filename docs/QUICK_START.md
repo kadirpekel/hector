@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Quick Start
-nav_order: 3
+nav_order: 2
 parent: Getting Started
 description: "Get up and running with Hector in 5 minutes"
 ---
@@ -13,22 +13,16 @@ Get up and running with Hector in 5 minutes! Build your first AI agent using pur
 ## Prerequisites
 
 1. **API Key** - OpenAI API key (get one at [platform.openai.com](https://platform.openai.com))
-2. **Go 1.24+** installed (optional - only if building from source)
+2. **Installation** - See [Installation Guide](INSTALLATION) for all options
 3. **2 minutes** of your time
 
 ## Option A: Zero-Config Mode (Fastest!)
 
-**No installation, no config file - just instant AI assistance!**
+**No config file needed - just instant AI assistance!**
 
-### Step 1: Get Hector
+### Step 1: Install Hector
 
-```bash
-# Install via Go
-go install github.com/kadirpekel/hector/cmd/hector@latest
-
-# Or download pre-built binary (if available)
-# Or build from source (see Option B below)
-```
+See [Installation Guide](INSTALLATION) for all options (binary releases, Go install, Docker, etc.)
 
 ### Step 2: Set API Key
 
@@ -60,23 +54,7 @@ hector call assistant "Write a haiku" --model gpt-4o
 
 When you need custom prompts, multiple agents, or RAG, use a config file.
 
-### Step 1: Install Hector
-
-Choose your preferred installation method:
-
-**From Source:**
-```bash
-git clone https://github.com/kadirpekel/hector.git
-cd hector
-go build -o hector ./cmd/hector
-```
-
-**Or use Go install:**
-```bash
-go install github.com/kadirpekel/hector/cmd/hector@latest
-```
-
-## Step 2: Create Your First Agent
+### Step 1: Create Your First Agent
 
 Create `my-agent.yaml`:
 
@@ -116,7 +94,7 @@ global:
     port: 8080
 ```
 
-## Step 3: Start the Server
+### Step 2: Start the Server
 
 Set your API key and start Hector:
 
@@ -132,7 +110,7 @@ You should see:
 🌐 Server running at http://localhost:8080
 ```
 
-## Step 4: Test Your Agent
+### Step 3: Test Your Agent
 
 Open a new terminal and try these commands:
 
@@ -280,43 +258,7 @@ document_stores:
 
 The agent will remember your conversation across the session and store important information in long-term memory!
 
-## CLI Commands Reference
-
-### Essential Commands
-
-```bash
-# Start Hector server
-hector serve --config my-agent.yaml
-
-# List all available agents
-hector list
-
-# Get detailed agent information
-hector info assistant
-
-# Single query to an agent
-hector call assistant "Your question here"
-
-# Interactive chat session
-hector chat assistant
-
-# Stream responses in real-time
-hector call assistant "Complex question" --stream
-```
-
-### Advanced Commands
-
-```bash
-# Use different server
-hector call --server http://remote-server.com assistant "question"
-
-# With authentication
-hector call assistant "question" --token "your-bearer-token"
-
-# Set default server (avoid typing --server every time)
-export HECTOR_SERVER="http://localhost:8080"
-hector call assistant "question"  # Now uses default server
-```
+**For complete CLI commands and options, see [CLI Guide](CLI_GUIDE)**
 
 ## Next Steps
 
@@ -334,54 +276,7 @@ hector call assistant "question"  # Now uses default server
 2. **[Tools & Extensions](TOOLS)** - Built-in tools, MCP protocol, custom tools
 3. **[Multi-Agent Systems](ARCHITECTURE#orchestrator-pattern)** - Agent orchestration and coordination
 4. **[Authentication](AUTHENTICATION)** - JWT, OAuth2, API keys
-5. **[Deployment](INSTALLATION#production-deployment)** - Docker, Kubernetes, production setup
-
-## Troubleshooting
-
-### Server Won't Start
-
-**Check your configuration:**
-```bash
-# Validate YAML syntax
-cat my-agent.yaml
-```
-
-**Check if port is available:**
-```bash
-lsof -i :8080
-```
-
-**Enable debug mode:**
-```bash
-hector serve --config my-agent.yaml --debug
-```
-
-### CLI Can't Connect
-
-**Test server manually:**
-```bash
-curl http://localhost:8080/agents
-```
-
-**Check server URL:**
-```bash
-hector list --server http://localhost:8080
-```
-
-### Agent Errors
-
-**Check API key:**
-```bash
-echo $OPENAI_API_KEY
-```
-
-**View server logs:**
-Server terminal shows detailed execution logs
-
-**Common issues:**
-- Missing API key environment variable
-- Invalid model name in configuration
-- Network connectivity issues
+5. **[Configuration Reference](CONFIGURATION)** - Complete YAML configuration guide
 
 ## What You've Learned
 

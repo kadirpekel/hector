@@ -61,6 +61,8 @@ export OPENAI_API_KEY="sk-..."
 
 **That's it!** You're up and running with zero configuration.
 
+**📖 See [CLI Guide](https://gohector.dev/CLI_GUIDE.html) for complete command reference and workflows**
+
 ### With Config File (For Advanced Features)
 
 Create `my-agent.yaml`:

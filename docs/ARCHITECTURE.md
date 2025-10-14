@@ -1,3 +1,11 @@
+---
+layout: default
+title: Architecture
+nav_order: 3
+parent: Reference
+description: "Complete architectural guide for Hector"
+---
+
 # Hector Architecture
 
 **100% A2A Protocol Native • Multi-Transport • Production-Ready**

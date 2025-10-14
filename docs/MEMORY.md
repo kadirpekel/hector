@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Memory Management
-nav_order: 2
+nav_order: 4
 parent: Core Guides
 description: "Dual-layer memory system for AI agents - working memory and long-term memory"
 ---
