@@ -202,6 +202,7 @@ llms:
   <h3><a href="advanced">🚀 Advanced</a></h3>
   <p>Complex deployments, integrations, and production patterns.</p>
   <ul>
+    <li><a href="A2A_NATIVE_ARCHITECTURE">A2A Native Architecture</a> - Hector vs LangChain technical comparison</li>
     <li><a href="ARCHITECTURE">Architecture</a></li>
     <li><a href="MEMORY_CONFIGURATION">Memory Configuration</a></li>
     <li><a href="EXTERNAL_AGENTS">External Agents</a></li>
