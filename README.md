@@ -92,6 +92,8 @@ export OPENAI_API_KEY="sk-..."
 ./hector chat assistant --config my-agent.yaml
 ```
 
+**📖 For complete configuration options, see [Configuration Reference](https://gohector.dev/CONFIGURATION.html)**
+
 ---
 
 ## Core Capabilities

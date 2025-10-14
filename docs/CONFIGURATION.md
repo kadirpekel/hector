@@ -1,895 +1,785 @@
----
-layout: default
-title: Configuration
-nav_order: 4
-parent: Reference
-description: "Complete configuration reference with examples and all available options"
----
-
 # Hector Configuration Reference
 
-Complete guide to configuring Hector AI Assistant.
-
-> **📖 External A2A Agents:** For integrating external agents via URL, see [EXTERNAL_AGENTS.md](EXTERNAL_AGENTS.md). This document covers native agent configuration only.
-
----
+Complete configuration reference for Hector AI Agent Platform.
 
 ## Table of Contents
 
-- [Quick Start](#quick-start)
 - [Configuration Structure](#configuration-structure)
-- [Agent Configuration](#agent-configuration)
+- [Agents](#agents)
+  - [Native Agents](#native-agents)
+  - [External A2A Agents](#external-a2a-agents)
 - [LLM Providers](#llm-providers)
-- [Prompt Configuration](#prompt-configuration)
+- [Tools](#tools)
+- [Memory Configuration](#memory-configuration)
 - [Reasoning Configuration](#reasoning-configuration)
-- [Tools Configuration](#tools-configuration)
-- [Database & Embedders](#database--embedders)
 - [Document Stores](#document-stores)
-- [Best Practices](#best-practices)
-
----
-
-## Quick Start
-
-###
-
- Minimal Configuration
-
-```yaml
-agents:
-  assistant:
-    name: "My Assistant"
-    llm: "main-llm"
-
-llms:
-  main-llm:
-    type: "anthropic"
-    model: "claude-3-7-sonnet-latest"
-    api_key: "${ANTHROPIC_API_KEY}"
-```
-
-### Recommended Configuration
-
-```yaml
-agents:
-  assistant:
-    name: "Coding Assistant"
-    llm: "main-llm"
-    
-    prompt:
-      include_tools: true
-      include_history: true
-      max_history_messages: 10
-    
-    reasoning:
-      engine: "chain-of-thought"
-      # max_iterations: 100  # Safety valve only - LLM naturally terminates
-      show_debug_info: true
-      enable_streaming: true
-
-llms:
-  main-llm:
-    type: "anthropic"
-    model: "claude-3-7-sonnet-latest"
-    api_key: "${ANTHROPIC_API_KEY}"
-    temperature: 0.1
-    max_tokens: 16000
-    timeout: 60
-```
+- [Database Providers](#database-providers)
+- [Embedder Providers](#embedder-providers)
+- [Security Configuration](#security-configuration)
+- [Task Configuration](#task-configuration)
+- [Global Configuration](#global-configuration)
+- [Plugins](#plugins)
 
 ---
 
 ## Configuration Structure
 
 ```yaml
-# Agent definitions (required)
-agents:
-  <agent-name>:
-    # Agent configuration
-
-# LLM providers (required)
-llms:
-  <llm-name>:
-    # LLM configuration
-
-# Optional sections
-tools:           # Tool configuration
-databases:       # Database providers
-embedders:       # Embedding providers
-document_stores: # Knowledge bases
+# Top-level configuration sections
+agents:           # Agent definitions (required)
+llms:             # LLM provider configurations (required)
+tools:            # Tool configurations (optional, has defaults)
+databases:        # Database provider configurations (optional)
+embedders:        # Embedder provider configurations (optional)
+document_stores:  # Document store configurations (optional)
+plugins:          # Plugin configurations (optional)
+global:           # Global server settings (optional)
 ```
 
 ---
 
-## Agent Configuration
+## Agents
 
-**Note:** This section covers **native agents** only. For external A2A agents, see [EXTERNAL_AGENTS.md](EXTERNAL_AGENTS.md).
+### Native Agents
 
-### Basic Structure
+Native agents run locally with full configuration control.
 
 ```yaml
 agents:
-  <agent-name>:
-    name: string           # Display name
-    description: string    # Agent description (optional)
-    visibility: string     # Agent visibility: "public" (default), "internal", or "private"
-    llm: string           # Reference to LLM config
+  <agent-id>:
+    # Required fields
+    name: string                      # Display name
+    llm: string                       # LLM provider reference
     
-    prompt:               # Prompt configuration
-      system_prompt: string          # Full custom prompt (override)
-      prompt_slots: map[string]string # Slot-based customization
-      include_tools: bool            # Include tool descriptions
-      include_context: bool          # Include semantic search results
-      include_history: bool          # Include conversation history
-      max_history_messages: int      # History limit (default: 10)
+    # Optional identity fields
+    type: "native"                    # Agent type (default: "native")
+    description: string               # Agent description
+    visibility: string                # "public" (default), "internal", or "private"
     
-    reasoning:            # Reasoning engine configuration
-      engine: string                 # "chain-of-thought" (only supported)
-      max_iterations: int            # Safety valve only (default: 100, rarely hit)
-      show_debug_info: bool          # Show detailed output
-      enable_streaming: bool         # Enable streaming mode
+    # Configuration sections
+    prompt: PromptConfig              # Prompt customization
+    memory: MemoryConfig              # Memory/conversation management
+    reasoning: ReasoningConfig        # Reasoning strategy
+    search: SearchConfig              # Search configuration
+    task: TaskConfig                  # Task management
+    security: SecurityConfig          # Security settings
     
-    document_stores: []string # Document store references
-    database: string         # Database provider reference
-    embedder: string         # Embedder reference
-    search: map              # Search configuration
+    # Resource references
+    tools: []string                   # Tool IDs to enable
+    document_stores: []string         # Document store IDs for RAG
+    database: string                  # Database provider reference (required if document_stores set)
+    embedder: string                  # Embedder provider reference (required if document_stores set)
+    session_store: string             # Session store reference (default: "default")
+    
+    # Multi-agent orchestration
+    sub_agents: []string              # Agent IDs this agent can orchestrate (empty = all)
 ```
 
-### Prompt Configuration
+#### Visibility Levels
 
-#### Slot-Based Customization (Recommended)
+- `public` - Discoverable via `/agents` API and callable by anyone
+- `internal` - Not listed in discovery but callable if agent ID known
+- `private` - Only callable by local orchestrators, not via external API
+
+#### Example: Minimal Native Agent
 
 ```yaml
 agents:
   assistant:
+    name: "My Assistant"
+    llm: "main-llm"
+```
+
+#### Example: Full Native Agent
+
+```yaml
+agents:
+  coding_assistant:
+    name: "Coding Assistant"
+    description: "Helps with code writing and debugging"
+    type: "native"
+    visibility: "public"
+    llm: "gpt-4o"
+    
     prompt:
       prompt_slots:
-        system_role: |
-          You are an AI coding assistant.
-        
-        reasoning_instructions: |
-          Your goal is to help users with coding tasks.
-          Be thorough and accurate.
-        
-        tool_usage: |
-          CRITICAL: ACT IMMEDIATELY, DON'T ANNOUNCE.
-          Use tools without preamble.
-        
-        output_format: |
-          Provide clear, accurate responses.
-        
-        communication_style: |
-          Use backticks for code.
-        
-        additional: |
-          <task_management>
-          For complex tasks, create todos first.
-          </task_management>
-```
-
-**Available Slots:**
-- `system_role` - Who the assistant is
-- `reasoning_instructions` - How to think
-- `tool_usage` - How to use tools
-- `output_format` - Response formatting
-- `communication_style` - How to communicate
-- `additional` - Extra instructions (task management, etc.)
-
-#### Full Override
-
-```yaml
-agents:
-  assistant:
-    prompt:
-      system_prompt: |
-        You are a helpful assistant.
-        [Your complete custom prompt here]
-```
-
-**Note:** `system_prompt` overrides all slots.
-
-### Reasoning Configuration
-
-```yaml
-agents:
-  assistant:
+        system_role: "You are an expert software engineer"
+        reasoning_instructions: "Think step-by-step and write clean code"
+    
+    memory:
+      strategy: "summary_buffer"
+      budget: 2000
+      threshold: 0.8
+    
     reasoning:
-      engine: "chain-of-thought"           # Only supported engine
-      # max_iterations: 100                # Optional safety valve (default: 100)
-      show_debug_info: true                # Show thinking/reflection
-      enable_streaming: true               # Real-time output (default: true)
-      enable_structured_reflection: true   # LLM-based reflection (default: true)
-      enable_completion_verification: false # Task completion check (default: false)
-      enable_goal_extraction: false        # Goal decomposition (default: false)
+      engine: "chain-of-thought"
+      max_iterations: 100
+      enable_streaming: true
+      show_tool_execution: true
+    
+    tools:
+      - "execute_command"
+      - "write_file"
+      - "search_replace"
+      - "search"
+    
+    document_stores:
+      - "codebase"
+    database: "qdrant"
+    embedder: "ollama"
+    
+    search:
+      top_k: 5
+      threshold: 0.7
 ```
 
-**Philosophy:**
-- **Trust the LLM** - Loops naturally terminate when no more tool calls
-- `max_iterations` is a safety valve only, not an artificial constraint
-- Matches Cursor's approach: continue until work is done
+### External A2A Agents
 
-**Engine Options:**
-- `chain-of-thought` - Fast, iterative reasoning (Cursor-like)
+External agents are A2A-compliant services accessed via URL.
 
-**Debug Info Includes:**
-- Iteration numbers
-- Token usage
-- Tool execution labels
-- Self-reflection (grayed out)
-- Timing information
-
----
-
-### Structured Output Features (Smart Defaults)
-
-Hector enables **structured reflection by default** for better quality output.
-
-#### 1. Structured Reflection (Default: ON)
-
-**What it does:** Uses LLM to analyze tool execution results with structured output, providing confidence scores and recommendations.
-
-**Benefits:**
-- +13% quality improvement
-- Better error recovery
-- More confident decision-making
-- Structured insights for debugging
-
-**Cost:** +20% token usage (minimal for most workloads)
-
-**Disable if needed:**
 ```yaml
-reasoning:
-  enable_structured_reflection: false  # Falls back to heuristic analysis
+agents:
+  <agent-id>:
+    # Required fields
+    type: "a2a"                       # Agent type
+    name: string                      # Display name
+    url: string                       # A2A agent URL
+    
+    # Optional fields
+    description: string               # Agent description
+    visibility: string                # "public", "internal", or "private"
+    credentials: AgentCredentials     # Authentication for calling this agent
 ```
 
-#### 2. Completion Verification (Default: OFF)
+#### AgentCredentials
 
-**What it does:** Verifies task completion before stopping, reducing premature exits.
-
-**Benefits:**
-- Fewer incomplete responses
-- Higher task completion rate
-- Quality assurance before final output
-
-**Cost:** +10-15% token usage (only triggers when agent thinks it's done)
-
-**Enable if needed:**
 ```yaml
-reasoning:
-  enable_completion_verification: true  # Recommended for critical tasks
+credentials:
+  type: string                        # "bearer", "api_key", or "basic"
+  
+  # For bearer auth
+  token: string                       # JWT token
+  
+  # For API key auth
+  api_key: string                     # API key
+  api_key_header: string              # Header name (default: "X-API-Key")
+  
+  # For basic auth
+  username: string                    # Username
+  password: string                    # Password
 ```
 
-#### 3. Goal Extraction (Default: OFF, Supervisor only)
+#### Example: External Agent
 
-**What it does:** Decomposes complex tasks into subtasks with dependencies (supervisor strategy only).
-
-**Benefits:**
-- Better multi-agent orchestration
-- Structured task planning
-- Clear execution order
-
-**Cost:** +5-10% token usage (only on first iteration)
-
-**Enable if needed:**
 ```yaml
-reasoning:
-  engine: "supervisor"
-  enable_goal_extraction: true  # Only works with supervisor engine
+agents:
+  weather_service:
+    type: "a2a"
+    name: "Weather Service"
+    url: "https://api.weather.com/agents/forecast"
+    visibility: "public"
+    credentials:
+      type: "bearer"
+      token: "${WEATHER_API_TOKEN}"
 ```
-
----
-
-### Cost Analysis & Optimization
-
-**Default configuration (structured reflection only):**
-- Quality: **+13% improvement**
-- Cost: **+20% token usage**
-- ROI: **Best balance for most use cases**
-
-**All features enabled:**
-- Quality: **+25% improvement**
-- Cost: **+35-40% token usage**
-- ROI: **Recommended for critical/complex tasks**
-
-**Cost optimization strategies:**
-
-1. **Use smart defaults** (structured reflection only) for general tasks
-2. **Enable completion verification** for user-facing or critical tasks
-3. **Enable goal extraction** only for complex multi-agent workflows
-4. **Disable structured reflection** for high-volume, cost-sensitive tasks:
-   ```yaml
-   reasoning:
-     enable_structured_reflection: false  # Heuristic fallback
-   ```
-
-5. **Use smaller models** (e.g., `gpt-4o-mini`, `claude-3-haiku`) with structured features for better ROI:
-   ```yaml
-   llms:
-     cost_effective:
-       type: "openai"
-       model: "gpt-4o-mini"  # Cheaper model
-       max_tokens: 2000
-   
-   agents:
-     support_agent:
-       llm: "cost_effective"
-       reasoning:
-         enable_structured_reflection: true  # Small model + structured output = quality + savings
-   ```
-
-**Benchmark data:** See `docs/benchmarks/` for detailed performance and cost analysis across providers.
 
 ---
 
 ## LLM Providers
 
-### Anthropic (Claude)
-
-```yaml
-llms:
-  main-llm:
-    type: "anthropic"
-    model: "claude-3-7-sonnet-latest"  # or claude-3-5-haiku-latest
-    api_key: "${ANTHROPIC_API_KEY}"    # Environment variable
-    host: "https://api.anthropic.com"  # Optional, default shown
-    temperature: 0.1                    # 0.0-1.0
-    max_tokens: 16000                   # Max response tokens
-    timeout: 60                         # Request timeout (seconds)
-    max_retries: 5                      # Rate limit retry attempts (default: 5)
-    retry_delay: 2                      # Base delay in seconds (default: 2, exponential backoff)
-```
-
-**Supported Models:**
-- `claude-3-7-sonnet-latest` - Most capable (recommended)
-- `claude-3-5-haiku-latest` - Fastest, cheaper
-- `claude-sonnet-4.5-20250514` - Specific version
-
-**Rate Limits:**
-- Handled automatically with exponential backoff
-- Default: 5 retries with 2s, 4s, 8s, 16s, 32s delays (total: ~62s)
-- Configurable via `max_retries` and `retry_delay`
-- Supports "trust the LLM" philosophy (up to 100 iterations)
-
 ### OpenAI
 
 ```yaml
 llms:
-  main-llm:
+  <llm-id>:
     type: "openai"
-    model: "gpt-4o"                     # or gpt-4o-mini, gpt-3.5-turbo
-    api_key: "${OPENAI_API_KEY}"
-    host: "https://api.openai.com/v1"  # Optional
-    temperature: 0.1
-    max_tokens: 16000
-    timeout: 60
-    max_retries: 5                      # Rate limit retry attempts (default: 5)
-    retry_delay: 2                      # Base delay in seconds (default: 2, exponential backoff)
+    model: string                     # e.g. "gpt-4o", "gpt-4o-mini"
+    api_key: string                   # API key (use env var: "${OPENAI_API_KEY}")
+    host: string                      # Default: "https://api.openai.com/v1"
+    temperature: float                # 0.0-2.0, default: 0.7
+    max_tokens: int                   # Default: 8000
+    timeout: int                      # Request timeout in seconds, default: 60
+    max_retries: int                  # Rate limit retry attempts, default: 5
+    retry_delay: int                  # Base retry delay in seconds, default: 2
+    
+    # Structured output (optional)
+    structured_output: StructuredOutputConfig
 ```
 
-### Google Gemini
+**Supported models:** `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-3.5-turbo`
+
+### Anthropic
 
 ```yaml
 llms:
-  main-llm:
+  <llm-id>:
+    type: "anthropic"
+    model: string                     # e.g. "claude-3-7-sonnet-latest"
+    api_key: string                   # API key (use env var: "${ANTHROPIC_API_KEY}")
+    host: string                      # Default: "https://api.anthropic.com"
+    temperature: float                # 0.0-1.0, default: 0.7
+    max_tokens: int                   # Default: 8000
+    timeout: int                      # Default: 60
+    max_retries: int                  # Default: 5
+    retry_delay: int                  # Default: 2
+    
+    # Structured output (optional)
+    structured_output: StructuredOutputConfig
+```
+
+**Supported models:** `claude-3-7-sonnet-latest`, `claude-3-5-sonnet-latest`, `claude-3-5-haiku-latest`, `claude-sonnet-4.5-20250514`
+
+### Gemini
+
+```yaml
+llms:
+  <llm-id>:
     type: "gemini"
-    model: "gemini-2.0-flash"                              # or gemini-1.5-pro, gemini-1.5-flash
-    api_key: "${GEMINI_API_KEY}"
-    host: "https://generativelanguage.googleapis.com"     # Default
-    temperature: 0.7
-    max_tokens: 2048
-    timeout: 60
-    max_retries: 3
-    retry_delay: 2
+    model: string                     # e.g. "gemini-2.0-flash-exp"
+    api_key: string                   # API key (use env var: "${GEMINI_API_KEY}")
+    host: string                      # Default: "https://generativelanguage.googleapis.com"
+    temperature: float                # 0.0-2.0, default: 0.7
+    max_tokens: int                   # Default: 8000
+    timeout: int                      # Default: 60
+    max_retries: int                  # Default: 5
+    retry_delay: int                  # Default: 2
+    
+    # Structured output (optional)
+    structured_output: StructuredOutputConfig
 ```
 
-**Available Models:**
-- `gemini-2.0-flash` - Latest, fastest, cost-effective
-- `gemini-1.5-pro` - Most powerful, best for complex tasks
-- `gemini-1.5-flash` - Balanced speed and capability
+**Supported models:** `gemini-2.0-flash-exp`, `gemini-1.5-pro`, `gemini-1.5-flash`
 
-**Supported Models:**
-- `gpt-4o` - Most capable
-- `gpt-4o-mini` - Faster, cheaper
-- `gpt-3.5-turbo` - Budget option
+### StructuredOutputConfig
+
+```yaml
+structured_output:
+  format: string                      # "json", "xml", or "enum"
+  
+  # For JSON format
+  schema: object                      # JSON schema definition
+  
+  # For enum format
+  enum: []string                      # List of allowed values
+  
+  # Provider-specific options
+  prefill: string                     # Anthropic: prefill string
+  property_ordering: []string         # Gemini: property order
+```
 
 ---
 
-## Structured Output Configuration
+## Tools
 
-Configure schema-validated JSON/XML/Enum output for reliable data extraction. Works with OpenAI, Anthropic, and Gemini.
+Tools are defined globally and referenced by agents.
 
-**When to use:**
-- Data extraction (invoices, forms, documents)
-- Classification (sentiment, priority, category)
-- Entity extraction (names, dates, locations, amounts)
-- API integrations requiring specific JSON formats
-- Database record creation
-- Form filling from unstructured text
+### Built-in Tool Types
 
-### Basic JSON Schema
+#### Command Tool
 
 ```yaml
-agents:
-  data_extractor:
-    llm: "openai-llm"
-    structured_output:
-      format: "json"
-      schema:
-        type: "object"
-        properties:
-          name: {type: "string"}
-          age: {type: "number"}
-          email: {type: "string", format: "email"}
-        required: ["name", "email"]
+tools:
+  <tool-id>:
+    type: "command"
+    enabled: bool                     # Default: true
+    allowed_commands: []string        # Whitelist of commands
+    working_directory: string         # Default: "./"
+    max_execution_time: string        # Duration, default: "30s"
+    enable_sandboxing: bool           # Default: true
 ```
 
-### Provider-Specific Optimizations
-
-#### OpenAI: Strict Mode
-```yaml
-agents:
-  openai_extractor:
-    llm: "openai-llm"
-    structured_output:
-      format: "json"
-      schema:  # Schema validated strictly
-        type: "object"
-        properties:
-          sentiment: {type: "string", enum: ["positive", "negative", "neutral"]}
-          confidence: {type: "number", minimum: 0, maximum: 1}
-        required: ["sentiment", "confidence"]
-```
-
-#### Anthropic: Prefill Technique
-```yaml
-agents:
-  anthropic_extractor:
-    llm: "claude-llm"
-    structured_output:
-      format: "json"
-      schema: {<your-schema>}
-      prefill: '{"sentiment":'  # Forces response to start with JSON
-```
-
-#### Gemini: Property Ordering
-```yaml
-agents:
-  gemini_extractor:
-    llm: "gemini-llm"
-    structured_output:
-      format: "json"
-      schema: {<your-schema>}
-      property_ordering: ["name", "age", "email"]  # Consistent field order
-```
-
-### Classification with Enum
+#### File Writer Tool
 
 ```yaml
-agents:
-  priority_classifier:
-    llm: "gemini-llm"
-    structured_output:
-      format: "enum"
-      enum: ["Urgent", "High", "Medium", "Low"]
+tools:
+  <tool-id>:
+    type: "write_file"
+    enabled: bool                     # Default: true
+    max_file_size: int64              # Bytes, default: 1048576 (1MB)
+    allowed_extensions: []string      # e.g. [".go", ".py", ".md"]
+    forbidden_paths: []string         # Paths to block
 ```
 
-### Real-World Example: Invoice Extraction
+#### Search Replace Tool
 
 ```yaml
-agents:
-  invoice_parser:
-    llm: "gemini-llm"
-    structured_output:
-      format: "json"
-      schema:
-        type: "object"
-        properties:
-          vendor: {type: "string"}
-          invoice_number: {type: "string"}
-          date: {type: "string", format: "date"}
-          line_items:
-            type: "array"
-            items:
-              type: "object"
-              properties:
-                description: {type: "string"}
-                quantity: {type: "number"}
-                unit_price: {type: "number"}
-                total: {type: "number"}
-          total: {type: "number"}
-        required: ["vendor", "invoice_number", "total"]
+tools:
+  <tool-id>:
+    type: "search_replace"
+    enabled: bool                     # Default: true
+    max_replacements: int             # Default: 100
+    backup_enabled: bool              # Create backup before replace
+    working_directory: string         # Default: "./"
 ```
 
-**Benefits:**
-- ✅ No regex or text parsing
-- ✅ Type-safe outputs (strings, numbers, booleans, arrays)
-- ✅ Required field validation
-- ✅ Direct database/API integration
-- ✅ Reduced error rates
-
-**See [Structured Output Guide](STRUCTURED_OUTPUT.md) for complete documentation and examples.**
-
----
-
-## Tools Configuration
-
-### Zero-Config (Default)
-
-No configuration needed! Default tools are automatically registered:
+#### Search Tool
 
 ```yaml
-# Just don't specify tools section
-# Defaults: execute_command, search, write_file, search_replace, todo_write
+tools:
+  <tool-id>:
+    type: "search"
+    enabled: bool                     # Default: true
+    document_stores: []string         # Document store IDs to search
+    default_limit: int                # Default: 10
+    max_limit: int                    # Default: 50
+    max_results: int                  # Default: 100
 ```
 
-### Custom Configuration
+#### Todo Tool
+
+```yaml
+tools:
+  <tool-id>:
+    type: "todo"
+    enabled: bool                     # Default: true
+```
+
+#### Agent Call Tool
+
+```yaml
+tools:
+  <tool-id>:
+    type: "agent_call"
+    enabled: bool                     # Default: true
+```
+
+**Note:** `agent_call` tool requires agent registry and is automatically configured when needed.
+
+#### MCP Tool
+
+```yaml
+tools:
+  <tool-id>:
+    type: "mcp"
+    enabled: bool                     # Default: true
+    server_url: string                # MCP server URL
+    description: string               # Tool description
+```
+
+### Default Tools
+
+If no tools are configured, these defaults are provided:
 
 ```yaml
 tools:
   execute_command:
-    type: command
-    allowed_commands: ["ls", "cat", "grep", "find", "git", "go", "npm"]
-    working_directory: "./"
-    max_execution_time: "30s"
-    enable_sandboxing: true
-  
-  write_file:
-    type: write_file
-    max_file_size: 1048576
-    allowed_extensions: [".go", ".py", ".js", ".ts", ".md"]
-    working_directory: "./"
-  
-  search_replace:
-    type: search_replace
-    max_replacements: 100
-    working_directory: "./"
-  
-  search:
-    type: search
-    document_stores: ["codebase"]
-    default_limit: 10
-    max_limit: 50
-    max_results: 100
-  
+    type: "command"
+    allowed_commands: ["ls", "cat", "head", "tail", "pwd", "find", "grep", "wc", "date", "echo", "tree", "du", "df"]
   todo_write:
-    type: todo
+    type: "todo"
 ```
-
-### Available Tools
-
-| Tool | Type | Description |
-|------|------|-------------|
-| `execute_command` | command | Execute shell commands |
-| `write_file` | write_file | Create/overwrite files |
-| `search_replace` | search_replace | Precise text replacement |
-| `search` | search | Semantic codebase search |
-| `todo_write` | todo | Task management |
 
 ---
 
-## Database & Embedders
+## Memory Configuration
 
-### Qdrant (Vector Database)
-
-```yaml
-databases:
-  qdrant:
-    type: "qdrant"
-    host: "localhost"
-    port: 6334                # Default Qdrant port
-    collection_name: "docs"   # Collection for vectors
-```
-
-**Setup:**
-```bash
-docker run -p 6334:6334 qdrant/qdrant
-```
-
-### Ollama Embeddings
+Memory controls conversation history and context management.
 
 ```yaml
-embedders:
-  embedder:
-    type: "ollama"
-    model: "nomic-embed-text"  # Recommended for code
-    host: "http://localhost:11434"
+memory:
+  # Strategy selection
+  strategy: string                    # "buffer_window" or "summary_buffer" (default)
+  
+  # Working memory settings
+  budget: int                         # Token budget, default: 2000
+  
+  # Buffer window settings (for buffer_window strategy)
+  window_size: int                    # Number of messages to keep, default: 20
+  
+  # Summary buffer settings (for summary_buffer strategy)
+  threshold: float                    # Trigger at % of budget, default: 0.8
+  target: float                       # Compress to % of budget, default: 0.6
+  
+  # Long-term memory (optional)
+  long_term: LongTermMemoryConfig
 ```
 
-**Setup:**
-```bash
-ollama serve
-ollama pull nomic-embed-text
+### LongTermMemoryConfig
+
+```yaml
+long_term:
+  storage_scope: string               # "all", "conversational", or "summaries_only"
+  batch_size: int                     # Batch size for storage, default: 1 (immediate)
+  auto_recall: bool                   # Auto-inject memories, default: true
+  recall_limit: int                   # Max memories to recall, default: 5
+  collection: string                  # Qdrant collection name, default: "hector_session_memory"
+```
+
+---
+
+## Reasoning Configuration
+
+```yaml
+reasoning:
+  engine: string                      # "chain-of-thought" or "supervisor"
+  max_iterations: int                 # Safety valve, default: 100
+  
+  # Output control
+  enable_streaming: bool              # Enable streaming, default: true
+  show_debug_info: bool               # Show iteration info, default: false
+  show_tool_execution: bool           # Show tool labels, default: true
+  show_thinking: bool                 # Show internal reasoning, default: false
+  
+  # Advanced features
+  enable_self_reflection: bool        # Enable self-reflection, default: false
+  enable_meta_reasoning: bool         # Enable meta-reasoning, default: false
+  enable_goal_evolution: bool         # Enable goal evolution, default: false
+  enable_dynamic_tools: bool          # Enable dynamic tools, default: false
+  enable_structured_reflection: bool  # LLM-based reflection, default: true
+  enable_completion_verification: bool # Task completion check, default: false
+  enable_goal_extraction: bool        # Goal decomposition (supervisor), default: false
+  
+  # Quality threshold
+  quality_threshold: float            # 0.0-1.0, default: 0.7
+```
+
+### Reasoning Engines
+
+- **chain-of-thought** - Iterative reasoning with natural termination (default)
+- **supervisor** - Optimized for multi-agent orchestration
+
+---
+
+## Prompt Configuration
+
+```yaml
+prompt:
+  # Slot-based customization (recommended)
+  prompt_slots:
+    system_role: string               # Who the assistant is
+    reasoning_instructions: string    # How to think
+    tool_usage: string                # How to use tools
+    output_format: string             # Response formatting
+    communication_style: string       # How to communicate
+    additional: string                # Extra instructions
+  
+  # Full override (bypasses slots)
+  system_prompt: string               # Complete custom prompt
+  
+  # Include flags
+  include_tools: bool                 # Include tool descriptions
+  include_context: bool               # Include semantic search results
+  include_history: bool               # Include conversation history
+  
+  # Deprecated fields (use memory: section instead)
+  max_history_messages: int           # Deprecated: use memory.budget
+  max_context_length: int             # Max context length
+  enable_summarization: bool          # Deprecated: use memory.strategy
+  summarize_threshold: float          # Deprecated: use memory.threshold
+  smart_memory: bool                  # Deprecated: use memory
+  memory_budget: int                  # Deprecated: use memory.budget
+```
+
+---
+
+## Search Configuration
+
+```yaml
+search:
+  models: []SearchModel               # Search model configurations
+  top_k: int                          # Top K results, default: 5
+  threshold: float                    # Similarity threshold, default: 0.7
+  max_context_length: int             # Max context length, default: 4000
+```
+
+### SearchModel
+
+```yaml
+models:
+  - name: string                      # Model name
+    collection: string                # Vector collection name
+    default_top_k: int                # Default top K, default: 10
+    max_top_k: int                    # Maximum top K, default: 100
 ```
 
 ---
 
 ## Document Stores
 
-### Configuration
-
 ```yaml
 document_stores:
-  hector-code:
-    name: "hector-code"
-    path: "."                        # Directory to index
-    source: "directory"              # Source type
+  <store-id>:
+    name: string                      # Store name
+    source: string                    # Source type, default: "directory"
+    path: string                      # Source path
     
-    include_patterns:
-      - "*.go"
-      - "*.md"
-      - "*.py"
+    include_patterns: []string        # Include glob patterns
+    exclude_patterns: []string        # Exclude glob patterns
     
-    exclude_patterns:
-      - "vendor/**"
-      - ".git/**"
-      - "**/testdata/**"
-      - "node_modules/**"
-    
-    max_file_size: 1048576          # 1MB
-    watch_changes: false             # Auto-reindex on changes
-    
-    database: "qdrant"               # Database reference
-    embedder: "embedder"             # Embedder reference
+    watch_changes: bool               # Auto-reindex on changes
+    max_file_size: int64              # Max file size in bytes, default: 10485760 (10MB)
 ```
 
-### Linking to Agent
+**Default include patterns:** `["*.md", "*.txt", "*.go", "*.py", "*.js", "*.ts", "*.yaml", "*.yml"]`
+
+**Default exclude patterns:** `["**/node_modules/**", "**/.git/**", "**/vendor/**", "**/__pycache__/**"]`
+
+---
+
+## Database Providers
+
+### Qdrant
 
 ```yaml
-agents:
-  assistant:
-    document_stores:
-      - "hector-code"
-    database: "qdrant"
-    embedder: "embedder"
-    
-    prompt:
-      include_context: true  # Enable semantic injection
+databases:
+  <db-id>:
+    type: "qdrant"
+    host: string                      # Default: "localhost"
+    port: int                         # Default: 6333
+    api_key: string                   # Optional API key
+    timeout: int                      # Connection timeout in seconds, default: 30
+    use_tls: bool                     # Use TLS connection, default: false
+    insecure: bool                    # Skip TLS verification, default: false
 ```
 
 ---
 
-## Best Practices
+## Embedder Providers
 
-### Performance
+### Ollama
 
-1. **Token Limits**
-   - Development: 8000-16000 tokens
-   - Production: 4000-8000 tokens (faster, cheaper)
-
-2. **History Management**
-   ```yaml
-   prompt:
-     max_history_messages: 5-10  # Balance context vs cost
-   ```
-
-3. **Safety Valve** (Optional)
-   ```yaml
-   reasoning:
-     max_iterations: 100  # Safety only, rarely needed
-   ```
-   
-   **Note:** Default is 100. Lower only if you need strict guarantees.
-
-### Cost Optimization
-
-1. **Use Cheaper Models for Simple Tasks**
-   ```yaml
-   # For simple queries
-   model: "claude-3-5-haiku-latest"  # or gpt-4o-mini
-   
-   # For complex reasoning
-   model: "claude-3-7-sonnet-latest"  # or gpt-4o
-   ```
-
-2. **Disable Semantic Search When Not Needed**
-   ```yaml
-   prompt:
-     include_context: false  # Saves embedding costs
-   ```
-
-3. **Limit Tool Access**
-   ```yaml
-   tools:
-     execute_command:
-       type: command
-       allowed_commands: ["ls", "cat", "pwd"]  # Only safe commands
-     # Don't include expensive tools like 'search' if not needed
-   ```
-
-### Security
-
-1. **Sandbox Commands**
-   ```yaml
-   tools:
-     execute_command:
-       type: command
-       allowed_commands: ["ls", "cat", "grep"]  # Whitelist only
-       enable_sandboxing: true
-       max_execution_time: "30s"
-   ```
-
-2. **Environment Variables for Secrets**
-   ```yaml
-   llms:
-     main:
-       api_key: "${ANTHROPIC_API_KEY}"  # Never hardcode
-   ```
-
-3. **File Path Restrictions**
-   ```yaml
-   document_stores:
-     code:
-       path: "./src"  # Limit to specific directories
-       exclude_patterns:
-         - "**/.env"
-         - "**/secrets/**"
-   ```
-
-### Debugging
-
-1. **Enable Debug Output**
-   ```yaml
-   reasoning:
-     show_debug_info: true  # See iterations, tokens, reflections
-   ```
-
-2. **Test with Non-Streaming First**
-   ```yaml
-   reasoning:
-     enable_streaming: false  # Easier to debug
-   ```
-
-3. **Trust the LLM to Terminate**
-   ```yaml
-   reasoning:
-     # max_iterations: 100  # Default is fine - LLM stops naturally
-   ```
-   
-   **Philosophy:** Like Cursor, Hector trusts the LLM to complete tasks without artificial limits.
+```yaml
+embedders:
+  <embedder-id>:
+    type: "ollama"
+    model: string                     # e.g. "nomic-embed-text"
+    host: string                      # Default: "http://localhost:11434"
+    dimension: int                    # Embedding dimension, default: 768
+    timeout: int                      # Request timeout in seconds, default: 30
+    max_retries: int                  # Max retry attempts, default: 3
+```
 
 ---
 
-## Example Configurations
-
-### Minimal (Quick Start)
+## Security Configuration
 
 ```yaml
-agents:
-  assistant:
-    llm: "main"
-
-llms:
-  main:
-    type: "anthropic"
-    model: "claude-3-7-sonnet-latest"
-    api_key: "${ANTHROPIC_API_KEY}"
+security:
+  schemes: map[string]SecurityScheme  # Security scheme definitions
+  require: []map[string][]string      # Security requirements
+  jwks_url: string                    # JWKS URL for JWT validation
+  issuer: string                      # Expected JWT issuer
+  audience: string                    # Expected JWT audience
 ```
 
-### Recommended (Production)
+### SecurityScheme
 
-See [hector.yaml](hector.yaml) for the default configuration.
+```yaml
+schemes:
+  <scheme-name>:
+    type: string                      # "http", "apiKey", "oauth2", "openIdConnect", "mutualTLS"
+    scheme: string                    # For HTTP: "bearer" or "basic"
+    bearer_format: string             # For bearer: "JWT"
+    description: string               # Human-readable description
+    
+    # For API Key auth
+    in: string                        # "header", "query", or "cookie"
+    name: string                      # Parameter name
+```
 
-### With Semantic Search
+---
 
-See examples in [configs/](configs/) directory.
+## Task Configuration
+
+```yaml
+task:
+  backend: string                     # "memory" (default) or "sql"
+  worker_pool: int                    # Max concurrent tasks, default: 100
+  
+  # SQL backend configuration
+  sql: TaskSQLConfig
+```
+
+### TaskSQLConfig
+
+```yaml
+sql:
+  driver: string                      # "postgres", "mysql", or "sqlite"
+  host: string                        # Database host (not for sqlite)
+  port: int                           # Database port (not for sqlite)
+  database: string                    # Database name or file path (sqlite)
+  username: string                    # Username (not for sqlite)
+  password: string                    # Password (not for sqlite)
+  ssl_mode: string                    # SSL mode for postgres: "disable", "require", "verify-ca", "verify-full"
+  max_conns: int                      # Max connections, default: 25
+  max_idle: int                       # Max idle connections, default: 5
+```
+
+---
+
+## Global Configuration
+
+```yaml
+global:
+  # A2A server configuration
+  a2a_server:
+    host: string                      # Server host, default: "0.0.0.0"
+    port: int                         # gRPC port, default: 8080
+    base_url: string                  # Base URL for discovery
+  
+  # Authentication
+  auth:
+    jwks_url: string                  # JWKS URL for JWT validation
+    issuer: string                    # Expected JWT issuer
+    audience: string                  # Expected JWT audience
+  
+  # Logging
+  logging:
+    level: string                     # "debug", "info", "warn", "error"
+    format: string                    # "text" or "json"
+    output: string                    # "stdout", "stderr", or "file"
+  
+  # Performance
+  performance:
+    max_concurrency: int              # Max concurrency, default: 4
+    timeout: duration                 # Global timeout, default: 15m
+```
+
+---
+
+## Plugins
+
+```yaml
+plugins:
+  # Plugin discovery
+  plugin_discovery:
+    enabled: bool                     # Enable auto-discovery, default: true
+    paths: []string                   # Discovery paths, default: ["./plugins", "~/.hector/plugins"]
+    scan_subdirectories: bool         # Scan subdirectories
+  
+  # Plugin definitions by category
+  llm_providers:
+    <plugin-id>: PluginConfig
+  
+  database_providers:
+    <plugin-id>: PluginConfig
+  
+  embedder_providers:
+    <plugin-id>: PluginConfig
+  
+  tool_providers:
+    <plugin-id>: PluginConfig
+  
+  reasoning_strategies:
+    <plugin-id>: PluginConfig
+```
+
+### PluginConfig
+
+```yaml
+<plugin-id>:
+  name: string                        # Plugin name
+  type: string                        # Must be "grpc"
+  path: string                        # Path to plugin executable
+  enabled: bool                       # Whether plugin is enabled
+  config: map[string]interface{}     # Plugin-specific configuration
+```
 
 ---
 
 ## Environment Variables
 
-Common environment variables:
+Hector supports environment variable expansion using `${VAR_NAME}` syntax:
 
-```bash
-# LLM API Keys
-export ANTHROPIC_API_KEY="your-key"
-export OPENAI_API_KEY="your-key"
-
-# Optional: Database URLs
-export QDRANT_URL="http://localhost:6334"
-export OLLAMA_HOST="http://localhost:11434"
-```
-
----
-
-## Troubleshooting
-
-### "No tools available"
-
-**Problem:** `🔧 Available tools: 0`
-
-**Solution:** Remove empty `tools:` section to use defaults, or explicitly define tools.
-
-### "Rate limit exceeded"
-
-**Problem:** API returns 429 errors
-
-**Solution:** Hector automatically retries with exponential backoff (default: 5 attempts, up to 62s). If persistent:
-
-**Increase retry aggressiveness:**
 ```yaml
 llms:
   main-llm:
-    max_retries: 7        # More attempts (2s, 4s, 8s, 16s, 32s, 64s, 128s)
-    retry_delay: 3        # Longer waits (3s, 6s, 12s, 24s, 48s)
+    api_key: "${OPENAI_API_KEY}"      # Expands to value of OPENAI_API_KEY
+
+databases:
+  qdrant:
+    host: "${QDRANT_HOST:-localhost}" # With default value
 ```
 
-**Reduce request frequency:**
-- Reduce `max_tokens`
-- Decrease `max_history_messages`
-- Disable `include_context`
-
-### "Document store not found"
-
-**Problem:** `failed to get database 'qdrant'`
-
-**Solution:**
-1. Ensure Qdrant is running: `docker ps | grep qdrant`
-2. Check database configuration matches
-3. Verify database name in agent config
-
-### "Streaming not working"
-
-**Problem:** No real-time output
-
-**Solution:**
-```yaml
-reasoning:
-  enable_streaming: true
-  show_debug_info: true  # See if tools are executing
-```
+**Common environment variables:**
+- `OPENAI_API_KEY` - OpenAI API key
+- `ANTHROPIC_API_KEY` - Anthropic API key
+- `GEMINI_API_KEY` - Google Gemini API key
+- `QDRANT_HOST` - Qdrant server host
+- `OLLAMA_HOST` - Ollama server host
 
 ---
 
-## Advanced Topics
+## Complete Example
 
-### Custom Prompts for Specific Domains
-
-**Legal Assistant:**
 ```yaml
+# Full configuration example
 agents:
-  legal-assistant:
+  assistant:
+    name: "Coding Assistant"
+    description: "Expert software engineer"
+    llm: "gpt-4o"
+    
     prompt:
       prompt_slots:
-        system_role: "You are a legal research assistant."
-        reasoning_instructions: |
-          Focus on accuracy and cite sources.
-          Use formal legal language.
-```
+        system_role: "You are an expert software engineer"
+        reasoning_instructions: "Think step-by-step and write clean code"
+    
+    memory:
+      strategy: "summary_buffer"
+      budget: 2000
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 100
+      enable_streaming: true
+    
+    tools:
+      - "execute_command"
+      - "write_file"
+      - "search"
+    
+    document_stores:
+      - "codebase"
+    database: "qdrant"
+    embedder: "ollama"
 
-**Code Reviewer:**
-```yaml
-agents:
-  reviewer:
-    prompt:
-      prompt_slots:
-        system_role: "You are a code review expert."
-        tool_usage: |
-          Always search for similar patterns in the codebase.
-          Use search tool to find related code.
-```
+llms:
+  gpt-4o:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 8000
 
-### Multi-Configuration Setup
+tools:
+  execute_command:
+    type: "command"
+    allowed_commands: ["ls", "cat", "grep", "git"]
+  write_file:
+    type: "write_file"
+  search:
+    type: "search"
+    document_stores: ["codebase"]
 
-```bash
-# Development
-./hector --config config-dev.yaml
+databases:
+  qdrant:
+    type: "qdrant"
+    host: "localhost"
+    port: 6333
 
-# Production
-./hector --config config-prod.yaml
+embedders:
+  ollama:
+    type: "ollama"
+    model: "nomic-embed-text"
+    host: "http://localhost:11434"
 
-# Testing
-./hector --config config-test.yaml
+document_stores:
+  codebase:
+    name: "codebase"
+    path: "."
+    include_patterns: ["*.go", "*.md"]
+    exclude_patterns: ["**/vendor/**", "**/.git/**"]
+
+global:
+  a2a_server:
+    host: "0.0.0.0"
+    port: 8080
+  logging:
+    level: "info"
+    format: "text"
 ```
 
 ---
 
-## References
-
-- [README.md](README.md) - Main documentation
-- [ARCHITECTURE.md](ARCHITECTURE.md) - System design
-- [LICENSE.md](LICENSE.md) - Licensing information
-- [Examples](configs/) - Sample configurations
-
----
-
-**Last Updated:** October 4, 2025
+For more examples, see the [configs/](../configs/) directory.
