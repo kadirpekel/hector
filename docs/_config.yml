@@ -85,7 +85,6 @@ defaults:
 
 # Exclude from processing
 exclude:
-  - benchmarks/
   - .sass-cache/
   - .jekyll-cache/
   - gemfiles/
