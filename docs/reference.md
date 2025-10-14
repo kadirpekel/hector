@@ -12,8 +12,8 @@ Complete technical reference for developers and integrators.
 
 ## API & Protocol
 
+- **[A2A Compliance](A2A_COMPLIANCE)** - 100% A2A Protocol specification compliance details
 - **[API Reference](API_REFERENCE)** - Complete A2A HTTP/SSE API documentation
-- **[A2A Compliance](A2A_COMPLIANCE)** - 100% A2A specification compliance details
 
 ## Configuration & System
 

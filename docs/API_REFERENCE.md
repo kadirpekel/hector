@@ -10,6 +10,8 @@ description: "Complete A2A Protocol API reference"
 
 **Complete A2A Protocol API Reference for Hector**
 
+This document provides the complete API reference for Hector's A2A-compliant endpoints. For detailed compliance analysis and protocol mapping, see [A2A Compliance](A2A_COMPLIANCE).
+
 ---
 
 ## Table of Contents
@@ -28,7 +30,7 @@ description: "Complete A2A Protocol API reference"
 
 ## Overview
 
-Hector provides three transport protocols, all implementing the same [A2A Protocol specification](https://a2a-protocol.org/latest/specification/):
+Hector provides three transport protocols, all implementing the same [A2A Protocol specification](https://a2a-protocol.org/latest/specification/). For detailed compliance analysis, see [A2A Compliance](A2A_COMPLIANCE).
 
 | Transport | Default Port | Use Case | Features |
 |-----------|--------------|----------|----------|
@@ -94,11 +96,11 @@ grpcurl -plaintext \
 
 **Endpoint**: `POST /rpc`
 
-**Methods**:
-- `SendMessage` - Send non-streaming message
-- `GetAgentCard` - Get agent metadata
-- `GetTask` - Get task status
-- `CancelTask` - Cancel a task
+**Methods** (per [A2A Spec Section 7](https://a2a-protocol.org/latest/specification/#core-methods)):
+- `message/send` - Send non-streaming message
+- `card/get` - Get agent metadata
+- `tasks/get` - Get task status
+- `tasks/cancel` - Cancel a task
 
 ---
 
@@ -249,10 +251,8 @@ rpc GetAgentCard(GetAgentCardRequest) returns (AgentCard)
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "GetAgentCard",
-  "params": {
-    "agentId": "assistant"
-  },
+  "method": "card/get",
+  "params": {},
   "id": 1
 }
 ```
@@ -313,8 +313,8 @@ curl -X POST http://localhost:8082/rpc \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
-    "method": "GetAgentCard",
-    "params": {"agentId": "assistant"},
+    "method": "card/get",
+    "params": {},
     "id": 1
   }'
 ```
@@ -332,16 +332,16 @@ Send a message to an agent and receive a complete response.
 POST /v1/agents/{agent_id}/message:send
 ```
 
-**gRPC**:
+**gRPC** (per [A2A Spec Section 3.2.2](https://a2a-protocol.org/latest/specification/#grpc-transport)):
 ```protobuf
 rpc SendMessage(SendMessageRequest) returns (SendMessageResponse)
 ```
 
-**JSON-RPC**:
+**JSON-RPC** (per [A2A Spec Section 3.2.1](https://a2a-protocol.org/latest/specification/#json-rpc-20-transport)):
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "SendMessage",
+  "method": "message/send",
   "params": {...},
   "id": 1
 }
@@ -420,9 +420,8 @@ curl -X POST http://localhost:8082/rpc \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
-    "method": "SendMessage",
+    "method": "message/send",
     "params": {
-      "agentId": "assistant",
       "message": {
         "role": "ROLE_USER",
         "content": [{"text": "What is 2+2?"}]
@@ -449,7 +448,7 @@ rpc SendStreamingMessage(SendMessageRequest) returns (stream StreamResponse)
 
 **Request Body**: Same as non-streaming
 
-**Response** (Server-Sent Events):
+**Response** (Server-Sent Events per [A2A Spec Section 3.2.3](https://a2a-protocol.org/latest/specification/#http-json-rest-transport)):
 ```
 event: message
 data: {"result":{"message":{"role":"ROLE_AGENT","content":[{"text":"The"}]}}}
@@ -556,7 +555,7 @@ rpc GetTask(GetTaskRequest) returns (Task)
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "GetTask",
+  "method": "tasks/get",
   "params": {
     "name": "tasks/task-123"
   },
@@ -588,12 +587,15 @@ rpc GetTask(GetTaskRequest) returns (Task)
 }
 ```
 
-**Task States**:
+**Task States** (per [A2A Spec Section 6.4](https://a2a-protocol.org/latest/specification/#task-state)):
 - `TASK_STATE_SUBMITTED` - Task received
-- `TASK_STATE_RUNNING` - Task in progress
+- `TASK_STATE_WORKING` - Task in progress (A2A spec name)
 - `TASK_STATE_COMPLETED` - Task finished successfully
 - `TASK_STATE_FAILED` - Task failed with error
 - `TASK_STATE_CANCELLED` - Task cancelled by user
+- `TASK_STATE_INPUT_REQUIRED` - Task requires additional input
+- `TASK_STATE_REJECTED` - Agent declined to perform task
+- `TASK_STATE_AUTH_REQUIRED` - Authentication needed
 
 **Examples**:
 
@@ -608,7 +610,7 @@ curl -X POST http://localhost:8082/rpc \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
-    "method": "GetTask",
+    "method": "tasks/get",
     "params": {"name": "tasks/task-123"},
     "id": 1
   }'
@@ -632,7 +634,7 @@ rpc CancelTask(CancelTaskRequest) returns (Task)
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "CancelTask",
+  "method": "tasks/cancel",
   "params": {
     "name": "tasks/task-123"
   },
@@ -932,6 +934,8 @@ X-RateLimit-Reset: 1640000000
 ---
 
 ## Webhooks (Push Notifications)
+
+**Note**: Push notification interfaces are implemented per A2A spec but webhook delivery is pending. See [A2A Compliance](A2A_COMPLIANCE#push-notifications) for current status.
 
 Configure webhooks for task completion:
 

@@ -8,7 +8,7 @@
 ```
 [![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
-[![A2A Protocol](https://img.shields.io/badge/A2A%20Compliance-100%25-brightgreen.svg)](A2A_COMPLIANCE_SYSTEM.md)
+[![A2A Protocol](https://img.shields.io/badge/A2A%20Compliance-100%25-brightgreen.svg)](https://gohector.dev/A2A_COMPLIANCE)
 [![Documentation](https://img.shields.io/badge/docs-gohector.dev-blue.svg)](https://gohector.dev)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 [![GoDoc](https://godoc.org/github.com/kadirpekel/hector?status.svg)](https://godoc.org/github.com/kadirpekel/hector)
@@ -19,7 +19,7 @@
 Hector is a **declarative AI agent platform** that eliminates code from agent development. Unlike Python-based frameworks (LangChain, AutoGen, CrewAI), Hector uses **pure YAML configuration** to define complete agent systems:
 
 - **Zero Code Required** - Define agents, tools, prompts, and orchestration entirely in YAML
-- **A2A Protocol Native** - Built on the [Agent-to-Agent protocol](https://a2a-protocol.org) for true interoperability
+- **A2A Protocol Native** - Built on the [Agent-to-Agent protocol](https://a2a-protocol.org) for true interoperability ([100% compliant](https://gohector.dev/A2A_COMPLIANCE))
 - **Single & Multi-Agent** - From standalone agents to complex orchestration networks
 - **Hybrid Architecture** - Mix local agents with remote A2A-compliant services
 
@@ -106,7 +106,7 @@ Unlike LangChain (500+ lines of Python), Hector uses **pure YAML** (120 lines) f
 
 **Core Capabilities:**
 - 🎯 **Zero Code** - Define agents, tools, prompts, and orchestration entirely in YAML
-- 🌐 **A2A Protocol Native** - Built on Agent-to-Agent protocol for true interoperability
+- 🌐 **A2A Protocol Native** - Built on Agent-to-Agent protocol for true interoperability ([100% compliant](https://gohector.dev/A2A_COMPLIANCE))
 - 🤖 **Multi-Agent Orchestration** - LLM-driven routing with native & external A2A agents
 - 🧠 **Memory Management** - Working memory (token-based) + long-term (vector storage)
 - 🛠️ **Tools & MCP** - Built-in tools + MCP protocol for 150+ integrations
