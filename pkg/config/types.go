@@ -1169,8 +1169,13 @@ func (c *TaskSQLConfig) ConnectionString() string {
 		if sslMode == "" {
 			sslMode = "disable"
 		}
-		return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-			c.Host, c.Port, c.Username, c.Password, c.Database, sslMode)
+		// Only include password if it's not empty
+		if c.Password != "" {
+			return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+				c.Host, c.Port, c.Username, c.Password, c.Database, sslMode)
+		}
+		return fmt.Sprintf("host=%s port=%d user=%s dbname=%s sslmode=%s",
+			c.Host, c.Port, c.Username, c.Database, sslMode)
 	case "mysql":
 		return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
 			c.Username, c.Password, c.Host, c.Port, c.Database)
