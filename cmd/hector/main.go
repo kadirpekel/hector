@@ -54,6 +54,31 @@ const (
 	CommandHelp  CommandType = "help"
 )
 
+// ============================================================================
+// CLI MODES
+// ============================================================================
+
+type CLIMode string
+
+const (
+	ModeServer CLIMode = "server" // Host agents via 'serve' command
+	ModeClient CLIMode = "client" // Connect to remote server (--server flag)
+	ModeDirect CLIMode = "direct" // In-process execution (no --server)
+)
+
+func (m CLIMode) String() string {
+	switch m {
+	case ModeServer:
+		return "Server"
+	case ModeClient:
+		return "Client (Remote)"
+	case ModeDirect:
+		return "Direct (Local)"
+	default:
+		return string(m)
+	}
+}
+
 // CLIArgs holds parsed command line arguments
 type CLIArgs struct {
 	Command    CommandType
@@ -393,7 +418,7 @@ func parseArgs() *CLIArgs {
 	serveBaseURL := serveCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
 	serveModel := serveCmd.String("model", "gpt-4o-mini", "OpenAI model to use in zero-config mode")
 	serveTools := serveCmd.Bool("tools", false, "Enable all local tools (file, command execution)")
-	serveMCP := serveCmd.String("mcp", "", "MCP server URL for tool integration")
+	serveMCP := serveCmd.String("mcp-url", "", "MCP server URL for tool integration (supports auth: https://user:pass@host)")
 	serveDocs := serveCmd.String("docs", "", "Document store folder (enables RAG)")
 	serveEmbedder := serveCmd.String("embedder-model", "nomic-embed-text", "Embedder model for document store")
 	serveVectorDB := serveCmd.String("vectordb", "http://localhost:6333", "Vector database connection string")
@@ -417,6 +442,7 @@ func parseArgs() *CLIArgs {
 	callBaseURL := callCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
 	callModel := callCmd.String("model", "gpt-4o-mini", "OpenAI model (direct mode, zero-config)")
 	callTools := callCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
+	callMCP := callCmd.String("mcp-url", "", "MCP server URL for tool integration (direct mode, zero-config)")
 
 	chatCmd := flag.NewFlagSet("chat", flag.ExitOnError)
 	chatServer := chatCmd.String("server", "", "A2A server URL (enables server mode)")
@@ -426,6 +452,7 @@ func parseArgs() *CLIArgs {
 	chatBaseURL := chatCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
 	chatModel := chatCmd.String("model", "gpt-4o-mini", "OpenAI model (direct mode, zero-config)")
 	chatTools := chatCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
+	chatMCP := chatCmd.String("mcp-url", "", "MCP server URL for tool integration (direct mode, zero-config)")
 	chatNoStream := chatCmd.Bool("no-stream", false, "Disable streaming (default: streaming enabled)")
 
 	// Parse command
@@ -488,6 +515,7 @@ func parseArgs() *CLIArgs {
 		args.BaseURL = *callBaseURL
 		args.Model = *callModel
 		args.Tools = *callTools
+		args.MCPURL = *callMCP
 
 	case "chat":
 		_ = chatCmd.Parse(os.Args[2:])
@@ -503,6 +531,7 @@ func parseArgs() *CLIArgs {
 		args.BaseURL = *chatBaseURL
 		args.Model = *chatModel
 		args.Tools = *chatTools
+		args.MCPURL = *chatMCP
 		args.Stream = !*chatNoStream // Streaming is default, --no-stream disables it
 
 	case "help", "--help", "-h":
@@ -518,7 +547,125 @@ func parseArgs() *CLIArgs {
 		os.Exit(1)
 	}
 
+	// Validate mode and flags after parsing
+	validateModeAndFlags(args)
+
 	return args
+}
+
+// ============================================================================
+// MODE DETECTION & VALIDATION
+// ============================================================================
+
+// detectMode determines which CLI mode is active
+func detectMode(args *CLIArgs) CLIMode {
+	if args.Command == CommandServe {
+		return ModeServer
+	}
+
+	// Check --server flag
+	if args.ServerURL != "" {
+		return ModeClient
+	}
+
+	return ModeDirect
+}
+
+// validateModeAndFlags checks for invalid flag combinations and fails fast
+func validateModeAndFlags(args *CLIArgs) {
+	mode := detectMode(args)
+
+	// Validate based on mode
+	switch mode {
+	case ModeServer:
+		// Server mode: all flags are valid
+		return
+
+	case ModeClient:
+		// Client mode: ONLY --server, --token, --stream allowed
+		// Configuration flags are NOT supported
+		if args.ConfigFile != "hector.yaml" && args.ConfigFile != "" {
+			fatalf(`❌ Error: --config flag is not supported in %s mode
+
+You're connecting to a remote server which has its own configuration.
+
+Solutions:
+  • Remove --config flag to use the remote server's configuration
+  • Remove --server flag (or unset HECTOR_SERVER) to use Direct mode with local config
+
+Current mode: %s
+Server: %s`, mode, mode, args.ServerURL)
+		}
+
+		// Zero-config flags not allowed in client mode
+		if args.APIKey != "" {
+			fatalf(`❌ Error: --api-key flag is not supported in %s mode
+
+The remote server has its own LLM configuration.
+
+Current mode: %s
+Server: %s`, mode, mode, args.ServerURL)
+		}
+
+		if args.Model != "" && args.Model != "gpt-4o-mini" { // Check if non-default
+			fatalf(`❌ Error: --model flag is not supported in %s mode
+
+The remote server has its own model configuration.
+
+Solutions:
+  • Remove --model flag to use the remote server's models
+  • Use Direct mode (remove --server) for local model selection
+
+Current mode: %s
+Server: %s`, mode, mode, args.ServerURL)
+		}
+
+		if args.Tools {
+			fatalf(`❌ Error: --tools flag is not supported in %s mode
+
+The remote server controls which tools are enabled.
+
+Current mode: %s
+Server: %s`, mode, mode, args.ServerURL)
+		}
+
+		if args.MCPURL != "" {
+			fatalf(`❌ Error: --mcp-url flag is not supported in %s mode
+
+The remote server controls which MCP servers are configured.
+
+Current mode: %s
+Server: %s`, mode, mode, args.ServerURL)
+		}
+
+		if args.BaseURL != "" && args.BaseURL != "https://api.openai.com/v1" { // Check if non-default
+			fatalf(`❌ Error: --base-url flag is not supported in %s mode
+
+The remote server has its own API configuration.
+
+Current mode: %s
+Server: %s`, mode, mode, args.ServerURL)
+		}
+
+	case ModeDirect:
+		// Direct mode: all flags valid, but check for conflicting config strategies
+		hasConfigFile := args.ConfigFile != "" && args.ConfigFile != "hector.yaml"
+		hasZeroConfig := args.APIKey != "" || args.Model != "gpt-4o-mini" || args.Tools
+
+		// Check if config file exists
+		configExists := false
+		if args.ConfigFile != "" {
+			if _, err := os.Stat(args.ConfigFile); err == nil {
+				configExists = true
+			}
+		}
+
+		if hasConfigFile && configExists && hasZeroConfig {
+			fmt.Fprintf(os.Stderr, "⚠️  Warning: Both --config and zero-config flags provided\n")
+			fmt.Fprintf(os.Stderr, "   Zero-config flags (--api-key, --model, --tools) will be ignored.\n")
+			fmt.Fprintf(os.Stderr, "   Using configuration from: %s\n\n", args.ConfigFile)
+		}
+	}
 }
 
 // ============================================================================
@@ -536,12 +683,26 @@ func executeServeCommand(args *CLIArgs) {
 		}
 
 		// Get API key from flag or environment
+		// Support multiple providers: OpenAI, Anthropic, Gemini
 		apiKey := args.APIKey
 		if apiKey == "" {
-			apiKey = os.Getenv("OPENAI_API_KEY")
+			// Try provider-specific env vars
+			if key := os.Getenv("OPENAI_API_KEY"); key != "" {
+				apiKey = key
+			} else if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+				apiKey = key
+			} else if key := os.Getenv("GEMINI_API_KEY"); key != "" {
+				apiKey = key
+			}
 		}
 		if apiKey == "" {
-			fatalf("OpenAI API key required for zero-config mode (use --api-key or set OPENAI_API_KEY environment variable)")
+			fatalf("API key required for zero-config mode\nSet one of: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY\nOr use --api-key flag")
+		}
+
+		// Get MCP URL from flag or environment
+		mcpURL := args.MCPURL
+		if mcpURL == "" {
+			mcpURL = os.Getenv("MCP_SERVER_URL")
 		}
 
 		opts := config.ZeroConfigOptions{
@@ -549,7 +710,7 @@ func executeServeCommand(args *CLIArgs) {
 			BaseURL:     args.BaseURL,
 			Model:       args.Model,
 			EnableTools: args.Tools,
-			MCPURL:      args.MCPURL,
+			MCPURL:      mcpURL,
 			DocsFolder:  args.DocsFolder,
 		}
 
@@ -889,7 +1050,33 @@ COMMANDS:
   help               Show this help message
   version            Show version information
 
-SERVER MODE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THREE MODES OF OPERATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Hector operates in three distinct modes based on your command and flags:
+
+1️⃣  SERVER MODE - Host agents for multiple clients
+   Trigger: 'serve' command
+   Use when: Production deployments, multi-agent systems, team access
+   Supports: --config AND zero-config flags
+
+2️⃣  CLIENT MODE - Connect to remote Hector server
+   Trigger: --server flag
+   Use when: Accessing remote/production servers, team collaboration
+   Supports: ONLY --server, --token, --stream
+   ⚠️  --config and zero-config flags NOT supported (server has its own config)
+
+3️⃣  DIRECT MODE - Run agents in-process (no server)
+   Trigger: No --server flag
+   Use when: Quick tasks, local development, scripts, experimentation
+   Supports: --config AND zero-config flags
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔧 SERVER MODE - Start persistent server
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
   hector serve [options]
     --config FILE            Configuration file (default: hector.yaml)
     --port PORT              gRPC server port (default: 8080, overrides config)
@@ -897,58 +1084,101 @@ SERVER MODE:
     --a2a-base-url URL       A2A base URL for discovery (overrides config)
     --debug                  Enable debug output
     
-  Zero-Config Mode (when hector.yaml doesn't exist):
-    --model MODEL            OpenAI model (default: gpt-4o-mini)
-    --api-key KEY            OpenAI API key (or set OPENAI_API_KEY)
+  Zero-Config Options (when hector.yaml doesn't exist):
+    --model MODEL            Model name (default: gpt-4o-mini)
+    --api-key KEY            API key (or set env var, see below)
     --tools                  Enable all local tools
-    --mcp URL                MCP server URL
+    --mcp-url URL            MCP server URL (supports auth: https://user:pass@host)
     --docs FOLDER            Document store folder (RAG)
     --embedder-model MODEL   Embedder model (default: nomic-embed-text)
     --vectordb URL           Vector DB (default: http://localhost:6333)
 
-CLIENT MODE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🌐 CLIENT MODE - Connect to remote server
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
   hector list [options]
-    --server URL     Server URL (default: localhost:8081)
+    --server URL     Server URL (triggers client mode)
     --token TOKEN    Authentication token
 
   hector info <agent> [options]
-    --server URL     Server URL (default: localhost:8081)
+    --server URL     Server URL (triggers client mode)
     --token TOKEN    Authentication token
 
   hector call <agent> "prompt" [options]
-    --server URL     Server URL (default: localhost:8081)
+    --server URL     Server URL (triggers client mode)
     --token TOKEN    Authentication token
     --stream BOOL    Enable streaming (default: true)
 
   hector chat <agent> [options]
-    --server URL     Server URL (default: localhost:8081)
+    --server URL     Server URL (triggers client mode)
     --token TOKEN    Authentication token
 
+  ⚠️  Important: --config, --model, --tools, --api-key flags are NOT supported
+      in client mode. The remote server uses its own configuration.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💻 DIRECT MODE - In-process execution (no server)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Same commands as Client mode, but WITHOUT --server flag:
+
+  hector list [--config FILE]
+  hector info <agent> [--config FILE]
+  hector call <agent> "prompt" [--config FILE] [zero-config options]
+  hector chat <agent> [--config FILE] [zero-config options]
+
+  With Config File:
+    --config FILE    Configuration file (default: hector.yaml)
+
+  Zero-Config Options (for call and chat):
+    --api-key KEY    API key (or set env var, see below)
+    --base-url URL   API base URL
+    --model MODEL    Model name (default: gpt-4o-mini)
+    --tools          Enable local tools
+    --mcp-url URL    MCP server URL (supports auth: https://user:pass@host)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 EXAMPLES:
-  # Start server
-  $ hector serve
+  
+  Server Mode - Host agents:
+    $ hector serve                                    # Use config file
+    $ hector serve --model gpt-4o --tools             # Zero-config mode
+    $ hector serve --config prod.yaml --port 9090     # Custom config & port
+  
+  Client Mode - Connect to remote server:
+    $ hector list --server http://remote:8080         # List remote agents
+    $ hector call assistant "task" --server URL       # Execute on remote
+    $ hector chat coder --server URL --token abc123   # Chat with auth
+  
+  Direct Mode - In-process execution:
+    $ hector list                                     # List from local config
+    $ hector call assistant "task"                    # Zero-config (fastest!)
+    $ hector call assistant "task" --config my.yaml  # Use specific config
+    $ hector call assistant "task" --model gpt-4o    # Override model
+    $ hector chat assistant --tools                   # Enable tools
 
-  # Start with zero-config
-  $ hector serve --model llama3.2:1b --tools
-
-  # List agents
-  $ hector list
-
-  # Get agent info
-  $ hector info my_agent
-
-  # Call agent
-  $ hector call my_agent "Analyze this"
-
-  # Interactive chat
-  $ hector chat my_agent
-
-  # Use remote server
-  $ hector call --server http://remote:8081 my_agent "prompt"
+  Mode Selection Examples:
+    # Same command, different modes:
+    $ hector call agent "task"                # Direct mode (local)
+    $ hector call agent "task" --server URL   # Client mode (remote)
 
 ENVIRONMENT VARIABLES:
-  HECTOR_SERVER    Default server URL
-  HECTOR_TOKEN     Default authentication token
+  API Keys (for zero-config mode):
+    OPENAI_API_KEY       OpenAI API key
+    ANTHROPIC_API_KEY    Anthropic (Claude) API key
+    GEMINI_API_KEY       Google Gemini API key
+  
+  MCP Configuration:
+    MCP_SERVER_URL       MCP server URL (supports auth: https://user:pass@host)
+
+MODE DETECTION:
+  • If you use 'serve' command → Server mode
+  • If you use --server flag → Client mode
+  • Otherwise → Direct mode
 
 For more information: https://github.com/kadirpekel/hector
 `)
