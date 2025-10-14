@@ -100,72 +100,21 @@ export OPENAI_API_KEY="sk-..."
 
 ---
 
-## Core Capabilities
+## Why Hector?
 
-Hector provides a comprehensive AI agent platform through pure YAML configuration:
+Unlike LangChain (500+ lines of Python), Hector uses **pure YAML** (120 lines) for the same functionality.
 
-**Declarative Configuration**
-- Zero code required - Define complete systems in YAML
-- 6-slot prompt system - Modular prompt composition
-- Multiple LLM providers - OpenAI, Anthropic, Gemini
-- Structured output - JSON schemas, enums, and constraints
-- Environment variables - Secure credential management
+**Core Capabilities:**
+- 🎯 **Zero Code** - Define agents, tools, prompts, and orchestration entirely in YAML
+- 🌐 **A2A Protocol Native** - Built on Agent-to-Agent protocol for true interoperability
+- 🤖 **Multi-Agent Orchestration** - LLM-driven routing with native & external A2A agents
+- 🧠 **Memory Management** - Working memory (token-based) + long-term (vector storage)
+- 🛠️ **Tools & MCP** - Built-in tools + MCP protocol for 150+ integrations
+- 📚 **RAG & Knowledge** - Vector search (Qdrant), semantic retrieval, document stores
+- 🔌 **Plugin System** - gRPC-based extensibility (custom LLMs, databases, tools)
+- 🔒 **Production Ready** - JWT auth, streaming (SSE), task persistence (SQL/Redis/Memory)
 
-**Tools & Integrations**
-- Built-in tools - Command execution, file operations (read/write/replace), semantic search, todos
-- MCP protocol support - Connect to MCP servers for tool discovery
-- Multi-agent orchestration - `agent_call` tool for delegation
-- Security controls - Command whitelisting, path restrictions, execution timeouts
-
-**Memory & Context Management**
-- Working memory strategies - Buffer window (LIFO) or summary buffer (token-based)
-- Long-term memory - Semantic recall via vector storage
-- Conversation history - Persistent multi-turn sessions
-- Automatic summarization - Threshold-triggered conversation compression
-
-**RAG & Knowledge Base**
-- Document stores - Directory-based knowledge indexing
-- Vector search - Qdrant integration for semantic retrieval
-- Embeddings - Ollama embedder support
-- Auto-recall - Inject relevant memories into context
-
-**Reasoning Strategies**
-- Chain-of-thought - Iterative reasoning with natural termination
-- Supervisor - Optimized for multi-agent orchestration
-- Configurable limits - Max iterations, quality thresholds
-- Streaming support - Real-time output with thinking blocks
-
-**Multi-Agent System**
-- Native agents - Full local control and configuration
-- External A2A agents - Connect to remote A2A-compliant services
-- LLM-driven routing - Automatic delegation and synthesis
-- Visibility control - Public, internal, private access levels
-
-**Plugin Architecture (gRPC)**
-- Language-agnostic - Write plugins in any language with gRPC
-- Extensible providers - Custom LLMs, databases, embedders, tools
-- Process isolation - Plugins run independently for stability
-- Auto-discovery - Scan directories for available plugins
-
-**Security & Authentication**
-- JWT validation - OAuth2/OIDC with JWKS auto-refresh
-- Multiple schemes - Bearer tokens, API keys, Basic auth
-- Agent visibility - Control discovery and access
-- Tool sandboxing - Restrict commands and file access
-
-**A2A Protocol Compliance**
-- Agent cards - Standard capability advertisement
-- HTTP+JSON transport - RESTful A2A endpoints with discovery
-- Server-Sent Events - Streaming responses per A2A spec
-- Task management - Async task lifecycle (create, status, cancel)
-- Session support - Context-aware multi-turn conversations
-
-**Deployment & Operations**
-- Multi-transport - gRPC, REST gateway, JSON-RPC
-- Three CLI modes - Server (host agents), Client (connect to remote), Direct (in-process)
-- Zero-config support - Get started with just an API key (Server & Direct modes)
-- Docker support - Production-ready containerization
-- Task persistence - In-memory or SQL backend (PostgreSQL, MySQL, SQLite)
+**📖 Complete documentation:** [gohector.dev](https://gohector.dev)
 
 ---
 
