@@ -428,79 +428,6 @@ hector serve
 
 ---
 
-## Common Workflows
-
-### Local Development
-
-```bash
-# Terminal 1: Start server (server mode)
-hector serve --config hector.yaml
-
-# Terminal 2: Test agents (client mode)
-hector call assistant "test 1" --server http://localhost:8080
-hector call assistant "test 2" --server http://localhost:8080
-hector chat assistant --server http://localhost:8080
-```
-
-### Quick Scripting (Direct Mode)
-
-```bash
-#!/bin/bash
-export OPENAI_API_KEY="sk-..."
-
-# Process multiple inputs
-for topic in "AI" "ML" "DL"; do
-  hector call assistant "Explain $topic in one paragraph" > "${topic}.txt"
-done
-```
-
-### Multi-Environment
-
-Use shell aliases or scripts for different environments:
-
-```bash
-# Define aliases for different environments
-alias hector-dev='hector --server http://localhost:8080'
-alias hector-prod='hector --server https://prod.example.com --token $PROD_TOKEN'
-
-# Use them
-hector-dev call assistant "test"
-hector-prod call assistant "test"
-```
-
-### Zero-Config Experimentation (Direct Mode)
-
-```bash
-export OPENAI_API_KEY="sk-..."
-
-# Try different models
-hector call assistant "test" --model gpt-4o-mini
-hector call assistant "test" --model gpt-4o
-
-# With tools
-hector call assistant "List files" --tools
-
-# Interactive
-hector chat assistant
-```
-
-### MCP Integration Workflow
-
-```bash
-# Set up environment for Composio
-export OPENAI_API_KEY="sk-..."
-export MCP_SERVER_URL="https://your-api-key@api.composio.dev/v1/mcp"
-
-# Now MCP tools are automatically available
-hector call assistant "Create a GitHub issue"
-hector serve  # Server also has MCP tools
-
-# Override for testing different MCP server
-hector call assistant "test" --mcp-url "http://localhost:3000/mcp"
-```
-
----
-
 ## CLI Flag Order
 
 **Important:** Flags must come **before** positional arguments (agent name, prompt):
@@ -513,56 +440,6 @@ hector chat --model gpt-4o assistant
 # ❌ Wrong - flags after agent name won't be parsed
 hector call assistant "hello" --server http://localhost:8080
 hector chat assistant --model gpt-4o
-```
-
----
-
-## Complete Example: Multi-Agent System
-
-### Configuration File
-
-```yaml
-# config.yaml
-agents:
-  coder:
-    name: "Coding Assistant"
-    description: "Writes clean code"
-    llm: "gpt-4o"
-    prompt:
-      system_role: "You are an expert programmer"
-  
-  reviewer:
-    name: "Code Reviewer"
-    description: "Reviews code quality"
-    llm: "claude"
-    prompt:
-      system_role: "You are a code reviewer focused on best practices"
-
-llms:
-  gpt-4o:
-    type: "openai"
-    model: "gpt-4o"
-    api_key: "${OPENAI_API_KEY}"
-  
-  claude:
-    type: "anthropic"
-    model: "claude-3-5-sonnet-20241022"
-    api_key: "${ANTHROPIC_API_KEY}"
-```
-
-### Usage
-
-```bash
-# Start server (server mode)
-hector serve --config config.yaml
-
-# Use different agents (client mode)
-hector call coder "Write a function" --server http://localhost:8080
-hector call reviewer "Review the code" --server http://localhost:8080
-
-# Interactive sessions
-hector chat coder --server http://localhost:8080
-hector chat reviewer --server http://localhost:8080
 ```
 
 ---
@@ -584,14 +461,3 @@ hector chat reviewer --server http://localhost:8080
               → Use DIRECT MODE: Use commands without `--server`
 ```
 
----
-
-## Next Steps
-
-- **[Configuration Reference](CONFIGURATION.html)** - Complete configuration options
-- **[Building Agents](AGENTS.html)** - Learn advanced agent features  
-- **[Installation Guide](INSTALLATION.html)** - All installation methods
-- **[Quick Start](QUICK_START.html)** - Get started in 5 minutes
-- **[Examples](https://github.com/kadirpekel/hector/tree/main/configs)** - Sample configurations
-
-**Ready to build?** Start with the [Quick Start Guide](QUICK_START.html) to get your first agent running.
