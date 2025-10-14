@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Tutorials
-nav_order: 16
+nav_order: 80
 has_children: true
 description: "Hands-on tutorials for building with Hector"
 ---
