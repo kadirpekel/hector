@@ -14,16 +14,16 @@
 [![GoDoc](https://godoc.org/github.com/kadirpekel/hector?status.svg)](https://godoc.org/github.com/kadirpekel/hector)
 
 # Hector
-**Pure A2A-Native Declarative AI Agent Platform**
+**Declarative AI Agent Platform with Native A2A Protocol Support**
 
-Hector is a **declarative AI agent platform** that eliminates code from agent development. Unlike Python-based frameworks (LangChain, AutoGen, CrewAI), Hector uses **pure YAML configuration** to define complete agent systems with:
+Hector is a **declarative AI agent platform** that eliminates code from agent development. Unlike Python-based frameworks (LangChain, AutoGen, CrewAI), Hector uses **pure YAML configuration** to define complete agent systems:
 
-- **Zero Code Required** - Define agents, tools, prompts, and orchestration in YAML
-- **100% A2A Native** - Built on the [Agent-to-Agent protocol](https://a2a-protocol.org) for true interoperability
-- **Single & Multi-Agent** - From individual agents to complex orchestration
-- **External Integration** - Connect remote A2A agents seamlessly
+- **Zero Code Required** - Define agents, tools, prompts, and orchestration entirely in YAML
+- **A2A Protocol Native** - Built on the [Agent-to-Agent protocol](https://a2a-protocol.org) for true interoperability
+- **Single & Multi-Agent** - From standalone agents to complex orchestration networks
+- **Hybrid Architecture** - Mix local agents with remote A2A-compliant services
 
-For complete documentation please visit [gohector.dev](https://gohector.dev).
+For complete documentation visit [gohector.dev](https://gohector.dev).
 
 ## Quick Start
 
@@ -94,6 +94,74 @@ export OPENAI_API_KEY="sk-..."
 
 ---
 
+## Core Capabilities
+
+Hector provides a comprehensive AI agent platform through pure YAML configuration:
+
+**Declarative Configuration**
+- Zero code required - Define complete systems in YAML
+- 6-slot prompt system - Modular prompt composition
+- Multiple LLM providers - OpenAI, Anthropic, Gemini
+- Structured output - JSON schemas, enums, and constraints
+- Environment variables - Secure credential management
+
+**Tools & Integrations**
+- Built-in tools - Command execution, file operations (read/write/replace), semantic search, todos
+- MCP protocol support - Connect to MCP servers for tool discovery
+- Multi-agent orchestration - `agent_call` tool for delegation
+- Security controls - Command whitelisting, path restrictions, execution timeouts
+
+**Memory & Context Management**
+- Working memory strategies - Buffer window (LIFO) or summary buffer (token-based)
+- Long-term memory - Semantic recall via vector storage
+- Conversation history - Persistent multi-turn sessions
+- Automatic summarization - Threshold-triggered conversation compression
+
+**RAG & Knowledge Base**
+- Document stores - Directory-based knowledge indexing
+- Vector search - Qdrant integration for semantic retrieval
+- Embeddings - Ollama embedder support
+- Auto-recall - Inject relevant memories into context
+
+**Reasoning Strategies**
+- Chain-of-thought - Iterative reasoning with natural termination
+- Supervisor - Optimized for multi-agent orchestration
+- Configurable limits - Max iterations, quality thresholds
+- Streaming support - Real-time output with thinking blocks
+
+**Multi-Agent System**
+- Native agents - Full local control and configuration
+- External A2A agents - Connect to remote A2A-compliant services
+- LLM-driven routing - Automatic delegation and synthesis
+- Visibility control - Public, internal, private access levels
+
+**Plugin Architecture (gRPC)**
+- Language-agnostic - Write plugins in any language with gRPC
+- Extensible providers - Custom LLMs, databases, embedders, tools
+- Process isolation - Plugins run independently for stability
+- Auto-discovery - Scan directories for available plugins
+
+**Security & Authentication**
+- JWT validation - OAuth2/OIDC with JWKS auto-refresh
+- Multiple schemes - Bearer tokens, API keys, Basic auth
+- Agent visibility - Control discovery and access
+- Tool sandboxing - Restrict commands and file access
+
+**A2A Protocol Compliance**
+- Agent cards - Standard capability advertisement
+- HTTP+JSON transport - RESTful A2A endpoints with discovery
+- Server-Sent Events - Streaming responses per A2A spec
+- Task management - Async task lifecycle (create, status, cancel)
+- Session support - Context-aware multi-turn conversations
+
+**Deployment & Operations**
+- Multi-transport - gRPC, REST gateway, JSON-RPC
+- Zero-config mode - Get started with just an API key
+- Docker support - Production-ready containerization
+- Task persistence - In-memory or SQL backend (PostgreSQL, MySQL, SQLite)
+
+---
+
 ## Architecture
 
 ### Agent Architecture
@@ -108,39 +176,39 @@ export OPENAI_API_KEY="sk-..."
 │  • Component Management   • Lifecycle Management             │
 ├──────────────────────────────────────────────────────────────┤
 │                      CLIENT LAYER                            │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │         A2AClient Interface (Protocol Native)           ││
-│  ├─────────────────────────────────────────────────────────┤│
-│  │  HTTPClient           │          DirectClient           ││
-│  │  • Remote agents      │          • In-process agents    ││
-│  │  • Uses protojson     │          • No network calls     ││
-│  │  • Multi-transport    │          • Direct protobuf      ││
-│  └─────────────────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │         A2AClient Interface (Protocol Native)           │ │
+│  ├─────────────────────────────────────────────────────────┤ │
+│  │  HTTPClient           │          DirectClient           │ │
+│  │  • Remote agents      │          • In-process agents    │ │
+│  │  • Uses protojson     │          • No network calls     │ │
+│  │  • Multi-transport    │          • Direct protobuf      │ │
+│  └─────────────────────────────────────────────────────────┘ │
 ├──────────────────────────────────────────────────────────────┤
 │                      TRANSPORT LAYER                         │
-│  ┌──────────────┬──────────────────┬─────────────────────┐ │
-│  │  gRPC (Core) │  REST (Gateway)  │  JSON-RPC (Adapter) │ │
-│  │  • Native    │  • Auto-gen      │  • Custom HTTP      │ │
-│  │  • Binary    │  • JSON          │  • Simple RPC       │ │
-│  │  • Streaming │  • SSE           │  • JSON             │ │
-│  │  Port: 8080  │  Port: 8081      │  Port: 8082         │ │
-│  └──────────────┴──────────────────┴─────────────────────┘ │
+│  ┌──────────────┬──────────────────┬─────────────────────┐   │
+│  │  gRPC (Core) │  REST (Gateway)  │  JSON-RPC (Adapter) │   │
+│  │  • Native    │  • Auto-gen      │  • Custom HTTP      │   │
+│  │  • Binary    │  • JSON          │  • Simple RPC       │   │
+│  │  • Streaming │  • SSE           │  • JSON             │   │
+│  │  Port: 8080  │  Port: 8081      │  Port: 8082         │   │
+│  └──────────────┴──────────────────┴─────────────────────┘   │
 ├──────────────────────────────────────────────────────────────┤
 │                      SERVER LAYER                            │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │            RegistryService (Multi-Agent Hub)            ││
-│  │  • Agent registration    • Request routing              ││
-│  │  • Metadata management   • Discovery endpoints          ││
-│  │  • Authentication        • Well-known endpoints         ││
-│  └─────────────────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │            RegistryService (Multi-Agent Hub)            │ │
+│  │  • Agent registration    • Request routing              │ │
+│  │  • Metadata management   • Discovery endpoints          │ │
+│  │  • Authentication        • Well-known endpoints         │ │
+│  └─────────────────────────────────────────────────────────┘ │
 ├──────────────────────────────────────────────────────────────┤
 │                       AGENT LAYER                            │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │  Agent (pb.A2AServiceServer interface)                  ││
-│  │  • SendMessage          • GetAgentCard                  ││
-│  │  • SendStreamingMessage • GetTask/CancelTask            ││
-│  │  • Task subscriptions   • Push notifications            ││
-│  └─────────────────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  Agent (pb.A2AServiceServer interface)                  │ │
+│  │  • SendMessage          • GetAgentCard                  │ │
+│  │  • SendStreamingMessage • GetTask/CancelTask            │ │
+│  │  • Task subscriptions   • Push notifications            │ │
+│  └─────────────────────────────────────────────────────────┘ │
 ├──────────────────────────────────────────────────────────────┤
 │                    REASONING ENGINE                          │
 │  Chain-of-Thought Strategy    |    Supervisor Strategy       │
@@ -148,12 +216,12 @@ export OPENAI_API_KEY="sk-..."
 │  • Natural termination        |    • Task decomposition      │
 ├──────────────────────────────────────────────────────────────┤
 │                        CORE SERVICES                         │
-│  ┌───────────┬──────────┬──────────┬──────────┬──────────┐ │
-│  │    LLM    │   Tools  │   Memory │    RAG   │   Tasks  │ │
-│  │  • OpenAI │ • Local  │ • Buffer │ • Qdrant │ • Async  │ │
-│  │• Anthropic│ • MCP    │ • Summary│ • Search │ • Status │ │
-│  │  • Gemini │ • Plugin │ • Session│ • Embed  │ • Track  │ │
-│  └───────────┴──────────┴──────────┴──────────┴──────────┘ │
+│  ┌───────────┬──────────┬──────────┬──────────┬──────────┐   │
+│  │    LLM    │   Tools  │   Memory │    RAG   │   Tasks  │   │
+│  │  • OpenAI │ • Local  │ • Buffer │ • Qdrant │ • Async  │   │
+│  │• Anthropic│ • MCP    │ • Summary│ • Search │ • Status │   │
+│  │  • Gemini │ • Plugin │ • Session│ • Embed  │ • Track  │   │
+│  └───────────┴──────────┴──────────┴──────────┴──────────┘   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
