@@ -25,6 +25,7 @@ type Args struct {
 
 	// Command-specific flags
 	AgentID string
+	TaskID  string
 	Input   string
 	Stream  bool
 

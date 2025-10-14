@@ -60,3 +60,6 @@ test-docs/
 # Hector binary (but not cmd/hector directory)
 /hector
 a2a-python
+
+# Runtime data (SQLite databases, task storage)
+data/

@@ -150,6 +150,38 @@ func (c *DirectClient) GetAgentCard(ctx context.Context, agentID string) (*pb.Ag
 	return agentEntry.Agent.GetAgentCard(ctx, &pb.GetAgentCardRequest{})
 }
 
+// GetTask retrieves a task by ID
+func (c *DirectClient) GetTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
+	// Get agent from registry
+	agentEntry, ok := c.registry.Get(agentID)
+	if !ok {
+		return nil, fmt.Errorf("agent '%s' not found", agentID)
+	}
+
+	// Call GetTask on the agent
+	req := &pb.GetTaskRequest{
+		Name: fmt.Sprintf("tasks/%s", taskID),
+	}
+
+	return agentEntry.Agent.GetTask(ctx, req)
+}
+
+// CancelTask cancels a running task
+func (c *DirectClient) CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
+	// Get agent from registry
+	agentEntry, ok := c.registry.Get(agentID)
+	if !ok {
+		return nil, fmt.Errorf("agent '%s' not found", agentID)
+	}
+
+	// Call CancelTask on the agent
+	req := &pb.CancelTaskRequest{
+		Name: fmt.Sprintf("tasks/%s", taskID),
+	}
+
+	return agentEntry.Agent.CancelTask(ctx, req)
+}
+
 // Close releases resources
 func (c *DirectClient) Close() error {
 	// No cleanup needed for direct client

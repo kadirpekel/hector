@@ -22,6 +22,12 @@ type A2AClient interface {
 	// GetAgentCard retrieves information about a specific agent
 	GetAgentCard(ctx context.Context, agentID string) (*pb.AgentCard, error)
 
+	// GetTask retrieves a task by ID
+	GetTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error)
+
+	// CancelTask cancels a running task
+	CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error)
+
 	// Close releases any resources held by the client
 	Close() error
 }

@@ -19,17 +19,15 @@ agents:
         max_idle: 2
 
     reasoning:
-      engine: react
-      max_iterations: 5
+      engine: chain-of-thought
+      max_iterations: 100
 
     memory:
       strategy: buffer_window
       window_size: 20
 
-providers:
-  llms:
-    gpt:
-      type: openai
-      model: gpt-4o-mini
-      api_key: ${OPENAI_API_KEY}
-
+llms:
+  gpt:
+    type: openai
+    model: gpt-4o-mini
+    api_key: ${OPENAI_API_KEY}

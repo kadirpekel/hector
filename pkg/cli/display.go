@@ -72,7 +72,79 @@ func DisplayMessageLine(msg *pb.Message, prefix string) {
 
 // DisplayTask displays a task response
 func DisplayTask(task *pb.Task) {
-	fmt.Printf("Task created: %s (status: %s)\n", task.Id, task.Status)
+	fmt.Printf("\n📋 Task Details\n")
+	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Printf("Task ID:     %s\n", task.Id)
+	fmt.Printf("Context ID:  %s\n", task.ContextId)
+
+	if task.Status != nil {
+		stateStr := task.Status.State.String()
+		// Remove TASK_STATE_ prefix for cleaner display
+		if len(stateStr) > 11 && stateStr[:11] == "TASK_STATE_" {
+			stateStr = stateStr[11:]
+		}
+
+		// Color code based on state
+		var stateDisplay string
+		switch task.Status.State {
+		case pb.TaskState_TASK_STATE_COMPLETED:
+			stateDisplay = fmt.Sprintf("✅ %s", stateStr)
+		case pb.TaskState_TASK_STATE_FAILED:
+			stateDisplay = fmt.Sprintf("❌ %s", stateStr)
+		case pb.TaskState_TASK_STATE_CANCELLED:
+			stateDisplay = fmt.Sprintf("🚫 %s", stateStr)
+		case pb.TaskState_TASK_STATE_WORKING:
+			stateDisplay = fmt.Sprintf("⚙️  %s", stateStr)
+		case pb.TaskState_TASK_STATE_SUBMITTED:
+			stateDisplay = fmt.Sprintf("📤 %s", stateStr)
+		default:
+			stateDisplay = stateStr
+		}
+
+		fmt.Printf("Status:      %s\n", stateDisplay)
+
+		if task.Status.Timestamp != nil {
+			fmt.Printf("Updated:     %s\n", task.Status.Timestamp.AsTime().Format("2006-01-02 15:04:05"))
+		}
+	}
+
+	// Display artifacts count
+	if len(task.Artifacts) > 0 {
+		fmt.Printf("Artifacts:   %d\n", len(task.Artifacts))
+	}
+
+	// Display history
+	if len(task.History) > 0 {
+		fmt.Printf("\n💬 History (%d messages):\n", len(task.History))
+		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+		for i, msg := range task.History {
+			roleStr := "Unknown"
+			switch msg.Role {
+			case pb.Role_ROLE_USER:
+				roleStr = "User"
+			case pb.Role_ROLE_AGENT:
+				roleStr = "Agent"
+			}
+
+			fmt.Printf("%d. [%s] ", i+1, roleStr)
+
+			// Display content
+			if len(msg.Content) > 0 {
+				for _, part := range msg.Content {
+					if text := part.GetText(); text != "" {
+						// Truncate long messages
+						if len(text) > 200 {
+							fmt.Printf("%s...\n", text[:200])
+						} else {
+							fmt.Printf("%s\n", text)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 }
 
 // DisplayError displays an error message

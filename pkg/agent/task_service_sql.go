@@ -102,8 +102,15 @@ func NewSQLTaskServiceFromConfig(cfg *config.TaskSQLConfig) (*SQLTaskService, er
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
+	// Map driver name to actual SQL driver name
+	// Config uses "sqlite" but the go-sqlite3 driver registers as "sqlite3"
+	driverName := cfg.Driver
+	if driverName == "sqlite" {
+		driverName = "sqlite3"
+	}
+
 	// Open database connection
-	db, err := sql.Open(cfg.Driver, cfg.ConnectionString())
+	db, err := sql.Open(driverName, cfg.ConnectionString())
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -530,16 +537,46 @@ func (s *SQLTaskService) taskToRow(task *pb.Task) (*taskRow, error) {
 		return nil, fmt.Errorf("failed to marshal status: %w", err)
 	}
 
-	// Serialize artifacts
-	artifactsData, err := json.Marshal(task.Artifacts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal artifacts: %w", err)
+	// Serialize artifacts using protojson (they are protobuf messages)
+	var artifactsData []byte
+	if len(task.Artifacts) > 0 {
+		// Marshal each artifact to json.RawMessage and then marshal the array
+		rawArtifacts := make([]json.RawMessage, len(task.Artifacts))
+		for i, artifact := range task.Artifacts {
+			artJSON, err := protojson.Marshal(artifact)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal artifact %d: %w", i, err)
+			}
+			rawArtifacts[i] = json.RawMessage(artJSON)
+		}
+		var err error
+		artifactsData, err = json.Marshal(rawArtifacts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal artifacts array: %w", err)
+		}
+	} else {
+		artifactsData = []byte("[]")
 	}
 
-	// Serialize history
-	historyData, err := json.Marshal(task.History)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal history: %w", err)
+	// Serialize history using protojson (they are protobuf messages)
+	var historyData []byte
+	if len(task.History) > 0 {
+		// Marshal each message to json.RawMessage and then marshal the array
+		rawMessages := make([]json.RawMessage, len(task.History))
+		for i, msg := range task.History {
+			msgJSON, err := protojson.Marshal(msg)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal message %d: %w", i, err)
+			}
+			rawMessages[i] = json.RawMessage(msgJSON)
+		}
+		var err error
+		historyData, err = json.Marshal(rawMessages)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal history array: %w", err)
+		}
+	} else {
+		historyData = []byte("[]")
 	}
 
 	// Serialize metadata
@@ -577,21 +614,45 @@ func (s *SQLTaskService) rowToTask(row *taskRow) (*pb.Task, error) {
 		}
 	}
 
-	// Deserialize artifacts
+	// Deserialize artifacts using protojson
 	if row.Artifacts != "" && row.Artifacts != "[]" {
-		err := json.Unmarshal([]byte(row.Artifacts), &task.Artifacts)
+		// Parse JSON array manually to unmarshal each artifact
+		var rawArtifacts []json.RawMessage
+		err := json.Unmarshal([]byte(row.Artifacts), &rawArtifacts)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal artifacts: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal artifacts array: %w", err)
+		}
+
+		task.Artifacts = make([]*pb.Artifact, len(rawArtifacts))
+		for i, raw := range rawArtifacts {
+			artifact := &pb.Artifact{}
+			err := protojson.Unmarshal(raw, artifact)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal artifact %d: %w", i, err)
+			}
+			task.Artifacts[i] = artifact
 		}
 	} else {
 		task.Artifacts = make([]*pb.Artifact, 0)
 	}
 
-	// Deserialize history
+	// Deserialize history using protojson
 	if row.History != "" && row.History != "[]" {
-		err := json.Unmarshal([]byte(row.History), &task.History)
+		// Parse JSON array manually to unmarshal each message
+		var rawMessages []json.RawMessage
+		err := json.Unmarshal([]byte(row.History), &rawMessages)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal history: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal history array: %w", err)
+		}
+
+		task.History = make([]*pb.Message, len(rawMessages))
+		for i, raw := range rawMessages {
+			message := &pb.Message{}
+			err := protojson.Unmarshal(raw, message)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal message %d: %w", i, err)
+			}
+			task.History[i] = message
 		}
 	} else {
 		task.History = make([]*pb.Message, 0)

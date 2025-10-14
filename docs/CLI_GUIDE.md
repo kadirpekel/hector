@@ -370,6 +370,67 @@ hector chat assistant --mcp-url https://api.composio.dev/v1/mcp --tools
 
 ---
 
+### `task` - Manage Tasks
+
+Interact with tasks when using the SQL task backend for persistent task storage.
+
+**Available actions:**
+- `get` - Retrieve task details and history
+- `cancel` - Cancel a running task
+
+```bash
+# Get task details (flags before positional args)
+hector task --server http://localhost:8081 get assistant task-abc123...
+
+# In direct mode (uses local config)
+hector task --config configs/task-sql-example.yaml get assistant task-abc123...
+
+# Cancel a task
+hector task --server http://localhost:8081 cancel assistant task-abc123...
+```
+
+**Output example:**
+```
+📋 Task Details
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Task ID:     task-abc123...
+Context ID:  ctx-xyz789...
+Status:      ✅ COMPLETED
+Updated:     2025-10-14 21:31:09
+
+💬 History (2 messages):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. [User] Write a haiku about coding
+2. [Agent] Code flows like water
+          Through silicon valleys deep
+          Logic finds its way
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+**Task states:**
+- 📤 **SUBMITTED** - Task has been created
+- ⚙️ **WORKING** - Task is being processed
+- ✅ **COMPLETED** - Task completed successfully
+- ❌ **FAILED** - Task failed
+- 🚫 **CANCELLED** - Task was cancelled
+
+**Prerequisites:**
+- Server must be running with task service enabled
+- See `configs/task-sql-example.yaml` for configuration example
+
+**Modes:** Direct mode, Client mode
+
+**⚠️ Note:** Flags must come before positional arguments:
+```bash
+# ✅ Correct
+hector task --server URL get agent task-id
+
+# ❌ Wrong
+hector task get agent task-id --server URL
+```
+
+---
+
 ## Environment Variables
 
 ### API Keys (for Zero-Config Mode)

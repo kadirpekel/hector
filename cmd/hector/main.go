@@ -51,6 +51,7 @@ const (
 	CommandInfo  CommandType = "info"
 	CommandCall  CommandType = "call"
 	CommandChat  CommandType = "chat"
+	CommandTask  CommandType = "task"
 	CommandHelp  CommandType = "help"
 )
 
@@ -85,6 +86,8 @@ type CLIArgs struct {
 	ConfigFile string
 	ServerURL  string
 	AgentID    string
+	TaskID     string
+	TaskAction string // For task command: "get" or "cancel"
 	Input      string
 	Token      string
 	Stream     bool
@@ -355,6 +358,7 @@ func main() {
 		ServerURL:  args.ServerURL,
 		Token:      args.Token,
 		AgentID:    args.AgentID,
+		TaskID:     args.TaskID,
 		Input:      args.Input,
 		Stream:     args.Stream,
 		Debug:      args.Debug,
@@ -388,6 +392,20 @@ func main() {
 	case CommandChat:
 		if err := cli.ChatCommand(cliArgs); err != nil {
 			fatalf("Chat command failed: %v", err)
+		}
+	case CommandTask:
+		// Task subcommands
+		switch args.TaskAction {
+		case "get":
+			if err := cli.TaskGetCommand(cliArgs); err != nil {
+				fatalf("Task get command failed: %v", err)
+			}
+		case "cancel":
+			if err := cli.TaskCancelCommand(cliArgs); err != nil {
+				fatalf("Task cancel command failed: %v", err)
+			}
+		default:
+			fatalf("Unknown task action: %s (use 'get' or 'cancel')", args.TaskAction)
 		}
 	case CommandHelp:
 		showHelp()
@@ -454,6 +472,11 @@ func parseArgs() *CLIArgs {
 	chatTools := chatCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
 	chatMCP := chatCmd.String("mcp-url", "", "MCP server URL for tool integration (direct mode, zero-config)")
 	chatNoStream := chatCmd.Bool("no-stream", false, "Disable streaming (default: streaming enabled)")
+
+	taskCmd := flag.NewFlagSet("task", flag.ExitOnError)
+	taskServer := taskCmd.String("server", "", "A2A server URL (enables server mode)")
+	taskToken := taskCmd.String("token", "", "Authentication token")
+	taskConfig := taskCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
 
 	// Parse command
 	if len(os.Args) < 2 {
@@ -533,6 +556,20 @@ func parseArgs() *CLIArgs {
 		args.Tools = *chatTools
 		args.MCPURL = *chatMCP
 		args.Stream = !*chatNoStream // Streaming is default, --no-stream disables it
+
+	case "task":
+		_ = taskCmd.Parse(os.Args[2:])
+		if len(taskCmd.Args()) < 3 {
+			fatalf("Usage: hector task <action> <agent> <task-id> [OPTIONS]\n" +
+				"Actions: get, cancel")
+		}
+		args.Command = CommandTask
+		args.TaskAction = taskCmd.Args()[0]
+		args.AgentID = taskCmd.Args()[1]
+		args.TaskID = taskCmd.Args()[2]
+		args.ServerURL = *taskServer
+		args.Token = *taskToken
+		args.ConfigFile = *taskConfig
 
 	case "help", "--help", "-h":
 		args.Command = CommandHelp
@@ -1047,6 +1084,7 @@ COMMANDS:
   info <agent>       Get agent information
   call <agent> "..."  Execute a task on an agent
   chat <agent>       Start interactive chat
+  task <action> <agent> <task-id>  Manage tasks (actions: get, cancel)
   help               Show this help message
   version            Show version information
 
