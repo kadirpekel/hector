@@ -428,14 +428,16 @@ reasoning:
   show_tool_execution: bool           # Show tool labels, default: true
   show_thinking: bool                 # Show internal reasoning, default: false
   
-  # Advanced features
-  enable_self_reflection: bool        # Enable self-reflection, default: false
-  enable_meta_reasoning: bool         # Enable meta-reasoning, default: false
-  enable_goal_evolution: bool         # Enable goal evolution, default: false
-  enable_dynamic_tools: bool          # Enable dynamic tools, default: false
-  enable_structured_reflection: bool  # LLM-based reflection, default: true
-  enable_completion_verification: bool # Task completion check, default: false
-  enable_goal_extraction: bool        # Goal decomposition (supervisor), default: false
+  # Advanced features (see Advanced Reasoning guide for details)
+  enable_structured_reflection: bool  # LLM-based tool analysis, default: true
+  enable_completion_verification: bool # Task completion verification, default: false
+  enable_goal_extraction: bool        # Goal decomposition (supervisor only), default: false
+  
+  # Experimental features (not recommended for production)
+  enable_self_reflection: bool        # Experimental, default: false
+  enable_meta_reasoning: bool         # Experimental, default: false
+  enable_goal_evolution: bool         # Experimental, default: false
+  enable_dynamic_tools: bool          # Experimental, default: false
   
   # Quality threshold
   quality_threshold: float            # 0.0-1.0, default: 0.7
@@ -445,6 +447,8 @@ reasoning:
 
 - **chain-of-thought** - Iterative reasoning with natural termination (default)
 - **supervisor** - Optimized for multi-agent orchestration
+
+For detailed information on advanced reasoning features like structured reflection, completion verification, and goal extraction, see the [Advanced Reasoning Guide](ADVANCED_REASONING.md).
 
 ---
 

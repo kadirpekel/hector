@@ -14,6 +14,7 @@ Master the fundamentals of building AI agents with Hector.
 
 - **[Building Agents](AGENTS)** - Complete guide to creating single agents
 - **[Memory Management](MEMORY)** - Intelligent context window management 🔥
+- **[Advanced Reasoning](ADVANCED_REASONING)** - LLM-based reflection & quality features 🧠
 - **[Tools & Extensions](TOOLS)** - Built-in tools, MCP protocol, integrations
 - **[Custom MCP Tools](MCP_CUSTOM_TOOLS)** - Build custom tools in 5 minutes
 - **[CLI Guide](CLI_GUIDE)** - Command-line interface and workflows
