@@ -107,6 +107,23 @@ func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create search engine: %w", err)
 		}
+
+		// Resolve document store names to actual configs and initialize them
+		globalConfig := componentManager.GetGlobalConfig()
+		var documentStoreConfigs []config.DocumentStoreConfig
+		for _, storeName := range agentConfig.DocumentStores {
+			storeConfig, exists := globalConfig.DocumentStores[storeName]
+			if !exists {
+				return nil, fmt.Errorf("document store '%s' not found in global configuration", storeName)
+			}
+			documentStoreConfigs = append(documentStoreConfigs, storeConfig)
+		}
+
+		// Initialize document stores from resolved configs
+		if err := hectorcontext.InitializeDocumentStoresFromConfig(documentStoreConfigs, searchEngine); err != nil {
+			return nil, fmt.Errorf("failed to initialize document stores: %w", err)
+		}
+
 		contextService = NewContextService(searchEngine)
 	} else {
 		// No document stores configured - create a no-op context service

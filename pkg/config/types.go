@@ -875,13 +875,14 @@ func (c *ToolConfig) SetDefaults() {
 
 // DocumentStoreConfig represents document store configuration
 type DocumentStoreConfig struct {
-	Name            string   `yaml:"name"`             // Store name
-	Source          string   `yaml:"source"`           // Source type
-	Path            string   `yaml:"path"`             // Source path
-	IncludePatterns []string `yaml:"include_patterns"` // Include patterns
-	ExcludePatterns []string `yaml:"exclude_patterns"` // Exclude patterns
-	WatchChanges    bool     `yaml:"watch_changes"`    // Watch for changes
-	MaxFileSize     int64    `yaml:"max_file_size"`    // Max file size in bytes
+	Name                string   `yaml:"name"`                 // Store name
+	Source              string   `yaml:"source"`               // Source type
+	Path                string   `yaml:"path"`                 // Source path
+	IncludePatterns     []string `yaml:"include_patterns"`     // Include patterns
+	ExcludePatterns     []string `yaml:"exclude_patterns"`     // Exclude patterns
+	WatchChanges        bool     `yaml:"watch_changes"`        // Watch for changes
+	MaxFileSize         int64    `yaml:"max_file_size"`        // Max file size in bytes
+	IncrementalIndexing bool     `yaml:"incremental_indexing"` // Enable incremental indexing (only index changed files)
 }
 
 // Validate implements Config.Validate for DocumentStoreConfig

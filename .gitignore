@@ -63,3 +63,6 @@ a2a-python
 
 # Runtime data (SQLite databases, task storage)
 data/
+
+# Document store index state (incremental indexing cache)
+.hector/

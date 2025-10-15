@@ -3,6 +3,7 @@ package context
 import (
 	"context"
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -277,11 +278,36 @@ func (ds *DocumentStore) StartIndexing() error {
 
 // indexDirectory indexes a local directory with enhanced error handling and progress tracking
 func (ds *DocumentStore) indexDirectory() error {
+	ctx := context.Background()
+
+	// Load existing index state if incremental indexing is enabled
+	var existingDocs map[string]int64
+	var err error
+	if ds.config.IncrementalIndexing {
+		existingDocs, err = ds.loadIndexState()
+		if err != nil {
+			log.Printf("Warning: Failed to load index state, performing full reindex: %v", err)
+			existingDocs = make(map[string]int64)
+		}
+
+		if len(existingDocs) > 0 {
+			fmt.Printf("📊 Incremental indexing: Found %d existing file(s) in index\n", len(existingDocs))
+		} else {
+			fmt.Printf("📊 First indexing or full reindex mode\n")
+		}
+	}
+
 	var indexedCount sync.WaitGroup
 	var successCount int32
 	var failCount int32
+	var skippedCount int32
 
-	err := filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
+	// Track files found during walk (for cleanup and state saving)
+	foundFiles := make(map[string]bool)
+	indexedFiles := make(map[string]int64) // Track successfully indexed files with timestamps
+	var filesMu sync.Mutex
+
+	err = filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			atomic.AddInt32(&failCount, 1)
 			log.Printf("Warning: Failed to access %s: %v", path, err)
@@ -303,6 +329,18 @@ func (ds *DocumentStore) indexDirectory() error {
 			return nil
 		}
 
+		// Track this file as found (for cleanup)
+		relPath, _ := filepath.Rel(ds.sourcePath, path)
+		filesMu.Lock()
+		foundFiles[relPath] = true
+		filesMu.Unlock()
+
+		// Check if file needs reindexing (incremental indexing)
+		if !ds.shouldReindexFile(path, info.ModTime(), existingDocs) {
+			atomic.AddInt32(&skippedCount, 1)
+			return nil
+		}
+
 		// Index the document with semaphore control
 		ds.indexingSemaphore <- struct{}{} // Acquire semaphore
 		indexedCount.Add(1)
@@ -321,6 +359,11 @@ func (ds *DocumentStore) indexDirectory() error {
 				log.Printf("Warning: Failed to index %s: %v", p, err)
 			} else {
 				atomic.AddInt32(&successCount, 1)
+				// Track successfully indexed file with its timestamp
+				rp, _ := filepath.Rel(ds.sourcePath, p)
+				filesMu.Lock()
+				indexedFiles[rp] = i.ModTime().Unix()
+				filesMu.Unlock()
 			}
 		}(path, info)
 
@@ -334,11 +377,54 @@ func (ds *DocumentStore) indexDirectory() error {
 	// Wait for all indexing operations to complete
 	indexedCount.Wait()
 
+	// Cleanup deleted files if incremental indexing is enabled
+	if ds.config.IncrementalIndexing {
+		if err := ds.cleanupDeletedFiles(ctx, existingDocs, foundFiles); err != nil {
+			log.Printf("Warning: Cleanup of deleted files failed: %v", err)
+		}
+	}
+
 	ds.mu.Lock()
 	ds.status.DocumentCount = int(successCount)
 	ds.mu.Unlock()
 
-	fmt.Printf("✅ Document store '%s' indexed: %d documents (%d errors)\n", ds.name, successCount, failCount)
+	// Save index state for incremental indexing
+	if ds.config.IncrementalIndexing {
+		// Merge: keep timestamps for unchanged files, update for re-indexed files
+		finalState := make(map[string]int64)
+
+		// Start with existing files that weren't re-indexed (the unchanged ones)
+		for path, ts := range existingDocs {
+			if foundFiles[path] { // File still exists
+				finalState[path] = ts
+			}
+		}
+
+		// Update with newly indexed files (overwrites existing entries)
+		for path, ts := range indexedFiles {
+			finalState[path] = ts
+		}
+
+		// Save state (totalChunks is approximate - we track files, not chunks)
+		if err := ds.saveIndexState(finalState, len(finalState)*3); err != nil {
+			log.Printf("Warning: Failed to save index state: %v", err)
+		}
+	}
+
+	// Enhanced status message for incremental indexing
+	if ds.config.IncrementalIndexing && skippedCount > 0 {
+		fmt.Printf("✅ Document store '%s' indexed: %d new/modified, %d unchanged, %d errors\n",
+			ds.name, successCount, skippedCount, failCount)
+	} else {
+		fmt.Printf("✅ Document store '%s' indexed: %d documents (%d errors)\n",
+			ds.name, successCount, failCount)
+	}
+
+	// Notify user if file watching is enabled
+	if ds.config.WatchChanges {
+		fmt.Printf("👁️  File watching enabled - changes will be automatically indexed\n")
+	}
+
 	return nil
 }
 
@@ -1015,35 +1101,18 @@ func (ds *DocumentStore) handleFileEvent(event fsnotify.Event) {
 
 // processUpdates handles incremental document updates
 func (ds *DocumentStore) processUpdates() {
-	updateCount := 0
-
 	for {
 		select {
 		case <-ds.ctx.Done():
 			return
-		case update, ok := <-ds.updateChannel:
+		case _, ok := <-ds.updateChannel:
 			if !ok {
 				return
 			}
 
-			relPath, _ := filepath.Rel(ds.sourcePath, update.FilePath)
-
-			ds.mu.Lock()
-			switch update.Operation {
-			case OperationCreate, OperationModify:
-				fmt.Printf("📝 Updated document in '%s': %s (%s)\n",
-					ds.name, relPath, update.Operation)
-			case OperationDelete:
-				fmt.Printf("🗑️  Document deleted from '%s': %s\n", ds.name, relPath)
-			}
-			ds.mu.Unlock()
-
-			updateCount++
-
-			// Log periodic stats
-			if updateCount%10 == 0 {
-				fmt.Printf("📊 Document updates in '%s': %d\n", ds.name, updateCount)
-			}
+			// Silent processing - files are automatically re-indexed by file watcher
+			// Users will see the updated files when they search/use them
+			// Verbose per-file logging is too noisy during active development
 		}
 	}
 }
@@ -1058,6 +1127,226 @@ func (ds *DocumentStore) RefreshDocument(relativePath string) error {
 	}
 
 	return ds.indexDocument(fullPath, info)
+}
+
+// ============================================================================
+// INCREMENTAL INDEXING SUPPORT
+// ============================================================================
+
+// IndexedFileInfo stores metadata about an indexed file for incremental indexing
+type IndexedFileInfo struct {
+	Path         string
+	LastModified int64 // Unix timestamp
+}
+
+// IndexState stores the complete index state for incremental indexing
+type IndexState struct {
+	StoreName   string           `json:"store_name"`
+	SourcePath  string           `json:"source_path"`
+	LastIndexed time.Time        `json:"last_indexed"`
+	Files       map[string]int64 `json:"files"` // path -> last_modified timestamp
+	TotalFiles  int              `json:"total_files"`
+	TotalChunks int              `json:"total_chunks"`
+}
+
+// getIndexStatePath returns the path to the index state file
+func (ds *DocumentStore) getIndexStatePath() string {
+	// Store in .hector directory to keep it out of version control
+	stateDir := filepath.Join(ds.sourcePath, ".hector")
+	// Use store name in filename to support multiple stores
+	return filepath.Join(stateDir, fmt.Sprintf("index_state_%s.json", ds.name))
+}
+
+// loadIndexState loads the index state from local file
+func (ds *DocumentStore) loadIndexState() (map[string]int64, error) {
+	statePath := ds.getIndexStatePath()
+
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// No state file yet - first run
+			return make(map[string]int64), nil
+		}
+		return nil, fmt.Errorf("failed to read index state: %w", err)
+	}
+
+	var state IndexState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("failed to parse index state: %w", err)
+	}
+
+	// Validate state matches current configuration
+	if state.StoreName != ds.name || state.SourcePath != ds.sourcePath {
+		log.Printf("Index state mismatch (store: %s vs %s, path: %s vs %s), rebuilding index",
+			state.StoreName, ds.name, state.SourcePath, ds.sourcePath)
+		return make(map[string]int64), nil
+	}
+
+	return state.Files, nil
+}
+
+// saveIndexState saves the index state to local file
+func (ds *DocumentStore) saveIndexState(files map[string]int64, totalChunks int) error {
+	statePath := ds.getIndexStatePath()
+	stateDir := filepath.Dir(statePath)
+
+	// Create .hector directory if it doesn't exist
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		return fmt.Errorf("failed to create state directory: %w", err)
+	}
+
+	state := IndexState{
+		StoreName:   ds.name,
+		SourcePath:  ds.sourcePath,
+		LastIndexed: time.Now(),
+		Files:       files,
+		TotalFiles:  len(files),
+		TotalChunks: totalChunks,
+	}
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal index state: %w", err)
+	}
+
+	// Write atomically using temp file + rename
+	tempPath := statePath + ".tmp"
+	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write index state: %w", err)
+	}
+
+	if err := os.Rename(tempPath, statePath); err != nil {
+		os.Remove(tempPath) // Clean up temp file
+		return fmt.Errorf("failed to save index state: %w", err)
+	}
+
+	return nil
+}
+
+// getExistingDocumentMetadata retrieves metadata for all documents currently indexed in this store
+// Returns a map of relative file path -> last modified timestamp
+func (ds *DocumentStore) getExistingDocumentMetadata(ctx context.Context) (map[string]int64, error) {
+	if ds.searchEngine == nil {
+		return nil, fmt.Errorf("search engine not available")
+	}
+
+	// Use a generic query with filter to get all documents for this store
+	// The query needs to be non-empty for semantic search validation,
+	// but the filter will narrow results to our specific store
+	filter := map[string]interface{}{
+		"store_name": ds.name,
+	}
+
+	// Use a generic query that matches broadly - filter does the real work
+	// This is a metadata retrieval operation, not a semantic search
+	results, err := ds.searchEngine.SearchWithFilter(ctx, "file document", 10000, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve existing documents: %w", err)
+	}
+
+	// Build map of path -> last_modified
+	// NOTE: Files are chunked, so we'll see multiple results per file
+	// We only need ONE timestamp per unique file path (use the latest)
+	existingDocs := make(map[string]int64)
+	for _, result := range results {
+		if result.Metadata == nil {
+			continue
+		}
+
+		// Extract path and last_modified from metadata
+		path, pathOk := result.Metadata["path"].(string)
+		if !pathOk {
+			continue
+		}
+
+		// Handle both int64 and float64 (JSON unmarshaling might give us float64)
+		var lastModified int64
+		switch v := result.Metadata["last_modified"].(type) {
+		case int64:
+			lastModified = v
+		case float64:
+			lastModified = int64(v)
+		case int:
+			lastModified = int64(v)
+		default:
+			continue
+		}
+
+		// Keep the latest timestamp for this file path (in case of multiple chunks)
+		if existing, found := existingDocs[path]; !found || lastModified > existing {
+			existingDocs[path] = lastModified
+		}
+	}
+
+	return existingDocs, nil
+}
+
+// shouldReindexFile determines if a file needs to be re-indexed based on modification time
+func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time, existingDocs map[string]int64) bool {
+	// If incremental indexing is disabled, always reindex
+	if !ds.config.IncrementalIndexing {
+		return true
+	}
+
+	// If existingDocs is empty, reindex everything (first run)
+	if len(existingDocs) == 0 {
+		return true
+	}
+
+	// Get relative path
+	relPath, err := filepath.Rel(ds.sourcePath, path)
+	if err != nil {
+		return true // If we can't get relative path, reindex to be safe
+	}
+
+	// Check if file exists in our index
+	storedModTime, exists := existingDocs[relPath]
+	if !exists {
+		// New file, needs indexing
+		return true
+	}
+
+	// Compare modification times (using Unix timestamps for consistency)
+	currentUnix := currentModTime.Unix()
+	if currentUnix > storedModTime {
+		// File has been modified since last indexing
+		return true
+	}
+
+	// File is unchanged, skip reindexing
+	return false
+}
+
+// cleanupDeletedFiles removes documents from the index for files that no longer exist
+func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs map[string]int64, foundFiles map[string]bool) error {
+	if !ds.config.IncrementalIndexing || len(existingDocs) == 0 {
+		// Only cleanup during incremental indexing
+		return nil
+	}
+
+	deletedCount := 0
+	for path := range existingDocs {
+		if !foundFiles[path] {
+			// File no longer exists in the directory, remove from index
+			// Delete all chunks for this file
+			filter := map[string]interface{}{
+				"store_name": ds.name,
+				"path":       path,
+			}
+
+			if err := ds.searchEngine.DeleteByFilter(ctx, filter); err != nil {
+				log.Printf("Warning: Failed to delete indexed file %s: %v", path, err)
+			} else {
+				deletedCount++
+			}
+		}
+	}
+
+	if deletedCount > 0 {
+		fmt.Printf("🗑️  Cleaned up %d deleted file(s) from index '%s'\n", deletedCount, ds.name)
+	}
+
+	return nil
 }
 
 // ============================================================================

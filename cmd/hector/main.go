@@ -155,15 +155,16 @@ type CLIArgs struct {
 	A2ABaseURL string
 
 	// Zero-config mode options
-	Provider      string // Detected provider: "openai", "anthropic", "gemini"
-	APIKey        string
-	BaseURL       string
-	Model         string
-	Tools         bool
-	MCPURL        string
-	DocsFolder    string
-	EmbedderModel string
-	VectorDB      string
+	Provider                string // Detected provider: "openai", "anthropic", "gemini"
+	APIKey                  string
+	BaseURL                 string
+	Model                   string
+	Tools                   bool
+	MCPURL                  string
+	DocsFolder              string
+	EmbedderModel           string
+	VectorDB                string
+	ExplicitZeroConfigFlags bool // Tracks if user explicitly provided zero-config flags
 }
 
 // ============================================================================
@@ -661,6 +662,13 @@ func parseArgs() *CLIArgs {
 		os.Exit(1)
 	}
 
+	// Track which zero-config flags were explicitly provided by user
+	// Check this BEFORE environment variable resolution
+	explicitAPIKey := args.APIKey != ""
+	explicitModel := args.Model != ""
+	explicitBaseURL := args.BaseURL != ""
+	explicitTools := args.Tools
+
 	// Resolve environment variables for flags that weren't explicitly set
 	// This happens AFTER flag parsing so flags always override environment
 	if args.APIKey == "" {
@@ -712,6 +720,8 @@ func parseArgs() *CLIArgs {
 	}
 
 	// Validate mode and flags after parsing
+	// Pass explicit flag info for better validation
+	args.ExplicitZeroConfigFlags = explicitAPIKey || explicitModel || explicitBaseURL || explicitTools
 	validateModeAndFlags(args)
 
 	return args
@@ -814,7 +824,6 @@ Server: %s`, mode, mode, args.ServerURL)
 	case ModeDirect:
 		// Direct mode: all flags valid, but check for conflicting config strategies
 		hasConfigFile := args.ConfigFile != "" && args.ConfigFile != "hector.yaml"
-		hasZeroConfig := args.APIKey != "" || args.Model != "" || args.BaseURL != "" || args.Tools
 
 		// Check if config file exists
 		configExists := false
@@ -824,7 +833,9 @@ Server: %s`, mode, mode, args.ServerURL)
 			}
 		}
 
-		if hasConfigFile && configExists && hasZeroConfig {
+		// Only warn if zero-config FLAGS were explicitly provided (not from env vars)
+		// args.ExplicitZeroConfigFlags is set in parseArgs() before env var resolution
+		if hasConfigFile && configExists && args.ExplicitZeroConfigFlags {
 			fmt.Fprintf(os.Stderr, "⚠️  Warning: Both --config and zero-config flags provided\n")
 			fmt.Fprintf(os.Stderr, "   Zero-config flags (--api-key, --model, --tools) will be ignored.\n")
 			fmt.Fprintf(os.Stderr, "   Using configuration from: %s\n\n", args.ConfigFile)

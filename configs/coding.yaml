@@ -428,6 +428,7 @@ document_stores:
     
     # Common directories to exclude
     exclude_patterns:
+      - ".hector/**"        # Index state directory (incremental indexing cache)
       - "vendor/**"
       - ".git/**"
       - "**/testdata/**"
@@ -451,8 +452,9 @@ document_stores:
       - "package-lock.json"
       - "yarn.lock"
     
-    max_file_size: 1048576   # 1MB max per file
-    watch_changes: false      # Manual re-indexing (restart server)
+    max_file_size: 1048576      # 1MB max per file
+    watch_changes: true         # Manual re-indexing (restart server)
+    incremental_indexing: true   # Only re-index changed files (fast startup)
     database: "qdrant"
     embedder: "embedder"
 
