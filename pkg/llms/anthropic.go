@@ -74,15 +74,15 @@ type AnthropicStreamResponse struct {
 	Usage        *AnthropicUsage    `json:"usage,omitempty"`
 }
 
-// AnthropicContent represents content blocks in response
+// AnthropicContent represents content blocks in requests and responses
 type AnthropicContent struct {
-	Type      string                 `json:"type"`                  // "text", "tool_use", "tool_result"
-	Text      string                 `json:"text,omitempty"`        // For text
-	ID        string                 `json:"id,omitempty"`          // For tool_use
-	Name      string                 `json:"name,omitempty"`        // For tool_use
-	Input     map[string]interface{} `json:"input,omitempty"`       // For tool_use
-	ToolUseID string                 `json:"tool_use_id,omitempty"` // For tool_result
-	Content   string                 `json:"content,omitempty"`     // For tool_result
+	Type      string                  `json:"type"`                  // "text", "tool_use", "tool_result"
+	Text      string                  `json:"text,omitempty"`        // For text content
+	ID        string                  `json:"id,omitempty"`          // Tool call ID (for tool_use)
+	Name      string                  `json:"name,omitempty"`        // Tool name (for tool_use)
+	Input     *map[string]interface{} `json:"input,omitempty"`       // Tool arguments (pointer ensures field presence as {} for tool_use)
+	ToolUseID string                  `json:"tool_use_id,omitempty"` // Tool call ID reference (for tool_result)
+	Content   string                  `json:"content,omitempty"`     // Tool result content (for tool_result)
 }
 
 // AnthropicDelta represents incremental content in streaming
@@ -187,10 +187,14 @@ func (p *AnthropicProvider) Generate(messages []*pb.Message, tools []ToolDefinit
 			text += content.Text
 		} else if content.Type == "tool_use" {
 			// Convert to ToolCall
+			var args map[string]interface{}
+			if content.Input != nil {
+				args = *content.Input
+			}
 			toolCalls = append(toolCalls, &protocol.ToolCall{
 				ID:   content.ID,
 				Name: content.Name,
-				Args: content.Input,
+				Args: args,
 			})
 		}
 	}
@@ -283,11 +287,17 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 
 			// Add tool use blocks
 			for _, tc := range toolCalls {
+				// Ensure Input is never nil (Anthropic requires this field always present for tool_use)
+				// Use pointer to distinguish between "omitted" (nil) and "empty object" (pointer to empty map)
+				input := tc.Args
+				if input == nil {
+					input = make(map[string]interface{})
+				}
 				contents = append(contents, AnthropicContent{
 					Type:  "tool_use",
 					ID:    tc.ID,
 					Name:  tc.Name,
-					Input: tc.Args,
+					Input: &input, // Pointer ensures field is always present as {} or {data}
 				})
 			}
 
@@ -336,7 +346,6 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 		}
 		request.Tools = anthropicTools
 	}
-
 	return request
 }
 
@@ -346,7 +355,6 @@ func (p *AnthropicProvider) makeRequest(request AnthropicRequest) (*AnthropicRes
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-
 	req, err := http.NewRequest("POST", p.config.Host+"/v1/messages", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -383,7 +391,6 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
-
 	req, err := http.NewRequest("POST", p.config.Host+"/v1/messages", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -392,10 +399,6 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", p.config.APIKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
-	// Enable fine-grained tool streaming for better performance
-	if len(request.Tools) > 0 {
-		req.Header.Set("anthropic-beta", "fine-grained-tool-streaming-2025-05-14")
-	}
 
 	// For streaming, we need the underlying HTTP client (not the retry wrapper)
 	httpClient := &http.Client{Timeout: time.Duration(p.config.Timeout) * time.Second}
@@ -410,8 +413,10 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Track tool calls being accumulated across deltas
-	toolCalls := make(map[int]*protocol.ToolCall) // index -> accumulated ToolCall
+	// Track tool calls and their arguments during streaming
+	// Tool arguments arrive as fragmented JSON strings that must be concatenated
+	toolCalls := make(map[int]*protocol.ToolCall) // index -> tool call metadata
+	toolJSONBuffers := make(map[int]string)       // index -> concatenated JSON fragments
 	var totalTokens int
 
 	// Read streaming response line by line (SSE format)
@@ -440,33 +445,44 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 		// Handle different event types
 		switch streamResp.Type {
 		case "content_block_start":
-			// New content block started (could be text or tool_use)
+			// New content block started (text or tool_use)
 			if streamResp.ContentBlock != nil && streamResp.ContentBlock.Type == "tool_use" {
-				// Initialize tool call accumulator
+				// Initialize tool call - arguments will be accumulated from JSON deltas
 				toolCalls[streamResp.Index] = &protocol.ToolCall{
 					ID:   streamResp.ContentBlock.ID,
 					Name: streamResp.ContentBlock.Name,
 					Args: make(map[string]interface{}),
 				}
+				toolJSONBuffers[streamResp.Index] = ""
 			}
 
 		case "content_block_delta":
 			if streamResp.Delta != nil {
-				// Text delta
+				// Text delta - stream to output as it arrives
 				if streamResp.Delta.Text != "" {
 					outputCh <- StreamChunk{Type: "text", Text: streamResp.Delta.Text}
 				}
 
-				// Tool use parameter delta (partial JSON)
-				// Note: Streaming JSON accumulation for tool args is complex.
-				// For now, we skip it. Full args available in content_block_stop.
+				// Tool parameter delta - accumulate JSON fragments
+				// Anthropic streams tool arguments as partial JSON strings that must be
+				// concatenated before parsing (e.g., "{\"lo", "cation\"", ": ", "\"Berlin\"}")
+				if streamResp.Delta.Type == "input_json_delta" && streamResp.Delta.PartialJSON != "" {
+					toolJSONBuffers[streamResp.Index] += streamResp.Delta.PartialJSON
+				}
 			}
 
 		case "content_block_stop":
-			// Content block finished
+			// Content block finished - parse and send complete tool call
 			if tc, exists := toolCalls[streamResp.Index]; exists {
-				// Tool call is complete
-				// Send complete tool call
+				// Parse accumulated JSON fragments into tool arguments
+				if jsonStr, hasJSON := toolJSONBuffers[streamResp.Index]; hasJSON && jsonStr != "" {
+					var args map[string]interface{}
+					if err := json.Unmarshal([]byte(jsonStr), &args); err == nil {
+						tc.Args = args
+					}
+				}
+
+				// Send complete tool call to agent
 				outputCh <- StreamChunk{
 					Type:     "tool_call",
 					ToolCall: tc,

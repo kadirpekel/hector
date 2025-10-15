@@ -664,23 +664,34 @@ func parseArgs() *CLIArgs {
 	// Resolve environment variables for flags that weren't explicitly set
 	// This happens AFTER flag parsing so flags always override environment
 	if args.APIKey == "" {
-		// Try provider-specific env vars (priority: OpenAI → Anthropic → Gemini)
-		// Only set provider from env if not explicitly provided via --provider flag
 		providerFromFlag := args.Provider != "" // Remember if user explicitly set --provider
 
-		if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-			args.APIKey = key
-			if !providerFromFlag {
+		if providerFromFlag {
+			// If provider is explicitly set via flag, only look for matching API key
+			switch args.Provider {
+			case ProviderOpenAI:
+				if key := os.Getenv("OPENAI_API_KEY"); key != "" {
+					args.APIKey = key
+				}
+			case ProviderAnthropic:
+				if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+					args.APIKey = key
+				}
+			case ProviderGemini:
+				if key := os.Getenv("GEMINI_API_KEY"); key != "" {
+					args.APIKey = key
+				}
+			}
+		} else {
+			// No --provider flag: auto-detect from available API keys (priority: OpenAI → Anthropic → Gemini)
+			if key := os.Getenv("OPENAI_API_KEY"); key != "" {
+				args.APIKey = key
 				args.Provider = ProviderOpenAI
-			}
-		} else if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
-			args.APIKey = key
-			if !providerFromFlag {
+			} else if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+				args.APIKey = key
 				args.Provider = ProviderAnthropic
-			}
-		} else if key := os.Getenv("GEMINI_API_KEY"); key != "" {
-			args.APIKey = key
-			if !providerFromFlag {
+			} else if key := os.Getenv("GEMINI_API_KEY"); key != "" {
+				args.APIKey = key
 				args.Provider = ProviderGemini
 			}
 		}

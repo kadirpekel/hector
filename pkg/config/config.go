@@ -364,11 +364,14 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 			opts.BaseURL = "https://api.anthropic.com"
 		}
 		if opts.Model == "" {
-			opts.Model = "claude-3-5-sonnet-20241022"
+			// Use Claude Sonnet 4.5 (latest as of Feb 2025)
+			// See: https://docs.anthropic.com/en/docs/about-claude/models/overview
+			opts.Model = "claude-sonnet-4-5-20250929"
 		}
 	case "gemini":
 		if opts.BaseURL == "" {
-			opts.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
+			// Note: Don't include /v1beta here, it's added by the Gemini provider
+			opts.BaseURL = "https://generativelanguage.googleapis.com"
 		}
 		if opts.Model == "" {
 			opts.Model = "gemini-2.0-flash-exp"

@@ -735,9 +735,9 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
         opts.Model = "gpt-4o-mini"
     case "anthropic":
         opts.BaseURL = "https://api.anthropic.com"
-        opts.Model = "claude-3-5-sonnet-20241022"
+        opts.Model = "claude-sonnet-4-5-20250929"
     case "gemini":
-        opts.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
+        opts.BaseURL = "https://generativelanguage.googleapis.com"
         opts.Model = "gemini-2.0-flash-exp"
     }
     
