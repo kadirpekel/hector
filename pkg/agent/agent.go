@@ -176,6 +176,12 @@ func (a *Agent) execute(
 			}
 		}
 
+		// Add current user input to conversation at the start of new messages
+		// This ensures correct message ordering: [history..., USER, ASSISTANT, TOOL_RESULTS, ...]
+		// Without this, saveToHistory would append USER at the end (wrong order)
+		userMsg := protocol.CreateUserMessage(input)
+		state.Conversation = append(state.Conversation, userMsg)
+
 		state.OutputChannel = outputCh
 		state.ShowThinking = cfg.ShowThinking
 		state.ShowDebugInfo = cfg.ShowDebugInfo
@@ -592,31 +598,8 @@ func (a *Agent) saveToHistory(
 		}
 	}
 
-	// Add user's input message to conversation (if not already there)
-	if len(state.Conversation) == 0 || state.Conversation[len(state.Conversation)-1].Role != pb.Role_ROLE_USER {
-		userMsg := protocol.CreateUserMessage(input)
-		state.Conversation = append(state.Conversation, userMsg)
-	}
-
-	// Add assistant's final response to conversation (if not already added via tool calls)
-	finalResponse := state.AssistantResponse.String()
-	if finalResponse != "" {
-		// Check if the last message is already an assistant message
-		// (it would have been added in-loop if there were tool calls in the final iteration)
-		lastIsAssistant := len(state.Conversation) > 0 && state.Conversation[len(state.Conversation)-1].Role == pb.Role_ROLE_AGENT
-
-		if !lastIsAssistant {
-			// Final iteration had no tool calls - add the response message here
-			assistantMsg := protocol.CreateTextMessage(pb.Role_ROLE_AGENT, finalResponse)
-			state.Conversation = append(state.Conversation, assistantMsg)
-		}
-	}
-
-	// Save NEW messages from this execution
-	// Note: state.Conversation already includes loaded history + new messages
-	// We need to save only the NEW messages (after the loaded history)
-
-	// Get current history size to know where new messages start
+	// Get existing history size to know where new messages start
+	// state.Conversation structure: [old history..., USER(current), ...new messages during execution...]
 	existingHistory, err := history.GetRecentHistory(sessionID)
 	if err != nil {
 		log.Printf("⚠️  Failed to get existing history: %v", err)
@@ -624,24 +607,61 @@ func (a *Agent) saveToHistory(
 	}
 	existingCount := len(existingHistory)
 
-	// Save only the new messages (those added during this execution)
-	// Filter out tool messages and messages with empty content
-	// Session history is for user/assistant conversation only
+	// Add assistant's final response if not already in conversation
+	// This handles the case where the final iteration had no tool calls
+	finalResponse := state.AssistantResponse.String()
+	if finalResponse != "" {
+		// Determine if we need to add the final response message
+		// If conversation has messages after existingCount (beyond the USER message),
+		// check if any are assistant messages - that means tool calls happened
+		needsFinalResponse := true
+
+		// Check if there are any assistant messages in the new messages
+		// (new messages start at existingCount, which is the USER message)
+		for i := existingCount + 1; i < len(state.Conversation); i++ {
+			if state.Conversation[i].Role == pb.Role_ROLE_AGENT {
+				// Found an assistant message - check if it has text or just tool calls/results
+				hasText := protocol.ExtractTextFromMessage(state.Conversation[i]) != ""
+				hasToolCalls := len(protocol.GetToolCallsFromMessage(state.Conversation[i])) > 0
+				hasToolResults := len(protocol.GetToolResultsFromMessage(state.Conversation[i])) > 0
+
+				// If the last assistant message has tool calls/results, tool calling happened
+				// The final text is distributed across multiple assistant messages
+				if hasToolCalls || hasToolResults || hasText {
+					needsFinalResponse = false
+					break
+				}
+			}
+		}
+
+		if needsFinalResponse {
+			// Final iteration had no tool calls - add the complete response message
+			assistantMsg := protocol.CreateTextMessage(pb.Role_ROLE_AGENT, finalResponse)
+			state.Conversation = append(state.Conversation, assistantMsg)
+		}
+	}
+
+	// Save only the NEW messages (those added during this execution)
+	// New messages start at index existingCount (USER message + any tool call/result messages)
+	// Session history includes user/assistant messages, including tool calls/results
 	for i := existingCount; i < len(state.Conversation); i++ {
 		msg := state.Conversation[i]
 
-		// Only save user/assistant messages with content
+		// Only save user/assistant messages (skip system messages if any)
 		if msg.Role == pb.Role_ROLE_USER || msg.Role == pb.Role_ROLE_AGENT {
-			// Skip messages with empty content (e.g., when LLM calls tool without preamble)
+			// Save message if it has text content OR tool calls/results
 			textContent := protocol.ExtractTextFromMessage(msg)
-			if textContent != "" {
+			hasToolCalls := len(protocol.GetToolCallsFromMessage(msg)) > 0
+			hasToolResults := len(protocol.GetToolResultsFromMessage(msg)) > 0
+
+			if textContent != "" || hasToolCalls || hasToolResults {
 				err := history.AddToHistory(sessionID, msg)
 				if err != nil {
 					log.Printf("⚠️  Failed to add message to history: %v", err)
 				}
 			}
 		}
-		// Skip system and tool messages - they're for LLM API, not user history
+		// Skip system messages - they're for prompt construction only
 	}
 }
 

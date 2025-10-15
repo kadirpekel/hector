@@ -189,14 +189,18 @@ func (s *DefaultPromptService) BuildMessages(
 	// This includes conversation history loaded in agent.go
 	messages = append(messages, currentToolConversation...)
 
-	// Add current user query if not already in history
-	// (History might already have it if we're in a follow-up iteration)
+	// Add current user query if not already in currentToolConversation
+	// Check if the current query is already present (not just at the end, but anywhere)
+	// This is important because after tool execution, the last message might be a tool result
 	needsUserQuery := true
-	if len(messages) > 0 {
-		lastMsg := messages[len(messages)-1]
-		lastMsgText := protocol.ExtractTextFromMessage(lastMsg)
-		if lastMsg.Role == pb.Role_ROLE_USER && lastMsgText == query {
-			needsUserQuery = false
+	for i := len(currentToolConversation) - 1; i >= 0; i-- {
+		msg := currentToolConversation[i]
+		if msg.Role == pb.Role_ROLE_USER {
+			msgText := protocol.ExtractTextFromMessage(msg)
+			if msgText == query {
+				needsUserQuery = false
+				break
+			}
 		}
 	}
 
