@@ -23,6 +23,30 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 - **Single & Multi-Agent** - From standalone agents to complex orchestration networks
 - **Hybrid Architecture** - Mix local agents with remote A2A-compliant services
 
+### See it in action!
+```
+% export OPENAI_API_KEY=sk-proj-...
+% export MCP_URL=https://apollo.composio.dev/v3/mcp/...
+% hector call assistant "what to wear today in berlin?"
+
+Agent: I'll check the current weather in Berlin to help you decide what to wear today.
+🔧 WEATHERMAP_WEATHER ✅
+Based on the current weather in Berlin:
+
+Temperature: 15°C (59°F) - feels like 14°C
+Conditions: Scattered clouds (40% cloud cover)
+Wind: Light breeze at 3 m/s
+Humidity: 75%
+
+What to wear:
+- Light jacket or sweater - The temperature is mild but cool enough that you'll want a layer
+- Long pants - Jeans or trousers would be comfortable
+- Comfortable shoes - No rain expected, so regular shoes are fine
+- Optional light scarf - The wind is gentle, but a scarf could add comfort
+
+It's a pleasant autumn day in Berlin! You won't need heavy winter clothing, but definitely bring a light-to-medium jacket. The weather is good for being outdoors without worrying about rain.
+```
+
 For complete documentation visit [gohector.dev](https://gohector.dev).
 
 ## Quick Start
