@@ -58,6 +58,43 @@ func getProviderOrDefault(provider string) string {
 	return DefaultProvider
 }
 
+// validateProvider checks if provider is valid
+func validateProvider(provider string) error {
+	if provider == "" {
+		return nil // Empty is OK, will use default
+	}
+	switch provider {
+	case ProviderOpenAI, ProviderAnthropic, ProviderGemini:
+		return nil
+	default:
+		return fmt.Errorf("invalid provider: %s (must be one of: openai, anthropic, gemini)", provider)
+	}
+}
+
+// checkForMisplacedFlags detects flags after positional arguments
+func checkForMisplacedFlags(args []string, command string) {
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--") {
+			fatalf(`❌ Error: Flag '%s' appears after positional arguments
+
+Flags must come BEFORE positional arguments in Go flag parsing.
+
+WRONG:  hector %s agent %s
+RIGHT:  hector %s %s agent
+
+Common flags:
+  --provider openai|anthropic|gemini
+  --api-key KEY
+  --model MODEL
+  --base-url URL
+  --tools
+  --mcp-url URL
+
+Run 'hector %s --help' for full usage.`, arg, command, arg, command, arg, command)
+		}
+	}
+}
+
 // ============================================================================
 // COMMAND TYPES
 // ============================================================================
@@ -453,6 +490,7 @@ func parseArgs() *CLIArgs {
 	serveA2ABaseURL := serveCmd.String("a2a-base-url", "", "A2A base URL for discovery (overrides config)")
 
 	// Zero-config mode flags
+	serveProvider := serveCmd.String("provider", "", "LLM provider: openai, anthropic, or gemini (auto-detected from API key if not set)")
 	serveAPIKey := serveCmd.String("api-key", "", "LLM API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY)")
 	serveBaseURL := serveCmd.String("base-url", "", "LLM API base URL (provider-specific defaults if not set)")
 	serveModel := serveCmd.String("model", "", "LLM model name (provider-specific defaults if not set)")
@@ -477,6 +515,7 @@ func parseArgs() *CLIArgs {
 	callToken := callCmd.String("token", "", "Authentication token")
 	callStream := callCmd.Bool("stream", true, "Enable streaming (default: true)")
 	callConfig := callCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
+	callProvider := callCmd.String("provider", "", "LLM provider: openai, anthropic, or gemini (auto-detected from API key if not set)")
 	callAPIKey := callCmd.String("api-key", "", "LLM API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY)")
 	callBaseURL := callCmd.String("base-url", "", "LLM API base URL (provider-specific defaults if not set)")
 	callModel := callCmd.String("model", "", "LLM model name (provider-specific defaults if not set)")
@@ -487,6 +526,7 @@ func parseArgs() *CLIArgs {
 	chatServer := chatCmd.String("server", "", "A2A server URL (enables server mode)")
 	chatToken := chatCmd.String("token", "", "Authentication token")
 	chatConfig := chatCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
+	chatProvider := chatCmd.String("provider", "", "LLM provider: openai, anthropic, or gemini (auto-detected from API key if not set)")
 	chatAPIKey := chatCmd.String("api-key", "", "LLM API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY)")
 	chatBaseURL := chatCmd.String("base-url", "", "LLM API base URL (provider-specific defaults if not set)")
 	chatModel := chatCmd.String("model", "", "LLM model name (provider-specific defaults if not set)")
@@ -516,6 +556,7 @@ func parseArgs() *CLIArgs {
 		args.Debug = *serveDebug
 		args.Host = *serveHost
 		args.A2ABaseURL = *serveA2ABaseURL
+		args.Provider = *serveProvider
 		args.APIKey = *serveAPIKey
 		args.BaseURL = *serveBaseURL
 		args.Model = *serveModel
@@ -524,6 +565,9 @@ func parseArgs() *CLIArgs {
 		args.DocsFolder = *serveDocs
 		args.EmbedderModel = *serveEmbedder
 		args.VectorDB = *serveVectorDB
+
+		// Detect flags in wrong position (after positional args)
+		checkForMisplacedFlags(serveCmd.Args(), "serve")
 
 	case "list":
 		_ = listCmd.Parse(os.Args[2:])
@@ -546,7 +590,7 @@ func parseArgs() *CLIArgs {
 	case "call":
 		_ = callCmd.Parse(os.Args[2:])
 		if len(callCmd.Args()) < 2 {
-			fatalf("Usage: hector call <agent> \"prompt\" [OPTIONS]")
+			fatalf("Usage: hector call [OPTIONS] <agent> \"prompt\"")
 		}
 		args.Command = CommandCall
 		args.AgentID = callCmd.Args()[0]
@@ -555,28 +599,40 @@ func parseArgs() *CLIArgs {
 		args.Token = *callToken
 		args.Stream = *callStream
 		args.ConfigFile = *callConfig
+		args.Provider = *callProvider
 		args.APIKey = *callAPIKey
 		args.BaseURL = *callBaseURL
 		args.Model = *callModel
 		args.Tools = *callTools
 		args.MCPURL = *callMCP
 
+		// Detect flags in wrong position (after positional args)
+		if len(callCmd.Args()) > 2 {
+			checkForMisplacedFlags(callCmd.Args()[2:], "call")
+		}
+
 	case "chat":
 		_ = chatCmd.Parse(os.Args[2:])
 		if len(chatCmd.Args()) < 1 {
-			fatalf("Usage: hector chat <agent> [OPTIONS]")
+			fatalf("Usage: hector chat [OPTIONS] <agent>")
 		}
 		args.Command = CommandChat
 		args.AgentID = chatCmd.Args()[0]
 		args.ServerURL = *chatServer // Don't resolve yet
 		args.Token = *chatToken
 		args.ConfigFile = *chatConfig
+		args.Provider = *chatProvider
 		args.APIKey = *chatAPIKey
 		args.BaseURL = *chatBaseURL
 		args.Model = *chatModel
 		args.Tools = *chatTools
 		args.MCPURL = *chatMCP
 		args.Stream = !*chatNoStream // Streaming is default, --no-stream disables it
+
+		// Detect flags in wrong position (after positional args)
+		if len(chatCmd.Args()) > 1 {
+			checkForMisplacedFlags(chatCmd.Args()[1:], "chat")
+		}
 
 	case "task":
 		_ = taskCmd.Parse(os.Args[2:])
@@ -609,16 +665,30 @@ func parseArgs() *CLIArgs {
 	// This happens AFTER flag parsing so flags always override environment
 	if args.APIKey == "" {
 		// Try provider-specific env vars (priority: OpenAI → Anthropic → Gemini)
+		// Only set provider from env if not explicitly provided via --provider flag
+		providerFromFlag := args.Provider != "" // Remember if user explicitly set --provider
+
 		if key := os.Getenv("OPENAI_API_KEY"); key != "" {
 			args.APIKey = key
-			args.Provider = ProviderOpenAI
+			if !providerFromFlag {
+				args.Provider = ProviderOpenAI
+			}
 		} else if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
 			args.APIKey = key
-			args.Provider = ProviderAnthropic
+			if !providerFromFlag {
+				args.Provider = ProviderAnthropic
+			}
 		} else if key := os.Getenv("GEMINI_API_KEY"); key != "" {
 			args.APIKey = key
-			args.Provider = ProviderGemini
+			if !providerFromFlag {
+				args.Provider = ProviderGemini
+			}
 		}
+	}
+
+	// Validate provider value if explicitly set
+	if err := validateProvider(args.Provider); err != nil {
+		fatalf("❌ %v", err)
 	}
 
 	// Ensure provider is always set (use default if not detected)
@@ -1159,8 +1229,10 @@ Hector operates in three distinct modes based on your command and flags:
     --debug                  Enable debug output
     
   Zero-Config Options (when hector.yaml doesn't exist):
-    --model MODEL            Model name (provider-specific defaults)
+    --provider PROVIDER      LLM provider: openai|anthropic|gemini (auto-detected)
     --api-key KEY            API key (or set env var, see below)
+    --model MODEL            Model name (provider-specific defaults)
+    --base-url URL           API base URL (provider-specific defaults)
     --tools                  Enable all local tools
     --mcp-url URL            MCP server URL (supports auth: https://user:pass@host)
     --docs FOLDER            Document store folder (RAG)
@@ -1189,8 +1261,8 @@ Hector operates in three distinct modes based on your command and flags:
     --server URL     Server URL (triggers client mode)
     --token TOKEN    Authentication token
 
-  ⚠️  Important: --config, --model, --tools, --api-key flags are NOT supported
-      in client mode. The remote server uses its own configuration.
+  ⚠️  Important: --config, --provider, --model, --tools, --api-key flags are NOT 
+      supported in client mode. The remote server uses its own configuration.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1208,11 +1280,12 @@ Hector operates in three distinct modes based on your command and flags:
     --config FILE    Configuration file (default: hector.yaml)
 
   Zero-Config Options (for call and chat):
-    --api-key KEY    API key (or set env var, see below)
-    --base-url URL   API base URL (provider-specific defaults)
-    --model MODEL    Model name (provider-specific defaults)
-    --tools          Enable local tools
-    --mcp-url URL    MCP server URL (supports auth: https://user:pass@host)
+    --provider PROVIDER    LLM provider: openai|anthropic|gemini (auto-detected)
+    --api-key KEY          API key (or set env var, see below)
+    --base-url URL         API base URL (provider-specific defaults)
+    --model MODEL          Model name (provider-specific defaults)
+    --tools                Enable local tools
+    --mcp-url URL          MCP server URL (supports auth: https://user:pass@host)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
