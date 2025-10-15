@@ -13,6 +13,8 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 [![GoDoc](https://godoc.org/github.com/kadirpekel/hector?status.svg)](https://godoc.org/github.com/kadirpekel/hector)
 
+> ⚠️ Alpha Version Disclaimer: This project is currently in alpha. It is under active development and not yet stable. Features may change, break, or be removed at any time.
+
 # Hector
 **Declarative AI Agent Platform with Native A2A Protocol Support**
 
