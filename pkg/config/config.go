@@ -306,12 +306,12 @@ func (c *AuthConfig) SetDefaults() {
 
 // LoadConfig loads the complete configuration from a YAML file
 // This is the main entry point for configuration loading
-// If the file doesn't exist, returns a zero-config default
+// If the file doesn't exist, attempts to create zero-config from environment
 func LoadConfig(filePath string) (*Config, error) {
 	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		// File doesn't exist - return zero-config default
-		return createZeroConfig(), nil
+		// File doesn't exist - return zero-config default (may fail if no env vars set)
+		return createZeroConfig()
 	}
 
 	var config Config
@@ -333,17 +333,17 @@ func LoadConfigFromString(yamlContent string) (*Config, error) {
 // ZeroConfigOptions holds configuration options for zero-config mode
 type ZeroConfigOptions struct {
 	Provider    string // LLM provider: "openai" (default), "anthropic", "gemini"
-	APIKey      string // API key for the selected provider (required)
+	APIKey      string // API key for the selected provider (resolved from flags or environment before being passed here)
 	BaseURL     string // API base URL (provider-specific defaults)
 	Model       string // Model name (provider-specific defaults)
 	EnableTools bool   // Enable all local tools
-	MCPURL      string // MCP server URL for tool integration
+	MCPURL      string // MCP server URL for tool integration (resolved from --mcp-url flag or MCP_URL env)
 	DocsFolder  string // Document store folder path (RAG support)
 }
 
 // CreateZeroConfig creates a configuration for zero-config mode with custom options
 // Supports openai (default), anthropic, and gemini providers
-// API key is REQUIRED - will be validated by caller
+// Note: API keys and MCP URL should already be resolved (from flags or environment) before calling this
 func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 	// Default to OpenAI if provider not specified
 	if opts.Provider == "" {
@@ -389,7 +389,7 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 			opts.Provider: {
 				Type:        opts.Provider,
 				Model:       opts.Model,
-				APIKey:      opts.APIKey, // Required - validated before this function is called
+				APIKey:      opts.APIKey, // Already resolved from flag or environment in CLI layer
 				Host:        opts.BaseURL,
 				Temperature: 0.7,
 				MaxTokens:   4096,
@@ -476,8 +476,8 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 			Enabled: true,
 		}
 	} else if opts.MCPURL != "" {
-		// Enable only MCP tools
-		agentConfig.Tools = []string{"mcp"}
+		// Enable MCP tools - nil means all tools available (including discovered MCP tools)
+		agentConfig.Tools = nil
 	} else {
 		// No tools
 		agentConfig.Tools = []string{}
@@ -487,7 +487,7 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 		"assistant": agentConfig,
 	}
 
-	// Configure MCP if URL provided
+	// Configure MCP tool if URL provided (already resolved from flag or environment)
 	if opts.MCPURL != "" {
 		if cfg.Tools.Tools == nil {
 			cfg.Tools.Tools = make(map[string]ToolConfig)
@@ -495,7 +495,7 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 		cfg.Tools.Tools["mcp"] = ToolConfig{
 			Type:      "mcp",
 			Enabled:   true,
-			ServerURL: opts.MCPURL,
+			ServerURL: opts.MCPURL, // Already resolved from --mcp-url flag or MCP_URL env
 		}
 	}
 
@@ -506,8 +506,9 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 }
 
 // createZeroConfig creates a minimal default configuration (for backward compatibility)
-func createZeroConfig() *Config {
-	return CreateZeroConfig(ZeroConfigOptions{})
+func createZeroConfig() (*Config, error) {
+	cfg := CreateZeroConfig(ZeroConfigOptions{})
+	return cfg, nil
 }
 
 // ============================================================================

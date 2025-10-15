@@ -4,7 +4,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"time"
 )
 
@@ -312,24 +311,8 @@ func (c *LLMProviderConfig) SetDefaults() {
 		// Base delay for exponential backoff (2^attempt * RetryDelay)
 		c.RetryDelay = 2
 	}
-	if c.APIKey == "" {
-		// Try to get API key from environment based on provider type
-		// Note: Don't use "${VAR}" syntax here because SetDefaults runs AFTER env expansion
-		switch c.Type {
-		case "openai":
-			if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-				c.APIKey = key
-			}
-		case "anthropic":
-			if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
-				c.APIKey = key
-			}
-		case "gemini":
-			if key := os.Getenv("GEMINI_API_KEY"); key != "" {
-				c.APIKey = key
-			}
-		}
-	}
+	// API key resolution is handled in the CLI layer (parseArgs)
+	// No environment variable fallback here
 }
 
 // DatabaseProviderConfig represents database provider configuration
@@ -881,6 +864,8 @@ func (c *ToolConfig) SetDefaults() {
 		if c.MaxResults == 0 {
 			c.MaxResults = 100
 		}
+	case "mcp":
+		// No defaults for MCP - ServerURL is provided via flag or env (resolved in CLI layer)
 	}
 }
 

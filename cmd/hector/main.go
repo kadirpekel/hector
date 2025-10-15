@@ -40,6 +40,25 @@ func getVersion() string {
 }
 
 // ============================================================================
+// PROVIDER CONSTANTS
+// ============================================================================
+
+const (
+	ProviderOpenAI    = "openai"
+	ProviderAnthropic = "anthropic"
+	ProviderGemini    = "gemini"
+	DefaultProvider   = ProviderOpenAI
+)
+
+// getProviderOrDefault returns the provider or default if empty
+func getProviderOrDefault(provider string) string {
+	if provider != "" {
+		return provider
+	}
+	return DefaultProvider
+}
+
+// ============================================================================
 // COMMAND TYPES
 // ============================================================================
 
@@ -98,7 +117,8 @@ type CLIArgs struct {
 	Host       string
 	A2ABaseURL string
 
-	// Zero-config mode options (OpenAI-based)
+	// Zero-config mode options
+	Provider      string // Detected provider: "openai", "anthropic", "gemini"
 	APIKey        string
 	BaseURL       string
 	Model         string
@@ -353,6 +373,7 @@ func main() {
 	args := parseArgs()
 
 	// Convert CLIArgs to cli.Args
+	// Note: Environment variables and provider are resolved in parseArgs()
 	cliArgs := cli.Args{
 		ConfigFile: args.ConfigFile,
 		ServerURL:  args.ServerURL,
@@ -363,7 +384,7 @@ func main() {
 		Stream:     args.Stream,
 		Debug:      args.Debug,
 		Port:       args.Port,
-		Provider:   "openai", // Default provider
+		Provider:   args.Provider, // Already set to detected provider or default
 		APIKey:     args.APIKey,
 		BaseURL:    args.BaseURL,
 		Model:      args.Model,
@@ -431,10 +452,10 @@ func parseArgs() *CLIArgs {
 	serveHost := serveCmd.String("host", "", "Server host (overrides config)")
 	serveA2ABaseURL := serveCmd.String("a2a-base-url", "", "A2A base URL for discovery (overrides config)")
 
-	// Zero-config mode flags (OpenAI-based)
-	serveAPIKey := serveCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY)")
-	serveBaseURL := serveCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
-	serveModel := serveCmd.String("model", "gpt-4o-mini", "OpenAI model to use in zero-config mode")
+	// Zero-config mode flags
+	serveAPIKey := serveCmd.String("api-key", "", "LLM API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY)")
+	serveBaseURL := serveCmd.String("base-url", "", "LLM API base URL (provider-specific defaults if not set)")
+	serveModel := serveCmd.String("model", "", "LLM model name (provider-specific defaults if not set)")
 	serveTools := serveCmd.Bool("tools", false, "Enable all local tools (file, command execution)")
 	serveMCP := serveCmd.String("mcp-url", "", "MCP server URL for tool integration (supports auth: https://user:pass@host)")
 	serveDocs := serveCmd.String("docs", "", "Document store folder (enables RAG)")
@@ -456,9 +477,9 @@ func parseArgs() *CLIArgs {
 	callToken := callCmd.String("token", "", "Authentication token")
 	callStream := callCmd.Bool("stream", true, "Enable streaming (default: true)")
 	callConfig := callCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
-	callAPIKey := callCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY)")
-	callBaseURL := callCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
-	callModel := callCmd.String("model", "gpt-4o-mini", "OpenAI model (direct mode, zero-config)")
+	callAPIKey := callCmd.String("api-key", "", "LLM API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY)")
+	callBaseURL := callCmd.String("base-url", "", "LLM API base URL (provider-specific defaults if not set)")
+	callModel := callCmd.String("model", "", "LLM model name (provider-specific defaults if not set)")
 	callTools := callCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
 	callMCP := callCmd.String("mcp-url", "", "MCP server URL for tool integration (direct mode, zero-config)")
 
@@ -466,9 +487,9 @@ func parseArgs() *CLIArgs {
 	chatServer := chatCmd.String("server", "", "A2A server URL (enables server mode)")
 	chatToken := chatCmd.String("token", "", "Authentication token")
 	chatConfig := chatCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
-	chatAPIKey := chatCmd.String("api-key", "", "OpenAI API key (or set OPENAI_API_KEY)")
-	chatBaseURL := chatCmd.String("base-url", "https://api.openai.com/v1", "OpenAI API base URL")
-	chatModel := chatCmd.String("model", "gpt-4o-mini", "OpenAI model (direct mode, zero-config)")
+	chatAPIKey := chatCmd.String("api-key", "", "LLM API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY)")
+	chatBaseURL := chatCmd.String("base-url", "", "LLM API base URL (provider-specific defaults if not set)")
+	chatModel := chatCmd.String("model", "", "LLM model name (provider-specific defaults if not set)")
 	chatTools := chatCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
 	chatMCP := chatCmd.String("mcp-url", "", "MCP server URL for tool integration (direct mode, zero-config)")
 	chatNoStream := chatCmd.Bool("no-stream", false, "Disable streaming (default: streaming enabled)")
@@ -584,6 +605,31 @@ func parseArgs() *CLIArgs {
 		os.Exit(1)
 	}
 
+	// Resolve environment variables for flags that weren't explicitly set
+	// This happens AFTER flag parsing so flags always override environment
+	if args.APIKey == "" {
+		// Try provider-specific env vars (priority: OpenAI → Anthropic → Gemini)
+		if key := os.Getenv("OPENAI_API_KEY"); key != "" {
+			args.APIKey = key
+			args.Provider = ProviderOpenAI
+		} else if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+			args.APIKey = key
+			args.Provider = ProviderAnthropic
+		} else if key := os.Getenv("GEMINI_API_KEY"); key != "" {
+			args.APIKey = key
+			args.Provider = ProviderGemini
+		}
+	}
+
+	// Ensure provider is always set (use default if not detected)
+	args.Provider = getProviderOrDefault(args.Provider)
+
+	if args.MCPURL == "" {
+		if mcpURL := os.Getenv("MCP_URL"); mcpURL != "" {
+			args.MCPURL = mcpURL
+		}
+	}
+
 	// Validate mode and flags after parsing
 	validateModeAndFlags(args)
 
@@ -644,7 +690,7 @@ Current mode: %s
 Server: %s`, mode, mode, args.ServerURL)
 		}
 
-		if args.Model != "" && args.Model != "gpt-4o-mini" { // Check if non-default
+		if args.Model != "" {
 			fatalf(`❌ Error: --model flag is not supported in %s mode
 
 The remote server has its own model configuration.
@@ -675,7 +721,7 @@ Current mode: %s
 Server: %s`, mode, mode, args.ServerURL)
 		}
 
-		if args.BaseURL != "" && args.BaseURL != "https://api.openai.com/v1" { // Check if non-default
+		if args.BaseURL != "" {
 			fatalf(`❌ Error: --base-url flag is not supported in %s mode
 
 The remote server has its own API configuration.
@@ -687,7 +733,7 @@ Server: %s`, mode, mode, args.ServerURL)
 	case ModeDirect:
 		// Direct mode: all flags valid, but check for conflicting config strategies
 		hasConfigFile := args.ConfigFile != "" && args.ConfigFile != "hector.yaml"
-		hasZeroConfig := args.APIKey != "" || args.Model != "gpt-4o-mini" || args.Tools
+		hasZeroConfig := args.APIKey != "" || args.Model != "" || args.BaseURL != "" || args.Tools
 
 		// Check if config file exists
 		configExists := false
@@ -721,40 +767,25 @@ func executeServeCommand(args *CLIArgs) {
 
 		// Get API key from flag or environment
 		// Support multiple providers: OpenAI, Anthropic, Gemini
-		apiKey := args.APIKey
-		if apiKey == "" {
-			// Try provider-specific env vars
-			if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-				apiKey = key
-			} else if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
-				apiKey = key
-			} else if key := os.Getenv("GEMINI_API_KEY"); key != "" {
-				apiKey = key
-			}
-		}
-		if apiKey == "" {
+		// Note: API key, provider, and MCP URL are already resolved in parseArgs()
+		if args.APIKey == "" {
 			fatalf("API key required for zero-config mode\nSet one of: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY\nOr use --api-key flag")
 		}
 
-		// Get MCP URL from flag or environment
-		mcpURL := args.MCPURL
-		if mcpURL == "" {
-			mcpURL = os.Getenv("MCP_SERVER_URL")
-		}
-
 		opts := config.ZeroConfigOptions{
-			APIKey:      apiKey,
+			Provider:    args.Provider, // Already set to detected provider or default
+			APIKey:      args.APIKey,   // Already resolved from flag or environment
 			BaseURL:     args.BaseURL,
 			Model:       args.Model,
 			EnableTools: args.Tools,
-			MCPURL:      mcpURL,
+			MCPURL:      args.MCPURL, // Already resolved from --mcp-url flag or MCP_URL env
 			DocsFolder:  args.DocsFolder,
 		}
 
 		hectorConfig = config.CreateZeroConfig(opts)
 
 		if args.Debug {
-			fmt.Printf("  Provider: OpenAI\n")
+			fmt.Printf("  Provider: %s\n", args.Provider)
 			fmt.Printf("  Model: %s\n", args.Model)
 			fmt.Printf("  Base URL: %s\n", args.BaseURL)
 			if args.Tools {
@@ -766,6 +797,11 @@ func executeServeCommand(args *CLIArgs) {
 			if args.DocsFolder != "" {
 				fmt.Printf("  Docs: %s\n", args.DocsFolder)
 			}
+		}
+
+		// Show MCP info even without debug flag (like we do for MCP discovery)
+		if args.MCPURL != "" && !args.Debug {
+			fmt.Printf("🔌 MCP server: %s\n", args.MCPURL)
 		}
 	} else {
 		// Load configuration from file
@@ -1123,7 +1159,7 @@ Hector operates in three distinct modes based on your command and flags:
     --debug                  Enable debug output
     
   Zero-Config Options (when hector.yaml doesn't exist):
-    --model MODEL            Model name (default: gpt-4o-mini)
+    --model MODEL            Model name (provider-specific defaults)
     --api-key KEY            API key (or set env var, see below)
     --tools                  Enable all local tools
     --mcp-url URL            MCP server URL (supports auth: https://user:pass@host)
@@ -1173,8 +1209,8 @@ Hector operates in three distinct modes based on your command and flags:
 
   Zero-Config Options (for call and chat):
     --api-key KEY    API key (or set env var, see below)
-    --base-url URL   API base URL
-    --model MODEL    Model name (default: gpt-4o-mini)
+    --base-url URL   API base URL (provider-specific defaults)
+    --model MODEL    Model name (provider-specific defaults)
     --tools          Enable local tools
     --mcp-url URL    MCP server URL (supports auth: https://user:pass@host)
 
@@ -1205,13 +1241,13 @@ EXAMPLES:
     $ hector call agent "task" --server URL   # Client mode (remote)
 
 ENVIRONMENT VARIABLES:
-  API Keys (for zero-config mode):
-    OPENAI_API_KEY       OpenAI API key
-    ANTHROPIC_API_KEY    Anthropic (Claude) API key
-    GEMINI_API_KEY       Google Gemini API key
+  API Keys (for zero-config mode - auto-detected by provider):
+    OPENAI_API_KEY       OpenAI (GPT) models
+    ANTHROPIC_API_KEY    Anthropic (Claude) models
+    GEMINI_API_KEY       Google Gemini models
   
   MCP Configuration:
-    MCP_SERVER_URL       MCP server URL (supports auth: https://user:pass@host)
+    MCP_URL              MCP server URL (supports auth: https://user:pass@host)
 
 MODE DETECTION:
   • If you use 'serve' command → Server mode

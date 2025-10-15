@@ -352,7 +352,9 @@ type DefaultToolService struct {
 }
 
 // NewToolService creates a new tool service with optional tool filtering
-// If allowedTools is nil or empty, all tools from the registry are available
+// If allowedTools is nil, all tools from the registry are available
+// If allowedTools is empty slice, no tools are available
+// If allowedTools has values, only those tools are available
 func NewToolService(toolRegistry *tools.ToolRegistry, allowedTools []string) reasoning.ToolService {
 	return &DefaultToolService{
 		toolRegistry: toolRegistry,

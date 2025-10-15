@@ -456,13 +456,13 @@ Set your MCP server URL to automatically configure tool integration:
 
 ```bash
 # Composio MCP server with auth
-export MCP_SERVER_URL="https://api-key-here@api.composio.dev/v1/mcp"
+export MCP_URL="https://api-key-here@api.composio.dev/v1/mcp"
 
 # Local MCP server
-export MCP_SERVER_URL="http://localhost:3000/mcp"
+export MCP_URL="http://localhost:3000/mcp"
 
 # With basic auth
-export MCP_SERVER_URL="https://user:password@mcp.example.com"
+export MCP_URL="https://user:password@mcp.example.com"
 ```
 
 The `--mcp-url` flag overrides this environment variable if both are provided.
@@ -477,7 +477,7 @@ cat > .env << EOF
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 GEMINI_API_KEY=AI...
-MCP_SERVER_URL=https://api-key@api.composio.dev/v1/mcp
+MCP_URL=https://api-key@api.composio.dev/v1/mcp
 EOF
 
 # Now zero-config mode works without flags

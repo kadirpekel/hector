@@ -85,48 +85,18 @@ func loadOrCreateConfig(opts Options) (*config.Config, error) {
 	}
 
 	// File doesn't exist, create zero-config
-	// Default to openai if no provider specified
-	provider := opts.Provider
-	if provider == "" {
-		provider = "openai"
-	}
-
-	apiKey := opts.APIKey
-	if apiKey == "" {
-		// Try provider-specific env vars
-		switch provider {
-		case "anthropic":
-			apiKey = os.Getenv("ANTHROPIC_API_KEY")
-		case "gemini":
-			apiKey = os.Getenv("GEMINI_API_KEY")
-		default: // openai
-			apiKey = os.Getenv("OPENAI_API_KEY")
-		}
-	}
-	if apiKey == "" {
-		envVar := fmt.Sprintf("%s_API_KEY", provider)
-		if provider == "openai" {
-			envVar = "OPENAI_API_KEY"
-		} else if provider == "anthropic" {
-			envVar = "ANTHROPIC_API_KEY"
-		} else if provider == "gemini" {
-			envVar = "GEMINI_API_KEY"
-		}
-		return nil, fmt.Errorf("API key required for zero-config mode (use --api-key or set %s environment variable)", envVar)
-	}
-
-	zeroOpts := config.ZeroConfigOptions{
-		Provider:    provider,
-		APIKey:      apiKey,
+	// Note: API key and MCP URL resolution from environment happens in CLI layer (parseArgs)
+	cfg := config.CreateZeroConfig(config.ZeroConfigOptions{
+		Provider:    opts.Provider, // Can be empty - defaults to "openai"
+		APIKey:      opts.APIKey,   // Already resolved from flags or environment in CLI layer
 		BaseURL:     opts.BaseURL,
 		Model:       opts.Model,
 		EnableTools: opts.Tools,
-		MCPURL:      opts.MCPURL,
+		MCPURL:      opts.MCPURL, // Already resolved from --mcp-url flag or MCP_URL env
 		DocsFolder:  opts.DocsFolder,
-	}
+	})
 
-	cfg := config.CreateZeroConfig(zeroOpts)
-	cfg.SetDefaults()
+	// Validate the configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid zero-config: %w", err)
 	}
