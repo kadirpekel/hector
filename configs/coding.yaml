@@ -286,10 +286,11 @@ agents:
       max_iterations: 99                 # Reasonable limit (like real Cursor)
       show_debug_info: true              # Show iteration info for debugging
       show_thinking: true                # Show grayed-out reflection (Cursor-style)
-      enable_streaming: true             # Real-time output
-      enable_structured_reflection: false # Keep it simple like Cursor
-      # Note: Structured reflection can be enabled for complex tasks
-      # but basic heuristics work well for most coding
+      enable_streaming: true              # Real-time output
+      show_tool_execution: true           # Show tool calls and results
+      enable_structured_reflection: true  # LLM-based reflection for better analysis
+      # Note: Structured reflection uses LLM to analyze tool execution results
+      # Provides more accurate assessment than simple heuristics
     
     # ========================================================================
     # SEMANTIC CODE SEARCH

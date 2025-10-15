@@ -363,21 +363,21 @@ func NewToolService(toolRegistry *tools.ToolRegistry, allowedTools []string) rea
 }
 
 // ExecuteToolCall executes a single tool call and returns the result
-func (s *DefaultToolService) ExecuteToolCall(ctx context.Context, toolCall *protocol.ToolCall) (string, error) {
+func (s *DefaultToolService) ExecuteToolCall(ctx context.Context, toolCall *protocol.ToolCall) (string, map[string]interface{}, error) {
 	if s.toolRegistry == nil {
-		return "", fmt.Errorf("tool registry not available")
+		return "", nil, fmt.Errorf("tool registry not available")
 	}
 
 	result, err := s.toolRegistry.ExecuteTool(ctx, toolCall.Name, toolCall.Args)
 	if err != nil {
-		return "", fmt.Errorf("tool execution failed: %w", err)
+		return "", nil, fmt.Errorf("tool execution failed: %w", err)
 	}
 
 	if !result.Success {
-		return "", fmt.Errorf("tool failed: %s", result.Error)
+		return "", result.Metadata, fmt.Errorf("tool failed: %s", result.Error)
 	}
 
-	return result.Content, nil
+	return result.Content, result.Metadata, nil
 }
 
 // GetAvailableTools returns tools available to this agent (filtered by allowedTools)

@@ -64,4 +64,5 @@ type ToolResult struct {
 	Error      error
 	ToolCallID string
 	ToolName   string
+	Metadata   map[string]interface{} // Tool-specific metadata (e.g., reflection_context_size)
 }

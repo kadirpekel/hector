@@ -58,7 +58,7 @@ type LLMService interface {
 // ToolService defines tool execution capabilities - only tool responsibilities
 type ToolService interface {
 	// ExecuteToolCall executes a single tool call and returns the result
-	ExecuteToolCall(ctx context.Context, toolCall *protocol.ToolCall) (string, error)
+	ExecuteToolCall(ctx context.Context, toolCall *protocol.ToolCall) (string, map[string]interface{}, error)
 
 	// GetAvailableTools returns all available tools as ToolDefinition
 	GetAvailableTools() []llms.ToolDefinition

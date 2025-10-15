@@ -1337,13 +1337,13 @@ type ReasoningConfig struct {
 	EnableMetaReasoning          bool    `yaml:"enable_meta_reasoning"`          // Enable meta-reasoning
 	EnableGoalEvolution          bool    `yaml:"enable_goal_evolution"`          // Enable goal evolution
 	EnableDynamicTools           bool    `yaml:"enable_dynamic_tools"`           // Enable dynamic tools
-	EnableStructuredReflection   bool    `yaml:"enable_structured_reflection"`   // Enable LLM-based structured reflection (vs heuristics)
+	EnableStructuredReflection   *bool   `yaml:"enable_structured_reflection"`   // Enable LLM-based structured reflection (nil=default, false=disabled, true=enabled)
 	EnableCompletionVerification bool    `yaml:"enable_completion_verification"` // Enable LLM-based task completion verification
 	EnableGoalExtraction         bool    `yaml:"enable_goal_extraction"`         // Enable LLM-based goal extraction (supervisor strategy)
 	ShowDebugInfo                bool    `yaml:"show_debug_info"`                // Show debug info (iteration counts, tokens, etc.)
-	ShowToolExecution            bool    `yaml:"show_tool_execution"`            // Show tool execution labels (enabled by default for better UX)
+	ShowToolExecution            *bool   `yaml:"show_tool_execution"`            // Show tool execution labels (nil=default true, explicitly configurable)
 	ShowThinking                 bool    `yaml:"show_thinking"`                  // Show internal reasoning in grayed-out format (Claude-style)
-	EnableStreaming              bool    `yaml:"enable_streaming"`               // Enable streaming
+	EnableStreaming              *bool   `yaml:"enable_streaming"`               // Enable streaming (nil=default true, explicitly configurable)
 	QualityThreshold             float64 `yaml:"quality_threshold"`              // Quality threshold
 }
 
@@ -1374,14 +1374,21 @@ func (c *ReasoningConfig) SetDefaults() {
 	if c.QualityThreshold == 0 {
 		c.QualityThreshold = 0.7
 	}
-	// EnableStreaming defaults to true for better UX in zero-config mode
-	// ShowToolExecution defaults to true - tool execution should be visible, not debug info
-	// EnableStructuredReflection defaults to true for better quality (+13% quality, +20% cost)
-	// Note: Go's zero value for bool is false, so we need to explicitly set it
-	// In YAML configs, users can explicitly set these to false if needed
-	c.EnableStreaming = true
-	c.ShowToolExecution = true
-	c.EnableStructuredReflection = true
+
+	// Pointer boolean defaults: Only set if not explicitly configured (nil)
+	// This allows us to distinguish between "not set" (nil) and "explicitly false"
+	if c.EnableStreaming == nil {
+		trueVal := true
+		c.EnableStreaming = &trueVal // Default: enabled for better UX
+	}
+	if c.ShowToolExecution == nil {
+		trueVal := true
+		c.ShowToolExecution = &trueVal // Default: enabled for visibility
+	}
+	if c.EnableStructuredReflection == nil {
+		trueVal := true
+		c.EnableStructuredReflection = &trueVal // Default: enabled (provides better analysis)
+	}
 }
 
 // ============================================================================

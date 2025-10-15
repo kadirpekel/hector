@@ -14,6 +14,10 @@ import (
 // ============================================================================
 // STRUCTURED REFLECTION
 // Uses structured output to analyze tool execution results reliably
+//
+// Key Design: Passes the authoritative Error field from ToolResult to the LLM
+// This eliminates guessing - the LLM knows definitively which tools succeeded/failed
+// and can focus on analyzing WHY and WHAT happened, not WHETHER it happened
 // ============================================================================
 
 // ReflectionAnalysis represents structured analysis of iteration results
@@ -48,7 +52,7 @@ func AnalyzeToolResults(
 
 	// Check if structured reflection is enabled via config
 	cfg := services.GetConfig()
-	useStructuredOutput := cfg.EnableStructuredReflection
+	useStructuredOutput := cfg.EnableStructuredReflection != nil && *cfg.EnableStructuredReflection
 
 	// Define structured output schema
 	schema := map[string]interface{}{
@@ -138,26 +142,44 @@ func buildAnalysisPrompt(toolCalls []*protocol.ToolCall, results []ToolResult) s
 	for i, result := range results {
 		if i < len(toolCalls) {
 			toolName := toolCalls[i].Name
+
+			// Determine actual execution status from the Error field
+			executionStatus := "SUCCESS"
+			if result.Error != nil {
+				executionStatus = fmt.Sprintf("FAILED: %v", result.Error)
+			}
+
 			prompt.WriteString(fmt.Sprintf("Tool: %s\n", toolName))
 			prompt.WriteString(fmt.Sprintf("Arguments: %v\n", toolCalls[i].Args))
-			prompt.WriteString(fmt.Sprintf("Result: %s\n\n", truncateString(result.Content, 500)))
+			prompt.WriteString(fmt.Sprintf("Execution Status: %s\n", executionStatus))
+
+			// Get truncation length from tool's metadata (if provided)
+			// This allows tools to control their own reflection context size
+			maxLen := getReflectionContextSize(&result)
+			prompt.WriteString(fmt.Sprintf("Output: %s\n\n", truncateString(result.Content, maxLen)))
 		}
 	}
 
-	prompt.WriteString(`Provide your analysis:
-- successful_tools: List of tool names that executed successfully
-- failed_tools: List of tool names that encountered errors
-- critical_errors: Brief descriptions of critical errors (empty if none)
+	prompt.WriteString(`Provide your analysis based on the EXECUTION STATUS of each tool:
+
+- successful_tools: List tools where "Execution Status: SUCCESS"
+- failed_tools: List tools where "Execution Status: FAILED"
+- critical_errors: Brief descriptions of failures (from FAILED status messages)
 - confidence: Your confidence (0.0-1.0) that the iteration made meaningful progress
 - should_pivot: Whether the agent should fundamentally change its approach
 - recommendation: One of ["continue", "retry_failed", "pivot_approach", "stop"]
 
-Be strict: only mark tools as failed if they clearly indicate errors, not just empty or unexpected results.`)
+IMPORTANT: 
+- Respect the Execution Status field - it's the authoritative source of success/failure
+- A search tool with "SUCCESS" status and 0 results is SUCCESSFUL (it answered: "nothing found")
+- Only mark tools as failed if their Execution Status says "FAILED"
+- Use the Output field to understand WHAT the tool did, but use Execution Status for WHETHER it succeeded`)
 
 	return prompt.String()
 }
 
 // fallbackAnalysis provides heuristic-based analysis when structured output isn't available
+// Uses the authoritative Error field from ToolResult to determine success/failure
 func fallbackAnalysis(toolCalls []*protocol.ToolCall, results []ToolResult) *ReflectionAnalysis {
 	analysis := &ReflectionAnalysis{
 		SuccessfulTools: make([]string, 0),
@@ -174,23 +196,19 @@ func fallbackAnalysis(toolCalls []*protocol.ToolCall, results []ToolResult) *Ref
 		}
 
 		toolName := toolCalls[i].Name
-		content := strings.ToLower(result.Content)
 
-		// Improved heuristics for error detection
-		isError := strings.Contains(content, "error:") ||
-			strings.Contains(content, "failed:") ||
-			strings.Contains(content, "exception:") ||
-			strings.Contains(content, "fatal:") ||
-			(result.Error != nil && result.Error.Error() != "")
-
-		if isError {
+		// Use the Error field as the authoritative source of success/failure
+		// This is systematic: if Error is nil, the tool succeeded
+		if result.Error != nil {
+			// Tool failed
 			analysis.FailedTools = append(analysis.FailedTools, toolName)
-			errorMsg := result.Content
+			errorMsg := result.Error.Error()
 			if len(errorMsg) > 200 {
 				errorMsg = errorMsg[:200] + "..."
 			}
 			analysis.CriticalErrors = append(analysis.CriticalErrors, errorMsg)
 		} else {
+			// Tool succeeded (even if output is empty or "0 results")
 			analysis.SuccessfulTools = append(analysis.SuccessfulTools, toolName)
 		}
 	}
@@ -208,6 +226,26 @@ func fallbackAnalysis(toolCalls []*protocol.ToolCall, results []ToolResult) *Ref
 	}
 
 	return analysis
+}
+
+// getReflectionContextSize returns the appropriate truncation length for a tool result
+// Tools can specify their preferred size via metadata["reflection_context_size"]
+// Falls back to sensible defaults if not specified
+func getReflectionContextSize(result *ToolResult) int {
+	// Check if tool specified a preferred context size in metadata
+	if result.Metadata != nil {
+		if size, ok := result.Metadata["reflection_context_size"].(int); ok && size > 0 {
+			return size
+		}
+		// Also support float64 (from JSON unmarshaling)
+		if size, ok := result.Metadata["reflection_context_size"].(float64); ok && size > 0 {
+			return int(size)
+		}
+	}
+
+	// Default: 500 chars for most tools
+	// Tools with large outputs should set their own metadata
+	return 500
 }
 
 // truncateString truncates a string to maxLen characters

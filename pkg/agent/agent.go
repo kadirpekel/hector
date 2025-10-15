@@ -436,7 +436,7 @@ func (a *Agent) callLLM(
 ) (string, []*protocol.ToolCall, int, error) {
 	llm := a.services.LLM()
 
-	if cfg.EnableStreaming {
+	if cfg.EnableStreaming != nil && *cfg.EnableStreaming {
 		// Streaming mode - capture streamed text for history
 		var streamedText strings.Builder
 		wrappedCh := make(chan string, 100)
@@ -498,7 +498,7 @@ func (a *Agent) executeTools(
 	results := make([]reasoning.ToolResult, 0, len(toolCalls))
 
 	// Add newline before tools section (once, before all tools)
-	if len(toolCalls) > 0 && cfg.ShowToolExecution {
+	if len(toolCalls) > 0 && cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
 		outputCh <- "\n"
 	}
 
@@ -512,21 +512,21 @@ func (a *Agent) executeTools(
 
 		// Show tool label before execution (both streaming and non-streaming)
 		// This ensures clean "🔧 tool ✅" pairing for each tool
-		if cfg.ShowToolExecution {
+		if cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
 			label := formatToolLabel(toolCall.Name, toolCall.Args)
 			outputCh <- fmt.Sprintf("🔧 %s", label)
 		}
 
 		// Execute tool
-		result, err := tools.ExecuteToolCall(ctx, toolCall)
+		result, metadata, err := tools.ExecuteToolCall(ctx, toolCall)
 		resultContent := result
 		if err != nil {
 			resultContent = fmt.Sprintf("Error: %v", err)
-			if cfg.ShowToolExecution {
+			if cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
 				outputCh <- " ❌\n"
 			}
 		} else {
-			if cfg.ShowToolExecution {
+			if cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
 				outputCh <- " ✅\n"
 			}
 		}
@@ -537,6 +537,7 @@ func (a *Agent) executeTools(
 			Error:      err,
 			ToolCallID: toolCall.ID,
 			ToolName:   toolCall.Name,
+			Metadata:   metadata,
 		})
 	}
 
