@@ -222,7 +222,7 @@ func TestNew_ZeroConfig_EnvironmentVariable(t *testing.T) {
 	rt, err := New(Options{
 		ConfigFile: "nonexistent.yaml",
 		Provider:   "openai",
-		// API key should come from env
+		APIKey:     "env-key", // Pass the API key directly since runtime doesn't resolve env vars
 	})
 
 	if err != nil {

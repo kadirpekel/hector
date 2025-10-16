@@ -1223,64 +1223,6 @@ func (ds *DocumentStore) saveIndexState(files map[string]int64, totalChunks int)
 	return nil
 }
 
-// getExistingDocumentMetadata retrieves metadata for all documents currently indexed in this store
-// Returns a map of relative file path -> last modified timestamp
-func (ds *DocumentStore) getExistingDocumentMetadata(ctx context.Context) (map[string]int64, error) {
-	if ds.searchEngine == nil {
-		return nil, fmt.Errorf("search engine not available")
-	}
-
-	// Use a generic query with filter to get all documents for this store
-	// The query needs to be non-empty for semantic search validation,
-	// but the filter will narrow results to our specific store
-	filter := map[string]interface{}{
-		"store_name": ds.name,
-	}
-
-	// Use a generic query that matches broadly - filter does the real work
-	// This is a metadata retrieval operation, not a semantic search
-	results, err := ds.searchEngine.SearchWithFilter(ctx, "file document", 10000, filter)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve existing documents: %w", err)
-	}
-
-	// Build map of path -> last_modified
-	// NOTE: Files are chunked, so we'll see multiple results per file
-	// We only need ONE timestamp per unique file path (use the latest)
-	existingDocs := make(map[string]int64)
-	for _, result := range results {
-		if result.Metadata == nil {
-			continue
-		}
-
-		// Extract path and last_modified from metadata
-		path, pathOk := result.Metadata["path"].(string)
-		if !pathOk {
-			continue
-		}
-
-		// Handle both int64 and float64 (JSON unmarshaling might give us float64)
-		var lastModified int64
-		switch v := result.Metadata["last_modified"].(type) {
-		case int64:
-			lastModified = v
-		case float64:
-			lastModified = int64(v)
-		case int:
-			lastModified = int64(v)
-		default:
-			continue
-		}
-
-		// Keep the latest timestamp for this file path (in case of multiple chunks)
-		if existing, found := existingDocs[path]; !found || lastModified > existing {
-			existingDocs[path] = lastModified
-		}
-	}
-
-	return existingDocs, nil
-}
-
 // shouldReindexFile determines if a file needs to be re-indexed based on modification time
 func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time, existingDocs map[string]int64) bool {
 	// If incremental indexing is disabled, always reindex

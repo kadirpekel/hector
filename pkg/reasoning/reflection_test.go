@@ -2,6 +2,7 @@ package reasoning
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
@@ -40,7 +41,7 @@ func TestFallbackAnalysis(t *testing.T) {
 			},
 			results: []ToolResult{
 				{Content: "Success: operation completed", Error: nil},
-				{Content: "Error: connection failed", Error: nil},
+				{Content: "Error: connection failed", Error: fmt.Errorf("connection failed")},
 			},
 			wantSuccessful: 1,
 			wantFailed:     1,
@@ -54,8 +55,8 @@ func TestFallbackAnalysis(t *testing.T) {
 				{Name: "tool3", Args: map[string]interface{}{}},
 			},
 			results: []ToolResult{
-				{Content: "Error: failed", Error: nil},
-				{Content: "Error: timeout", Error: nil},
+				{Content: "Error: failed", Error: fmt.Errorf("failed")},
+				{Content: "Error: timeout", Error: fmt.Errorf("timeout")},
 				{Content: "Success", Error: nil},
 			},
 			wantSuccessful: 1,

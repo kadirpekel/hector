@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -311,8 +312,23 @@ func (c *LLMProviderConfig) SetDefaults() {
 		// Base delay for exponential backoff (2^attempt * RetryDelay)
 		c.RetryDelay = 2
 	}
-	// API key resolution is handled in the CLI layer (parseArgs)
-	// No environment variable fallback here
+	// Set API key from environment if not provided
+	if c.APIKey == "" {
+		switch c.Type {
+		case "openai":
+			if key := os.Getenv("OPENAI_API_KEY"); key != "" {
+				c.APIKey = key
+			}
+		case "anthropic":
+			if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+				c.APIKey = key
+			}
+		case "gemini":
+			if key := os.Getenv("GEMINI_API_KEY"); key != "" {
+				c.APIKey = key
+			}
+		}
+	}
 }
 
 // DatabaseProviderConfig represents database provider configuration

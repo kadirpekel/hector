@@ -217,7 +217,7 @@ func TestAnthropicProvider_Generate_WithTools(t *testing.T) {
 					Type: "tool_use",
 					ID:   "toolu_123",
 					Name: "test_tool",
-					Input: map[string]interface{}{
+					Input: &map[string]interface{}{
 						"param1": "value1",
 					},
 				},
