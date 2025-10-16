@@ -20,6 +20,8 @@
 
 Hector is a **declarative AI agent platform** that eliminates code from agent development. Built on the [Agent-to-Agent protocol](https://a2a-protocol.org), Hector enables true interoperability between agents across networks, servers, and organizations.
 
+**🚀 From idea to production agent in minutes, not months.**
+
 **Platform Capabilities:**
 - **Zero Code Development** - Define agents, tools, prompts, and orchestration entirely in YAML
 - **A2A Protocol Native** - 100% compliant with Agent-to-Agent protocol for true interoperability
@@ -49,12 +51,17 @@ Agent: I'll check the current weather in Berlin to help you decide what to wear 
 
 ## 🎯 **Why Choose Hector?**
 
+**Transform complex AI agent development from weeks of coding to minutes of configuration.**
+
 ### **For Individuals & Developers**
 - **🚀 Zero Code Development** - Build powerful AI agents with pure YAML, no programming required
 - **⚡ Instant Setup** - Start in seconds with zero-config mode, no complex setup
-- **🛠️ Rich Tool Ecosystem** - Built-in tools + MCP protocol integration for unlimited extensibility
-- **🧠 Smart Memory** - Context-aware conversations with automatic memory management
-- **📚 Task Management** - Async processing with real-time status tracking
+- **🧠 Advanced Memory Systems** - Working memory, session management, and context window optimization
+- **🔍 RAG & Document Stores** - Semantic search across knowledge bases with automatic retrieval
+- **🛠️ Rich Tool Ecosystem** - Built-in tools (search, file ops, commands) + MCP protocol integration
+- **📚 Task Management** - Async processing with real-time status tracking and streaming
+- **🎯 Structured Output** - Provider-aware JSON/XML/Enum for reliable data extraction
+- **🔄 Multi-Turn Sessions** - Conversation history and context across interactions
 
 ### **For Enterprises & Teams**
 - **🌐 True Interoperability** - 100% A2A protocol compliant, works with any A2A agent
@@ -62,6 +69,9 @@ Agent: I'll check the current weather in Berlin to help you decide what to wear 
 - **🏢 Distributed Architecture** - Deploy agents across servers, teams, and organizations
 - **🔒 Production Security** - JWT authentication, RBAC, and secure agent communication
 - **📡 Multi-Transport APIs** - gRPC, REST, JSON-RPC - integrate with any system
+- **🔌 Plugin System** - gRPC-based extensibility for custom LLMs, databases, and tools
+- **⚡ Real-Time Streaming** - Token-by-token output via Server-Sent Events (SSE)
+- **🎛️ Fine-Grained Control** - Slot-based prompt system for precise agent behavior
 
 ---
 
@@ -189,6 +199,17 @@ agents:
   remote_analyst:
     type: "a2a"
     url: "https://analytics.partner.com/a2a"
+```
+
+---
+
+## 🚀 **Get Started Now**
+
+```bash
+# Install and run in 30 seconds
+go install github.com/kadirpekel/hector/cmd/hector@latest
+export OPENAI_API_KEY="your-key-here"
+hector call "Hello, Hector!"
 ```
 
 ---
