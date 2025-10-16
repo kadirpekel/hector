@@ -18,144 +18,61 @@
 # Hector
 **Declarative AI Agent Platform with Native A2A Protocol Support**
 
-Hector is a **declarative AI agent platform** that eliminates code from agent development. Unlike Python-based frameworks (LangChain, AutoGen, CrewAI), Hector uses **pure YAML configuration** to define complete agent systems:
+Hector is a **declarative AI agent platform** that eliminates code from agent development. Built on the [Agent-to-Agent protocol](https://a2a-protocol.org), Hector enables true interoperability between agents across networks, servers, and organizations.
 
-- **Zero Code Required** - Define agents, tools, prompts, and orchestration entirely in YAML
-- **A2A Protocol Native** - Built on the [Agent-to-Agent protocol](https://a2a-protocol.org) for true interoperability ([100% compliant](https://gohector.dev/A2A_COMPLIANCE))
+**Platform Capabilities:**
+- **Zero Code Development** - Define agents, tools, prompts, and orchestration entirely in YAML
+- **A2A Protocol Native** - 100% compliant with Agent-to-Agent protocol for true interoperability
 - **Single & Multi-Agent** - From standalone agents to complex orchestration networks
-- **Hybrid Architecture** - Mix local agents with remote A2A-compliant services
+- **Distributed Deployment** - Deploy agents across multiple servers and organizations
+- **Production Security** - JWT authentication, RBAC, and secure agent communication
+
+Visit [gohector.dev](https://gohector.dev) for complete documentation.
 
 ### See it in action!
-```
-% export OPENAI_API_KEY=sk-proj-...
-% export MCP_URL=https://apollo.composio.dev/v3/mcp/...
-% hector call "what to wear today in berlin?"
+```bash
+go install github.com/kadirpekel/hector/cmd/hector@latest
+
+export OPENAI_API_KEY="sk-..."
+export MCP_URL="https://apollo.composio.dev/v3/mcp/..."
+
+# Run hector in zero-config mode
+hector call "what to wear today in berlin?"
 
 Agent: I'll check the current weather in Berlin to help you decide what to wear today.
 🔧 WEATHERMAP_WEATHER ✅
-Based on the current weather in Berlin:
 
-Temperature: 15°C (59°F) - feels like 14°C
-Conditions: Scattered clouds (40% cloud cover)
-Wind: Light breeze at 3 m/s
-Humidity: 75%
-
-What to wear:
-- Light jacket or sweater - The temperature is mild but cool enough that you'll want a layer
-- Long pants - Jeans or trousers would be comfortable
-- Comfortable shoes - No rain expected, so regular shoes are fine
-- Optional light scarf - The wind is gentle, but a scarf could add comfort
-
-It's a pleasant autumn day in Berlin! You won't need heavy winter clothing, but definitely bring a light-to-medium jacket. The weather is good for being outdoors without worrying about rain.
+☀️ **15°C (59°F), scattered clouds** - Perfect autumn weather in Berlin! 🌤️ Light jacket and comfortable shoes recommended for a pleasant day outdoors.
 ```
-
-For complete documentation visit [gohector.dev](https://gohector.dev).
-
-## Quick Start
-
-### Install
-
-```bash
-# Clone and build
-git clone https://github.com/kadirpekel/hector
-cd hector
-make build
-
-# Or install as Go package
-go install github.com/kadirpekel/hector/cmd/hector@latest
-```
-
-**📦 For all installation options (binary releases, Docker, etc.), see [Installation Guide](https://gohector.dev/INSTALLATION.html)**
-
-### Fastest Start - Zero-Config Mode
-
-No configuration file needed!
-
-```bash
-# Set API key
-export OPENAI_API_KEY="sk-..."
-
-# Start using immediately (agent name optional!)
-./hector call "Explain quantum computing in simple terms"
-
-# Or interactive chat (agent name optional!)
-./hector chat
-
-# With tools enabled
-./hector call "List files in current directory" --tools
-
-# Explicit agent name still works
-./hector call assistant "Explain quantum computing in simple terms"
-./hector chat assistant
-```
-
-**That's it!** You're up and running with zero configuration.
-
-**📖 See [CLI Guide](https://gohector.dev/CLI_GUIDE.html) for complete command reference and workflows**
-
-### With Config File (For Advanced Features)
-
-Create `my-agent.yaml`:
-
-```yaml
-agents:
-  assistant:
-    name: "My Assistant"
-    llm: "gpt-4o"
-    prompt:
-      system_role: |
-        You are a helpful assistant who explains concepts clearly.
-
-llms:
-  gpt-4o:
-    type: "openai"
-    model: "gpt-4o-mini"
-    api_key: "${OPENAI_API_KEY}"
-```
-
-Run in **Direct Mode** (in-process, no server):
-
-```bash
-# Set API key
-export OPENAI_API_KEY="sk-..."
-
-# Call agent directly
-./hector call assistant "Explain quantum computing" --config my-agent.yaml
-
-# Interactive chat
-./hector chat assistant --config my-agent.yaml
-```
-
-**📖 For complete configuration options, see [Configuration Reference](https://gohector.dev/CONFIGURATION.html)**
 
 ---
 
-## Why Hector?
+## 🎯 **Why Choose Hector?**
 
-Unlike LangChain (500+ lines of Python), Hector uses **pure YAML** (120 lines) for the same functionality.
+### **For Individuals & Developers**
+- **🚀 Zero Code Development** - Build powerful AI agents with pure YAML, no programming required
+- **⚡ Instant Setup** - Start in seconds with zero-config mode, no complex setup
+- **🛠️ Rich Tool Ecosystem** - Built-in tools + MCP protocol integration for unlimited extensibility
+- **🧠 Smart Memory** - Context-aware conversations with automatic memory management
+- **📚 Task Management** - Async processing with real-time status tracking
 
-**Core Capabilities:**
-- 🎯 **Zero Code** - Define agents, tools, prompts, and orchestration entirely in YAML
-- 🌐 **A2A Protocol Native** - Built on Agent-to-Agent protocol for true interoperability ([100% compliant](https://gohector.dev/A2A_COMPLIANCE))
-- 🤖 **Multi-Agent Orchestration** - LLM-driven routing with native & external A2A agents
-- 🧠 **Memory Management** - Working memory (token-based) + long-term (vector storage)
-- 🛠️ **Tools & MCP** - Built-in tools + MCP protocol for 150+ integrations
-- 📚 **RAG & Knowledge** - Vector search (Qdrant), semantic retrieval, document stores
-- 🔌 **Plugin System** - gRPC-based extensibility (custom LLMs, databases, tools)
-- 🔒 **Production Ready** - JWT auth, streaming (SSE), task persistence (SQL/Redis/Memory)
-
-**📖 Complete documentation:** [gohector.dev](https://gohector.dev)
+### **For Enterprises & Teams**
+- **🌐 True Interoperability** - 100% A2A protocol compliant, works with any A2A agent
+- **🤖 Multi-Agent Orchestration** - LLM-driven agent coordination and task delegation
+- **🏢 Distributed Architecture** - Deploy agents across servers, teams, and organizations
+- **🔒 Production Security** - JWT authentication, RBAC, and secure agent communication
+- **📡 Multi-Transport APIs** - gRPC, REST, JSON-RPC - integrate with any system
 
 ---
 
-## Architecture
+## 🏗️ **Agent Architecture**
 
-### Agent Architecture
+**How Hector agents work under the hood:**
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                      APPLICATION                             │
-│                 (Your Agents & Logic)                        │
+│                 (Your Agent & Logic)                         │
 ├──────────────────────────────────────────────────────────────┤
 │                     HECTOR RUNTIME                           │
 │  • Configuration Loading  • Agent Initialization             │
@@ -180,14 +97,6 @@ Unlike LangChain (500+ lines of Python), Hector uses **pure YAML** (120 lines) f
 │  │  Port: 8080  │  Port: 8081      │  Port: 8082         │   │
 │  └──────────────┴──────────────────┴─────────────────────┘   │
 ├──────────────────────────────────────────────────────────────┤
-│                      SERVER LAYER                            │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │            RegistryService (Multi-Agent Hub)            │ │
-│  │  • Agent registration    • Request routing              │ │
-│  │  • Metadata management   • Discovery endpoints          │ │
-│  │  • Authentication        • Well-known endpoints         │ │
-│  └─────────────────────────────────────────────────────────┘ │
-├──────────────────────────────────────────────────────────────┤
 │                       AGENT LAYER                            │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │  Agent (pb.A2AServiceServer interface)                  │ │
@@ -211,7 +120,11 @@ Unlike LangChain (500+ lines of Python), Hector uses **pure YAML** (120 lines) f
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### Multi-Agent Architecture
+---
+
+## 🌐 **Distributed Multi-Agent Platform**
+
+**Enterprise-grade agent networks and orchestration:**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -248,6 +161,46 @@ Unlike LangChain (500+ lines of Python), Hector uses **pure YAML** (120 lines) f
                   └───────────────┘
 ```
 
+### **Production Examples**
+
+**Deploy Multi-Agent Server:**
+```bash
+hector serve --config agents.yaml --port 8080
+```
+
+**Connect from Anywhere:**
+```bash
+hector call coordinator "Research AI trends" --server https://agents.company.com:8080
+```
+
+**API Integration:**
+```bash
+curl -X POST https://agents.company.com:8080/v1/agents/coordinator/message:send \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Research AI trends"}'
+```
+
+**Hybrid Agent Networks:**
+```yaml
+agents:
+  local_assistant:
+    type: "native"
+    llm: "gpt-4o"
+  remote_analyst:
+    type: "a2a"
+    url: "https://analytics.partner.com/a2a"
+```
+
+---
+
+## 📚 **Documentation & Resources**
+
+- **[Complete Documentation](https://gohector.dev)** - Full platform guide
+- **[CLI Guide](https://gohector.dev/CLI_GUIDE.html)** - Command-line interface
+- **[Agent Configuration](https://gohector.dev/AGENTS.html)** - YAML configuration guide
+- **[Multi-Agent Tutorial](https://gohector.dev/TUTORIAL_MULTI_AGENT.html)** - Orchestration workflows
+- **[A2A Compliance](https://gohector.dev/A2A_COMPLIANCE.html)** - Protocol standards
+
 ## Say Hi! to Hector!
 
 ![Hector Gopher Logo](gopher.png)
@@ -256,9 +209,6 @@ Unlike LangChain (500+ lines of Python), Hector uses **pure YAML** (120 lines) f
 
 **AGPL-3.0** - See [LICENSE.md](LICENSE.md) for details.
 
-Hector is free and open-source software. You can use, modify, and distribute it under the terms of the AGPL-3.0 license, which requires:
-- Source code disclosure for network use
-- Same license for derivative works
-- Patent grant to users
+Hector is free and open-source software. You can use, modify, and distribute it under the terms of the AGPL-3.0 license.
 
 For commercial licensing options, please contact the maintainers.
