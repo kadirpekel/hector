@@ -30,17 +30,21 @@ export OPENAI_API_KEY="sk-..."
 ### 2. Run Immediately (Zero-Config)
 
 ```bash
-# Single query
-hector call assistant "Explain quantum computing"
+# Single query (agent name optional!)
+hector call "Explain quantum computing"
 
-# Interactive chat
-hector chat assistant
+# Interactive chat (agent name optional!)
+hector chat
 
 # Custom model
-hector call assistant "Write a haiku" --model gpt-4o
+hector call "Write a haiku" --model gpt-4o
 
 # With tools enabled
-hector call assistant "List files" --tools
+hector call "List files" --tools
+
+# Explicit agent name still works
+hector call assistant "Explain quantum computing"
+hector chat assistant
 ```
 
 **That's it!** No configuration file needed.

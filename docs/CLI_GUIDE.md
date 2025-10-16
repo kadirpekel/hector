@@ -177,16 +177,20 @@ hector list --config hector.yaml
 export OPENAI_API_KEY="sk-..."
 
 # Start using immediately (no config file needed!)
-hector call assistant "Explain quantum computing"
+hector call "Explain quantum computing"        # Agent name optional!
+hector call assistant "Explain quantum computing"  # Explicit agent name still works
 
 # Interactive chat
-hector chat assistant
+hector chat                                   # Agent name optional!
+hector chat assistant                         # Explicit agent name still works
 
 # Enable tools
-hector call assistant "List files" --tools
+hector call "List files" --tools              # Agent name optional!
+hector call assistant "List files" --tools    # Explicit agent name still works
 
 # Custom model
-hector call assistant "Write code" --model gpt-4o
+hector call "Write code" --model gpt-4o       # Agent name optional!
+hector call assistant "Write code" --model gpt-4o  # Explicit agent name still works
 ```
 
 **Direct mode flags:**
@@ -200,6 +204,27 @@ hector call assistant "Write code" --model gpt-4o
 - `--mcp-url URL` - MCP server URL (supports auth: `https://user:pass@host`)
 
 **📖 For all configuration options, see [Configuration Reference](https://gohector.dev/CONFIGURATION.html)**
+
+### Agent Name Behavior
+
+**In Zero-Config Mode (Direct mode without config file):**
+- Agent name is **optional** for `call` and `chat` commands
+- Defaults to `"assistant"` when not specified
+- Both `hector call "prompt"` and `hector call assistant "prompt"` work
+
+**In Config File Mode (Direct mode with config file):**
+- Agent name is **required** for `call` and `chat` commands
+- Must specify which agent from your config file to use
+- `hector call "prompt"` will fail, `hector call myagent "prompt"` is required
+
+**In Client Mode (with --server flag):**
+- Agent name is **required** for `call` and `chat` commands
+- Must specify which agent on the remote server to use
+- `hector call "prompt" --server URL` will fail, `hector call myagent "prompt" --server URL` is required
+
+**In Server Mode:**
+- Agent names are defined in your configuration file
+- No direct interaction with agents via CLI (agents are hosted for clients)
 
 ---
 

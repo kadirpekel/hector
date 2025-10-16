@@ -29,7 +29,7 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 ```
 % export OPENAI_API_KEY=sk-proj-...
 % export MCP_URL=https://apollo.composio.dev/v3/mcp/...
-% hector call assistant "what to wear today in berlin?"
+% hector call "what to wear today in berlin?"
 
 Agent: I'll check the current weather in Berlin to help you decide what to wear today.
 🔧 WEATHERMAP_WEATHER ✅
@@ -75,14 +75,18 @@ No configuration file needed!
 # Set API key
 export OPENAI_API_KEY="sk-..."
 
-# Start using immediately
-./hector call assistant "Explain quantum computing in simple terms"
+# Start using immediately (agent name optional!)
+./hector call "Explain quantum computing in simple terms"
 
-# Or interactive chat
-./hector chat assistant
+# Or interactive chat (agent name optional!)
+./hector chat
 
 # With tools enabled
-./hector call assistant "List files in current directory" --tools
+./hector call "List files in current directory" --tools
+
+# Explicit agent name still works
+./hector call assistant "Explain quantum computing in simple terms"
+./hector chat assistant
 ```
 
 **That's it!** You're up and running with zero configuration.

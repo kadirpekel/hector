@@ -132,7 +132,7 @@ hector version
 
 # Run zero-config mode (no config file needed)
 export OPENAI_API_KEY="sk-..."
-hector call assistant "Hello, world!"
+hector call "Hello, world!"  # Agent name optional in zero-config!
 ```
 
 ---
@@ -195,6 +195,6 @@ hector serve --config config.yaml
 
 # In another terminal, test the agent
 hector list
-hector call assistant "Explain quantum computing"
+hector call "Explain quantum computing"  # Agent name optional in zero-config!
 ```
 

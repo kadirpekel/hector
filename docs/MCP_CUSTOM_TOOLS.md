@@ -141,9 +141,9 @@ agents:
 # Start Hector
 ./hector serve --config config.yaml
 
-# Test the custom tools
-./hector call assistant "Search the web for 'AI agent frameworks' and tell me the top 3"
-./hector call assistant "What's the weather in Tokyo?"
+# Test the custom tools (agent name optional in zero-config!)
+./hector call "Search the web for 'AI agent frameworks' and tell me the top 3"
+./hector call "What's the weather in Tokyo?"
 ```
 
 **That's it!** You've extended Hector with custom tools in 5 minutes.
