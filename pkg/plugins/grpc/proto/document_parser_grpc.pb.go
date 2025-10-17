@@ -43,4 +43,3 @@ func (c *documentParserServiceClient) GetSupportedExtensions(ctx context.Context
 		MimeTypes:  []string{},
 	}, nil
 }
-

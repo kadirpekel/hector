@@ -157,4 +157,3 @@ func (c *DocumentParserGRPCClient) GetSupportedExtensions(ctx context.Context) (
 	req := &pb.GetSupportedExtensionsRequest{}
 	return c.client.GetSupportedExtensions(ctx, req)
 }
-

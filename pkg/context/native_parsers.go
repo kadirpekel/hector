@@ -381,18 +381,3 @@ func isBinaryFileType(filePath string) bool {
 	}
 	return binaryExtensions[ext]
 }
-
-// getFileMimeType returns the MIME type for a file based on its extension
-func getFileMimeType(filePath string) string {
-	ext := strings.ToLower(filepath.Ext(filePath))
-	mimeTypes := map[string]string{
-		".pdf":  "application/pdf",
-		".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-		".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-	}
-
-	if mimeType, exists := mimeTypes[ext]; exists {
-		return mimeType
-	}
-	return "application/octet-stream"
-}
