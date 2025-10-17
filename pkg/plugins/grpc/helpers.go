@@ -106,11 +106,12 @@ type (
 
 // Plugin types
 const (
-	PluginTypeLLM       = "llm_provider"
-	PluginTypeDatabase  = "database_provider"
-	PluginTypeEmbedder  = "embedder_provider"
-	PluginTypeTool      = "tool_provider"
-	PluginTypeReasoning = "reasoning_strategy"
+	PluginTypeLLM            = "llm_provider"
+	PluginTypeDatabase       = "database_provider"
+	PluginTypeEmbedder       = "embedder_provider"
+	PluginTypeTool           = "tool_provider"
+	PluginTypeReasoning      = "reasoning_strategy"
+	PluginTypeDocumentParser = "document_parser"
 )
 
 // Stream chunk types

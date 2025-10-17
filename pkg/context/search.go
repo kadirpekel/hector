@@ -203,10 +203,14 @@ func (se *SearchEngine) IngestDocument(ctx context.Context, docID, content strin
 		return NewSearchError("SearchEngine", "IngestDocument", "content cannot be empty", docID, nil)
 	}
 
-	// Get the first available model's collection
-	collection, err := se.getFirstCollection()
-	if err != nil {
-		return err
+	// Get collection name from metadata (store_name) or fallback to first collection
+	collection := se.getCollectionFromMetadata(metadata)
+	if collection == "" {
+		var err error
+		collection, err = se.getFirstCollection()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Generate embedding with timeout
@@ -312,10 +316,13 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 		return nil, NewSearchError("SearchEngine", "SearchWithFilter", "failed to generate embedding", processedQuery, err)
 	}
 
-	// Get first collection
-	collection, err := se.getFirstCollection()
-	if err != nil {
-		return nil, err
+	// Get collection from filter (store_name) or fallback to first collection
+	collection := se.getCollectionFromFilter(filter)
+	if collection == "" {
+		collection, err = se.getFirstCollection()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Search with filter
@@ -357,6 +364,34 @@ func (se *SearchEngine) getFirstCollection() (string, error) {
 	}
 
 	return "", NewSearchError("SearchEngine", "getFirstCollection", "no valid collections found", "", nil)
+}
+
+// getCollectionFromMetadata extracts collection name from document metadata
+func (se *SearchEngine) getCollectionFromMetadata(metadata map[string]interface{}) string {
+	if metadata == nil {
+		return ""
+	}
+
+	// Look for store_name in metadata to determine collection
+	if storeName, ok := metadata["store_name"].(string); ok && storeName != "" {
+		return storeName
+	}
+
+	return ""
+}
+
+// getCollectionFromFilter extracts collection name from search filter
+func (se *SearchEngine) getCollectionFromFilter(filter map[string]interface{}) string {
+	if filter == nil {
+		return ""
+	}
+
+	// Look for store_name in filter to determine collection
+	if storeName, ok := filter["store_name"].(string); ok && storeName != "" {
+		return storeName
+	}
+
+	return ""
 }
 
 // determineModelsToSearch determines which models to search based on input

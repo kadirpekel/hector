@@ -41,3 +41,12 @@ type EmbedderProvider interface {
 	Shutdown(ctx context.Context) error
 	Health(ctx context.Context) error
 }
+
+// DocumentParserProvider interface for document parser plugins
+type DocumentParserProvider interface {
+	Initialize(ctx context.Context, config map[string]string) error
+	ParseDocument(ctx context.Context, filePath string, fileSize int64, mimeType string, config map[string]string) (*pb.ParseDocumentResponse, error)
+	GetSupportedExtensions(ctx context.Context) (*pb.GetSupportedExtensionsResponse, error)
+	Shutdown(ctx context.Context) error
+	Health(ctx context.Context) error
+}

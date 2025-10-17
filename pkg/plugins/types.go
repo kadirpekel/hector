@@ -13,11 +13,12 @@ import (
 type PluginType string
 
 const (
-	PluginTypeLLM       PluginType = "llm_provider"
-	PluginTypeDatabase  PluginType = "database_provider"
-	PluginTypeEmbedder  PluginType = "embedder_provider"
-	PluginTypeTool      PluginType = "tool_provider"
-	PluginTypeReasoning PluginType = "reasoning_strategy"
+	PluginTypeLLM            PluginType = "llm_provider"
+	PluginTypeDatabase       PluginType = "database_provider"
+	PluginTypeEmbedder       PluginType = "embedder_provider"
+	PluginTypeTool           PluginType = "tool_provider"
+	PluginTypeReasoning      PluginType = "reasoning_strategy"
+	PluginTypeDocumentParser PluginType = "document_parser"
 )
 
 // PluginProtocol represents the communication protocol used by the plugin

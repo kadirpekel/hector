@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package hector.plugin;
+
+option go_package = "github.com/kadirpekel/hector/plugins/grpc/proto";
+
+// Document Parser Plugin Protocol
+// Handles parsing of binary documents (PDF, Word, PowerPoint, etc.)
+
+// ParseDocumentRequest requests parsing of a document
+message ParseDocumentRequest {
+  string file_path = 1;           // Path to the document file
+  int64 file_size = 2;            // File size in bytes
+  string mime_type = 3;           // MIME type (optional)
+  map<string, string> config = 4; // Parser-specific configuration
+  int32 timeout_seconds = 5;      // Timeout in seconds (optional)
+}
+
+// ParseDocumentResponse returns the parsed document content
+message ParseDocumentResponse {
+  bool success = 1;                    // Whether parsing succeeded
+  string content = 2;                  // Extracted text content
+  string title = 3;                    // Document title (optional)
+  string author = 4;                   // Document author (optional)
+  string created = 5;                  // Creation date (optional)
+  string modified = 6;                 // Modification date (optional)
+  int32 pages = 7;                     // Number of pages/slides/sheets (optional)
+  int32 word_count = 8;                // Word count (optional)
+  map<string, string> metadata = 9;    // Additional metadata
+  string error = 10;                   // Error message if success=false
+  repeated string warnings = 11;       // Warning messages
+  int64 processing_time_ms = 12;       // Processing time in milliseconds
+}
+
+// GetSupportedExtensionsRequest requests supported file extensions
+message GetSupportedExtensionsRequest {}
+
+// GetSupportedExtensionsResponse returns supported extensions and MIME types
+message GetSupportedExtensionsResponse {
+  repeated string extensions = 1;      // Supported file extensions (e.g., [".pdf", ".docx"])
+  repeated string mime_types = 2;      // Supported MIME types (e.g., ["application/pdf"])
+}
+
+// DocumentParserService defines the gRPC service for document parser plugins
+service DocumentParserService {
+  // ParseDocument parses a document and extracts text content
+  rpc ParseDocument(ParseDocumentRequest) returns (ParseDocumentResponse);
+  
+  // GetSupportedExtensions returns the file extensions and MIME types this parser supports
+  rpc GetSupportedExtensions(GetSupportedExtensionsRequest) returns (GetSupportedExtensionsResponse);
+}
+

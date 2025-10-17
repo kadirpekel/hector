@@ -45,6 +45,7 @@ const (
 	DocumentTypeMarkdown = "markdown"
 	DocumentTypeText     = "text"
 	DocumentTypeScript   = "script"
+	DocumentTypeBinary   = "binary" // Binary documents (PDF, Word, etc.)
 	DocumentTypeUnknown  = "unknown"
 )
 
@@ -154,6 +155,9 @@ type DocumentStore struct {
 	searchEngine *SearchEngine
 	sourcePath   string
 
+	// Native binary parsers
+	nativeParsers *NativeParserRegistry
+
 	// File watching components
 	watcher       *fsnotify.Watcher
 	updateChannel chan DocumentUpdate
@@ -186,6 +190,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 		config:            storeConfig,
 		searchEngine:      searchEngine,
 		sourcePath:        storeConfig.Path,
+		nativeParsers:     NewNativeParserRegistry(),
 		updateChannel:     make(chan DocumentUpdate, DefaultUpdateChannelSize),
 		ctx:               ctx,
 		cancel:            cancel,
@@ -477,16 +482,21 @@ func (ds *DocumentStore) isGitRepository(path string) bool {
 // indexDocument indexes a single document into vector database with enhanced processing
 // Now uses chunking to split large files into smaller, semantically meaningful pieces
 func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
-	// Read file content
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return NewDocumentStoreError(ds.name, "indexDocument", "failed to read file", path, err)
-	}
-
 	relPath, _ := filepath.Rel(ds.sourcePath, path)
 
+	// Try to parse with plugin first, fallback to text reading
+	content, err := ds.extractContentWithPlugins(path, info)
+	if err != nil {
+		// Fallback to reading as text
+		contentBytes, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return NewDocumentStoreError(ds.name, "indexDocument", "failed to read file", path, readErr)
+		}
+		content = string(contentBytes)
+	}
+
 	// Create document with enhanced metadata
-	doc := ds.createDocument(relPath, info, string(content))
+	doc := ds.createDocument(relPath, info, content)
 
 	// Extract metadata based on file type
 	ds.extractMetadata(doc)
@@ -524,6 +534,35 @@ func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 	}
 
 	return nil
+}
+
+// extractContentWithPlugins attempts to extract content using native parsers or plugins
+func (ds *DocumentStore) extractContentWithPlugins(path string, info os.FileInfo) (string, error) {
+	// First try native parsers for binary files
+	if isBinaryFileType(path) {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		result, err := ds.nativeParsers.ParseDocument(ctx, path, info.Size())
+		if err != nil {
+			return "", fmt.Errorf("native parser failed: %w", err)
+		}
+
+		if !result.Success {
+			return "", fmt.Errorf("native parser failed: %s", result.Error)
+		}
+
+		// Log successful parsing
+		if result.ProcessingTimeMs > 0 {
+			log.Printf("✅ Parsed %s with native parser (%dms)", path, result.ProcessingTimeMs)
+		}
+
+		return result.Content, nil
+	}
+
+	// For non-binary files, fall back to plain text reading
+	// Plugin system integration will be implemented when needed
+	return "", fmt.Errorf("no native parser available for text files - use plain text reading")
 }
 
 // ContentChunk represents a chunk of content with line number tracking
@@ -633,6 +672,10 @@ func (ds *DocumentStore) detectTypeAndLanguage(path string) (string, string) {
 		".md":   DocumentTypeMarkdown,
 		".txt":  DocumentTypeText,
 		".sh":   DocumentTypeScript,
+		// Binary document types
+		".pdf":  DocumentTypeBinary,
+		".docx": DocumentTypeBinary,
+		".xlsx": DocumentTypeBinary,
 	}
 
 	langMap := map[string]string{
@@ -654,6 +697,10 @@ func (ds *DocumentStore) detectTypeAndLanguage(path string) (string, string) {
 		".md":   "markdown",
 		".txt":  "text",
 		".sh":   "shell",
+		// Binary document languages
+		".pdf":  "pdf",
+		".docx": "word",
+		".xlsx": "excel",
 	}
 
 	docType := typeMap[ext]
@@ -822,24 +869,18 @@ func (ds *DocumentStore) extractGoImport(line string) string {
 
 // Search searches documents in this store using vector database
 func (ds *DocumentStore) Search(ctx context.Context, query string, limit int) ([]databases.SearchResult, error) {
-	// Use the search engine to perform vector similarity search
-	results, err := ds.searchEngine.Search(ctx, query, limit)
+	// Create filter to search only this store's collection
+	filter := map[string]interface{}{
+		"store_name": ds.name,
+	}
+
+	// Use the search engine to perform vector similarity search with store filter
+	results, err := ds.searchEngine.SearchWithFilter(ctx, query, limit, filter)
 	if err != nil {
 		return nil, NewDocumentStoreError(ds.name, "Search", "vector search failed", "", err)
 	}
 
-	// Filter results to only include documents from this store
-	// Use metadata filtering since IDs are UUIDs (not prefixed)
-	var storeResults []databases.SearchResult
-	for _, result := range results {
-		if result.Metadata != nil {
-			if storeName, ok := result.Metadata["store_name"].(string); ok && storeName == ds.name {
-				storeResults = append(storeResults, result)
-			}
-		}
-	}
-
-	return storeResults, nil
+	return results, nil
 }
 
 // GetDocument retrieves a document by ID from vector database

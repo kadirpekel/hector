@@ -233,11 +233,12 @@ func (d *PluginDiscovery) validateManifest(manifest *PluginManifest) error {
 
 	// Validate plugin type
 	validTypes := map[PluginType]bool{
-		PluginTypeLLM:       true,
-		PluginTypeDatabase:  true,
-		PluginTypeEmbedder:  true,
-		PluginTypeTool:      true,
-		PluginTypeReasoning: true,
+		PluginTypeLLM:            true,
+		PluginTypeDatabase:       true,
+		PluginTypeEmbedder:       true,
+		PluginTypeTool:           true,
+		PluginTypeReasoning:      true,
+		PluginTypeDocumentParser: true,
 	}
 	if !validTypes[manifest.Type] {
 		return fmt.Errorf("invalid plugin type: %s", manifest.Type)

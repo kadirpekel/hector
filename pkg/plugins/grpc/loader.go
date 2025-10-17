@@ -95,6 +95,10 @@ func (l *GRPCLoader) Unload(ctx context.Context, plugin plugins.Plugin) error {
 		if adapter.client != nil {
 			adapter.client.Kill()
 		}
+	case *DocumentParserPluginAdapter:
+		if adapter.client != nil {
+			adapter.client.Kill()
+		}
 	}
 	return nil
 }
@@ -133,6 +137,10 @@ func (l *GRPCLoader) getPluginMap(pluginType plugins.PluginType) map[string]plug
 		return map[string]plugin.Plugin{
 			string(plugins.PluginTypeEmbedder): &EmbedderProviderPlugin{},
 		}
+	case plugins.PluginTypeDocumentParser:
+		return map[string]plugin.Plugin{
+			string(plugins.PluginTypeDocumentParser): &DocumentParserProviderPlugin{},
+		}
 	// Add more types as needed
 	default:
 		return nil
@@ -159,6 +167,12 @@ func (l *GRPCLoader) wrapPlugin(raw interface{}, manifest *plugins.PluginManifes
 			return NewEmbedderPluginAdapter(embedderPlugin, manifest, client), nil
 		}
 		return nil, fmt.Errorf("plugin does not implement Embedder provider interface")
+
+	case plugins.PluginTypeDocumentParser:
+		if parserPlugin, ok := raw.(DocumentParserProvider); ok {
+			return NewDocumentParserPluginAdapter(parserPlugin, manifest, client), nil
+		}
+		return nil, fmt.Errorf("plugin does not implement Document Parser provider interface")
 
 	default:
 		return nil, fmt.Errorf("unsupported plugin type: %s", manifest.Type)

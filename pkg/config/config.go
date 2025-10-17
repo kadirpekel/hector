@@ -3,8 +3,12 @@
 package config
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 // ============================================================================
@@ -406,11 +410,35 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 
 	// Configure document store if folder provided
 	if opts.DocsFolder != "" {
-		// Note: Document stores require additional setup
-		// For now, we'll keep this simple and not auto-configure
-		// Users should use hector.yaml for advanced RAG setups
-		fmt.Println("⚠️  Warning: Document stores (--docs) require additional configuration.")
-		fmt.Println("   For RAG support, please create a hector.yaml configuration file.")
+		// Generate a unique store name based on the source path to avoid conflicts
+		storeName := generateStoreNameFromPath(opts.DocsFolder)
+
+		// Create a default document store configuration for zero-config mode
+		docStoreConfig := DocumentStoreConfig{
+			Name:                storeName,
+			Source:              "directory",
+			Path:                opts.DocsFolder,
+			IncludePatterns:     []string{"*.md", "*.txt", "*.go", "*.py", "*.js", "*.ts", "*.yaml", "*.yml", "*.json", "*.xml", "*.html", "*.csv", "*.pdf", "*.docx", "*.xlsx"},
+			ExcludePatterns:     []string{"**/node_modules/**", "**/.git/**", "**/vendor/**", "**/__pycache__/**", "**/.DS_Store", "**/.hector/**", "**/index_state_*.json"},
+			WatchChanges:        true,
+			MaxFileSize:         50 * 1024 * 1024, // 50MB
+			IncrementalIndexing: true,
+		}
+
+		// Add to document stores
+		if cfg.DocumentStores == nil {
+			cfg.DocumentStores = make(map[string]DocumentStoreConfig)
+		}
+		cfg.DocumentStores[storeName] = docStoreConfig
+
+		// Enable search tool for the agent
+		if cfg.Tools.Tools == nil {
+			cfg.Tools.Tools = make(map[string]ToolConfig)
+		}
+		cfg.Tools.Tools["search"] = ToolConfig{
+			Type:           "search",
+			DocumentStores: []string{storeName},
+		}
 	}
 
 	// Configure agent
@@ -425,13 +453,36 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 		Type:        "native",
 		LLM:         opts.Provider,
 		Visibility:  "public",
-		Prompt: PromptConfig{
-			SystemPrompt: "You are a helpful AI assistant. Be concise and accurate in your responses.",
-		},
+		// Don't override system prompt - let strategy use its optimized defaults
+		// Don't auto-enable context inclusion - let users choose
+		Prompt: PromptConfig{},
 		Reasoning: ReasoningConfig{
 			Engine:        "chain-of-thought",
-			MaxIterations: 10,
+			MaxIterations: 100,
 		},
+	}
+
+	// Add document store to agent if docs folder provided
+	if opts.DocsFolder != "" {
+		storeName := generateStoreNameFromPath(opts.DocsFolder)
+		agentConfig.DocumentStores = []string{storeName}
+		agentConfig.Database = "default-database"
+		agentConfig.Embedder = "default-embedder"
+
+		// Create default database and embedder configurations
+		cfg.Databases["default-database"] = DatabaseProviderConfig{
+			Type:    "qdrant",
+			Host:    "localhost",
+			Port:    6334,
+			Timeout: 30,
+		}
+		cfg.Embedders["default-embedder"] = EmbedderProviderConfig{
+			Type:      "ollama",
+			Model:     "nomic-embed-text",
+			Host:      "http://localhost:11434",
+			Dimension: 768,
+			Timeout:   30,
+		}
 	}
 
 	// Configure tools
@@ -546,4 +597,36 @@ func (c *Config) ListDocumentStores() []string {
 		stores = append(stores, name)
 	}
 	return stores
+}
+
+// generateStoreNameFromPath creates a unique store name based on the source path
+// This ensures different directories get different collections and index states
+func generateStoreNameFromPath(sourcePath string) string {
+	// Normalize the path to handle different path separators and trailing slashes
+	normalizedPath := filepath.Clean(sourcePath)
+
+	// Get the absolute path to ensure uniqueness
+	absPath, err := filepath.Abs(normalizedPath)
+	if err != nil {
+		// Fallback to normalized path if absolute path fails
+		absPath = normalizedPath
+	}
+
+	// Create a hash of the FULL path for uniqueness
+	hash := md5.Sum([]byte(absPath))
+	hashStr := hex.EncodeToString(hash[:])[:8] // Use first 8 characters for brevity
+
+	// Get the directory name for readability
+	dirName := filepath.Base(absPath)
+	if dirName == "" || dirName == "." {
+		dirName = "root"
+	}
+
+	// Clean the directory name to be safe for use as a collection name
+	dirName = strings.ReplaceAll(dirName, " ", "_")
+	dirName = strings.ReplaceAll(dirName, "-", "_")
+
+	// Return a combination of directory name and hash for uniqueness
+	// The hash is based on the FULL absolute path, so 8 chars is sufficient
+	return fmt.Sprintf("docs_%s_%s", dirName, hashStr)
 }

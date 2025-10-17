@@ -522,6 +522,7 @@ func parseArgs() *CLIArgs {
 	callModel := callCmd.String("model", "", "LLM model name (provider-specific defaults if not set)")
 	callTools := callCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
 	callMCP := callCmd.String("mcp-url", "", "MCP server URL for tool integration (direct mode, zero-config)")
+	callDocs := callCmd.String("docs", "", "Document store folder (enables RAG)")
 
 	chatCmd := flag.NewFlagSet("chat", flag.ExitOnError)
 	chatServer := chatCmd.String("server", "", "A2A server URL (enables server mode)")
@@ -533,6 +534,7 @@ func parseArgs() *CLIArgs {
 	chatModel := chatCmd.String("model", "", "LLM model name (provider-specific defaults if not set)")
 	chatTools := chatCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
 	chatMCP := chatCmd.String("mcp-url", "", "MCP server URL for tool integration (direct mode, zero-config)")
+	chatDocs := chatCmd.String("docs", "", "Document store folder (enables RAG)")
 	chatNoStream := chatCmd.Bool("no-stream", false, "Disable streaming (default: streaming enabled)")
 
 	taskCmd := flag.NewFlagSet("task", flag.ExitOnError)
@@ -601,6 +603,7 @@ func parseArgs() *CLIArgs {
 		args.Model = *callModel
 		args.Tools = *callTools
 		args.MCPURL = *callMCP
+		args.DocsFolder = *callDocs
 
 		// Handle agent name and input based on zero config mode
 		if isZeroConfigMode(args) {
@@ -647,6 +650,7 @@ func parseArgs() *CLIArgs {
 		args.Model = *chatModel
 		args.Tools = *chatTools
 		args.MCPURL = *chatMCP
+		args.DocsFolder = *chatDocs
 		args.Stream = !*chatNoStream // Streaming is default, --no-stream disables it
 
 		// Handle agent name based on zero config mode
@@ -1371,6 +1375,7 @@ Hector operates in three distinct modes based on your command and flags:
     --model MODEL          Model name (provider-specific defaults)
     --tools                Enable local tools
     --mcp-url URL          MCP server URL (supports auth: https://user:pass@host)
+    --docs FOLDER          Document store folder (enables RAG)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1392,8 +1397,10 @@ EXAMPLES:
     $ hector call assistant "task"                    # Zero-config with explicit agent
     $ hector call "task" --config my.yaml            # Use specific config
     $ hector call "task" --model gpt-4o              # Override model
+    $ hector call "task" --docs ./documents          # Enable RAG with documents
     $ hector chat --tools                             # Enable tools
     $ hector chat assistant --tools                   # Enable tools with explicit agent
+    $ hector chat --docs ./documents                  # Enable RAG with documents
 
   Mode Selection Examples:
     # Same command, different modes:
