@@ -17,7 +17,7 @@ Pure A2A-Native Declarative AI Agent Platform
 Build powerful AI agents in pure YAML. Compose single agents, orchestrate multi-agent systems, and integrate external A2A agents—all through declarative configuration and industry-standard protocols.
 {: .fs-5 .fw-300 }
 
-[Get started now](QUICK_START){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
+[Get started now](getting-started/QUICK_START){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [View on GitHub]({{ site.hector.repo_url }}){: .btn .fs-5 .mb-4 .mb-md-0 }
 
 ---
@@ -66,12 +66,12 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 
 ---
 
-## Featured Tutorials
+## Featured How-To Guides
 
 <div class="featured-tutorials">
 
 <div class="tutorial-card">
-  <h3>🔥 <a href="TUTORIAL_MULTI_AGENT">LangChain vs Hector</a></h3>
+  <h3>🔥 <a href="architecture-design/TUTORIAL_MULTI_AGENT">LangChain vs Hector</a></h3>
   <p><strong>Most Popular!</strong> See how Hector transforms complex LangChain multi-agent implementations into simple YAML configuration.</p>
   <div class="tutorial-stats">
     <span class="stat">📊 500+ lines Python → 120 lines YAML</span>
@@ -80,7 +80,7 @@ Hector is a **declarative AI agent platform** that eliminates code from agent de
 </div>
 
 <div class="tutorial-card">
-  <h3>🤖 <a href="TUTORIAL_CURSOR">Build Cursor-like AI Assistant</a></h3>
+  <h3>🤖 <a href="how-to/TUTORIAL_CURSOR">AI Coding Assistant Tutorial</a></h3>
   <p><strong>Build Your Own AI Coding Assistant!</strong> Create a powerful Cursor-like AI coding assistant with semantic search and chain-of-thought reasoning—all in pure YAML.</p>
   <div class="tutorial-stats">
     <span class="stat">💻 Full IDE-like capabilities</span>
@@ -170,44 +170,50 @@ llms:
 <div class="doc-grid">
 
 <div class="doc-section">
-  <h3><a href="QUICK_START">🎯 Getting Started</a></h3>
+  <h3><a href="getting-started/QUICK_START">🎯 Getting Started</a></h3>
   <p>New to Hector? Start here for quick setup and your first agent.</p>
   <ul>
-    <li><a href="INSTALLATION">Installation Guide</a></li>
-    <li><a href="CLI_GUIDE">CLI Guide</a></li>
+    <li><a href="getting-started/INSTALLATION">Installation Guide</a></li>
+    <li><a href="getting-started/CLI_GUIDE">CLI Guide</a></li>
   </ul>
 </div>
 
 <div class="doc-section">
-  <h3>🎓 Tutorials</h3>
-  <p>Hands-on learning with real-world examples and comparisons.</p>
+  <h3><a href="agent-capabilities">🎯 Agent Capabilities</a></h3>
+  <p>What agents can do - organized by capability.</p>
   <ul>
-    <li><a href="TUTORIAL_MULTI_AGENT">LangChain vs Hector</a></li>
-    <li><a href="TUTORIAL_CURSOR">Build Cursor-like Assistant</a></li>
+    <li><a href="agent-capabilities/intelligence-reasoning">Intelligence & Reasoning</a></li>
+    <li><a href="agent-capabilities/memory-context">Memory & Context</a></li>
+    <li><a href="agent-capabilities/tools-actions">Tools & Actions</a></li>
+    <li><a href="agent-capabilities/knowledge-rag">Knowledge & RAG</a></li>
   </ul>
 </div>
 
 <div class="doc-section">
-  <h3><a href="core-guides">📖 Core Guides</a></h3>
-  <p>Essential knowledge for building production-ready agents.</p>
+  <h3><a href="how-to">🎓 How-To Guides</a></h3>
+  <p>Step-by-step guides for common Hector tasks and integrations.</p>
   <ul>
-    <li><a href="AGENTS">Building Agents</a></li>
-    <li><a href="MEMORY">Memory Management</a></li>
-    <li><a href="TOOLS">Tools & Extensions</a></li>
-    <li><a href="MCP_CUSTOM_TOOLS">Custom MCP Tools</a></li>
+    <li><a href="how-to/TUTORIAL_CURSOR">AI Coding Assistant Tutorial</a></li>
+    <li><a href="how-to/MCP_CUSTOM_TOOLS">Custom MCP Tools</a></li>
   </ul>
 </div>
 
 <div class="doc-section">
-  <h3><a href="advanced">🚀 Advanced</a></h3>
-  <p>Complex deployments, integrations, and production patterns.</p>
+  <h3><a href="architecture-design">🏗️ Architecture & Design</a></h3>
+  <p>System architecture, design patterns, and technical comparisons.</p>
   <ul>
-    <li><a href="A2A_NATIVE_ARCHITECTURE">A2A Native Architecture</a> - Hector vs LangChain technical comparison</li>
-    <li><a href="ARCHITECTURE">Architecture</a></li>
-    <li><a href="MEMORY_CONFIGURATION">Memory Configuration</a></li>
-    <li><a href="EXTERNAL_AGENTS">External Agents</a></li>
-    <li><a href="AUTHENTICATION">Authentication</a></li>
-    <li><a href="MEMORY_CONFIGURATION#long-term-memory-configuration">Long-Term Memory</a></li>
+    <li><a href="architecture-design/ARCHITECTURE">Architecture</a></li>
+    <li><a href="architecture-design/A2A_NATIVE_ARCHITECTURE">A2A Native Architecture</a></li>
+    <li><a href="architecture-design/TUTORIAL_MULTI_AGENT">LangChain vs Hector</a></li>
+  </ul>
+</div>
+
+<div class="doc-section">
+  <h3><a href="development">🛠️ Development</a></h3>
+  <p>Development tools, plugins, and contributing to Hector.</p>
+  <ul>
+    <li><a href="development/PLUGINS">Plugin Development</a></li>
+    <li><a href="development/CONTRIBUTING">Contributing</a></li>
   </ul>
 </div>
 
@@ -215,9 +221,9 @@ llms:
   <h3><a href="reference">📋 Reference</a></h3>
   <p>Complete technical documentation and API specifications.</p>
   <ul>
-    <li><a href="API_REFERENCE">API Reference</a></li>
-    <li><a href="CONFIGURATION">Configuration</a></li>
-    <li><a href="A2A_COMPLIANCE">A2A Compliance</a></li>
+    <li><a href="reference/API_REFERENCE">API Reference</a></li>
+    <li><a href="reference/CONFIGURATION">Configuration</a></li>
+    <li><a href="reference/A2A_COMPLIANCE">A2A Compliance</a></li>
   </ul>
 </div>
 

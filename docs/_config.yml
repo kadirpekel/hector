@@ -66,7 +66,25 @@ kramdown:
 
 # Collections
 collections:
-  tutorials:
+  getting-started:
+    output: true
+    permalink: /:collection/:name/
+  core-concepts:
+    output: true
+    permalink: /:collection/:name/
+  agent-capabilities:
+    output: true
+    permalink: /:collection/:name/
+  how-to:
+    output: true
+    permalink: /:collection/:name/
+  architecture-design:
+    output: true
+    permalink: /:collection/:name/
+  development:
+    output: true
+    permalink: /:collection/:name/
+  reference:
     output: true
     permalink: /:collection/:name/
 
@@ -78,7 +96,37 @@ defaults:
     values:
       layout: "default"
   - scope:
-      path: "tutorials"
+      path: "getting-started"
+      type: "pages"
+    values:
+      layout: "default"
+  - scope:
+      path: "core-concepts"
+      type: "pages"
+    values:
+      layout: "default"
+  - scope:
+      path: "agent-capabilities"
+      type: "pages"
+    values:
+      layout: "default"
+  - scope:
+      path: "how-to"
+      type: "pages"
+    values:
+      layout: "default"
+  - scope:
+      path: "architecture-design"
+      type: "pages"
+    values:
+      layout: "default"
+  - scope:
+      path: "development"
+      type: "pages"
+    values:
+      layout: "default"
+  - scope:
+      path: "reference"
       type: "pages"
     values:
       layout: "default"

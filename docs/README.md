@@ -16,15 +16,15 @@ Start here: **[Documentation Index](index.md)**
 
 Intelligent context management for your AI agents.
 
-👉 **[Read the Memory Management Guide](MEMORY.md)**
+👉 **[Read the Memory Management Guide](agent-capabilities/memory-context/working-memory)**
 
 ## 🚀 Quick Links
 
-- **[Quick Start Guide](QUICK_START.md)** - Get running in 5 minutes
-- **[Memory Management](MEMORY.md)** - Never lose context
-- **[Configuration Reference](CONFIGURATION.md)** - Complete YAML guide
-- **[CLI Guide](CLI_GUIDE.md)** - Command-line interface and workflows
-- **[Agents Guide](AGENTS.md)** - Build AI agents
+- **[Quick Start Guide](getting-started/QUICK_START.md)** - Get running in 5 minutes
+- **[Memory Management](agent-capabilities/memory-context/working-memory)** - Never lose context
+- **[Configuration Reference](reference/CONFIGURATION.md)** - Complete YAML guide
+- **[CLI Guide](getting-started/CLI_GUIDE.md)** - Command-line interface and workflows
+- **[Agents Guide](agent-capabilities/intelligence-reasoning)** - Build AI agents
 
 ## 📖 All Documentation
 
