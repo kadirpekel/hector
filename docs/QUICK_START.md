@@ -42,9 +42,9 @@ hector call "Write a haiku" --model gpt-4o
 # With tools enabled
 hector call "List files" --tools
 
-# Explicit agent name still works
-hector call assistant "Explain quantum computing"
-hector chat assistant
+# Zero-config mode (no agent name needed)
+hector call "Explain quantum computing"
+hector chat
 ```
 
 **That's it!** No configuration file needed.

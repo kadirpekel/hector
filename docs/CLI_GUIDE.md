@@ -177,20 +177,16 @@ hector list --config hector.yaml
 export OPENAI_API_KEY="sk-..."
 
 # Start using immediately (no config file needed!)
-hector call "Explain quantum computing"        # Agent name optional!
-hector call assistant "Explain quantum computing"  # Explicit agent name still works
+hector call "Explain quantum computing"        # Zero-config mode
 
 # Interactive chat
-hector chat                                   # Agent name optional!
-hector chat assistant                         # Explicit agent name still works
+hector chat                                   # Zero-config mode
 
 # Enable tools
-hector call "List files" --tools              # Agent name optional!
-hector call assistant "List files" --tools    # Explicit agent name still works
+hector call "List files" --tools              # Zero-config mode with tools
 
 # Custom model
-hector call "Write code" --model gpt-4o       # Agent name optional!
-hector call assistant "Write code" --model gpt-4o  # Explicit agent name still works
+hector call "Write code" --model gpt-4o       # Zero-config mode with custom model
 ```
 
 **Direct mode flags:**
@@ -208,9 +204,9 @@ hector call assistant "Write code" --model gpt-4o  # Explicit agent name still w
 ### Agent Name Behavior
 
 **In Zero-Config Mode (Direct mode without config file):**
-- Agent name is **optional** for `call` and `chat` commands
-- Defaults to `"assistant"` when not specified
-- Both `hector call "prompt"` and `hector call assistant "prompt"` work
+- Agent name is **not supported** for `call` and `chat` commands
+- Always uses default agent `"assistant"`
+- Only `hector call "prompt"` and `hector chat` work (no agent name allowed)
 
 **In Config File Mode (Direct mode with config file):**
 - Agent name is **required** for `call` and `chat` commands
@@ -346,21 +342,21 @@ Execute a one-shot task on an agent.
 hector call assistant "Explain AI" --config hector.yaml
 
 # Direct mode with zero-config
-hector call assistant "Explain AI"
+hector call "Explain AI"
 
 # Client mode
 hector call assistant "Explain AI" --server http://localhost:8080
 
 # With custom options (Direct mode, zero-config)
-hector call assistant "Write code" --model gpt-4o --tools
-hector call assistant "Use GitHub" --mcp-url https://api.composio.dev/v1/mcp
-hector call assistant "Search docs" --docs ./knowledge
+hector call "Write code" --model gpt-4o --tools
+hector call "Use GitHub" --mcp-url https://api.composio.dev/v1/mcp
+hector call "Search docs" --docs ./knowledge
 
 # With embedded auth in MCP URL
-hector call assistant "Deploy app" --mcp-url https://user:token@composio.dev/mcp
+hector call "Deploy app" --mcp-url https://user:token@composio.dev/mcp
 
 # Disable streaming
-hector call assistant "hello" --stream=false
+hector call "hello" --stream=false
 ```
 
 **Modes:** Direct mode, Client mode
@@ -506,7 +502,7 @@ MCP_URL=https://api-key@api.composio.dev/v1/mcp
 EOF
 
 # Now zero-config mode works without flags
-hector call assistant "hello"
+hector call "hello"
 hector serve
 ```
 

@@ -607,19 +607,16 @@ func parseArgs() *CLIArgs {
 
 		// Handle agent name and input based on zero config mode
 		if isZeroConfigMode(args) {
-			// Zero config mode: agent name is optional
+			// Zero config mode: only prompt provided, no agent name
 			if len(callCmd.Args()) < 1 {
-				fatalf("Usage: hector call [OPTIONS] [agent] \"prompt\"")
+				fatalf("Usage: hector call [OPTIONS] \"prompt\"")
 			}
-			if len(callCmd.Args()) == 1 {
-				// Only prompt provided, use default agent
-				args.AgentID = getDefaultAgentName()
-				args.Input = callCmd.Args()[0]
-			} else {
-				// Both agent and prompt provided
-				args.AgentID = callCmd.Args()[0]
-				args.Input = callCmd.Args()[1]
+			if len(callCmd.Args()) > 1 {
+				fatalf("Usage: hector call [OPTIONS] \"prompt\"\nNote: Agent name not supported in zero-config mode")
 			}
+			// Only prompt provided, use default agent
+			args.AgentID = getDefaultAgentName()
+			args.Input = callCmd.Args()[0]
 		} else {
 			// Config mode: agent name is required
 			if len(callCmd.Args()) < 2 {
@@ -631,7 +628,7 @@ func parseArgs() *CLIArgs {
 
 		// Detect flags in wrong position (after positional args)
 		expectedArgs := 2
-		if isZeroConfigMode(args) && len(callCmd.Args()) == 1 {
+		if isZeroConfigMode(args) {
 			expectedArgs = 1
 		}
 		if len(callCmd.Args()) > expectedArgs {
@@ -655,14 +652,12 @@ func parseArgs() *CLIArgs {
 
 		// Handle agent name based on zero config mode
 		if isZeroConfigMode(args) {
-			// Zero config mode: agent name is optional
-			if len(chatCmd.Args()) == 0 {
-				// No agent provided, use default
-				args.AgentID = getDefaultAgentName()
-			} else {
-				// Agent name provided
-				args.AgentID = chatCmd.Args()[0]
+			// Zero config mode: no agent name provided
+			if len(chatCmd.Args()) > 0 {
+				fatalf("Usage: hector chat [OPTIONS]\nNote: Agent name not supported in zero-config mode")
 			}
+			// No agent provided, use default
+			args.AgentID = getDefaultAgentName()
 		} else {
 			// Config mode: agent name is required
 			if len(chatCmd.Args()) < 1 {
@@ -673,7 +668,7 @@ func parseArgs() *CLIArgs {
 
 		// Detect flags in wrong position (after positional args)
 		expectedArgs := 1
-		if isZeroConfigMode(args) && len(chatCmd.Args()) == 0 {
+		if isZeroConfigMode(args) {
 			expectedArgs = 0
 		}
 		if len(chatCmd.Args()) > expectedArgs {
@@ -1277,8 +1272,8 @@ COMMANDS:
   serve              Start A2A server to host agents
   list               List available agents
   info <agent>       Get agent information
-  call [agent] "..."  Execute a task on an agent (agent optional in zero-config)
-  chat [agent]       Start interactive chat (agent optional in zero-config)
+  call [agent] "..."  Execute a task on an agent (agent required in config mode)
+  chat [agent]       Start interactive chat (agent required in config mode)
   task <action> <agent> <task-id>  Manage tasks (actions: get, cancel)
   help               Show this help message
   version            Show version information
@@ -1362,8 +1357,10 @@ Hector operates in three distinct modes based on your command and flags:
 
   hector list [--config FILE]
   hector info <agent> [--config FILE]
-  hector call [agent] "prompt" [--config FILE] [zero-config options]
-  hector chat [agent] [--config FILE] [zero-config options]
+  hector call "prompt" [--config FILE] [zero-config options]  # Zero-config mode
+  hector call <agent> "prompt" [--config FILE]               # Config mode
+  hector chat [--config FILE] [zero-config options]          # Zero-config mode  
+  hector chat <agent> [--config FILE]                       # Config mode
 
   With Config File:
     --config FILE    Configuration file (default: hector.yaml)
@@ -1394,13 +1391,13 @@ EXAMPLES:
   Direct Mode - In-process execution:
     $ hector list                                     # List from local config
     $ hector call "task"                              # Zero-config (fastest!)
-    $ hector call assistant "task"                    # Zero-config with explicit agent
     $ hector call "task" --config my.yaml            # Use specific config
     $ hector call "task" --model gpt-4o              # Override model
     $ hector call "task" --docs ./documents          # Enable RAG with documents
     $ hector chat --tools                             # Enable tools
-    $ hector chat assistant --tools                   # Enable tools with explicit agent
     $ hector chat --docs ./documents                  # Enable RAG with documents
+    $ hector call assistant "task" --config my.yaml  # Config mode with agent
+    $ hector chat assistant --config my.yaml         # Config mode with agent
 
   Mode Selection Examples:
     # Same command, different modes:
