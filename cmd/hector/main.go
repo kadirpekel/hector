@@ -785,23 +785,6 @@ func detectMode(args *CLIArgs) CLIMode {
 	return ModeLocal
 }
 
-// isZeroConfigMode determines if we're in zero config mode
-// Zero config mode is when no config file exists and we're in local mode
-func isZeroConfigMode(args *CLIArgs) bool {
-	// Only applies to local mode (not server or client mode)
-	mode := detectMode(args)
-	if mode != ModeLocal {
-		return false
-	}
-
-	// Check if config file exists
-	if _, err := os.Stat(args.ConfigFile); os.IsNotExist(err) {
-		return true
-	}
-
-	return false
-}
-
 // getDefaultAgentName returns the default agent name for local mode
 func getDefaultAgentName() string {
 	return "assistant"
