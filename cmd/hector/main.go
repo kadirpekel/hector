@@ -120,7 +120,7 @@ type CLIMode string
 const (
 	ModeServer CLIMode = "server" // Host agents via 'serve' command
 	ModeClient CLIMode = "client" // Connect to remote server (--server flag)
-	ModeDirect CLIMode = "direct" // In-process execution (no --server)
+	ModeLocal  CLIMode = "local"  // In-process execution (no --server)
 )
 
 func (m CLIMode) String() string {
@@ -129,8 +129,8 @@ func (m CLIMode) String() string {
 		return "Server"
 	case ModeClient:
 		return "Client (Remote)"
-	case ModeDirect:
-		return "Direct (Local)"
+	case ModeLocal:
+		return "Local"
 	default:
 		return string(m)
 	}
@@ -504,43 +504,43 @@ func parseArgs() *CLIArgs {
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
 	listServer := listCmd.String("server", "", "A2A server URL (enables server mode)")
 	listToken := listCmd.String("token", "", "Authentication token")
-	listConfig := listCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
+	listConfig := listCmd.String("config", "hector.yaml", "Configuration file (local mode)")
 
 	infoCmd := flag.NewFlagSet("info", flag.ExitOnError)
 	infoServer := infoCmd.String("server", "", "A2A server URL (enables server mode)")
 	infoToken := infoCmd.String("token", "", "Authentication token")
-	infoConfig := infoCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
+	infoConfig := infoCmd.String("config", "hector.yaml", "Configuration file (local mode)")
 
 	callCmd := flag.NewFlagSet("call", flag.ExitOnError)
 	callServer := callCmd.String("server", "", "A2A server URL (enables server mode)")
 	callToken := callCmd.String("token", "", "Authentication token")
 	callStream := callCmd.Bool("stream", true, "Enable streaming (default: true)")
-	callConfig := callCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
+	callConfig := callCmd.String("config", "hector.yaml", "Configuration file (local mode)")
 	callProvider := callCmd.String("provider", "", "LLM provider: openai, anthropic, or gemini (auto-detected from API key if not set)")
 	callAPIKey := callCmd.String("api-key", "", "LLM API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY)")
 	callBaseURL := callCmd.String("base-url", "", "LLM API base URL (provider-specific defaults if not set)")
 	callModel := callCmd.String("model", "", "LLM model name (provider-specific defaults if not set)")
-	callTools := callCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
-	callMCP := callCmd.String("mcp-url", "", "MCP server URL for tool integration (direct mode, zero-config)")
+	callTools := callCmd.Bool("tools", false, "Enable tools (local mode, zero-config)")
+	callMCP := callCmd.String("mcp-url", "", "MCP server URL for tool integration (local mode, zero-config)")
 	callDocs := callCmd.String("docs", "", "Document store folder (enables RAG)")
 
 	chatCmd := flag.NewFlagSet("chat", flag.ExitOnError)
 	chatServer := chatCmd.String("server", "", "A2A server URL (enables server mode)")
 	chatToken := chatCmd.String("token", "", "Authentication token")
-	chatConfig := chatCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
+	chatConfig := chatCmd.String("config", "hector.yaml", "Configuration file (local mode)")
 	chatProvider := chatCmd.String("provider", "", "LLM provider: openai, anthropic, or gemini (auto-detected from API key if not set)")
 	chatAPIKey := chatCmd.String("api-key", "", "LLM API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY)")
 	chatBaseURL := chatCmd.String("base-url", "", "LLM API base URL (provider-specific defaults if not set)")
 	chatModel := chatCmd.String("model", "", "LLM model name (provider-specific defaults if not set)")
-	chatTools := chatCmd.Bool("tools", false, "Enable tools (direct mode, zero-config)")
-	chatMCP := chatCmd.String("mcp-url", "", "MCP server URL for tool integration (direct mode, zero-config)")
+	chatTools := chatCmd.Bool("tools", false, "Enable tools (local mode, zero-config)")
+	chatMCP := chatCmd.String("mcp-url", "", "MCP server URL for tool integration (local mode, zero-config)")
 	chatDocs := chatCmd.String("docs", "", "Document store folder (enables RAG)")
 	chatNoStream := chatCmd.Bool("no-stream", false, "Disable streaming (default: streaming enabled)")
 
 	taskCmd := flag.NewFlagSet("task", flag.ExitOnError)
 	taskServer := taskCmd.String("server", "", "A2A server URL (enables server mode)")
 	taskToken := taskCmd.String("token", "", "Authentication token")
-	taskConfig := taskCmd.String("config", "hector.yaml", "Configuration file (direct mode)")
+	taskConfig := taskCmd.String("config", "hector.yaml", "Configuration file (local mode)")
 
 	// Parse command
 	if len(os.Args) < 2 {
@@ -605,20 +605,20 @@ func parseArgs() *CLIArgs {
 		args.MCPURL = *callMCP
 		args.DocsFolder = *callDocs
 
-		// Handle agent name and input based on zero config mode
-		if isZeroConfigMode(args) {
-			// Zero config mode: only prompt provided, no agent name
+		// Handle agent name and input based on mode
+		if detectMode(args) == ModeLocal {
+			// Local mode: only prompt provided, no agent name
 			if len(callCmd.Args()) < 1 {
 				fatalf("Usage: hector call [OPTIONS] \"prompt\"")
 			}
 			if len(callCmd.Args()) > 1 {
-				fatalf("Usage: hector call [OPTIONS] \"prompt\"\nNote: Agent name not supported in zero-config mode")
+				fatalf("Usage: hector call [OPTIONS] \"prompt\"\nNote: Agent name not supported in local mode")
 			}
 			// Only prompt provided, use default agent
 			args.AgentID = getDefaultAgentName()
 			args.Input = callCmd.Args()[0]
 		} else {
-			// Config mode: agent name is required
+			// Client mode: agent name is required
 			if len(callCmd.Args()) < 2 {
 				fatalf("Usage: hector call [OPTIONS] <agent> \"prompt\"")
 			}
@@ -628,7 +628,7 @@ func parseArgs() *CLIArgs {
 
 		// Detect flags in wrong position (after positional args)
 		expectedArgs := 2
-		if isZeroConfigMode(args) {
+		if detectMode(args) == ModeLocal {
 			expectedArgs = 1
 		}
 		if len(callCmd.Args()) > expectedArgs {
@@ -650,16 +650,16 @@ func parseArgs() *CLIArgs {
 		args.DocsFolder = *chatDocs
 		args.Stream = !*chatNoStream // Streaming is default, --no-stream disables it
 
-		// Handle agent name based on zero config mode
-		if isZeroConfigMode(args) {
-			// Zero config mode: no agent name provided
+		// Handle agent name based on mode
+		if detectMode(args) == ModeLocal {
+			// Local mode: no agent name provided
 			if len(chatCmd.Args()) > 0 {
-				fatalf("Usage: hector chat [OPTIONS]\nNote: Agent name not supported in zero-config mode")
+				fatalf("Usage: hector chat [OPTIONS]\nNote: Agent name not supported in local mode")
 			}
 			// No agent provided, use default
 			args.AgentID = getDefaultAgentName()
 		} else {
-			// Config mode: agent name is required
+			// Client mode: agent name is required
 			if len(chatCmd.Args()) < 1 {
 				fatalf("Usage: hector chat [OPTIONS] <agent>")
 			}
@@ -668,7 +668,7 @@ func parseArgs() *CLIArgs {
 
 		// Detect flags in wrong position (after positional args)
 		expectedArgs := 1
-		if isZeroConfigMode(args) {
+		if detectMode(args) == ModeLocal {
 			expectedArgs = 0
 		}
 		if len(chatCmd.Args()) > expectedArgs {
@@ -782,15 +782,15 @@ func detectMode(args *CLIArgs) CLIMode {
 		return ModeClient
 	}
 
-	return ModeDirect
+	return ModeLocal
 }
 
 // isZeroConfigMode determines if we're in zero config mode
-// Zero config mode is when no config file exists and we're in direct mode
+// Zero config mode is when no config file exists and we're in local mode
 func isZeroConfigMode(args *CLIArgs) bool {
-	// Only applies to direct mode (not server or client mode)
+	// Only applies to local mode (not server or client mode)
 	mode := detectMode(args)
-	if mode != ModeDirect {
+	if mode != ModeLocal {
 		return false
 	}
 
@@ -802,7 +802,7 @@ func isZeroConfigMode(args *CLIArgs) bool {
 	return false
 }
 
-// getDefaultAgentName returns the default agent name for zero config mode
+// getDefaultAgentName returns the default agent name for local mode
 func getDefaultAgentName() string {
 	return "assistant"
 }
@@ -827,7 +827,7 @@ You're connecting to a remote server which has its own configuration.
 
 Solutions:
   • Remove --config flag to use the remote server's configuration
-  • Remove --server flag (or unset HECTOR_SERVER) to use Direct mode with local config
+  • Remove --server flag (or unset HECTOR_SERVER) to use Local mode with local config
 
 Current mode: %s
 Server: %s`, mode, mode, args.ServerURL)
@@ -850,7 +850,7 @@ The remote server has its own model configuration.
 
 Solutions:
   • Remove --model flag to use the remote server's models
-  • Use Direct mode (remove --server) for local model selection
+  • Use Local mode (remove --server) for local model selection
 
 Current mode: %s
 Server: %s`, mode, mode, args.ServerURL)
@@ -883,8 +883,8 @@ Current mode: %s
 Server: %s`, mode, mode, args.ServerURL)
 		}
 
-	case ModeDirect:
-		// Direct mode: all flags valid, but check for conflicting config strategies
+	case ModeLocal:
+		// Local mode: all flags valid, but check for conflicting config strategies
 		hasConfigFile := args.ConfigFile != "" && args.ConfigFile != "hector.yaml"
 
 		// Check if config file exists
@@ -1272,8 +1272,8 @@ COMMANDS:
   serve              Start A2A server to host agents
   list               List available agents
   info <agent>       Get agent information
-  call [agent] "..."  Execute a task on an agent (agent required in config mode)
-  chat [agent]       Start interactive chat (agent required in config mode)
+  call [agent] "..."  Execute a task on an agent (agent required in client mode)
+  chat [agent]       Start interactive chat (agent required in client mode)
   task <action> <agent> <task-id>  Manage tasks (actions: get, cancel)
   help               Show this help message
   version            Show version information
@@ -1295,7 +1295,7 @@ Hector operates in three distinct modes based on your command and flags:
    Supports: ONLY --server, --token, --stream
    ⚠️  --config and zero-config flags NOT supported (server has its own config)
 
-3️⃣  DIRECT MODE - Run agents in-process (no server)
+3️⃣  LOCAL MODE - Run agents in-process (no server)
    Trigger: No --server flag
    Use when: Quick tasks, local development, scripts, experimentation
    Supports: --config AND zero-config flags
@@ -1350,17 +1350,17 @@ Hector operates in three distinct modes based on your command and flags:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-💻 DIRECT MODE - In-process execution (no server)
+💻 LOCAL MODE - In-process execution (no server)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Same commands as Client mode, but WITHOUT --server flag:
 
   hector list [--config FILE]
   hector info <agent> [--config FILE]
-  hector call "prompt" [--config FILE] [zero-config options]  # Zero-config mode
-  hector call <agent> "prompt" [--config FILE]               # Config mode
-  hector chat [--config FILE] [zero-config options]          # Zero-config mode  
-  hector chat <agent> [--config FILE]                       # Config mode
+  hector call "prompt" [--config FILE] [zero-config options]  # Local mode
+  hector call <agent> "prompt" [--config FILE]               # Local mode with config
+  hector chat [--config FILE] [zero-config options]          # Local mode  
+  hector chat <agent> [--config FILE]                       # Local mode with config
 
   With Config File:
     --config FILE    Configuration file (default: hector.yaml)
@@ -1388,7 +1388,7 @@ EXAMPLES:
     $ hector call assistant "task" --server URL       # Execute on remote
     $ hector chat coder --server URL --token abc123   # Chat with auth
   
-  Direct Mode - In-process execution:
+  Local Mode - In-process execution:
     $ hector list                                     # List from local config
     $ hector call "task"                              # Zero-config (fastest!)
     $ hector call "task" --config my.yaml            # Use specific config
@@ -1401,8 +1401,8 @@ EXAMPLES:
 
   Mode Selection Examples:
     # Same command, different modes:
-    $ hector call "task"                    # Direct mode (local, zero-config)
-    $ hector call agent "task"              # Direct mode (local, config file)
+    $ hector call "task"                    # Local mode (local, zero-config)
+    $ hector call agent "task"              # Local mode (local, config file)
     $ hector call agent "task" --server URL # Client mode (remote)
 
 ENVIRONMENT VARIABLES:
@@ -1417,7 +1417,7 @@ ENVIRONMENT VARIABLES:
 MODE DETECTION:
   • If you use 'serve' command → Server mode
   • If you use --server flag → Client mode
-  • Otherwise → Direct mode
+  • Otherwise → Local mode
 
 For more information: https://github.com/kadirpekel/hector
 `)

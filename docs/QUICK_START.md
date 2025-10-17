@@ -17,7 +17,7 @@ Get up and running with Hector in 5 minutes.
 
 ---
 
-## Direct Mode: Quick Experimentation
+## Local Mode: Quick Experimentation
 
 Run agents locally without a server. Perfect for testing and development.
 
@@ -42,7 +42,7 @@ hector call "Write a haiku" --model gpt-4o
 # With tools enabled
 hector call "List files" --tools
 
-# Zero-config mode (no agent name needed)
+# Local mode (no agent name needed)
 hector call "Explain quantum computing"
 hector chat
 ```

@@ -50,7 +50,7 @@ Act as a client connecting to an existing A2A server. Use this to:
 
 **Note:** You only control client-side options (`--server`, `--token`, `--stream`). The server determines agent configuration.
 
-### 💻 Direct Mode
+### 💻 Local Mode
 **Trigger:** `hector <command>` (without `--server`)  
 **Purpose:** Run agents in-process for immediate local execution
 
@@ -70,7 +70,7 @@ Execute agents directly in the CLI process without a server. Ideal for:
 |------|---------|---------------|---------------------|------------------|
 | **Server** | `serve` command | ✅ Yes | ✅ Yes | Host agents for multiple clients |
 | **Client** | `--server` flag | ❌ No | ❌ No | Connect to remote A2A servers |
-| **Direct** | No `--server` flag | ✅ Yes | ✅ Yes | In-process local execution |
+| **Local** | No `--server` flag | ✅ Yes | ✅ Yes | In-process local execution |
 
 ### 1. Server Mode
 
@@ -150,14 +150,14 @@ You're connecting to a remote server which has its own configuration.
 
 Solutions:
   • Remove --config flag to use the remote server's configuration
-  • Remove --server flag to use Direct mode with local config
+  • Remove --server flag to use Local mode with local config
 ```
 
-**Note:** Unlike Direct mode, Client mode does NOT support environment variables for server/token. You must use explicit flags (`--server`, `--token`) for clarity and to avoid ambiguity.
+**Note:** Unlike Local mode, Client mode does NOT support environment variables for server/token. You must use explicit flags (`--server`, `--token`) for clarity and to avoid ambiguity.
 
 ---
 
-### 3. Direct Mode
+### 3. Local Mode
 
 Run agents **in-process** without a server. Supports both config files AND zero-config options.
 
@@ -189,7 +189,7 @@ hector call "List files" --tools              # Zero-config mode with tools
 hector call "Write code" --model gpt-4o       # Zero-config mode with custom model
 ```
 
-**Direct mode flags:**
+**Local mode flags:**
 - `--config FILE` - Configuration file (default: `hector.yaml`)
 
 **Zero-config flags (for call and chat commands):**
@@ -203,20 +203,15 @@ hector call "Write code" --model gpt-4o       # Zero-config mode with custom mod
 
 ### Agent Name Behavior
 
-**In Zero-Config Mode (Direct mode without config file):**
+**In Local Mode (local execution without server):**
 - Agent name is **not supported** for `call` and `chat` commands
 - Always uses default agent `"assistant"`
 - Only `hector call "prompt"` and `hector chat` work (no agent name allowed)
 
-**In Config File Mode (Direct mode with config file):**
+**In Client Mode (connecting to remote server):**
 - Agent name is **required** for `call` and `chat` commands
-- Must specify which agent from your config file to use
+- Must specify which agent from the remote server to use
 - `hector call "prompt"` will fail, `hector call myagent "prompt"` is required
-
-**In Client Mode (with --server flag):**
-- Agent name is **required** for `call` and `chat` commands
-- Must specify which agent on the remote server to use
-- `hector call "prompt" --server URL` will fail, `hector call myagent "prompt" --server URL` is required
 
 **In Server Mode:**
 - Agent names are defined in your configuration file
@@ -233,7 +228,7 @@ Hector performs **strict validation** on flag combinations and **fails immediate
 The CLI automatically detects which mode you're in based on:
 1. If `serve` command → **Server mode**
 2. If `--server` flag present → **Client mode**
-3. Otherwise → **Direct mode**
+3. Otherwise → **Local mode**
 
 **No environment variables affect mode detection.** This keeps behavior explicit and predictable.
 
@@ -242,7 +237,7 @@ The CLI automatically detects which mode you're in based on:
 Mode selection is **always explicit** - determined only by the command and flags you use:
 - `hector serve` → Server mode
 - `hector <cmd> --server URL` → Client mode  
-- `hector <cmd>` → Direct mode
+- `hector <cmd>` → Local mode
 
 **No hidden environment variables affect mode selection.** What you type is what you get.
 
@@ -303,17 +298,17 @@ hector serve --config hector.yaml --debug
 List all available agents.
 
 ```bash
-# Direct mode (from config)
+# Local mode (from config)
 hector list --config hector.yaml
 
-# Direct mode (zero-config, shows "assistant")
+# Local mode (zero-config, shows "assistant")
 hector list
 
 # Client mode (from remote server)
 hector list --server http://localhost:8080 --token abc123
 ```
 
-**Modes:** Direct mode, Client mode
+**Modes:** Local mode, Client mode
 
 ---
 
@@ -322,14 +317,14 @@ hector list --server http://localhost:8080 --token abc123
 Display detailed information about a specific agent.
 
 ```bash
-# Direct mode
+# Local mode
 hector info assistant --config hector.yaml
 
 # Client mode
 hector info assistant --server http://localhost:8080
 ```
 
-**Modes:** Direct mode, Client mode
+**Modes:** Local mode, Client mode
 
 ---
 
@@ -338,16 +333,16 @@ hector info assistant --server http://localhost:8080
 Execute a one-shot task on an agent.
 
 ```bash
-# Direct mode with config
+# Local mode with config
 hector call assistant "Explain AI" --config hector.yaml
 
-# Direct mode with zero-config
+# Local mode with zero-config
 hector call "Explain AI"
 
 # Client mode
 hector call assistant "Explain AI" --server http://localhost:8080
 
-# With custom options (Direct mode, zero-config)
+# With custom options (Local mode, zero-config)
 hector call "Write code" --model gpt-4o --tools
 hector call "Use GitHub" --mcp-url https://api.composio.dev/v1/mcp
 hector call "Search docs" --docs ./knowledge
@@ -359,7 +354,7 @@ hector call "Deploy app" --mcp-url https://user:token@composio.dev/mcp
 hector call "hello" --stream=false
 ```
 
-**Modes:** Direct mode, Client mode
+**Modes:** Local mode, Client mode
 
 ---
 
@@ -368,16 +363,16 @@ hector call "hello" --stream=false
 Start an interactive chat session with an agent.
 
 ```bash
-# Direct mode with config
+# Local mode with config
 hector chat assistant --config hector.yaml
 
-# Direct mode with zero-config
+# Local mode with zero-config
 hector chat assistant
 
 # Client mode
 hector chat assistant --server http://localhost:8080
 
-# With custom options (Direct mode, zero-config)
+# With custom options (Local mode, zero-config)
 hector chat assistant --model gpt-4o
 hector chat assistant --mcp-url https://api.composio.dev/v1/mcp --tools
 ```
@@ -387,7 +382,7 @@ hector chat assistant --mcp-url https://api.composio.dev/v1/mcp --tools
 - `/clear` - Clear conversation history
 - `/info` - Show agent information
 
-**Modes:** Direct mode, Client mode
+**Modes:** Local mode, Client mode
 
 ---
 
@@ -403,7 +398,7 @@ Interact with tasks when using the SQL task backend for persistent task storage.
 # Get task details (flags before positional args)
 hector task --server http://localhost:8081 get assistant task-abc123...
 
-# In direct mode (uses local config)
+# In local mode (uses local config)
 hector task --config configs/task-sql-example.yaml get assistant task-abc123...
 
 # Cancel a task
@@ -439,7 +434,7 @@ Updated:     2025-10-14 21:31:09
 - Server must be running with task service enabled
 - See `configs/task-sql-example.yaml` for configuration example
 
-**Modes:** Direct mode, Client mode
+**Modes:** Local mode, Client mode
 
 **⚠️ Note:** Flags must come before positional arguments:
 ```bash
@@ -540,6 +535,6 @@ hector chat assistant --model gpt-4o
            │  → Use CLIENT MODE: Add `--server URL` to commands
            │
            └─ Quick local task or script?
-              → Use DIRECT MODE: Use commands without `--server`
+              → Use LOCAL MODE: Use commands without `--server`
 ```
 

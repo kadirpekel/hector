@@ -468,7 +468,7 @@ func createClient(args Args) (client.A2AClient, error) {
         return runtime.NewHTTPClient(args.ServerURL, args.Token), nil
     }
     
-    // Direct mode: use in-process client (no server)
+    // Local mode: use in-process client (no server)
     rt, err := runtime.New(runtime.Options{
         ConfigFile: args.ConfigFile,
         Provider:   args.Provider,
@@ -676,7 +676,7 @@ func New(opts Options) (*Runtime, error) {
         // Client mode: connect to remote server
         a2aClient = client.NewHTTPClient(serverURL, token)
     } else {
-        // Direct mode: in-process with zero-config
+        // Local mode: in-process with zero-config
         a2aClient, _ = client.NewDirectClient(cfg)
     }
     

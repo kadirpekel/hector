@@ -39,7 +39,7 @@ func NewDirectClient(cfg *config.Config) (A2AClient, error) {
 	for agentID, agentCfg := range cfg.Agents {
 		cfg := agentCfg
 
-		// Only support native agents in direct mode (not external A2A agents)
+		// Only support native agents in local mode (not external A2A agents)
 		if cfg.Type == "a2a" {
 			continue
 		}
@@ -188,7 +188,7 @@ func (c *DirectClient) Close() error {
 	return nil
 }
 
-// directStream implements pb.A2AService_SendStreamingMessageServer for direct mode
+// localStream implements pb.A2AService_SendStreamingMessageServer for local mode
 type directStream struct {
 	ctx  context.Context
 	send chan<- *pb.StreamResponse

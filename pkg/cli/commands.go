@@ -29,7 +29,7 @@ func ListCommand(args Args) error {
 	}
 
 	// Display
-	mode := "Direct Mode"
+	mode := "Local Mode"
 	if args.ServerURL != "" {
 		mode = "Server Mode"
 	}
@@ -122,7 +122,7 @@ func ChatCommand(args Args) error {
 	defer a2aClient.Close()
 
 	// Display welcome message
-	mode := "Direct Mode"
+	mode := "Local Mode"
 	if args.ServerURL != "" {
 		mode = "Server Mode"
 	}
@@ -211,7 +211,7 @@ func createClient(args Args) (client.A2AClient, error) {
 		return runtime.NewHTTPClient(args.ServerURL, args.Token), nil
 	}
 
-	// Direct mode: use Runtime
+	// Local mode: use Runtime
 	rt, err := runtime.New(runtime.Options{
 		ConfigFile: args.ConfigFile,
 		Provider:   args.Provider,
