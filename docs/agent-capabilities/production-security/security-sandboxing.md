@@ -10,11 +10,12 @@ description: "Safe execution and isolation"
 
 Secure your agent deployments with safe execution and isolation features.
 
-## Tool Security
+## Tool Security Configuration
 
-### Command Execution Security
+### Global Tool Security Setup
 
 ```yaml
+# Secure tool configuration
 tools:
   execute_command:
     type: "command"
@@ -27,12 +28,7 @@ tools:
     working_directory: "./"  # Restrict to specific directory
     max_execution_time: "30s"
     enable_sandboxing: true  # Enable process isolation
-```
 
-### File Operations Security
-
-```yaml
-tools:
   write_file:
     type: "write_file"
     enabled: true
@@ -45,6 +41,13 @@ tools:
       - "/usr"
       - "/bin"
     max_file_size: 10485760  # 10MB limit
+
+# Agent using secure tools
+agents:
+  secure_assistant:
+    name: "Secure Assistant"
+    llm: "gpt-4o"
+    tools: ["execute_command", "write_file"]
 ```
 
 ## Sandboxing Options
@@ -52,6 +55,7 @@ tools:
 ### Process Isolation
 
 ```yaml
+# Enhanced sandboxing configuration
 tools:
   execute_command:
     enable_sandboxing: true
@@ -65,6 +69,7 @@ tools:
 ### Network Restrictions
 
 ```yaml
+# Network-restricted tool configuration
 tools:
   execute_command:
     network_policy:

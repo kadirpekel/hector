@@ -14,7 +14,7 @@ Hector includes 5 production-ready tools for common agent tasks.
 
 Execute shell commands securely with whitelisting.
 
-**Configuration:**
+**Global Tool Configuration:**
 ```yaml
 tools:
   execute_command:
@@ -32,11 +32,48 @@ tools:
     max_execution_time: "30s"
     enable_sandboxing: true
 
+  write_file:
+    type: "write_file"
+    enabled: true
+    allowed_extensions:
+      - ".go"
+      - ".yaml"
+      - ".md"
+      - ".txt"
+    forbidden_paths:
+      - "/etc"
+      - "/usr"
+      - "/bin"
+    max_file_size: 10485760  # 10MB
+
+  search:
+    type: "search"
+    enabled: true
+    document_stores:
+      - "codebase_docs"
+      - "api_reference"
+    default_limit: 10
+    max_limit: 50
+    enabled_search_types:
+      - "content"
+      - "file"
+      - "function"
+
+  search_replace:
+    type: "search_replace"
+    enabled: true
+    max_replacements: 100
+    backup_enabled: true
+
+  todo:
+    type: "todo"
+    enabled: true
+
 agents:
   file_manager:
     name: "File Manager"
     llm: "gpt-4o"
-    tools: ["execute_command", "write_file"]
+    tools: ["execute_command", "write_file", "search", "search_replace", "todo"]
 ```
 
 **Usage in Agent:**
@@ -60,7 +97,6 @@ Create and modify files safely.
 
 **Configuration:**
 ```yaml
-tools:
   write_file:
     type: "write_file"
     enabled: true
@@ -98,7 +134,6 @@ Semantic search across document stores (RAG).
 
 **Configuration:**
 ```yaml
-tools:
   search:
     type: "search"
     enabled: true
@@ -139,7 +174,6 @@ Find and replace text in files.
 
 **Configuration:**
 ```yaml
-tools:
   search_replace:
     type: "search_replace"
     enabled: true
@@ -171,7 +205,6 @@ Task management and tracking.
 
 **Configuration:**
 ```yaml
-tools:
   todo:
     type: "todo"
     enabled: true

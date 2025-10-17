@@ -17,21 +17,30 @@ Coordinate multiple agents to work together on complex tasks and workflows.
 Use a supervisor agent to coordinate multiple specialized agents:
 
 ```yaml
+# Global tool configuration
+tools:
+  agent_call:
+    type: "agent_call"
+    enabled: true
+    allowed_agents:
+      - "researcher"
+      - "writer"
+      - "reviewer"
+
+# Agent definitions
 agents:
   supervisor:
     name: "Task Supervisor"
     llm: "gpt-4o"
     reasoning:
       engine: "supervisor"  # Specialized for orchestration
-    tools:
-      - agent_call  # Can call other agents
-    
+    tools: ["agent_call"]  # Reference to global tool
+
   researcher:
     name: "Research Agent"
     llm: "claude-3-5-sonnet"
-    document_stores:
-      - "research_docs"
-    
+    document_stores: ["research_docs"]
+
   writer:
     name: "Content Writer"
     llm: "gpt-4o"
@@ -55,6 +64,7 @@ Supervisor: "I'll coordinate this task"
 ### Enable Agent Calls
 
 ```yaml
+# Global tool configuration (already defined above)
 tools:
   agent_call:
     type: "agent_call"
@@ -68,10 +78,14 @@ tools:
 ### Supervisor Reasoning
 
 ```yaml
-reasoning:
-  engine: "supervisor"
-  max_iterations: 20  # More iterations for complex orchestration
-  enable_streaming: true
+agents:
+  orchestrator:
+    name: "Orchestrator"
+    llm: "gpt-4o"
+    reasoning:
+      engine: "supervisor"
+      max_iterations: 20  # More iterations for complex orchestration
+      enable_streaming: true
 ```
 
 ## Use Cases
