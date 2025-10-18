@@ -44,7 +44,7 @@ Its typical use cases include building AI assistants, automating workflows, crea
       speed: 1,
       startAt: 0,
       fontSize: 'medium',
-      poster: 'npt:0:30'
+      poster: 'npt:0:2'
     });
   };
   document.head.appendChild(script);
