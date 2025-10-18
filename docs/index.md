@@ -35,17 +35,21 @@ Its typical use cases include building AI assistants, automating workflows, crea
   var script = document.createElement('script');
   script.src = 'https://unpkg.com/asciinema-player@3.6.3/dist/bundle/asciinema-player.js';
   script.onload = function() {
-    AsciinemaPlayer.create('assets/hector-demo.cast', document.getElementById('hector-demo'), {
-      theme: 'asciinema',
-      cols: 120,
-      rows: 30,
-      autoplay: false,
-      loop: false,
-      speed: 1,
-      startAt: 0,
-      fontSize: 'medium',
-      poster: 'npt:0:2'
-    });
+        AsciinemaPlayer.create('assets/hector-demo.cast', document.getElementById('hector-demo'), {
+          theme: 'asciinema',
+          cols: 120,
+          rows: 30,
+          autoplay: false,
+          loop: false,
+          speed: 1,
+          startAt: 0,
+          fontSize: 'medium',
+          poster: 'npt:0:2',
+          pauseOnMarkers: true,
+          markers: [
+            [17.0, 'Server & Client Demo']
+          ]
+        });
   };
   document.head.appendChild(script);
 </script>
