@@ -231,19 +231,6 @@ llms:
 
 ---
 
-## 💡 Why Choose Hector?
-
-| Feature | Hector | LangChain | AutoGen | CrewAI |
-|:--------|:-------|:----------|:--------|:-------|
-| **Configuration** | Pure YAML | Python code | Python code | Python code |
-| **A2A Native** | ✅ 100% | ❌ No | ❌ No | ❌ No |
-| **External Agents** | ✅ Seamless | ⚠️ Custom | ⚠️ Custom | ❌ No |
-| **Zero Code** | ✅ Yes | ❌ No | ❌ No | ❌ No |
-| **Multi-Agent** | ✅ LLM-driven | ✅ Hard-coded | ✅ Hard-coded | ✅ Hard-coded |
-| **Production Ready** | ✅ Built-in | ⚠️ DIY | ⚠️ DIY | ⚠️ DIY |
-
----
-
 ## 🔗 Quick Links & License
 
 - [🏠 Project Homepage]({{ site.hector.repo_url }})
