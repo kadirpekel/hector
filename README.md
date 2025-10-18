@@ -92,7 +92,7 @@ Agent: I'll check the current weather in Berlin to help you decide what to wear 
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │         A2AClient Interface (Protocol Native)           │ │
 │  ├─────────────────────────────────────────────────────────┤ │
-│  │  HTTPClient           │          DirectClient           │ │
+│  │  HTTPClient           │          LocalClient           │ │
 │  │  • Remote agents      │          • In-process agents    │ │
 │  │  • Uses protojson     │          • No network calls     │ │
 │  │  • Multi-transport    │          • Direct protobuf      │ │

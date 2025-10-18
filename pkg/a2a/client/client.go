@@ -8,7 +8,7 @@ import (
 )
 
 // A2AClient is a generic interface for interacting with A2A agents
-// It abstracts whether the agent is remote (HTTP) or local (direct)
+// It abstracts whether the agent is remote (HTTP) or local (local)
 type A2AClient interface {
 	// SendMessage sends a message to an agent and returns the response
 	SendMessage(ctx context.Context, agentID string, message *pb.Message) (*pb.SendMessageResponse, error)

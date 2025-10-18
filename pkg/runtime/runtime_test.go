@@ -314,7 +314,7 @@ func TestNewHTTPClient(t *testing.T) {
 	client.Close()
 }
 
-func TestNewDirectClient(t *testing.T) {
+func TestNewLocalClient(t *testing.T) {
 	cfg := &config.Config{
 		Name: "Test",
 		LLMs: map[string]config.LLMProviderConfig{
@@ -335,12 +335,12 @@ func TestNewDirectClient(t *testing.T) {
 	}
 	cfg.SetDefaults()
 
-	client, err := NewDirectClient(cfg)
+	client, err := NewLocalClient(cfg)
 	if err != nil {
-		t.Fatalf("NewDirectClient() error = %v", err)
+		t.Fatalf("NewLocalClient() error = %v", err)
 	}
 	if client == nil {
-		t.Error("NewDirectClient() returned nil")
+		t.Error("NewLocalClient() returned nil")
 	}
 	client.Close()
 }

@@ -204,7 +204,7 @@ func ChatCommand(args Args) error {
 	return nil
 }
 
-// createClient creates the appropriate A2A client (HTTP or Direct) based on args
+// createClient creates the appropriate A2A client (HTTP or Local) based on args
 func createClient(args Args) (client.A2AClient, error) {
 	if args.ServerURL != "" {
 		// Server mode: use HTTP client

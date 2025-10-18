@@ -13,15 +13,15 @@ import (
 	"github.com/kadirpekel/hector/pkg/config"
 )
 
-// DirectClient implements A2AClient for in-process agent execution
-type DirectClient struct {
+// LocalClient implements A2AClient for in-process agent execution
+type LocalClient struct {
 	config     *config.Config
 	components *component.ComponentManager
 	registry   *agent.AgentRegistry
 }
 
-// NewDirectClient creates a new direct (in-process) A2A client
-func NewDirectClient(cfg *config.Config) (A2AClient, error) {
+// NewLocalClient creates a new local (in-process) A2A client
+func NewLocalClient(cfg *config.Config) (A2AClient, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
 	}
@@ -56,7 +56,7 @@ func NewDirectClient(cfg *config.Config) (A2AClient, error) {
 		}
 	}
 
-	return &DirectClient{
+	return &LocalClient{
 		config:     cfg,
 		components: componentManager,
 		registry:   agentRegistry,
@@ -64,7 +64,7 @@ func NewDirectClient(cfg *config.Config) (A2AClient, error) {
 }
 
 // SendMessage sends a non-streaming message to an agent
-func (c *DirectClient) SendMessage(ctx context.Context, agentID string, message *pb.Message) (*pb.SendMessageResponse, error) {
+func (c *LocalClient) SendMessage(ctx context.Context, agentID string, message *pb.Message) (*pb.SendMessageResponse, error) {
 	// Get agent from registry
 	agentEntry, ok := c.registry.Get(agentID)
 	if !ok {
@@ -81,7 +81,7 @@ func (c *DirectClient) SendMessage(ctx context.Context, agentID string, message 
 }
 
 // StreamMessage sends a streaming message to an agent
-func (c *DirectClient) StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error) {
+func (c *LocalClient) StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error) {
 	// Get agent from registry
 	agentEntry, ok := c.registry.Get(agentID)
 	if !ok {
@@ -97,7 +97,7 @@ func (c *DirectClient) StreamMessage(ctx context.Context, agentID string, messag
 	streamChan := make(chan *pb.StreamResponse, 10)
 
 	// Create a mock stream that writes to our channel
-	stream := &directStream{
+	stream := &localStream{
 		ctx:  ctx,
 		send: streamChan,
 	}
@@ -114,7 +114,7 @@ func (c *DirectClient) StreamMessage(ctx context.Context, agentID string, messag
 }
 
 // ListAgents returns a list of all registered agents
-func (c *DirectClient) ListAgents(ctx context.Context) ([]AgentInfo, error) {
+func (c *LocalClient) ListAgents(ctx context.Context) ([]AgentInfo, error) {
 	entries := c.registry.List()
 	agents := make([]AgentInfo, 0, len(entries))
 
@@ -132,7 +132,7 @@ func (c *DirectClient) ListAgents(ctx context.Context) ([]AgentInfo, error) {
 			ID:          entry.Name,
 			Name:        name,
 			Description: description,
-			Endpoint:    "direct://" + entry.Name,
+			Endpoint:    "local://" + entry.Name,
 		})
 	}
 
@@ -140,7 +140,7 @@ func (c *DirectClient) ListAgents(ctx context.Context) ([]AgentInfo, error) {
 }
 
 // GetAgentCard retrieves the agent card for a specific agent
-func (c *DirectClient) GetAgentCard(ctx context.Context, agentID string) (*pb.AgentCard, error) {
+func (c *LocalClient) GetAgentCard(ctx context.Context, agentID string) (*pb.AgentCard, error) {
 	// Get agent from registry
 	agentEntry, ok := c.registry.Get(agentID)
 	if !ok {
@@ -151,7 +151,7 @@ func (c *DirectClient) GetAgentCard(ctx context.Context, agentID string) (*pb.Ag
 }
 
 // GetTask retrieves a task by ID
-func (c *DirectClient) GetTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
+func (c *LocalClient) GetTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
 	// Get agent from registry
 	agentEntry, ok := c.registry.Get(agentID)
 	if !ok {
@@ -167,7 +167,7 @@ func (c *DirectClient) GetTask(ctx context.Context, agentID string, taskID strin
 }
 
 // CancelTask cancels a running task
-func (c *DirectClient) CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
+func (c *LocalClient) CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
 	// Get agent from registry
 	agentEntry, ok := c.registry.Get(agentID)
 	if !ok {
@@ -183,18 +183,18 @@ func (c *DirectClient) CancelTask(ctx context.Context, agentID string, taskID st
 }
 
 // Close releases resources
-func (c *DirectClient) Close() error {
-	// No cleanup needed for direct client
+func (c *LocalClient) Close() error {
+	// No cleanup needed for local client
 	return nil
 }
 
 // localStream implements pb.A2AService_SendStreamingMessageServer for local mode
-type directStream struct {
+type localStream struct {
 	ctx  context.Context
 	send chan<- *pb.StreamResponse
 }
 
-func (s *directStream) Send(resp *pb.StreamResponse) error {
+func (s *localStream) Send(resp *pb.StreamResponse) error {
 	select {
 	case s.send <- resp:
 		return nil
@@ -203,25 +203,25 @@ func (s *directStream) Send(resp *pb.StreamResponse) error {
 	}
 }
 
-func (s *directStream) Context() context.Context {
+func (s *localStream) Context() context.Context {
 	return s.ctx
 }
 
-func (s *directStream) SendMsg(m interface{}) error {
+func (s *localStream) SendMsg(m interface{}) error {
 	return nil
 }
 
-func (s *directStream) RecvMsg(m interface{}) error {
+func (s *localStream) RecvMsg(m interface{}) error {
 	return nil
 }
 
-func (s *directStream) SendHeader(_ metadata.MD) error {
+func (s *localStream) SendHeader(_ metadata.MD) error {
 	return nil
 }
 
-func (s *directStream) SetHeader(_ metadata.MD) error {
+func (s *localStream) SetHeader(_ metadata.MD) error {
 	return nil
 }
 
-func (s *directStream) SetTrailer(_ metadata.MD) {
+func (s *localStream) SetTrailer(_ metadata.MD) {
 }

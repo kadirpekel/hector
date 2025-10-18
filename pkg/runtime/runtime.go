@@ -37,8 +37,8 @@ func New(opts Options) (*Runtime, error) {
 		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Create direct client
-	a2aClient, err := client.NewDirectClient(cfg)
+	// Create local client
+	a2aClient, err := client.NewLocalClient(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
@@ -109,7 +109,7 @@ func NewHTTPClient(serverURL, token string) client.A2AClient {
 	return client.NewHTTPClient(serverURL, token)
 }
 
-// NewDirectClient creates a direct (in-process) A2A client with custom config
-func NewDirectClient(cfg *config.Config) (client.A2AClient, error) {
-	return client.NewDirectClient(cfg)
+// NewLocalClient creates a local (in-process) A2A client with custom config
+func NewLocalClient(cfg *config.Config) (client.A2AClient, error) {
+	return client.NewLocalClient(cfg)
 }
