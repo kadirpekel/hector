@@ -1,4 +1,4 @@
-site_name: Hector Documentation
+site_name: Hector AI
 site_description: Pure A2A-Native Declarative AI Agent Platform
 site_url: https://gohector.dev
 repo_url: https://github.com/kadirpekel/hector
@@ -64,8 +64,6 @@ nav:
     - Tools & Extensions: tools.md
     - Custom MCP Tools: mcp-custom-tools.md
     - Memory Management: memory.md
-    - Architecture: architecture.md
-    - Configuration: configuration.md
     - Plugin Development: plugins.md
     - Authentication: authentication.md
     - External Agents: external-agents.md
@@ -74,6 +72,8 @@ nav:
     - AI Coding Assistant: tutorial-cursor.md
     - Multi-Agent Systems: tutorial-multi-agent.md
   - Reference:
+    - Architecture: architecture.md
+    - Configuration: configuration.md
     - API Reference: api-reference.md
     - A2A Compliance: a2a-compliance.md
 
