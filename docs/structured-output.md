@@ -7,16 +7,7 @@ description: Provider-aware JSON/XML/Enum output for reliable data extraction
 
 Hector provides comprehensive structured output capabilities across all supported LLM providers (OpenAI, Anthropic, Gemini). This guide explains how to leverage provider-specific optimizations for consistent, reliable structured responses.
 
-## Table of Contents
-
-- [Overview](#overview)
-- [Provider Comparison](#provider-comparison)
-- [Configuration](#configuration)
-- [JSON Schema Output](#json-schema-output)
-- [Enum Output](#enum-output)
-- [Provider-Specific Optimizations](#provider-specific-optimizations)
-- [Best Practices](#best-practices)
-- [Examples](#examples)
+---
 
 ## Overview
 

@@ -330,7 +330,7 @@ func (r *AgentRegistry) RegisterAgent(
 - Works with external `agent.A2AAgent`
 - Completely transparent
 
-### agent_call Tool
+### Agent_call Tool
 
 **Location:** `agent/agent_call_tool.go`
 

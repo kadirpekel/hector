@@ -11,20 +11,6 @@ This document provides the complete API reference for Hector's A2A-compliant end
 
 ---
 
-## Table of Contents
-
-- [Overview](#overview)
-- [Transport Protocols](#transport-protocols)
-- [Authentication](#authentication)
-- [Discovery Endpoints](#discovery-endpoints)
-- [Messaging Endpoints](#messaging-endpoints)
-- [Task Management](#task-management)
-- [Streaming](#streaming)
-- [Error Handling](#error-handling)
-- [Client SDKs](#client-sdks)
-
----
-
 ## Overview
 
 Hector provides three transport protocols, all implementing the same [A2A Protocol specification](https://a2a-protocol.org/latest/specification/).

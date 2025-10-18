@@ -123,7 +123,3 @@ hector chat assistant --server http://remote:8080
 ```
 
 ---
-
-## What's Next?
-
-**[CLI Guide](cli-guide.md)** - Complete command reference and workflows

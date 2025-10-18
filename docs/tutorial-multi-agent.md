@@ -9,17 +9,6 @@ description: Build a multi-agent research system - LangChain vs Hector compariso
 
 ---
 
-## Table of Contents
-
-- [Why This Comparison Matters](#why-this-comparison-matters)
-- [The Challenge: Multi-Agent Research System](#the-challenge-multi-agent-research-system)
-- [LangChain Implementation: The Traditional Way](#langchain-implementation-the-traditional-way)
-- [Hector Implementation: The Simple Way](#hector-implementation-the-simple-way)
-- [The Dramatic Difference](#the-dramatic-difference)
-- [Conclusion](#conclusion)
-
----
-
 ## Why This Comparison Matters
 
 **LangChain** is the most popular framework for building AI agent systems - and for good reason. It's powerful, flexible, and has a huge ecosystem. But it comes with a cost: **complexity**.

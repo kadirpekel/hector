@@ -9,19 +9,6 @@ description: Build a Cursor-like AI coding assistant with semantic search and ch
 
 ---
 
-## Table of Contents
-
-- [Why This Tutorial](#why-this-tutorial)
-- [Understanding AI Coding Assistants](#understanding-ai-coding-assistants)
-- [The Configuration](#the-configuration)
-- [Getting Started](#getting-started)
-- [Example Tasks](#example-tasks)
-- [Architecture Deep Dive](#architecture-deep-dive)
-- [Customization](#customization)
-- [Troubleshooting](#troubleshooting)
-
----
-
 ## Why This Tutorial
 
 With Hector, you can build a powerful AI coding assistant using **pure YAML configuration**—no programming required. This tutorial shows you how to create an intelligent agent with capabilities comparable to commercial coding assistants.

@@ -26,21 +26,6 @@ Hector is a **100% A2A Protocol Native** AI agent platform built from the ground
 
 ---
 
-## Table of Contents
-
-- [Architecture Overview](#architecture-overview)
-- [Transport Protocol Compliance](#transport-protocol-compliance)
-- [Core Method Implementation](#core-method-implementation)
-- [Discovery & Agent Cards](#discovery-agent-cards)
-- [Streaming Implementation](#streaming-implementation)
-- [Task Management](#task-management)
-- [Security & Authentication](#security-authentication)
-- [Error Handling](#error-handling)
-- [Push Notifications](#push-notifications)
-- [Compliance Verification](#compliance-verification)
-
----
-
 ## Architecture Overview
 
 Hector's architecture is built around A2A protocol types from the ground up:
