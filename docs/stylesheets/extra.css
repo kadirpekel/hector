@@ -1,0 +1,88 @@
+/* Logo styling */
+.md-header__button.md-logo img, .md-header__button.md-logo svg {
+  height: 2rem;
+  width: auto;
+}
+
+/* Enhance logo visibility */
+.md-header__button.md-logo {
+  padding: 0.2rem;
+}
+
+/* Dark mode adjustments for grid cards */
+[data-md-color-scheme="slate"] .grid.cards > *:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Full-width homepage layout */
+.md-content__inner {
+  max-width: none !important;
+}
+
+/* Asciinema player styling - matching asciinema's approach */
+.asciinema-container {
+  width: 100%;
+  margin: 2rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Asciinema player specific styling */
+asciinema-player {
+  width: 100% !important;
+  height: auto !important;
+  border-radius: 8px;
+}
+
+/* Responsive asciinema player */
+@media (max-width: 768px) {
+  .asciinema-container {
+    margin: 1rem 0;
+  }
+  
+  asciinema-player {
+    font-size: 12px !important;
+  }
+}
+
+/* Dark mode adjustments for asciinema */
+[data-md-color-scheme="slate"] .asciinema-container {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+}
+
+/* Ensure proper spacing around content */
+.md-content {
+  padding: 0 1rem;
+}
+
+@media (min-width: 768px) {
+  .md-content {
+    padding: 0 2rem;
+  }
+}
+
+/* Grid cards styling - matching asciinema's approach */
+.grid.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.grid.cards > * {
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: box-shadow 0.25s;
+}
+
+.grid.cards > *:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode adjustments for grid cards */
+[data-md-color-scheme="slate"] .grid.cards > *:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}

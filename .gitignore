@@ -66,3 +66,4 @@ data/
 
 # Document store index state (incremental indexing cache)
 .hector/
+site

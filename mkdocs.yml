@@ -1,0 +1,108 @@
+site_name: Hector Documentation
+site_description: Pure A2A-Native Declarative AI Agent Platform
+site_url: https://gohector.dev
+repo_url: https://github.com/kadirpekel/hector
+repo_name: kadirpekel/hector
+
+# Documentation source directory
+docs_dir: docs
+
+# Theme
+theme:
+  name: material
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  font: false
+  features:
+    - navigation.tabs
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.annotation
+    - content.code.copy
+    - content.action.edit
+    - content.action.view
+  language: en
+  logo: assets/letter-h.png
+  favicon: assets/letter-h.png
+  icon:
+    repo: fontawesome/brands/github
+
+# Navigation
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: installation.md
+    - Quick Start: quick-start.md
+    - CLI Guide: cli-guide.md
+  - Core Concepts:
+    - Building Agents: agents.md
+    - Tools & Extensions: tools.md
+    - Custom MCP Tools: mcp-custom-tools.md
+    - Memory Management: memory.md
+    - Architecture: architecture.md
+    - Configuration: configuration.md
+    - Plugin Development: plugins.md
+    - Authentication: authentication.md
+    - External Agents: external-agents.md
+    - Structured Output: structured-output.md
+  - How To:
+    - AI Coding Assistant: tutorial-cursor.md
+    - Multi-Agent Systems: tutorial-multi-agent.md
+  - Reference:
+    - API Reference: api-reference.md
+    - A2A Compliance: a2a-compliance.md
+
+# Plugins
+plugins:
+  - search
+
+# Markdown extensions
+markdown_extensions:
+  - attr_list
+  - admonition
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+# Extra CSS
+extra_css:
+  - stylesheets/extra.css
+
+# Extra JavaScript
+# extra_javascript:
+#   - javascripts/asciinema.js
