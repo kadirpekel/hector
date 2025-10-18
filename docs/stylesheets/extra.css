@@ -9,6 +9,24 @@
   padding: 0.2rem;
 }
 
+/* Lighten header background for better logo visibility */
+.md-header {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode header adjustments */
+[data-md-color-scheme="slate"] .md-header {
+  background-color: rgba(30, 30, 30, 0.95) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Ensure header text remains readable */
+.md-header__title {
+  color: var(--md-default-fg-color) !important;
+}
+
 /* Dark mode adjustments for grid cards */
 [data-md-color-scheme="slate"] .grid.cards > *:hover {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);

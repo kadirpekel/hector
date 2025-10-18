@@ -27,6 +27,7 @@ description: Build a Cursor-like AI coding assistant with semantic search and ch
 With Hector, you can build a powerful AI coding assistant using **pure YAML configuration**—no programming required. This tutorial shows you how to create an intelligent agent with capabilities comparable to commercial coding assistants.
 
 **What you'll build:**
+
 - **Semantic code search** - Find code by meaning, not keywords
 - **Chain-of-thought reasoning** - Iterative problem solving
 - **Tool execution** - File operations, commands, tests, linters
@@ -34,6 +35,7 @@ With Hector, you can build a powerful AI coding assistant using **pure YAML conf
 - **Full customization** - Every prompt, tool, and behavior under your control
 
 **What you'll learn:**
+
 - How AI coding assistants work under the hood
 - The power of declarative configuration over imperative code
 - How to customize and extend the agent for your workflow
@@ -50,6 +52,7 @@ AI coding assistants rely on three core components:
 ### 1. Effective Prompts
 
 The system prompt establishes the agent as a "pair programmer" who takes action rather than just making suggestions. Key elements:
+
 - Defines the agent's role and behavior
 - Instructs to implement changes, not just suggest them
 - Emphasizes thoroughness and self-sufficiency
@@ -62,6 +65,7 @@ The agent iterates through a simple loop: generate response → execute tools �
 ### 3. Tool Execution
 
 Essential capabilities that make the agent practical:
+
 - **Semantic Search** - Find relevant code by meaning, not keywords
 - **File Operations** - Read, write, and edit files precisely
 - **Command Execution** - Run tests, linters, build tools

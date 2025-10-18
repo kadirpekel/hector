@@ -14,6 +14,7 @@ description: Build custom tools in 5 minutes with Python or TypeScript
 Hector's built-in tools (`execute_command`, `write_file`, `search`, etc.) cover general-purpose needs. But when you need domain-specific capabilities, **MCP (Model Context Protocol) servers** are the answer.
 
 **Benefits:**
+
 - **Fast** - Build in 5-10 minutes
 - **Simple** - Just Python or TypeScript
 - **Zero code in Hector** - Pure YAML configuration
@@ -22,6 +23,7 @@ Hector's built-in tools (`execute_command`, `write_file`, `search`, etc.) cover 
 - **Shareable** - Publish for community use
 
 **When to use:**
+
 - Web scraping/search
 - API integrations (weather, finance, CRM)
 - Database operations
