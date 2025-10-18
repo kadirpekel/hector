@@ -130,7 +130,7 @@ memory:
 
 ---
 
-## 🗄️ Long-Term Memory
+## Long-Term Memory
 
 Long-term memory provides persistent knowledge storage and retrieval:
 
@@ -238,7 +238,7 @@ memory:
 
 ---
 
-## 🔄 Memory Lifecycle
+## Memory Lifecycle
 
 ### Memory Flow
 
@@ -416,7 +416,7 @@ monitoring:
 
 ---
 
-## 🔗 Related Documentation
+## Related Documentation
 
 - [Building Agents](agents.md) - Learn how to build AI agents
 - [Configuration Reference](configuration.md) - Complete configuration guide

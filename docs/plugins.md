@@ -5,11 +5,11 @@ description: Build custom LLMs, databases, and tools via gRPC plugins
 
 # 🔌 Plugin Development Guide
 
-## 🌟 Overview
+## Overview
 
 Hector's plugin system allows you to extend core functionality without modifying Hector's codebase. Write plugins in any language that supports gRPC (Go, Python, Rust, JavaScript, etc.) and integrate them seamlessly.
 
-## 🏗️ Plugin Architecture
+## Plugin Architecture
 
 ### Key Features
 
@@ -42,7 +42,7 @@ Hector uses gRPC exclusively for plugins (not Go's native plugin system) because
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -263,7 +263,7 @@ llms:
 
 ---
 
-## 🗄️ Database Provider Plugin
+## Database Provider Plugin
 
 Create custom vector database integrations.
 
@@ -513,7 +513,7 @@ embedders:
 
 ---
 
-## 🛠️ Tool Provider Plugin
+## Tool Provider Plugin
 
 Create custom tools for domain-specific operations.
 
@@ -777,7 +777,7 @@ agents:
 
 ---
 
-## 🔧 Plugin Development Workflow
+## Plugin Development Workflow
 
 ### 1. **Setup Development Environment**
 
@@ -1019,7 +1019,7 @@ plugins:
 
 ---
 
-## 📊 Plugin Monitoring
+## Plugin Monitoring
 
 ### Monitoring Configuration
 
@@ -1059,7 +1059,7 @@ plugins:
 
 ---
 
-## 🔗 Related Documentation
+## Related Documentation
 
 - [Building Agents](agents.md) - Learn how to build AI agents
 - [Configuration Reference](configuration.md) - Complete configuration guide

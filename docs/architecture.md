@@ -578,7 +578,7 @@ monitoring:
 
 ---
 
-## 🔄 Migration & Upgrades
+## Migration & Upgrades
 
 Hector supports smooth migration and upgrades:
 

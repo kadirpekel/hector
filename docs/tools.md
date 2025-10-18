@@ -78,7 +78,7 @@ graph TB
 
 ---
 
-## 🔧 Built-in Tools
+## Built-in Tools
 
 Hector comes with 5 powerful built-in tools ready to use:
 
@@ -358,7 +358,7 @@ tools:
 
 ---
 
-## 🔧 gRPC Plugin System
+## gRPC Plugin System
 
 Build custom tools in any language that supports gRPC.
 
@@ -481,7 +481,7 @@ plugins:
 
 ---
 
-## 🎯 Tool Usage Patterns
+## Tool Usage Patterns
 
 ### Agent Tool Selection
 
@@ -587,7 +587,7 @@ security:
 
 ---
 
-## 📊 Tool Performance
+## Tool Performance
 
 ### Performance Optimization
 
@@ -620,7 +620,7 @@ performance:
 
 ---
 
-## 🔧 Tool Development
+## Tool Development
 
 ### Building Custom Tools
 
@@ -671,7 +671,7 @@ test:
 
 ---
 
-## 📚 Tool Examples
+## Tool Examples
 
 ### Complete Tool Configuration
 
@@ -735,7 +735,7 @@ tools:
 
 ---
 
-## 🔗 Related Documentation
+## Related Documentation
 
 - [Building Agents](agents.md) - Learn how to build AI agents
 - [Configuration Reference](configuration.md) - Complete configuration guide

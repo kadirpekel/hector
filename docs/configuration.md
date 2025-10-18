@@ -3,7 +3,7 @@ title: Configuration Reference
 description: Complete YAML configuration reference for Hector AI Agent Platform
 ---
 
-# ⚙️ Hector Configuration Reference
+# Hector Configuration Reference
 
 Complete configuration reference for Hector AI Agent Platform.
 
@@ -25,7 +25,7 @@ Complete configuration reference for Hector AI Agent Platform.
 
 ---
 
-## 🏗️ Configuration Structure
+## Configuration Structure
 
 ```yaml
 # Top-level configuration sections
@@ -41,7 +41,7 @@ global:           # Global server settings (optional)
 
 ---
 
-## 🤖 Agents
+## Agents
 
 ### Native Agents
 
@@ -272,7 +272,7 @@ llms:
 
 ---
 
-## 🛠️ Tools
+## Tools
 
 Configure built-in tools and custom tool plugins.
 
@@ -448,7 +448,7 @@ reasoning:
 
 ---
 
-## 📚 Document Stores
+## Document Stores
 
 Configure document stores for RAG (Retrieval-Augmented Generation).
 
@@ -499,7 +499,7 @@ document_stores:
 
 ---
 
-## 🗄️ Database Providers
+## Database Providers
 
 Configure vector database providers for document storage and retrieval.
 
@@ -734,7 +734,7 @@ plugins:
 
 ---
 
-## 📝 Configuration Examples
+## Configuration Examples
 
 ### Minimal Configuration
 
@@ -852,7 +852,7 @@ global:
 
 ---
 
-## 🔧 Environment Variables
+## Environment Variables
 
 Hector supports environment variable substitution in configuration:
 
@@ -885,7 +885,7 @@ auth:
 
 ---
 
-## ✅ Configuration Validation
+## Configuration Validation
 
 Hector validates configuration on startup:
 
@@ -908,7 +908,7 @@ Hector validates configuration on startup:
 
 ---
 
-## 🔗 Related Documentation
+## Related Documentation
 
 - [Building Agents](agents.md) - Learn how to build AI agents
 - [Architecture](architecture.md) - Understand Hector's architecture
