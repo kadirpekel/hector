@@ -15,7 +15,7 @@ Get up and running with Hector in 5 minutes.
 
 ---
 
-## Direct Mode: Quick Experimentation
+## Local Mode: Quick Experimentation
 
 Run agents locally without a server. Perfect for testing and development.
 

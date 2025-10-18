@@ -172,7 +172,7 @@ Hector's client architecture supports multiple deployment patterns:
 
 ### Client Modes
 
-=== "Direct Mode"
+=== "Local Mode"
     ```yaml
     # Local execution
     agents:
