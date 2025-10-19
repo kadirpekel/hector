@@ -37,13 +37,13 @@ Hector is built **entirely** around the A2A Protocol, with zero abstraction laye
 │  └─────────┬───────┴─────────┬───────┴─────────┬───────┘    │
 │            │                 │                 │            │
 │            ▼                 ▼                 ▼            │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │                Hector Implementation                     │ │
-│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
-│  │  │ Transport   │ Runtime     │ Agent       │            │ │
-│  │  │ Layer       │ System      │ Management  │            │ │
-│  │  └─────────────┴─────────────┴─────────────┘            │ │
-│  └─────────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │                Hector Implementation                   │ │
+│  │  ┌─────────────┬─────────────┬─────────────┐           │ │
+│  │  │ Transport   │ Runtime     │ Agent       │           │ │
+│  │  │ Layer       │ System      │ Management  │           │ │
+│  │  └─────────────┴─────────────┴─────────────┘           │ │
+│  └────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
 ### Core A2A Components
@@ -69,26 +69,6 @@ Hector is built **entirely** around the A2A Protocol, with zero abstraction laye
 
 Hector supports multiple transport protocols from a single codebase:
 
-### Transport Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    A2A Protocol Layer                       │
-│  ┌─────────────────┬─────────────────┬─────────────────┐    │
-│  │ Agent-to-Agent  │ Protobuf        │ A2A             │    │
-│  │ Protocol        │ Messages        │ Specification   │    │
-│  └─────────┬───────┴─────────┬───────┴─────────┬───────┘    │
-│            │                 │                 │            │
-│            ▼                 ▼                 ▼            │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │                Hector Implementation                     │ │
-│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
-│  │  │ Transport   │ Runtime     │ Agent       │            │ │
-│  │  │ Layer       │ System      │ Management  │            │ │
-│  │  └─────────────┴─────────────┴─────────────┘            │ │
-│  └─────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
 ### Transport Options
 
 === "gRPC (Native)"
@@ -180,60 +160,6 @@ Hector's client architecture supports multiple deployment patterns:
 
 Hector's server provides a robust, scalable platform for hosting AI agents:
 
-### Server Components
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    A2A Protocol Layer                       │
-│  ┌─────────────────┬─────────────────┬─────────────────┐    │
-│  │ Agent-to-Agent  │ Protobuf        │ A2A             │    │
-│  │ Protocol        │ Messages        │ Specification   │    │
-│  └─────────┬───────┴─────────┬───────┴─────────┬───────┘    │
-│            │                 │                 │            │
-│            ▼                 ▼                 ▼            │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │                Hector Implementation                     │ │
-│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
-│  │  │ Transport   │ Runtime     │ Agent       │            │ │
-│  │  │ Layer       │ System      │ Management  │            │ │
-│  │  └─────────────┴─────────────┴─────────────┘            │ │
-│  └─────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
-### Server Features
-
-- **Multi-Transport** - gRPC, REST, JSON-RPC from single server
-- **Authentication** - JWT-based security
-- **Agent Registry** - Dynamic agent discovery and management
-- **Streaming** - Real-time response streaming
-- **Task Management** - Async task processing
-- **Hot Reload** - Configuration updates without restart
-
----
-
-## Runtime System
-
-Hector's runtime system manages the execution of AI agents:
-
-### Runtime Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    A2A Protocol Layer                       │
-│  ┌─────────────────┬─────────────────┬─────────────────┐    │
-│  │ Agent-to-Agent  │ Protobuf        │ A2A             │    │
-│  │ Protocol        │ Messages        │ Specification   │    │
-│  └─────────┬───────┴─────────┬───────┴─────────┬───────┘    │
-│            │                 │                 │            │
-│            ▼                 ▼                 ▼            │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │                Hector Implementation                     │ │
-│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
-│  │  │ Transport   │ Runtime     │ Agent       │            │ │
-│  │  │ Layer       │ System      │ Management  │            │ │
-│  │  └─────────────┴─────────────┴─────────────┘            │ │
-│  └─────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
 ```
 ### Runtime Features
 
@@ -254,26 +180,6 @@ Hector's core components provide the foundation for AI agent execution:
 | Component | Purpose | Features |
 |-----------|---------|----------|
 | **Agent Factory** | Creates agents from config | Dynamic loading, validation |
-| **LLM Registry** | Manages language models | Multi-provider support |
-| **Memory Manager** | Handles conversation context | Session + long-term memory |
-| **Reasoning Engine** | Controls agent thinking | Chain-of-thought, supervisor |
-| **Tool Registry** | Manages agent capabilities | Built-in + custom tools |
-| **Document Store** | RAG and knowledge base | Vector search, embeddings |
-
-### Component Features
-
-- **Interface-Based** - Clean abstractions and dependency injection
-- **Hot Reload** - Update components without restart
-- **Validation** - Configuration validation and error handling
-- **Performance** - Optimized for production workloads
-
----
-
-## Multi-Agent Orchestration
-
-Hector supports sophisticated multi-agent workflows:
-
-### Orchestration Patterns
 
 === "Sequential Processing"
     ```yaml
@@ -330,25 +236,6 @@ Hector supports sophisticated multi-agent workflows:
 
 Hector provides comprehensive security features:
 
-### Authentication Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    A2A Protocol Layer                       │
-│  ┌─────────────────┬─────────────────┬─────────────────┐    │
-│  │ Agent-to-Agent  │ Protobuf        │ A2A             │    │
-│  │ Protocol        │ Messages        │ Specification   │    │
-│  └─────────┬───────┴─────────┬───────┴─────────┬───────┘    │
-│            │                 │                 │            │
-│            ▼                 ▼                 ▼            │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │                Hector Implementation                     │ │
-│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
-│  │  │ Transport   │ Runtime     │ Agent       │            │ │
-│  │  │ Layer       │ System      │ Management  │            │ │
-│  │  └─────────────┴─────────────┴─────────────┘            │ │
-│  └─────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
 ```
 ### Security Features
 
@@ -387,31 +274,14 @@ Hector's plugin system allows extensive customization:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    A2A Protocol Layer                       │
+│                    Plugin Types                             │
 │  ┌─────────────────┬─────────────────┬─────────────────┐    │
-│  │ Agent-to-Agent  │ Protobuf        │ A2A             │    │
-│  │ Protocol        │ Messages        │ Specification   │    │
-│  └─────────┬───────┴─────────┬───────┴─────────┬───────┘    │
-│            │                 │                 │            │
-│            ▼                 ▼                 ▼            │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │                Hector Implementation                     │ │
-│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
-│  │  │ Transport   │ Runtime     │ Agent       │            │ │
-│  │  │ Layer       │ System      │ Management  │            │ │
-│  │  └─────────────┴─────────────┴─────────────┘            │ │
-│  └─────────────────────────────────────────────────────────┘ │
+│  │ **LLM Provider**│ **Tool Provider**│ **DB Provider** │    │
+│  │ Custom models   │ Custom capabilities│ Vector storage │    │
+│  │ Text generation │ Function execution│ Search & recall │    │
+│  └─────────────────┴─────────────────┴─────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
-```
-### Plugin Types
-
-| Type | Purpose | Interface |
-|------|---------|-----------|
-| **LLM Provider** | Custom language models | Text generation, streaming |
-| **Database Provider** | Vector databases | Embeddings, search |
-| **Tool Provider** | Custom capabilities | Function execution |
-
-### Plugin Features
+```### Plugin Features
 
 - **Language Agnostic** - Write in any gRPC-supported language
 - **Process Isolation** - Plugins run in separate processes

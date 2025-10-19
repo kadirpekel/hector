@@ -14,32 +14,30 @@ description: Dual-layer memory system for AI agents - working memory and long-te
 Hector implements a **cognitive memory architecture** inspired by human memory systems:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                HECTOR MEMORY SYSTEM                        │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
+┌──────────────────────────────────────────────────────────────┐
+│                HECTOR MEMORY SYSTEM                          │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │            WORKING MEMORY (Session-Scoped)              │ │
-│  │  ┌─────────────────────────────────────────────────────┐ │ │
-│  │  │ - Current conversation context                       │ │ │
-│  │  │ - Token-based management                             │ │ │
-│  │  │ - Automatic summarization                           │ │ │
-│  │  │ - Strategy: summary_buffer/buffer                    │ │ │
-│  │  └─────────────────────────────────────────────────────┘ │ │
+│  │                                                         │ │
+│  │  • Current conversation context                         │ │
+│  │  • Token-based management                               │ │
+│  │  • Automatic summarization                              │ │
+│  │  • Strategy: summary_buffer/buffer                      │ │
 │  └─────────────────────────────────────────────────────────┘ │
-│                                                             │
+│                                                              │
 │  ┌─────────────────────────────────────────────────────────┐ │
-│  │            LONG-TERM MEMORY (Persistent)                 │ │
-│  │  ┌─────────────────────────────────────────────────────┐ │ │
-│  │  │ - Vector-based storage (Qdrant)                     │ │ │
-│  │  │ - Semantic search & recall                          │ │ │
-│  │  │ - Session-scoped persistence                        │ │ │
-│  │  │ - Auto-recall or on-demand                          │ │ │
-│  │  └─────────────────────────────────────────────────────┘ │ │
+│  │            LONG-TERM MEMORY (Persistent)                │ │
+│  │                                                         │ │
+│  │  • Vector-based storage (Qdrant)                        │ │
+│  │  • Semantic search & recall                             │ │
+│  │  • Session-scoped persistence                           │ │
+│  │  • Auto-recall or on-demand                             │ │
 │  └─────────────────────────────────────────────────────────┘ │
-│                                                             │
+│                                                              │
 │  Working Memory ←→ Long-Term Memory                          │
-└─────────────────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────────────────┘
 ```
 **Two Memory Types:**
 
@@ -246,34 +244,6 @@ memory:
 
 ### Memory Flow
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                HECTOR MEMORY SYSTEM                        │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │            WORKING MEMORY (Session-Scoped)              │ │
-│  │  ┌─────────────────────────────────────────────────────┐ │ │
-│  │  │ - Current conversation context                       │ │ │
-│  │  │ - Token-based management                             │ │ │
-│  │  │ - Automatic summarization                           │ │ │
-│  │  │ - Strategy: summary_buffer/buffer                    │ │ │
-│  │  └─────────────────────────────────────────────────────┘ │ │
-│  └─────────────────────────────────────────────────────────┘ │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │            LONG-TERM MEMORY (Persistent)                 │ │
-│  │  ┌─────────────────────────────────────────────────────┐ │ │
-│  │  │ - Vector-based storage (Qdrant)                     │ │ │
-│  │  │ - Semantic search & recall                          │ │ │
-│  │  │ - Session-scoped persistence                        │ │ │
-│  │  │ - Auto-recall or on-demand                          │ │ │
-│  │  └─────────────────────────────────────────────────────┘ │ │
-│  └─────────────────────────────────────────────────────────┘ │
-│                                                             │
-│  Working Memory ←→ Long-Term Memory                          │
-└─────────────────────────────────────────────────────────────┘
-```
 ### Memory Operations
 
 1. **Store** - Save new information to memory

@@ -24,21 +24,21 @@ Hector provides a **powerful, extensible tool system** that gives agents capabil
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  Global Tool Registry                        │
+│                  Global Tool Registry                       │
 ├─────────────────────────────────────────────────────────────┤
-│  Tool Registry  →  Built-in Tools                            │
-│  Tool Registry  →  MCP Servers                               │
-│  Tool Registry  →  gRPC Plugins                              │
+│  Tool Registry  →  Built-in Tools                           │
+│  Tool Registry  →  MCP Servers                              │
+│  Tool Registry  →  gRPC Plugins                             │
 └─────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                    Built-in Tools                             │
+│                    Built-in Tools                           │
 ├─────────────────────────────────────────────────────────────┤
-│  command  →  write_file  →  search  →  todo  →  search_replace │
+│  command  →  write_file  →  search  →  todo  →  search_repl │
 └─────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                     MCP Servers                              │
+│                     MCP Servers                             │
 ├─────────────────────────────────────────────────────────────┤
 │  Composio Server  →  GitHub, Slack, Notion                  │
 │  Mem0 Server      →  Vector Memory                          │
@@ -46,7 +46,7 @@ Hector provides a **powerful, extensible tool system** that gives agents capabil
 └─────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                    gRPC Plugins                              │
+│                    gRPC Plugins                             │
 ├─────────────────────────────────────────────────────────────┤
 │  Custom LLMs      →  Custom Language Models                 │
 │  Custom Tools     →  Custom Capabilities                    │
@@ -232,13 +232,13 @@ Connect to 150+ external services via MCP servers.
 └─────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                    Built-in Tools                             │
+│                    Built-in Tools                           │
 ├─────────────────────────────────────────────────────────────┤
-│  command  →  write_file  →  search  →  todo  →  search_replace │
+│  command  →  write_file  →  search  →  todo  →  search_repl │
 └─────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                     MCP Servers                              │
+│                     MCP Servers                             │
 ├─────────────────────────────────────────────────────────────┤
 │  Composio Server  →  GitHub, Slack, Notion                  │
 │  Mem0 Server      →  Vector Memory                          │
@@ -246,7 +246,7 @@ Connect to 150+ external services via MCP servers.
 └─────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                    gRPC Plugins                              │
+│                    gRPC Plugins                             │
 ├─────────────────────────────────────────────────────────────┤
 │  Custom LLMs      →  Custom Language Models                 │
 │  Custom Tools     →  Custom Capabilities                    │
@@ -356,7 +356,7 @@ Build custom tools in any language that supports gRPC.
 └─────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                     MCP Servers                              │
+│                     MCP Servers                             │
 ├─────────────────────────────────────────────────────────────┤
 │  Composio Server  →  GitHub, Slack, Notion                  │
 │  Mem0 Server      →  Vector Memory                          │
@@ -364,7 +364,7 @@ Build custom tools in any language that supports gRPC.
 └─────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                    gRPC Plugins                              │
+│                    gRPC Plugins                             │
 ├─────────────────────────────────────────────────────────────┤
 │  Custom LLMs      →  Custom Language Models                 │
 │  Custom Tools     →  Custom Capabilities                    │
