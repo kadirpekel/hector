@@ -56,26 +56,34 @@ theme:
 nav:
   - Home: index.md
   - Getting Started:
-    - Installation: installation.md
-    - Quick Start: quick-start.md
-    - CLI Guide: cli-guide.md
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quick-start.md
   - Core Concepts:
-    - Building Agents: agents.md
-    - Tools & Extensions: tools.md
-    - Memory Management: memory.md
-    - Plugin Development: plugins.md
-    - Authentication: authentication.md
-    - External Agents: external-agents.md
-    - Structured Output: structured-output.md
-  - How To:
-    - AI Coding Assistant: tutorial-cursor.md
-    - Multi-Agent Systems: tutorial-multi-agent.md
-    - Custom MCP Tools: mcp-custom-tools.md
+    - Overview: core-concepts/overview.md
+    - LLM Providers: core-concepts/llm-providers.md
+    - Prompts: core-concepts/prompts.md
+    - Memory: core-concepts/memory.md
+    - Tools: core-concepts/tools.md
+    - RAG & Search: core-concepts/rag.md
+    - Reasoning: core-concepts/reasoning.md
+    - Multi-Agent: core-concepts/multi-agent.md
+    - Structured Output: core-concepts/structured-output.md
+    - Sessions & Streaming: core-concepts/sessions.md
+    - Security: core-concepts/security.md
+  - How-To Guides:
+    - Build Coding Assistant: how-to/build-coding-assistant.md
+    - Build Research System: how-to/build-research-system.md
+    - Add Custom Tools: how-to/add-custom-tools.md
+    - Setup RAG: how-to/setup-rag.md
+    - Deploy to Production: how-to/deploy-production.md
+    - Integrate External Agents: how-to/integrate-external-agents.md
+    - Develop Plugins: plugins.md
   - Reference:
-    - Architecture: architecture.md
-    - Configuration: configuration.md
-    - API Reference: api-reference.md
-    - A2A Compliance: a2a-compliance.md
+    - CLI Reference: reference/cli.md
+    - Configuration: reference/configuration.md
+    - API Reference: reference/api.md
+    - Architecture: reference/architecture.md
+    - A2A Protocol: reference/a2a-protocol.md
 
 # Plugins
 plugins:
