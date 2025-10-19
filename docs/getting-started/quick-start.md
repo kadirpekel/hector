@@ -89,7 +89,7 @@ agents:
 ### 2. Use Your Configured Agent
 
 ```bash
-hector call coder "How do I read a CSV file in Python?" --config config.yaml
+hector call --config config.yaml coder "How do I read a CSV file in Python?"
 ```
 
 ---
@@ -148,8 +148,8 @@ hector call assistant "Hello" --server http://remote:8080 --token "your-jwt-toke
 
 | Command | Purpose | Example |
 |---------|---------|---------|
-| `hector call` | Send a single message | `hector call "Hello"` |
-| `hector chat` | Interactive conversation | `hector chat assistant` |
+| `hector call` | Send a single message | `hector call "Hello"` (zero-config) |
+| `hector chat` | Interactive conversation | `hector chat` (zero-config) |
 | `hector serve` | Start server | `hector serve --config config.yaml` |
 | `hector list` | List available agents | `hector list` |
 | `hector version` | Show version | `hector version` |

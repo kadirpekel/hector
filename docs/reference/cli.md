@@ -28,7 +28,7 @@ Available for all commands:
 
 | Flag | Type | Description | Default |
 |------|------|-------------|---------|
-| `--config FILE` | string | Configuration file path | `hector.yaml` |
+| `--config FILE` | string | Configuration file path | None (required for config mode) |
 | `--debug` | bool | Enable debug logging | `false` |
 | `--log-level LEVEL` | string | Log level (debug/info/warn/error) | `info` |
 | `--log-format FORMAT` | string | Log format (text/json) | `text` |
@@ -67,14 +67,14 @@ hector serve [flags]
 
 | Flag | Type | Description | Default |
 |------|------|-------------|---------|
-| `--config FILE` | string | Configuration file | `hector.yaml` |
+| `--config FILE` | string | Configuration file (required for config mode) | None |
 | `--port PORT` | int | Server port | `8080` |
 | `--host HOST` | string | Server host | `0.0.0.0` |
 | `--a2a-base-url URL` | string | A2A base URL | Auto-detected |
 
 **Zero-Config Flags:**
 
-When no `config.yaml` exists, use these to configure quickly:
+When using zero-config mode (no `--config` flag), use these to configure quickly:
 
 | Flag | Type | Description | Default |
 |------|------|-------------|---------|
@@ -205,8 +205,8 @@ hector call [AGENT] MESSAGE [flags]
 
 | Argument | Type | Description | Required |
 |----------|------|-------------|----------|
-| `AGENT` | string | Agent name | Optional in zero-config |
-| `MESSAGE` | string | Message to send | Yes |
+| `AGENT` | string | Agent name | ❌ Zero-config / ✅ Config mode / ✅ Client mode |
+| `MESSAGE` | string | Message to send | Always required |
 
 **Flags:**
 
@@ -229,24 +229,22 @@ hector call [AGENT] MESSAGE [flags]
 **Examples:**
 
 ```bash
-# Simple call
-hector call assistant "What is the capital of France?"
-
-# Zero-config (no agent name needed)
+# Zero-config mode (NO agent name)
 export OPENAI_API_KEY="sk-..."
 hector call "What is quantum computing?"
 
-# With session context
-hector call assistant "What did we talk about?" --session sess_123
+# Config mode (agent name REQUIRED and validated immediately)
+hector call --config config.yaml assistant "What is the capital of France?"
+hector call --config config.yaml coder "Fix the bug" --session sess_123
 
-# Remote agent
-hector call assistant "Hello" --server http://remote:8080 --token "eyJ..."
+# Client mode (agent name REQUIRED)
+hector call --server http://remote:8080 assistant "Hello" --token "eyJ..."
 
 # No streaming
-hector call assistant "Hello" --stream=false
+hector call --config config.yaml assistant "Hello" --stream=false
 
 # With timeout
-hector call assistant "Complex analysis" --timeout 10m
+hector call --config config.yaml assistant "Complex analysis" --timeout 10m
 ```
 
 ---
@@ -264,7 +262,7 @@ hector chat [AGENT] [flags]
 
 | Argument | Type | Description | Required |
 |----------|------|-------------|----------|
-| `AGENT` | string | Agent name | Optional in zero-config |
+| `AGENT` | string | Agent name | ❌ Zero-config / ✅ Config mode / ✅ Client mode |
 
 **Flags:**
 
@@ -277,18 +275,17 @@ hector chat [AGENT] [flags]
 **Examples:**
 
 ```bash
-# Interactive chat with local agent
-hector chat assistant
-
-# Zero-config (no agent name needed)
+# Zero-config mode (NO agent name)
 export OPENAI_API_KEY="sk-..."
 hector chat
 
-# Resume session
-hector chat assistant --session sess_123
+# Config mode (agent name REQUIRED and validated immediately)
+hector chat --config config.yaml assistant
+hector chat --config config.yaml coder --session sess_123
 
-# Remote agent
-hector chat assistant --server http://remote:8080 --token "eyJ..."
+# Client mode (agent name REQUIRED)
+hector chat --server http://remote:8080 assistant
+hector chat --server http://remote:8080 assistant --token "eyJ..."
 ```
 
 **In Chat:**
@@ -388,24 +385,22 @@ Hector recognizes these environment variables:
 
 ## Configuration File
 
-By default, Hector looks for `hector.yaml` in:
-
-1. Current directory
-2. `~/.hector/config.yaml`
-3. `/etc/hector/config.yaml`
-
-Specify a different file:
+Hector requires an explicit configuration file via the `--config` flag:
 
 ```bash
 hector serve --config /path/to/config.yaml
+hector chat --config myconfig.yaml agent_name
 ```
 
-Or use environment variable:
+**No default location**: Hector does not automatically search for config files. This makes the behavior explicit and predictable.
 
-```bash
-export HECTOR_CONFIG="/path/to/config.yaml"
-hector serve
-```
+**Why explicit?**
+- Clear distinction between zero-config and config modes
+- No "magic" behavior that searches multiple locations
+- Easier to understand and debug
+- Follows Go's philosophy of explicitness
+
+For quick experimentation without a config file, use zero-config mode (see examples above).
 
 ---
 
@@ -501,6 +496,27 @@ export OPENAI_API_KEY="sk-..."
 
 # Or pass as flag
 hector serve --api-key "sk-..."
+```
+
+### "agent 'X' not found"
+
+When using `--config`, agent names are validated immediately:
+
+```
+Error: agent 'myagent' not found
+
+Available agents in config:
+  - assistant
+  - coder
+```
+
+**Solution:**
+```bash
+# Use an agent that exists in your config
+hector call --config config.yaml assistant "Hello"
+
+# Check available agents
+hector list --config config.yaml
 ```
 
 ### "connection refused"

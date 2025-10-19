@@ -19,6 +19,16 @@ Tools give agents capabilities beyond language generation—they can execute com
 
 ## Built-In Tools
 
+!!! tip "Permissive by Default 🎯"
+    All file/command tools are **permissive by default** - they allow maximum flexibility while remaining secure. This makes Hector easy to use in zero-config mode.
+
+    - **write_file**: Allow all file types by default (including extensionless files)
+    - **execute_command**: Allow all commands by default (when sandboxing enabled)
+    - **document_store**: Index all parseable file types by default (text files + .pdf/.docx/.xlsx)
+    - **search_replace**: No file type restrictions
+
+    You can opt-in to whitelist (`allowed_*`) or blacklist (`denied_*`) specific extensions/commands as needed.
+
 Hector includes 6 ready-to-use tools:
 
 ### 1. execute_command
@@ -32,11 +42,17 @@ agents:
 
 tools:
   execute_command:
+    type: command
     enabled: true
-    allowed_commands: ["ls", "cat", "grep", "git", "npm", "python"]
+    enable_sandboxing: true  # Default: true (recommended for security)
+    # Note: No allowed_commands = allow ALL commands (when sandboxing enabled)
+    # To restrict, add: allowed_commands: ["ls", "cat", "grep", "git"]
     max_execution_time: "30s"
     working_directory: "./"
 ```
+
+!!! warning "Security: Sandboxing Required"
+    When `enable_sandboxing: false`, you **must** specify `allowed_commands` explicitly. The config will fail validation without it for security reasons.
 
 **Use cases:** Running tests, building projects, checking git status
 
@@ -60,10 +76,20 @@ agents:
 
 tools:
   write_file:
+    type: write_file
     enabled: true
     allowed_paths: ["./src/", "./docs/"]
-    max_file_size: "10MB"
+    max_file_size: 10485760  # 10MB in bytes
+    # Note: No allowed_extensions = allow ALL file types by default
+    # To whitelist: allowed_extensions: [".py", ".go", ".md"]
+    # To blacklist: denied_extensions: [".exe", ".bin"]
 ```
+
+!!! info "File Extension Management"
+    - **Default**: Allow all file types (including extensionless files like `Makefile`)
+    - **Whitelist**: Set `allowed_extensions` to only allow specific types
+    - **Blacklist**: Set `denied_extensions` to block specific types
+    - **Precedence**: Blacklist > Whitelist > Default
 
 **Use cases:** Code generation, documentation creation, config files
 

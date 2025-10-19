@@ -241,7 +241,7 @@ Agent registered: writer
 ### Simple Research Task
 
 ```bash
-hector call research_coordinator "Research the impact of AI on healthcare"
+hector call --config research-system.yaml research_coordinator "Research the impact of AI on healthcare"
 ```
 
 **What happens:**
@@ -288,7 +288,7 @@ hector call research_coordinator "Research the impact of AI on healthcare"
 ### Complex Research Task
 
 ```bash
-hector call research_coordinator \
+hector call --config research-system.yaml research_coordinator \
   "Research quantum computing developments in 2024, analyze market trends, and create an investment report"
 ```
 
@@ -350,10 +350,11 @@ researcher:
 # Allow calling external APIs
 tools:
   execute_command:
+    type: command
     enabled: true
-    allowed_commands:
-      - "curl"
-      - "wget"
+    # Permissive defaults: allows all commands (sandboxed for security)
+    # Only restrict if needed:
+    # allowed_commands: ["curl", "wget"]
 ```
 
 ### Enable Long-Term Memory
@@ -539,21 +540,21 @@ agents:
 ### Academic Research
 
 ```bash
-hector call research_coordinator \
+hector call --config research-system.yaml research_coordinator \
   "Research machine learning interpretability, analyze recent papers, and write a literature review"
 ```
 
 ### Market Analysis
 
 ```bash
-hector call research_coordinator \
+hector call --config research-system.yaml research_coordinator \
   "Research electric vehicle market, analyze competitors, and create market entry strategy"
 ```
 
 ### Technical Investigation
 
 ```bash
-hector call research_coordinator \
+hector call --config research-system.yaml research_coordinator \
   "Research microservices architectures, analyze trade-offs, and recommend approach for our system"
 ```
 

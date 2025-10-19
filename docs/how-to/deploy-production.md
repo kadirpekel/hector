@@ -452,14 +452,18 @@ kubectl get secret hector-secrets -o jsonpath='{.data.openai-api-key}' | base64 
 ```yaml
 tools:
   execute_command:
+    type: command
     enabled: true
-    allowed_commands: ["npm", "go", "python"]
-    denied_commands: ["rm", "dd", "sudo"]
+    # Production security: optionally restrict commands
+    # allowed_commands: ["npm", "go", "python"]
+    # denied_commands: ["rm", "dd", "sudo"]
   
   write_file:
+    type: write_file
     enabled: true
-    allowed_paths: ["./output/"]
-    denied_paths: ["./secrets/", "./.env"]
+    # Production security: optionally restrict paths
+    # allowed_paths: ["./output/"]
+    # denied_paths: ["./secrets/", "./.env"]
 ```
 
 ### Monitoring

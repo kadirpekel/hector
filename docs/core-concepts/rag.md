@@ -80,7 +80,7 @@ agents:
     document_stores:
       - name: "codebase"
         paths: ["./src/"]
-        file_patterns: ["*.go", "*.py", "*.js"]
+        include_patterns: ["*.go", "*.py", "*.js"]
 ```
 
 ### 4. Test It
@@ -107,7 +107,8 @@ agents:
     document_stores:
       - name: "docs"
         paths: ["./documentation/"]
-        file_patterns: ["*.md"]
+        # Note: Defaults to parseable file types (text + .pdf/.docx/.xlsx)
+        # To restrict further: include_patterns: ["*.md", "*.txt"]
 ```
 
 ### Multiple Document Stores
@@ -120,17 +121,18 @@ agents:
     document_stores:
       - name: "codebase"
         paths: ["./src/", "./lib/"]
-        file_patterns: ["*.go", "*.py"]
+        # Note: Defaults to common text files + .pdf/.docx/.xlsx
+        # include_patterns: ["*.go", "*.py"]  # Optional: restrict to specific types
         chunk_size: 512
       
       - name: "documentation"
         paths: ["./docs/"]
-        file_patterns: ["*.md"]
+        include_patterns: ["*.md"]
         chunk_size: 1024
       
       - name: "configs"
         paths: ["./configs/"]
-        file_patterns: ["*.yaml", "*.json"]
+        include_patterns: ["*.yaml", "*.json"]
         chunk_size: 256
 ```
 
@@ -140,7 +142,7 @@ agents:
 document_stores:
   - name: "my_store"
     paths: ["./path1/", "./path2/"]
-    file_patterns: ["*.ext"]
+    include_patterns: ["*.ext"]  # Optional: defaults to common text files + .pdf/.docx/.xlsx
     
     # Chunking
     chunk_size: 512           # Characters per chunk
@@ -355,7 +357,7 @@ plugins:
 document_stores:
   - name: "pdfs"
     paths: ["./documents/"]
-    file_patterns: ["*.pdf"]
+    include_patterns: ["*.pdf"]
     parser: "plugin:pdf-parser"
 ```
 
@@ -422,7 +424,7 @@ agents:
     document_stores:
       - name: "codebase"
         paths: ["./src/", "./lib/"]
-        file_patterns: ["*.go", "*.py", "*.js", "*.ts"]
+        include_patterns: ["*.go", "*.py", "*.js", "*.ts"]
         chunk_size: 512
     
     prompt:
@@ -441,7 +443,7 @@ agents:
     document_stores:
       - name: "documentation"
         paths: ["./docs/"]
-        file_patterns: ["*.md", "*.rst"]
+        include_patterns: ["*.md", "*.rst"]
         chunk_size: 1024
     
     prompt:
@@ -460,12 +462,12 @@ agents:
     document_stores:
       - name: "papers"
         paths: ["./research/"]
-        file_patterns: ["*.pdf", "*.md"]
+        include_patterns: ["*.pdf", "*.md"]
         chunk_size: 2048
       
       - name: "notes"
         paths: ["./notes/"]
-        file_patterns: ["*.md"]
+        include_patterns: ["*.md"]
         chunk_size: 512
 ```
 
@@ -578,7 +580,7 @@ chunk_overlap: 200
 document_stores:
   - name: "clean_codebase"
     paths: ["./"]
-    file_patterns: ["*.go"]
+    include_patterns: ["*.go"]
     exclude_patterns: [
       "*_test.go",     # Test files
       "*.min.js",      # Minified files

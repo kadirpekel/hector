@@ -23,23 +23,15 @@ type CommandTool struct {
 func NewCommandTool(commandConfig *config.CommandToolsConfig) *CommandTool {
 	if commandConfig == nil {
 		commandConfig = &config.CommandToolsConfig{
-			AllowedCommands: []string{
-				"cat", "head", "tail", "ls", "find", "grep", "wc", "pwd",
-				"git", "npm", "go", "curl", "wget", "echo", "date",
-			},
+			AllowedCommands:  nil, // nil = allow all (when sandboxing enabled)
 			WorkingDirectory: "./",
 			MaxExecutionTime: 30 * time.Second,
-			EnableSandboxing: true,
+			EnableSandboxing: true, // Sandboxing enabled by default for security
 		}
 	}
 
 	// Apply defaults if not set
-	if len(commandConfig.AllowedCommands) == 0 {
-		commandConfig.AllowedCommands = []string{
-			"cat", "head", "tail", "ls", "find", "grep", "wc", "pwd",
-			"git", "npm", "go", "curl", "wget", "echo", "date",
-		}
-	}
+	// Note: Empty AllowedCommands with EnableSandboxing=true means "allow all" (default permissive)
 	if commandConfig.WorkingDirectory == "" {
 		commandConfig.WorkingDirectory = "./"
 	}
@@ -107,13 +99,15 @@ func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) 
 
 // validateCommand performs security validation on the command
 func (t *CommandTool) validateCommand(command string) error {
-	if !t.config.EnableSandboxing {
+	// If sandboxing is enabled (default) and no allowed_commands specified, allow all (safe)
+	if t.config.EnableSandboxing && len(t.config.AllowedCommands) == 0 {
 		return nil
 	}
 
+	// If sandboxing is disabled OR allowed_commands is specified, enforce the whitelist
 	baseCmd := t.extractBaseCommand(command)
 	if !t.isCommandAllowed(baseCmd) {
-		return fmt.Errorf("command not allowed: %s", baseCmd)
+		return fmt.Errorf("command not allowed: %s (allowed: %v)", baseCmd, t.config.AllowedCommands)
 	}
 
 	return nil
@@ -181,6 +175,12 @@ func (t *CommandTool) extractBaseCommand(command string) string {
 
 // isCommandAllowed checks if a command is in the allowed list
 func (t *CommandTool) isCommandAllowed(command string) bool {
+	// If no allowed commands configured, allow all (when sandboxing enabled)
+	if len(t.config.AllowedCommands) == 0 {
+		return true
+	}
+
+	// Check against whitelist
 	for _, allowed := range t.config.AllowedCommands {
 		if command == allowed {
 			return true

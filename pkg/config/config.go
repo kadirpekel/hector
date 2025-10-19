@@ -48,6 +48,34 @@ type Config struct {
 	Plugins PluginConfigs `yaml:"plugins,omitempty"`
 }
 
+// ValidateAgent checks if an agent exists in the configuration
+// Returns error with list of available agents if not found
+func (c *Config) ValidateAgent(agentID string) error {
+	// For zero-config mode, we only have one default agent
+	if len(c.Agents) == 0 {
+		// Zero-config will create default agent, skip validation
+		return nil
+	}
+
+	// Check if agent exists
+	if _, exists := c.Agents[agentID]; !exists {
+		// Build list of available agents
+		availableAgents := make([]string, 0, len(c.Agents))
+		for name := range c.Agents {
+			availableAgents = append(availableAgents, name)
+		}
+
+		if len(availableAgents) == 0 {
+			return fmt.Errorf("agent '%s' not found: no agents defined in configuration", agentID)
+		}
+
+		return fmt.Errorf("agent '%s' not found\n\nAvailable agents:\n  - %s",
+			agentID, strings.Join(availableAgents, "\n  - "))
+	}
+
+	return nil
+}
+
 // Validate implements Config.Validate for Config
 func (c *Config) Validate() error {
 	// Validate global settings
@@ -510,11 +538,11 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 		}
 
 		cfg.Tools.Tools["file_writer"] = ToolConfig{
-			Type:              "file_writer",
-			Enabled:           true,
-			MaxFileSize:       1048576, // 1MB
-			AllowedExtensions: []string{".go", ".yaml", ".yml", ".md", ".json", ".txt", ".sh", ".py", ".js", ".ts"},
-			WorkingDirectory:  "./",
+			Type:             "file_writer",
+			Enabled:          true,
+			MaxFileSize:      1048576, // 1MB
+			WorkingDirectory: "./",
+			// Note: AllowedExtensions intentionally not set = allow ALL file types (default permissive)
 		}
 
 		cfg.Tools.Tools["search_replace"] = ToolConfig{

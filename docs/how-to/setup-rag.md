@@ -126,29 +126,31 @@ llms:
     model: "gpt-4o-mini"
     api_key: "${OPENAI_API_KEY}"
 
+# Document Stores (what to index)
+document_stores:
+  codebase:
+    name: "codebase"
+    paths:
+      - "./src/"
+      - "./lib/"
+    include_patterns:
+      - "*.go"
+      - "*.py"
+      - "*.js"
+      - "*.ts"
+    chunk_size: 512
+    chunk_overlap: 50
+
 # Agent with Semantic Search
 agents:
   coder:
     llm: "gpt-4o"
     database: "qdrant"
     embedder: "embedder"
+    document_stores: ["codebase"]
     
     tools:
       - "search"  # Enable semantic search tool
-    
-    # Define what to index
-    document_stores:
-      - name: "codebase"
-        paths:
-          - "./src/"
-          - "./lib/"
-        file_patterns:
-          - "*.go"
-          - "*.py"
-          - "*.js"
-          - "*.ts"
-        chunk_size: 512
-        chunk_overlap: 50
 ```
 
 **Key components:**
@@ -190,7 +192,7 @@ This may take a few minutes for large codebases.
 ### Interactive Chat
 
 ```bash
-hector chat coder
+hector chat --config config-with-rag.yaml coder
 ```
 
 Try these queries:
@@ -209,7 +211,7 @@ Try these queries:
 ### Single Query
 
 ```bash
-hector call coder "Explain how the API routes are structured"
+hector call --config config-with-rag.yaml coder "Explain how the API routes are structured"
 ```
 
 Agent will:
@@ -253,23 +255,26 @@ Index different types of content with different settings:
 ```yaml
 document_stores:
   # Source code - small chunks for precision
-  - name: "source_code"
+  source_code:
+    name: "source_code"
     paths: ["./src/"]
-    file_patterns: ["*.go", "*.py", "*.js"]
+    include_patterns: ["*.go", "*.py", "*.js"]
     chunk_size: 512
     chunk_overlap: 50
   
   # Documentation - large chunks for context
-  - name: "documentation"
+  documentation:
+    name: "documentation"
     paths: ["./docs/"]
-    file_patterns: ["*.md", "*.rst"]
+    include_patterns: ["*.md", "*.rst"]
     chunk_size: 2048
     chunk_overlap: 200
   
   # Configuration files - small chunks
-  - name: "configs"
+  configs:
+    name: "configs"
     paths: ["./config/"]
-    file_patterns: ["*.yaml", "*.json", "*.toml"]
+    include_patterns: ["*.yaml", "*.json", "*.toml"]
     chunk_size: 256
     chunk_overlap: 25
 ```
@@ -278,9 +283,10 @@ document_stores:
 
 ```yaml
 document_stores:
-  - name: "clean_code"
+  clean_code:
+    name: "clean_code"
     paths: ["./"]
-    file_patterns: ["*.go"]
+    include_patterns: ["*.go"]
     exclude_patterns:
       - "*_test.go"        # Test files
       - "vendor/*"         # Dependencies
@@ -311,7 +317,8 @@ chunk_overlap: 200
 
 ```yaml
 document_stores:
-  - name: "optimized"
+  optimized:
+    name: "optimized"
     paths: ["./src/"]
     
     # Indexing performance
@@ -402,18 +409,23 @@ agents:
   fullstack_dev:
     database: "qdrant"
     embedder: "embedder"
-    document_stores:
-      - name: "frontend"
-        paths: ["./frontend/"]
-        collection: "frontend_code"
-      
-      - name: "backend"
-        paths: ["./backend/"]
-        collection: "backend_code"
-      
-      - name: "docs"
-        paths: ["./docs/"]
-        collection: "documentation"
+    document_stores: ["frontend", "backend", "docs"]
+
+document_stores:
+  frontend:
+    name: "frontend"
+    paths: ["./frontend/"]
+    collection: "frontend_code"
+  
+  backend:
+    name: "backend"
+    paths: ["./backend/"]
+    collection: "backend_code"
+  
+  docs:
+    name: "docs"
+    paths: ["./docs/"]
+    collection: "documentation"
 ```
 
 Each gets its own Qdrant collection.
@@ -481,7 +493,8 @@ curl https://ollama.ai/install.sh | sh
 **Lower threshold:**
 ```yaml
 document_stores:
-  - name: "codebase"
+  codebase:
+    name: "codebase"
     search_config:
       score_threshold: 0.5  # Lower from 0.7
 ```
@@ -489,8 +502,9 @@ document_stores:
 **Check file patterns:**
 ```yaml
 document_stores:
-  - name: "codebase"
-    file_patterns: ["*.go", "*.py"]  # Make sure this matches your files
+  codebase:
+    name: "codebase"
+    include_patterns: ["*.go", "*.py"]  # Make sure this matches your files
 ```
 
 ### "Indexing is slow"
@@ -498,7 +512,8 @@ document_stores:
 **Optimize batch size:**
 ```yaml
 document_stores:
-  - name: "codebase"
+  codebase:
+    name: "codebase"
     batch_size: 50  # Increase for better performance
     parallel: true
 ```

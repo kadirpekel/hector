@@ -237,7 +237,7 @@ agents:
     document_stores:
       - name: "codebase"
         paths: ["./src/"]
-        file_patterns: ["*.go", "*.py"]
+        include_patterns: ["*.go", "*.py"]
         exclude_patterns: ["*_test.go"]
         chunk_size: 512
         chunk_overlap: 50
@@ -310,24 +310,27 @@ agents:
 ```yaml
 tools:
   execute_command:
+    type: command
     enabled: true
-    allowed_commands: ["npm", "git", "python"]
-    denied_commands: ["rm", "sudo"]
-    max_execution_time: "30s"
-    working_directory: "./"
+    # Permissive defaults: all commands allowed (sandboxed)
+    # Optional restrictions:
+    # allowed_commands: ["npm", "git", "python"]
+    # denied_commands: ["rm", "sudo"]
+    # max_execution_time: "30s"
   
   write_file:
+    type: write_file
     enabled: true
-    allowed_paths: ["./src/", "./docs/"]
-    denied_paths: ["./secrets/"]
-    max_file_size: "10MB"
-    create_directories: true
+    # Permissive defaults: all file types and paths allowed
+    # Optional restrictions:
+    # allowed_paths: ["./src/", "./docs/"]
+    # denied_paths: ["./secrets/"]
   
   search_replace:
+    type: search_replace
     enabled: true
-    allowed_paths: ["./src/"]
-    backup: true
-    max_replacements: 100
+    # Permissive defaults: no restrictions
+    # Optional: backup: true
   
   search:
     enabled: true
@@ -431,7 +434,7 @@ document_stores:
     paths:
       - "./src/"
       - "./lib/"
-    file_patterns:
+    include_patterns:
       - "*.go"
       - "*.py"
       - "*.js"
@@ -599,18 +602,20 @@ agents:
     document_stores:
       - name: "codebase"
         paths: ["./src/"]
-        file_patterns: ["*.go", "*.py"]
+        include_patterns: ["*.go", "*.py"]
         chunk_size: 512
 
 # Tools
 tools:
   execute_command:
+    type: command
     enabled: true
-    allowed_commands: ["npm", "git", "python"]
+    # Permissive defaults (sandboxed)
   
   write_file:
+    type: write_file
     enabled: true
-    allowed_paths: ["./src/", "./docs/"]
+    # Permissive defaults
 
 # Logging
 logging:

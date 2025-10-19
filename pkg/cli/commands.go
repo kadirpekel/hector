@@ -61,12 +61,26 @@ func InfoCommand(args Args) error {
 
 // CallCommand sends a single message to an agent
 func CallCommand(args Args) error {
-	// Create client
+	// For config mode with agent, validate before expensive initialization
+	if args.ConfigFile != "" && args.AgentID != "" {
+		a2aClient, _, err := createClientWithValidation(args)
+		if err != nil {
+			return fmt.Errorf("failed to create client: %w", err)
+		}
+		defer a2aClient.Close()
+		return executeCall(a2aClient, args)
+	}
+
+	// For other modes (zero-config, server), use regular client creation
 	a2aClient, err := createClient(args)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 	defer a2aClient.Close()
+	return executeCall(a2aClient, args)
+}
+
+func executeCall(a2aClient client.A2AClient, args Args) error {
 
 	// Create message
 	msg := &pb.Message{
@@ -114,12 +128,26 @@ func CallCommand(args Args) error {
 
 // ChatCommand starts an interactive chat session
 func ChatCommand(args Args) error {
-	// Create client
+	// For config mode with agent, validate before expensive initialization
+	if args.ConfigFile != "" && args.AgentID != "" {
+		a2aClient, _, err := createClientWithValidation(args)
+		if err != nil {
+			return fmt.Errorf("failed to create client: %w", err)
+		}
+		defer a2aClient.Close()
+		return executeChat(a2aClient, args)
+	}
+
+	// For other modes (zero-config, server), use regular client creation
 	a2aClient, err := createClient(args)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 	defer a2aClient.Close()
+	return executeChat(a2aClient, args)
+}
+
+func executeChat(a2aClient client.A2AClient, args Args) error {
 
 	// Display welcome message
 	mode := "Local Mode"
@@ -212,6 +240,7 @@ func createClient(args Args) (client.A2AClient, error) {
 	}
 
 	// Local mode: use Runtime
+	// Note: For config mode with agent validation, caller should use createClientWithValidation
 	rt, err := runtime.New(runtime.Options{
 		ConfigFile: args.ConfigFile,
 		Provider:   args.Provider,
@@ -227,4 +256,40 @@ func createClient(args Args) (client.A2AClient, error) {
 	}
 
 	return rt.Client(), nil
+}
+
+// createClientWithValidation creates a client and validates agent exists first (for config mode)
+// This avoids expensive initialization if the agent doesn't exist
+func createClientWithValidation(args Args) (client.A2AClient, *runtime.Runtime, error) {
+	if args.ServerURL != "" {
+		// Server mode: use HTTP client (no validation needed)
+		return runtime.NewHTTPClient(args.ServerURL, args.Token), nil, nil
+	}
+
+	// Local mode: load config first to validate agent before expensive initialization
+	cfg, err := runtime.LoadConfigForValidation(args.ConfigFile, runtime.Options{
+		Provider:   args.Provider,
+		APIKey:     args.APIKey,
+		BaseURL:    args.BaseURL,
+		Model:      args.Model,
+		Tools:      args.Tools,
+		MCPURL:     args.MCPURL,
+		DocsFolder: args.DocsFolder,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	// Validate agent exists before expensive initialization
+	if err := cfg.ValidateAgent(args.AgentID); err != nil {
+		return nil, nil, err
+	}
+
+	// Now create runtime with validated config
+	rt, err := runtime.NewWithConfig(cfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to initialize runtime: %w", err)
+	}
+
+	return rt.Client(), rt, nil
 }

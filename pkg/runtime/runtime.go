@@ -113,3 +113,25 @@ func NewHTTPClient(serverURL, token string) client.A2AClient {
 func NewLocalClient(cfg *config.Config) (client.A2AClient, error) {
 	return client.NewLocalClient(cfg)
 }
+
+// LoadConfigForValidation loads config without creating expensive client
+// Used by CLI to validate agent exists before initialization
+func LoadConfigForValidation(configFile string, opts Options) (*config.Config, error) {
+	opts.ConfigFile = configFile
+	return loadOrCreateConfig(opts)
+}
+
+// NewWithConfig creates a runtime with pre-loaded config
+// Used after validation to avoid double-loading config
+func NewWithConfig(cfg *config.Config) (*Runtime, error) {
+	// Create local client with validated config
+	a2aClient, err := client.NewLocalClient(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client: %w", err)
+	}
+
+	return &Runtime{
+		config: cfg,
+		client: a2aClient,
+	}, nil
+}

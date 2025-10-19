@@ -124,27 +124,26 @@ Create `config.yaml`:
 ```yaml
 # MCP Tools Configuration
 tools:
-  mcp_tools:
-    - server:
-        url: "http://localhost:3000"
-        protocol: "mcp"
-      enabled: true
+  weather_server:
+    type: "mcp"
+    enabled: true
+    server_url: "http://localhost:3000"
+    description: "Weather information tools"
 
 # Agent using weather tools
 agents:
   weather_assistant:
     llm: "gpt-4o"
     
-    # Enable weather tools
-    tools:
-      - "get_weather"
-      - "get_forecast"
-    
     prompt:
       system_role: |
         You are a helpful weather assistant.
-        Use the get_weather and get_forecast tools
+        Use the weather tools (get_weather, get_forecast)
         to provide accurate weather information.
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 10
 
 # LLM Configuration
 llms:
@@ -160,7 +159,7 @@ llms:
 hector serve --config config.yaml
 
 # In another terminal
-hector call weather_assistant "What's the weather in San Francisco?"
+hector call --config config.yaml weather_assistant "What's the weather in San Francisco?"
 ```
 
 Agent response:
@@ -273,22 +272,16 @@ composio server start --port 3000
 
 ```yaml
 tools:
-  mcp_tools:
-    - server:
-        url: "http://localhost:3000"
-        protocol: "mcp"
-      auth:
-        type: "api_key"
-        api_key: "${COMPOSIO_API_KEY}"
-      enabled: true
+  composio:
+    type: "mcp"
+    enabled: true
+    server_url: "http://localhost:3000"
+    description: "Composio - 150+ app integrations"
+    # Authentication handled by Composio server
 
 agents:
   automation:
     llm: "gpt-4o"
-    tools:
-      - "github_create_issue"
-      - "slack_send_message"
-      - "notion_create_page"
     
     prompt:
       system_role: |
@@ -296,12 +289,18 @@ agents:
         - GitHub (create issues, PRs)
         - Slack (send messages, notifications)
         - Notion (manage pages, databases)
+        
+        Use the Composio tools to automate workflows.
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 20
 ```
 
 ### Step 3: Use the Tools
 
 ```bash
-hector call automation \
+hector call --config config.yaml automation \
   "Create a GitHub issue for the authentication bug and notify the team on Slack"
 ```
 
@@ -440,14 +439,12 @@ In Hector config:
 
 ```yaml
 tools:
-  mcp_tools:
-    - server:
-        url: "http://localhost:3000"
-        protocol: "mcp"
-      auth:
-        type: "bearer"
-        token: "${MCP_API_KEY}"
-      enabled: true
+  custom_mcp:
+    type: "mcp"
+    enabled: true
+    server_url: "http://localhost:3000"
+    description: "Custom MCP tools"
+    # Add authentication in MCP server if needed
 ```
 
 ---

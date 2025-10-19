@@ -25,7 +25,7 @@ func NewFileWriterTool(cfg *config.FileWriterConfig) *FileWriterTool {
 	if cfg == nil {
 		cfg = &config.FileWriterConfig{
 			MaxFileSize:       1048576, // 1MB default
-			AllowedExtensions: []string{".go", ".yaml", ".md", ".json", ".txt", ".sh"},
+			AllowedExtensions: nil,     // nil = allow all (default behavior)
 			BackupOnOverwrite: true,
 			WorkingDirectory:  "./",
 		}
@@ -35,9 +35,8 @@ func NewFileWriterTool(cfg *config.FileWriterConfig) *FileWriterTool {
 	if cfg.MaxFileSize == 0 {
 		cfg.MaxFileSize = 1048576
 	}
-	if len(cfg.AllowedExtensions) == 0 {
-		cfg.AllowedExtensions = []string{".go", ".yaml", ".md", ".json", ".txt", ".sh"}
-	}
+	// Note: Empty AllowedExtensions means "allow all" (not restricted)
+	// To restrict, user must explicitly set allowed_extensions in config
 	if cfg.WorkingDirectory == "" {
 		cfg.WorkingDirectory = "./"
 	}
@@ -50,6 +49,7 @@ func NewFileWriterToolWithConfig(name string, toolConfig config.ToolConfig) (*Fi
 	cfg := &config.FileWriterConfig{
 		MaxFileSize:       int(toolConfig.MaxFileSize),
 		AllowedExtensions: toolConfig.AllowedExtensions,
+		DeniedExtensions:  toolConfig.DeniedExtensions,
 		WorkingDirectory:  toolConfig.WorkingDirectory,
 	}
 
@@ -219,24 +219,46 @@ func (t *FileWriterTool) validatePath(path string) error {
 		return fmt.Errorf("path escapes working directory")
 	}
 
-	// Check extension if restrictions are configured
-	if len(t.config.AllowedExtensions) > 0 {
-		ext := filepath.Ext(path)
-		if ext == "" {
-			return fmt.Errorf("file must have an extension")
-		}
+	// Extension validation logic:
+	// DEFAULT: Allow ALL extensions (most permissive, zero-config friendly)
+	// - If denied_extensions set: Block those extensions (blacklist)
+	// - If allowed_extensions set: ONLY allow those extensions (whitelist)
+	// - Whitelist takes precedence over default permissive behavior
 
+	ext := filepath.Ext(path)
+
+	// Check denied_extensions first (blacklist)
+	if len(t.config.DeniedExtensions) > 0 {
+		for _, deniedExt := range t.config.DeniedExtensions {
+			if ext == deniedExt || (ext == "" && deniedExt == "") {
+				if ext == "" {
+					return fmt.Errorf("extensionless files are explicitly denied")
+				}
+				return fmt.Errorf("file extension %s is explicitly denied", ext)
+			}
+		}
+	}
+
+	// If allowed_extensions is configured, enforce whitelist (overrides default permissive behavior)
+	if len(t.config.AllowedExtensions) > 0 {
 		allowed := false
 		for _, allowedExt := range t.config.AllowedExtensions {
+			// Check for exact match (including extensionless files with "")
 			if ext == allowedExt {
 				allowed = true
 				break
 			}
 		}
 		if !allowed {
+			if ext == "" {
+				return fmt.Errorf("extensionless files not allowed (add '' to allowed_extensions to allow Makefile, Dockerfile, etc.)")
+			}
 			return fmt.Errorf("file extension %s not allowed (allowed: %v)", ext, t.config.AllowedExtensions)
 		}
 	}
+
+	// DEFAULT: If neither allowed_extensions nor denied_extensions configured,
+	// allow all extensions (zero-config, permissive by default)
 
 	return nil
 }

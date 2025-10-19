@@ -105,8 +105,21 @@ func (r *AgentRegistry) RegisterAgent(name string, agent pb.A2AServiceServer, ag
 func (r *AgentRegistry) GetAgent(name string) (pb.A2AServiceServer, error) {
 	entry, exists := r.Get(name)
 	if !exists {
+		// Build list of available agents for helpful error message
+		allEntries := r.List()
+		if len(allEntries) == 0 {
+			return nil, NewAgentRegistryError("AgentRegistry", "GetAgent",
+				fmt.Sprintf("agent '%s' not found: no agents defined", name), nil)
+		}
+
+		availableAgents := make([]string, 0, len(allEntries))
+		for _, e := range allEntries {
+			availableAgents = append(availableAgents, e.Name)
+		}
+
 		return nil, NewAgentRegistryError("AgentRegistry", "GetAgent",
-			fmt.Sprintf("agent %s not found", name), nil)
+			fmt.Sprintf("agent '%s' not found\n\nAvailable agents:\n  - %s",
+				name, strings.Join(availableAgents, "\n  - ")), nil)
 	}
 	return entry.Agent, nil
 }

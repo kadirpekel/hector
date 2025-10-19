@@ -165,74 +165,66 @@ agents:
       - "execute_command"
       - "todo_write"
     
-    # Document Stores (semantic search targets)
-    document_stores:
-      - name: "codebase"
-        paths:
-          - "./src/"
-          - "./lib/"
-          - "./pkg/"
-        file_patterns:
-          - "*.go"
-          - "*.py"
-          - "*.js"
-          - "*.ts"
-          - "*.tsx"
-          - "*.java"
-          - "*.rs"
-        chunk_size: 512
-        chunk_overlap: 50
-        exclude_patterns:
-          - "*_test.go"
-          - "*.test.js"
-          - "*.spec.ts"
-          - "node_modules/*"
-          - "vendor/*"
-          - "*.min.js"
-      
-      - name: "docs"
-        paths:
-          - "./docs/"
-          - "./README.md"
-        file_patterns:
-          - "*.md"
-        chunk_size: 1024
+    # Reference to document stores (defined below)
+    document_stores: ["codebase", "docs"]
+    
+    # Memory Configuration
+    memory:
+      working:
+        strategy: "summary_buffer"
+        budget: 4000
+
+# Document Stores (semantic search targets)
+document_stores:
+  codebase:
+    name: "codebase"
+    paths:
+      - "./src/"
+      - "./lib/"
+      - "./pkg/"
+    include_patterns:
+      - "*.go"
+      - "*.py"
+      - "*.js"
+      - "*.ts"
+      - "*.tsx"
+      - "*.java"
+      - "*.rs"
+    chunk_size: 512
+    chunk_overlap: 50
+    exclude_patterns:
+      - "*_test.go"
+      - "*.test.js"
+      - "*.spec.ts"
+      - "node_modules/*"
+      - "vendor/*"
+      - "*.min.js"
+  
+  docs:
+    name: "docs"
+    paths:
+      - "./docs/"
+      - "./README.md"
+    include_patterns:
+      - "*.md"
+    chunk_size: 1024
 
 # Tool Configurations
 tools:
   execute_command:
+    type: command
     enabled: true
-    allowed_commands:
-      - "cat"
-      - "ls"
-      - "grep"
-      - "git"
-      - "npm"
-      - "yarn"
-      - "go"
-      - "python"
-      - "node"
-      - "cargo"
-      - "make"
-    max_execution_time: "60s"
+    # Permissive defaults: allows all commands (sandboxed for security)
   
   write_file:
+    type: write_file
     enabled: true
-    allowed_paths:
-      - "./src/"
-      - "./lib/"
-      - "./pkg/"
-      - "./tests/"
-      - "./docs/"
-    max_file_size: "10MB"
+    # Permissive defaults: allows all file types and paths
   
   search_replace:
+    type: search_replace
     enabled: true
-    allowed_paths:
-      - "./src/"
-      - "./lib/"
-      - "./pkg/"
-    backup: true
+    # Permissive defaults: no restrictions
 ```
 
 ---
@@ -260,7 +252,7 @@ Agent registered: coder
 ### Interactive Chat
 
 ```bash
-hector chat coder
+hector chat --config coding-assistant.yaml coder
 ```
 
 **Try these tasks:**
@@ -282,7 +274,7 @@ hector chat coder
 ### Single Command
 
 ```bash
-hector call coder "Add error handling to the API endpoints"
+hector call --config coding-assistant.yaml coder "Add error handling to the API endpoints"
 ```
 
 ### Via API
@@ -303,13 +295,15 @@ curl -X POST http://localhost:8080/agents/coder/tasks \
 
 ```yaml
 document_stores:
-  - name: "frontend"
+  frontend:
+    name: "frontend"
     paths: ["./frontend/src/"]
-    file_patterns: ["*.tsx", "*.ts", "*.css"]
+    include_patterns: ["*.tsx", "*.ts", "*.css"]
   
-  - name: "backend"
+  backend:
+    name: "backend"
     paths: ["./backend/"]
-    file_patterns: ["*.go", "*.sql"]
+    include_patterns: ["*.go", "*.sql"]
 ```
 
 ### Add Project-Specific Commands
@@ -317,13 +311,11 @@ document_stores:
 ```yaml
 tools:
   execute_command:
-    allowed_commands:
-      - "npm"
-      - "yarn"
-      - "pnpm"
-      - "docker-compose"
-      - "kubectl"
-      # Add your project's commands
+    type: command
+    enabled: true
+    # All commands allowed by default (sandboxed)
+    # Only restrict if needed:
+    # allowed_commands: ["npm", "yarn", "pnpm"]
 ```
 
 ### Customize the Prompt
@@ -362,17 +354,20 @@ reasoning:
 
 ```yaml
 document_stores:
-  - name: "source_code"
+  source_code:
+    name: "source_code"
     paths: ["./src/"]
     chunk_size: 512  # Smaller for precision
   
-  - name: "documentation"
+  documentation:
+    name: "documentation"
     paths: ["./docs/"]
     chunk_size: 2048  # Larger for context
   
-  - name: "configs"
+  configs:
+    name: "configs"
     paths: ["./config/"]
-    file_patterns: ["*.yaml", "*.json", "*.toml"]
+    include_patterns: ["*.yaml", "*.json", "*.toml"]
     chunk_size: 256
 ```
 
@@ -421,12 +416,16 @@ Now the agent remembers context across multiple requests!
 ```yaml
 tools:
   execute_command:
-    allowed_commands: ["npm", "go", "git"]  # Whitelist only
-    denied_commands: ["rm", "dd", "sudo"]   # Blacklist dangerous
+    type: command
+    # Optional restrictions (only if needed):
+    # allowed_commands: ["npm", "go", "git"]  # Whitelist only
+    # denied_commands: ["rm", "dd", "sudo"]   # Blacklist dangerous
   
   write_file:
-    allowed_paths: ["./src/", "./tests/"]   # Restrict paths
-    denied_paths: ["./secrets/", "./.env"]  # Protect sensitive
+    type: write_file
+    # Optional restrictions (only if needed):
+    # allowed_paths: ["./src/", "./tests/"]   # Restrict paths
+    # denied_paths: ["./secrets/", "./.env"]  # Protect sensitive
 ```
 
 ### Performance
@@ -434,7 +433,8 @@ tools:
 ```yaml
 # Index in the background
 document_stores:
-  - name: "codebase"
+  codebase:
+    name: "codebase"
     batch_size: 100      # Index 100 docs at a time
     parallel: true       # Parallel processing
     cache_embeddings: true  # Cache for re-indexing

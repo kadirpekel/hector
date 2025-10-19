@@ -615,26 +615,26 @@ type CommandToolsConfig struct {
 
 // Validate implements Config.Validate for CommandToolsConfig
 func (c *CommandToolsConfig) Validate() error {
-	if len(c.AllowedCommands) == 0 {
-		return fmt.Errorf("at least one allowed command is required")
+	// If sandboxing is disabled, require explicit allowed_commands for security
+	if !c.EnableSandboxing && len(c.AllowedCommands) == 0 {
+		return fmt.Errorf("allowed_commands is required when enable_sandboxing is false (security requirement)")
 	}
+	// If sandboxing is enabled (default), empty allowed_commands means "allow all" (safe)
 	return nil
 }
 
 // SetDefaults implements Config.SetDefaults for CommandToolsConfig
 func (c *CommandToolsConfig) SetDefaults() {
-	if len(c.AllowedCommands) == 0 {
-		c.AllowedCommands = []string{
-			"cat", "head", "tail", "ls", "find", "grep", "wc", "pwd",
-			"git", "npm", "go", "curl", "wget", "echo", "date",
-		}
-	}
+	// Note: Empty AllowedCommands with EnableSandboxing=true means "allow all" (default permissive)
+	// Only restrict commands when sandboxing is explicitly disabled
 	if c.WorkingDirectory == "" {
 		c.WorkingDirectory = "./"
 	}
 	if c.MaxExecutionTime == 0 {
 		c.MaxExecutionTime = 30 * time.Second
 	}
+	// EnableSandboxing defaults to true (sandboxing enabled by default for security)
+	// This is set in the zero-config creation, not here
 }
 
 // SearchToolConfig represents search tool configuration
@@ -676,7 +676,8 @@ func (c *SearchToolConfig) SetDefaults() {
 // FileWriterConfig represents file writer tool configuration
 type FileWriterConfig struct {
 	MaxFileSize       int      `yaml:"max_file_size"`
-	AllowedExtensions []string `yaml:"allowed_extensions"`
+	AllowedExtensions []string `yaml:"allowed_extensions"` // Whitelist: only these extensions allowed (empty = allow all)
+	DeniedExtensions  []string `yaml:"denied_extensions"`  // Blacklist: block these extensions
 	BackupOnOverwrite bool     `yaml:"backup_on_overwrite"`
 	WorkingDirectory  string   `yaml:"working_directory"`
 }
@@ -694,9 +695,8 @@ func (c *FileWriterConfig) SetDefaults() {
 	if c.MaxFileSize == 0 {
 		c.MaxFileSize = 1048576 // 1MB default
 	}
-	if len(c.AllowedExtensions) == 0 {
-		c.AllowedExtensions = []string{".go", ".yaml", ".md", ".json", ".txt", ".sh"}
-	}
+	// Note: Empty AllowedExtensions means "allow all" (default permissive behavior)
+	// Only set restrictions if explicitly configured by user
 	if c.WorkingDirectory == "" {
 		c.WorkingDirectory = "./"
 	}
@@ -791,8 +791,9 @@ type ToolConfig struct {
 
 	// File writer tool fields
 	MaxFileSize       int64    `yaml:"max_file_size,omitempty"`      // Max file size in bytes
-	AllowedExtensions []string `yaml:"allowed_extensions,omitempty"` // Allowed file extensions
-	ForbiddenPaths    []string `yaml:"forbidden_paths,omitempty"`    // Forbidden paths
+	AllowedExtensions []string `yaml:"allowed_extensions,omitempty"` // Whitelist: only these extensions (empty = allow all)
+	DeniedExtensions  []string `yaml:"denied_extensions,omitempty"`  // Blacklist: block these extensions
+	ForbiddenPaths    []string `yaml:"forbidden_paths,omitempty"`    // Forbidden file paths
 
 	// Search replace tool fields
 	MaxReplacements int  `yaml:"max_replacements,omitempty"` // Max replacements per operation
@@ -927,11 +928,37 @@ func (c *DocumentStoreConfig) SetDefaults() {
 	if c.Path == "" {
 		c.Path = "./"
 	}
+	// Include patterns: Default to supported file types (text + parseable binary documents)
+	// Hector can parse: .pdf, .docx, .xlsx + all text-based files
 	if len(c.IncludePatterns) == 0 {
-		c.IncludePatterns = []string{"*.md", "*.txt", "*.go", "*.py", "*.js", "*.ts", "*.yaml", "*.yml"}
+		c.IncludePatterns = []string{
+			// Documentation
+			"*.md", "*.markdown", "*.txt", "*.rst", "*.adoc",
+			// Code (common languages)
+			"*.go", "*.py", "*.js", "*.ts", "*.jsx", "*.tsx",
+			"*.java", "*.c", "*.cpp", "*.h", "*.hpp", "*.rs",
+			"*.rb", "*.php", "*.sh", "*.bash", "*.sql",
+			// Config files
+			"*.yaml", "*.yml", "*.json", "*.toml", "*.ini", "*.env", "*.conf",
+			// Web files
+			"*.html", "*.htm", "*.css", "*.xml", "*.svg",
+			// Binary documents (parseable)
+			"*.pdf", "*.docx", "*.xlsx",
+		}
 	}
+	// Exclude patterns: Binary/media files and dependency directories
 	if len(c.ExcludePatterns) == 0 {
-		c.ExcludePatterns = []string{"**/node_modules/**", "**/.git/**", "**/vendor/**", "**/__pycache__/**"}
+		c.ExcludePatterns = []string{
+			// Dependencies
+			"**/node_modules/**", "**/.git/**", "**/vendor/**", "**/__pycache__/**",
+			// Build artifacts
+			"**/dist/**", "**/build/**", "**/.next/**", "**/target/**",
+			// Binary/media files (cannot parse)
+			"*.exe", "*.dll", "*.so", "*.dylib", "*.bin",
+			"*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.ico", "*.webp",
+			"*.mp4", "*.avi", "*.mov", "*.mkv", "*.mp3", "*.wav",
+			"*.zip", "*.tar", "*.gz", "*.7z", "*.rar",
+		}
 	}
 	if c.MaxFileSize == 0 {
 		c.MaxFileSize = 10 * 1024 * 1024 // 10MB default

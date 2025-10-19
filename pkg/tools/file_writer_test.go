@@ -110,7 +110,7 @@ func TestFileWriterTool_ValidatePath(t *testing.T) {
 			name:    "path without extension",
 			path:    "test",
 			wantErr: true,
-			errMsg:  "file must have an extension",
+			errMsg:  "extensionless files not allowed",
 		},
 		{
 			name:    "disallowed extension",
@@ -264,6 +264,201 @@ func TestFileWriterTool_ErrorResult(t *testing.T) {
 	}
 	if result.ToolName != "write_file" {
 		t.Errorf("Expected tool name 'write_file', got: %s", result.ToolName)
+	}
+}
+
+func TestFileWriterTool_DefaultAllowAll(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "filewriter_default_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create tool with NO extension restrictions (default: allow all)
+	tool := NewFileWriterTool(&config.FileWriterConfig{
+		MaxFileSize:       1024,
+		AllowedExtensions: nil, // nil/empty = Allow ALL extensions (default)
+		BackupOnOverwrite: false,
+		WorkingDirectory:  tempDir,
+	})
+
+	tests := []struct {
+		name        string
+		path        string
+		content     string
+		wantSuccess bool
+	}{
+		{
+			name:        "python file allowed by default",
+			path:        "test.py",
+			content:     "print('hello')",
+			wantSuccess: true,
+		},
+		{
+			name:        "toml file allowed by default",
+			path:        "pyproject.toml",
+			content:     "[tool.poetry]\nname = \"test\"",
+			wantSuccess: true,
+		},
+		{
+			name:        "extensionless file (Makefile) allowed by default",
+			path:        "Makefile",
+			content:     "all:\n\techo test",
+			wantSuccess: true,
+		},
+		{
+			name:        "dockerfile allowed by default",
+			path:        "Dockerfile",
+			content:     "FROM alpine",
+			wantSuccess: true,
+		},
+		{
+			name:        ".mod file allowed by default",
+			path:        "go.mod",
+			content:     "module test",
+			wantSuccess: true,
+		},
+		{
+			name:        ".lock file allowed by default",
+			path:        "Cargo.lock",
+			content:     "# cargo lock",
+			wantSuccess: true,
+		},
+		{
+			name:        ".ini file allowed by default",
+			path:        "setup.cfg",
+			content:     "[metadata]\nname = test",
+			wantSuccess: true,
+		},
+		{
+			name:        ".exe file allowed by default",
+			path:        "test.exe",
+			content:     "binary",
+			wantSuccess: true,
+		},
+		{
+			name:        ".bat file allowed by default",
+			path:        "script.bat",
+			content:     "@echo off",
+			wantSuccess: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			args := map[string]interface{}{
+				"path":    tt.path,
+				"content": tt.content,
+				"backup":  false,
+			}
+
+			result, err := tool.Execute(ctx, args)
+
+			if tt.wantSuccess {
+				if err != nil {
+					t.Errorf("Execute() error = %v, want nil", err)
+					return
+				}
+				if !result.Success {
+					t.Errorf("Expected success=true, got: %v", result.Success)
+				}
+
+				// Verify file was actually created
+				filePath := filepath.Join(tempDir, tt.path)
+				if _, err := os.Stat(filePath); os.IsNotExist(err) {
+					t.Errorf("Expected file %s to be created", tt.path)
+				}
+			} else {
+				if err == nil {
+					t.Error("Execute() expected error, got nil")
+				}
+			}
+		})
+	}
+}
+
+func TestFileWriterTool_WhitelistRestrictions(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "filewriter_whitelist_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create tool with WHITELIST (only specific extensions allowed)
+	tool := NewFileWriterTool(&config.FileWriterConfig{
+		MaxFileSize:       1024,
+		AllowedExtensions: []string{".txt", ".md", ""}, // Only .txt, .md, and extensionless
+		BackupOnOverwrite: false,
+		WorkingDirectory:  tempDir,
+	})
+
+	tests := []struct {
+		name        string
+		path        string
+		wantSuccess bool
+		wantError   string
+	}{
+		{
+			name:        "allowed .txt file (in whitelist)",
+			path:        "test.txt",
+			wantSuccess: true,
+		},
+		{
+			name:        "allowed .md file (in whitelist)",
+			path:        "README.md",
+			wantSuccess: true,
+		},
+		{
+			name:        "allowed extensionless file (in whitelist)",
+			path:        "Makefile",
+			wantSuccess: true,
+		},
+		{
+			name:        "disallowed .py file (not in whitelist)",
+			path:        "test.py",
+			wantSuccess: false,
+			wantError:   "file extension .py not allowed",
+		},
+		{
+			name:        "disallowed .go file (not in whitelist)",
+			path:        "main.go",
+			wantSuccess: false,
+			wantError:   "file extension .go not allowed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			args := map[string]interface{}{
+				"path":    tt.path,
+				"content": "test content",
+				"backup":  false,
+			}
+
+			result, err := tool.Execute(ctx, args)
+
+			if tt.wantSuccess {
+				if err != nil {
+					t.Errorf("Execute() error = %v, want nil", err)
+					return
+				}
+				if !result.Success {
+					t.Errorf("Expected success=true, got: %v (error: %s)", result.Success, result.Error)
+				}
+			} else {
+				if err == nil {
+					t.Error("Execute() expected error, got nil")
+					return
+				}
+				if tt.wantError != "" && !strings.Contains(err.Error(), tt.wantError) {
+					t.Errorf("Expected error containing %q, got: %v", tt.wantError, err)
+				}
+			}
+		})
 	}
 }
 
