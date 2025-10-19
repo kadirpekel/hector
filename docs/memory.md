@@ -13,30 +13,34 @@ description: Dual-layer memory system for AI agents - working memory and long-te
 
 Hector implements a **cognitive memory architecture** inspired by human memory systems:
 
-```mermaid
-graph TB
-    subgraph "HECTOR MEMORY SYSTEM"
-        subgraph "WORKING MEMORY (Session-Scoped)"
-            WM1[Current conversation context]
-            WM2[Token-based management]
-            WM3[Automatic summarization]
-            WM4[Strategy: summary_buffer/buffer]
-        end
-        
-        subgraph "LONG-TERM MEMORY (Persistent)"
-            LTM1[Vector-based storage (Qdrant)]
-            LTM2[Semantic search & recall]
-            LTM3[Session-scoped persistence]
-            LTM4[Auto-recall or on-demand]
-        end
-        
-        WM1 -.-> LTM1
-        WM2 -.-> LTM2
-        WM3 -.-> LTM3
-        WM4 -.-> LTM4
-    end
 ```
-
+┌─────────────────────────────────────────────────────────────┐
+│                HECTOR MEMORY SYSTEM                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │            WORKING MEMORY (Session-Scoped)              │ │
+│  │  ┌─────────────────────────────────────────────────────┐ │ │
+│  │  │ • Current conversation context                       │ │ │
+│  │  │ • Token-based management                             │ │ │
+│  │  │ • Automatic summarization                           │ │ │
+│  │  │ • Strategy: summary_buffer/buffer                    │ │ │
+│  │  └─────────────────────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │            LONG-TERM MEMORY (Persistent)                 │ │
+│  │  ┌─────────────────────────────────────────────────────┐ │ │
+│  │  │ • Vector-based storage (Qdrant)                     │ │ │
+│  │  │ • Semantic search & recall                          │ │ │
+│  │  │ • Session-scoped persistence                        │ │ │
+│  │  │ • Auto-recall or on-demand                          │ │ │
+│  │  └─────────────────────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                                                             │
+│  Working Memory ←→ Long-Term Memory                          │
+└─────────────────────────────────────────────────────────────┘
+```
 **Two Memory Types:**
 
 1. **Working Memory** - Manages conversation history within sessions (like human short-term memory)
@@ -242,32 +246,34 @@ memory:
 
 ### Memory Flow
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant Agent
-    participant WorkingMemory
-    participant LongTermMemory
-    participant VectorDB
-    
-    User->>Agent: Send message
-    Agent->>WorkingMemory: Store message
-    WorkingMemory->>WorkingMemory: Check token limit
-    
-    alt Token limit exceeded
-        WorkingMemory->>WorkingMemory: Summarize old messages
-        WorkingMemory->>LongTermMemory: Store summary
-        LongTermMemory->>VectorDB: Embed and store
-    end
-    
-    Agent->>LongTermMemory: Recall relevant context
-    LongTermMemory->>VectorDB: Search similar memories
-    VectorDB->>LongTermMemory: Return relevant memories
-    LongTermMemory->>Agent: Provide context
-    
-    Agent->>User: Respond with context
 ```
-
+┌─────────────────────────────────────────────────────────────┐
+│                HECTOR MEMORY SYSTEM                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │            WORKING MEMORY (Session-Scoped)              │ │
+│  │  ┌─────────────────────────────────────────────────────┐ │ │
+│  │  │ • Current conversation context                       │ │ │
+│  │  │ • Token-based management                             │ │ │
+│  │  │ • Automatic summarization                           │ │ │
+│  │  │ • Strategy: summary_buffer/buffer                    │ │ │
+│  │  └─────────────────────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │            LONG-TERM MEMORY (Persistent)                 │ │
+│  │  ┌─────────────────────────────────────────────────────┐ │ │
+│  │  │ • Vector-based storage (Qdrant)                     │ │ │
+│  │  │ • Semantic search & recall                          │ │ │
+│  │  │ • Session-scoped persistence                        │ │ │
+│  │  │ • Auto-recall or on-demand                          │ │ │
+│  │  └─────────────────────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                                                             │
+│  Working Memory ←→ Long-Term Memory                          │
+└─────────────────────────────────────────────────────────────┘
+```
 ### Memory Operations
 
 1. :material-plus: **Store** - Save new information to memory

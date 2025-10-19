@@ -30,32 +30,32 @@ Hector is a **100% A2A Protocol Native** AI agent platform built from the ground
 
 Hector's architecture is built around A2A protocol types from the ground up:
 
-```mermaid
-graph TB
-    subgraph "A2A Protocol Layer"
-        PROTO[Protocol Buffers<br/>a2a.v1.*]
-    end
-    
-    subgraph "Transport Layer"
-        GRPC[gRPC Server<br/>Port 8080]
-        REST[REST Gateway<br/>Port 8081]
-        JSONRPC[JSON-RPC Server<br/>Port 8082]
-    end
-    
-    subgraph "Core Services"
-        AGENT[Agent Registry]
-        TASK[Task Manager]
-        AUTH[Auth Service]
-    end
-    
-    PROTO --> GRPC
-    PROTO --> REST
-    PROTO --> JSONRPC
-    GRPC --> AGENT
-    REST --> AGENT
-    JSONRPC --> AGENT
-    AGENT --> TASK
-    AGENT --> AUTH
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    A2A Protocol Layer                       │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │           Protocol Buffers (a2a.v1.*)                   │ │
+│  └─────────────────┬───────────────────────────────────────┘ │
+│                    │                                         │
+│                    ▼                                         │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │                   Transport Layer                       │ │
+│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
+│  │  │ gRPC Server │ REST Gateway│ JSON-RPC    │            │ │
+│  │  │ Port 8080   │ Port 8081   │ Server      │            │ │
+│  │  │             │             │ Port 8082   │            │ │
+│  │  └─────────────┴─────────────┴─────────────┘            │ │
+│  └─────────────────┬───────────────────────────────────────┘ │
+│                    │                                         │
+│                    ▼                                         │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │                   Core Services                          │ │
+│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
+│  │  │   Agent     │    Task     │    Auth     │            │ │
+│  │  │  Registry   │   Manager   │   Service    │            │ │
+│  │  └─────────────┴─────────────┴─────────────┘            │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 **Key Design Principles:**
@@ -443,15 +443,31 @@ func (s *A2AService) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.
 
 Hector implements the complete A2A task lifecycle:
 
-```mermaid
-graph TD
-    A[TASK_STATE_SUBMITTED] --> B[TASK_STATE_WORKING]
-    B --> C{TASK_STATE_COMPLETED}
-    B --> D{TASK_STATE_FAILED}
-    B --> E{TASK_STATE_CANCELLED}
-    B --> F{TASK_STATE_INPUT_REQUIRED}
-    B --> G{TASK_STATE_REJECTED}
-    B --> H{TASK_STATE_AUTH_REQUIRED}
+```
+    TASK_STATE_SUBMITTED
+            │
+            ▼
+    TASK_STATE_WORKING
+            │
+    ┌───────┼───────┐
+    │       │       │
+    ▼       ▼       ▼
+TASK_STATE_COMPLETED
+    │
+    ▼
+TASK_STATE_FAILED
+    │
+    ▼
+TASK_STATE_CANCELLED
+    │
+    ▼
+TASK_STATE_INPUT_REQUIRED
+    │
+    ▼
+TASK_STATE_REJECTED
+    │
+    ▼
+TASK_STATE_AUTH_REQUIRED
 ```
 
 **Task States (per A2A Spec):**

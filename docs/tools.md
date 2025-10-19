@@ -22,55 +22,36 @@ Hector provides a **powerful, extensible tool system** that gives agents capabil
 
 ### Architecture
 
-```mermaid
-graph TB
-    subgraph "Global Tool Registry"
-        REGISTRY[Tool Registry]
-    end
-    
-    subgraph "Tool Sources"
-        BUILTIN[Built-in Tools]
-        MCP[MCP Servers]
-        GRPC[gRPC Plugins]
-    end
-    
-    subgraph "Built-in Tools"
-        COMMAND[command]
-        WRITE[write_file]
-        SEARCH[search]
-        TODO[todo]
-        REPLACE[search_replace]
-    end
-    
-    subgraph "MCP Servers"
-        COMPOSIO[Composio]
-        MEM0[Mem0]
-        CUSTOM_MCP[Custom Servers]
-    end
-    
-    subgraph "gRPC Plugins"
-        CUSTOM_LLM[Custom LLMs]
-        CUSTOM_TOOLS[Custom Tools]
-    end
-    
-    REGISTRY --> BUILTIN
-    REGISTRY --> MCP
-    REGISTRY --> GRPC
-    
-    BUILTIN --> COMMAND
-    BUILTIN --> WRITE
-    BUILTIN --> SEARCH
-    BUILTIN --> TODO
-    BUILTIN --> REPLACE
-    
-    MCP --> COMPOSIO
-    MCP --> MEM0
-    MCP --> CUSTOM_MCP
-    
-    GRPC --> CUSTOM_LLM
-    GRPC --> CUSTOM_TOOLS
 ```
-
+┌─────────────────────────────────────────────────────────────┐
+│                  Global Tool Registry                        │
+├─────────────────────────────────────────────────────────────┤
+│  Tool Registry  →  Built-in Tools                            │
+│  Tool Registry  →  MCP Servers                               │
+│  Tool Registry  →  gRPC Plugins                              │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    Built-in Tools                             │
+├─────────────────────────────────────────────────────────────┤
+│  command  →  write_file  →  search  →  todo  →  search_replace │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+┌─────────────────────────────────────────────────────────────┐
+│                     MCP Servers                              │
+├─────────────────────────────────────────────────────────────┤
+│  Composio Server  →  GitHub, Slack, Notion                  │
+│  Mem0 Server      →  Vector Memory                          │
+│  Custom Servers    →  Custom Integrations                   │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    gRPC Plugins                              │
+├─────────────────────────────────────────────────────────────┤
+│  Custom LLMs      →  Custom Language Models                 │
+│  Custom Tools     →  Custom Capabilities                    │
+└─────────────────────────────────────────────────────────────┘
+```
 **Key Concepts:**
 - :material-wrench: **Tool** - A single capability (e.g., "execute_command")
 - :material-source: **Tool Source** - A provider of tools (local, MCP server, plugin)
@@ -245,37 +226,36 @@ Connect to 150+ external services via MCP servers.
 
 ### MCP Architecture
 
-```mermaid
-graph LR
-    subgraph "Hector Agent"
-        AGENT[Agent]
-        MCP_CLIENT[MCP Client]
-    end
-    
-    subgraph "MCP Servers"
-        COMPOSIO[Composio Server]
-        MEM0[Mem0 Server]
-        CUSTOM[Custom MCP Server]
-    end
-    
-    subgraph "External Services"
-        GITHUB[GitHub]
-        SLACK[Slack]
-        NOTION[Notion]
-        DATABASE[Database]
-    end
-    
-    AGENT --> MCP_CLIENT
-    MCP_CLIENT --> COMPOSIO
-    MCP_CLIENT --> MEM0
-    MCP_CLIENT --> CUSTOM
-    
-    COMPOSIO --> GITHUB
-    COMPOSIO --> SLACK
-    MEM0 --> NOTION
-    CUSTOM --> DATABASE
 ```
-
+┌─────────────────────────────────────────────────────────────┐
+│                  Global Tool Registry                        │
+├─────────────────────────────────────────────────────────────┤
+│  Tool Registry  →  Built-in Tools                            │
+│  Tool Registry  →  MCP Servers                               │
+│  Tool Registry  →  gRPC Plugins                              │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    Built-in Tools                             │
+├─────────────────────────────────────────────────────────────┤
+│  command  →  write_file  →  search  →  todo  →  search_replace │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+┌─────────────────────────────────────────────────────────────┐
+│                     MCP Servers                              │
+├─────────────────────────────────────────────────────────────┤
+│  Composio Server  →  GitHub, Slack, Notion                  │
+│  Mem0 Server      →  Vector Memory                          │
+│  Custom Servers    →  Custom Integrations                   │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    gRPC Plugins                              │
+├─────────────────────────────────────────────────────────────┤
+│  Custom LLMs      →  Custom Language Models                 │
+│  Custom Tools     →  Custom Capabilities                    │
+└─────────────────────────────────────────────────────────────┘
+```
 ### Popular MCP Servers
 
 === "Composio"
@@ -364,36 +344,36 @@ Build custom tools in any language that supports gRPC.
 
 ### Plugin Architecture
 
-```mermaid
-graph TB
-    subgraph "Hector Core"
-        RUNTIME[Runtime System]
-        PLUGIN_MGR[Plugin Manager]
-    end
-    
-    subgraph "gRPC Plugins"
-        LLM_PLUGIN[LLM Plugin]
-        TOOL_PLUGIN[Tool Plugin]
-        DB_PLUGIN[Database Plugin]
-    end
-    
-    subgraph "Plugin Interface"
-        GRPC[gRPC Interface]
-        PROTO[Protobuf Messages]
-    end
-    
-    RUNTIME --> PLUGIN_MGR
-    PLUGIN_MGR --> LLM_PLUGIN
-    PLUGIN_MGR --> TOOL_PLUGIN
-    PLUGIN_MGR --> DB_PLUGIN
-    
-    LLM_PLUGIN --> GRPC
-    TOOL_PLUGIN --> GRPC
-    DB_PLUGIN --> GRPC
-    
-    GRPC --> PROTO
 ```
-
+┌─────────────────────────────────────────────────────────────┐
+│                  Global Tool Registry                        │
+├─────────────────────────────────────────────────────────────┤
+│  Tool Registry  →  Built-in Tools                            │
+│  Tool Registry  →  MCP Servers                               │
+│  Tool Registry  →  gRPC Plugins                              │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    Built-in Tools                             │
+├─────────────────────────────────────────────────────────────┤
+│  command  →  write_file  →  search  →  todo  →  search_replace │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+┌─────────────────────────────────────────────────────────────┐
+│                     MCP Servers                              │
+├─────────────────────────────────────────────────────────────┤
+│  Composio Server  →  GitHub, Slack, Notion                  │
+│  Mem0 Server      →  Vector Memory                          │
+│  Custom Servers    →  Custom Integrations                   │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    gRPC Plugins                              │
+├─────────────────────────────────────────────────────────────┤
+│  Custom LLMs      →  Custom Language Models                 │
+│  Custom Tools     →  Custom Capabilities                    │
+└─────────────────────────────────────────────────────────────┘
+```
 ### Plugin Types
 
 | Type | Purpose | Interface | Example |

@@ -54,27 +54,24 @@ Hector is built **entirely** around the A2A Protocol, with zero abstraction laye
 
 ### Protocol-First Design
 
-```mermaid
-graph TB
-    subgraph "A2A Protocol Layer"
-        A2A[Agent-to-Agent Protocol]
-        PB[Protobuf Messages]
-        SPEC[A2A Specification]
-    end
-    
-    subgraph "Hector Implementation"
-        TRANSPORT[Transport Layer]
-        RUNTIME[Runtime System]
-        AGENTS[Agent Management]
-    end
-    
-    A2A --> TRANSPORT
-    PB --> TRANSPORT
-    SPEC --> RUNTIME
-    TRANSPORT --> RUNTIME
-    RUNTIME --> AGENTS
 ```
-
+┌─────────────────────────────────────────────────────────────┐
+│                    A2A Protocol Layer                       │
+│  ┌─────────────────┬─────────────────┬─────────────────┐    │
+│  │ Agent-to-Agent  │ Protobuf        │ A2A             │    │
+│  │ Protocol        │ Messages        │ Specification   │    │
+│  └─────────┬───────┴─────────┬───────┴─────────┬───────┘    │
+│            │                 │                 │            │
+│            ▼                 ▼                 ▼            │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │                Hector Implementation                     │ │
+│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
+│  │  │ Transport   │ Runtime     │ Agent       │            │ │
+│  │  │ Layer       │ System      │ Management  │            │ │
+│  │  └─────────────┴─────────────┴─────────────┘            │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 ### Core A2A Components
 
 | Component | Purpose | Implementation |
@@ -100,36 +97,24 @@ Hector supports multiple transport protocols from a single codebase:
 
 ### Transport Architecture
 
-```mermaid
-graph LR
-    subgraph "Client Applications"
-        CLI[Hector CLI]
-        WEB[Web App]
-        SDK[SDK/API]
-    end
-    
-    subgraph "Transport Layer"
-        GRPC[gRPC Native]
-        REST[REST Gateway]
-        JSONRPC[JSON-RPC]
-    end
-    
-    subgraph "Hector Server"
-        RUNTIME[Runtime System]
-        AGENTS[Agent Registry]
-    end
-    
-    CLI --> GRPC
-    WEB --> REST
-    SDK --> JSONRPC
-    
-    GRPC --> RUNTIME
-    REST --> RUNTIME
-    JSONRPC --> RUNTIME
-    
-    RUNTIME --> AGENTS
 ```
-
+┌─────────────────────────────────────────────────────────────┐
+│                    A2A Protocol Layer                       │
+│  ┌─────────────────┬─────────────────┬─────────────────┐    │
+│  │ Agent-to-Agent  │ Protobuf        │ A2A             │    │
+│  │ Protocol        │ Messages        │ Specification   │    │
+│  └─────────┬───────┴─────────┬───────┴─────────┬───────┘    │
+│            │                 │                 │            │
+│            ▼                 ▼                 ▼            │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │                Hector Implementation                     │ │
+│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
+│  │  │ Transport   │ Runtime     │ Agent       │            │ │
+│  │  │ Layer       │ System      │ Management  │            │ │
+│  │  └─────────────┴─────────────┴─────────────┘            │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 ### Transport Options
 
 === "gRPC (Native)"
@@ -223,40 +208,24 @@ Hector's server provides a robust, scalable platform for hosting AI agents:
 
 ### Server Components
 
-```mermaid
-graph TB
-    subgraph "Transport Layer"
-        GRPC[gRPC Server]
-        REST[REST Gateway]
-        JSONRPC[JSON-RPC Handler]
-    end
-    
-    subgraph "Core Services"
-        REGISTRY[Agent Registry]
-        RUNTIME[Runtime System]
-        AUTH[Authentication]
-        TASKS[Task Manager]
-    end
-    
-    subgraph "Agent Management"
-        FACTORY[Agent Factory]
-        MEMORY[Memory Manager]
-        REASONING[Reasoning Engine]
-    end
-    
-    GRPC --> REGISTRY
-    REST --> REGISTRY
-    JSONRPC --> REGISTRY
-    
-    REGISTRY --> RUNTIME
-    RUNTIME --> FACTORY
-    FACTORY --> MEMORY
-    FACTORY --> REASONING
-    
-    AUTH --> REGISTRY
-    TASKS --> RUNTIME
 ```
-
+┌─────────────────────────────────────────────────────────────┐
+│                    A2A Protocol Layer                       │
+│  ┌─────────────────┬─────────────────┬─────────────────┐    │
+│  │ Agent-to-Agent  │ Protobuf        │ A2A             │    │
+│  │ Protocol        │ Messages        │ Specification   │    │
+│  └─────────┬───────┴─────────┬───────┴─────────┬───────┘    │
+│            │                 │                 │            │
+│            ▼                 ▼                 ▼            │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │                Hector Implementation                     │ │
+│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
+│  │  │ Transport   │ Runtime     │ Agent       │            │ │
+│  │  │ Layer       │ System      │ Management  │            │ │
+│  │  └─────────────┴─────────────┴─────────────┘            │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 ### Server Features
 
 - **Multi-Transport** - gRPC, REST, JSON-RPC from single server
@@ -274,30 +243,24 @@ Hector's runtime system manages the execution of AI agents:
 
 ### Runtime Architecture
 
-```mermaid
-graph LR
-    subgraph "Runtime System"
-        MANAGER[Component Manager]
-        FACTORY[Agent Factory]
-        REGISTRY[Service Registry]
-    end
-    
-    subgraph "Agent Execution"
-        LLM[LLM Provider]
-        MEMORY[Memory Manager]
-        REASONING[Reasoning Engine]
-        TOOLS[Tool Registry]
-    end
-    
-    MANAGER --> FACTORY
-    FACTORY --> LLM
-    FACTORY --> MEMORY
-    FACTORY --> REASONING
-    FACTORY --> TOOLS
-    
-    REGISTRY --> MANAGER
 ```
-
+┌─────────────────────────────────────────────────────────────┐
+│                    A2A Protocol Layer                       │
+│  ┌─────────────────┬─────────────────┬─────────────────┐    │
+│  │ Agent-to-Agent  │ Protobuf        │ A2A             │    │
+│  │ Protocol        │ Messages        │ Specification   │    │
+│  └─────────┬───────┴─────────┬───────┴─────────┬───────┘    │
+│            │                 │                 │            │
+│            ▼                 ▼                 ▼            │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │                Hector Implementation                     │ │
+│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
+│  │  │ Transport   │ Runtime     │ Agent       │            │ │
+│  │  │ Layer       │ System      │ Management  │            │ │
+│  │  └─────────────┴─────────────┴─────────────┘            │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 ### Runtime Features
 
 - **Component Management** - Dynamic loading and configuration
@@ -395,25 +358,24 @@ Hector provides comprehensive security features:
 
 ### Authentication Architecture
 
-```mermaid
-graph TB
-    subgraph "Client"
-        TOKEN[JWT Token]
-        REQUEST[API Request]
-    end
-    
-    subgraph "Server"
-        MIDDLEWARE[Auth Middleware]
-        VALIDATOR[Token Validator]
-        REGISTRY[Agent Registry]
-    end
-    
-    TOKEN --> REQUEST
-    REQUEST --> MIDDLEWARE
-    MIDDLEWARE --> VALIDATOR
-    VALIDATOR --> REGISTRY
 ```
-
+┌─────────────────────────────────────────────────────────────┐
+│                    A2A Protocol Layer                       │
+│  ┌─────────────────┬─────────────────┬─────────────────┐    │
+│  │ Agent-to-Agent  │ Protobuf        │ A2A             │    │
+│  │ Protocol        │ Messages        │ Specification   │    │
+│  └─────────┬───────┴─────────┬───────┴─────────┬───────┘    │
+│            │                 │                 │            │
+│            ▼                 ▼                 ▼            │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │                Hector Implementation                     │ │
+│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
+│  │  │ Transport   │ Runtime     │ Agent       │            │ │
+│  │  │ Layer       │ System      │ Management  │            │ │
+│  │  └─────────────┴─────────────┴─────────────┘            │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 ### Security Features
 
 - **JWT Authentication** - Industry-standard token-based auth
@@ -449,36 +411,24 @@ Hector's plugin system allows extensive customization:
 
 ### Plugin Architecture
 
-```mermaid
-graph TB
-    subgraph "Hector Core"
-        RUNTIME[Runtime System]
-        REGISTRY[Service Registry]
-    end
-    
-    subgraph "Plugin Types"
-        LLM[LLM Plugins]
-        DB[Database Plugins]
-        TOOL[Tool Plugins]
-    end
-    
-    subgraph "Plugin Interface"
-        GRPC[gRPC Interface]
-        PROTO[Protobuf Messages]
-    end
-    
-    RUNTIME --> REGISTRY
-    REGISTRY --> LLM
-    REGISTRY --> DB
-    REGISTRY --> TOOL
-    
-    LLM --> GRPC
-    DB --> GRPC
-    TOOL --> GRPC
-    
-    GRPC --> PROTO
 ```
-
+┌─────────────────────────────────────────────────────────────┐
+│                    A2A Protocol Layer                       │
+│  ┌─────────────────┬─────────────────┬─────────────────┐    │
+│  │ Agent-to-Agent  │ Protobuf        │ A2A             │    │
+│  │ Protocol        │ Messages        │ Specification   │    │
+│  └─────────┬───────┴─────────┬───────┴─────────┬───────┘    │
+│            │                 │                 │            │
+│            ▼                 ▼                 ▼            │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │                Hector Implementation                     │ │
+│  │  ┌─────────────┬─────────────┬─────────────┐            │ │
+│  │  │ Transport   │ Runtime     │ Agent       │            │ │
+│  │  │ Layer       │ System      │ Management  │            │ │
+│  │  └─────────────┴─────────────┴─────────────┘            │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 ### Plugin Types
 
 | Type | Purpose | Interface |
