@@ -53,13 +53,9 @@ Hector provides a **powerful, extensible tool system** that gives agents capabil
 └─────────────────────────────────────────────────────────────┘
 ```
 **Key Concepts:**
-- :material-wrench: **Tool** - A single capability (e.g., "execute_command")
-- :material-source: **Tool Source** - A provider of tools (local, MCP server, plugin)
-- :material-registry: **Tool Registry** - Centralized discovery and execution
-
----
-
-## Built-in Tools
+- **Tool** - A single capability (e.g., "execute_command")
+- **Tool Source** - A provider of tools (local, MCP server, plugin)
+- **Tool Registry** - Centralized discovery and execution## Built-in Tools
 
 Hector comes with 5 powerful built-in tools ready to use:
 
@@ -86,10 +82,10 @@ tools:
 ```
 
 **Security Features:**
-- :material-shield-check: **Command Whitelist** - Only allowed commands can be executed
-- :material-timer: **Execution Timeout** - Prevents hanging processes
-- :material-folder: **Working Directory** - Restricts execution to specific directories
-- :material-security: **Sandboxing** - Isolated execution environment
+- **Command Whitelist** - Only allowed commands can be executed
+- **Execution Timeout** - Prevents hanging processes
+- **Working Directory** - Restricts execution to specific directories
+- **Sandboxing** - Isolated execution environment
 
 **Agent Usage:**
 ```
@@ -117,10 +113,10 @@ tools:
 ```
 
 **Security Features:**
-- :material-folder-lock: **Path Restrictions** - Only allowed paths can be written to
-- :material-file-size: **Size Limits** - Prevents large file creation
-- :material-folder-plus: **Directory Creation** - Can create directories if needed
-- :material-backup: **Backup Support** - Automatic backups before modification
+- **Path Restrictions** - Only allowed paths can be written to
+- **Size Limits** - Prevents large file creation
+- **Directory Creation** - Can create directories if needed
+- **Backup Support** - Automatic backups before modification
 
 **Agent Usage:**
 ```
@@ -147,10 +143,10 @@ tools:
 ```
 
 **Features:**
-- :material-magnify: **Pattern Matching** - Support for regex patterns
-- :material-counter: **Replacement Limits** - Prevents excessive replacements
-- :material-backup: **Automatic Backup** - Creates backups before changes
-- :material-preview: **Preview Mode** - Show changes before applying
+- **Pattern Matching** - Support for regex patterns
+- **Replacement Limits** - Prevents excessive replacements
+- **Automatic Backup** - Creates backups before changes
+- **Preview Mode** - Show changes before applying
 
 **Agent Usage:**
 ```
@@ -174,10 +170,10 @@ tools:
 ```
 
 **Features:**
-- :material-check: **Task Status** - Track pending, in_progress, completed tasks
-- :material-counter: **Task Limits** - Prevent excessive task creation
-- :material-broom: **Auto Cleanup** - Remove completed tasks automatically
-- :material-history: **Task History** - Keep track of task changes
+- **Task Status** - Track pending, in_progress, completed tasks
+- **Task Limits** - Prevent excessive task creation
+- **Auto Cleanup** - Remove completed tasks automatically
+- **Task History** - Keep track of task changes
 
 **Agent Usage:**
 ```
@@ -205,10 +201,10 @@ document_stores:
 ```
 
 **Features:**
-- :material-magnify: **Semantic Search** - Vector-based similarity search
-- :material-database: **Multi-Store** - Search across multiple document stores
-- :material-chart-line: **Relevance Scoring** - Rank results by relevance
-- :material-citation: **Source Citation** - Provide source references
+- **Semantic Search** - Vector-based similarity search
+- **Multi-Store** - Search across multiple document stores
+- **Relevance Scoring** - Rank results by relevance
+- **Source Citation** - Provide source references
 
 **Agent Usage:**
 ```
@@ -220,7 +216,7 @@ Agent: Based on the documentation, here's how to use the authentication module: 
 
 ---
 
-## 🔌 MCP (Model Context Protocol) Integration
+## MCP (Model Context Protocol) Integration
 
 Connect to 150+ external services via MCP servers.
 
@@ -274,11 +270,11 @@ Connect to 150+ external services via MCP servers.
     ```
     
     **Available Tools:**
-    - :material-github: **GitHub** - Create issues, PRs, manage repos
-    - :material-slack: **Slack** - Send messages, manage channels
-    - :material-notebook: **Notion** - Create pages, databases
-    - :material-google: **Google** - Gmail, Calendar, Drive
-    - :material-microsoft: **Microsoft** - Outlook, Teams, SharePoint
+    - **GitHub** - Create issues, PRs, manage repos
+    - **Slack** - Send messages, manage channels
+    - **Notion** - Create pages, databases
+    - **Google** - Gmail, Calendar, Drive
+    - **Microsoft** - Outlook, Teams, SharePoint
 
 === "Mem0"
     ```yaml
@@ -296,9 +292,9 @@ Connect to 150+ external services via MCP servers.
     ```
     
     **Features:**
-    - :material-database: **Vector Memory** - Store and retrieve memories
-    - :material-magnify: **Semantic Search** - Find relevant memories
-    - :material-delete: **Memory Management** - Update and delete memories
+    - **Vector Memory** - Store and retrieve memories
+    - **Semantic Search** - Find relevant memories
+    - **Memory Management** - Update and delete memories
 
 === "Custom MCP Server"
     ```yaml
@@ -467,10 +463,10 @@ plugins:
 
 Agents automatically select appropriate tools based on:
 
-- :material-brain: **Task Analysis** - Understanding what needs to be done
-- :material-tools: **Tool Capabilities** - Matching tools to requirements
-- :material-shield-check: **Security Context** - Respecting tool permissions
-- :material-history: **Previous Experience** - Learning from past tool usage
+- **Task Analysis** - Understanding what needs to be done
+- **Tool Capabilities** - Matching tools to requirements
+- **Security Context** - Respecting tool permissions
+- **Previous Experience** - Learning from past tool usage
 
 ### Tool Chaining
 
@@ -520,17 +516,17 @@ tools:
 
 ---
 
-## 🔒 Security Considerations
+## Security Considerations
 
 ### Tool Security Model
 
 Hector implements a comprehensive security model for tools:
 
-- :material-shield-check: **Permission-Based** - Tools respect agent permissions
-- :material-folder-lock: **Path Restrictions** - File operations restricted to allowed paths
-- :material-timer: **Execution Limits** - Timeouts prevent hanging processes
-- :material-counter: **Resource Limits** - Size and count limits prevent abuse
-- :material-security: **Sandboxing** - Isolated execution environments
+- **Permission-Based** - Tools respect agent permissions
+- **Path Restrictions** - File operations restricted to allowed paths
+- **Execution Limits** - Timeouts prevent hanging processes
+- **Resource Limits** - Size and count limits prevent abuse
+- **Sandboxing** - Isolated execution environments
 
 ### Security Configuration
 
@@ -571,10 +567,10 @@ security:
 
 ### Performance Optimization
 
-- :material-speedometer: **Parallel Execution** - Multiple tools can run simultaneously
-- :material-cache: **Result Caching** - Cache tool results for repeated operations
-- :material-timer: **Timeout Management** - Prevent tools from hanging
-- :material-chart-line: **Performance Monitoring** - Track tool execution metrics
+- **Parallel Execution** - Multiple tools can run simultaneously
+- **Result Caching** - Cache tool results for repeated operations
+- **Timeout Management** - Prevent tools from hanging
+- **Performance Monitoring** - Track tool execution metrics
 
 ### Performance Configuration
 
@@ -715,10 +711,3 @@ tools:
 
 ---
 
-## Related Documentation
-
-- [Building Agents](agents.md) - Learn how to build AI agents
-- [Configuration Reference](configuration.md) - Complete configuration guide
-- [Architecture](architecture.md) - Understand Hector's architecture
-- [Plugin Development](plugins.md) - Build custom plugins
-- [Memory Management](memory.md) - Memory system configuration

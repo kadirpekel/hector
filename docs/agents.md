@@ -79,17 +79,6 @@ llms:
 
 ---
 
-## Table of Contents
-
-- [Agent Anatomy](#agent-anatomy)
-- [Prompt Customization](#prompt-customization)
-- [Reasoning Strategies](#reasoning-strategies)
-- [Built-in Tools](#built-in-tools)
-- [Document Stores & RAG](#document-stores-rag)
-- [Sessions & Streaming](#sessions-streaming)
-- [Plugin System](#plugin-system)
-- [Real-World Examples](#real-world-examples)
-
 ---
 
 ## Agent Anatomy
@@ -137,10 +126,10 @@ llms:
 ```
 
 **Supported Providers:**
-- :material-openai: **OpenAI** (GPT-4o, GPT-4, GPT-3.5)
-- :material-anthropic: **Anthropic** (Claude 3.5 Sonnet, Claude 3 Opus/Haiku)
-- :material-google: **Google Gemini** (Gemini 2.0 Flash, Gemini 1.5 Pro/Flash)
-- :material-cog: **Custom** via gRPC plugins
+- **OpenAI** (GPT-4o, GPT-4, GPT-3.5)
+- **Anthropic** (Claude 3.5 Sonnet, Claude 3 Opus/Haiku)
+- **Google Gemini** (Gemini 2.0 Flash, Gemini 1.5 Pro/Flash)
+- **Custom** via gRPC plugins
 
 ### 2. **Prompt (Optional but Recommended)**
 
@@ -664,9 +653,9 @@ Extend Hector with custom LLMs, databases, or tools via gRPC plugins.
 
 ### Plugin Types
 
-- :material-brain: **LLM Plugins** - Add custom language models
-- :material-database: **Database Plugins** - Add custom vector databases
-- :material-wrench: **Tool Plugins** - Add custom tools/capabilities
+- **LLM Plugins** - Add custom language models
+- **Database Plugins** - Add custom vector databases
+- **Tool Plugins** - Add custom tools/capabilities
 
 ### Example: Custom LLM Plugin
 

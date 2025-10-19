@@ -5,36 +5,10 @@ description: Complete architectural guide for Hector AI Agent Platform
 
 # Hector Architecture
 
-**100% A2A Protocol Native • Multi-Transport • Production-Ready**
+**100% A2A Protocol Native - Multi-Transport - Production-Ready**
 
 ---
 
-## Table of Contents
-
-- [Overview](#overview)
-- [A2A Protocol Native Architecture](#a2a-protocol-native-architecture)
-- [Transport Layer](#transport-layer)
-- [Client Architecture](#client-architecture)
-- [Server Architecture](#server-architecture)
-- [Runtime System](#runtime-system)
-- [Core Components](#core-components)
-- [Multi-Agent Orchestration](#multi-agent-orchestration)
-- [Security & Authentication](#security-authentication)
-- [Extension Points](#extension-points)
-
----
-
-## Overview
-
-Hector is a **100% A2A Protocol Native** AI agent platform built from the ground up with the [Agent-to-Agent (A2A) Protocol](https://a2a-protocol.org/) at its core.
-
-### Design Principles
-
-1. **Protocol Native** - Every component speaks A2A natively using protobuf types - zero abstraction layers
-2. **Multi-Transport** - gRPC (native), REST (grpc-gateway), JSON-RPC (custom adapter)
-3. **Clean Architecture** - Clear separation of concerns (transport, runtime, client, server, agents)
-4. **Interface-Based** - Dependency injection and strategy patterns throughout
-5. **Production-Ready** - Authentication, discovery, streaming, task management
 
 ### Key Features
 
@@ -569,10 +543,3 @@ Hector supports smooth migration and upgrades:
 
 ---
 
-## Related Documentation
-
-- [Building Agents](agents.md) - Learn how to build AI agents
-- [Configuration Reference](configuration.md) - Complete configuration guide
-- [Tools & Extensions](tools.md) - Built-in tools and custom extensions
-- [Memory Management](memory.md) - Memory system configuration
-- [Plugin Development](plugins.md) - Build custom plugins

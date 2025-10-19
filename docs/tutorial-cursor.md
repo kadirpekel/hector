@@ -253,22 +253,22 @@ The reasoning loop follows this pattern:
 │  User Request                        │
 │  "Add tests for auth module"         │
 └──────────────────────────────────────┘
-              ↓
+              ->
     ┌─────────────────┐
     │  LLM generates  │ ←──┐
     │  response +     │    │
     │  tool calls     │    │
     └─────────────────┘    │
-              ↓            │
+              ->            │
     ┌─────────────────┐    │
     │  Execute tools  │    │
     │  in parallel    │    │
     └─────────────────┘    │
-              ↓            │
+              ->            │
        More tools? ─────Yes─┘
               │
              No
-              ↓
+              ->
     ┌─────────────────┐
     │  Return result  │
     │  to user        │
@@ -304,20 +304,20 @@ The reasoning loop follows this pattern:
 ┌─────────────────────────────────────┐
 │ Query: "authentication flow"        │
 └─────────────────────────────────────┘
-              ↓
+              ->
 ┌─────────────────────────────────────┐
 │ Convert to vector embedding         │
 └─────────────────────────────────────┘
-              ↓
+              ->
 ┌─────────────────────────────────────┐
 │ Find similar vectors in database    │
 └─────────────────────────────────────┘
-              ↓
+              ->
 ┌─────────────────────────────────────┐
 │ Return top matches:                 │
-│  • auth.go:50-80 (95% match)       │
-│  • middleware.go:120-150 (89%)     │
-│  • user.go:200-230 (84%)           │
+│  - auth.go:50-80 (95% match)       │
+│  - middleware.go:120-150 (89%)     │
+│  - user.go:200-230 (84%)           │
 └─────────────────────────────────────┘
 ```
 

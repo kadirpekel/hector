@@ -139,9 +139,9 @@ agents:
 
 ```
 Hector Orchestrator
-    ↓ agent_call tool
+    -> agent_call tool
 AgentRegistry (a2a.Agent interface)
-    ↓
+    ->
     ├─ Native Agents (in-process, fast)
     │  └─ agent.Agent implements a2a.Agent
     │
@@ -275,7 +275,7 @@ func main() {
     agentCallTool := agent.NewAgentCallTool(registry)
     // ... register tool with component manager ...
     
-    fmt.Println("✅ External agent registered and ready!")
+    fmt.Println("  External agent registered and ready!")
 }
 ```
 
@@ -439,7 +439,7 @@ result, _ := tool.Execute(ctx, map[string]interface{}{
     "task":  "test task",
 })
 
-// ✅ Works! External agents fully supported!
+//   Works! External agents fully supported!
 ```
 
 ---
@@ -494,4 +494,4 @@ result, _ := tool.Execute(ctx, map[string]interface{}{
    └─ User gets unified response
 ```
 
-**All automatic, all transparent!** ✅
+**All automatic, all transparent!**  

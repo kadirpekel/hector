@@ -5,7 +5,7 @@ description: 100% A2A Protocol specification compliance documentation with proof
 
 # Hector A2A Protocol Compliance Documentation
 
-**100% Native A2A Protocol Implementation • Full Specification Compliance • Production Ready**
+**100% Native A2A Protocol Implementation - Full Specification Compliance - Production Ready**
 
 ---
 
@@ -72,7 +72,7 @@ Hector implements all three A2A-specified transport protocols with full complian
 
 ### 1. gRPC Transport (Port 8080)
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 ```protobuf
 service A2AService {
@@ -97,7 +97,7 @@ service A2AService {
 
 ### 2. HTTP+JSON/REST Transport (Port 8081)
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 **Auto-generated from protobuf using grpc-gateway:**
 
@@ -119,7 +119,7 @@ curl -N -H "Accept: text/event-stream" \
 
 ### 3. JSON-RPC 2.0 Transport (Port 8082)
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 ```json
 {
@@ -283,7 +283,7 @@ func (s *A2AService) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) 
 
 ### RFC 8615 Well-Known Endpoints
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 Hector implements standard discovery endpoints per RFC 8615:
 
@@ -324,7 +324,7 @@ func (s *A2AService) GetServiceAgentCard() *pb.AgentCard {
 
 ### Agent Card Specification
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 All agents expose full AgentCard information:
 
@@ -368,7 +368,7 @@ All agents expose full AgentCard information:
 
 ### Server-Sent Events (SSE)
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 REST endpoints use SSE per A2A specification:
 
@@ -412,7 +412,7 @@ func (h *RESTHandler) handleStreamingMessage(w http.ResponseWriter, r *http.Requ
 
 ### gRPC Streaming
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 Native gRPC streaming with bidirectional support:
 
@@ -439,7 +439,7 @@ func (s *A2AService) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.
 
 ### Task Lifecycle
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 Hector implements the complete A2A task lifecycle:
 
@@ -510,7 +510,7 @@ type TaskStatus struct {
 
 ### JWT Authentication
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 Hector implements JWT-based authentication per A2A specification:
 
@@ -559,7 +559,7 @@ func (a *AuthService) ValidateToken(token string) (*Claims, error) {
 
 ### Security Schemes
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 Agent cards declare supported security schemes:
 
@@ -585,7 +585,7 @@ Agent cards declare supported security schemes:
 
 ### HTTP Status Codes
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 REST endpoints return appropriate HTTP status codes:
 
@@ -608,7 +608,7 @@ func (h *RESTHandler) handleError(w http.ResponseWriter, err error) {
 
 ### gRPC Status Codes
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 gRPC endpoints return appropriate status codes:
 
@@ -629,7 +629,7 @@ func (s *A2AService) SendMessage(ctx context.Context, req *pb.SendMessageRequest
 
 ### JSON-RPC Error Codes
 
-**Compliance:** ✅ **100% Compliant**
+**Compliance:**   **100% Compliant**
 
 JSON-RPC endpoints return appropriate error codes:
 
@@ -654,7 +654,7 @@ JSON-RPC endpoints return appropriate error codes:
 
 ### Interface Implementation
 
-**Status:** 🔄 **Interface Complete, Webhook Delivery Pending**
+**Status:**   **Interface Complete, Webhook Delivery Pending**
 
 Hector implements the A2A push notification interface:
 
@@ -678,10 +678,10 @@ func (s *A2AService) CreateTaskPushNotificationConfig(ctx context.Context, req *
 ```
 
 **Current Status:**
-- ✅ **Interface implemented** - All A2A push notification methods
-- ✅ **Configuration storage** - Store webhook configs
-- 🔄 **Webhook delivery** - Pending implementation
-- ✅ **Event filtering** - Filter by event types
+-   **Interface implemented** - All A2A push notification methods
+-   **Configuration storage** - Store webhook configs
+-   **Webhook delivery** - Pending implementation
+-   **Event filtering** - Filter by event types
 
 **Files:**
 - `pkg/a2a/server/a2a_service.go:*TaskPushNotification*()`

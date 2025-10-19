@@ -7,22 +7,6 @@ description: Complete YAML configuration reference for Hector AI Agent Platform
 
 Complete configuration reference for Hector AI Agent Platform.
 
-## 📋 Table of Contents
-
-- [Configuration Structure](#configuration-structure)
-- [Agents](#agents)
-- [LLM Providers](#llm-providers)
-- [Tools](#tools)
-- [Memory Configuration](#memory-configuration)
-- [Reasoning Configuration](#reasoning-configuration)
-- [Document Stores](#document-stores)
-- [Database Providers](#database-providers)
-- [Embedder Providers](#embedder-providers)
-- [Security Configuration](#security-configuration)
-- [Task Configuration](#task-configuration)
-- [Global Configuration](#global-configuration)
-- [Plugins](#plugins)
-
 ---
 
 ## Configuration Structure
@@ -80,9 +64,9 @@ agents:
 
 #### Visibility Levels
 
-- :material-earth: **`public`** - Discoverable via `/agents` API and callable by anyone
-- :material-account-group: **`internal`** - Not listed in discovery but callable if agent ID known
-- :material-lock: **`private`** - Only callable by local orchestrators, not via external API
+- **`public`** - Discoverable via `/agents` API and callable by anyone
+- **`internal`** - Not listed in discovery but callable if agent ID known
+- **`private`** - Only callable by local orchestrators, not via external API
 
 #### Example: Minimal Native Agent
 
@@ -191,7 +175,7 @@ agents:
 
 ---
 
-## 🧠 LLM Providers
+## LLM Providers
 
 Configure language model providers for your agents.
 
@@ -337,7 +321,7 @@ tools:
 
 ---
 
-## 🧠 Memory Configuration
+## Memory Configuration
 
 Configure memory strategies for conversation context and long-term knowledge.
 
@@ -401,7 +385,7 @@ memory:
 
 ---
 
-## 🧠 Reasoning Configuration
+## Reasoning Configuration
 
 Configure reasoning strategies for agent decision-making.
 
@@ -533,7 +517,7 @@ databases:
 
 ---
 
-## 🔤 Embedder Providers
+## Embedder Providers
 
 Configure embedding providers for text vectorization.
 
@@ -567,7 +551,7 @@ embedders:
 
 ---
 
-## 🔐 Security Configuration
+## Security Configuration
 
 Configure authentication and security settings.
 
@@ -616,7 +600,7 @@ auth:
 
 ---
 
-## 📋 Task Configuration
+## Task Configuration
 
 Configure task management and processing.
 
@@ -643,7 +627,7 @@ tasks:
 
 ---
 
-## 🌐 Global Configuration
+## Global Configuration
 
 Configure global server settings.
 
@@ -674,7 +658,7 @@ global:
 
 ---
 
-## 🔌 Plugins
+## Plugins
 
 Configure custom plugins for extending Hector functionality.
 
@@ -891,11 +875,11 @@ Hector validates configuration on startup:
 
 ### Validation Checks
 
-- :material-check: **Required Fields** - All required fields are present
-- :material-check: **Type Validation** - Field types match expected types
-- :material-check: **Reference Validation** - All references are valid
-- :material-check: **Plugin Validation** - Plugin configurations are valid
-- :material-check: **Security Validation** - Security settings are valid
+- **Required Fields** - All required fields are present
+- **Type Validation** - Field types match expected types
+- **Reference Validation** - All references are valid
+- **Plugin Validation** - Plugin configurations are valid
+- **Security Validation** - Security settings are valid
 
 ### Common Validation Errors
 
@@ -908,10 +892,3 @@ Hector validates configuration on startup:
 
 ---
 
-## Related Documentation
-
-- [Building Agents](agents.md) - Learn how to build AI agents
-- [Architecture](architecture.md) - Understand Hector's architecture
-- [Tools & Extensions](tools.md) - Built-in tools and custom extensions
-- [Memory Management](memory.md) - Memory system configuration
-- [Plugin Development](plugins.md) - Build custom plugins

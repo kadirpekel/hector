@@ -569,10 +569,3 @@ MCP servers are the perfect way to extend Hector with custom capabilities. They'
 - **Language flexible** - Python, TypeScript, Go, Rust, etc.
 - **Production ready** - Built-in error handling and monitoring
 
-**Next Steps:**
-1. **Start simple** - Build a basic tool first
-2. **Add complexity** - Gradually add more features
-3. **Share with community** - Publish useful tools
-4. **Integrate with workflows** - Use in multi-agent systems
-
-The complete example is available at: [`examples/mcp-servers/`](https://github.com/kadirpekel/hector/tree/main/examples/mcp-servers)

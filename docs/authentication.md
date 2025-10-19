@@ -55,8 +55,8 @@ agents:
 ./hector serve --config hector-config.yaml
 
 # Output:
-# 🔒 Authentication: ENABLED
-# ✅ JWT validator initialized
+# Authentication: ENABLED
+# JWT validator initialized
 #    Provider: https://your-auth-provider.com
 ```
 
@@ -98,18 +98,18 @@ curl http://localhost:8080/agents/secure_agent/tasks \
 
 ```
 1. User logs in at Auth Provider (Auth0/Keycloak/etc.)
-   ↓
+   ->
 2. Auth Provider issues JWT token
-   ↓
+   ->
 3. User sends request to Hector:
    Authorization: Bearer <token>
-   ↓
+   ->
 4. Hector validates token:
-   • Fetches JWKS from provider (cached)
-   • Verifies JWT signature
-   • Checks expiration
-   • Extracts claims (user, role, tenant)
-   ↓
+   - Fetches JWKS from provider (cached)
+   - Verifies JWT signature
+   - Checks expiration
+   - Extracts claims (user, role, tenant)
+   ->
 5. If valid: Process request
    If invalid: Return 401 Unauthorized
 ```

@@ -3,7 +3,7 @@ title: Plugin Development
 description: Build custom LLMs, databases, and tools via gRPC plugins
 ---
 
-# 🔌 Plugin Development Guide
+# Plugin Development Guide
 
 ## Overview
 
@@ -13,32 +13,32 @@ Hector's plugin system allows you to extend core functionality without modifying
 
 ### Key Features
 
-- :material-language-multiple: **Language Agnostic** - Write in Go, Python, Rust, JavaScript, or any language with gRPC support
-- :material-security: **Process Isolation** - Plugins run in separate processes for stability and security  
-- :material-speedometer: **gRPC Protocol** - Industry-standard RPC framework for high performance
-- :material-magnify: **Auto-Discovery** - Plugins can be automatically discovered from configured paths
-- :material-refresh: **Hot-Reloadable** - Plugins can be updated without restarting Hector (future)
+- **Language Agnostic** - Write in Go, Python, Rust, JavaScript, or any language with gRPC support
+- **Process Isolation** - Plugins run in separate processes for stability and security  
+- **gRPC Protocol** - Industry-standard RPC framework for high performance
+- **Auto-Discovery** - Plugins can be automatically discovered from configured paths
+- **Hot-Reloadable** - Plugins can be updated without restarting Hector (future)
 
 ### Plugin Types
 
 | Type | Purpose | Interface |
 |------|---------|-----------|
-| :material-brain: **`llm_provider`** | Custom LLM integrations | Generate text, streaming, tool calling |
-| :material-database: **`database_provider`** | Vector database backends | Store/search embeddings, collections |
-| :material-vector: **`embedder_provider`** | Embedding generation | Convert text to vectors |
-| :material-wrench: **`tool_provider`** | Custom tools | Execute domain-specific operations |
-| :material-cog: **`reasoning_strategy`** | Reasoning approaches | Custom agent reasoning patterns |
+| **`llm_provider`** | Custom LLM integrations | Generate text, streaming, tool calling |
+| **`database_provider`** | Vector database backends | Store/search embeddings, collections |
+| **`embedder_provider`** | Embedding generation | Convert text to vectors |
+| **`tool_provider`** | Custom tools | Execute domain-specific operations |
+| **`reasoning_strategy`** | Reasoning approaches | Custom agent reasoning patterns |
 
 ### Why gRPC Only?
 
 Hector uses gRPC exclusively for plugins (not Go's native plugin system) because:
 
-- ✅ **Cross-Language** - Write plugins in any language  
-- ✅ **Process Isolation** - Plugin crashes don't affect Hector  
-- ✅ **Production-Ready** - Used by Terraform, Vault, Consul  
-- ✅ **Cross-Platform** - Works on Windows, macOS, Linux  
-- ✅ **Version Independent** - No Go version matching required  
-- ✅ **Network Transparent** - Plugins can run locally or remotely  
+-   **Cross-Language** - Write plugins in any language  
+-   **Process Isolation** - Plugin crashes don't affect Hector  
+-   **Production-Ready** - Used by Terraform, Vault, Consul  
+-   **Cross-Platform** - Works on Windows, macOS, Linux  
+-   **Version Independent** - No Go version matching required  
+-   **Network Transparent** - Plugins can run locally or remotely  
 
 ---
 
@@ -46,12 +46,11 @@ Hector uses gRPC exclusively for plugins (not Go's native plugin system) because
 
 ### Prerequisites
 
-- :material-language-go: **Go 1.24+** (for building Hector)
-- :material-cog: **gRPC** - Any language with gRPC support
-- :material-download: **Protobuf** - Protocol buffer compiler
-- :material-code-tags: **IDE** - Your preferred development environment
+- **Go 1.24+** (for building Hector)
+- **gRPC** - Any language with gRPC support
+- **Protobuf** - Protocol buffer compiler
+- **IDE** - Your preferred development environment
 
-### Plugin Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -82,7 +81,7 @@ Hector uses gRPC exclusively for plugins (not Go's native plugin system) because
 ```
 ---
 
-## 🧠 LLM Provider Plugin
+## LLM Provider Plugin
 
 Create custom language model integrations.
 
@@ -391,7 +390,7 @@ databases:
 
 ---
 
-## 🔤 Embedder Provider Plugin
+## Embedder Provider Plugin
 
 Create custom embedding generation services.
 
@@ -646,7 +645,7 @@ tools:
 
 ---
 
-## 🧠 Reasoning Strategy Plugin
+## Reasoning Strategy Plugin
 
 Create custom reasoning strategies for agent decision-making.
 
@@ -879,7 +878,7 @@ hector call my_agent "Hello" --llm custom
 
 ---
 
-## 🧪 Plugin Testing
+## Plugin Testing
 
 ### Unit Testing
 
@@ -945,7 +944,7 @@ hector call test_agent "Test message"
 
 ---
 
-## 📦 Plugin Packaging
+## Plugin Packaging
 
 ### Docker Packaging
 
@@ -977,15 +976,15 @@ tar -czf my-plugin-v1.0.0.tar.gz my-plugin-*
 
 ---
 
-## 🔒 Plugin Security
+## Plugin Security
 
 ### Security Best Practices
 
-- :material-shield-check: **Input Validation** - Validate all inputs
-- :material-lock: **Authentication** - Implement proper authentication
-- :material-timer: **Timeouts** - Set appropriate timeouts
-- :material-security: **Sandboxing** - Run in isolated environments
-- :material-log: **Logging** - Log security events
+- **Input Validation** - Validate all inputs
+- **Authentication** - Implement proper authentication
+- **Timeouts** - Set appropriate timeouts
+- **Sandboxing** - Run in isolated environments
+- **Logging** - Log security events
 
 ### Security Configuration
 
@@ -1041,18 +1040,11 @@ plugins:
 
 ### Plugin Metrics
 
-- :material-chart-line: **Request Count** - Number of requests processed
-- :material-timer: **Response Time** - Average response time
-- :material-alert: **Error Rate** - Percentage of failed requests
-- :material-memory: **Memory Usage** - Memory consumption
-- :material-cpu: **CPU Usage** - CPU utilization
+- **Request Count** - Number of requests processed
+- **Response Time** - Average response time
+- **Error Rate** - Percentage of failed requests
+- **Memory Usage** - Memory consumption
+- **CPU Usage** - CPU utilization
 
 ---
 
-## Related Documentation
-
-- [Building Agents](agents.md) - Learn how to build AI agents
-- [Configuration Reference](configuration.md) - Complete configuration guide
-- [Architecture](architecture.md) - Understand Hector's architecture
-- [Tools & Extensions](tools.md) - Built-in tools and custom extensions
-- [Memory Management](memory.md) - Memory system configuration

@@ -62,7 +62,6 @@ nav:
   - Core Concepts:
     - Building Agents: agents.md
     - Tools & Extensions: tools.md
-    - Custom MCP Tools: mcp-custom-tools.md
     - Memory Management: memory.md
     - Plugin Development: plugins.md
     - Authentication: authentication.md
@@ -71,6 +70,7 @@ nav:
   - How To:
     - AI Coding Assistant: tutorial-cursor.md
     - Multi-Agent Systems: tutorial-multi-agent.md
+    - Custom MCP Tools: mcp-custom-tools.md
   - Reference:
     - Architecture: architecture.md
     - Configuration: configuration.md

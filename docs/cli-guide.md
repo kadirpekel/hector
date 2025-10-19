@@ -148,8 +148,8 @@ Error: --config flag is not supported in Client (Remote) mode
 You're connecting to a remote server which has its own configuration.
 
 Solutions:
-  • Remove --config flag to use the remote server's configuration
-  • Remove --server flag to use Local mode with local config
+  - Remove --config flag to use the remote server's configuration
+  - Remove --server flag to use Local mode with local config
 ```
 
 !!! info "Note"
@@ -417,14 +417,14 @@ hector task --server http://localhost:8081 cancel assistant task-abc123...
 
 **Output example:**
 ```
-📋 Task Details
+Task Details
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Task ID:     task-abc123...
 Context ID:  ctx-xyz789...
-Status:      ✅ COMPLETED
+Status:      COMPLETED
 Updated:     2025-10-14 21:31:09
 
-💬 History (2 messages):
+History (2 messages):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. [User] Write a haiku about coding
 2. [Agent] Code flows like water

@@ -9,8 +9,8 @@ Essential installation methods for the Hector AI Agent Platform.
 
 ## Prerequisites
 
-- :material-language-go: **Go 1.24+** (for building from source)
-- :material-key: **API Key** from your LLM provider (OpenAI, Anthropic, or Gemini)
+- **Go 1.24+** (for building from source)
+- **API Key** from your LLM provider (OpenAI, Anthropic, or Gemini)
 
 !!! tip "Pro Tip"
     You can get API keys from [OpenAI](https://platform.openai.com/api-keys), [Anthropic](https://console.anthropic.com/), or [Google AI Studio](https://aistudio.google.com/app/apikey).
@@ -19,7 +19,7 @@ Essential installation methods for the Hector AI Agent Platform.
 
 ## Installation Methods
 
-### 1. :material-download: Binary Releases
+### 1. Binary Releases
 
 Pre-built binaries are available for all major platforms:
 
@@ -50,7 +50,7 @@ Pre-built binaries are available for all major platforms:
     # Move to a directory in your PATH or run from current directory
     ```
 
-### 2. :material-package: Go Install
+### 2. Go Install
 
 Install directly using Go package manager:
 
@@ -61,7 +61,7 @@ go install github.com/kadirpekel/hector/cmd/hector@latest
 !!! info "Note"
     Requires Go 1.24 or later. The binary will be installed to `$GOPATH/bin` (typically `~/go/bin`).
 
-### 3. :material-hammer-wrench: Build from Source
+### 3. Build from Source
 
 Clone and build the project:
 
@@ -77,7 +77,7 @@ go build -o hector ./cmd/hector
 sudo mv hector /usr/local/bin/
 ```
 
-### 4. :material-docker: Docker
+### 4. Docker
 
 Run Hector in a container:
 

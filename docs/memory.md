@@ -21,20 +21,20 @@ Hector implements a **cognitive memory architecture** inspired by human memory s
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │            WORKING MEMORY (Session-Scoped)              │ │
 │  │  ┌─────────────────────────────────────────────────────┐ │ │
-│  │  │ • Current conversation context                       │ │ │
-│  │  │ • Token-based management                             │ │ │
-│  │  │ • Automatic summarization                           │ │ │
-│  │  │ • Strategy: summary_buffer/buffer                    │ │ │
+│  │  │ - Current conversation context                       │ │ │
+│  │  │ - Token-based management                             │ │ │
+│  │  │ - Automatic summarization                           │ │ │
+│  │  │ - Strategy: summary_buffer/buffer                    │ │ │
 │  │  └─────────────────────────────────────────────────────┘ │ │
 │  └─────────────────────────────────────────────────────────┘ │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │            LONG-TERM MEMORY (Persistent)                 │ │
 │  │  ┌─────────────────────────────────────────────────────┐ │ │
-│  │  │ • Vector-based storage (Qdrant)                     │ │ │
-│  │  │ • Semantic search & recall                          │ │ │
-│  │  │ • Session-scoped persistence                        │ │ │
-│  │  │ • Auto-recall or on-demand                          │ │ │
+│  │  │ - Vector-based storage (Qdrant)                     │ │ │
+│  │  │ - Semantic search & recall                          │ │ │
+│  │  │ - Session-scoped persistence                        │ │ │
+│  │  │ - Auto-recall or on-demand                          │ │ │
 │  │  └─────────────────────────────────────────────────────┘ │ │
 │  └─────────────────────────────────────────────────────────┘ │
 │                                                             │
@@ -69,11 +69,11 @@ memory:
 ```
 
 **How it works:**
-1. :material-chat: **Conversation grows** - Messages accumulate in working memory
-2. :material-chart-line: **Threshold reached** - When 80% of max_tokens is used
-3. :material-compress: **Auto-summarize** - Older messages are summarized
-4. :material-database: **Store in LTM** - Summary stored in long-term memory
-5. :material-refresh: **Continue fresh** - Conversation continues with summary context
+1. **Conversation grows** - Messages accumulate in working memory
+2. **Threshold reached** - When 80% of max_tokens is used
+3. **Auto-summarize** - Older messages are summarized
+4. **Store in LTM** - Summary stored in long-term memory
+5. **Continue fresh** - Conversation continues with summary context
 
 **Benefits:**
 - **Never lose context** - Important information preserved in summaries
@@ -96,11 +96,11 @@ memory:
 ```
 
 **How it works:**
-1. :material-chat: **Messages accumulate** - New messages added to buffer
-2. :material-counter: **Window limit** - When window_size (10) messages reached
-3. :material-delete: **Remove oldest** - Oldest message removed
-4. :material-database: **Store in LTM** - Removed message stored in long-term memory
-5. :material-refresh: **Continue** - Buffer continues with recent messages
+1. **Messages accumulate** - New messages added to buffer
+2. **Window limit** - When window_size (10) messages reached
+3. **Remove oldest** - Oldest message removed
+4. **Store in LTM** - Removed message stored in long-term memory
+5. **Continue** - Buffer continues with recent messages
 
 **Benefits:**
 - **Simple and predictable** - Always keeps N recent messages
@@ -121,10 +121,10 @@ memory:
 ```
 
 **How it works:**
-1. :material-chat: **Messages embedded** - Each message converted to vector
-2. :material-database: **Vector storage** - Stored in vector database
-3. :material-magnify: **Semantic search** - Relevant context retrieved by similarity
-4. :material-refresh: **Dynamic context** - Context changes based on current query
+1. **Messages embedded** - Each message converted to vector
+2. **Vector storage** - Stored in vector database
+3. **Semantic search** - Relevant context retrieved by similarity
+4. **Dynamic context** - Context changes based on current query
 
 **Benefits:**
 - **Semantic understanding** - Finds relevant context by meaning
@@ -153,10 +153,10 @@ memory:
 ```
 
 **Features:**
-- :material-database: **Persistent Storage** - Information survives session restarts
-- :material-magnify: **Semantic Search** - Find relevant information by meaning
-- :material-chart-line: **Similarity Scoring** - Rank results by relevance
-- :material-refresh: **Auto-Recall** - Automatically retrieve relevant context
+- **Persistent Storage** - Information survives session restarts
+- **Semantic Search** - Find relevant information by meaning
+- **Similarity Scoring** - Rank results by relevance
+- **Auto-Recall** - Automatically retrieve relevant context
 
 ### Long-Term Memory Types
 
@@ -236,9 +236,9 @@ memory:
 
 | Strategy | Token Usage | Context Preservation | Performance | Use Case |
 |----------|-------------|---------------------|-------------|----------|
-| **Summary Buffer** | :material-check: Efficient | :material-check: High | :material-check: Good | General purpose |
-| **Buffer Window** | :material-check: Fixed | :material-warning: Limited | :material-check: Excellent | Simple tasks |
-| **Vector Memory** | :material-warning: Variable | :material-check: Excellent | :material-warning: Moderate | Complex tasks |
+| **Summary Buffer** | Efficient | High | Good | General purpose |
+| **Buffer Window** | Fixed | Limited | Excellent | Simple tasks |
+| **Vector Memory** | Variable | Excellent | Moderate | Complex tasks |
 
 ---
 
@@ -254,20 +254,20 @@ memory:
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │            WORKING MEMORY (Session-Scoped)              │ │
 │  │  ┌─────────────────────────────────────────────────────┐ │ │
-│  │  │ • Current conversation context                       │ │ │
-│  │  │ • Token-based management                             │ │ │
-│  │  │ • Automatic summarization                           │ │ │
-│  │  │ • Strategy: summary_buffer/buffer                    │ │ │
+│  │  │ - Current conversation context                       │ │ │
+│  │  │ - Token-based management                             │ │ │
+│  │  │ - Automatic summarization                           │ │ │
+│  │  │ - Strategy: summary_buffer/buffer                    │ │ │
 │  │  └─────────────────────────────────────────────────────┘ │ │
 │  └─────────────────────────────────────────────────────────┘ │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │            LONG-TERM MEMORY (Persistent)                 │ │
 │  │  ┌─────────────────────────────────────────────────────┐ │ │
-│  │  │ • Vector-based storage (Qdrant)                     │ │ │
-│  │  │ • Semantic search & recall                          │ │ │
-│  │  │ • Session-scoped persistence                        │ │ │
-│  │  │ • Auto-recall or on-demand                          │ │ │
+│  │  │ - Vector-based storage (Qdrant)                     │ │ │
+│  │  │ - Semantic search & recall                          │ │ │
+│  │  │ - Session-scoped persistence                        │ │ │
+│  │  │ - Auto-recall or on-demand                          │ │ │
 │  │  └─────────────────────────────────────────────────────┘ │ │
 │  └─────────────────────────────────────────────────────────┘ │
 │                                                             │
@@ -276,11 +276,11 @@ memory:
 ```
 ### Memory Operations
 
-1. :material-plus: **Store** - Save new information to memory
-2. :material-magnify: **Search** - Find relevant information
-3. :material-refresh: **Recall** - Retrieve context for current task
-4. :material-delete: **Forget** - Remove outdated information
-5. :material-compress: **Summarize** - Compress information for efficiency
+1. **Store** - Save new information to memory
+2. **Search** - Find relevant information
+3. **Recall** - Retrieve context for current task
+4. **Forget** - Remove outdated information
+5. **Summarize** - Compress information for efficiency
 
 ---
 
@@ -333,10 +333,10 @@ memory:
 
 ### Memory Optimization
 
-- :material-chart-line: **Monitor token usage** - Track memory efficiency
-- :material-database: **Regular cleanup** - Remove outdated memories
-- :material-compress: **Optimize summaries** - Fine-tune summarization
-- :material-magnify: **Tune similarity** - Adjust recall thresholds
+- **Monitor token usage** - Track memory efficiency
+- **Regular cleanup** - Remove outdated memories
+- **Optimize summaries** - Fine-tune summarization
+- **Tune similarity** - Adjust recall thresholds
 
 ---
 
@@ -392,10 +392,10 @@ memory:
 
 ### Memory Metrics
 
-- :material-chart-line: **Token Usage** - Current and peak token usage
-- :material-database: **Memory Size** - Number of stored memories
-- :material-magnify: **Recall Accuracy** - Relevance of recalled memories
-- :material-timer: **Performance** - Memory operation timing
+- **Token Usage** - Current and peak token usage
+- **Memory Size** - Number of stored memories
+- **Recall Accuracy** - Relevance of recalled memories
+- **Performance** - Memory operation timing
 
 ### Monitoring Configuration
 
@@ -422,10 +422,3 @@ monitoring:
 
 ---
 
-## Related Documentation
-
-- [Building Agents](agents.md) - Learn how to build AI agents
-- [Configuration Reference](configuration.md) - Complete configuration guide
-- [Architecture](architecture.md) - Understand Hector's architecture
-- [Tools & Extensions](tools.md) - Built-in tools and custom extensions
-- [Plugin Development](plugins.md) - Build custom plugins
