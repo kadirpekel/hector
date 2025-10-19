@@ -785,6 +785,6 @@ Hector achieves **100% A2A Protocol compliance** through:
 - **Robust Streaming**: SSE and gRPC streaming per specification
 - **Comprehensive Task Management**: Full task lifecycle implementation
 - **Security Compliance**: JWT authentication with configurable schemes
-- **Production Ready**: Error handling, monitoring, and deployment features
+- **Production Ready**: Error handling and deployment features
 
 **Result:** A truly A2A-native platform that enables seamless interoperability with any A2A-compliant agent or client, with the simplicity and power of declarative YAML configuration.

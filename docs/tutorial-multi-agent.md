@@ -454,7 +454,7 @@ tools:
 
 workflow:
   max_iterations: 20
-  enable_logging: true
+  enable_debug: true
 ```
 
 ### Dependencies (requirements.txt)
@@ -769,7 +769,7 @@ coordinator:
 | **Change agent behavior** | Modify code, test, redeploy | Edit prompt in YAML |
 | **Swap LLM providers** | Update imports, modify initialization | Change `type: "openai"` to `type: "anthropic"` |
 | **Add error handling** | Implement try/catch blocks, retry logic | Already included |
-| **Add monitoring** | Set up logging, metrics collection | Already included |
+| **Add monitoring** | Set up logging, metrics collection | Not available |
 | **Deploy to production** | Package app, manage dependencies | Copy YAML file |
 
 ### Why This Matters
@@ -796,6 +796,6 @@ Hector transforms multi-agent development from 500+ lines of Python code into 12
 - **75% less code** - Focus on what agents do, not how they work
 - **Zero dependencies** - Single binary vs Python environment setup
 - **Built-in orchestration** - Supervisor reasoning engine handles coordination
-- **Production-ready** - Security, monitoring, and A2A protocol included
+- **Production-ready** - Security and A2A protocol included
 
 The complete example is available at: [`configs/research-assistant.yaml`](https://github.com/kadirpekel/hector/tree/main/configs/research-assistant.yaml)

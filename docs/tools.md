@@ -570,7 +570,6 @@ security:
 - **Parallel Execution** - Multiple tools can run simultaneously
 - **Result Caching** - Cache tool results for repeated operations
 - **Timeout Management** - Prevent tools from hanging
-- **Performance Monitoring** - Track tool execution metrics
 
 ### Performance Configuration
 
@@ -588,11 +587,6 @@ performance:
       ttl: "1h"
       max_size: "100MB"
     
-    # Monitoring
-    metrics:
-      enabled: true
-      collect_detailed: true
-```
 
 ---
 

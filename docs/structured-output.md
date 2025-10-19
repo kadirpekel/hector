@@ -384,4 +384,4 @@ if err := json.Unmarshal([]byte(text), &result); err != nil {
 1. **Use streaming for long responses** - Better user experience
 2. **Cache schemas** - Avoid recreating complex schemas
 3. **Choose appropriate providers** - Match provider strengths to your use case
-4. **Monitor token usage** - Structured output may use more tokens than free-form text
+4. **Track token usage** - Structured output may use more tokens than free-form text

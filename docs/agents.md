@@ -22,7 +22,7 @@ Hector's core strength is making it incredibly easy to build sophisticated AI ag
 - **Real-Time Streaming** - Token-by-token output
 - **Multi-Turn Sessions** - Conversation history & context
 - **Document Stores** - Semantic search with RAG
-- **Production Ready** - Error handling, logging, monitoring
+- **Production Ready** - Error handling, logging
 
 ---
 

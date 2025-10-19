@@ -640,20 +640,6 @@ global:
     host: "0.0.0.0"                   # Server host
     port: 8080                        # Server port
     timeout: "30s"                    # Request timeout
-    
-  # Logging
-  logging:
-    level: "info"                     # Log level
-    format: "json"                    # Log format
-    
-  # Monitoring
-  monitoring:
-    metrics:
-      enabled: true                   # Enable metrics
-      port: 9090                      # Metrics port
-    health:
-      enabled: true                   # Enable health checks
-      endpoint: "/health"             # Health check endpoint
 ```
 
 ---
@@ -820,18 +806,6 @@ global:
     host: "0.0.0.0"
     port: 8080
     timeout: "30s"
-  
-  logging:
-    level: "info"
-    format: "json"
-  
-  monitoring:
-    metrics:
-      enabled: true
-      port: 9090
-    health:
-      enabled: true
-      endpoint: "/health"
 ```
 
 ---

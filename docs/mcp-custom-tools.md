@@ -549,13 +549,11 @@ ls -la weather_server.py
 
 ### Debug Mode
 
-Enable debug logging in Hector:
+Enable debug mode in Hector:
 
 ```yaml
 global:
-  logging:
-    level: "debug"
-    mcp_debug: true
+  debug: true
 ```
 
 ---
@@ -567,5 +565,5 @@ MCP servers are the perfect way to extend Hector with custom capabilities. They'
 - **Fast to build** - 5-10 minutes for simple tools
 - **Easy to maintain** - Standard HTTP/JSON interface
 - **Language flexible** - Python, TypeScript, Go, Rust, etc.
-- **Production ready** - Built-in error handling and monitoring
+- **Production ready** - Built-in error handling
 

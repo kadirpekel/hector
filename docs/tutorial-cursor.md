@@ -136,7 +136,7 @@ See the complete configuration in the Hector repository's `configs/coding.yaml` 
    ```
    
    **Note:** Hector's Qdrant client uses the **gRPC protocol on port 6334**. Make sure both ports are exposed:
-   - Port 6333: HTTP/REST API (for dashboard/debugging)
+   - Port 6333: HTTP/REST API (for debugging)
    - Port 6334: gRPC API (required by Hector)
    
    **Ollama for embeddings:**
@@ -395,7 +395,7 @@ reasoning:
 
 ### Debug Mode
 
-Enable debug logging to see what the agent is doing:
+Enable debug mode to see what the agent is doing:
 
 ```bash
 hector serve --config configs/my-cursor.yaml --log-level debug
