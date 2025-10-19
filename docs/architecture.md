@@ -411,11 +411,11 @@ Hector's plugin system allows extensive customization:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Plugin Types                             │
-│  ┌─────────────────┬─────────────────┬─────────────────┐    │
-│  │ **LLM Provider**│ **Tool Provider**│ **DB Provider** │    │
-│  │ Custom models   │ Custom capabilities│ Vector storage │    │
-│  │ Text generation │ Function execution│ Search & recall │    │
-│  └─────────────────┴─────────────────┴─────────────────┘    │
+│  ┌─────────────────┬─────────────────┬──────────────────┐   │
+│  │ **LLM Provider**│ **Tool Provider**│ **DB Provider** │   │
+│  │ Custom models   │ Custom capabilities│ Vector storage│   │
+│  │ Text generation │ Function execution│ Search & recall│   │
+│  └─────────────────┴─────────────────┴──────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
