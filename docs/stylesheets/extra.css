@@ -1,22 +1,20 @@
-/* Logo styling */
-.md-header__button.md-logo img, .md-header__button.md-logo svg {
+/* Header styling */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
   height: 2rem;
   width: auto;
 }
 
-/* Enhance logo visibility */
 .md-header__button.md-logo {
   padding: 0.2rem;
 }
 
-/* Consistent header background for both light and dark modes - lighter for logo visibility */
 .md-header {
   background-color: rgba(32, 32, 32, 0.95) !important;
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Ensure header text is white and readable in both modes */
 .md-header__title,
 .md-header__button,
 .md-header__topic,
@@ -33,36 +31,21 @@
   background-color: rgba(255, 255, 255, 0.15);
 }
 
-/* Header icons */
 .md-header__button svg {
   fill: rgba(255, 255, 255, 0.87);
 }
 
-/* Dark mode adjustments for grid cards */
-[data-md-color-scheme="slate"] .grid.cards > *:hover {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-}
-
-/* Hero Section - Two Column Layout with Player Spanning Rows */
+/* Hero Section */
 .hero-section {
   display: grid;
   grid-template-columns: 1fr 1.2fr;
   gap: 1.5rem;
-  margin: 2rem 0 2rem 0;
+  margin: 2rem 0;
 }
 
 .hero-content {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-}
-
-.hero-title {
-  font-size: 3.5rem;
-  font-weight: 800;
-  margin: 0 0 0.5rem 0;
-  line-height: 1.1;
-  color: var(--md-default-fg-color);
 }
 
 .hero-slogan {
@@ -97,111 +80,16 @@
   padding: 0;
 }
 
-/* Reduce player container padding for maximum size */
-.hero-demo .asciinema-player-wrapper {
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
-/* Hero Description - Centered with Better Typography */
-.hero-description {
-  margin: 3rem auto 4rem auto;
-  max-width: 800px;
-  text-align: center;
-}
-
-.hero-description p {
-  margin-bottom: 1.25rem;
-  font-size: 1.125rem;
-  line-height: 1.7;
-  color: var(--md-default-fg-color);
-}
-
-.hero-description p strong {
-  color: var(--md-default-fg-color);
-  font-weight: 600;
-}
-
-/* Responsive Hero Section */
-@media (max-width: 960px) {
-  .hero-section {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-  }
-  
-  .hero-title {
-    font-size: 2.5rem;
-  }
-  
-  .hero-slogan {
-    font-size: 1.25rem;
-  }
-  
-  .hero-description {
-    font-size: 1rem;
-    text-align: left;
-    padding: 0 1rem;
-  }
-  
-  .hero-description p {
-    font-size: 1rem;
-  }
-}
-
-/* Full-width homepage layout */
+/* Homepage layout */
 .md-content__inner {
   max-width: none !important;
 }
 
-/* Asciinema player styling - minimal padding for maximum size */
-.asciinema-container {
-  width: 100%;
-  margin: 0;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-/* Asciinema player specific styling */
-asciinema-player {
-  width: 100% !important;
-  height: auto !important;
-  border-radius: 8px;
-}
-
-/* Hero demo specific - no margins */
-.hero-demo asciinema-player {
-  margin: 0 !important;
-}
-
-/* Responsive asciinema player */
-@media (max-width: 768px) {
-  .asciinema-container {
-    margin: 0;
-  }
-  
-  asciinema-player {
-    font-size: 12px !important;
-  }
-}
-
-/* Dark mode adjustments for asciinema */
-[data-md-color-scheme="slate"] .asciinema-container {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
-}
-
-/* Ensure proper spacing around content */
 .md-content {
   padding: 0 1rem;
 }
 
-@media (min-width: 768px) {
-  .md-content {
-    padding: 0 2rem;
-  }
-}
-
-/* Grid cards styling - matching asciinema's approach */
+/* Grid cards */
 .grid.cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -221,7 +109,25 @@ asciinema-player {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* Dark mode adjustments for grid cards */
+/* Dark mode */
 [data-md-color-scheme="slate"] .grid.cards > *:hover {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Responsive */
+@media (min-width: 768px) {
+  .md-content {
+    padding: 0 2rem;
+  }
+}
+
+@media (max-width: 960px) {
+  .hero-section {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  .hero-slogan {
+    font-size: 1.25rem;
+  }
 }

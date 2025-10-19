@@ -7,8 +7,7 @@ hide:
 ---
 
 <style>
-/* Hide the auto-generated page title, but not our custom hero title */
-.md-content h1:first-child:not(.hero-title) {
+.md-content h1:first-child {
   display: none;
 }
 </style>
@@ -41,40 +40,36 @@ agents:
   </div>
 </div>
 
-<div>
-  <p><strong>Hector</strong> eliminates code from agent development. Get multi-agent orchestration, advanced memory management, and seamless interoperability through the <a href="https://a2a-protocol.org">Agent-to-Agent protocol</a> out of the box. Hector handles the complexity so you can focus on building intelligent systems.</p>
-  
-  <p><strong>⚡️ From idea to production agent in minutes, not months.</strong></p>
-</div>
+<p><strong>Hector</strong> eliminates code from agent development. Get multi-agent orchestration, advanced memory management, and seamless interoperability through the <a href="https://a2a-protocol.org">Agent-to-Agent protocol</a> out of the box. Hector handles the complexity so you can focus on building intelligent systems.</p>
+
+<p><strong>⚡️ From idea to production agent in minutes, not months.</strong></p>
 
 <script>
-  // Load asciinema player CSS
+(function() {
   var link = document.createElement('link');
   link.rel = 'stylesheet';
   link.href = 'https://unpkg.com/asciinema-player@3.6.3/dist/bundle/asciinema-player.css';
   document.head.appendChild(link);
   
-  // Load asciinema player script
   var script = document.createElement('script');
   script.src = 'https://unpkg.com/asciinema-player@3.6.3/dist/bundle/asciinema-player.js';
   script.onload = function() {
-        AsciinemaPlayer.create('assets/hector-demo.cast', document.getElementById('hector-demo'), {
-          theme: 'asciinema',
-          cols: 80,
-          rows: 20,
-          autoplay: false,
-          loop: false,
-          speed: 1,
-          startAt: 0,
-          fontSize: 'medium',
-          poster: 'npt:0:2',
-          pauseOnMarkers: true,
-          markers: [
-            [17.0, 'Server & Client Demo']
-          ]
-        });
+    AsciinemaPlayer.create('assets/hector-demo.cast', document.getElementById('hector-demo'), {
+      theme: 'asciinema',
+      cols: 80,
+      rows: 20,
+      autoplay: false,
+      loop: false,
+      speed: 1,
+      startAt: 0,
+      fontSize: 'medium',
+      poster: 'npt:0:2',
+      pauseOnMarkers: true,
+      markers: [[17.0, 'Server & Client Demo']]
+    });
   };
   document.head.appendChild(script);
+})();
 </script>
 
 ## Why Hector?
