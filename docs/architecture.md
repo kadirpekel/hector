@@ -22,6 +22,63 @@ description: Complete architectural guide for Hector AI Agent Platform
 
 ---
 
+## Agent Architecture
+
+**How Hector agents work under the hood:**
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      APPLICATION                             │
+│                 (Your Agent & Logic)                         │
+├──────────────────────────────────────────────────────────────┤
+│                     HECTOR RUNTIME                           │
+│  • Configuration Loading  • Agent Initialization             │
+│  • Component Management   • Lifecycle Management             │
+├──────────────────────────────────────────────────────────────┤
+│                      CLIENT LAYER                            │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │         A2AClient Interface (Protocol Native)           │ │
+│  ├─────────────────────────────────────────────────────────┤ │
+│  │  HTTPClient           │          LocalClient            │ │
+│  │  • Remote agents      │          • In-process agents    │ │
+│  │  • Uses protojson     │          • No network calls     │ │
+│  │  • Multi-transport    │          • Direct protobuf      │ │
+│  └─────────────────────────────────────────────────────────┘ │
+├──────────────────────────────────────────────────────────────┤
+│                      TRANSPORT LAYER                         │
+│  ┌──────────────┬──────────────────┬─────────────────────┐   │
+│  │  gRPC (Core) │  REST (Gateway)  │  JSON-RPC (Adapter) │   │
+│  │  • Native    │  • Auto-gen      │  • Custom HTTP      │   │
+│  │  • Binary    │  • JSON          │  • Simple RPC       │   │
+│  │  • Streaming │  • SSE           │  • JSON             │   │
+│  │  Port: 8080  │  Port: 8081      │  Port: 8082         │   │
+│  └──────────────┴──────────────────┴─────────────────────┘   │
+├──────────────────────────────────────────────────────────────┤
+│                       AGENT LAYER                            │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  Agent (pb.A2AServiceServer interface)                  │ │
+│  │  • SendMessage          • GetAgentCard                  │ │
+│  │  • SendStreamingMessage • GetTask/CancelTask            │ │
+│  │  • Task subscriptions   • Push notifications            │ │
+│  └─────────────────────────────────────────────────────────┘ │
+├──────────────────────────────────────────────────────────────┤
+│                    REASONING ENGINE                          │
+│  Chain-of-Thought Strategy    |    Supervisor Strategy       │
+│  • Step-by-step reasoning     |    • Multi-agent coord       │
+│  • Natural termination        |    • Task decomposition      │
+├──────────────────────────────────────────────────────────────┤
+│                        CORE SERVICES                         │
+│  ┌───────────┬──────────┬──────────┬──────────┬──────────┐   │
+│  │    LLM    │   Tools  │   Memory │    RAG   │   Tasks  │   │
+│  │  • OpenAI │ • Local  │ • Buffer │ • Qdrant │ • Async  │   │
+│  │• Anthropic│ • MCP    │ • Summary│ • Search │ • Status │   │
+│  │  • Gemini │ • Plugin │ • Session│ • Embed  │ • Track  │   │
+│  └───────────┴──────────┴──────────┴──────────┴──────────┘   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## A2A Protocol Native Architecture
 
 Hector is built **entirely** around the A2A Protocol, with zero abstraction layers between the protocol and implementation.
@@ -65,43 +122,116 @@ Hector is built **entirely** around the A2A Protocol, with zero abstraction laye
 
 ---
 
+## Distributed Multi-Agent Platform
+
+**Enterprise-grade agent networks and orchestration:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        USER / CLIENT                        │
+│                  (CLI, HTTP, A2A Protocol)                  │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          │ A2A Protocol (HTTP+JSON/SSE)
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      A2A SERVER                             │
+│         • Discovery (/agents)    • Execution (/tasks)       │
+│         • Sessions               • Streaming (SSE)          │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+      ┌───────────────────┼───────────────────┐
+      │                   │                   │
+      ▼                   ▼                   ▼
+┌──────────────┐    ┌──────────────┐   ┌──────────────┐
+│Orchestrator  │    │   Native     │   │   External   │
+│    Agent     │    │   Agents     │   │  A2A Agents  │
+│              │    │              │   │              │
+│ • Supervisor │    │ • Local      │   │ • Remote URL │
+│ • agent_call │    │ • Full Ctrl  │   │ • HTTP Proxy │
+│ • Synthesis  │    │              │   │ • Same Iface │
+└──────┬───────┘    └──────────────┘   └──────────────┘
+       │
+       │ LLM-Driven Routing (agent_call tool)
+       └──────────────────┐
+                          ▼
+                  ┌───────────────┐
+                  │ Agent Registry│
+                  │  (All Agents) │
+                  └───────────────┘
+```
+
+### Production Examples
+
+**Deploy Multi-Agent Server:**
+```bash
+hector serve --config agents.yaml --port 8080
+```
+
+**Connect from Anywhere:**
+```bash
+hector call coordinator "Research AI trends" --server https://agents.company.com:8080
+```
+
+**API Integration:**
+```bash
+curl -X POST https://agents.company.com:8080/v1/agents/coordinator/message:send \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Research AI trends"}'
+```
+
+**Hybrid Agent Networks:**
+```yaml
+agents:
+  local_assistant:
+    type: "native"
+    llm: "gpt-4o"
+  remote_analyst:
+    type: "a2a"
+    url: "https://analytics.partner.com/a2a"
+```
+
+---
+
 ## Transport Layer
 
-Hector supports multiple transport protocols from a single codebase:
+Hector supports multiple transport protocols from a single codebase, as shown in the Agent Architecture diagram above. The transport layer provides three distinct interfaces:
 
 ### Transport Options
 
-=== "gRPC (Native)"
+=== "gRPC (Core)"
     ```bash
-    # Direct gRPC calls
+    # Direct gRPC calls - Native A2A protocol
     grpcurl -plaintext \
       -d '{"agent_id":"my_agent","message":{"role":"user","parts":[{"type":"text","text":"Hello"}]}}' \
       localhost:8080 \
       a2a.AgentService/SendMessage
     ```
+    - **Port**: 8080
+    - **Protocol**: Binary protobuf
+    - **Features**: Native streaming, high performance
 
 === "REST (Gateway)"
     ```bash
-    # HTTP REST API
-    curl -X POST http://localhost:8080/agents/my_agent/message/send \
+    # HTTP REST API - Auto-generated from gRPC
+    curl -X POST http://localhost:8081/agents/my_agent/message/send \
       -H "Content-Type: application/json" \
       -d '{"message":{"role":"user","parts":[{"type":"text","text":"Hello"}]}}'
     ```
+    - **Port**: 8081
+    - **Protocol**: JSON over HTTP
+    - **Features**: Web compatibility, SSE streaming
 
-=== "JSON-RPC"
+=== "JSON-RPC (Adapter)"
     ```bash
-    # JSON-RPC calls
-    curl -X POST http://localhost:8080/rpc \
+    # JSON-RPC calls - Legacy system support
+    curl -X POST http://localhost:8082/rpc \
       -H "Content-Type: application/json" \
       -d '{"jsonrpc":"2.0","method":"agent.send_message","params":{"agent_id":"my_agent","message":{"role":"user","parts":[{"type":"text","text":"Hello"}]}},"id":1}'
     ```
-
-### Transport Features
-
-- **High Performance** - gRPC for internal communication
-- **Web Compatibility** - REST for web applications
-- **Legacy Support** - JSON-RPC for existing systems
-- **Security** - Authentication across all transports
+    - **Port**: 8082
+    - **Protocol**: JSON-RPC 2.0
+    - **Features**: Legacy compatibility, simple RPC
 
 ---
 
@@ -160,7 +290,6 @@ Hector's client architecture supports multiple deployment patterns:
 
 Hector's server provides a robust, scalable platform for hosting AI agents:
 
-```
 ### Runtime Features
 
 - **Component Management** - Dynamic loading and configuration
@@ -169,17 +298,23 @@ Hector's server provides a robust, scalable platform for hosting AI agents:
 - **Memory Management** - Session and long-term memory
 - **Reasoning Engine** - Chain-of-thought and supervisor strategies
 
----
-
-## Core Components
-
-Hector's core components provide the foundation for AI agent execution:
-
-### Component Architecture
+### Server Components
 
 | Component | Purpose | Features |
 |-----------|---------|----------|
-| **Agent Factory** | Creates agents from config | Dynamic loading, validation |
+| **Runtime Manager** | Core orchestration | Component lifecycle, configuration |
+| **Agent Factory** | Agent creation | Dynamic loading, validation |
+| **Service Registry** | Resource management | LLMs, databases, tools |
+| **Memory Service** | Context management | Session, long-term, vector storage |
+| **Task Service** | Async processing | Status tracking, streaming |
+
+---
+
+## Multi-Agent Orchestration
+
+Hector supports sophisticated multi-agent workflows through the supervisor reasoning engine:
+
+### Orchestration Patterns
 
 === "Sequential Processing"
     ```yaml
@@ -225,10 +360,11 @@ Hector's core components provide the foundation for AI agent execution:
 
 ### Orchestration Features
 
-- **Agent Communication** - Agents can call other agents
+- **Agent Communication** - Agents can call other agents via `agent_call` tool
 - **Task Decomposition** - Break complex tasks into subtasks
 - **Result Synthesis** - Combine results from multiple agents
 - **Async Processing** - Non-blocking agent communication
+- **LLM-Driven Routing** - Intelligent task delegation based on agent capabilities
 
 ---
 
@@ -281,7 +417,9 @@ Hector's plugin system allows extensive customization:
 │  │ Text generation │ Function execution│ Search & recall │    │
 │  └─────────────────┴─────────────────┴─────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
-```### Plugin Features
+```
+
+### Plugin Features
 
 - **Language Agnostic** - Write in any gRPC-supported language
 - **Process Isolation** - Plugins run in separate processes

@@ -16,7 +16,7 @@ hide:
 
 **Hector** is a declarative AI agent platform that eliminates code from agent development. Built on the [Agent-to-Agent protocol](https://a2a-protocol.org), Hector enables true interoperability between agents across networks, servers, and organizations.
 
-  **From idea to production agent in minutes, not months.**
+  **⚡️ From idea to production agent in minutes, not months.**
 
 Its typical use cases include building AI assistants, automating workflows, creating multi-agent systems, and integrating with external services. It focuses on simplicity and declarative configuration, which makes it a popular choice among developers and organizations working with AI agents.
 
