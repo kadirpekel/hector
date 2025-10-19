@@ -7,22 +7,45 @@ hide:
 ---
 
 <style>
-.md-typeset h1 {
-  position: absolute;
-  left: -10000px;
-  opacity: 0;
+/* Hide the auto-generated page title, but not our custom hero title */
+.md-content h1:first-child:not(.hero-title) {
+  display: none;
 }
 </style>
 
-**Hector** is a declarative AI agent platform that eliminates code from agent development. Define sophisticated AI agents through YAML configuration, with built-in support for multi-agent orchestration, advanced memory management, and seamless interoperability through the [Agent-to-Agent protocol](https://a2a-protocol.org).
+<div class="hero-section">
+  <div class="hero-content">
+    <p class="hero-slogan">Build AI agents without code</p>
+    
+    <p>A declarative A2A native AI agent platform. Define sophisticated agents through simple YAML configuration.</p>
+    
+    <div class="hero-example">
+```yaml
+agents:
+  assistant:
+    llm: gpt-4o
+    tools: [search, write_file, execute_command]
+    reasoning:
+      engine: chain-of-thought
+      max_iterations: 100
+    memory:
+      working:
+        strategy: summary_buffer
 
-  **⚡️ From idea to production agent in minutes, not months.**
+```
+    </div>
+  </div>
+  
+  <div class="hero-demo">
+    <div id="hector-demo"></div>
+  </div>
+</div>
 
-Build AI assistants, automate complex workflows, create multi-agent research systems, or integrate with external A2A services—all without writing code. Hector handles the complexity so you can focus on building intelligent systems.
-
-## See Hector in Action
-
-<div id="hector-demo"></div>
+<div>
+  <p><strong>Hector</strong> eliminates code from agent development. Get multi-agent orchestration, advanced memory management, and seamless interoperability through the <a href="https://a2a-protocol.org">Agent-to-Agent protocol</a> out of the box. Hector handles the complexity so you can focus on building intelligent systems.</p>
+  
+  <p><strong>⚡️ From idea to production agent in minutes, not months.</strong></p>
+</div>
 
 <script>
   // Load asciinema player CSS
@@ -37,8 +60,8 @@ Build AI assistants, automate complex workflows, create multi-agent research sys
   script.onload = function() {
         AsciinemaPlayer.create('assets/hector-demo.cast', document.getElementById('hector-demo'), {
           theme: 'asciinema',
-          cols: 120,
-          rows: 30,
+          cols: 80,
+          rows: 20,
           autoplay: false,
           loop: false,
           speed: 1,
@@ -86,7 +109,7 @@ Build AI assistants, automate complex workflows, create multi-agent research sys
     - **Declarative approach** - No code to maintain
     - **Flexible deployment** - Docker, Kubernetes, systemd
     - **Extensible platform** - Custom plugins via gRPC
-    - **Open source** - MIT licensed
+    - **Open source** - AGPL-3.0 licensed
 
 </div>
 
@@ -112,11 +135,23 @@ Build AI assistants, automate complex workflows, create multi-agent research sys
 
     Step-by-step tutorials for common tasks. Build a coding assistant, set up RAG, deploy to production, or integrate external A2A agents.
 
--   :book: __[Reference](reference/cli.md)__
+-   :book: __[CLI Reference](reference/cli.md)__
 
     ---
 
-    Technical reference documentation. CLI commands, configuration syntax, API endpoints, architecture details, and A2A protocol specifications.
+    Complete command-line interface reference with all commands, flags, and options.
+
+-   :gear: __[Configuration](reference/configuration.md)__
+
+    ---
+
+    Complete YAML configuration reference for agents, LLMs, tools, memory, and deployment.
+
+-   :globe_with_meridians: __[API Reference](reference/api.md)__
+
+    ---
+
+    REST, gRPC, WebSocket, and JSON-RPC API documentation with examples.
 
 </div>
 

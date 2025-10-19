@@ -9,22 +9,33 @@
   padding: 0.2rem;
 }
 
-/* Lighten header background for better logo visibility */
+/* Consistent header background for both light and dark modes - lighter for logo visibility */
 .md-header {
-  background-color: rgba(255, 255, 255, 0.95) !important;
+  background-color: rgba(32, 32, 32, 0.95) !important;
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-/* Dark mode header adjustments */
-[data-md-color-scheme="slate"] .md-header {
-  background-color: rgba(30, 30, 30, 0.95) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Ensure header text remains readable */
-.md-header__title {
-  color: var(--md-default-fg-color) !important;
+/* Ensure header text is white and readable in both modes */
+.md-header__title,
+.md-header__button,
+.md-header__topic,
+.md-header .md-search__input::placeholder {
+  color: rgba(255, 255, 255, 0.87) !important;
+}
+
+.md-header .md-search__input {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white !important;
+}
+
+.md-header .md-search__input:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Header icons */
+.md-header__button svg {
+  fill: rgba(255, 255, 255, 0.87);
 }
 
 /* Dark mode adjustments for grid cards */
@@ -32,15 +43,120 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
+/* Hero Section - Two Column Layout with Player Spanning Rows */
+.hero-section {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 1.5rem;
+  margin: 2rem 0 2rem 0;
+}
+
+.hero-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.hero-title {
+  font-size: 3.5rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.1;
+  color: var(--md-default-fg-color);
+}
+
+.hero-slogan {
+  font-size: 1.5rem;
+  font-weight: 500;
+  margin: 0 0 1rem 0;
+  color: var(--md-default-fg-color--light);
+}
+
+.hero-content > p {
+  margin: 0 0 1rem 0;
+}
+
+.hero-example {
+  margin-top: 1rem;
+}
+
+.hero-example pre {
+  margin: 0;
+  border-radius: 6px;
+}
+
+.hero-demo {
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.hero-demo #hector-demo {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Reduce player container padding for maximum size */
+.hero-demo .asciinema-player-wrapper {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Hero Description - Centered with Better Typography */
+.hero-description {
+  margin: 3rem auto 4rem auto;
+  max-width: 800px;
+  text-align: center;
+}
+
+.hero-description p {
+  margin-bottom: 1.25rem;
+  font-size: 1.125rem;
+  line-height: 1.7;
+  color: var(--md-default-fg-color);
+}
+
+.hero-description p strong {
+  color: var(--md-default-fg-color);
+  font-weight: 600;
+}
+
+/* Responsive Hero Section */
+@media (max-width: 960px) {
+  .hero-section {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  .hero-title {
+    font-size: 2.5rem;
+  }
+  
+  .hero-slogan {
+    font-size: 1.25rem;
+  }
+  
+  .hero-description {
+    font-size: 1rem;
+    text-align: left;
+    padding: 0 1rem;
+  }
+  
+  .hero-description p {
+    font-size: 1rem;
+  }
+}
+
 /* Full-width homepage layout */
 .md-content__inner {
   max-width: none !important;
 }
 
-/* Asciinema player styling - matching asciinema's approach */
+/* Asciinema player styling - minimal padding for maximum size */
 .asciinema-container {
   width: 100%;
-  margin: 2rem 0;
+  margin: 0;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -53,10 +169,15 @@ asciinema-player {
   border-radius: 8px;
 }
 
+/* Hero demo specific - no margins */
+.hero-demo asciinema-player {
+  margin: 0 !important;
+}
+
 /* Responsive asciinema player */
 @media (max-width: 768px) {
   .asciinema-container {
-    margin: 1rem 0;
+    margin: 0;
   }
   
   asciinema-player {
