@@ -3,6 +3,7 @@ title: Hector Documentation
 description: Pure A2A-Native Declarative AI Agent Platform - Complete Documentation
 hide:
   - navigation
+  - toc
 ---
 
 <style>
