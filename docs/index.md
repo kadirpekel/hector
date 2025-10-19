@@ -59,7 +59,7 @@ agents:
     AsciinemaPlayer.create('assets/hector-demo.cast', document.getElementById('hector-demo'), {
       theme: 'asciinema',
       cols: 80,
-      rows: 20,
+      rows: 25,
       autoplay: false,
       loop: false,
       speed: 1,
