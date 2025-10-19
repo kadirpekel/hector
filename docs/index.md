@@ -18,6 +18,8 @@ hide:
     
     <p>A declarative A2A native AI agent platform. Define sophisticated agents through simple YAML configuration.</p>
     
+    <p><strong>Built with Go</strong> for production performance, single-binary deployment, and true portability.</p>
+    
     <div class="hero-example">
 ```yaml
 agents:
@@ -102,6 +104,7 @@ agents:
 
     - **Simple configuration** - Human-readable YAML
     - **Declarative approach** - No code to maintain
+    - **Built with Go** - Production performance, single binary, no dependencies
     - **Flexible deployment** - Docker, Kubernetes, systemd
     - **Extensible platform** - Custom plugins via gRPC
     - **Open source** - AGPL-3.0 licensed

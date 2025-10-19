@@ -6,225 +6,265 @@
 ██║  ██║███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║
 ╚═╝  ╚═╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
 ```
+
+<div align="center">
+
 [![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
-[![A2A Protocol](https://img.shields.io/badge/A2A%20Compliance-100%25-brightgreen.svg)](https://gohector.dev/A2A_COMPLIANCE)
+[![A2A Protocol](https://img.shields.io/badge/A2A%20Compliance-100%25-brightgreen.svg)](https://gohector.dev/reference/a2a-protocol/)
 [![Documentation](https://img.shields.io/badge/docs-gohector.dev-blue.svg)](https://gohector.dev)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
-[![GoDoc](https://godoc.org/github.com/kadirpekel/hector?status.svg)](https://godoc.org/github.com/kadirpekel/hector)
 
-> ⚠️ Alpha Version Disclaimer: This project is currently in alpha. It is under active development and not yet stable. Features may change, break, or be removed at any time.
+**Build AI agents without code**
 
-# Hector
-**Declarative AI Agent Platform with Native A2A Protocol Support**
+A declarative A2A native AI agent platform. Define sophisticated agents through simple YAML configuration.
 
-Hector is a **declarative AI agent platform** that eliminates code from agent development. Built on the [Agent-to-Agent protocol](https://a2a-protocol.org), Hector enables true interoperability between agents across networks, servers, and organizations.
+**Built with Go** for production performance, single-binary deployment, and true portability.
 
-**🚀 From idea to production agent in minutes, not months.**
+**⚡️ From idea to production agent in minutes, not months.**
 
-**Platform Capabilities:**
-- **Zero Code Development** - Define agents, tools, prompts, and orchestration entirely in YAML
-- **A2A Protocol Native** - 100% compliant with Agent-to-Agent protocol for true interoperability
-- **Single & Multi-Agent** - From standalone agents to complex orchestration networks
-- **Distributed Deployment** - Deploy agents across multiple servers and organizations
-- **Production Security** - JWT authentication, RBAC, and secure agent communication
+[Getting Started](https://gohector.dev/getting-started/installation/) • [Documentation](https://gohector.dev) • [Examples](https://github.com/kadirpekel/hector/tree/main/configs)
 
-Visit [gohector.dev](https://gohector.dev) for complete documentation.
+</div>
 
-### See it in action!
+---
+
+> ⚠️ **Alpha Version:** This project is in active development. Features may change as we refine the platform.
+
+---
+
+## Quick Start
+
 ```bash
+# Install (single binary, no dependencies)
 go install github.com/kadirpekel/hector/cmd/hector@latest
 
+# Set API key
 export OPENAI_API_KEY="sk-..."
-export MCP_URL="https://apollo.composio.dev/v3/mcp/..."
 
-# Run hector in zero-config mode
-hector call "what to wear today in berlin?"
-
-Agent: I'll check the current weather in Berlin to help you decide what to wear today.
-🔧 WEATHERMAP_WEATHER ✅
-
-☀️ **15°C (59°F), scattered clouds** - Perfect autumn weather in Berlin! 🌤️ Light jacket and comfortable shoes recommended for a pleasant day outdoors.
+# Run your first agent (zero-config mode)
+hector call "What is the capital of France?"
 ```
 
----
+> **Why Go?** Unlike Python-based frameworks, Hector compiles to a single binary with no runtime dependencies. Deploy anywhere—from edge devices to Kubernetes—with consistent performance and minimal resource usage.
 
-## 🎯 **Why Choose Hector?**
+## Configuration Example
 
-**Transform complex AI agent development from weeks of coding to minutes of configuration.**
-
-### **For Individuals & Developers**
-- **🚀 Zero Code Development** - Build powerful AI agents with pure YAML, no programming required
-- **⚡ Instant Setup** - Start in seconds with zero-config mode, no complex setup
-- **🧠 Advanced Memory Systems** - Working memory, session management, and context window optimization
-- **🔍 RAG & Document Stores** - Semantic search across knowledge bases with automatic retrieval
-- **🛠️ Rich Tool Ecosystem** - Built-in tools (search, file ops, commands) + MCP protocol integration
-- **📚 Task Management** - Async processing with real-time status tracking and streaming
-- **🎯 Structured Output** - Provider-aware JSON/XML/Enum for reliable data extraction
-- **🔄 Multi-Turn Sessions** - Conversation history and context across interactions
-
-### **For Enterprises & Teams**
-- **🌐 True Interoperability** - 100% A2A protocol compliant, works with any A2A agent
-- **🤖 Multi-Agent Orchestration** - LLM-driven agent coordination and task delegation
-- **🏢 Distributed Architecture** - Deploy agents across servers, teams, and organizations
-- **🔒 Production Security** - JWT authentication, RBAC, and secure agent communication
-- **📡 Multi-Transport APIs** - gRPC, REST, JSON-RPC - integrate with any system
-- **🔌 Plugin System** - gRPC-based extensibility for custom LLMs, databases, and tools
-- **⚡ Real-Time Streaming** - Token-by-token output via Server-Sent Events (SSE)
-- **🎛️ Fine-Grained Control** - Slot-based prompt system for precise agent behavior
-
----
-
-## 🏗️ **Agent Architecture**
-
-**How Hector agents work under the hood:**
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                      APPLICATION                             │
-│                 (Your Agent & Logic)                         │
-├──────────────────────────────────────────────────────────────┤
-│                     HECTOR RUNTIME                           │
-│  • Configuration Loading  • Agent Initialization             │
-│  • Component Management   • Lifecycle Management             │
-├──────────────────────────────────────────────────────────────┤
-│                      CLIENT LAYER                            │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │         A2AClient Interface (Protocol Native)           │ │
-│  ├─────────────────────────────────────────────────────────┤ │
-│  │  HTTPClient           │          LocalClient           │ │
-│  │  • Remote agents      │          • In-process agents    │ │
-│  │  • Uses protojson     │          • No network calls     │ │
-│  │  • Multi-transport    │          • Direct protobuf      │ │
-│  └─────────────────────────────────────────────────────────┘ │
-├──────────────────────────────────────────────────────────────┤
-│                      TRANSPORT LAYER                         │
-│  ┌──────────────┬──────────────────┬─────────────────────┐   │
-│  │  gRPC (Core) │  REST (Gateway)  │  JSON-RPC (Adapter) │   │
-│  │  • Native    │  • Auto-gen      │  • Custom HTTP      │   │
-│  │  • Binary    │  • JSON          │  • Simple RPC       │   │
-│  │  • Streaming │  • SSE           │  • JSON             │   │
-│  │  Port: 8080  │  Port: 8081      │  Port: 8082         │   │
-│  └──────────────┴──────────────────┴─────────────────────┘   │
-├──────────────────────────────────────────────────────────────┤
-│                       AGENT LAYER                            │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │  Agent (pb.A2AServiceServer interface)                  │ │
-│  │  • SendMessage          • GetAgentCard                  │ │
-│  │  • SendStreamingMessage • GetTask/CancelTask            │ │
-│  │  • Task subscriptions   • Push notifications            │ │
-│  └─────────────────────────────────────────────────────────┘ │
-├──────────────────────────────────────────────────────────────┤
-│                    REASONING ENGINE                          │
-│  Chain-of-Thought Strategy    |    Supervisor Strategy       │
-│  • Step-by-step reasoning     |    • Multi-agent coord       │
-│  • Natural termination        |    • Task decomposition      │
-├──────────────────────────────────────────────────────────────┤
-│                        CORE SERVICES                         │
-│  ┌───────────┬──────────┬──────────┬──────────┬──────────┐   │
-│  │    LLM    │   Tools  │   Memory │    RAG   │   Tasks  │   │
-│  │  • OpenAI │ • Local  │ • Buffer │ • Qdrant │ • Async  │   │
-│  │• Anthropic│ • MCP    │ • Summary│ • Search │ • Status │   │
-│  │  • Gemini │ • Plugin │ • Session│ • Embed  │ • Track  │   │
-│  └───────────┴──────────┴──────────┴──────────┴──────────┘   │
-└──────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🌐 **Distributed Multi-Agent Platform**
-
-**Enterprise-grade agent networks and orchestration:**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        USER / CLIENT                        │
-│                  (CLI, HTTP, A2A Protocol)                  │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          │ A2A Protocol (HTTP+JSON/SSE)
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      A2A SERVER                             │
-│         • Discovery (/agents)    • Execution (/tasks)       │
-│         • Sessions               • Streaming (SSE)          │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-      ┌───────────────────┼───────────────────┐
-      │                   │                   │
-      ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐   ┌──────────────┐
-│Orchestrator  │    │   Native     │   │   External   │
-│    Agent     │    │   Agents     │   │  A2A Agents  │
-│              │    │              │   │              │
-│ • Supervisor │    │ • Local      │   │ • Remote URL │
-│ • agent_call │    │ • Full Ctrl  │   │ • HTTP Proxy │
-│ • Synthesis  │    │              │   │ • Same Iface │
-└──────┬───────┘    └──────────────┘   └──────────────┘
-       │
-       │ LLM-Driven Routing (agent_call tool)
-       └──────────────────┐
-                          ▼
-                  ┌───────────────┐
-                  │ Agent Registry│
-                  │  (All Agents) │
-                  └───────────────┘
-```
-
-### **Production Examples**
-
-**Deploy Multi-Agent Server:**
-```bash
-hector serve --config agents.yaml --port 8080
-```
-
-**Connect from Anywhere:**
-```bash
-hector call coordinator "Research AI trends" --server https://agents.company.com:8080
-```
-
-**API Integration:**
-```bash
-curl -X POST https://agents.company.com:8080/v1/agents/coordinator/message:send \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Research AI trends"}'
-```
-
-**Hybrid Agent Networks:**
 ```yaml
 agents:
-  local_assistant:
-    type: "native"
-    llm: "gpt-4o"
-  remote_analyst:
-    type: "a2a"
-    url: "https://analytics.partner.com/a2a"
+  assistant:
+    llm: gpt-4o
+    tools: [search, write_file, execute_command]
+    reasoning:
+      engine: chain-of-thought
+      max_iterations: 100
+    memory:
+      working:
+        strategy: summary_buffer
 ```
+
+That's it. No code required.
 
 ---
 
-## 🚀 **Get Started Now**
+## Why Hector?
+
+### For Developers
+
+- **Zero-code development** - YAML configuration only
+- **Instant setup** - Working agent in 5 minutes
+- **Advanced memory** - Working & long-term memory strategies
+- **RAG & semantic search** - Built-in vector store integration
+- **Rich tool ecosystem** - Built-in tools, MCP, and plugins
+
+### For Enterprises
+
+- **True interoperability** - Native A2A protocol support
+- **Multi-agent orchestration** - Coordinate specialized agents
+- **Production security** - JWT auth, API keys, agent-level security
+- **Distributed architecture** - Local, server, or client modes
+- **Multi-transport APIs** - REST, SSE, WebSocket, gRPC
+
+### For Teams
+
+- **Simple configuration** - Human-readable YAML
+- **Declarative approach** - No code to maintain
+- **Built with Go** - Production performance, single binary, no dependencies
+- **Flexible deployment** - Docker, Kubernetes, systemd
+- **Extensible platform** - Custom plugins via gRPC
+- **Open source** - AGPL-3.0 licensed
+
+---
+
+## Key Features
+
+<table>
+<tr>
+<td width="50%">
+
+**Agent Development**
+- Multiple LLM providers (OpenAI, Anthropic, Gemini)
+- Slot-based prompt system
+- Structured output (JSON, XML, Enum)
+- Working & long-term memory
+- Two reasoning strategies
+- Session management
+
+</td>
+<td width="50%">
+
+**Production Features**
+- **Built with Go** - High performance, single binary
+- A2A protocol compliant
+- Multi-agent orchestration
+- Built-in & MCP tools
+- RAG with vector databases
+- JWT authentication
+- Real-time streaming
+- Plugin system (gRPC)
+
+</td>
+</tr>
+</table>
+
+---
+
+## Documentation
+
+📚 **[Complete Documentation at gohector.dev](https://gohector.dev)**
+
+### Quick Links
+
+- **[Getting Started](https://gohector.dev/getting-started/installation/)** - Install and run in 5 minutes
+- **[Core Concepts](https://gohector.dev/core-concepts/overview/)** - Understanding agents, LLMs, memory, tools
+- **[How-To Guides](https://gohector.dev/how-to/build-coding-assistant/)** - Build real-world agents
+- **[CLI Reference](https://gohector.dev/reference/cli/)** - Command-line interface
+- **[Configuration](https://gohector.dev/reference/configuration/)** - Complete YAML reference
+- **[API Reference](https://gohector.dev/reference/api/)** - REST, gRPC, WebSocket APIs
+- **[A2A Protocol](https://gohector.dev/reference/a2a-protocol/)** - Protocol compliance
+
+---
+
+## Architecture
+
+**Hector's layered architecture:**
+
+```
+Application (Your Agents)
+         ↓
+   Hector Runtime
+         ↓
+    A2A Protocol
+         ↓
+Multi-Transport Layer (gRPC, REST, JSON-RPC)
+         ↓
+  Agent Orchestration
+         ↓
+Core Services (LLM, Memory, Tools, RAG, Tasks)
+```
+
+For detailed architecture, see the [Architecture Reference](https://gohector.dev/reference/architecture/).
+
+---
+
+## Deployment Modes
+
+**Three ways to run Hector:**
 
 ```bash
-# Install and run in 30 seconds
-go install github.com/kadirpekel/hector/cmd/hector@latest
-export OPENAI_API_KEY="your-key-here"
-hector call "Hello, Hector!"
+# 1. Local Mode - In-process execution
+hector call assistant "Hello"
+
+# 2. Server Mode - Host agents for multiple clients
+hector serve --config agents.yaml
+
+# 3. Client Mode - Connect to remote agents
+hector call assistant "Hello" --server https://remote:8080
 ```
 
 ---
 
-## 📚 **Documentation & Resources**
+## Multi-Agent Example
 
-- **[Complete Documentation](https://gohector.dev)** - Full platform guide
-- **[CLI Guide](https://gohector.dev/CLI_GUIDE.html)** - Command-line interface
-- **[Agent Configuration](https://gohector.dev/AGENTS.html)** - YAML configuration guide
-- **[Multi-Agent Tutorial](https://gohector.dev/TUTORIAL_MULTI_AGENT.html)** - Orchestration workflows
-- **[A2A Compliance](https://gohector.dev/A2A_COMPLIANCE.html)** - Protocol standards
+**Coordinate specialized agents:**
 
-## Say Hi! to Hector!
+```yaml
+agents:
+  coordinator:
+    llm: gpt-4o
+    reasoning:
+      engine: supervisor
+    tools:
+      - agent_call
+    sub_agents:
+      - researcher
+      - analyst
+      - writer
+  
+  researcher:
+    llm: gpt-4o
+    tools: [search]
+  
+  analyst:
+    llm: claude-sonnet-4
+    tools: [search]
+  
+  writer:
+    llm: gpt-4o
+    tools: [write_file]
+```
 
-![Hector Gopher Logo](gopher.png)
+See [Multi-Agent Tutorial](https://gohector.dev/how-to/build-research-system/) for complete example.
+
+---
+
+## A2A Protocol
+
+Hector is **100% compliant** with the [Agent-to-Agent protocol](https://a2a-protocol.org), enabling true interoperability:
+
+- Connect to any A2A-compliant agent
+- Expose your agents for others to use
+- Federation across organizations
+- Standards-based communication
+
+Learn more: [A2A Protocol Reference](https://gohector.dev/reference/a2a-protocol/)
+
+---
+
+## Examples
+
+Check out [`configs/`](https://github.com/kadirpekel/hector/tree/main/configs) for complete examples:
+
+- [Coding Assistant](https://github.com/kadirpekel/hector/blob/main/configs/coding.yaml) - AI pair programmer
+- [Multi-Agent Research](https://github.com/kadirpekel/hector/blob/main/configs/orchestrator-example.yaml) - Coordinated research system
+- [MCP Tools Integration](https://github.com/kadirpekel/hector/blob/main/configs/tools-mcp-example.yaml) - External tool integration
+- [Memory Strategies](https://github.com/kadirpekel/hector/blob/main/configs/memory-strategies-example.yaml) - Memory management
+- [Security Setup](https://github.com/kadirpekel/hector/blob/main/configs/security-example.yaml) - JWT authentication
+
+---
+
+## Contributing
+
+We welcome contributions! Hector is in active development and we're building this in the open.
+
+**Ways to contribute:**
+- 🐛 Report bugs and issues
+- 💡 Suggest features and improvements
+- 📖 Improve documentation
+- 🔧 Submit pull requests
+- ⭐ Star the repo and spread the word
+
+See [Contributing Guidelines](CONTRIBUTING.md) for details.
+
+---
+
+## Community
+
+- **Documentation:** [gohector.dev](https://gohector.dev)
+- **Issues:** [GitHub Issues](https://github.com/kadirpekel/hector/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/kadirpekel/hector/discussions)
+
+---
 
 ## License
 
@@ -233,3 +273,13 @@ hector call "Hello, Hector!"
 Hector is free and open-source software. You can use, modify, and distribute it under the terms of the AGPL-3.0 license.
 
 For commercial licensing options, please contact the maintainers.
+
+---
+
+<div align="center">
+
+**Built with ❤️ by the Hector community**
+
+[![Star on GitHub](https://img.shields.io/github/stars/kadirpekel/hector?style=social)](https://github.com/kadirpekel/hector)
+
+</div>
