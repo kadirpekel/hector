@@ -231,14 +231,19 @@ agents:
     
     # Reasoning Configuration
     reasoning:
-      engine: "chain-of-thought"  # chain-of-thought|supervisor
-      max_iterations: 100
-      enable_streaming: true
-      show_tool_execution: true
-      show_thinking: false
-      show_debug_info: false
-      enable_structured_reflection: true
-      enable_completion_verification: false
+      engine: "chain-of-thought"         # chain-of-thought|supervisor
+      max_iterations: 100                 # Safety limit
+      
+      # LLM Reasoning (improve quality)
+      enable_self_reflection: false       # LLM outputs <thinking> tags (Chain of Thought)
+      enable_structured_reflection: true  # LLM-based tool analysis (default: true)
+      enable_goal_extraction: false       # For supervisor strategy only
+      
+      # Display Options
+      show_thinking: false                # Show [Thinking: ...] meta-reflection blocks
+      show_tool_execution: true           # Show tool execution labels
+      show_debug_info: false              # Show iteration counts, tokens
+      enable_streaming: true              # Real-time output (default: true)
     
     # Tools
     tools:

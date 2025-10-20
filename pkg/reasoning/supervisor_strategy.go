@@ -41,8 +41,8 @@ func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningSta
 				// Store decomposition in custom state
 				state.CustomState["task_decomposition"] = decomposition
 
-				// Display decomposition if debug enabled
-				if state.ShowDebugInfo && state.OutputChannel != nil {
+				// Display decomposition if thinking is enabled
+				if state.ShowThinking && state.OutputChannel != nil {
 					s.displayTaskDecomposition(decomposition, state.OutputChannel)
 				}
 			}
@@ -53,24 +53,24 @@ func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningSta
 	return s.ChainOfThoughtStrategy.PrepareIteration(iteration, state)
 }
 
-// displayTaskDecomposition shows the extracted task plan to the user
+// displayTaskDecomposition shows the extracted task plan to the user using thinking blocks
 func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecomposition, outputCh chan<- string) {
-	outputCh <- "\033[90m\n📋 **Task Decomposition:**\n"
-	outputCh <- fmt.Sprintf("  - Main Goal: %s\n", decomposition.MainGoal)
-	outputCh <- fmt.Sprintf("  - Execution Order: %s\n", decomposition.ExecutionOrder)
-	outputCh <- fmt.Sprintf("  - Required Agents: %v\n", decomposition.RequiredAgents)
-	outputCh <- fmt.Sprintf("  - Strategy: %s\n", decomposition.Strategy)
+	output := ThinkingBlock(fmt.Sprintf("Task Decomposition: %s", decomposition.MainGoal))
+	output += ThinkingBlock(fmt.Sprintf("Execution Order: %s", decomposition.ExecutionOrder))
+	output += ThinkingBlock(fmt.Sprintf("Required Agents: %v", decomposition.RequiredAgents))
+	output += ThinkingBlock(fmt.Sprintf("Strategy: %s", decomposition.Strategy))
+
 	if len(decomposition.Subtasks) > 0 {
-		outputCh <- fmt.Sprintf("  - Subtasks (%d):\n", len(decomposition.Subtasks))
 		for i, task := range decomposition.Subtasks {
 			deps := "none"
 			if len(task.DependsOn) > 0 {
 				deps = fmt.Sprintf("%v", task.DependsOn)
 			}
-			outputCh <- fmt.Sprintf("    %d. [P%d] %s (agent: %s, depends: %s)\n", i+1, task.Priority, task.Description, task.AgentType, deps)
+			output += ThinkingBlock(fmt.Sprintf("Subtask %d: [P%d] %s (agent: %s, depends: %s)", i+1, task.Priority, task.Description, task.AgentType, deps))
 		}
 	}
-	outputCh <- "\033[0m"
+
+	outputCh <- output
 }
 
 // ShouldStop implements ReasoningStrategy

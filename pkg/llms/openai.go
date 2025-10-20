@@ -522,9 +522,14 @@ func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, er
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", p.config.Host+"/chat/completions", bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest("POST", p.config.Host+"/chat/completions", bytes.NewReader(requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Enable request body reuse for retries
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(requestBody)), nil
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -564,9 +569,14 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", p.config.Host+"/chat/completions", bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest("POST", p.config.Host+"/chat/completions", bytes.NewReader(requestBody))
 	if err != nil {
 		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Enable request body reuse for retries
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(requestBody)), nil
 	}
 
 	req.Header.Set("Content-Type", "application/json")

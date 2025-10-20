@@ -355,9 +355,14 @@ func (p *AnthropicProvider) makeRequest(request AnthropicRequest) (*AnthropicRes
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	req, err := http.NewRequest("POST", p.config.Host+"/v1/messages", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", p.config.Host+"/v1/messages", bytes.NewReader(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Enable request body reuse for retries
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(jsonData)), nil
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -391,9 +396,14 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
-	req, err := http.NewRequest("POST", p.config.Host+"/v1/messages", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", p.config.Host+"/v1/messages", bytes.NewReader(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Enable request body reuse for retries
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(jsonData)), nil
 	}
 
 	req.Header.Set("Content-Type", "application/json")

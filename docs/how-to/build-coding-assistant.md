@@ -87,114 +87,49 @@ llms:
     type: "anthropic"
     model: "claude-sonnet-4-20250514"
     api_key: "${ANTHROPIC_API_KEY}"
-    temperature: 0.0  # Deterministic for code
+    temperature: 0.0
     max_tokens: 8000
-
-# Vector Database (for semantic search)
-databases:
-  qdrant:
-    type: "qdrant"
-    host: "localhost"
-    port: 6334
-
-# Embedder (for semantic search)
-embedders:
-  embedder:
-    type: "ollama"
-    host: "http://localhost:11434"
-    model: "nomic-embed-text"
 
 # Coding Assistant Agent
 agents:
   coder:
     name: "AI Coding Assistant"
     llm: "claude"
-    database: "qdrant"
-    embedder: "embedder"
     
-    # Prompt Configuration
+    # Quick shortcuts for easy setup
+    docs_folder: "."         # Auto-configures semantic search for current directory
+    enable_tools: true       # Auto-enables all coding tools
+    
+    # Optional: Customize the system prompt
     prompt:
       prompt_slots:
         system_role: |
           You are an expert AI coding assistant.
-          You operate like a pair programmer in Cursor.
-          
-          Your capabilities:
-          - Semantic code search to understand codebases
-          - File creation and modification
-          - Command execution for testing and validation
-          - Step-by-step reasoning
-        
-        reasoning_instructions: |
-          Always implement changes rather than just suggesting them.
-          
-          For each task:
-          1. Use semantic search to understand the codebase
-          2. Analyze existing patterns and conventions
-          3. Implement changes following project style
-          4. Test your changes when possible
-          5. Explain what you did and why
-        
-        tool_usage: |
-          Use tools proactively:
-          - search: Find relevant code semantically
-          - write_file: Create or modify files
-          - search_replace: Make precise edits
-          - execute_command: Run tests, linters, builds
-          - todo_write: Break down complex tasks
-        
-        communication_style: |
-          Be concise but thorough.
-          Show your reasoning process.
-          Admit when you're unsure.
-          Ask clarifying questions when needed.
+          Use semantic search to understand code before making changes.
+          Always implement rather than just suggesting.
     
-    # Reasoning Configuration
+    # Reasoning configuration
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 100
-      enable_structured_reflection: true
       enable_streaming: true
-      show_tool_execution: true
     
-    # Tools
-    tools:
-      - "search"
-      - "write_file"
-      - "search_replace"
-      - "execute_command"
-      - "todo_write"
-    
-    # Reference to document stores (defined below)
-    document_stores: ["codebase", "docs"]
-    
-    # Memory Configuration
+    # Memory configuration
     memory:
       working:
         strategy: "summary_buffer"
         budget: 4000
-
-# Document Stores (semantic search targets)
-document_stores:
-  codebase:
-    name: "codebase"
-    paths: ["./src/", "./lib/", "./pkg/"]
-  
-  docs:
-    name: "docs"
-    paths: ["./docs/", "./README.md"]
-
-# Tool Configurations
-tools:
-  execute_command:
-    type: command
-  
-  write_file:
-    type: write_file
-  
-  search_replace:
-    type: search_replace
 ```
+
+**What gets auto-configured:**
+- ✅ Document store indexing your codebase
+- ✅ Qdrant vector database (localhost:6334)
+- ✅ Ollama embedder (localhost:11434, nomic-embed-text)
+- ✅ Search tool for semantic code search
+- ✅ All file tools (write_file, search_replace)
+- ✅ Command execution tool (sandboxed)
+
+💡 **Want full control?** See the [advanced configuration example](https://github.com/kadirpekel/hector/blob/main/configs/coding-advanced.yaml).
 
 ---
 

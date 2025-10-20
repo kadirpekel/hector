@@ -27,12 +27,67 @@ agents:
   assistant:
     reasoning:
       engine: "chain-of-thought"
-      max_iterations: 100        # Safety limit
-      enable_streaming: true
+      max_iterations: 100                 # Safety limit
+      
+      # Improve LLM reasoning
+      enable_self_reflection: true        # LLM outputs <thinking> tags
+      enable_structured_reflection: true  # Analyze tool execution
+      
+      # Display options
+      show_thinking: true                 # Show meta-reflection
       show_tool_execution: true
-      show_thinking: false
-      show_debug_info: false
+      enable_streaming: true
 ```
+
+### Self-Reflection (Chain of Thought Prompting)
+
+When `enable_self_reflection: true`, the LLM outputs its internal reasoning using `<thinking>` tags **before** taking actions. This is based on research showing that Chain of Thought prompting improves accuracy on complex tasks.
+
+**Example:**
+```
+<thinking>
+I need to implement authentication.
+First, I should search for existing patterns.
+Then implement JWT validation with proper error handling.
+</thinking>
+
+I'll implement the authentication system...
+🔧 search: authentication patterns ✅
+🔧 write_file: auth.py ✅
+```
+
+**Benefits:**
+- ✅ Improves reasoning quality (research-backed)
+- ✅ Better at complex multi-step problems
+- ✅ Helps LLM catch logical errors
+- ✅ Makes planning visible to users
+
+**Trade-offs:**
+- ⚠️ Uses more tokens (costs more)
+- ⚠️ Slightly slower (more text to generate)
+
+### Structured Reflection (Tool Analysis)
+
+When `enable_structured_reflection: true` (default), Hector makes a **separate LLM call** after tool execution to analyze results using structured output (JSON schema).
+
+**Example:**
+```
+[Thinking: Iteration 1: Analyzing results]
+[Thinking: ✅ Succeeded: search, write_file]
+[Thinking: Confidence: 80% - Continue]
+```
+
+**Benefits:**
+- ✅ Reliable tool execution analysis
+- ✅ Consistent confidence scores
+- ✅ Deterministic JSON parsing
+- ✅ Great for debugging
+
+**How It Works:**
+1. Agent calls tools
+2. Separate LLM call analyzes results with JSON schema
+3. Returns: successful_tools, failed_tools, confidence, recommendation
+4. Displayed as `[Thinking: ...]` blocks if `show_thinking: true`
 
 ### How It Works
 
@@ -344,8 +399,8 @@ agents:
       show_debug_info: false           # Show debug details
       
       # Reflection
-      enable_structured_reflection: true   # Self-evaluation
-      enable_completion_verification: false  # Verify task completion
+      enable_self_reflection: true           # LLM outputs <thinking> tags
+      enable_structured_reflection: true     # Analyze tool results
 ```
 
 ### Supervisor Options
@@ -605,3 +660,66 @@ agents:
 - **[Configuration Reference](../reference/configuration.md)** - All reasoning options
 - **[Build a Coding Assistant](../how-to/build-coding-assistant.md)** - Chain-of-thought example
 
+
+---
+
+## Reasoning Configuration Reference
+
+### Core Settings
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `engine` | string | `"chain-of-thought"` | Reasoning strategy (`chain-of-thought` \| `supervisor`) |
+| `max_iterations` | int | `100` | Maximum reasoning iterations (safety limit) |
+| `quality_threshold` | float | `0.0` | Quality threshold (0.0-1.0, for future use) |
+
+### LLM Reasoning Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enable_self_reflection` | bool | `false` | LLM outputs `<thinking>` tags (Chain of Thought prompting) |
+| `enable_structured_reflection` | bool | `true` | LLM-based tool analysis with JSON schema |
+| `enable_goal_extraction` | bool | `false` | Extract goals/subtasks (supervisor strategy only) |
+
+### Display Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `show_thinking` | bool | `false` | Show `[Thinking: ...]` meta-reflection blocks |
+| `show_tool_execution` | bool | `true` | Show tool execution labels |
+| `show_debug_info` | bool | `false` | Show iteration counts, tokens, timing |
+| `enable_streaming` | bool | `true` | Real-time token-by-token output |
+
+### Example: Maximum Visibility
+
+```yaml
+reasoning:
+  engine: "chain-of-thought"
+  max_iterations: 100
+  enable_self_reflection: true        # LLM shows planning
+  enable_structured_reflection: true  # Show tool analysis
+  show_thinking: true                 # Display both types
+  show_tool_execution: true
+  show_debug_info: true
+  enable_streaming: true
+```
+
+**Output:**
+```
+🤔 Iteration 1/100
+
+<thinking>
+I'll search for authentication patterns first.
+Then implement JWT validation.
+</thinking>
+
+I'll implement authentication...
+🔧 search: authentication patterns ✅
+🔧 write_file: auth.py ✅
+
+[Thinking: Iteration 1: Analyzing results]
+[Thinking: ✅ Succeeded: search, write_file]
+[Thinking: Confidence: 80% - Continue]
+
+📝 Tokens used: 450 (total: 450)
+```

@@ -115,6 +115,17 @@ func DefaultRetryStrategy(statusCode int) RetryStrategy {
 // Do executes an HTTP request with smart retry logic
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
+		// Restore request body for retries using GetBody (if available)
+		// HTTP request bodies are io.ReadCloser and get consumed after first read.
+		// GetBody allows recreating the body for retry attempts.
+		if attempt > 0 && req.GetBody != nil {
+			body, err := req.GetBody()
+			if err != nil {
+				return nil, fmt.Errorf("failed to recreate request body for retry: %w", err)
+			}
+			req.Body = body
+		}
+
 		resp, strategy, retryInfo, err := c.attemptRequest(req)
 
 		// No retry - return immediately (success or non-retryable error)

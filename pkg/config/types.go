@@ -1391,20 +1391,16 @@ func (c *PromptConfig) SetDefaults() {
 
 // ReasoningConfig represents reasoning configuration
 type ReasoningConfig struct {
-	Engine                       string  `yaml:"engine"`                         // Reasoning engine
-	MaxIterations                int     `yaml:"max_iterations"`                 // Max iterations (safety valve, default: 100)
-	EnableSelfReflection         bool    `yaml:"enable_self_reflection"`         // Enable self-reflection
-	EnableMetaReasoning          bool    `yaml:"enable_meta_reasoning"`          // Enable meta-reasoning
-	EnableGoalEvolution          bool    `yaml:"enable_goal_evolution"`          // Enable goal evolution
-	EnableDynamicTools           bool    `yaml:"enable_dynamic_tools"`           // Enable dynamic tools
-	EnableStructuredReflection   *bool   `yaml:"enable_structured_reflection"`   // Enable LLM-based structured reflection (nil=default, false=disabled, true=enabled)
-	EnableCompletionVerification bool    `yaml:"enable_completion_verification"` // Enable LLM-based task completion verification
-	EnableGoalExtraction         bool    `yaml:"enable_goal_extraction"`         // Enable LLM-based goal extraction (supervisor strategy)
-	ShowDebugInfo                bool    `yaml:"show_debug_info"`                // Show debug info (iteration counts, tokens, etc.)
-	ShowToolExecution            *bool   `yaml:"show_tool_execution"`            // Show tool execution labels (nil=default true, explicitly configurable)
-	ShowThinking                 bool    `yaml:"show_thinking"`                  // Show internal reasoning in grayed-out format (Claude-style)
-	EnableStreaming              *bool   `yaml:"enable_streaming"`               // Enable streaming (nil=default true, explicitly configurable)
-	QualityThreshold             float64 `yaml:"quality_threshold"`              // Quality threshold
+	Engine                     string  `yaml:"engine"`                       // Reasoning engine (chain-of-thought, supervisor)
+	MaxIterations              int     `yaml:"max_iterations"`               // Max iterations (safety valve, default: 100)
+	EnableSelfReflection       bool    `yaml:"enable_self_reflection"`       // Enable LLM to output internal reasoning with <thinking> tags
+	EnableStructuredReflection *bool   `yaml:"enable_structured_reflection"` // Enable LLM-based structured tool analysis (nil=default true)
+	EnableGoalExtraction       bool    `yaml:"enable_goal_extraction"`       // Enable LLM-based goal extraction (supervisor strategy only)
+	ShowDebugInfo              bool    `yaml:"show_debug_info"`              // Show debug info (iteration counts, tokens, etc.)
+	ShowToolExecution          *bool   `yaml:"show_tool_execution"`          // Show tool execution labels (nil=default true, explicitly configurable)
+	ShowThinking               bool    `yaml:"show_thinking"`                // Show meta-reflection in grayed-out [Thinking: ...] blocks
+	EnableStreaming            *bool   `yaml:"enable_streaming"`             // Enable streaming (nil=default true, explicitly configurable)
+	QualityThreshold           float64 `yaml:"quality_threshold"`            // Quality threshold (0.0-1.0, for future use)
 }
 
 // Validate implements Config.Validate for ReasoningConfig

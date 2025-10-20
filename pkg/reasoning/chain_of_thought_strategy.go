@@ -76,10 +76,17 @@ func (s *ChainOfThoughtStrategy) AfterIteration(
 	results []ToolResult,
 	state *ReasoningState,
 ) error {
-	// Self-reflection: Evaluate progress made in this iteration
-	if state.ShowDebugInfo && state.OutputChannel != nil {
-		// Try structured reflection first (more reliable)
-		if state.Services != nil && state.Context != nil {
+	// Self-reflection: Evaluate progress made in this iteration (controlled by show_thinking)
+	if state.ShowThinking && state.OutputChannel != nil {
+		// Check if structured reflection is enabled in config
+		useStructuredReflection := false
+		if state.Services != nil {
+			cfg := state.Services.GetConfig()
+			useStructuredReflection = cfg.EnableStructuredReflection != nil && *cfg.EnableStructuredReflection
+		}
+
+		// Use structured reflection if enabled and services available
+		if useStructuredReflection && state.Services != nil && state.Context != nil {
 			analysis, err := AnalyzeToolResults(state.Context, toolCalls, results, state.Services)
 			if err == nil {
 				s.displayStructuredReflection(iteration, analysis, state)
@@ -90,7 +97,7 @@ func (s *ChainOfThoughtStrategy) AfterIteration(
 				s.reflectOnProgress(iteration, text, toolCalls, results, state)
 			}
 		} else {
-			// No services available, use heuristic reflection
+			// Use simple heuristic reflection when structured reflection is disabled
 			s.reflectOnProgress(iteration, text, toolCalls, results, state)
 		}
 	}
@@ -110,42 +117,36 @@ func (s *ChainOfThoughtStrategy) displayStructuredReflection(
 		return
 	}
 
-	// Output reflection thinking block (in gray)
-	output := "\033[90m\n💭 **Self-Reflection (AI Analysis):**\n"
+	// Use thinking block format for clean, grayed-out output
+	output := ThinkingBlock(fmt.Sprintf("Iteration %d: Analyzing results", iteration))
 
 	// Show tool execution summary
 	if len(analysis.SuccessfulTools) > 0 {
-		output += fmt.Sprintf("  - ✅ Succeeded: %s\n", formatStringList(analysis.SuccessfulTools))
+		output += ThinkingBlock(fmt.Sprintf("✅ Succeeded: %s", formatStringList(analysis.SuccessfulTools)))
 	}
 	if len(analysis.FailedTools) > 0 {
-		output += fmt.Sprintf("  - ❌ Failed: %s\n", formatStringList(analysis.FailedTools))
+		output += ThinkingBlock(fmt.Sprintf("❌ Failed: %s", formatStringList(analysis.FailedTools)))
 	}
 
-	// Show confidence
-	output += fmt.Sprintf("  - 🎯 Confidence: %.0f%%\n", analysis.Confidence*100)
-
-	// Show recommendation
+	// Show confidence and recommendation
+	var recommendation string
 	if analysis.ShouldPivot {
-		output += "  - ⚠️  Recommendation: Pivot approach\n"
+		recommendation = "Pivot approach"
 	} else {
 		switch analysis.Recommendation {
 		case "retry_failed":
-			output += "  - 🔄 Recommendation: Retry failed tools\n"
+			recommendation = "Retry failed tools"
 		case "pivot_approach":
-			output += "  - 🔀 Recommendation: Change approach\n"
+			recommendation = "Change approach"
 		case "stop":
-			output += "  - 🛑 Recommendation: Stop (task may be infeasible)\n"
+			recommendation = "Stop (task may be infeasible)"
 		default:
-			output += "  - ✅ Recommendation: Continue\n"
+			recommendation = "Continue"
 		}
 	}
 
-	// Check if we're on high iterations
-	if iteration > 5 {
-		output += fmt.Sprintf("  - 📊 Iteration %d - consider simplifying approach\n", iteration)
-	}
+	output += ThinkingBlock(fmt.Sprintf("Confidence: %.0f%% - %s", analysis.Confidence*100, recommendation))
 
-	output += "\033[0m" // Reset color
 	state.OutputChannel <- output
 }
 
@@ -172,26 +173,19 @@ func (s *ChainOfThoughtStrategy) reflectOnProgress(
 		}
 	}
 
-	// Output reflection thinking block (in gray)
+	// Output reflection using thinking block format
 	if len(toolCalls) > 0 {
-		// ANSI gray color code: \033[90m ... \033[0m
-		output := "\033[90m\n💭 **Self-Reflection:**\n"
-		output += "  - Tools executed: " + formatToolList(toolCalls) + "\n"
-		output += "  - Success/Fail: " + formatSuccessRatio(successCount, failCount) + "\n"
+		output := ThinkingBlock(fmt.Sprintf("Iteration %d: Evaluating progress", iteration))
+		output += ThinkingBlock(fmt.Sprintf("Tools executed: %s", formatToolList(toolCalls)))
+		output += ThinkingBlock(fmt.Sprintf("Success/Fail: %s", formatSuccessRatio(successCount, failCount)))
 
 		// Evaluate approach effectiveness
 		if failCount > 0 {
-			output += "  - ⚠️  Some tools failed - may need to pivot approach\n"
+			output += ThinkingBlock("⚠️  Some tools failed - may need to pivot approach")
 		} else if successCount > 0 {
-			output += "  - ✅ All tools succeeded - making progress\n"
+			output += ThinkingBlock("✅ All tools succeeded - making progress")
 		}
 
-		// Check if we're making forward progress
-		if iteration > 5 && len(toolCalls) > 0 {
-			output += fmt.Sprintf("  - 📊 Iteration %d - consider simplifying approach\n", iteration)
-		}
-
-		output += "\033[0m" // Reset color
 		state.OutputChannel <- output
 	}
 }

@@ -347,32 +347,6 @@ func (a *Agent) execute(
 
 			// Strategy hook: should stop?
 			if strategy.ShouldStop(text, toolCalls, state) {
-				// Optional: Verify task completion before stopping (if enabled)
-				if cfg.EnableCompletionVerification && len(toolCalls) == 0 {
-					// Only verify completion when there are no more tool calls
-					assessment, err := reasoning.AssessTaskCompletion(ctx, input, state.AssistantResponse.String(), a.services)
-					if err == nil && cfg.ShowDebugInfo {
-						// Display completion assessment
-						outputCh <- "\033[90m\n🎯 **Completion Assessment:**\n"
-						outputCh <- fmt.Sprintf("  - Complete: %v (%.0f%% confident)\n", assessment.IsComplete, assessment.Confidence*100)
-						outputCh <- fmt.Sprintf("  - Quality: %s\n", assessment.Quality)
-						if len(assessment.MissingActions) > 0 {
-							outputCh <- fmt.Sprintf("  - Missing: %v\n", assessment.MissingActions)
-						}
-						outputCh <- fmt.Sprintf("  - Recommendation: %s\n", assessment.Recommendation)
-						outputCh <- fmt.Sprintf("  - Reasoning: %s\n", assessment.Reasoning)
-						outputCh <- "\033[0m"
-					}
-
-					// If not complete, continue for one more iteration
-					if err == nil && !assessment.IsComplete && assessment.Recommendation == "continue" {
-						if cfg.ShowDebugInfo {
-							outputCh <- "\033[90m⚠️  Task not fully complete, continuing...\033[0m\n"
-						}
-						continue
-					}
-				}
-
 				if cfg.ShowDebugInfo {
 					outputCh <- "\033[90m\n\n✅ **Reasoning complete**\033[0m\n"
 				}
@@ -677,6 +651,37 @@ func (a *Agent) buildPromptSlots(strategy reasoning.ReasoningStrategy) reasoning
 
 	// Get strategy's default slots
 	strategySlots := strategy.GetPromptSlots()
+
+	// INJECT SELF-REFLECTION: If enabled, add thinking tags to reasoning instructions
+	if a.config.Reasoning.EnableSelfReflection {
+		selfReflectionPrompt := `
+<self_reflection>
+Before taking actions, output your internal reasoning using <thinking> tags:
+<thinking>
+- Analyze the user's request and break it down
+- Consider what information you need
+- Plan your approach step by step
+- Reason about potential challenges
+</thinking>
+
+After tool execution, reflect on results:
+<thinking>
+- Evaluate what worked and what didn't
+- Assess progress toward the goal
+- Decide next steps based on outcomes
+</thinking>
+
+Your thinking will be displayed to help users understand your reasoning process.
+Make your thinking natural, concise, and focused on the current task.
+</self_reflection>
+`
+		// Append to reasoning instructions
+		if strategySlots.ReasoningInstructions != "" {
+			strategySlots.ReasoningInstructions += "\n\n" + selfReflectionPrompt
+		} else {
+			strategySlots.ReasoningInstructions = selfReflectionPrompt
+		}
+	}
 
 	// SLOT-BASED CUSTOMIZATION: Merge with user's slot overrides (if any)
 	// Users can override ANY slot individually - complete flexibility
