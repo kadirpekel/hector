@@ -145,6 +145,7 @@ agents:
 ```
 
 **What the shortcuts auto-configure:**
+
 - ✅ Indexes your entire codebase
 - ✅ Connects to Qdrant (localhost:6334)
 - ✅ Uses Ollama for embeddings (localhost:11434)
@@ -334,6 +335,7 @@ agents:
 ```
 
 **When to use advanced config:**
+
 - ✅ Multiple document stores
 - ✅ Custom tool restrictions
 - ✅ Production deployments
@@ -488,6 +490,7 @@ Ready to level up? Check out these guides:
 ## 📖 Learn More
 
 **Core Concepts:**
+
 - [Tools](../core-concepts/tools.md) - Understanding the tool system
 - [RAG & Semantic Search](../core-concepts/rag.md) - How semantic search works
 - [Reasoning Strategies](../core-concepts/reasoning.md) - Chain-of-thought & self-reflection
@@ -495,6 +498,7 @@ Ready to level up? Check out these guides:
 - [Prompts](../core-concepts/prompts.md) - Prompt engineering
 
 **Reference:**
+
 - [Configuration Reference](../reference/configuration.md) - Complete config options
 - [CLI Reference](../reference/cli.md) - All CLI commands
 - [API Reference](../reference/api.md) - HTTP API documentation
