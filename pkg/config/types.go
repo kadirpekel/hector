@@ -470,6 +470,11 @@ type AgentConfig struct {
 	Tools          []string        `yaml:"tools,omitempty"`           // Tool references (defined globally in tools: section)
 	SubAgents      []string        `yaml:"sub_agents,omitempty"`      // For supervisor agents: which agents can be orchestrated (empty = all)
 	Security       SecurityConfig  `yaml:"security,omitempty"`        // Security configuration
+
+	// Zero-config shortcuts (mutually exclusive with explicit config)
+	// These provide simple configuration shortcuts that auto-expand to full config
+	DocsFolder  string `yaml:"docs_folder,omitempty"`  // Shortcut: auto-create document store from folder path (mutually exclusive with document_stores)
+	EnableTools bool   `yaml:"enable_tools,omitempty"` // Shortcut: auto-enable all local tools (mutually exclusive with explicit tools list)
 }
 
 // Validate implements Config.Validate for AgentConfig
@@ -519,6 +524,16 @@ func (c *AgentConfig) Validate() error {
 		if c.LLM == "" {
 			return fmt.Errorf("llm provider reference is required for native agents")
 		}
+
+		// Validate zero-config shortcuts are not mixed with explicit config (Option C: Error on ambiguity)
+		// NOTE: Expansion only happens if explicit config is NOT set, so if both are set here, it's a user error
+		if c.DocsFolder != "" && len(c.DocumentStores) > 0 {
+			return fmt.Errorf("docs_folder shortcut and document_stores are mutually exclusive (use one or the other)")
+		}
+		if c.EnableTools && len(c.Tools) > 0 {
+			return fmt.Errorf("enable_tools shortcut and explicit tools list are mutually exclusive (use one or the other)")
+		}
+
 		// Database and embedder are only required if document stores are configured
 		if len(c.DocumentStores) > 0 {
 			if c.Database == "" {

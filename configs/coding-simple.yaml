@@ -1,0 +1,119 @@
+# ============================================================================
+# SIMPLE CODING ASSISTANT - Zero-Config Shortcuts Demo
+# ============================================================================
+#
+# This demonstrates the new zero-config shortcuts for ultra-simple setup.
+# Compare this to coding.yaml to see the difference!
+#
+# PREREQUISITES:
+# 1. Anthropic API key: export ANTHROPIC_API_KEY="sk-ant-..."
+# 2. Qdrant running: docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
+# 3. Ollama with embeddings: ollama pull nomic-embed-text
+#
+# QUICK START:
+#   hector serve --config configs/coding-simple.yaml
+#   hector chat --config configs/coding-simple.yaml coder
+#
+# ============================================================================
+
+# LLM Configuration
+llms:
+  claude:
+    type: "anthropic"
+    model: "claude-sonnet-4-20250514"
+    api_key: "${ANTHROPIC_API_KEY}"
+    temperature: 0.0
+    max_tokens: 8000
+
+# Coding Assistant Agent
+agents:
+  coder:
+    name: "AI Coding Assistant"
+    llm: "claude"
+    
+    # 🎯 Zero-config shortcuts (new!)
+    docs_folder: "."         # Auto-creates document store + search tool
+    enable_tools: true       # Auto-enables all local tools
+    
+    # That's it! Everything else is auto-configured:
+    # ✅ Document store auto-created from "."
+    # ✅ Qdrant database auto-configured (localhost:6333)
+    # ✅ Ollama embedder auto-configured (localhost:11434)
+    # ✅ All tools auto-enabled (execute_command, write_file, search_replace, todo_write)
+    # ✅ Search tool auto-configured for the document store
+    
+    # Optional: Customize prompt (or omit for defaults)
+    prompt:
+      prompt_slots:
+        system_role: |
+          You are an expert AI coding assistant.
+          You operate like a pair programmer in Cursor.
+
+          Your capabilities:
+          - Semantic code search to understand codebases
+          - File creation and modification
+          - Command execution for testing and validation
+          - Step-by-step reasoning
+
+        reasoning_instructions: |
+          Always implement changes rather than just suggesting them.
+          Use semantic search to understand patterns before making changes.
+
+    # Optional: Customize reasoning (or omit for defaults)
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 100
+      enable_structured_reflection: true
+      enable_streaming: true
+      show_tool_execution: true
+
+    # Optional: Customize memory (or omit for defaults)
+    memory:
+      working:
+        strategy: "summary_buffer"
+        budget: 4000
+
+# ============================================================================
+# COMPARISON
+# ============================================================================
+#
+# BEFORE (coding.yaml):     ~450 lines with explicit configuration
+# AFTER (this file):        ~80 lines with zero-config shortcuts
+#
+# The shortcuts auto-expand to:
+# - databases:
+#     default-database:
+#       type: "qdrant"
+#       host: "localhost"
+#       port: 6333
+# - embedders:
+#     default-embedder:
+#       type: "ollama"
+#       model: "nomic-embed-text"
+#       host: "http://localhost:11434"
+# - document_stores:
+#     cwd-<hash>:
+#       name: "cwd-<hash>"
+#       source: "directory"
+#       path: "."
+#       watch_changes: true
+#       max_file_size: 52428800  # 50MB
+#       incremental_indexing: true
+# - tools:
+#     execute_command:
+#       type: "command"
+#       enable_sandboxing: true
+#     write_file:
+#       type: "write_file"
+#       max_file_size: 1048576  # 1MB
+#     search_replace:
+#       type: "search_replace"
+#       max_replacements: 100
+#     todo_write:
+#       type: "todo"
+#     search:
+#       type: "search"
+#       document_stores: ["cwd-<hash>"]
+#
+# ============================================================================
+

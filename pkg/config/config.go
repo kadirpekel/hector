@@ -191,6 +191,110 @@ func (c *Config) SetDefaults() {
 		c.Embedders[name] = embedder
 	}
 
+	// Expand agent zero-config shortcuts BEFORE setting agent defaults
+	// This allows shortcuts to auto-create document stores, databases, embedders, and tools
+	// NOTE: Validation of mutual exclusivity happens in AgentConfig.Validate() AFTER this expansion
+	for agentID, agent := range c.Agents {
+		// Shortcut 1: docs_folder -> auto-create document store (only if document_stores not explicitly set)
+		if agent.DocsFolder != "" && len(agent.DocumentStores) == 0 {
+			// Generate unique store name from path
+			storeName := generateStoreNameFromPath(agent.DocsFolder)
+
+			// Create document store config
+			docStoreConfig := DocumentStoreConfig{
+				Name:                storeName,
+				Source:              "directory",
+				Path:                agent.DocsFolder,
+				WatchChanges:        true,
+				MaxFileSize:         50 * 1024 * 1024, // 50MB
+				IncrementalIndexing: true,
+				// Use default include/exclude patterns (set in DocumentStoreConfig.SetDefaults)
+			}
+			c.DocumentStores[storeName] = docStoreConfig
+
+			// Auto-assign document store to agent
+			agent.DocumentStores = []string{storeName}
+
+			// Clear the shortcut field after successful expansion (so validation doesn't see both)
+			agent.DocsFolder = ""
+
+			// Auto-create database and embedder if not already set
+			if agent.Database == "" {
+				if _, exists := c.Databases["default-database"]; !exists {
+					c.Databases["default-database"] = DatabaseProviderConfig{}
+				}
+				agent.Database = "default-database"
+			}
+			if agent.Embedder == "" {
+				if _, exists := c.Embedders["default-embedder"]; !exists {
+					c.Embedders["default-embedder"] = EmbedderProviderConfig{}
+				}
+				agent.Embedder = "default-embedder"
+			}
+
+			// Auto-enable search tool for this agent if not already configured
+			if c.Tools.Tools == nil {
+				c.Tools.Tools = make(map[string]ToolConfig)
+			}
+			if _, exists := c.Tools.Tools["search"]; !exists {
+				c.Tools.Tools["search"] = ToolConfig{
+					Type:           "search",
+					DocumentStores: []string{storeName},
+				}
+			}
+		}
+
+		// Shortcut 2: enable_tools -> auto-enable all local tools (only if tools not explicitly set)
+		if agent.EnableTools && len(agent.Tools) == 0 {
+			// nil means all tools available
+			agent.Tools = nil
+
+			// Clear the shortcut field after successful expansion (so validation doesn't see both)
+			agent.EnableTools = false
+
+			// Initialize tools config with default local tools if not already set
+			if c.Tools.Tools == nil {
+				c.Tools.Tools = make(map[string]ToolConfig)
+			}
+
+			// Ensure core local tools are configured
+			toolDefaults := map[string]ToolConfig{
+				"execute_command": {
+					Type:             "command",
+					Enabled:          true,
+					WorkingDirectory: "./",
+					MaxExecutionTime: "30s",
+					EnableSandboxing: true, // Sandboxing enabled by default (allows all commands safely)
+					AllowedCommands:  nil,  // nil = allow all (when sandboxing enabled)
+				},
+				"write_file": {
+					Type:             "write_file",
+					MaxFileSize:      1048576, // 1MB
+					WorkingDirectory: "./",
+				},
+				"search_replace": {
+					Type:             "search_replace",
+					MaxReplacements:  100,
+					WorkingDirectory: "./",
+					BackupEnabled:    true,
+				},
+				"todo_write": {
+					Type: "todo",
+				},
+			}
+
+			// Add default tools if not already configured
+			for toolName, toolConfig := range toolDefaults {
+				if _, exists := c.Tools.Tools[toolName]; !exists {
+					c.Tools.Tools[toolName] = toolConfig
+				}
+			}
+		}
+
+		// Update agent in map
+		c.Agents[agentID] = agent
+	}
+
 	// Set agent defaults (now handles zero-config)
 	for name := range c.Agents {
 		agent := c.Agents[name]

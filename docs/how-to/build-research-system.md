@@ -70,6 +70,8 @@ Instead of one agent trying to do everything:
 
 ## Step 2: Create Configuration
 
+**Tip:** While multi-agent systems need explicit agent definitions, you can still use `enable_tools: true` shortcuts for each agent to simplify tool configuration!
+
 Create `research-system.yaml`:
 
 ```yaml

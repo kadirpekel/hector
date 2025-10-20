@@ -180,4 +180,3 @@ func TestFileWriterTool_WhitelistAndBlacklist(t *testing.T) {
 		})
 	}
 }
-

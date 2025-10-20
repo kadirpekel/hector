@@ -78,7 +78,63 @@ export OPENAI_API_KEY="sk-..."
 
 ## Step 2: Create Configuration
 
-Create `coding-assistant.yaml`:
+**Choose your approach:**
+
+### Option A: Zero-Config Shortcuts (⚡ Quick Start)
+
+Perfect for getting started quickly. Create `coding-assistant-simple.yaml`:
+
+```yaml
+# Minimal configuration - only ~40 lines!
+llms:
+  claude:
+    type: "anthropic"
+    model: "claude-sonnet-4-20250514"
+    api_key: "${ANTHROPIC_API_KEY}"
+    temperature: 0.0
+    max_tokens: 8000
+
+agents:
+  coder:
+    name: "AI Coding Assistant"
+    llm: "claude"
+    
+    # 🎯 Zero-config shortcuts (auto-creates everything!)
+    docs_folder: "."         # Auto: document store + qdrant + ollama + search
+    enable_tools: true       # Auto: all coding tools (sandboxed)
+    
+    # Optional: Customize prompt (or omit for defaults)
+    prompt:
+      prompt_slots:
+        system_role: |
+          You are an expert AI coding assistant.
+          Use semantic search to understand code before making changes.
+    
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 100
+      enable_streaming: true
+    
+    memory:
+      working:
+        strategy: "summary_buffer"
+        budget: 4000
+```
+
+**What gets auto-created:**
+- ✅ Document store (indexes `.` directory)
+- ✅ Qdrant database (localhost:6333)
+- ✅ Ollama embedder (localhost:11434, nomic-embed-text)
+- ✅ Search tool (configured for document store)
+- ✅ All file/command tools with safe defaults
+
+💡 **Use this** if you want to get started fast! Jump to [Step 3](#step-3-start-the-agent).
+
+---
+
+### Option B: Explicit Configuration (🎛️ Full Control)
+
+For advanced customization and fine-grained control. Create `coding-assistant.yaml`:
 
 ```yaml
 # LLM Configuration

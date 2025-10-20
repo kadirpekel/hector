@@ -152,6 +152,39 @@ llms:
 
 ## Agent Configuration
 
+### Zero-Config Shortcuts (New!)
+
+Simplify agent configuration with zero-config shortcuts:
+
+```yaml
+agents:
+  assistant:
+    name: "My Assistant"
+    llm: "claude"
+    
+    # 🎯 Zero-config shortcuts (mutually exclusive with explicit config)
+    docs_folder: "./"         # Auto-creates document store + search tool + db + embedder
+    enable_tools: true        # Auto-enables all local tools (execute_command, write_file, etc.)
+```
+
+**What gets auto-created:**
+- `docs_folder: "./"` → Document store + Qdrant database + Ollama embedder + search tool
+- `enable_tools: true` → All local tools with safe defaults (sandboxed)
+
+⚠️ **Mutual exclusivity:** Cannot mix shortcuts with explicit config:
+- `docs_folder` + `document_stores` = Error
+- `enable_tools` + `tools: [...]` = Error
+
+**Comparison:**
+
+| Feature | Shortcuts | Explicit Config |
+|---------|-----------|-----------------|
+| **Lines of Config** | ~15-40 | ~200-450 |
+| **Setup Time** | ~5 minutes | ~30 minutes |
+| **Customization** | Limited | Full control |
+| **Use Case** | Quick start, demos | Production, fine-tuning |
+| **Best For** | 90% of users | Power users |
+
 ### Basic Agent
 
 ```yaml
