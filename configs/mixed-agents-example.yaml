@@ -109,7 +109,7 @@ llms:
 tools:
   execute_command:
     type: command
-    allowed_commands: ["curl", "echo", "cat"]
+    # Permissive defaults: allows all commands (sandboxed)
     working_directory: "."
   
   write_file:

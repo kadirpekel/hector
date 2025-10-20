@@ -178,36 +178,13 @@ agents:
 document_stores:
   codebase:
     name: "codebase"
-    paths:
-      - "./src/"
-      - "./lib/"
-      - "./pkg/"
-    include_patterns:
-      - "*.go"
-      - "*.py"
-      - "*.js"
-      - "*.ts"
-      - "*.tsx"
-      - "*.java"
-      - "*.rs"
-    chunk_size: 512
-    chunk_overlap: 50
-    exclude_patterns:
-      - "*_test.go"
-      - "*.test.js"
-      - "*.spec.ts"
-      - "node_modules/*"
-      - "vendor/*"
-      - "*.min.js"
+    paths: ["./src/", "./lib/", "./pkg/"]
+    # Defaults: indexes all parseable files (text + code)
   
   docs:
     name: "docs"
-    paths:
-      - "./docs/"
-      - "./README.md"
-    include_patterns:
-      - "*.md"
-    chunk_size: 1024
+    paths: ["./docs/", "./README.md"]
+    # Defaults: indexes all parseable files
 
 # Tool Configurations
 tools:
@@ -298,12 +275,12 @@ document_stores:
   frontend:
     name: "frontend"
     paths: ["./frontend/src/"]
-    include_patterns: ["*.tsx", "*.ts", "*.css"]
+    # Defaults: indexes all parseable files
   
   backend:
     name: "backend"
     paths: ["./backend/"]
-    include_patterns: ["*.go", "*.sql"]
+    # Defaults: indexes all parseable files
 ```
 
 ### Add Project-Specific Commands
@@ -367,8 +344,7 @@ document_stores:
   configs:
     name: "configs"
     paths: ["./config/"]
-    include_patterns: ["*.yaml", "*.json", "*.toml"]
-    chunk_size: 256
+    # Defaults: indexes all parseable files
 ```
 
 ### Use Different LLM for Speed

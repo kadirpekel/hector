@@ -130,16 +130,8 @@ llms:
 document_stores:
   codebase:
     name: "codebase"
-    paths:
-      - "./src/"
-      - "./lib/"
-    include_patterns:
-      - "*.go"
-      - "*.py"
-      - "*.js"
-      - "*.ts"
-    chunk_size: 512
-    chunk_overlap: 50
+    paths: ["./src/", "./lib/"]
+    # Defaults: indexes all parseable files
 
 # Agent with Semantic Search
 agents:
@@ -258,25 +250,19 @@ document_stores:
   source_code:
     name: "source_code"
     paths: ["./src/"]
-    include_patterns: ["*.go", "*.py", "*.js"]
     chunk_size: 512
-    chunk_overlap: 50
   
   # Documentation - large chunks for context
   documentation:
     name: "documentation"
     paths: ["./docs/"]
-    include_patterns: ["*.md", "*.rst"]
     chunk_size: 2048
-    chunk_overlap: 200
   
   # Configuration files - small chunks
   configs:
     name: "configs"
     paths: ["./config/"]
-    include_patterns: ["*.yaml", "*.json", "*.toml"]
     chunk_size: 256
-    chunk_overlap: 25
 ```
 
 ### Exclude Files
@@ -286,14 +272,7 @@ document_stores:
   clean_code:
     name: "clean_code"
     paths: ["./"]
-    include_patterns: ["*.go"]
-    exclude_patterns:
-      - "*_test.go"        # Test files
-      - "vendor/*"         # Dependencies
-      - "node_modules/*"
-      - "*.min.js"         # Minified files
-      - ".git/*"
-```
+    # Defaults: indexes all parseable files, smart exclusions
 
 ### Adjust Chunk Sizes
 
@@ -495,6 +474,7 @@ curl https://ollama.ai/install.sh | sh
 document_stores:
   codebase:
     name: "codebase"
+    paths: ["./src/"]
     search_config:
       score_threshold: 0.5  # Lower from 0.7
 ```
@@ -504,7 +484,7 @@ document_stores:
 document_stores:
   codebase:
     name: "codebase"
-    include_patterns: ["*.go", "*.py"]  # Make sure this matches your files
+    paths: ["./src/"]
 ```
 
 ### "Indexing is slow"
@@ -514,6 +494,7 @@ document_stores:
 document_stores:
   codebase:
     name: "codebase"
+    paths: ["./src/"]
     batch_size: 50  # Increase for better performance
     parallel: true
 ```

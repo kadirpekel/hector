@@ -150,9 +150,7 @@ llms:
 tools:
   execute_command:
     type: command
-    allowed_commands:
-      - "curl"
-      - "wget"
+    # Permissive defaults: allows all commands (sandboxed)
     working_directory: "./"
     max_execution_time: "30s"
     enable_sandboxing: true

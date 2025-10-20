@@ -26,11 +26,7 @@ tools:
   execute_command:
     type: "command"
     enabled: true
-    allowed_commands:
-      - "cat"
-      - "ls"
-      - "grep"
-      - "git"
+    # Permissive defaults: allows all commands (sandboxed)
     max_execution_time: "30s"
   
   write_file:
