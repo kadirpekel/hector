@@ -400,9 +400,9 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 	req.Header.Set("x-api-key", p.config.APIKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	// For streaming, we need the underlying HTTP client (not the retry wrapper)
-	httpClient := &http.Client{Timeout: time.Duration(p.config.Timeout) * time.Second}
-	resp, err := httpClient.Do(req)
+	// Use the smart retry client for streaming initial request
+	// The retry logic applies to establishing the connection, not streaming
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to make request: %w", err)
 	}

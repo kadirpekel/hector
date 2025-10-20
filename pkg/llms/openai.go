@@ -575,9 +575,9 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 		req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
 	}
 
-	// For streaming, we need the underlying HTTP client (not the retry wrapper)
-	httpClient := &http.Client{Timeout: time.Duration(p.config.Timeout) * time.Second}
-	resp, err := httpClient.Do(req)
+	// Use the smart retry client for streaming initial request
+	// The retry logic applies to establishing the connection, not streaming
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
