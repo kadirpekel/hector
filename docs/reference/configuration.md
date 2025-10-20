@@ -152,9 +152,9 @@ llms:
 
 ## Agent Configuration
 
-### Zero-Config Shortcuts (New!)
+### Configuration Shortcuts
 
-Simplify agent configuration with zero-config shortcuts:
+Simplify agent configuration with shortcuts:
 
 ```yaml
 agents:
@@ -162,7 +162,7 @@ agents:
     name: "My Assistant"
     llm: "claude"
     
-    # 🎯 Zero-config shortcuts (mutually exclusive with explicit config)
+    # 🎯 Quick config shortcuts (mutually exclusive with explicit config)
     docs_folder: "./"         # Auto-creates document store + search tool + db + embedder
     enable_tools: true        # Auto-enables all local tools (execute_command, write_file, etc.)
 ```
@@ -259,7 +259,7 @@ agents:
         window_size: 20             # For buffer_window
       
       longterm:
-        enabled: true
+        
         storage_scope: "session"    # all|session|conversational|summaries_only
         batch_size: 1
         auto_recall: true
@@ -344,7 +344,7 @@ agents:
 tools:
   execute_command:
     type: command
-    enabled: true
+    
     # Permissive defaults: all commands allowed (sandboxed)
     # Optional restrictions:
     # allowed_commands: ["npm", "git", "python"]
@@ -353,7 +353,7 @@ tools:
   
   write_file:
     type: write_file
-    enabled: true
+    
     # Permissive defaults: all file types and paths allowed
     # Optional restrictions:
     # allowed_paths: ["./src/", "./docs/"]
@@ -361,17 +361,17 @@ tools:
   
   search_replace:
     type: search_replace
-    enabled: true
+    
     # Permissive defaults: no restrictions
     # Optional: backup: true
   
   search:
-    enabled: true
+    
     default_limit: 10
     max_limit: 50
   
   todo_write:
-    enabled: true
+    
 ```
 
 ### MCP Tools
@@ -386,7 +386,7 @@ tools:
       auth:
         type: "bearer"
         token: "${MCP_TOKEN}"
-      enabled: true
+      
       tools:                      # Optional: specific tools only
         - "github_create_issue"
         - "slack_send_message"
@@ -403,7 +403,7 @@ databases:
   qdrant:
     type: "qdrant"
     host: "localhost"
-    port: 6333                    # Default: 6333
+    port: 6334                    # Default: 6334
     timeout: 300
     use_tls: false
     insecure: false
@@ -592,7 +592,7 @@ databases:
   qdrant:
     type: "qdrant"
     host: "localhost"
-    port: 6333
+    port: 6334
 
 # Embedder
 embedders:
@@ -629,7 +629,7 @@ agents:
         strategy: "summary_buffer"
         budget: 4000
       longterm:
-        enabled: true
+        
         storage_scope: "session"
     
     document_stores:
@@ -642,12 +642,12 @@ agents:
 tools:
   execute_command:
     type: command
-    enabled: true
+    
     # Permissive defaults (sandboxed)
   
   write_file:
     type: write_file
-    enabled: true
+    
     # Permissive defaults
 
 # Logging

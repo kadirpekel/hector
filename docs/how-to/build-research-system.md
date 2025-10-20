@@ -206,7 +206,7 @@ databases:
   qdrant:
     type: "qdrant"
     host: "localhost"
-    port: 6333
+    port: 6334
 
 embedders:
   embedder:
@@ -353,7 +353,7 @@ researcher:
 tools:
   execute_command:
     type: command
-    enabled: true
+    
     # Permissive defaults: allows all commands (sandboxed for security)
     # Only restrict if needed:
     # allowed_commands: ["curl", "wget"]
@@ -368,7 +368,7 @@ agents:
     embedder: "embedder"
     memory:
       longterm:
-        enabled: true
+        
         storage_scope: "session"
 ```
 

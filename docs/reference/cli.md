@@ -84,7 +84,7 @@ When using zero-config mode (no `--config` flag), use these to configure quickly
 | `--tools` | bool | Enable all built-in tools | `false` |
 | `--mcp-url URL` | string | MCP server URL | - |
 | `--docs FOLDER` | string | Documents folder for RAG | - |
-| `--vectordb URL` | string | Vector database URL | `http://localhost:6333` |
+| `--vectordb URL` | string | Vector database URL | `http://localhost:6334` |
 | `--embedder-model MODEL` | string | Embedding model | `nomic-embed-text` |
 
 **Examples:**

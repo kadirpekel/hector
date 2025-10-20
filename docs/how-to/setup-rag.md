@@ -39,14 +39,14 @@ Qdrant stores vector embeddings of your documents.
 ```bash
 docker run -d \
   --name qdrant \
-  -p 6333:6333 \
+  -p 6334:6334 \
   -p 6334:6334 \
   -v qdrant_data:/qdrant/storage \
   qdrant/qdrant
 ```
 
 **Ports:**
-- `6333` - gRPC API (used by Hector)
+- `6334` - gRPC API (used by Hector)
 - `6334` - REST API + Dashboard
 
 ### Verify Installation
@@ -56,7 +56,7 @@ docker run -d \
 docker ps | grep qdrant
 
 # Access dashboard
-open http://localhost:6333/dashboard
+open http://localhost:6334/dashboard
 ```
 
 You should see the Qdrant web interface.
@@ -110,7 +110,7 @@ databases:
   qdrant:
     type: "qdrant"
     host: "localhost"
-    port: 6333
+    port: 6334
 
 # Embedder
 embedders:
@@ -131,7 +131,6 @@ document_stores:
   codebase:
     name: "codebase"
     paths: ["./src/", "./lib/"]
-    # Defaults: indexes all parseable files
 
 # Agent with Semantic Search
 agents:
@@ -217,7 +216,7 @@ Agent will:
 
 ### Check Qdrant Dashboard
 
-Visit http://localhost:6333/dashboard
+Visit http://localhost:6334/dashboard
 
 You should see:
 - **Collection:** `codebase` (or your document store name)
@@ -228,7 +227,7 @@ You should see:
 
 ```bash
 # Search via Qdrant API
-curl -X POST http://localhost:6333/collections/codebase/points/search \
+curl -X POST http://localhost:6334/collections/codebase/points/search \
   -H "Content-Type: application/json" \
   -d '{
     "vector": [0.1, 0.2, ...],  # Would be actual embedding
@@ -272,7 +271,6 @@ document_stores:
   clean_code:
     name: "clean_code"
     paths: ["./"]
-    # Defaults: indexes all parseable files, smart exclusions
 
 ### Adjust Chunk Sizes
 
@@ -319,7 +317,7 @@ document_stores:
 
 ```bash
 # Delete collection
-curl -X DELETE http://localhost:6333/collections/codebase
+curl -X DELETE http://localhost:6334/collections/codebase
 
 # Restart Hector to trigger re-indexing
 hector serve --config config-with-rag.yaml
@@ -352,7 +350,7 @@ databases:
   qdrant_cloud:
     type: "qdrant"
     host: "your-cluster.qdrant.io"
-    port: 6333
+    port: 6334
     api_key: "${QDRANT_API_KEY}"
     use_https: true
 ```
@@ -427,7 +425,7 @@ docker logs qdrant
 
 **Test connectivity:**
 ```bash
-curl http://localhost:6333/
+curl http://localhost:6334/
 # Should return Qdrant info
 ```
 
@@ -465,7 +463,7 @@ curl https://ollama.ai/install.sh | sh
 ### "Search returns no results"
 
 **Verify indexing:**
-- Check Qdrant dashboard: http://localhost:6333/dashboard
+- Check Qdrant dashboard: http://localhost:6334/dashboard
 - Look for your collection
 - Check vector count
 
@@ -515,7 +513,7 @@ Mount Qdrant data directory:
 ```bash
 docker run -d \
   --name qdrant \
-  -p 6333:6333 \
+  -p 6334:6334 \
   -v /path/to/qdrant_data:/qdrant/storage \
   qdrant/qdrant
 ```
@@ -525,7 +523,7 @@ docker run -d \
 ```bash
 docker run -d \
   --name qdrant \
-  -p 6333:6333 \
+  -p 6334:6334 \
   --memory="2g" \
   --cpus="2" \
   -v qdrant_data:/qdrant/storage \

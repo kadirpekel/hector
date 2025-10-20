@@ -169,7 +169,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 			config: DatabaseProviderConfig{
 				Type:    "qdrant",
 				Host:    "localhost",
-				Port:    6333,
+				Port:    6334,
 				APIKey:  "test-key",
 				Timeout: 30,
 				UseTLS:  true,
@@ -181,7 +181,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 			config: DatabaseProviderConfig{
 				Type:    "qdrant",
 				Host:    "localhost",
-				Port:    6333,
+				Port:    6334,
 				Timeout: 30,
 				UseTLS:  false,
 			},
@@ -191,7 +191,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 			name: "missing_type",
 			config: DatabaseProviderConfig{
 				Host: "localhost",
-				Port: 6333,
+				Port: 6334,
 			},
 			wantErr: true,
 		},
@@ -199,7 +199,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 			name: "missing_host",
 			config: DatabaseProviderConfig{
 				Type: "qdrant",
-				Port: 6333,
+				Port: 6334,
 			},
 			wantErr: true,
 		},
@@ -235,7 +235,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 			config: DatabaseProviderConfig{
 				Type:    "qdrant",
 				Host:    "localhost",
-				Port:    6333,
+				Port:    6334,
 				Timeout: -1,
 			},
 			wantErr: true,

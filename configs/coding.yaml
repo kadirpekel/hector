@@ -12,7 +12,7 @@
 #
 # PREREQUISITES:
 # 1. Anthropic API key: export ANTHROPIC_API_KEY="sk-ant-..."
-# 2. Qdrant running: docker run -p 6334:6333 -p 6333:6333 qdrant/qdrant
+# 2. Qdrant running: docker run -p 6334:6333 -p 6334:6334 qdrant/qdrant
 # 3. Ollama with embeddings: ollama pull nomic-embed-text
 #
 # QUICK START:

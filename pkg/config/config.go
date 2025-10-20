@@ -191,7 +191,7 @@ func (c *Config) SetDefaults() {
 		c.Embedders[name] = embedder
 	}
 
-	// Expand agent zero-config shortcuts BEFORE setting agent defaults
+	// Expand agent shortcuts BEFORE setting agent defaults
 	// This allows shortcuts to auto-create document stores, databases, embedders, and tools
 	// NOTE: Validation of mutual exclusivity happens in AgentConfig.Validate() AFTER this expansion
 	for agentID, agent := range c.Agents {

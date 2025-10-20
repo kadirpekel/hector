@@ -236,7 +236,7 @@ plugins:
     custom_llm:
       type: "grpc"
       path: "./plugins/custom-llm-plugin"
-      enabled: true
+      
       config:
         api_key: "${CUSTOM_LLM_API_KEY}"
         endpoint: "http://localhost:8081"
@@ -374,7 +374,7 @@ plugins:
     custom_db:
       type: "grpc"
       path: "./plugins/custom-db-plugin"
-      enabled: true
+      
       config:
         url: "${CUSTOM_DB_URL}"
         api_key: "${CUSTOM_DB_API_KEY}"
@@ -486,7 +486,7 @@ plugins:
     custom_embedder:
       type: "grpc"
       path: "./plugins/custom-embedder-plugin"
-      enabled: true
+      
       config:
         url: "${CUSTOM_EMBEDDER_URL}"
         api_key: "${CUSTOM_EMBEDDER_API_KEY}"
@@ -624,7 +624,7 @@ plugins:
     custom_tools:
       type: "grpc"
       path: "./plugins/custom-tools-plugin"
-      enabled: true
+      
       config:
         api_key: "${CUSTOM_TOOLS_API_KEY}"
         timeout: "30s"
@@ -632,13 +632,13 @@ plugins:
 tools:
   custom_api_call:
     type: "plugin:custom_tools"
-    enabled: true
+    
     config:
       tool_name: "custom_api_call"
   
   custom_data_processing:
     type: "plugin:custom_tools"
-    enabled: true
+    
     config:
       tool_name: "custom_data_processing"
 ```
@@ -749,7 +749,7 @@ plugins:
     custom_reasoning:
       type: "grpc"
       path: "./plugins/custom-reasoning-plugin"
-      enabled: true
+      
       config:
         max_iterations: 20
         temperature: 0.7
@@ -856,7 +856,7 @@ plugins:
     my_plugin:
       type: "grpc"
       path: "./my-plugin"
-      enabled: true
+      
       config:
         api_key: "${MY_PLUGIN_API_KEY}"
 
@@ -920,7 +920,7 @@ plugins:
     test_plugin:
       type: "grpc"
       path: "./test-plugin"
-      enabled: true
+      
       config:
         api_key: "test-key"
 
@@ -993,7 +993,7 @@ plugins:
   my_plugin:
     type: "grpc"
     path: "./my-plugin"
-    enabled: true
+    
     
     # Security settings
     security:

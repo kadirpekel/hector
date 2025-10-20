@@ -93,7 +93,7 @@ agents:
         strategy: "buffer_window"
         window_size: 10
       longterm:
-        enabled: true
+        
         storage_scope: "session"
 ```
 

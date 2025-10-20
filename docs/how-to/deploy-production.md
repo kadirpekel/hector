@@ -128,7 +128,7 @@ services:
   qdrant:
     image: qdrant/qdrant:latest
     ports:
-      - "6333:6333"
+      - "6334:6334"
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
@@ -418,7 +418,7 @@ server {
 global:
   a2a_server:
     tls:
-      enabled: true
+      
       cert_file: "/path/to/cert.pem"
       key_file: "/path/to/key.pem"
 ```
@@ -453,14 +453,14 @@ kubectl get secret hector-secrets -o jsonpath='{.data.openai-api-key}' | base64 
 tools:
   execute_command:
     type: command
-    enabled: true
+    
     # Production security: optionally restrict commands
     # allowed_commands: ["npm", "go", "python"]
     # denied_commands: ["rm", "dd", "sudo"]
   
   write_file:
     type: write_file
-    enabled: true
+    
     # Production security: optionally restrict paths
     # allowed_paths: ["./output/"]
     # denied_paths: ["./secrets/", "./.env"]

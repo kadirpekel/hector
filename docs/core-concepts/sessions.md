@@ -111,7 +111,7 @@ agents:
         budget: 4000
       
       longterm:
-        enabled: true
+        
         storage_scope: "session"  # Session-scoped long-term memory
 ```
 
@@ -287,7 +287,7 @@ agents:
         strategy: "summary_buffer"
         budget: 4000
       longterm:
-        enabled: true
+        
         storage_scope: "session"
 ```
 
@@ -357,7 +357,7 @@ agents:
         strategy: "buffer_window"
         window_size: 20
       longterm:
-        enabled: true
+        
         storage_scope: "session"
 ```
 
@@ -385,7 +385,7 @@ agents:
     tools: ["search", "agent_call"]
     memory:
       longterm:
-        enabled: true
+        
         storage_scope: "conversational"  # Remember across sessions
 ```
 

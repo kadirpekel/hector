@@ -47,12 +47,12 @@ A coding assistant that can:
 ```bash
 docker run -d \
   --name qdrant \
-  -p 6333:6333 \
+  -p 6334:6334 \
   -p 6334:6334 \
   qdrant/qdrant
 ```
 
-Verify: http://localhost:6333/dashboard
+Verify: http://localhost:6334/dashboard
 
 ### Start Ollama (Optional but Recommended)
 
@@ -78,63 +78,7 @@ export OPENAI_API_KEY="sk-..."
 
 ## Step 2: Create Configuration
 
-**Choose your approach:**
-
-### Option A: Zero-Config Shortcuts (⚡ Quick Start)
-
-Perfect for getting started quickly. Create `coding-assistant-simple.yaml`:
-
-```yaml
-# Minimal configuration - only ~40 lines!
-llms:
-  claude:
-    type: "anthropic"
-    model: "claude-sonnet-4-20250514"
-    api_key: "${ANTHROPIC_API_KEY}"
-    temperature: 0.0
-    max_tokens: 8000
-
-agents:
-  coder:
-    name: "AI Coding Assistant"
-    llm: "claude"
-    
-    # 🎯 Zero-config shortcuts (auto-creates everything!)
-    docs_folder: "."         # Auto: document store + qdrant + ollama + search
-    enable_tools: true       # Auto: all coding tools (sandboxed)
-    
-    # Optional: Customize prompt (or omit for defaults)
-    prompt:
-      prompt_slots:
-        system_role: |
-          You are an expert AI coding assistant.
-          Use semantic search to understand code before making changes.
-    
-    reasoning:
-      engine: "chain-of-thought"
-      max_iterations: 100
-      enable_streaming: true
-    
-    memory:
-      working:
-        strategy: "summary_buffer"
-        budget: 4000
-```
-
-**What gets auto-created:**
-- ✅ Document store (indexes `.` directory)
-- ✅ Qdrant database (localhost:6333)
-- ✅ Ollama embedder (localhost:11434, nomic-embed-text)
-- ✅ Search tool (configured for document store)
-- ✅ All file/command tools with safe defaults
-
-💡 **Use this** if you want to get started fast! Jump to [Step 3](#step-3-start-the-agent).
-
----
-
-### Option B: Explicit Configuration (🎛️ Full Control)
-
-For advanced customization and fine-grained control. Create `coding-assistant.yaml`:
+Create `coding-assistant.yaml`:
 
 ```yaml
 # LLM Configuration
@@ -151,7 +95,7 @@ databases:
   qdrant:
     type: "qdrant"
     host: "localhost"
-    port: 6333
+    port: 6334
 
 # Embedder (for semantic search)
 embedders:
@@ -235,29 +179,21 @@ document_stores:
   codebase:
     name: "codebase"
     paths: ["./src/", "./lib/", "./pkg/"]
-    # Defaults: indexes all parseable files (text + code)
   
   docs:
     name: "docs"
     paths: ["./docs/", "./README.md"]
-    # Defaults: indexes all parseable files
 
 # Tool Configurations
 tools:
   execute_command:
     type: command
-    enabled: true
-    # Permissive defaults: allows all commands (sandboxed for security)
   
   write_file:
     type: write_file
-    enabled: true
-    # Permissive defaults: allows all file types and paths
   
   search_replace:
     type: search_replace
-    enabled: true
-    # Permissive defaults: no restrictions
 ```
 
 ---
@@ -331,12 +267,10 @@ document_stores:
   frontend:
     name: "frontend"
     paths: ["./frontend/src/"]
-    # Defaults: indexes all parseable files
   
   backend:
     name: "backend"
     paths: ["./backend/"]
-    # Defaults: indexes all parseable files
 ```
 
 ### Add Project-Specific Commands
@@ -345,7 +279,7 @@ document_stores:
 tools:
   execute_command:
     type: command
-    enabled: true
+    
     # All commands allowed by default (sandboxed)
     # Only restrict if needed:
     # allowed_commands: ["npm", "yarn", "pnpm"]
@@ -400,7 +334,6 @@ document_stores:
   configs:
     name: "configs"
     paths: ["./config/"]
-    # Defaults: indexes all parseable files
 ```
 
 ### Use Different LLM for Speed
@@ -433,7 +366,7 @@ agents:
         strategy: "summary_buffer"
         budget: 4000
       longterm:
-        enabled: true
+        
         storage_scope: "session"
 ```
 
@@ -498,7 +431,7 @@ docker ps | grep qdrant
 docker logs qdrant
 
 # Verify connectivity
-curl http://localhost:6333/
+curl http://localhost:6334/
 ```
 
 ### "Ollama not responding"

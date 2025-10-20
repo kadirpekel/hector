@@ -166,8 +166,8 @@ func TestDatabaseProviderConfig_SetDefaults(t *testing.T) {
 				if config.Host != "localhost" {
 					t.Errorf("Default host = %v, want %v", config.Host, "localhost")
 				}
-				if config.Port != 6333 {
-					t.Errorf("Default port = %v, want %v", config.Port, 6333)
+				if config.Port != 6334 {
+					t.Errorf("Default port = %v, want %v", config.Port, 6334)
 				}
 				if config.Timeout != 30 {
 					t.Errorf("Default timeout = %v, want %v", config.Timeout, 30)
@@ -187,8 +187,8 @@ func TestDatabaseProviderConfig_SetDefaults(t *testing.T) {
 				if config.Host != "custom-host" {
 					t.Errorf("Host should be preserved: %v", config.Host)
 				}
-				if config.Port != 6333 {
-					t.Errorf("Default port = %v, want %v", config.Port, 6333)
+				if config.Port != 6334 {
+					t.Errorf("Default port = %v, want %v", config.Port, 6334)
 				}
 				if config.Timeout != 30 {
 					t.Errorf("Default timeout = %v, want %v", config.Timeout, 30)
@@ -204,7 +204,7 @@ func TestDatabaseProviderConfig_SetDefaults(t *testing.T) {
 				Timeout: 0, // Zero value should be set to default
 			},
 			validateConfig: func(t *testing.T, config DatabaseProviderConfig) {
-				if config.Port != 6333 {
+				if config.Port != 6334 {
 					t.Errorf("Zero port should be set to default: %v", config.Port)
 				}
 				if config.Timeout != 30 {

@@ -369,7 +369,7 @@ func (c *DatabaseProviderConfig) SetDefaults() {
 		c.Host = "localhost"
 	}
 	if c.Port == 0 {
-		c.Port = 6333
+		c.Port = 6334 // Default gRPC port
 	}
 	if c.Timeout == 0 {
 		c.Timeout = 30
@@ -471,7 +471,7 @@ type AgentConfig struct {
 	SubAgents      []string        `yaml:"sub_agents,omitempty"`      // For supervisor agents: which agents can be orchestrated (empty = all)
 	Security       SecurityConfig  `yaml:"security,omitempty"`        // Security configuration
 
-	// Zero-config shortcuts (mutually exclusive with explicit config)
+	// Quick config shortcuts (mutually exclusive with explicit config)
 	// These provide simple configuration shortcuts that auto-expand to full config
 	DocsFolder  string `yaml:"docs_folder,omitempty"`  // Shortcut: auto-create document store from folder path (mutually exclusive with document_stores)
 	EnableTools bool   `yaml:"enable_tools,omitempty"` // Shortcut: auto-enable all local tools (mutually exclusive with explicit tools list)
@@ -525,7 +525,7 @@ func (c *AgentConfig) Validate() error {
 			return fmt.Errorf("llm provider reference is required for native agents")
 		}
 
-		// Validate zero-config shortcuts are not mixed with explicit config (Option C: Error on ambiguity)
+		// Validate shortcuts are not mixed with explicit config (Option C: Error on ambiguity)
 		// NOTE: Expansion only happens if explicit config is NOT set, so if both are set here, it's a user error
 		if c.DocsFolder != "" && len(c.DocumentStores) > 0 {
 			return fmt.Errorf("docs_folder shortcut and document_stores are mutually exclusive (use one or the other)")
@@ -837,9 +837,11 @@ func (c *ToolConfig) Validate() error {
 	// Type-specific validation
 	switch c.Type {
 	case "command":
-		if len(c.AllowedCommands) == 0 {
-			return fmt.Errorf("allowed_commands is required for command tool")
+		// Only require allowed_commands when sandboxing is disabled (same logic as CommandToolsConfig)
+		if !c.EnableSandboxing && len(c.AllowedCommands) == 0 {
+			return fmt.Errorf("allowed_commands is required when enable_sandboxing is false (security requirement)")
 		}
+		// If sandboxing is enabled (default), empty allowed_commands means "allow all" (safe)
 	case "write_file":
 		// Optional validation
 	case "search_replace":

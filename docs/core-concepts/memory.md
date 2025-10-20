@@ -80,7 +80,7 @@ agents:
         threshold: 0.8
         target: 0.6
       longterm:
-        enabled: true
+        
         storage_scope: "session"
 ```
 
@@ -148,7 +148,7 @@ databases:
   qdrant:
     type: "qdrant"
     host: "localhost"
-    port: 6333
+    port: 6334
 
 # Embedder
 embedders:
@@ -167,7 +167,7 @@ agents:
         strategy: "summary_buffer"
         budget: 2000
       longterm:
-        enabled: true
+        
         storage_scope: "session"     # all|session|conversational|summaries_only
         batch_size: 1                # Store after each message
         auto_recall: true            # Auto-inject memories
@@ -191,17 +191,17 @@ Control what gets stored in long-term memory:
 ```yaml
 # Store everything
 longterm:
-  enabled: true
+  
   storage_scope: "all"  # Every message vectorized
 
 # Store only summaries (efficient)
 longterm:
-  enabled: true
+  
   storage_scope: "summaries_only"
 
 # Store only user messages
 longterm:
-  enabled: true
+  
   storage_scope: "conversational"
 ```
 
@@ -211,7 +211,7 @@ Automatically retrieve relevant memories:
 
 ```yaml
 longterm:
-  enabled: true
+  
   auto_recall: true       # Automatically inject relevant memories
   recall_limit: 5         # Retrieve top 5 relevant memories
   similarity_threshold: 0.7  # Minimum similarity score
@@ -228,7 +228,7 @@ longterm:
 
 ```yaml
 longterm:
-  enabled: true
+  
   auto_recall: false  # Use tools to explicitly recall
 ```
 
@@ -262,7 +262,7 @@ agents:
         strategy: "summary_buffer"
         budget: 4000
       longterm:
-        enabled: true
+        
         storage_scope: "session"
         auto_recall: true
 ```
@@ -279,7 +279,7 @@ agents:
         strategy: "summary_buffer"
         budget: 4000
       longterm:
-        enabled: true
+        
         storage_scope: "all"
         auto_recall: true
         recall_limit: 10
@@ -389,7 +389,7 @@ agents:
         budget: 4000
         threshold: 0.8
       longterm:
-        enabled: true
+        
         storage_scope: "summaries_only"  # Only store summaries
         auto_recall: true
         recall_limit: 3
@@ -406,7 +406,7 @@ agents:
     embedder: "embedder"
     memory:
       longterm:
-        enabled: true
+        
         storage_scope: "session"
         collection: "user_sessions"
         # Session ID passed in API calls
@@ -423,7 +423,7 @@ agents:
       working:
         strategy: "summary_buffer"
       longterm:
-        enabled: true
+        
         storage_scope: "summaries_only"  # Only summaries, not raw messages
         auto_recall: false               # Manual recall only
 ```
@@ -448,7 +448,7 @@ agents:
         threshold: 0.8
       
       longterm:
-        enabled: true
+        
         storage_scope: "all"
         auto_recall: true
         recall_limit: 5
@@ -477,7 +477,7 @@ agents:
         window_size: 15
       
       longterm:
-        enabled: true
+        
         storage_scope: "summaries_only"
         auto_recall: true
         recall_limit: 10

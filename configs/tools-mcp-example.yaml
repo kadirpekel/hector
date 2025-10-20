@@ -217,7 +217,7 @@ agents:
 # ============================================================================
 #
 # 1. Install dependencies:
-#    - Qdrant: docker run -p 6333:6333 qdrant/qdrant
+#    - Qdrant: docker run -p 6334:6334 qdrant/qdrant
 #
 # 2. Set environment variables:
 #    export OPENAI_API_KEY="sk-..."

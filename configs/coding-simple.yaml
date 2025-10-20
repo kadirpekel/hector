@@ -1,13 +1,13 @@
 # ============================================================================
-# SIMPLE CODING ASSISTANT - Zero-Config Shortcuts Demo
+# SIMPLE CODING ASSISTANT - Shortcuts Demo
 # ============================================================================
 #
-# This demonstrates the new zero-config shortcuts for ultra-simple setup.
+# This demonstrates quick config shortcuts for ultra-simple setup.
 # Compare this to coding.yaml to see the difference!
 #
 # PREREQUISITES:
 # 1. Anthropic API key: export ANTHROPIC_API_KEY="sk-ant-..."
-# 2. Qdrant running: docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
+# 2. Qdrant running: docker run -p 6334:6334 -p 6334:6334 qdrant/qdrant
 # 3. Ollama with embeddings: ollama pull nomic-embed-text
 #
 # QUICK START:
@@ -31,7 +31,7 @@ agents:
     name: "AI Coding Assistant"
     llm: "claude"
     
-    # 🎯 Zero-config shortcuts (new!)
+    # 🎯 Quick config shortcuts
     docs_folder: "."         # Auto-creates document store + search tool
     enable_tools: true       # Auto-enables all local tools
     
@@ -78,14 +78,14 @@ agents:
 # ============================================================================
 #
 # BEFORE (coding.yaml):     ~450 lines with explicit configuration
-# AFTER (this file):        ~80 lines with zero-config shortcuts
+# AFTER (this file):        ~80 lines with shortcuts
 #
 # The shortcuts auto-expand to:
 # - databases:
 #     default-database:
 #       type: "qdrant"
 #       host: "localhost"
-#       port: 6333
+#       port: 6334
 # - embedders:
 #     default-embedder:
 #       type: "ollama"

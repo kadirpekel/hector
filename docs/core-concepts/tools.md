@@ -43,7 +43,7 @@ agents:
 tools:
   execute_command:
     type: command
-    enabled: true
+    
     enable_sandboxing: true  # Default: true (recommended for security)
     # Note: No allowed_commands = allow ALL commands (when sandboxing enabled)
     # To restrict, add: allowed_commands: ["ls", "cat", "grep", "git"]
@@ -77,7 +77,7 @@ agents:
 tools:
   write_file:
     type: write_file
-    enabled: true
+    
     allowed_paths: ["./src/", "./docs/"]
     max_file_size: 10485760  # 10MB in bytes
     # Note: No allowed_extensions = allow ALL file types by default
@@ -113,7 +113,7 @@ agents:
 
 tools:
   search_replace:
-    enabled: true
+    
     allowed_paths: ["./src/"]
     backup: true
 ```
@@ -138,7 +138,7 @@ databases:
   qdrant:
     type: "qdrant"
     host: "localhost"
-    port: 6333
+    port: 6334
 
 embedders:
   embedder:
@@ -248,12 +248,12 @@ agents:
 
 tools:
   execute_command:
-    enabled: true
+    
     allowed_commands: ["npm", "git", "python"]
     max_execution_time: "60s"
   
   write_file:
-    enabled: true
+    
     allowed_paths: ["./src/", "./tests/"]
     max_file_size: "5MB"
 ```
@@ -290,7 +290,7 @@ tools:
     - server:
         url: "http://localhost:3000"
         protocol: "mcp"
-      enabled: true
+      
 
 agents:
   assistant:
@@ -324,7 +324,7 @@ tools:
       auth:
         type: "api_key"
         api_key: "${COMPOSIO_API_KEY}"
-      enabled: true
+      
 
 agents:
   automation:
@@ -363,7 +363,7 @@ tools:
     - server:
         url: "http://localhost:3000"
         protocol: "mcp"
-      enabled: true
+      
 
 agents:
   assistant:
@@ -414,14 +414,14 @@ See [Plugin System](../reference/architecture.md#plugin-system) for implementati
 ```yaml
 tools:
   execute_command:
-    enabled: true
+    
     allowed_commands: ["ls", "cat"]      # Whitelist
     denied_commands: ["rm", "dd"]        # Blacklist
     max_execution_time: "30s"
     working_directory: "./"
     
   write_file:
-    enabled: true
+    
     allowed_paths: ["./src/"]
     denied_paths: ["./secrets/"]
     max_file_size: "10MB"
@@ -440,7 +440,7 @@ tools:
       auth:
         type: "bearer"  # bearer|api_key|basic
         token: "${MCP_TOKEN}"
-      enabled: true
+      
       tools:  # Optional: specific tools only
         - "github_create_issue"
         - "slack_send_message"
@@ -572,7 +572,7 @@ agents:
 
 tools:
   execute_command:
-    enabled: true
+    
     allowed_commands: ["docker", "kubectl", "git", "terraform"]
     max_execution_time: "120s"
 ```

@@ -36,13 +36,13 @@ RAG requires two components:
 ```bash
 docker run -d \
   --name qdrant \
-  -p 6333:6333 \
+  -p 6334:6334 \
   -p 6334:6334 \
   -v $(pwd)/qdrant_storage:/qdrant/storage \
   qdrant/qdrant
 ```
 
-Verify: http://localhost:6333/dashboard
+Verify: http://localhost:6334/dashboard
 
 ### 2. Start Ollama
 
@@ -62,7 +62,7 @@ databases:
   qdrant:
     type: "qdrant"
     host: "localhost"
-    port: 6333
+    port: 6334
 
 # Embedder
 embedders:
@@ -214,7 +214,7 @@ databases:
   qdrant:
     type: "qdrant"
     host: "localhost"
-    port: 6333           # gRPC port (default: 6333)
+    port: 6334           # gRPC port (default: 6334)
     grpc_port: 6334      # REST dashboard port (default: 6334)
     api_key: ""          # Optional for Qdrant Cloud
     use_https: false     # Enable for cloud
@@ -224,7 +224,7 @@ databases:
 ```bash
 docker run -d \
   --name qdrant \
-  -p 6333:6333 \
+  -p 6334:6334 \
   -p 6334:6334 \
   -v qdrant_data:/qdrant/storage \
   qdrant/qdrant
@@ -236,7 +236,7 @@ databases:
   qdrant_cloud:
     type: "qdrant"
     host: "your-cluster.qdrant.io"
-    port: 6333
+    port: 6334
     api_key: "${QDRANT_API_KEY}"
     use_https: true
 ```
@@ -405,7 +405,7 @@ databases:
   qdrant:
     type: "qdrant"
     host: "localhost"
-    port: 6333
+    port: 6334
     connection_pool_size: 10  # Connection pooling
 ```
 
@@ -479,10 +479,10 @@ agents:
 
 ```bash
 # View Qdrant dashboard
-open http://localhost:6333/dashboard
+open http://localhost:6334/dashboard
 
 # Check collection info
-curl http://localhost:6333/collections/codebase
+curl http://localhost:6334/collections/codebase
 ```
 
 ### Debug Search Results
@@ -502,7 +502,7 @@ agents:
 
 ```bash
 # Delete collection and re-index
-curl -X DELETE http://localhost:6333/collections/codebase
+curl -X DELETE http://localhost:6334/collections/codebase
 
 # Restart Hector to trigger re-indexing
 hector serve --config config.yaml
@@ -522,7 +522,7 @@ docker ps | grep qdrant
 docker logs qdrant
 
 # Verify port
-curl http://localhost:6333/
+curl http://localhost:6334/
 ```
 
 ### "Ollama not responding"

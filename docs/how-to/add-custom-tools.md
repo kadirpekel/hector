@@ -126,7 +126,7 @@ Create `config.yaml`:
 tools:
   weather_server:
     type: "mcp"
-    enabled: true
+    
     server_url: "http://localhost:3000"
     description: "Weather information tools"
 
@@ -274,7 +274,7 @@ composio server start --port 3000
 tools:
   composio:
     type: "mcp"
-    enabled: true
+    
     server_url: "http://localhost:3000"
     description: "Composio - 150+ app integrations"
     # Authentication handled by Composio server
@@ -441,7 +441,7 @@ In Hector config:
 tools:
   custom_mcp:
     type: "mcp"
-    enabled: true
+    
     server_url: "http://localhost:3000"
     description: "Custom MCP tools"
     # Add authentication in MCP server if needed

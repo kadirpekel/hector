@@ -590,7 +590,7 @@ agents:
     type: "a2a"
     url: "https://agent.example.com"
     metrics:
-      enabled: true
+      
       track_latency: true
       track_errors: true
 ```

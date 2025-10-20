@@ -440,7 +440,7 @@ agents:
 global:
   a2a_server:
     tls:
-      enabled: true
+      
       cert_file: "/path/to/cert.pem"
       key_file: "/path/to/key.pem"
 ```
