@@ -117,8 +117,8 @@ func (g *RESTGateway) setupRouting() http.Handler {
 		// Otherwise, route to agent-specific endpoints via gRPC
 		g.createAgentRoutingHandler(g.mux).ServeHTTP(w, r)
 	}))
-	log.Printf("   → Agent Cards: /v1/agents/{agent_id}/.well-known/agent-card.json (per-agent)")
-	log.Printf("   → Agent endpoints: /v1/agents/{agent_id}/* (A2A spec-compliant)")
+	log.Printf("   → Agent Cards: /v1/agents/{name}/.well-known/agent-card.json (per-agent)")
+	log.Printf("   → Agent endpoints: /v1/agents/{name}/* (A2A spec-compliant)")
 
 	// Also support root-level endpoints for backward compatibility and single-agent mode
 	mainMux.Handle("/v1/", g.mux)
@@ -225,20 +225,20 @@ func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Extract agent ID from path: /v1/agents/{agent_id}/.well-known/agent-card.json
+	// Extract agent name from path: /v1/agents/{name}/.well-known/agent-card.json
 	path := r.URL.Path
 	remainder := strings.TrimPrefix(path, "/v1/agents/")
 	parts := strings.Split(remainder, "/")
 	if len(parts) == 0 || parts[0] == "" {
-		http.Error(w, "Agent ID required", http.StatusBadRequest)
+		http.Error(w, "Agent name required", http.StatusBadRequest)
 		return
 	}
 
-	agentID := parts[0]
+	agentName := parts[0]
 
 	// Create gRPC client and call GetAgentCard with agent-name metadata
 	client := pb.NewA2AServiceClient(g.conn)
-	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
+	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentName)
 
 	card, err := client.GetAgentCard(ctx, &pb.GetAgentCardRequest{})
 	if err != nil {
@@ -255,7 +255,7 @@ func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request)
 		"description":  card.Description,
 		"version":      card.Version,
 		"capabilities": card.Capabilities,
-		"endpoint":     fmt.Sprintf("/v1/agents/%s", agentID),
+		"endpoint":     fmt.Sprintf("/v1/agents/%s", agentName),
 	}
 
 	// Include security information if present
@@ -269,12 +269,12 @@ func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request)
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-// createAgentRoutingHandler creates a handler that extracts agent ID from URL path
+// createAgentRoutingHandler creates a handler that extracts agent name from URL path
 // and adds it as metadata for the gRPC service to route correctly
-// Transforms: /v1/agents/{agent_id}/message:send -> /v1/message:send with agent-name metadata
+// Transforms: /v1/agents/{name}/message:send -> /v1/message:send with agent-name metadata
 func (g *RESTGateway) createAgentRoutingHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract agent ID from path: /v1/agents/{agent_id}/...
+		// Extract agent name from path: /v1/agents/{name}/...
 		path := r.URL.Path
 		if !strings.HasPrefix(path, "/v1/agents/") {
 			http.Error(w, "Invalid agent path", http.StatusNotFound)
@@ -286,13 +286,13 @@ func (g *RESTGateway) createAgentRoutingHandler(next http.Handler) http.Handler 
 		parts := strings.SplitN(remainder, "/", 2)
 
 		if len(parts) == 0 || parts[0] == "" {
-			http.Error(w, "Agent ID required", http.StatusBadRequest)
+			http.Error(w, "Agent name required", http.StatusBadRequest)
 			return
 		}
 
-		agentID := parts[0]
+		agentName := parts[0]
 
-		// Rewrite path to standard A2A endpoint by removing /v1/agents/{agent_id}
+		// Rewrite path to standard A2A endpoint by removing /v1/agents/{name}
 		// e.g., /v1/agents/assistant/message:send -> /v1/message:send
 		if len(parts) == 2 {
 			r.URL.Path = "/v1/" + parts[1]
@@ -303,7 +303,7 @@ func (g *RESTGateway) createAgentRoutingHandler(next http.Handler) http.Handler 
 		// Add agent-name to gRPC metadata so RegistryService can route correctly
 		// The grpc-gateway runtime will convert this header to gRPC metadata
 		// Use grpc-metadata- prefix for proper conversion
-		r.Header.Set("grpc-metadata-agent-name", agentID)
+		r.Header.Set("grpc-metadata-agent-name", agentName)
 
 		// Forward to grpc-gateway mux
 		next.ServeHTTP(w, r)

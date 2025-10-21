@@ -167,49 +167,35 @@ func (s *RegistryService) GetAgentByName(name string) (pb.A2AServiceServer, erro
 	return agentEntry.Agent, nil
 }
 
-// GetAgent retrieves an agent by ID (implements DiscoverableService interface)
-func (s *RegistryService) GetAgent(agentID string) (pb.A2AServiceServer, bool) {
-	agentEntry, ok := s.registry.Get(agentID)
+// GetAgent retrieves an agent by name (implements DiscoverableService interface)
+func (s *RegistryService) GetAgent(agentName string) (pb.A2AServiceServer, bool) {
+	agentEntry, ok := s.registry.Get(agentName)
 	if !ok {
 		return nil, false
 	}
 	return agentEntry.Agent, true
 }
 
-// GetAgentMetadata returns metadata for a specific agent
-func (s *RegistryService) GetAgentMetadata(name string) (*AgentMetadata, error) {
+// GetAgentCardAndVisibility returns the A2A agent card and visibility for a specific agent
+func (s *RegistryService) GetAgentCardAndVisibility(name string) (*pb.AgentCard, string, error) {
 	agentEntry, ok := s.registry.Get(name)
 	if !ok {
-		return nil, fmt.Errorf("agent '%s' not found", name)
+		return nil, "", fmt.Errorf("agent '%s' not found", name)
 	}
 
-	// Get agent card to extract metadata
+	// Get official A2A agent card
 	ctx := context.Background()
 	card, err := agentEntry.Agent.GetAgentCard(ctx, &pb.GetAgentCardRequest{})
 	if err != nil {
-		// Return minimal metadata if card retrieval fails
-		return &AgentMetadata{
-			ID:          name,
-			Name:        agentEntry.Name,
-			Description: agentEntry.Config.Description,
-			Version:     "1.0.0",
-			Visibility:  agentEntry.Config.Visibility,
-		}, nil
+		return nil, "", fmt.Errorf("failed to get agent card: %w", err)
 	}
 
-	// Build metadata from agent card
-	metadata := &AgentMetadata{
-		ID:              name,
-		Name:            card.Name,
-		Description:     card.Description,
-		Version:         card.Version,
-		Visibility:      agentEntry.Config.Visibility,
-		Capabilities:    card.Capabilities,
-		SecuritySchemes: card.SecuritySchemes,
-		Security:        card.Security,
+	visibility := agentEntry.Config.Visibility
+	if visibility == "" {
+		visibility = "public" // Default visibility
 	}
 
-	return metadata, nil
+	return card, visibility, nil
 }
 
 // Compile-time check that RegistryService implements pb.A2AServiceServer

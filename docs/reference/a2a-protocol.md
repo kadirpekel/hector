@@ -447,7 +447,7 @@ curl -X POST http://localhost:8082/rpc \
     "jsonrpc": "2.0",
     "method": "message/send",
     "params": {
-      "agent_id": "assistant",
+      "name": "assistant",
       "message": {"role":"ROLE_USER","content":[{"text":"Hello"}]}
     },
     "id": 1
@@ -479,7 +479,7 @@ curl -X POST http://localhost:8082/rpc \
     "code": "NOT_FOUND",
     "message": "Agent not found: unknown_agent",
     "details": {
-      "agent_id": "unknown_agent"
+      "name": "unknown_agent"
     }
   }
 }

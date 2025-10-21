@@ -6,7 +6,7 @@ import (
 )
 
 // TaskGetCommand retrieves task details
-func TaskGetCommand(args Args) error {
+func TaskGetCommand(args *CLIArgs) error {
 	// Create client
 	a2aClient, err := createClient(args)
 	if err != nil {
@@ -27,7 +27,7 @@ func TaskGetCommand(args Args) error {
 }
 
 // TaskCancelCommand cancels a running task
-func TaskCancelCommand(args Args) error {
+func TaskCancelCommand(args *CLIArgs) error {
 	// Create client
 	a2aClient, err := createClient(args)
 	if err != nil {

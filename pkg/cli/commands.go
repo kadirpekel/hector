@@ -14,7 +14,7 @@ import (
 )
 
 // ListCommand lists all available agents
-func ListCommand(args Args) error {
+func ListCommand(args *CLIArgs) error {
 	// Create client
 	a2aClient, err := createClient(args)
 	if err != nil {
@@ -39,7 +39,7 @@ func ListCommand(args Args) error {
 }
 
 // InfoCommand displays agent information
-func InfoCommand(args Args) error {
+func InfoCommand(args *CLIArgs) error {
 	// Create client
 	a2aClient, err := createClient(args)
 	if err != nil {
@@ -60,7 +60,7 @@ func InfoCommand(args Args) error {
 }
 
 // CallCommand sends a single message to an agent
-func CallCommand(args Args) error {
+func CallCommand(args *CLIArgs) error {
 	// For config mode with agent, validate before expensive initialization
 	if args.ConfigFile != "" && args.AgentID != "" {
 		a2aClient, _, err := createClientWithValidation(args)
@@ -80,7 +80,7 @@ func CallCommand(args Args) error {
 	return executeCall(a2aClient, args)
 }
 
-func executeCall(a2aClient client.A2AClient, args Args) error {
+func executeCall(a2aClient client.A2AClient, args *CLIArgs) error {
 
 	// Create message
 	msg := &pb.Message{
@@ -127,7 +127,7 @@ func executeCall(a2aClient client.A2AClient, args Args) error {
 }
 
 // ChatCommand starts an interactive chat session
-func ChatCommand(args Args) error {
+func ChatCommand(args *CLIArgs) error {
 	// For config mode with agent, validate before expensive initialization
 	if args.ConfigFile != "" && args.AgentID != "" {
 		a2aClient, _, err := createClientWithValidation(args)
@@ -147,7 +147,7 @@ func ChatCommand(args Args) error {
 	return executeChat(a2aClient, args)
 }
 
-func executeChat(a2aClient client.A2AClient, args Args) error {
+func executeChat(a2aClient client.A2AClient, args *CLIArgs) error {
 
 	// Display welcome message
 	mode := "Local Mode"
@@ -233,7 +233,7 @@ func executeChat(a2aClient client.A2AClient, args Args) error {
 }
 
 // createClient creates the appropriate A2A client (HTTP or Local) based on args
-func createClient(args Args) (client.A2AClient, error) {
+func createClient(args *CLIArgs) (client.A2AClient, error) {
 	if args.ServerURL != "" {
 		// Server mode: use HTTP client
 		return runtime.NewHTTPClient(args.ServerURL, args.Token), nil
@@ -260,7 +260,7 @@ func createClient(args Args) (client.A2AClient, error) {
 
 // createClientWithValidation creates a client and validates agent exists first (for config mode)
 // This avoids expensive initialization if the agent doesn't exist
-func createClientWithValidation(args Args) (client.A2AClient, *runtime.Runtime, error) {
+func createClientWithValidation(args *CLIArgs) (client.A2AClient, *runtime.Runtime, error) {
 	if args.ServerURL != "" {
 		// Server mode: use HTTP client (no validation needed)
 		return runtime.NewHTTPClient(args.ServerURL, args.Token), nil, nil

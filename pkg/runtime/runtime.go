@@ -31,6 +31,21 @@ type Options struct {
 	AgentName  string // Agent name/ID for zero-config agent (default: "assistant")
 }
 
+// ToZeroConfigOptions converts runtime Options to config.ZeroConfigOptions
+// This consolidates the mapping logic in one place to avoid duplication
+func (o *Options) ToZeroConfigOptions() config.ZeroConfigOptions {
+	return config.ZeroConfigOptions{
+		Provider:    o.Provider,
+		APIKey:      o.APIKey,
+		BaseURL:     o.BaseURL,
+		Model:       o.Model,
+		EnableTools: o.Tools,
+		MCPURL:      o.MCPURL,
+		DocsFolder:  o.DocsFolder,
+		AgentName:   o.AgentName,
+	}
+}
+
 // New creates a new Runtime instance
 func New(opts Options) (*Runtime, error) {
 	cfg, err := loadOrCreateConfig(opts)
@@ -85,17 +100,8 @@ func loadOrCreateConfig(opts Options) (*config.Config, error) {
 		return cfg, nil
 	}
 
-	// File doesn't exist, create zero-config
-	cfg := config.CreateZeroConfig(config.ZeroConfigOptions{
-		Provider:    opts.Provider,
-		APIKey:      opts.APIKey,
-		BaseURL:     opts.BaseURL,
-		Model:       opts.Model,
-		EnableTools: opts.Tools,
-		MCPURL:      opts.MCPURL,
-		DocsFolder:  opts.DocsFolder,
-		AgentName:   opts.AgentName,
-	})
+	// File doesn't exist, create zero-config using consolidated method
+	cfg := config.CreateZeroConfig(opts.ToZeroConfigOptions())
 
 	// Validate the configuration
 	if err := cfg.Validate(); err != nil {

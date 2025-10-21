@@ -17,20 +17,8 @@ type AgentDiscovery struct {
 // DiscoverableService interface for services that support agent discovery
 type DiscoverableService interface {
 	ListAgents() []string
-	GetAgent(agentID string) (pb.A2AServiceServer, bool)
-	GetAgentMetadata(agentID string) (*AgentMetadata, error)
-}
-
-// AgentMetadata holds agent metadata for discovery
-type AgentMetadata struct {
-	ID              string
-	Name            string
-	Description     string
-	Version         string
-	Visibility      string // "public", "internal", "private"
-	Capabilities    *pb.AgentCapabilities
-	SecuritySchemes map[string]*pb.SecurityScheme
-	Security        []*pb.Security
+	GetAgent(agentName string) (pb.A2AServiceServer, bool)
+	GetAgentCardAndVisibility(agentName string) (*pb.AgentCard, string, error)
 }
 
 // AuthConfig holds authentication configuration
@@ -77,33 +65,20 @@ func (d *AgentDiscovery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Determine which agents to show based on auth status
 	isAuthenticated := claims != nil
 
-	// Get all agent IDs
-	agentIDs := d.service.ListAgents()
+	// Get all agent names
+	agentNames := d.service.ListAgents()
 
-	// Build response with agent cards
-	type AgentCard struct {
-		ID              string                        `json:"id"`
-		Name            string                        `json:"name"`
-		Description     string                        `json:"description"`
-		Version         string                        `json:"version"`
-		Visibility      string                        `json:"visibility,omitempty"`
-		Capabilities    *pb.AgentCapabilities         `json:"capabilities,omitempty"`
-		Endpoint        string                        `json:"endpoint,omitempty"`
-		AgentCardURL    string                        `json:"agent_card_url,omitempty"`
-		SecuritySchemes map[string]*pb.SecurityScheme `json:"security_schemes,omitempty"`
-		Security        []*pb.Security                `json:"security,omitempty"`
-	}
+	// Build response with pure A2A-compliant agent cards
+	// The card.Name field IS the agent identifier - following A2A protocol!
+	agents := []*pb.AgentCard{}
 
-	agents := []AgentCard{}
-
-	for _, agentID := range agentIDs {
-		metadata, err := d.service.GetAgentMetadata(agentID)
+	for _, agentName := range agentNames {
+		card, visibility, err := d.service.GetAgentCardAndVisibility(agentName)
 		if err != nil {
-			continue // Skip if metadata unavailable
+			continue // Skip if card unavailable
 		}
 
-		// Apply visibility filtering per A2A spec section 5.2
-		visibility := metadata.Visibility
+		// Apply visibility filtering (server-side only)
 		if visibility == "" {
 			visibility = "public" // Default visibility
 		}
@@ -126,20 +101,8 @@ func (d *AgentDiscovery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Unknown visibility, treat as public
 		}
 
-		// Build agent card
-		card := AgentCard{
-			ID:              agentID,
-			Name:            metadata.Name,
-			Description:     metadata.Description,
-			Version:         metadata.Version,
-			Visibility:      visibility,
-			Capabilities:    metadata.Capabilities,
-			Endpoint:        "/v1/agents/" + agentID,
-			AgentCardURL:    "/v1/agents/" + agentID + "/.well-known/agent-card.json",
-			SecuritySchemes: metadata.SecuritySchemes,
-			Security:        metadata.Security,
-		}
-
+		// Return pure A2A AgentCard - card.Name is the identifier!
+		// card.Url already contains the endpoint
 		agents = append(agents, card)
 	}
 
@@ -158,7 +121,7 @@ func (d *AgentDiscovery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // AgentCardHandler returns the card for a specific agent
 func (d *AgentDiscovery) AgentCardHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Extract agent ID from path (e.g., /v1/agents/{agentID})
+		// Extract agent name from path (e.g., /v1/agents/{name})
 		// This is handled by the grpc-gateway for /v1/card
 		// This is just a fallback handler
 

@@ -362,7 +362,7 @@ Simple JSON-RPC 2.0 interface.
   "jsonrpc": "2.0",
   "method": "message/send",
   "params": {
-    "agent_id": "assistant",
+    "name": "assistant",
     "message": {
       "role": "ROLE_USER",
       "content": [{"text": "Hello"}]
@@ -395,7 +395,7 @@ curl -X POST http://localhost:8082/rpc \
     "jsonrpc": "2.0",
     "method": "message/send",
     "params": {
-      "agent_id": "assistant",
+      "name": "assistant",
       "message": {
         "role": "ROLE_USER",
         "content": [{"text": "Hello"}]
@@ -413,7 +413,7 @@ curl -X POST http://localhost:8082/rpc \
   "jsonrpc": "2.0",
   "method": "card/get",
   "params": {
-    "agent_id": "assistant"
+    "name": "assistant"
   },
   "id": 1
 }
@@ -470,7 +470,7 @@ Create and manage conversation sessions.
     "code": "INVALID_ARGUMENT",
     "message": "Agent not found: unknown_agent",
     "details": {
-      "agent_id": "unknown_agent"
+      "name": "unknown_agent"
     }
   }
 }
