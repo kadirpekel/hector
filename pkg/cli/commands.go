@@ -240,7 +240,6 @@ func createClient(args Args) (client.A2AClient, error) {
 	}
 
 	// Local mode: use Runtime
-	// Note: For config mode with agent validation, caller should use createClientWithValidation
 	rt, err := runtime.New(runtime.Options{
 		ConfigFile: args.ConfigFile,
 		Provider:   args.Provider,
@@ -250,6 +249,7 @@ func createClient(args Args) (client.A2AClient, error) {
 		Tools:      args.Tools,
 		MCPURL:     args.MCPURL,
 		DocsFolder: args.DocsFolder,
+		AgentName:  args.AgentID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize runtime: %w", err)
@@ -275,6 +275,7 @@ func createClientWithValidation(args Args) (client.A2AClient, *runtime.Runtime, 
 		Tools:      args.Tools,
 		MCPURL:     args.MCPURL,
 		DocsFolder: args.DocsFolder,
+		AgentName:  args.AgentID,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load configuration: %w", err)

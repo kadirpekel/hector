@@ -466,25 +466,68 @@ func LoadConfigFromString(yamlContent string) (*Config, error) {
 	return &config, nil
 }
 
+// Default agent name for zero-config mode
+const DefaultAgentName = "assistant"
+
 // ZeroConfigOptions holds configuration options for zero-config mode
 type ZeroConfigOptions struct {
-	Provider    string // LLM provider: "openai" (default), "anthropic", "gemini"
-	APIKey      string // API key for the selected provider (resolved from flags or environment before being passed here)
-	BaseURL     string // API base URL (provider-specific defaults)
-	Model       string // Model name (provider-specific defaults)
+	Provider    string // LLM provider: "openai", "anthropic", "gemini"
+	APIKey      string // API key for the selected provider
+	BaseURL     string // API base URL
+	Model       string // Model name
 	EnableTools bool   // Enable all local tools
-	MCPURL      string // MCP server URL for tool integration (resolved from --mcp-url flag or MCP_URL env)
+	MCPURL      string // MCP server URL for tool integration
 	DocsFolder  string // Document store folder path (RAG support)
+	AgentName   string // Agent name/ID (defaults to DefaultAgentName)
 }
 
-// CreateZeroConfig creates a configuration for zero-config mode with custom options
-// Supports openai (default), anthropic, and gemini providers
-// Note: API keys and MCP URL should already be resolved (from flags or environment) before calling this
+// CreateZeroConfig creates a configuration for zero-config mode
+// Supports openai, anthropic, and gemini providers
 func CreateZeroConfig(opts ZeroConfigOptions) *Config {
+	// Resolve API key from environment if not provided via flags
+	if opts.APIKey == "" {
+		if opts.Provider != "" {
+			// Provider specified: look for matching API key
+			switch opts.Provider {
+			case "openai":
+				opts.APIKey = os.Getenv("OPENAI_API_KEY")
+			case "anthropic":
+				opts.APIKey = os.Getenv("ANTHROPIC_API_KEY")
+			case "gemini":
+				opts.APIKey = os.Getenv("GEMINI_API_KEY")
+			}
+		} else {
+			// Auto-detect provider from available API keys (priority: OpenAI → Anthropic → Gemini)
+			if key := os.Getenv("OPENAI_API_KEY"); key != "" {
+				opts.APIKey = key
+				opts.Provider = "openai"
+			} else if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+				opts.APIKey = key
+				opts.Provider = "anthropic"
+			} else if key := os.Getenv("GEMINI_API_KEY"); key != "" {
+				opts.APIKey = key
+				opts.Provider = "gemini"
+			}
+		}
+	}
+
+	// Resolve MCP URL from environment if not provided
+	if opts.MCPURL == "" {
+		opts.MCPURL = os.Getenv("MCP_URL")
+	}
+
 	// Default to OpenAI if provider not specified
 	if opts.Provider == "" {
 		opts.Provider = "openai"
 	}
+
+	// Default to DefaultAgentName if agent name not specified
+	if opts.AgentName == "" {
+		opts.AgentName = DefaultAgentName
+	}
+
+	// Note: API key validation happens in Config.Validate() via LLMProviderConfig.Validate()
+	// This allows proper error handling through the runtime initialization flow
 
 	// Set provider-specific defaults
 	switch opts.Provider {
@@ -528,7 +571,7 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 			opts.Provider: {
 				Type:        opts.Provider,
 				Model:       opts.Model,
-				APIKey:      opts.APIKey, // Already resolved from flag or environment in CLI layer
+				APIKey:      opts.APIKey,
 				Host:        opts.BaseURL,
 				Temperature: 0.7,
 				MaxTokens:   4096,
@@ -670,10 +713,10 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 	}
 
 	cfg.Agents = map[string]AgentConfig{
-		"assistant": agentConfig,
+		opts.AgentName: agentConfig,
 	}
 
-	// Configure MCP tool if URL provided (already resolved from flag or environment)
+	// Configure MCP tool if URL provided
 	if opts.MCPURL != "" {
 		if cfg.Tools.Tools == nil {
 			cfg.Tools.Tools = make(map[string]ToolConfig)
@@ -681,7 +724,7 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 		cfg.Tools.Tools["mcp"] = ToolConfig{
 			Type:      "mcp",
 			Enabled:   true,
-			ServerURL: opts.MCPURL, // Already resolved from --mcp-url flag or MCP_URL env
+			ServerURL: opts.MCPURL,
 		}
 	}
 

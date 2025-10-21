@@ -34,22 +34,6 @@ type Args struct {
 	VectorDB      string
 }
 
-// SetDefaults sets default values for CLI arguments
-func (a *Args) SetDefaults() {
-	if a.ConfigFile == "" {
-		a.ConfigFile = "hector.yaml"
-	}
-	if a.Port == 0 {
-		a.Port = 8080 // Match A2A server default
-	}
-	if a.BaseURL == "" {
-		a.BaseURL = "https://api.openai.com/v1"
-	}
-	if a.Model == "" {
-		a.Model = "gpt-4"
-	}
-	// Streaming is default
-	if !a.Stream {
-		a.Stream = true
-	}
-}
+// Defaults are handled in two layers:
+// - CLI flags: Set at flag definition in main.go parseArgs()
+// - Zero-config: Set in config.CreateZeroConfig()

@@ -28,6 +28,7 @@ type Options struct {
 	Tools      bool
 	MCPURL     string
 	DocsFolder string
+	AgentName  string // Agent name/ID for zero-config agent (default: "assistant")
 }
 
 // New creates a new Runtime instance
@@ -85,15 +86,15 @@ func loadOrCreateConfig(opts Options) (*config.Config, error) {
 	}
 
 	// File doesn't exist, create zero-config
-	// Note: API key and MCP URL resolution from environment happens in CLI layer (parseArgs)
 	cfg := config.CreateZeroConfig(config.ZeroConfigOptions{
-		Provider:    opts.Provider, // Can be empty - defaults to "openai"
-		APIKey:      opts.APIKey,   // Already resolved from flags or environment in CLI layer
+		Provider:    opts.Provider,
+		APIKey:      opts.APIKey,
 		BaseURL:     opts.BaseURL,
 		Model:       opts.Model,
 		EnableTools: opts.Tools,
-		MCPURL:      opts.MCPURL, // Already resolved from --mcp-url flag or MCP_URL env
+		MCPURL:      opts.MCPURL,
 		DocsFolder:  opts.DocsFolder,
+		AgentName:   opts.AgentName,
 	})
 
 	// Validate the configuration

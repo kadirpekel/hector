@@ -239,8 +239,16 @@ func (c *LLMProviderConfig) Validate() error {
 	if c.Host == "" {
 		return fmt.Errorf("host is required")
 	}
-	if c.Type == "openai" && c.APIKey == "" {
-		return fmt.Errorf("api_key is required for OpenAI")
+	// API key validation for all providers that require it
+	if c.APIKey == "" {
+		switch c.Type {
+		case "openai":
+			return fmt.Errorf("api_key is required for OpenAI")
+		case "anthropic":
+			return fmt.Errorf("api_key is required for Anthropic")
+		case "gemini":
+			return fmt.Errorf("api_key is required for Gemini")
+		}
 	}
 	if c.Temperature < 0 || c.Temperature > 2 {
 		return fmt.Errorf("temperature must be between 0 and 2")

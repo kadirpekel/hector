@@ -47,29 +47,7 @@ const (
 	ProviderOpenAI    = "openai"
 	ProviderAnthropic = "anthropic"
 	ProviderGemini    = "gemini"
-	DefaultProvider   = ProviderOpenAI
 )
-
-// getProviderOrDefault returns the provider or default if empty
-func getProviderOrDefault(provider string) string {
-	if provider != "" {
-		return provider
-	}
-	return DefaultProvider
-}
-
-// validateProvider checks if provider is valid
-func validateProvider(provider string) error {
-	if provider == "" {
-		return nil // Empty is OK, will use default
-	}
-	switch provider {
-	case ProviderOpenAI, ProviderAnthropic, ProviderGemini:
-		return nil
-	default:
-		return fmt.Errorf("invalid provider: %s (must be one of: openai, anthropic, gemini)", provider)
-	}
-}
 
 // checkForMisplacedFlags detects flags after positional arguments
 func checkForMisplacedFlags(args []string, command string) {
@@ -419,7 +397,6 @@ func main() {
 	args := parseArgs()
 
 	// Convert CLIArgs to cli.Args
-	// Note: Environment variables and provider are resolved in parseArgs()
 	cliArgs := cli.Args{
 		ConfigFile: args.ConfigFile,
 		ServerURL:  args.ServerURL,
@@ -430,7 +407,7 @@ func main() {
 		Stream:     args.Stream,
 		Debug:      args.Debug,
 		Port:       args.Port,
-		Provider:   args.Provider, // Already set to detected provider or default
+		Provider:   args.Provider,
 		APIKey:     args.APIKey,
 		BaseURL:    args.BaseURL,
 		Model:      args.Model,
@@ -580,6 +557,16 @@ func parseArgs() *CLIArgs {
 		// Detect flags in wrong position (after positional args)
 		checkForMisplacedFlags(serveCmd.Args(), "serve")
 
+		// Optional positional argument: agent name for zero-config mode
+		// If not provided, CreateZeroConfig uses config.DefaultAgentName
+		if len(serveCmd.Args()) > 0 {
+			args.AgentID = serveCmd.Args()[0]
+		}
+
+		if len(serveCmd.Args()) > 1 {
+			fatalf("Usage: hector serve [AGENT] [OPTIONS]\n\nError: Too many positional arguments.\n\nExamples:\n  hector serve                    # Creates agent named '%s' (default)\n  hector serve myagent            # Creates agent named 'myagent'\n  hector serve --tools gopher     # Creates agent named 'gopher' with tools\n  hector serve --config file.yaml # Uses agents from config file", config.DefaultAgentName)
+		}
+
 	case "list":
 		_ = listCmd.Parse(os.Args[2:])
 		args.Command = CommandList
@@ -624,7 +611,7 @@ func parseArgs() *CLIArgs {
 			if len(callCmd.Args()) > 1 {
 				fatalf("Usage: hector call [OPTIONS] \"prompt\"\n\nError: Agent name not supported in zero-config mode.\n\nFor zero-config mode:\n  hector call \"your prompt\"\n\nTo use named agents, create a config file:\n  hector call --config myconfig.yaml <agent-name> \"your prompt\"")
 			}
-			args.AgentID = getDefaultAgentName()
+			args.AgentID = config.DefaultAgentName
 			args.Input = callCmd.Args()[0]
 
 		case ModeLocalConfig:
@@ -679,7 +666,7 @@ func parseArgs() *CLIArgs {
 			if len(chatCmd.Args()) > 0 {
 				fatalf("Usage: hector chat [OPTIONS]\n\nError: Agent name not supported in zero-config mode.\n\nFor zero-config mode, omit agent name:\n  hector chat\n\nTo use named agents, create a config file:\n  hector chat --config myconfig.yaml <agent-name>")
 			}
-			args.AgentID = getDefaultAgentName()
+			args.AgentID = config.DefaultAgentName
 
 		case ModeLocalConfig:
 			// Local config mode: agent name is REQUIRED
@@ -736,61 +723,10 @@ func parseArgs() *CLIArgs {
 	}
 
 	// Track which zero-config flags were explicitly provided by user
-	// Check this BEFORE environment variable resolution
 	explicitAPIKey := args.APIKey != ""
 	explicitModel := args.Model != ""
 	explicitBaseURL := args.BaseURL != ""
 	explicitTools := args.Tools
-
-	// Resolve environment variables for flags that weren't explicitly set
-	// This happens AFTER flag parsing so flags always override environment
-	if args.APIKey == "" {
-		providerFromFlag := args.Provider != "" // Remember if user explicitly set --provider
-
-		if providerFromFlag {
-			// If provider is explicitly set via flag, only look for matching API key
-			switch args.Provider {
-			case ProviderOpenAI:
-				if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-					args.APIKey = key
-				}
-			case ProviderAnthropic:
-				if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
-					args.APIKey = key
-				}
-			case ProviderGemini:
-				if key := os.Getenv("GEMINI_API_KEY"); key != "" {
-					args.APIKey = key
-				}
-			}
-		} else {
-			// No --provider flag: auto-detect from available API keys (priority: OpenAI → Anthropic → Gemini)
-			if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-				args.APIKey = key
-				args.Provider = ProviderOpenAI
-			} else if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
-				args.APIKey = key
-				args.Provider = ProviderAnthropic
-			} else if key := os.Getenv("GEMINI_API_KEY"); key != "" {
-				args.APIKey = key
-				args.Provider = ProviderGemini
-			}
-		}
-	}
-
-	// Validate provider value if explicitly set
-	if err := validateProvider(args.Provider); err != nil {
-		fatalf("❌ %v", err)
-	}
-
-	// Ensure provider is always set (use default if not detected)
-	args.Provider = getProviderOrDefault(args.Provider)
-
-	if args.MCPURL == "" {
-		if mcpURL := os.Getenv("MCP_URL"); mcpURL != "" {
-			args.MCPURL = mcpURL
-		}
-	}
 
 	// Validate mode and flags after parsing
 	// Pass explicit flag info for better validation
@@ -824,11 +760,6 @@ func detectMode(args *CLIArgs) CLIMode {
 		return ModeLocalConfig
 	}
 	return ModeLocalZeroConfig
-}
-
-// getDefaultAgentName returns the default agent name for local mode
-func getDefaultAgentName() string {
-	return "assistant"
 }
 
 // validateModeAndFlags checks for invalid flag combinations and fails fast
@@ -908,14 +839,8 @@ Server: %s`, mode, mode, args.ServerURL)
 		}
 
 	case ModeLocalZeroConfig:
-		// Local zero-config mode: Require API key
-		if args.APIKey == "" && os.Getenv("OPENAI_API_KEY") == "" &&
-			os.Getenv("ANTHROPIC_API_KEY") == "" && os.Getenv("GEMINI_API_KEY") == "" {
-			fatalf("Error: API key required for zero-config mode.\n\n" +
-				"Provide via flag: --api-key YOUR_KEY\n" +
-				"Or environment: OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY\n" +
-				"Or use config file: --config FILE")
-		}
+		// Local zero-config mode: API key validation happens in config.CreateZeroConfig()
+		// which checks both flags and environment variables
 
 	case ModeLocalConfig:
 		// Local config mode: Validate config file exists
@@ -946,21 +871,15 @@ func executeServeCommand(args *CLIArgs) {
 			fmt.Println("🔧 No config file found, entering zero-config mode")
 		}
 
-		// Get API key from flag or environment
-		// Support multiple providers: OpenAI, Anthropic, Gemini
-		// Note: API key, provider, and MCP URL are already resolved in parseArgs()
-		if args.APIKey == "" {
-			fatalf("API key required for zero-config mode\nSet one of: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY\nOr use --api-key flag")
-		}
-
 		opts := config.ZeroConfigOptions{
-			Provider:    args.Provider, // Already set to detected provider or default
-			APIKey:      args.APIKey,   // Already resolved from flag or environment
+			Provider:    args.Provider,
+			APIKey:      args.APIKey,
 			BaseURL:     args.BaseURL,
 			Model:       args.Model,
 			EnableTools: args.Tools,
-			MCPURL:      args.MCPURL, // Already resolved from --mcp-url flag or MCP_URL env
+			MCPURL:      args.MCPURL,
 			DocsFolder:  args.DocsFolder,
+			AgentName:   args.AgentID,
 		}
 
 		hectorConfig = config.CreateZeroConfig(opts)

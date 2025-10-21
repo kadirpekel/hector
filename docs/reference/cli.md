@@ -60,8 +60,14 @@ Start Hector as an A2A server.
 
 **Usage:**
 ```bash
-hector serve [flags]
+hector serve [AGENT] [flags]
 ```
+
+**Arguments:**
+
+| Argument | Type | Description | Required |
+|----------|------|-------------|----------|
+| `AGENT` | string | Agent name (zero-config mode only) | ❌ (defaults to `assistant`) |
 
 **Flags:**
 
@@ -90,21 +96,28 @@ When using zero-config mode (no `--config` flag), use these to configure quickly
 **Examples:**
 
 ```bash
-# With configuration file
+# With configuration file (agent names defined in config)
 hector serve --config config.yaml
 
-# Zero-config mode
+# Zero-config mode (default agent name: "assistant")
 export OPENAI_API_KEY="sk-..."
 hector serve --model gpt-4o --tools
 
+# Zero-config mode with custom agent name
+hector serve --tools gopher
+hector serve myagent --model gpt-4o --tools
+
 # With RAG
-hector serve --model gpt-4o --tools --docs ./knowledge
+hector serve coder --model gpt-4o --tools --docs ./knowledge
 
 # Custom port
 hector serve --config config.yaml --port 9090
 
 # With MCP tools
 hector serve --mcp-url http://localhost:3000
+
+# All flags before positional arg (recommended)
+hector serve --tools --model gpt-4o coder
 ```
 
 ---
