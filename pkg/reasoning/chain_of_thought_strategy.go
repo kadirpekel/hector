@@ -44,14 +44,20 @@ func (s *ChainOfThoughtStrategy) ShouldStop(text string, toolCalls []*protocol.T
 		todos := todoTool.GetTodos("default")
 		allComplete := len(todos) > 0 && s.allTodosComplete(todos)
 
+		// Check if todos were complete in the previous iteration
+		todosWereCompleteLast := false
+		if val, ok := state.GetToolState()["todos_complete"]; ok {
+			todosWereCompleteLast, _ = val.(bool)
+		}
+
 		// If todos were complete last iteration AND still complete AND agent is still calling tools
 		// → Agent is looping, stop now
-		if state.TodosWereCompleteLastIteration && allComplete {
+		if todosWereCompleteLast && allComplete {
 			return true
 		}
 
-		// Update state for next iteration
-		state.TodosWereCompleteLastIteration = allComplete
+		// Update tool state for next iteration
+		state.GetToolState()["todos_complete"] = allComplete
 	}
 
 	return false
@@ -77,21 +83,21 @@ func (s *ChainOfThoughtStrategy) AfterIteration(
 	state *ReasoningState,
 ) error {
 	// Self-reflection: Evaluate progress made in this iteration (controlled by show_thinking)
-	if state.ShowThinking && state.OutputChannel != nil {
+	if state.ShowThinking() && state.GetOutputChannel() != nil {
 		// Check if structured reflection is enabled in config
 		useStructuredReflection := false
-		if state.Services != nil {
-			cfg := state.Services.GetConfig()
+		if state.GetServices() != nil {
+			cfg := state.GetServices().GetConfig()
 			useStructuredReflection = cfg.EnableStructuredReflection != nil && *cfg.EnableStructuredReflection
 		}
 
 		// Use structured reflection if enabled and services available
-		if useStructuredReflection && state.Services != nil && state.Context != nil {
-			analysis, err := AnalyzeToolResults(state.Context, toolCalls, results, state.Services)
+		if useStructuredReflection && state.GetServices() != nil && state.GetContext() != nil {
+			analysis, err := AnalyzeToolResults(state.GetContext(), toolCalls, results, state.GetServices())
 			if err == nil {
 				s.displayStructuredReflection(iteration, analysis, state)
 				// Store analysis in state for potential use by agent
-				state.CustomState["reflection_analysis"] = analysis
+				state.GetCustomState()["reflection_analysis"] = analysis
 			} else {
 				// Fallback to heuristic reflection
 				s.reflectOnProgress(iteration, text, toolCalls, results, state)
@@ -147,7 +153,7 @@ func (s *ChainOfThoughtStrategy) displayStructuredReflection(
 
 	output += ThinkingBlock(fmt.Sprintf("Confidence: %.0f%% - %s", analysis.Confidence*100, recommendation))
 
-	state.OutputChannel <- output
+	state.GetOutputChannel() <- output
 }
 
 // reflectOnProgress performs self-reflection and outputs thinking blocks (fallback heuristic method)
@@ -186,7 +192,7 @@ func (s *ChainOfThoughtStrategy) reflectOnProgress(
 			output += ThinkingBlock("✅ All tools succeeded - making progress")
 		}
 
-		state.OutputChannel <- output
+		state.GetOutputChannel() <- output
 	}
 }
 
@@ -240,7 +246,7 @@ func indexOf(s, substr string) int {
 // ChainOfThought injects current todos to enable systematic task tracking
 func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) string {
 	// Access todo tool from services
-	if state.Services == nil {
+	if state.GetServices() == nil {
 		return ""
 	}
 
@@ -259,8 +265,8 @@ func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) stri
 	}
 
 	// Display todos to user if thinking is enabled
-	if state.ShowThinking && state.OutputChannel != nil {
-		s.displayTodos(todos, state.OutputChannel)
+	if state.ShowThinking() && state.GetOutputChannel() != nil {
+		s.displayTodos(todos, state.GetOutputChannel())
 	}
 
 	// Format todos for LLM context
@@ -291,12 +297,12 @@ func (s *ChainOfThoughtStrategy) displayTodos(todos []tools.TodoItem, outputCh c
 
 // getTodoTool retrieves the todo_write tool (guaranteed to exist due to GetRequiredTools)
 func (s *ChainOfThoughtStrategy) getTodoTool(state *ReasoningState) *tools.TodoTool {
-	if state.Services == nil || state.Services.Tools() == nil {
+	if state.GetServices() == nil || state.GetServices().Tools() == nil {
 		return nil
 	}
 
 	// Get the todo tool from the tool service
-	tool, err := state.Services.Tools().GetTool("todo_write")
+	tool, err := state.GetServices().Tools().GetTool("todo_write")
 	if err != nil {
 		return nil
 	}

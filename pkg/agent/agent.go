@@ -29,7 +29,6 @@ import (
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
 	"github.com/kadirpekel/hector/pkg/llms"
-	"github.com/kadirpekel/hector/pkg/memory"
 	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
@@ -42,6 +41,7 @@ const (
 	outputChannelBuffer        = 100
 	historyRetentionMultiplier = 10
 	defaultRetryWaitSeconds    = 120
+	maxLLMRetries              = 3 // Maximum retry attempts for rate limits
 )
 
 // ============================================================================
@@ -135,16 +135,29 @@ func (a *Agent) execute(
 
 		startTime := time.Now()
 		cfg := a.services.GetConfig()
-		state := reasoning.NewReasoningState()
-		state.Query = input // Original user query for strategies
 
-		// Pass agent context to state
-		state.CustomState["agent_name"] = a.name // Current agent name (for visibility filtering)
+		// Build state using builder pattern for clean, validated initialization
+		state, err := reasoning.Builder().
+			WithQuery(input).
+			WithAgentName(a.name).
+			WithSubAgents(a.config.SubAgents).
+			WithOutputChannel(outputCh).
+			WithShowThinking(cfg.ShowThinking).
+			WithShowDebugInfo(cfg.ShowDebugInfo).
+			WithServices(a.services).
+			WithContext(ctx).
+			Build()
 
-		// Pass sub_agents config to state for supervisor strategies
-		if len(a.config.SubAgents) > 0 {
-			state.CustomState["sub_agents"] = a.config.SubAgents
+		if err != nil {
+			outputCh <- fmt.Sprintf("❌ Failed to initialize state: %v\n", err)
+			return
 		}
+
+		// Ensure history is saved even on early return (cancellation, errors)
+		// This captures partial work and maintains conversation continuity
+		defer func() {
+			a.saveToHistory(ctx, input, state, strategy, startTime)
+		}()
 
 		// Restore conversation history from HistoryService (interactive mode)
 		historyService := a.services.History()
@@ -157,9 +170,11 @@ func (a *Agent) execute(
 				}
 			}
 
-			// Set up status notifier for summarization feedback
-			if memService, ok := historyService.(*memory.MemoryService); ok {
-				memService.SetStatusNotifier(func(message string) {
+			// Set up status notifier for summarization feedback (optional interface)
+			// This uses Go's optional interface pattern - only implementations that
+			// support status notifications need to implement StatusNotifiable
+			if notifiable, ok := historyService.(reasoning.StatusNotifiable); ok {
+				notifiable.SetStatusNotifier(func(message string) {
 					if message != "" {
 						// Newline before, continue on same line after
 						outputCh <- "\n" + message + "\n"
@@ -167,26 +182,20 @@ func (a *Agent) execute(
 				})
 			}
 
-			// Get recent history and restore to conversation
+			// Get recent history and store using setter (immutable during this turn)
 			recentHistory, err := historyService.GetRecentHistory(sessionID)
 			if err != nil {
 				outputCh <- fmt.Sprintf("⚠️  Failed to load conversation history: %v\n", err)
 			} else if len(recentHistory) > 0 {
-				state.Conversation = append(state.Conversation, recentHistory...)
+				state.SetHistory(recentHistory)
 			}
 		}
 
-		// Add current user input to conversation at the start of new messages
-		// This ensures correct message ordering: [history..., USER, ASSISTANT, TOOL_RESULTS, ...]
-		// Without this, saveToHistory would append USER at the end (wrong order)
+		// Add current user input to CurrentTurn
+		// CurrentTurn will contain: USER message, then ASSISTANT + TOOL messages created during execution
 		userMsg := protocol.CreateUserMessage(input)
-		state.Conversation = append(state.Conversation, userMsg)
+		state.AddCurrentTurnMessage(userMsg)
 
-		state.OutputChannel = outputCh
-		state.ShowThinking = cfg.ShowThinking
-		state.ShowDebugInfo = cfg.ShowDebugInfo
-		state.Services = a.services // Give strategies access to services
-		state.Context = ctx         // Pass context for LLM calls
 		maxIterations := a.getMaxIterations(cfg)
 
 		// Show reasoning metadata if debug enabled
@@ -211,8 +220,9 @@ func (a *Agent) execute(
 		// Philosophy: Trust the LLM to naturally terminate (like Cursor)
 		// Loop continues while there are tool calls to execute
 		// maxIterations is a safety valve only, rarely hit
-		for state.Iteration < maxIterations {
-			state.Iteration++
+		for state.Iteration() < maxIterations {
+			// Atomically increment iteration counter
+			currentIteration := state.NextIteration()
 
 			// Check context cancellation
 			select {
@@ -223,11 +233,11 @@ func (a *Agent) execute(
 			}
 
 			if cfg.ShowDebugInfo {
-				outputCh <- fmt.Sprintf("🤔 **Iteration %d/%d**\n", state.Iteration, maxIterations)
+				outputCh <- fmt.Sprintf("🤔 **Iteration %d/%d**\n", currentIteration, maxIterations)
 			}
 
 			// Strategy hook: prepare iteration
-			if err := strategy.PrepareIteration(state.Iteration, state); err != nil {
+			if err := strategy.PrepareIteration(currentIteration, state); err != nil {
 				outputCh <- fmt.Sprintf("Error preparing iteration: %v\n", err)
 				return
 			}
@@ -239,56 +249,80 @@ func (a *Agent) execute(
 			additionalContext := strategy.GetContextInjection(state)
 
 			// Build messages using PromptService (with slots and additional context)
-			messages, err := a.services.Prompt().BuildMessages(ctx, input, promptSlots, state.Conversation, additionalContext)
+			// AllMessages() combines History + CurrentTurn for the full conversation
+			messages, err := a.services.Prompt().BuildMessages(ctx, input, promptSlots, state.AllMessages(), additionalContext)
 			if err != nil {
 				outputCh <- fmt.Sprintf("Error building messages: %v\n", err)
 				return
 			}
 
-			// Call LLM with agent-level retry for transient errors
-			text, toolCalls, tokens, err := a.callLLM(ctx, messages, toolDefs, outputCh, cfg)
-			if err != nil {
-				// Check if error is a typed RetryableError
+			// Call LLM with intelligent retry for rate limits
+			// Respects Retry-After headers from rate limit responses
+			var text string
+			var toolCalls []*protocol.ToolCall
+			var tokens int
+
+			for attempt := 0; attempt <= maxLLMRetries; attempt++ {
+				text, toolCalls, tokens, err = a.callLLM(ctx, messages, toolDefs, outputCh, cfg)
+
+				if err == nil {
+					// Success!
+					break
+				}
+
+				// Check if this is a retryable error (rate limit)
 				var retryErr *httpclient.RetryableError
-				if errors.As(err, &retryErr) {
-					// Use the exact retry time from the error
-					waitTime := retryErr.RetryAfter
-					if waitTime == 0 {
-						waitTime = defaultRetryWaitSeconds * time.Second // Fallback if not specified
-					}
-
-					outputCh <- fmt.Sprintf("⏳ Rate limit exceeded (HTTP %d). Waiting %v before retry...\n",
-						retryErr.StatusCode, waitTime.Round(time.Second))
-					time.Sleep(waitTime)
-
-					// Retry once at agent level
-					text, toolCalls, tokens, err = a.callLLM(ctx, messages, toolDefs, outputCh, cfg)
-					if err != nil {
-						outputCh <- fmt.Sprintf("❌ LLM still unavailable after retry: %v\n", err)
-						return
-					}
-					outputCh <- "✅ Retry successful, continuing...\n"
-				} else {
+				if !errors.As(err, &retryErr) {
 					// Fatal error (auth, invalid request, etc.) - stop immediately
 					outputCh <- fmt.Sprintf("❌ Fatal error: %v\n", err)
 					return
 				}
+
+				// Rate limit error - check if we have retries left
+				if attempt >= maxLLMRetries {
+					outputCh <- fmt.Sprintf("❌ Rate limit exceeded after %d retries: %v\n", maxLLMRetries, err)
+					return
+				}
+
+				// Use the exact retry time from rate limit headers
+				waitTime := retryErr.RetryAfter
+				if waitTime == 0 {
+					waitTime = defaultRetryWaitSeconds * time.Second // Fallback if not specified
+				}
+
+				outputCh <- fmt.Sprintf("⏳ Rate limit exceeded (HTTP %d). Waiting %v before retry %d/%d...\n",
+					retryErr.StatusCode, waitTime.Round(time.Second), attempt+1, maxLLMRetries)
+
+				// Respect the rate limit - wait as instructed
+				time.Sleep(waitTime)
+
+				outputCh <- fmt.Sprintf("🔄 Retrying LLM call (attempt %d/%d)...\n", attempt+1, maxLLMRetries)
 			}
 
-			state.TotalTokens += tokens
+			// Accumulate tokens using mutation method
+			state.AddTokens(tokens)
 
 			if cfg.ShowDebugInfo {
-				outputCh <- fmt.Sprintf("\033[90m📝 Tokens used: %d (total: %d)\033[0m\n", tokens, state.TotalTokens)
+				outputCh <- fmt.Sprintf("\033[90m📝 Tokens used: %d (total: %d)\033[0m\n", tokens, state.TotalTokens())
 			}
 
 			// Accumulate assistant response text across iterations
 			if text != "" {
-				state.AssistantResponse.WriteString(text)
+				state.AppendResponse(text)
 			}
 
-			// Store first iteration's tool calls for metadata
-			if state.Iteration == 1 && len(toolCalls) > 0 {
-				state.FirstIterationToolCalls = toolCalls
+			// Store first iteration's tool calls for metadata (atomic method handles the check)
+			state.RecordFirstToolCalls(toolCalls)
+
+			// Edge case: If LLM returned neither text nor tool calls, treat as error
+			// This ensures we always have a response to save to history
+			if text == "" && len(toolCalls) == 0 {
+				text = "[Internal: Agent returned empty response]"
+				state.AppendResponse(text)
+				if cfg.ShowDebugInfo {
+					outputCh <- "\033[90m⚠️  LLM returned empty response\033[0m\n"
+				}
+				// Will naturally stop on next iteration via ShouldStop (no tool calls)
 			}
 
 			// Execute tools if any
@@ -312,9 +346,13 @@ func (a *Agent) execute(
 						protocol.CreateToolCallPart(tc))
 				}
 
-				state.Conversation = append(state.Conversation, assistantMsg)
+				state.AddCurrentTurnMessage(assistantMsg)
 
 				results = a.executeTools(ctx, toolCalls, outputCh, cfg)
+
+				// Validate and truncate tool results to prevent context overflow
+				// Large tool outputs (e.g., read_file on huge files) can exceed context limits
+				results = a.truncateToolResults(results, cfg)
 
 				// Add tool result messages using DataPart (native A2A protocol)
 				for _, result := range results {
@@ -334,13 +372,13 @@ func (a *Agent) execute(
 							protocol.CreateToolResultPart(a2aResult),
 						},
 					}
-					state.Conversation = append(state.Conversation, resultMsg)
+					state.AddCurrentTurnMessage(resultMsg)
 				}
 			}
 
 			// Strategy hook: Additional processing (reflection, meta-cognition, etc.)
 			// Call BEFORE checking ShouldStop so reflection happens even for final iteration
-			if err := strategy.AfterIteration(state.Iteration, text, toolCalls, results, state); err != nil {
+			if err := strategy.AfterIteration(currentIteration, text, toolCalls, results, state); err != nil {
 				outputCh <- fmt.Sprintf("Error in strategy processing: %v\n", err)
 				return
 			}
@@ -354,12 +392,12 @@ func (a *Agent) execute(
 			}
 		}
 
-		// Save to history (this now saves full a2a.Message objects)
-		a.saveToHistory(ctx, input, state, strategy, startTime)
+		// Note: History saving is handled by defer at function start
+		// This ensures partial work is saved even on early return/cancellation
 
 		if cfg.ShowDebugInfo {
 			outputCh <- fmt.Sprintf("\033[90m\n⏱️  Total time: %v | Tokens: %d | Iterations: %d\033[0m\n",
-				time.Since(startTime), state.TotalTokens, state.Iteration)
+				time.Since(startTime), state.TotalTokens(), state.Iteration())
 		}
 	}()
 
@@ -430,9 +468,14 @@ func (a *Agent) callLLM(
 			}
 		}()
 
+		// Call LLM service (blocks until streaming completes)
+		// Contract: GenerateStreaming writes to wrappedCh synchronously
+		// and only returns when all writes are complete
 		toolCalls, tokens, err := llm.GenerateStreaming(messages, toolDefs, wrappedCh)
+
+		// Safe to close now - GenerateStreaming has returned, no more writes
 		close(wrappedCh)
-		<-done // Wait for goroutine to finish
+		<-done // Wait for forwarding goroutine to finish
 
 		if err != nil {
 			return "", nil, 0, err
@@ -552,6 +595,39 @@ func formatToolLabel(toolName string, args map[string]interface{}) string {
 	return toolName
 }
 
+// truncateToolResults validates and truncates tool results to prevent context overflow
+// Large tool outputs (e.g., reading huge files) can exceed LLM context limits
+func (a *Agent) truncateToolResults(results []reasoning.ToolResult, cfg config.ReasoningConfig) []reasoning.ToolResult {
+	// Maximum size for a single tool result (50KB default)
+	// This prevents any single tool from consuming excessive context
+	const maxToolResultSize = 50000
+
+	truncated := make([]reasoning.ToolResult, len(results))
+	copy(truncated, results)
+
+	for i := range truncated {
+		contentSize := len(truncated[i].Content)
+		if contentSize > maxToolResultSize {
+			// Truncate content and add informative suffix
+			originalSize := contentSize
+			truncated[i].Content = truncated[i].Content[:maxToolResultSize]
+
+			// Add truncation notice
+			suffix := fmt.Sprintf("\n\n⚠️  [Output truncated: showing %d of %d bytes. Use more specific queries or filters to see full content.]",
+				maxToolResultSize, originalSize)
+			truncated[i].Content += suffix
+
+			// Log truncation if debug enabled
+			if cfg.ShowDebugInfo {
+				log.Printf("⚠️  Tool result truncated: %s (%d → %d bytes)",
+					truncated[i].ToolName, originalSize, maxToolResultSize)
+			}
+		}
+	}
+
+	return truncated
+}
+
 // saveToHistory saves the conversation to history service
 func (a *Agent) saveToHistory(
 	ctx context.Context,
@@ -573,55 +649,23 @@ func (a *Agent) saveToHistory(
 		}
 	}
 
-	// Get existing history size to know where new messages start
-	// state.Conversation structure: [old history..., USER(current), ...new messages during execution...]
-	existingHistory, err := history.GetRecentHistory(sessionID)
-	if err != nil {
-		log.Printf("⚠️  Failed to get existing history: %v", err)
-		return
-	}
-	existingCount := len(existingHistory)
-
-	// Add assistant's final response if not already in conversation
+	// Add assistant's final response if not already added
 	// This handles the case where the final iteration had no tool calls
-	finalResponse := state.AssistantResponse.String()
-	if finalResponse != "" {
-		// Determine if we need to add the final response message
-		// If conversation has messages after existingCount (beyond the USER message),
-		// check if any are assistant messages - that means tool calls happened
-		needsFinalResponse := true
-
-		// Check if there are any assistant messages in the new messages
-		// (new messages start at existingCount, which is the USER message)
-		for i := existingCount + 1; i < len(state.Conversation); i++ {
-			if state.Conversation[i].Role == pb.Role_ROLE_AGENT {
-				// Found an assistant message - check if it has text or just tool calls/results
-				hasText := protocol.ExtractTextFromMessage(state.Conversation[i]) != ""
-				hasToolCalls := len(protocol.GetToolCallsFromMessage(state.Conversation[i])) > 0
-				hasToolResults := len(protocol.GetToolResultsFromMessage(state.Conversation[i])) > 0
-
-				// If the last assistant message has tool calls/results, tool calling happened
-				// The final text is distributed across multiple assistant messages
-				if hasToolCalls || hasToolResults || hasText {
-					needsFinalResponse = false
-					break
-				}
-			}
-		}
-
-		if needsFinalResponse {
+	// Uses explicit flag instead of complex message inspection
+	if !state.IsFinalResponseAdded() {
+		finalResponse := state.GetAssistantResponse()
+		if finalResponse != "" {
 			// Final iteration had no tool calls - add the complete response message
 			assistantMsg := protocol.CreateTextMessage(pb.Role_ROLE_AGENT, finalResponse)
-			state.Conversation = append(state.Conversation, assistantMsg)
+			state.AddCurrentTurnMessage(assistantMsg)
+			state.MarkFinalResponseAdded()
 		}
 	}
 
-	// Save only the NEW messages (those added during this execution)
-	// New messages start at index existingCount (USER message + any tool call/result messages)
-	// Session history includes user/assistant messages, including tool calls/results
-	for i := existingCount; i < len(state.Conversation); i++ {
-		msg := state.Conversation[i]
-
+	// Save all messages from CurrentTurn (much simpler than before!)
+	// CurrentTurn contains: USER message + ASSISTANT responses + TOOL calls/results
+	currentTurn := state.GetCurrentTurn()
+	for _, msg := range currentTurn {
 		// Only save user/assistant messages (skip system messages if any)
 		if msg.Role == pb.Role_ROLE_USER || msg.Role == pb.Role_ROLE_AGENT {
 			// Save message if it has text content OR tool calls/results

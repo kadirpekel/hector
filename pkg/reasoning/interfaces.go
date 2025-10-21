@@ -122,6 +122,13 @@ type HistoryService interface {
 	ClearHistory(sessionID string) error
 }
 
+// StatusNotifiable is an optional interface that HistoryService implementations
+// can implement to receive status notifications (e.g., for summarization feedback).
+// This follows Go's optional interface pattern (like io.Closer, http.Flusher).
+type StatusNotifiable interface {
+	SetStatusNotifier(notifier func(message string))
+}
+
 // ============================================================================
 // AGENT REGISTRY SERVICE INTERFACE
 // Uses A2A protocol types (AgentCard) for true A2A-native architecture

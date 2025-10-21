@@ -32,18 +32,18 @@ func NewSupervisorStrategy() *SupervisorStrategy {
 // Supervisor extracts goals on first iteration (if enabled), then delegates to base strategy
 func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningState) error {
 	// On first iteration, optionally extract goals for task decomposition
-	if iteration == 1 && state.Services != nil {
-		cfg := state.Services.GetConfig()
+	if iteration == 1 && state.GetServices() != nil {
+		cfg := state.GetServices().GetConfig()
 		if cfg.EnableGoalExtraction {
 			// Extract goals using structured output
-			decomposition, err := ExtractGoals(state.Context, state.Query, []string{}, state.Services)
+			decomposition, err := ExtractGoals(state.GetContext(), state.Query(), []string{}, state.GetServices())
 			if err == nil {
 				// Store decomposition in custom state
-				state.CustomState["task_decomposition"] = decomposition
+				state.GetCustomState()["task_decomposition"] = decomposition
 
 				// Display decomposition if thinking is enabled
-				if state.ShowThinking && state.OutputChannel != nil {
-					s.displayTaskDecomposition(decomposition, state.OutputChannel)
+				if state.ShowThinking() && state.GetOutputChannel() != nil {
+					s.displayTaskDecomposition(decomposition, state.GetOutputChannel())
 				}
 			}
 		}
@@ -160,11 +160,11 @@ func (s *SupervisorStrategy) getAvailableAgents(state *ReasoningState) map[strin
 	agents := make(map[string]string)
 
 	// Get registry service from services
-	if state == nil || state.Services == nil || state.Services.Registry() == nil {
+	if state == nil || state.GetServices() == nil || state.GetServices().Registry() == nil {
 		return agents
 	}
 
-	registry := state.Services.Registry()
+	registry := state.GetServices().Registry()
 
 	// Get current agent name to exclude it from available agents
 	currentAgentName := s.getCurrentAgentName(state)
@@ -205,20 +205,18 @@ func (s *SupervisorStrategy) getAvailableAgents(state *ReasoningState) map[strin
 	return agents
 }
 
-// getSubAgentsFromConfig extracts sub_agents list from state's custom data
+// getSubAgentsFromConfig extracts sub_agents list from state
 func (s *SupervisorStrategy) getSubAgentsFromConfig(state *ReasoningState) []string {
-	if subAgents, ok := state.CustomState["sub_agents"].([]string); ok {
-		return subAgents
+	subAgents := state.SubAgents()
+	if len(subAgents) == 0 {
+		return nil
 	}
-	return nil
+	return subAgents
 }
 
 // getCurrentAgentName extracts the current agent's name from state
 func (s *SupervisorStrategy) getCurrentAgentName(state *ReasoningState) string {
-	if agentName, ok := state.CustomState["agent_name"].(string); ok {
-		return agentName
-	}
-	return ""
+	return state.AgentName()
 }
 
 // buildToolUsageGuidance creates agent_call usage guidance
