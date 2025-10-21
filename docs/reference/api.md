@@ -127,7 +127,9 @@ curl -N -X POST http://localhost:8081/v1/agents/assistant/message:sendStream \
 
 Get agent metadata and capabilities.
 
-**Endpoint:** `GET /v1/agents/{agent}`
+**Endpoint:** `GET /v1/agents/{agent}/.well-known/agent-card.json`
+
+**Query String Support:** `GET /.well-known/agent-card.json?name={agent}`
 
 **Response:**
 ```json
@@ -144,7 +146,11 @@ Get agent metadata and capabilities.
 
 **Example:**
 ```bash
-curl http://localhost:8081/v1/agents/assistant
+# Per-agent endpoint
+curl http://localhost:8081/v1/agents/assistant/.well-known/agent-card.json
+
+# Query string style
+curl http://localhost:8081/.well-known/agent-card.json?name=assistant
 ```
 
 ### List Agents
