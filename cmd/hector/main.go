@@ -507,7 +507,7 @@ func parseArgs() *CLIArgs {
 	serveMCP := serveCmd.String("mcp-url", "", "MCP server URL for tool integration (supports auth: https://user:pass@host)")
 	serveDocs := serveCmd.String("docs", "", "Document store folder (enables RAG)")
 	serveEmbedder := serveCmd.String("embedder-model", "nomic-embed-text", "Embedder model for document store")
-	serveVectorDB := serveCmd.String("vectordb", "http://localhost:6333", "Vector database connection string")
+	serveVectorDB := serveCmd.String("vectordb", "http://localhost:6334", "Vector database connection string")
 
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
 	listServer := listCmd.String("server", "", "A2A server URL (enables server mode)")
@@ -1348,7 +1348,7 @@ Hector operates in three distinct modes based on your command and flags:
     --mcp-url URL            MCP server URL (supports auth: https://user:pass@host)
     --docs FOLDER            Document store folder (RAG)
     --embedder-model MODEL   Embedder model (default: nomic-embed-text)
-    --vectordb URL           Vector DB (default: http://localhost:6333)
+    --vectordb URL           Vector DB (default: http://localhost:6334)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

@@ -35,7 +35,8 @@ const (
 	DefaultFileWatchTimeout = 10 * time.Second
 
 	// MaxConcurrentIndexing is the maximum number of concurrent indexing operations
-	MaxConcurrentIndexing = 10
+	// Reduced to prevent overwhelming Ollama with too many embedding requests
+	MaxConcurrentIndexing = 3
 )
 
 // Document types
