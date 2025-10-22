@@ -51,43 +51,66 @@ func NewMemoryService(
 	}
 }
 
-// AddToHistory adds a message to memory
+// AddToHistory adds a single message to memory
+// DEPRECATED: Use AddBatchToHistory for better performance and correct turn boundaries
+// This method is kept for backward compatibility but skips summarization checks
 func (s *MemoryService) AddToHistory(sessionID string, msg *pb.Message) error {
 	if sessionID == "" {
 		sessionID = "default"
 	}
 
-	// 1. Append message directly to session store (efficient!)
-	// This replaces the old bulk update approach
+	// 1. Append message directly to session store
 	if err := s.sessionService.AppendMessage(sessionID, msg); err != nil {
 		log.Printf("⚠️  Failed to append message to session: %v", err)
 		return fmt.Errorf("failed to append message: %w", err)
 	}
 
-	// 2. Let working memory strategy process the message (for summarization, etc.)
-	// Get current history state and let strategy process it
-	allMessages, err := s.sessionService.GetMessages(sessionID, 0)
-	if err == nil {
-		history := s.messagesToConversationHistory(sessionID, allMessages)
-		if err := s.workingMemory.AddMessage(history, msg); err != nil {
-			log.Printf("⚠️  Working memory strategy AddMessage failed: %v", err)
-		}
+	// 2. Store in long-term memory (if enabled and should store)
+	s.addToLongTermBatch(sessionID, msg)
+
+	// NOTE: No summarization check here - that's handled by AddBatchToHistory
+	// at turn boundaries to prevent infinite loops
+
+	return nil
+}
+
+// AddBatchToHistory adds multiple messages atomically at a turn boundary
+// This is the CORRECT way to save messages - checks summarization ONCE per turn
+func (s *MemoryService) AddBatchToHistory(sessionID string, messages []*pb.Message) error {
+	if sessionID == "" {
+		sessionID = "default"
 	}
 
-	// 3. Store in long-term memory (if enabled and should store)
-	if s.longTermMemory != nil && s.shouldStoreLongTerm(msg) {
-		// Add to pending batch
-		if _, exists := s.pendingBatches[sessionID]; !exists {
-			s.pendingBatches[sessionID] = make([]*pb.Message, 0, s.longTermConfig.BatchSize)
-		}
-		s.pendingBatches[sessionID] = append(s.pendingBatches[sessionID], msg)
+	if len(messages) == 0 {
+		return nil
+	}
 
-		// Flush if batch size reached
-		if len(s.pendingBatches[sessionID]) >= s.longTermConfig.BatchSize {
-			if err := s.flushLongTermBatch(sessionID); err != nil {
-				log.Printf("⚠️  Long-term storage failed: %v", err)
-			}
+	// 1. Append all messages to session store first
+	for _, msg := range messages {
+		if err := s.sessionService.AppendMessage(sessionID, msg); err != nil {
+			log.Printf("⚠️  Failed to append message to session: %v", err)
+			return fmt.Errorf("failed to append message: %w", err)
 		}
+
+		// Store in long-term memory (if enabled)
+		s.addToLongTermBatch(sessionID, msg)
+	}
+
+	// 2. NOW check summarization ONCE for the entire batch
+	// This prevents the infinite loop bug where each message triggers summarization
+	allMessages, err := s.sessionService.GetMessages(sessionID, 0)
+	if err != nil {
+		log.Printf("⚠️  Failed to get messages for summarization check: %v", err)
+		return nil // Don't fail the save operation
+	}
+
+	history := s.messagesToConversationHistory(sessionID, allMessages)
+
+	// Let working memory strategy decide if summarization is needed
+	// This is called ONCE per turn, not once per message
+	if err := s.workingMemory.CheckAndSummarize(history); err != nil {
+		log.Printf("⚠️  Summarization check failed: %v", err)
+		// Don't fail - messages are already saved
 	}
 
 	return nil
@@ -205,6 +228,25 @@ func (s *MemoryService) getLastUserMessage(messages []*pb.Message) string {
 // SetStatusNotifier sets a status notifier on the working memory strategy
 func (s *MemoryService) SetStatusNotifier(notifier StatusNotifier) {
 	s.workingMemory.SetStatusNotifier(notifier)
+}
+
+// addToLongTermBatch adds a message to the pending long-term memory batch
+// This is a helper to avoid code duplication between AddToHistory and AddBatchToHistory
+func (s *MemoryService) addToLongTermBatch(sessionID string, msg *pb.Message) {
+	if s.longTermMemory != nil && s.shouldStoreLongTerm(msg) {
+		// Add to pending batch
+		if _, exists := s.pendingBatches[sessionID]; !exists {
+			s.pendingBatches[sessionID] = make([]*pb.Message, 0, s.longTermConfig.BatchSize)
+		}
+		s.pendingBatches[sessionID] = append(s.pendingBatches[sessionID], msg)
+
+		// Flush if batch size reached
+		if len(s.pendingBatches[sessionID]) >= s.longTermConfig.BatchSize {
+			if err := s.flushLongTermBatch(sessionID); err != nil {
+				log.Printf("⚠️  Long-term storage failed: %v", err)
+			}
+		}
+	}
 }
 
 // flushLongTermBatch flushes pending messages to long-term memory

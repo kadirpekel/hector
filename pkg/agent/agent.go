@@ -448,6 +448,30 @@ func (a *Agent) callLLM(
 ) (string, []*protocol.ToolCall, int, error) {
 	llm := a.services.LLM()
 
+	// Check if structured output is configured for this agent
+	if a.config.StructuredOutput != nil {
+		// Use structured output mode (no streaming support)
+		structConfig := &llms.StructuredOutputConfig{
+			Format:           a.config.StructuredOutput.Format,
+			Schema:           a.config.StructuredOutput.Schema,
+			Enum:             a.config.StructuredOutput.Enum,
+			Prefill:          a.config.StructuredOutput.Prefill,
+			PropertyOrdering: a.config.StructuredOutput.PropertyOrdering,
+		}
+
+		text, toolCalls, tokens, err := llm.GenerateStructured(messages, toolDefs, structConfig)
+		if err != nil {
+			return "", nil, 0, err
+		}
+
+		// Send text to output
+		if text != "" {
+			outputCh <- text
+		}
+
+		return text, toolCalls, tokens, nil
+	}
+
 	if cfg.EnableStreaming != nil && *cfg.EnableStreaming {
 		// Streaming mode - capture streamed text for history
 		var streamedText strings.Builder
@@ -662,9 +686,13 @@ func (a *Agent) saveToHistory(
 		}
 	}
 
-	// Save all messages from CurrentTurn (much simpler than before!)
+	// Save all messages from CurrentTurn as a BATCH (much simpler than before!)
 	// CurrentTurn contains: USER message + ASSISTANT responses + TOOL calls/results
+	// Using batch save ensures summarization is checked ONCE per turn, not per message
 	currentTurn := state.GetCurrentTurn()
+
+	// Filter messages to save (only user/assistant with content)
+	messagesToSave := make([]*pb.Message, 0, len(currentTurn))
 	for _, msg := range currentTurn {
 		// Only save user/assistant messages (skip system messages if any)
 		if msg.Role == pb.Role_ROLE_USER || msg.Role == pb.Role_ROLE_AGENT {
@@ -674,13 +702,18 @@ func (a *Agent) saveToHistory(
 			hasToolResults := len(protocol.GetToolResultsFromMessage(msg)) > 0
 
 			if textContent != "" || hasToolCalls || hasToolResults {
-				err := history.AddToHistory(sessionID, msg)
-				if err != nil {
-					log.Printf("⚠️  Failed to add message to history: %v", err)
-				}
+				messagesToSave = append(messagesToSave, msg)
 			}
 		}
 		// Skip system messages - they're for prompt construction only
+	}
+
+	// Batch save - summarization is checked ONCE at turn boundary
+	if len(messagesToSave) > 0 {
+		err := history.AddBatchToHistory(sessionID, messagesToSave)
+		if err != nil {
+			log.Printf("⚠️  Failed to save messages to history: %v", err)
+		}
 	}
 }
 

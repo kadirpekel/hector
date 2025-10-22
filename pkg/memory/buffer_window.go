@@ -34,6 +34,12 @@ func (s *BufferWindowStrategy) AddMessage(session *hectorcontext.ConversationHis
 	return session.AddMessage(msg)
 }
 
+// CheckAndSummarize for buffer window strategy (no-op, no summarization needed)
+func (s *BufferWindowStrategy) CheckAndSummarize(session *hectorcontext.ConversationHistory) error {
+	// Buffer window doesn't need summarization - it just keeps last N messages
+	return nil
+}
+
 func (s *BufferWindowStrategy) GetMessages(session *hectorcontext.ConversationHistory) ([]*pb.Message, error) {
 	messages := session.GetRecentMessages(s.windowSize)
 	return messages, nil

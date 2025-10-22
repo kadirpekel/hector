@@ -119,6 +119,7 @@ type SessionMetadata struct {
 type HistoryService interface {
 	GetRecentHistory(sessionID string) ([]*pb.Message, error)
 	AddToHistory(sessionID string, msg *pb.Message) error
+	AddBatchToHistory(sessionID string, messages []*pb.Message) error
 	ClearHistory(sessionID string) error
 }
 

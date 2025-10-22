@@ -77,8 +77,25 @@ agents:
       - agent_call  # THE KEY TOOL for orchestration
     reasoning:
       engine: "supervisor"  # Optimized for multi-agent orchestration!
-      max_iterations: 20  # More iterations for complex orchestration
+      max_iterations: 10  # Reduced from 20 - prevents excessive agent_call loops
     # sub_agents: ["researcher", "analyst", "writer"]  # Optional: specify which agents to orchestrate (omit = all agents)
+    
+    # Memory configuration for multi-agent orchestration
+    # 
+    # ARCHITECTURE NOTE: Summarization now occurs ONCE per turn (at turn boundaries)
+    # Previously, each message triggered a summarization check, causing infinite loops
+    # when the conversation exceeded the budget. The fix ensures batch processing where
+    # all messages in a turn are saved first, then a single summarization check occurs.
+    #
+    # Each agent_call iteration adds ~3-5 messages (request, tool call, result)
+    # With max_iterations: 10 and 3-5 agent calls per turn, expect 30-50 messages/turn
+    # Default budget of 2000 tokens was too small, causing frequent summarization
+    memory:
+      working:
+        strategy: "summary_buffer"
+        budget: 16000      # 16K tokens (8x default) - handles 5-10 turns with multiple agent calls
+        threshold: 0.85    # Trigger at 85% (13,600 tokens)
+        target: 0.70       # Compress to 70% (11,200 tokens)
 
     prompt:
       system_role: |
@@ -145,13 +162,28 @@ llms:
 tools:
   execute_command:
     type: command
-    # Permissive defaults: allows all commands (sandboxed)
+    enable_sandboxing: true  # Required for security
     working_directory: "."
   
   write_file:
-    type: file_system
-    path: "./output"
-    allowed_operations: ["write"]
+    type: write_file
+    working_directory: "./output"
+
+# ============================================================================
+# MEMORY CONFIGURATION FOR ORCHESTRATORS
+# ============================================================================
+# Multi-agent orchestration generates MANY messages:
+#   - Each agent_call: 5-10 messages (task, reasoning, tool call, response, synthesis)
+#   - Default budget: 2000 tokens → too small!
+#   - Result: Constant summarization, slow performance
+#
+# SOLUTION: Use larger budget (16K tokens) for orchestrator agents
+# This prevents the summarization loop you saw with "🧠 Summarizing 218 messages..."
+#
+# If you still see frequent summarization:
+#   1. Increase budget: 32000 (32K tokens)
+#   2. OR use buffer_window: strategy: "buffer_window", window_size: 200
+#   3. OR reduce agent_call frequency: fewer, more focused delegations
 
 # ============================================================================
 # USAGE EXAMPLES
@@ -180,4 +212,60 @@ tools:
 # 3. Call analyst for insights
 # 4. Call writer for content creation
 # 5. Synthesize everything into final output
+
+# ============================================================================
+# TROUBLESHOOTING: "Why is summarization happening constantly?"
+# ============================================================================
+#
+# SYMPTOM:
+#   🧠 Summarizing 218 messages (keeping 84 recent)...
+#   🧠 Summarizing 219 messages (keeping 84 recent)...
+#   [Long waits between agent calls, even with only 2-3 user messages]
+#
+# ROOT CAUSE:
+#   Multi-agent orchestration generates MANY messages per iteration:
+#     • Each agent_call iteration adds 3-5 messages:
+#       - Assistant response (text)
+#       - Tool call (agent_call with parameters)
+#       - Tool result (sub-agent's response)
+#   
+#   Example: User makes 3 requests, orchestrator makes 5 agent_calls each:
+#     • Turn 1: 1 user msg + (5 iterations × 3 msgs) = 16 messages
+#     • Turn 2: 1 user msg + (5 iterations × 3 msgs) = 32 total
+#     • Turn 3: 1 user msg + (15 iterations × 3 msgs) = 77 total
+#   
+#   With max_iterations: 20, you can easily hit 200+ messages in 3 turns!
+#   Default budget: 2000 tokens → exceeded after ~50 messages → constant summarization
+#
+# FIX OPTIONS:
+#
+# Option 1: Reduce max_iterations (RECOMMENDED - prevents over-iteration)
+#   reasoning:
+#     engine: "supervisor"
+#     max_iterations: 10      # Reduced from 20 (fewer iterations = fewer messages)
+#
+# Option 2: Larger memory budget (handles more turns without summarization)
+#   memory:
+#     working:
+#       strategy: "summary_buffer"
+#       budget: 16000          # 16K tokens (vs default 2000)
+#       threshold: 0.85        # Trigger at 85%
+#       target: 0.70           # Compress to 70%
+#
+# Option 3: Buffer window (simpler, no summarization, but loses old context)
+#   memory:
+#     working:
+#       strategy: "buffer_window"
+#       window_size: 200       # Keep last 200 messages
+#
+# Option 4: Prompt the orchestrator to be more efficient
+#   Add to system_role:
+#     "Be efficient: delegate 3-5 tasks maximum per request.
+#      Avoid redundant agent calls. Synthesize once at the end."
+#
+# BEST PRACTICE:
+#   ✅ Use max_iterations: 5-10 (orchestrators should delegate, not loop excessively)
+#   ✅ Use budget: 16000 (8x default, handles 5-10 multi-agent turns)
+#   ✅ Use supervisor engine (optimized for delegation)
+#   ✅ Monitor message counts in logs to tune settings
 

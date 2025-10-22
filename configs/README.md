@@ -59,6 +59,11 @@ This directory contains curated example configurations for Hector. Each file dem
 - Tool sandboxing and restrictions
 - Command whitelisting
 
+**`structured-output-example.yaml`** (5.8K) - Structured JSON output
+- JSON schema validation for reliable responses
+- Sentiment analysis, data extraction, classification examples
+- Works with OpenAI, Anthropic, Gemini
+
 **`task-sql-example.yaml`** (849B) - SQL task persistence
 - Task persistence with SQL backend
 - SQLite/PostgreSQL/MySQL support

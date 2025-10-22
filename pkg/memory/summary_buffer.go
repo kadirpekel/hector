@@ -90,19 +90,20 @@ func (s *SummaryBufferStrategy) SetStatusNotifier(notifier StatusNotifier) {
 }
 
 // AddMessage adds a message to the session's memory
-// May trigger summarization if threshold is exceeded (blocking operation)
-// NO CONVERSION - stores pb.Message directly
+// DEPRECATED: This is kept for compatibility but should not trigger summarization
+// Use CheckAndSummarize at turn boundaries instead
 func (s *SummaryBufferStrategy) AddMessage(session *hectorcontext.ConversationHistory, msg *pb.Message) error {
-	// Add message to session
-	if err := session.AddMessage(msg); err != nil {
-		return fmt.Errorf("failed to add message: %w", err)
-	}
+	// Just add the message, don't check summarization
+	// Summarization is now handled at turn boundaries via CheckAndSummarize
+	return session.AddMessage(msg)
+}
 
-	// Check if we need to summarize
+// CheckAndSummarize checks if summarization is needed and performs it
+// This should be called ONCE per turn, not per message
+func (s *SummaryBufferStrategy) CheckAndSummarize(session *hectorcontext.ConversationHistory) error {
 	if s.shouldSummarize(session) {
 		return s.summarize(session)
 	}
-
 	return nil
 }
 

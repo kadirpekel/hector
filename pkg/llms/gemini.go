@@ -130,30 +130,16 @@ func (p *GeminiProvider) Generate(messages []*pb.Message, tools []ToolDefinition
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.httpClient.Do(httpReq)
+	_, geminiResp, err := p.handleGeminiResponse(resp, err)
 	if err != nil {
-		return "", nil, 0, fmt.Errorf("gemini API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", nil, 0, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var geminiResp GeminiResponse
-	if err := json.Unmarshal(respBody, &geminiResp); err != nil {
-		return "", nil, 0, fmt.Errorf("failed to parse Gemini response: %w", err)
-	}
-
-	if geminiResp.Error != nil {
-		return "", nil, 0, fmt.Errorf("gemini API error: %s", geminiResp.Error.Message)
+		return "", nil, 0, err
 	}
 
 	if len(geminiResp.Candidates) == 0 {
 		return "", nil, 0, fmt.Errorf("no candidates in response")
 	}
 
-	return p.parseResponse(&geminiResp)
+	return p.parseResponse(geminiResp)
 }
 
 // GenerateStreaming generates a streaming response
@@ -209,6 +195,7 @@ func (p *GeminiProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 		p.config.Host, p.config.Model, p.config.APIKey)
 
 	reqBody, _ := json.Marshal(req)
+
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(reqBody))
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("failed to create request: %w", err)
@@ -216,26 +203,12 @@ func (p *GeminiProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.httpClient.Do(httpReq)
+	_, geminiResp, err := p.handleGeminiResponse(resp, err)
 	if err != nil {
-		return "", nil, 0, fmt.Errorf("gemini API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", nil, 0, fmt.Errorf("failed to read response: %w", err)
+		return "", nil, 0, err
 	}
 
-	var geminiResp GeminiResponse
-	if err := json.Unmarshal(respBody, &geminiResp); err != nil {
-		return "", nil, 0, fmt.Errorf("failed to parse Gemini response: %w", err)
-	}
-
-	if geminiResp.Error != nil {
-		return "", nil, 0, fmt.Errorf("gemini API error: %s", geminiResp.Error.Message)
-	}
-
-	return p.parseResponse(&geminiResp)
+	return p.parseResponse(geminiResp)
 }
 
 // GenerateStructuredStreaming generates a streaming response with structured output
@@ -312,6 +285,50 @@ func (p *GeminiProvider) Close() error {
 // HELPER METHODS
 // ============================================================================
 
+// handleGeminiResponse processes HTTP response and extracts errors
+// Returns (response body, parsed GeminiResponse, error)
+func (p *GeminiProvider) handleGeminiResponse(resp *http.Response, err error) ([]byte, *GeminiResponse, error) {
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	// Even if there's an error, try to read response body
+	if err != nil {
+		if resp != nil && resp.Body != nil {
+			body, readErr := io.ReadAll(resp.Body)
+			if readErr == nil && len(body) > 0 {
+				var errorResp GeminiResponse
+				if json.Unmarshal(body, &errorResp) == nil && errorResp.Error != nil {
+					return nil, nil, fmt.Errorf("Gemini API error: %s (code: %d)",
+						errorResp.Error.Message, errorResp.Error.Code)
+				}
+				return nil, nil, fmt.Errorf("gemini API request failed: %w - Response: %s", err, string(body))
+			}
+		}
+		return nil, nil, fmt.Errorf("gemini API request failed: %w", err)
+	}
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Parse response
+	var geminiResp GeminiResponse
+	if err := json.Unmarshal(respBody, &geminiResp); err != nil {
+		return respBody, nil, fmt.Errorf("failed to parse Gemini response: %w", err)
+	}
+
+	// Check for API errors in response
+	if geminiResp.Error != nil {
+		return respBody, &geminiResp, fmt.Errorf("Gemini API error: %s (code: %d, status: %s)",
+			geminiResp.Error.Message, geminiResp.Error.Code, geminiResp.Error.Status)
+	}
+
+	return respBody, &geminiResp, nil
+}
+
 // buildRequest builds a Gemini API request
 func (p *GeminiProvider) buildRequest(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) *GeminiRequest {
 	contents, systemInstruction := p.convertMessages(messages)
@@ -366,12 +383,48 @@ func (p *GeminiProvider) convertSchemaToGemini(schema interface{}, propertyOrder
 		return nil
 	}
 
+	// Clean schema - remove unsupported fields for Gemini
+	cleaned := p.cleanSchemaForGemini(schemaMap)
+
 	// Add propertyOrdering if provided (Gemini-specific optimization)
 	if len(propertyOrdering) > 0 {
-		schemaMap["propertyOrdering"] = propertyOrdering
+		cleaned["propertyOrdering"] = propertyOrdering
 	}
 
-	return schemaMap
+	return cleaned
+}
+
+// cleanSchemaForGemini removes fields that Gemini doesn't support
+func (p *GeminiProvider) cleanSchemaForGemini(schema map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	for key, value := range schema {
+		// Skip unsupported fields
+		if key == "additionalProperties" {
+			continue
+		}
+
+		// Recursively clean nested objects
+		switch v := value.(type) {
+		case map[string]interface{}:
+			result[key] = p.cleanSchemaForGemini(v)
+		case []interface{}:
+			// Clean array elements
+			cleanedArray := make([]interface{}, len(v))
+			for i, item := range v {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					cleanedArray[i] = p.cleanSchemaForGemini(itemMap)
+				} else {
+					cleanedArray[i] = item
+				}
+			}
+			result[key] = cleanedArray
+		default:
+			result[key] = value
+		}
+	}
+
+	return result
 }
 
 // convertMessages converts our Message format to Gemini format

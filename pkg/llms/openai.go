@@ -293,22 +293,30 @@ func (p *OpenAIProvider) Close() error {
 
 // GenerateStructured generates a response with structured output
 func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
-	req := p.buildRequest(messages, false, tools)
+	// OpenAI doesn't support tools with strict JSON schema mode, so pass empty tools
+	req := p.buildRequest(messages, false, nil)
 
 	// Add structured output configuration
-	if structConfig != nil && structConfig.Format == "json" && structConfig.Schema != nil {
-		schema, ok := structConfig.Schema.(map[string]interface{})
-		if !ok {
-			return "", nil, 0, fmt.Errorf("schema must be a map")
-		}
+	if structConfig != nil && structConfig.Format == "json" {
+		if structConfig.Schema != nil {
+			schema, ok := structConfig.Schema.(map[string]interface{})
+			if !ok {
+				return "", nil, 0, fmt.Errorf("schema must be a map")
+			}
 
-		req.ResponseFormat = &OpenAIResponseFormat{
-			Type: "json_schema",
-			JSONSchema: &OpenAIJSONSchema{
-				Name:   "response",
-				Schema: schema,
-				Strict: true, // Enable strict validation
-			},
+			req.ResponseFormat = &OpenAIResponseFormat{
+				Type: "json_schema",
+				JSONSchema: &OpenAIJSONSchema{
+					Name:   "response",
+					Schema: schema,
+					Strict: true, // Enable strict validation
+				},
+			}
+		} else {
+			// Fallback to simple JSON mode if no schema provided
+			req.ResponseFormat = &OpenAIResponseFormat{
+				Type: "json_object",
+			}
 		}
 	}
 
@@ -540,10 +548,32 @@ func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, er
 
 	// Use generic HTTP client with smart retry
 	resp, err := p.httpClient.Do(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	// Even if there's an error, try to read the response body for error details
 	if err != nil {
+		if resp != nil && resp.Body != nil {
+			body, readErr := io.ReadAll(resp.Body)
+			if readErr == nil && len(body) > 0 {
+				// Try to parse error details
+				var errorResp struct {
+					Error struct {
+						Message string `json:"message"`
+						Type    string `json:"type"`
+						Code    string `json:"code"`
+					} `json:"error"`
+				}
+				if json.Unmarshal(body, &errorResp) == nil && errorResp.Error.Message != "" {
+					return nil, fmt.Errorf("HTTP request failed: %s (type: %s, code: %s)",
+						errorResp.Error.Message, errorResp.Error.Type, errorResp.Error.Code)
+				}
+				return nil, fmt.Errorf("HTTP request failed: %w - Response: %s", err, string(body))
+			}
+		}
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -551,6 +581,18 @@ func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, er
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		// Try to parse error details
+		var errorResp struct {
+			Error struct {
+				Message string `json:"message"`
+				Type    string `json:"type"`
+				Code    string `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(body, &errorResp); err == nil && errorResp.Error.Message != "" {
+			return nil, fmt.Errorf("API request failed with status %d: %s (type: %s, code: %s)",
+				resp.StatusCode, errorResp.Error.Message, errorResp.Error.Type, errorResp.Error.Code)
+		}
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 

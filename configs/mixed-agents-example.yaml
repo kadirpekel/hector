@@ -76,7 +76,22 @@ agents:
       - agent_call  # Can call BOTH native and external agents!
     reasoning:
       engine: "supervisor"
-      max_iterations: 20
+      max_iterations: 10  # Reduced from 20 - prevents excessive agent_call loops
+    
+    # Memory configuration for multi-agent orchestration
+    # 
+    # ARCHITECTURE NOTE: Summarization now occurs ONCE per turn (at turn boundaries)
+    # Previously, each message triggered a summarization check, causing infinite loops.
+    # The fix ensures all messages in a turn are saved first, then ONE summarization check.
+    #
+    # Each agent_call adds ~3-5 messages per iteration
+    memory:
+      working:
+        strategy: "summary_buffer"
+        budget: 16000      # 16K tokens - handles 5-10 multi-agent turns
+        threshold: 0.85    # Trigger at 85%
+        target: 0.70       # Compress to 70%
+    
     prompt:
       system_role: |
         You orchestrate a team of specialized agents.
@@ -109,7 +124,7 @@ llms:
 tools:
   execute_command:
     type: command
-    # Permissive defaults: allows all commands (sandboxed)
+    enable_sandboxing: true  # Required for security
     working_directory: "."
   
   write_file:

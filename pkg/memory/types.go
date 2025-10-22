@@ -17,7 +17,12 @@ type StatusNotifier func(message string)
 // Uses NATIVE pb.Message storage without any conversion
 type WorkingMemoryStrategy interface {
 	// AddMessage stores a pb.Message directly (no conversion)
+	// DEPRECATED: Use CheckAndSummarize at turn boundaries instead
 	AddMessage(session *hectorcontext.ConversationHistory, message *pb.Message) error
+
+	// CheckAndSummarize checks if summarization is needed and performs it
+	// This should be called ONCE per turn to prevent infinite loops
+	CheckAndSummarize(session *hectorcontext.ConversationHistory) error
 
 	// GetMessages retrieves pb.Message directly (no conversion)
 	GetMessages(session *hectorcontext.ConversationHistory) ([]*pb.Message, error)

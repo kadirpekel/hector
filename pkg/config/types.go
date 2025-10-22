@@ -465,19 +465,20 @@ type AgentConfig struct {
 	Credentials *AgentCredentials `yaml:"credentials,omitempty"` // Authentication credentials for calling this external agent
 
 	// Native agent fields (when type="native" or omitted)
-	LLM            string          `yaml:"llm,omitempty"`             // LLM provider reference
-	Database       string          `yaml:"database,omitempty"`        // Database provider reference
-	Embedder       string          `yaml:"embedder,omitempty"`        // Embedder provider reference
-	SessionStore   string          `yaml:"session_store,omitempty"`   // Session store reference (defaults to "default")
-	DocumentStores []string        `yaml:"document_stores,omitempty"` // Document store references
-	Prompt         PromptConfig    `yaml:"prompt,omitempty"`          // Prompt configuration
-	Memory         MemoryConfig    `yaml:"memory,omitempty"`          // Memory configuration
-	Reasoning      ReasoningConfig `yaml:"reasoning,omitempty"`       // Reasoning configuration
-	Search         SearchConfig    `yaml:"search,omitempty"`          // Search configuration
-	Task           TaskConfig      `yaml:"task,omitempty"`            // Task configuration
-	Tools          []string        `yaml:"tools,omitempty"`           // Tool references (defined globally in tools: section)
-	SubAgents      []string        `yaml:"sub_agents,omitempty"`      // For supervisor agents: which agents can be orchestrated (empty = all)
-	Security       SecurityConfig  `yaml:"security,omitempty"`        // Security configuration
+	LLM              string                  `yaml:"llm,omitempty"`               // LLM provider reference
+	Database         string                  `yaml:"database,omitempty"`          // Database provider reference
+	Embedder         string                  `yaml:"embedder,omitempty"`          // Embedder provider reference
+	SessionStore     string                  `yaml:"session_store,omitempty"`     // Session store reference (defaults to "default")
+	DocumentStores   []string                `yaml:"document_stores,omitempty"`   // Document store references
+	Prompt           PromptConfig            `yaml:"prompt,omitempty"`            // Prompt configuration
+	Memory           MemoryConfig            `yaml:"memory,omitempty"`            // Memory configuration
+	Reasoning        ReasoningConfig         `yaml:"reasoning,omitempty"`         // Reasoning configuration
+	Search           SearchConfig            `yaml:"search,omitempty"`            // Search configuration
+	Task             TaskConfig              `yaml:"task,omitempty"`              // Task configuration
+	Tools            []string                `yaml:"tools,omitempty"`             // Tool references (defined globally in tools: section)
+	SubAgents        []string                `yaml:"sub_agents,omitempty"`        // For supervisor agents: which agents can be orchestrated (empty = all)
+	Security         SecurityConfig          `yaml:"security,omitempty"`          // Security configuration
+	StructuredOutput *StructuredOutputConfig `yaml:"structured_output,omitempty"` // Structured output configuration
 
 	// Quick config shortcuts (mutually exclusive with explicit config)
 	// These provide simple configuration shortcuts that auto-expand to full config
