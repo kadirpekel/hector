@@ -2,9 +2,9 @@ package cli
 
 import "testing"
 
-func TestArgs_AllFields(t *testing.T) {
+func TestCLIArgs_AllFields(t *testing.T) {
 	// Test that all expected fields exist
-	args := Args{
+	args := CLIArgs{
 		ConfigFile:    "test.yaml",
 		Debug:         true,
 		ServerURL:     "http://localhost:8081",
