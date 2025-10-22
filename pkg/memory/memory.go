@@ -60,33 +60,32 @@ func NewMemoryService(
 	}
 }
 
-// AddToHistory adds a single message to memory
+// AddToHistory adds a single message to the session history
 //
-// DEPRECATED: Use AddBatchToHistory instead for better performance and correct turn boundaries.
+// ⚠️ DEPRECATED: Use AddBatchToHistory instead.
 //
-// This method is retained ONLY for backward compatibility and has limitations:
-//   - Does NOT trigger summarization checks (only AddBatchToHistory does)
-//   - Less efficient than batch operations
-//   - Not used by any core code
+// This method is kept for backward compatibility but should NOT be used in production code.
+// Limitations:
+//   - No transaction support (partial save failures possible)
+//   - No summarization checks (strategy state becomes stale)
+//   - Inefficient (multiple DB calls vs single batch transaction)
 //
-// Migration: Replace AddToHistory(msg) with AddBatchToHistory([]*pb.Message{msg})
+// Migrate by using: AddBatchToHistory(sessionID, []*pb.Message{msg})
 func (s *MemoryService) AddToHistory(sessionID string, msg *pb.Message) error {
 	if sessionID == "" {
 		sessionID = "default"
 	}
 
-	// 1. Append message directly to session store
+	// Append message directly to session store (no batch, no transaction)
 	if err := s.sessionService.AppendMessage(sessionID, msg); err != nil {
 		log.Printf("⚠️  Failed to append message to session: %v", err)
 		return fmt.Errorf("failed to append message: %w", err)
 	}
 
-	// 2. Store in long-term memory (if enabled and should store)
+	// Store in long-term memory (if enabled)
 	s.addToLongTermBatch(sessionID, msg)
 
-	// NOTE: No summarization check here - that's handled by AddBatchToHistory
-	// at turn boundaries to prevent infinite loops
-
+	// NOTE: No summarization check - that's why AddBatchToHistory should be used instead
 	return nil
 }
 

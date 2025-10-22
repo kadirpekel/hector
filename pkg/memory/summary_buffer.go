@@ -68,10 +68,6 @@ func NewSummaryBufferStrategy(config SummaryBufferConfig) (*SummaryBufferStrateg
 		return nil, fmt.Errorf("summarization service is required")
 	}
 
-	// Debug logging removed for cleaner output
-	// log.Printf("✅ Summary buffer strategy initialized (budget: %d, threshold: %.0f%%, target: %.0f%%)",
-	// 	config.Budget, config.Threshold*100, config.Target*100)
-
 	return &SummaryBufferStrategy{
 		tokenBudget:  config.Budget,
 		threshold:    config.Threshold,
@@ -311,8 +307,6 @@ func (s *SummaryBufferStrategy) LoadState(sessionID string, sessionService inter
 			log.Printf("⚠️  No checkpoint found, loading recent %d of %d messages", maxRecent, len(allMessages))
 		} else {
 			messagesToLoad = allMessages
-			// Debug log - only visible in server logs, not CLI output
-			// log.Printf("📥 Loading all %d messages (no checkpoint needed yet)", len(allMessages))
 		}
 	}
 
@@ -328,8 +322,6 @@ func (s *SummaryBufferStrategy) LoadState(sessionID string, sessionService inter
 		}
 	}
 
-	// Debug log - only visible in server logs, not CLI output
-	// log.Printf("✅ Loaded %d messages for session %s", len(messagesToLoad), sessionID)
 	return session, nil
 }
 

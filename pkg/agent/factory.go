@@ -24,13 +24,6 @@ func NewAgentServicesWithRegistry(agentID string, agentConfig *config.AgentConfi
 	return newAgentServicesInternal(agentID, agentConfig, componentManager, registryService)
 }
 
-// NewAgentServices creates agent services with all dependencies wired up
-// Returns the configured agent services
-// Deprecated: Use NewAgentServicesWithRegistry instead
-func NewAgentServices(agentID string, agentConfig *config.AgentConfig, componentManager *component.ComponentManager) (reasoning.AgentServices, error) {
-	return NewAgentServicesWithRegistry(agentID, agentConfig, componentManager, nil)
-}
-
 // newAgentServicesInternal is the internal implementation
 func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, componentManager *component.ComponentManager, registryService reasoning.AgentRegistryService) (reasoning.AgentServices, error) {
 	if agentID == "" {
