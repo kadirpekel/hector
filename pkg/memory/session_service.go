@@ -63,6 +63,42 @@ func (s *InMemorySessionService) AppendMessage(sessionID string, message *pb.Mes
 	return nil
 }
 
+// AppendMessages appends multiple messages atomically
+// For in-memory implementation, this is equivalent to multiple AppendMessage calls
+// but done atomically under a single lock
+func (s *InMemorySessionService) AppendMessages(sessionID string, messages []*pb.Message) error {
+	if sessionID == "" {
+		return fmt.Errorf("sessionID cannot be empty")
+	}
+	if len(messages) == 0 {
+		return nil // Nothing to append
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Get or create session
+	session, exists := s.sessions[sessionID]
+	if !exists {
+		session = &SessionData{
+			Messages: make([]*pb.Message, 0),
+			Metadata: &reasoning.SessionMetadata{
+				ID:        sessionID,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+				Metadata:  make(map[string]interface{}),
+			},
+		}
+		s.sessions[sessionID] = session
+	}
+
+	// Append all messages atomically
+	session.Messages = append(session.Messages, messages...)
+	session.Metadata.UpdatedAt = time.Now()
+
+	return nil
+}
+
 // GetMessages returns the most recent messages from a session
 func (s *InMemorySessionService) GetMessages(sessionID string, limit int) ([]*pb.Message, error) {
 	if sessionID == "" {

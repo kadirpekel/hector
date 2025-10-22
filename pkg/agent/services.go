@@ -166,27 +166,11 @@ func (s *DefaultPromptService) BuildMessages(
 		}
 	}
 
-	// Add conversation history from HistoryService if enabled
-	if s.promptConfig.IncludeHistory && s.historyService != nil {
-		// Extract sessionID from context (if available)
-		sessionID := ""
-		if sessionIDValue := ctx.Value("sessionID"); sessionIDValue != nil {
-			if sid, ok := sessionIDValue.(string); ok {
-				sessionID = sid
-			}
-		}
-
-		historyMsgs, err := s.historyService.GetRecentHistory(sessionID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get recent history: %w", err)
-		}
-
-		// Already in *pb.Message format - append directly
-		messages = append(messages, historyMsgs...)
-	}
-
 	// Add current tool conversation (assistant responses + tool results from this query)
-	// This includes conversation history loaded in agent.go
+	// IMPORTANT: currentToolConversation already contains conversation history from agent.go
+	// The history was loaded once in agent.execute() and stored in state.history
+	// state.AllMessages() returns history + currentTurn, which is passed here
+	// NO NEED to load history again - it's already in currentToolConversation!
 	messages = append(messages, currentToolConversation...)
 
 	// Add current user query if not already in currentToolConversation

@@ -76,6 +76,14 @@ func (c *LocalClient) SendMessage(ctx context.Context, agentID string, message *
 		Request: message,
 	}
 
+	// IMPORTANT: Add sessionID to context so agent can load conversation history
+	// Use context_id from message as the session ID (same as A2A server does)
+	contextID := message.ContextId
+	if contextID == "" {
+		contextID = "default" // Fallback to default if not provided
+	}
+	ctx = context.WithValue(ctx, "sessionID", contextID)
+
 	// Call agent directly
 	return agentEntry.Agent.SendMessage(ctx, req)
 }
@@ -92,6 +100,14 @@ func (c *LocalClient) StreamMessage(ctx context.Context, agentID string, message
 	req := &pb.SendMessageRequest{
 		Request: message,
 	}
+
+	// IMPORTANT: Add sessionID to context so agent can load conversation history
+	// Use context_id from message as the session ID (same as A2A server does)
+	contextID := message.ContextId
+	if contextID == "" {
+		contextID = "default" // Fallback to default if not provided
+	}
+	ctx = context.WithValue(ctx, "sessionID", contextID)
 
 	// Create channel for streaming responses
 	streamChan := make(chan *pb.StreamResponse, 10)

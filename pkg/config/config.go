@@ -598,6 +598,18 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 		Databases:      make(map[string]DatabaseProviderConfig),
 		Embedders:      make(map[string]EmbedderProviderConfig),
 		DocumentStores: make(map[string]DocumentStoreConfig),
+		// Add session persistence for CLI conversation continuity
+		SessionStores: map[string]SessionStoreConfig{
+			"default-session-store": {
+				Backend: "sql",
+				SQL: &SessionSQLConfig{
+					Driver:   "sqlite",
+					Database: "./data/sessions.db",
+					MaxConns: 10,
+					MaxIdle:  2,
+				},
+			},
+		},
 	}
 
 	// Configure document store if folder provided
@@ -652,6 +664,8 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 			Engine:        "chain-of-thought",
 			MaxIterations: 100,
 		},
+		// Enable session persistence for conversation continuity
+		SessionStore: "default-session-store",
 	}
 
 	// Add document store to agent if docs folder provided

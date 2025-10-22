@@ -94,6 +94,12 @@ type SessionService interface {
 	// Message-level operations (efficient for relational stores)
 	// These operations work with individual messages, not bulk session state
 	AppendMessage(sessionID string, message *pb.Message) error
+
+	// AppendMessages appends multiple messages atomically
+	// If any message fails, the entire batch is rolled back (transaction support)
+	// This is the PREFERRED method for batch operations
+	AppendMessages(sessionID string, messages []*pb.Message) error
+
 	GetMessages(sessionID string, limit int) ([]*pb.Message, error) // Deprecated: Use GetMessagesWithOptions
 	GetMessagesWithOptions(sessionID string, opts LoadOptions) ([]*pb.Message, error)
 	GetMessageCount(sessionID string) (int, error)

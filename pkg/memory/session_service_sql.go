@@ -52,13 +52,16 @@ type messageRow struct {
 
 const (
 	// SQL schema for sessions
+	// IMPORTANT: For multi-agent isolation, PRIMARY KEY is (id, agent_id)
+	// This allows different agents to use the same session ID
 	createSessionsTableSQL = `
 CREATE TABLE IF NOT EXISTS sessions (
-    id VARCHAR(255) PRIMARY KEY,
-    agent_id VARCHAR(255),
+    id VARCHAR(255) NOT NULL,
+    agent_id VARCHAR(255) NOT NULL,
     metadata TEXT,
     created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL
+    updated_at TIMESTAMP NOT NULL,
+    PRIMARY KEY (id, agent_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_agent_id ON sessions(agent_id);
@@ -287,6 +290,108 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	return nil
 }
 
+// AppendMessages appends multiple messages atomically using a transaction
+// If any message fails, the entire batch is rolled back
+// This is the PREFERRED method for batch operations
+func (s *SQLSessionService) AppendMessages(sessionID string, messages []*pb.Message) error {
+	if sessionID == "" {
+		return fmt.Errorf("sessionID cannot be empty")
+	}
+	if len(messages) == 0 {
+		return nil // Nothing to append
+	}
+
+	ctx := context.Background()
+
+	// Ensure session exists
+	if _, err := s.GetOrCreateSessionMetadata(sessionID); err != nil {
+		return fmt.Errorf("failed to ensure session exists: %w", err)
+	}
+
+	// Start transaction
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	// Ensure transaction is rolled back on error
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Get starting sequence number (do this inside transaction for consistency)
+	var startSequenceNum int64
+	countQuery := `SELECT COALESCE(MAX(sequence_num), 0) FROM session_messages WHERE session_id = ?`
+	if s.dialect == "postgres" {
+		countQuery = `SELECT COALESCE(MAX(sequence_num), 0) FROM session_messages WHERE session_id = $1`
+	}
+
+	if err = tx.QueryRowContext(ctx, countQuery, sessionID).Scan(&startSequenceNum); err != nil {
+		return fmt.Errorf("failed to get sequence number: %w", err)
+	}
+
+	// Prepare insert query based on dialect
+	insertQuery := `
+INSERT INTO session_messages (session_id, message_id, context_id, task_id, role, message_json, sequence_num, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`
+	if s.dialect == "postgres" {
+		insertQuery = `
+INSERT INTO session_messages (session_id, message_id, context_id, task_id, role, message_json, sequence_num, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+`
+	}
+
+	now := time.Now()
+
+	// Insert all messages within transaction
+	for i, message := range messages {
+		if message == nil {
+			err = fmt.Errorf("message at index %d is nil", i)
+			return err
+		}
+
+		// Serialize message
+		messageJSON, marshalErr := protojson.Marshal(message)
+		if marshalErr != nil {
+			err = fmt.Errorf("failed to marshal message at index %d: %w", i, marshalErr)
+			return err
+		}
+
+		sequenceNum := startSequenceNum + int64(i) + 1
+
+		// Execute insert within transaction
+		_, execErr := tx.ExecContext(ctx, insertQuery,
+			sessionID, message.MessageId, message.ContextId, message.TaskId,
+			message.Role.String(), string(messageJSON), sequenceNum, now,
+		)
+		if execErr != nil {
+			err = fmt.Errorf("failed to insert message at index %d: %w", i, execErr)
+			return err
+		}
+	}
+
+	// Update session timestamp within transaction
+	updateQuery := `UPDATE sessions SET updated_at = ? WHERE id = ?`
+	if s.dialect == "postgres" {
+		updateQuery = `UPDATE sessions SET updated_at = $1 WHERE id = $2`
+	}
+
+	_, err = tx.ExecContext(ctx, updateQuery, now, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to update session timestamp: %w", err)
+	}
+
+	// Commit transaction
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
 // GetMessages returns the most recent messages from a session
 func (s *SQLSessionService) GetMessages(sessionID string, limit int) ([]*pb.Message, error) {
 	if sessionID == "" {
@@ -295,19 +400,23 @@ func (s *SQLSessionService) GetMessages(sessionID string, limit int) ([]*pb.Mess
 
 	ctx := context.Background()
 
-	// Build query
+	// Build query with JOIN to filter by agent_id (multi-agent isolation)
 	query := `
-SELECT message_json
-FROM session_messages
-WHERE session_id = ?
-ORDER BY sequence_num ASC
+SELECT sm.message_json
+FROM session_messages sm
+JOIN sessions s ON sm.session_id = s.id
+WHERE sm.session_id = ? AND s.agent_id = ?
+ORDER BY sm.sequence_num ASC
 `
+	args := []interface{}{sessionID, s.agentID}
+
 	if s.dialect == "postgres" {
 		query = `
-SELECT message_json
-FROM session_messages
-WHERE session_id = $1
-ORDER BY sequence_num ASC
+SELECT sm.message_json
+FROM session_messages sm
+JOIN sessions s ON sm.session_id = s.id
+WHERE sm.session_id = $1 AND s.agent_id = $2
+ORDER BY sm.sequence_num ASC
 `
 	}
 
@@ -317,34 +426,33 @@ ORDER BY sequence_num ASC
 		if s.dialect == "postgres" {
 			query = `
 SELECT message_json FROM (
-    SELECT message_json, sequence_num
-    FROM session_messages
-    WHERE session_id = $1
-    ORDER BY sequence_num DESC
-    LIMIT $2
+    SELECT sm.message_json, sm.sequence_num
+    FROM session_messages sm
+    JOIN sessions s ON sm.session_id = s.id
+    WHERE sm.session_id = $1 AND s.agent_id = $2
+    ORDER BY sm.sequence_num DESC
+    LIMIT $3
 ) sub ORDER BY sequence_num ASC
 `
 		} else {
 			query = `
 SELECT message_json FROM (
-    SELECT message_json, sequence_num
-    FROM session_messages
-    WHERE session_id = ?
-    ORDER BY sequence_num DESC
+    SELECT sm.message_json, sm.sequence_num
+    FROM session_messages sm
+    JOIN sessions s ON sm.session_id = s.id
+    WHERE sm.session_id = ? AND s.agent_id = ?
+    ORDER BY sm.sequence_num DESC
     LIMIT ?
 ) sub ORDER BY sequence_num ASC
 `
 		}
+		args = append(args, limit)
 	}
 
 	var rows *sql.Rows
 	var err error
 
-	if limit > 0 {
-		rows, err = s.db.QueryContext(ctx, query, sessionID, limit)
-	} else {
-		rows, err = s.db.QueryContext(ctx, query, sessionID)
-	}
+	rows, err = s.db.QueryContext(ctx, query, args...)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to query messages: %w", err)
@@ -382,12 +490,22 @@ func (s *SQLSessionService) GetMessagesWithOptions(sessionID string, opts reason
 
 	ctx := context.Background()
 
-	// Build query based on dialect
-	query := `SELECT message_id, message_json FROM session_messages WHERE session_id = ?`
-	args := []interface{}{sessionID}
+	// Build query based on dialect - JOIN with sessions to filter by agent_id for isolation
+	query := `
+		SELECT sm.message_id, sm.message_json 
+		FROM session_messages sm 
+		JOIN sessions s ON sm.session_id = s.id 
+		WHERE sm.session_id = ? AND s.agent_id = ?
+	`
+	args := []interface{}{sessionID, s.agentID}
 
 	if s.dialect == "postgres" {
-		query = `SELECT message_id, message_json FROM session_messages WHERE session_id = $1`
+		query = `
+			SELECT sm.message_id, sm.message_json 
+			FROM session_messages sm 
+			JOIN sessions s ON sm.session_id = s.id 
+			WHERE sm.session_id = $1 AND s.agent_id = $2
+		`
 	}
 
 	// Add FromMessageID filter (for checkpoint loading)
@@ -499,22 +617,22 @@ func (s *SQLSessionService) GetOrCreateSessionMetadata(sessionID string) (*reaso
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Try to get existing session
+	// Try to get existing session FOR THIS AGENT (multi-agent isolation)
 	query := `
 SELECT id, agent_id, metadata, created_at, updated_at
 FROM sessions
-WHERE id = ?
+WHERE id = ? AND agent_id = ?
 `
 	if s.dialect == "postgres" {
 		query = `
 SELECT id, agent_id, metadata, created_at, updated_at
 FROM sessions
-WHERE id = $1
+WHERE id = $1 AND agent_id = $2
 `
 	}
 
 	var row sessionRow
-	err := s.db.QueryRowContext(ctx, query, sessionID).Scan(
+	err := s.db.QueryRowContext(ctx, query, sessionID, s.agentID).Scan(
 		&row.ID, &row.AgentID, &row.Metadata, &row.CreatedAt, &row.UpdatedAt,
 	)
 

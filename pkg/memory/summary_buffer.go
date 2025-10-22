@@ -311,7 +311,8 @@ func (s *SummaryBufferStrategy) LoadState(sessionID string, sessionService inter
 			log.Printf("⚠️  No checkpoint found, loading recent %d of %d messages", maxRecent, len(allMessages))
 		} else {
 			messagesToLoad = allMessages
-			log.Printf("📥 Loading all %d messages (no checkpoint needed yet)", len(allMessages))
+			// Debug log - only visible in server logs, not CLI output
+			// log.Printf("📥 Loading all %d messages (no checkpoint needed yet)", len(allMessages))
 		}
 	}
 
@@ -327,7 +328,8 @@ func (s *SummaryBufferStrategy) LoadState(sessionID string, sessionService inter
 		}
 	}
 
-	log.Printf("✅ Loaded %d messages for session %s", len(messagesToLoad), sessionID)
+	// Debug log - only visible in server logs, not CLI output
+	// log.Printf("✅ Loaded %d messages for session %s", len(messagesToLoad), sessionID)
 	return session, nil
 }
 
