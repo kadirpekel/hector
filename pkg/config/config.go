@@ -619,11 +619,11 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 
 		// Create a default document store configuration for zero-config mode
 		docStoreConfig := DocumentStoreConfig{
-			Name:                storeName,
-			Source:              "directory",
-			Path:                opts.DocsFolder,
-			IncludePatterns:     []string{"*.md", "*.txt", "*.go", "*.py", "*.js", "*.ts", "*.yaml", "*.yml", "*.json", "*.xml", "*.html", "*.csv", "*.pdf", "*.docx", "*.xlsx"},
-			ExcludePatterns:     []string{"**/node_modules/**", "**/.git/**", "**/vendor/**", "**/__pycache__/**", "**/.DS_Store", "**/.hector/**", "**/index_state_*.json"},
+			Name:            storeName,
+			Source:          "directory",
+			Path:            opts.DocsFolder,
+			IncludePatterns: []string{"*.md", "*.txt", "*.go", "*.py", "*.js", "*.ts", "*.yaml", "*.yml", "*.json", "*.xml", "*.html", "*.csv", "*.pdf", "*.docx", "*.xlsx"},
+			// ExcludePatterns: Leave empty to use comprehensive defaults from SetDefaults()
 			WatchChanges:        true,
 			MaxFileSize:         50 * 1024 * 1024, // 50MB
 			IncrementalIndexing: true,

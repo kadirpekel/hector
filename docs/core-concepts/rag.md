@@ -576,17 +576,163 @@ chunk_overlap: 200
 
 ### 3. Filter Irrelevant Files
 
+Hector automatically excludes common files that shouldn't be indexed. You can also add custom exclusions.
+
+#### Default Exclusions
+
+Hector automatically skips:
+
+**Version Control:**
+```
+**/.git/**, **/.svn/**, **/.hg/**, **/.bzr/**
+```
+
+**Dependencies:**
+```
+**/node_modules/**, **/vendor/**, **/venv/**, **/__pycache__/**
+**/.npm/**, **/.yarn/**, **/gems/**, **/.bundle/**
+```
+
+**Build Artifacts:**
+```
+**/dist/**, **/build/**, **/target/**, **/.next/**, **/bin/**
+**/.cache/**, **/.parcel-cache/**
+```
+
+**IDE & Editor:**
+```
+**/.vscode/**, **/.idea/**, **/.DS_Store
+**/*.swp, **/*~
+```
+
+**Binary Files:**
+```
+*.exe, *.dll, *.so, *.pyc, *.o
+*.png, *.jpg, *.mp4, *.mp3
+*.zip, *.tar, *.gz
+```
+
+**Logs & Temp:**
+```
+*.log, *.tmp, *.cache
+**/logs/**, **/tmp/**
+```
+
+**Lock Files:**
+```
+**/package-lock.json, **/yarn.lock
+**/Gemfile.lock, **/Cargo.lock
+```
+
+**Empty Files:**
+```
+All files with 0 bytes are automatically skipped
+```
+
+See the full list: [112 default exclusions](https://github.com/kadirpekel/hector/blob/main/pkg/config/types.go#L978)
+
+#### Custom Exclusions
+
+Add your own patterns:
+
 ```yaml
 document_stores:
-  - name: "clean_codebase"
+  - name: "filtered_codebase"
     paths: ["./"]
-    include_patterns: ["*.go"]
+    include_patterns: ["*.go", "*.py"]
     exclude_patterns: [
-      "*_test.go",     # Test files
-      "*.min.js",      # Minified files
-      "vendor/*",      # Dependencies
-      "node_modules/*"
+      # Custom exclusions (in addition to defaults)
+      "*_test.go",        # Test files
+      "**/*_mock.go",     # Mock files
+      "**/testdata/**",   # Test data directories
+      "*.generated.go",   # Generated code
+      "**/experiments/**" # Experimental code
     ]
+```
+
+#### Pattern Syntax
+
+Hector supports flexible glob patterns:
+
+```yaml
+# Directory patterns
+"**/node_modules/**"    # Any node_modules directory
+"**/.git/**"            # Any .git directory
+
+# File extension patterns
+"*.log"                 # All .log files
+"*.pyc"                 # All .pyc files
+
+# Specific files
+"**/.DS_Store"          # .DS_Store anywhere
+"**/package-lock.json"  # Lock files
+
+# Combined patterns
+"**/*.min.js"           # Minified JS anywhere
+"**/dist/*.map"         # Source maps in dist
+```
+
+#### Override Defaults
+
+To use ONLY your patterns (no defaults):
+
+```yaml
+document_stores:
+  - name: "minimal"
+    paths: ["./"]
+    # Explicitly set empty to disable defaults
+    exclude_patterns: []
+    # Now only your include_patterns apply
+    include_patterns: ["*.md"]
+```
+
+⚠️ **Warning:** Disabling default exclusions may index binary files, node_modules, etc.
+
+#### Performance Tips
+
+**DO:**
+- ✅ Exclude large directories (`node_modules`, `vendor`)
+- ✅ Exclude binary files (images, videos, archives)
+- ✅ Exclude build artifacts (`dist`, `build`)
+- ✅ Use specific patterns (`*.test.js` vs `**test**`)
+
+**DON'T:**
+- ❌ Index empty files (auto-skipped)
+- ❌ Index minified files (`*.min.js`)
+- ❌ Index compiled files (`*.pyc`, `*.o`)
+- ❌ Use overly broad patterns (`**/*`)
+
+#### Example: Production Setup
+
+```yaml
+document_stores:
+  - name: "production_codebase"
+    paths: ["./src/", "./lib/"]
+    
+    # Explicit inclusions
+    include_patterns: [
+      "*.go", "*.py", "*.js", "*.ts",
+      "*.md", "*.yaml", "*.json"
+    ]
+    
+    # Additional exclusions (on top of defaults)
+    exclude_patterns: [
+      # Project-specific
+      "*_test.go",
+      "**/*_mock.py",
+      "**/fixtures/**",
+      
+      # Generated code
+      "*.pb.go",
+      "*.generated.*",
+      
+      # Docs we don't want
+      "**/node_modules/**/@types/**",
+      "**/vendor/github.com/**/testdata/**"
+    ]
+    
+    # Skip large files
+    max_file_size: 10485760  # 10MB
 ```
 
 ### 4. Organize by Type

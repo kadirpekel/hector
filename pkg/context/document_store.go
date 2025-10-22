@@ -325,6 +325,11 @@ func (ds *DocumentStore) indexDirectory() error {
 			return nil
 		}
 
+		// Skip empty files
+		if info.Size() == 0 {
+			return nil
+		}
+
 		// Apply filters
 		if ds.shouldExclude(path) || !ds.shouldInclude(path) {
 			return nil
@@ -902,12 +907,60 @@ func (ds *DocumentStore) GetDocument(id string) (databases.SearchResult, bool) {
 // ============================================================================
 
 // shouldExclude checks if a file should be excluded based on patterns
+// Supports both simple string matching and glob patterns
 func (ds *DocumentStore) shouldExclude(path string) bool {
+	// Get relative path for pattern matching
+	relPath, err := filepath.Rel(ds.sourcePath, path)
+	if err != nil {
+		relPath = path // Fallback to absolute path
+	}
+
+	// Normalize separators for cross-platform compatibility
+	normalizedPath := filepath.ToSlash(relPath)
+
 	for _, pattern := range ds.config.ExcludePatterns {
-		if strings.Contains(path, pattern) {
+		// Pattern types:
+		// 1. Directory patterns: **/node_modules/**
+		// 2. File patterns: *.log
+		// 3. Specific paths: .git
+
+		// Normalize pattern
+		normalizedPattern := filepath.ToSlash(pattern)
+
+		// Check for directory patterns (**/dirname/**)
+		if strings.HasPrefix(normalizedPattern, "**/") && strings.HasSuffix(normalizedPattern, "/**") {
+			dirName := strings.Trim(normalizedPattern, "*/")
+			// Check if path contains this directory
+			if strings.Contains("/"+normalizedPath+"/", "/"+dirName+"/") {
+				return true
+			}
+		}
+
+		// Check for glob patterns (*.ext, **/*.swp)
+		if strings.Contains(normalizedPattern, "*") {
+			// Try matching with filepath.Match for simple patterns
+			matched, err := filepath.Match(normalizedPattern, filepath.Base(normalizedPath))
+			if err == nil && matched {
+				return true
+			}
+
+			// Try matching against full path for ** patterns
+			if strings.Contains(normalizedPattern, "**") {
+				// Convert ** to * for simple matching
+				simplePattern := strings.ReplaceAll(normalizedPattern, "**/", "")
+				simplePattern = strings.ReplaceAll(simplePattern, "/**", "")
+				if strings.Contains(normalizedPath, simplePattern) {
+					return true
+				}
+			}
+		}
+
+		// Simple substring match (for .DS_Store, etc.)
+		if strings.Contains(normalizedPath, normalizedPattern) {
 			return true
 		}
 	}
+
 	return false
 }
 

@@ -977,15 +977,58 @@ func (c *DocumentStoreConfig) SetDefaults() {
 	// Exclude patterns: Binary/media files and dependency directories
 	if len(c.ExcludePatterns) == 0 {
 		c.ExcludePatterns = []string{
-			// Dependencies
-			"**/node_modules/**", "**/.git/**", "**/vendor/**", "**/__pycache__/**",
-			// Build artifacts
-			"**/dist/**", "**/build/**", "**/.next/**", "**/target/**",
-			// Binary/media files (cannot parse)
-			"*.exe", "*.dll", "*.so", "*.dylib", "*.bin",
-			"*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.ico", "*.webp",
-			"*.mp4", "*.avi", "*.mov", "*.mkv", "*.mp3", "*.wav",
-			"*.zip", "*.tar", "*.gz", "*.7z", "*.rar",
+			// Version control & hidden directories
+			"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**",
+
+			// Dependency directories
+			"**/node_modules/**", "**/vendor/**", "**/venv/**", "**/.venv/**",
+			"**/virtualenv/**", "**/env/**", "**/__pycache__/**",
+			"**/.npm/**", "**/.yarn/**", "**/.pnp/**",
+			"**/.bundle/**", "**/gems/**",
+
+			// Build & distribution artifacts
+			"**/dist/**", "**/build/**", "**/out/**", "**/output/**",
+			"**/target/**", "**/.next/**", "**/.nuxt/**", "**/.output/**",
+			"**/bin/**", "**/obj/**", "**/.gradle/**", "**/.m2/**",
+			"**/.cache/**", "**/.parcel-cache/**",
+
+			// IDE & editor files
+			"**/.vscode/**", "**/.idea/**", "**/.eclipse/**",
+			"**/.settings/**", "**/*.swp", "**/*.swo", "**/*~",
+			"**/.DS_Store", "**/Thumbs.db", "**/.directory",
+
+			// Compiled & executable files
+			"*.exe", "*.dll", "*.so", "*.dylib", "*.bin", "*.o", "*.a",
+			"*.obj", "*.lib", "*.class", "*.pyc", "*.pyo", "*.pyd",
+
+			// Image & media files (non-parseable)
+			"*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.ico", "*.webp", "*.svg",
+			"*.mp4", "*.avi", "*.mov", "*.mkv", "*.flv", "*.wmv",
+			"*.mp3", "*.wav", "*.flac", "*.aac", "*.ogg", "*.wma",
+
+			// Archive & compressed files
+			"*.zip", "*.tar", "*.gz", "*.bz2", "*.7z", "*.rar", "*.xz", "*.tgz",
+
+			// Fonts
+			"*.ttf", "*.otf", "*.woff", "*.woff2", "*.eot",
+
+			// Database files
+			"*.db", "*.sqlite", "*.sqlite3", "*.mdb",
+
+			// Log & temporary files
+			"*.log", "*.tmp", "*.temp", "*.bak", "*.swp", "*.cache",
+			"**/logs/**", "**/tmp/**", "**/temp/**",
+
+			// Lock files
+			"**/package-lock.json", "**/yarn.lock", "**/pnpm-lock.yaml",
+			"**/Gemfile.lock", "**/Cargo.lock", "**/poetry.lock",
+
+			// Hector-specific
+			"**/.hector/**", "**/index_state_*.json",
+
+			// Common large directories
+			"**/coverage/**", "**/.nyc_output/**", "**/test-results/**",
+			"**/public/assets/**", "**/static/media/**",
 		}
 	}
 	if c.MaxFileSize == 0 {
