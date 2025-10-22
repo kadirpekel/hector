@@ -41,8 +41,8 @@ type Config struct {
 	// Document store configurations
 	DocumentStores map[string]DocumentStoreConfig `yaml:"document_stores,omitempty"`
 
-	// Session store configurations (shared across agents) - REMOVED for now
-	// SessionStores map[string]SessionStoreConfig `yaml:"session_stores,omitempty"`
+	// Session store configurations (shared across agents)
+	SessionStores map[string]SessionStoreConfig `yaml:"session_stores,omitempty"`
 
 	// Plugin configurations
 	Plugins PluginConfigs `yaml:"plugins,omitempty"`
@@ -123,6 +123,13 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// Validate session stores
+	for name, store := range c.SessionStores {
+		if err := store.Validate(); err != nil {
+			return fmt.Errorf("session store '%s' validation failed: %w", name, err)
+		}
+	}
+
 	// Validate plugins
 	if err := c.Plugins.Validate(); err != nil {
 		return fmt.Errorf("plugins validation failed: %w", err)
@@ -151,6 +158,9 @@ func (c *Config) SetDefaults() {
 	}
 	if c.DocumentStores == nil {
 		c.DocumentStores = make(map[string]DocumentStoreConfig)
+	}
+	if c.SessionStores == nil {
+		c.SessionStores = make(map[string]SessionStoreConfig)
 	}
 
 	// Zero-config: Create default services if none exist
@@ -310,6 +320,13 @@ func (c *Config) SetDefaults() {
 		store := c.DocumentStores[name]
 		store.SetDefaults()
 		c.DocumentStores[name] = store
+	}
+
+	// Set session store defaults
+	for name := range c.SessionStores {
+		store := c.SessionStores[name]
+		store.SetDefaults()
+		c.SessionStores[name] = store
 	}
 
 	// Set plugin defaults

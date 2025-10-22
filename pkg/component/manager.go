@@ -2,18 +2,22 @@ package component
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/databases"
 	"github.com/kadirpekel/hector/pkg/embedders"
 	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/memory"
 	"github.com/kadirpekel/hector/pkg/plugins"
 	plugingrpc "github.com/kadirpekel/hector/pkg/plugins/grpc"
 	"github.com/kadirpekel/hector/pkg/protocol"
+	"github.com/kadirpekel/hector/pkg/reasoning"
 	"github.com/kadirpekel/hector/pkg/tools"
 	yaml "gopkg.in/yaml.v3"
 )
@@ -35,6 +39,9 @@ type ComponentManager struct {
 
 	// Plugin registry
 	pluginRegistry *plugins.PluginRegistry
+
+	// Session store database connections (shared across agents)
+	sessionStoreDBs map[string]interface{} // map[storeName] -> *sql.DB
 }
 
 // NewComponentManager creates a new component manager and initializes all components
@@ -68,6 +75,7 @@ func NewComponentManagerWithAgentRegistry(globalConfig *config.Config, agentRegi
 		embedderRegistry: embedders.NewEmbedderRegistry(),
 		toolRegistry:     toolRegistry,
 		pluginRegistry:   pluginRegistry,
+		sessionStoreDBs:  make(map[string]interface{}),
 	}
 
 	// Discover and load plugins
@@ -176,6 +184,98 @@ func (cm *ComponentManager) GetDatabase(name string) (databases.DatabaseProvider
 // GetEmbedder returns an embedder provider by name
 func (cm *ComponentManager) GetEmbedder(name string) (embedders.EmbedderProvider, error) {
 	return cm.embedderRegistry.GetEmbedder(name)
+}
+
+// GetSessionService returns a session service for the given store name and agent ID
+// Creates and caches database connections per store, but creates new service instances per agent
+func (cm *ComponentManager) GetSessionService(storeName string, agentID string) (reasoning.SessionService, error) {
+	if storeName == "" {
+		// No session store configured, return in-memory service
+		return memory.NewInMemorySessionService(), nil
+	}
+
+	if agentID == "" {
+		return nil, fmt.Errorf("agent ID is required for session service")
+	}
+
+	// Look up session store config
+	storeConfig, ok := cm.globalConfig.SessionStores[storeName]
+	if !ok {
+		return nil, fmt.Errorf("session store '%s' not found in configuration", storeName)
+	}
+
+	// Handle in-memory backend
+	if storeConfig.Backend == "" || storeConfig.Backend == "memory" {
+		return memory.NewInMemorySessionService(), nil
+	}
+
+	// Handle SQL backend
+	if storeConfig.Backend == "sql" {
+		if storeConfig.SQL == nil {
+			return nil, fmt.Errorf("SQL configuration is required for SQL session store '%s'", storeName)
+		}
+
+		// Get or create shared database connection for this store
+		db, err := cm.getOrCreateSessionStoreDB(storeName, storeConfig.SQL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get database for session store '%s': %w", storeName, err)
+		}
+
+		// Create a new SQLSessionService instance with the shared DB and agent's ID
+		return memory.NewSQLSessionService(db, storeConfig.SQL.Driver, agentID)
+	}
+
+	return nil, fmt.Errorf("unsupported session store backend '%s' for store '%s'", storeConfig.Backend, storeName)
+}
+
+// getOrCreateSessionStoreDB returns a shared database connection for a session store
+// Caches the connection so multiple agents can share the same connection pool
+func (cm *ComponentManager) getOrCreateSessionStoreDB(storeName string, cfg *config.SessionSQLConfig) (*sql.DB, error) {
+	// Check cache
+	if cached, ok := cm.sessionStoreDBs[storeName]; ok {
+		if db, ok := cached.(*sql.DB); ok {
+			return db, nil
+		}
+	}
+
+	// Set defaults and validate
+	cfg.SetDefaults()
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid SQL configuration: %w", err)
+	}
+
+	// Map driver name to actual SQL driver name
+	driverName := cfg.Driver
+	if driverName == "sqlite" {
+		driverName = "sqlite3"
+	}
+
+	// Open database connection
+	db, err := sql.Open(driverName, cfg.ConnectionString())
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Configure connection pool
+	db.SetMaxOpenConns(cfg.MaxConns)
+	db.SetMaxIdleConns(cfg.MaxIdle)
+	db.SetConnMaxLifetime(time.Hour)
+
+	// Test connection
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	// Cache the connection
+	cm.sessionStoreDBs[storeName] = db
+
+	fmt.Printf("✅ Session store '%s' connected (driver: %s, database: %s)\n", storeName, cfg.Driver, cfg.Database)
+
+	return db, nil
 }
 
 // ============================================================================

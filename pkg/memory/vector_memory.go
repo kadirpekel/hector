@@ -49,7 +49,8 @@ func (v *VectorMemoryStrategy) Name() string {
 
 // Store adds messages to long-term memory (batch operation)
 // Each message is stored as a separate vector document in Qdrant
-func (v *VectorMemoryStrategy) Store(sessionID string, messages []*pb.Message) error {
+// Isolation: agentID + sessionID (prevents cross-agent memory leaks)
+func (v *VectorMemoryStrategy) Store(agentID string, sessionID string, messages []*pb.Message) error {
 	if len(messages) == 0 {
 		return nil
 	}
@@ -81,9 +82,10 @@ func (v *VectorMemoryStrategy) Store(sessionID string, messages []*pb.Message) e
 			roleStr = "system"
 		}
 
-		// Prepare metadata
+		// Prepare metadata with BOTH agent_id AND session_id for proper isolation
 		metadata := map[string]interface{}{
-			"session_id":    sessionID,
+			"agent_id":      agentID,   // ✅ Agent isolation
+			"session_id":    sessionID, // ✅ Session isolation
 			"role":          roleStr,
 			"content":       textContent, // Store content for retrieval
 			"message_index": i,
@@ -100,8 +102,8 @@ func (v *VectorMemoryStrategy) Store(sessionID string, messages []*pb.Message) e
 }
 
 // Recall retrieves relevant context from long-term memory using semantic search
-// Filters by sessionID to ensure session isolation
-func (v *VectorMemoryStrategy) Recall(sessionID string, query string, limit int) ([]*pb.Message, error) {
+// Filters by BOTH agentID and sessionID to ensure proper isolation
+func (v *VectorMemoryStrategy) Recall(agentID string, sessionID string, query string, limit int) ([]*pb.Message, error) {
 	if query == "" {
 		return []*pb.Message{}, nil
 	}
@@ -112,10 +114,11 @@ func (v *VectorMemoryStrategy) Recall(sessionID string, query string, limit int)
 		return nil, fmt.Errorf("failed to embed query: %w", err)
 	}
 
-	// Search with session filter
+	// Search with BOTH agent and session filters for proper isolation
 	ctx := context.Background()
 	results, err := v.db.SearchWithFilter(ctx, v.collection, queryVector, limit, map[string]interface{}{
-		"session_id": sessionID, // Session isolation
+		"agent_id":   agentID,   // ✅ Agent isolation (prevents cross-agent leaks)
+		"session_id": sessionID, // ✅ Session isolation
 	})
 	if err != nil {
 		return nil, fmt.Errorf("recall failed: %w", err)
@@ -161,11 +164,12 @@ func (v *VectorMemoryStrategy) Recall(sessionID string, query string, limit int)
 }
 
 // Clear removes all long-term memory for a session
-// Deletes all vectors associated with the session from Qdrant
-func (v *VectorMemoryStrategy) Clear(sessionID string) error {
-	// Delete all points where session_id = sessionID
+// Deletes all vectors associated with the agent+session from Qdrant
+func (v *VectorMemoryStrategy) Clear(agentID string, sessionID string) error {
+	// Delete all points where agent_id = agentID AND session_id = sessionID
 	ctx := context.Background()
 	return v.db.DeleteByFilter(ctx, v.collection, map[string]interface{}{
-		"session_id": sessionID,
+		"agent_id":   agentID,   // ✅ Agent isolation
+		"session_id": sessionID, // ✅ Session isolation
 	})
 }

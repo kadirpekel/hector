@@ -8,15 +8,15 @@ agents:
     description: "Agent with SQLite task persistence"
     llm: "gpt"
     
+    # Task configuration - presence of this section enables async task support
     task:
-      enabled: true
-      backend: sql
-      worker_pool: 100  # Max concurrent async tasks
+      backend: sql        # Use SQL backend instead of in-memory
+      worker_pool: 100    # Max concurrent async tasks (default: 100, 0 = unlimited)
       sql:
-        driver: sqlite
+        driver: sqlite    # Database driver: sqlite, postgres, or mysql
         database: ./data/tasks.db  # File path (will be created if doesn't exist)
-        max_conns: 10   # SQLite has limited concurrency
-        max_idle: 2
+        max_conns: 10     # SQLite has limited write concurrency
+        max_idle: 2       # Idle connection pool size
 
     reasoning:
       engine: chain-of-thought

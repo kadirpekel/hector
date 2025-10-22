@@ -309,6 +309,100 @@ hector chat --server http://remote:8080 assistant --token "eyJ..."
 
 ---
 
+## Session Support
+
+The `--session` flag enables conversation resumption across multiple CLI invocations. When you provide the same session ID, the agent remembers the previous conversation context.
+
+### How It Works
+
+```bash
+# First conversation
+hector call --config config.yaml --session work assistant "Remember: meeting at 3pm"
+# Agent: Got it! Meeting at 3pm.
+
+# Later (even after restart)
+hector call --config config.yaml --session work assistant "When is the meeting?"
+# Agent: The meeting is at 3pm.
+```
+
+**Key Points:**
+- Same `--session` ID = same conversation context
+- Works with `call`, `chat`, and `task` commands
+- Requires session persistence configured (see [Setup Session Persistence](../how-to/setup-session-persistence.md))
+
+### Session IDs
+
+**Format:** Any string (alphanumeric, hyphens, underscores)
+
+**Examples:**
+- `work-2024-01-15`
+- `customer-support-case-12345`
+- `coding-session-abc`
+- `$(uuidgen)` (auto-generate UUID)
+
+### CLI Session Examples
+
+**Interactive chat with session:**
+
+```bash
+# First session
+hector chat --config config.yaml --session my-chat assistant
+You: Remember my name is Alice
+Agent: Got it, Alice!
+You: exit
+
+# Resume later
+hector chat --config config.yaml --session my-chat assistant
+You: What's my name?
+Agent: Your name is Alice.
+```
+
+**Single calls with shared session:**
+
+```bash
+# Store information
+hector call --config config.yaml --session work assistant "Project ALPHA started"
+
+# Query later
+hector call --config config.yaml --session work assistant "What project did we start?"
+# Agent remembers: Project ALPHA
+```
+
+**Auto-generated session IDs:**
+
+```bash
+# Chat generates and displays session ID
+hector chat --config config.yaml assistant
+# Output: 💾 Session ID: cli-chat-1729612345
+#         Resume later with: --session=cli-chat-1729612345
+```
+
+### Configuration Requirement
+
+Session persistence requires a `session_stores` configuration:
+
+```yaml
+session_stores:
+  main-db:
+    backend: sql
+    sql:
+      driver: sqlite
+      database: ./data/sessions.db
+
+agents:
+  assistant:
+    session_store: "main-db"  # Enables session persistence
+    memory:
+      working:
+        strategy: "summary_buffer"
+```
+
+Without `session_store` configured, sessions work within a single CLI command but don't persist.
+
+See [Setup Session Persistence](../how-to/setup-session-persistence.md) for full configuration guide.
+
+---
+
 ## Operating Modes
 
 Hector operates in three modes based on command and flags:

@@ -17,6 +17,7 @@ A session represents a continuous conversation between a user and an agent. Sess
 - **Memory persistence** - Long-term memory scoped to sessions
 - **Conversation tracking** - Monitor ongoing interactions
 - **Multi-turn conversations** - Natural back-and-forth dialogue
+- **Persistent storage** - Conversations survive server restarts (with session stores)
 
 ### Session Lifecycle
 
@@ -96,11 +97,21 @@ rpc StreamMessage(SendMessageRequest) returns (stream MessageChunk)
 # Interactive chat (automatic session)
 hector chat assistant
 
-# Specify session ID
-hector chat assistant --session sess_abc123
+# Specify session ID for resumption
+hector chat assistant --session my-session
+
+# Single call with session
+hector call assistant "Hello" --session my-session
+
+# Resume later (same session ID = same conversation)
+hector call assistant "Continue where we left off" --session my-session
 ```
 
+See [CLI Reference](../reference/cli.md#session-support) for full details.
+
 ### Session Configuration
+
+#### Basic (In-Memory)
 
 ```yaml
 agents:
@@ -115,12 +126,36 @@ agents:
         storage_scope: "session"  # Session-scoped long-term memory
 ```
 
+#### With Persistent Storage
+
+For conversations that survive server restarts:
+
+```yaml
+# Global session stores (like llms, databases, tools)
+session_stores:
+  main-db:
+    backend: sql
+    sql:
+      driver: sqlite  # or postgres, mysql
+      database: ./data/sessions.db
+
+agents:
+  assistant:
+    session_store: "main-db"  # Reference global store
+    memory:
+      working:
+        strategy: "summary_buffer"
+        budget: 4000
+```
+
 **Storage scopes:**
 
 - `session` - Memories per session (most common)
 - `conversational` - Memories across all user sessions
 - `all` - Global memory across all users
 - `summaries_only` - Only summarized content
+
+**Session persistence:** See [Setup Session Persistence](../how-to/setup-session-persistence.md) guide.
 
 ### Session Management
 
@@ -522,6 +557,7 @@ eventSource.onmessage = (event) => { /* ... */ };
 
 ## Next Steps
 
+- **[Setup Session Persistence](../how-to/setup-session-persistence.md)** - Configure persistent session storage
 - **[API Reference](../reference/api.md)** - Complete API documentation
 - **[Memory](memory.md)** - Session-scoped memory configuration
 - **[Security](security.md)** - Session authentication

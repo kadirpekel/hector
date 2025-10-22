@@ -61,7 +61,11 @@ type Agent struct {
 }
 
 // NewAgent creates a new agent with services
-func NewAgent(agentConfig *config.AgentConfig, componentMgr interface{}, registry *AgentRegistry) (*Agent, error) {
+func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr interface{}, registry *AgentRegistry) (*Agent, error) {
+	if agentID == "" {
+		return nil, fmt.Errorf("agent ID cannot be empty")
+	}
+
 	compMgr, ok := componentMgr.(*component.ComponentManager)
 	if !ok {
 		return nil, fmt.Errorf("invalid component manager type")
@@ -69,7 +73,7 @@ func NewAgent(agentConfig *config.AgentConfig, componentMgr interface{}, registr
 
 	agentConfig.Task.SetDefaults()
 
-	services, err := NewAgentServicesWithRegistry(agentConfig, compMgr, registry)
+	services, err := NewAgentServicesWithRegistry(agentID, agentConfig, compMgr, registry)
 	if err != nil {
 		return nil, err
 	}

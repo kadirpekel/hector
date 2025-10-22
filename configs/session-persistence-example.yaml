@@ -1,0 +1,54 @@
+# Example: Session Persistence with SQLite
+# This configuration enables persistent session storage using SQLite
+# Working memory (conversation history) survives process restarts
+
+# ============================================================================
+# GLOBAL SESSION STORES
+# ============================================================================
+# Session stores are defined globally and can be shared across multiple agents
+# Each agent's sessions are isolated by agent_id in the database
+
+session_stores:
+  main-db:
+    backend: sql        # Backend type: "memory" (default) or "sql"
+    sql:
+      driver: sqlite    # Database driver: sqlite, postgres, or mysql
+      database: ./data/sessions.db  # File path (will be created if doesn't exist)
+      max_conns: 10     # Maximum open connections (SQLite: limited concurrency)
+      max_idle: 2       # Maximum idle connections in pool
+
+# ============================================================================
+# AGENTS
+# ============================================================================
+
+agents:
+  assistant:
+    name: "Persistent Session Assistant"
+    description: "Agent with persistent session storage - remembers conversations across restarts"
+    llm: "gpt"
+    
+    # Reference the global session store by name
+    session_store: "main-db"  # Uses the "main-db" session store defined above
+    
+    # Working memory configuration
+    memory:
+      strategy: summary_buffer  # Smart memory with auto-summarization
+      budget: 2000              # Token budget for working memory
+      threshold: 0.8            # Trigger summarization at 80% capacity
+      target: 0.6               # Compress to 60% capacity
+    
+    # Reasoning configuration
+    reasoning:
+      engine: chain-of-thought
+      max_iterations: 100
+
+# ============================================================================
+# LLM PROVIDERS
+# ============================================================================
+
+llms:
+  gpt:
+    type: openai
+    model: gpt-4o-mini
+    api_key: ${OPENAI_API_KEY}
+

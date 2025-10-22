@@ -41,12 +41,14 @@ func ParseArgs(version string) *CLIArgs {
 	callServer := callCmd.String("server", "", "A2A server URL (enables server mode)")
 	callToken := callCmd.String("token", "", "Authentication token")
 	callStream := callCmd.Bool("stream", true, "Enable streaming (default: true)")
+	callSession := callCmd.String("session", "", "Session ID for resuming conversations")
 	callConfig := callCmd.String("config", "", "Configuration file (local mode)")
 	callZeroConfig := addZeroConfigFlags(callCmd)
 
 	chatCmd := flag.NewFlagSet("chat", flag.ExitOnError)
 	chatServer := chatCmd.String("server", "", "A2A server URL (enables server mode)")
 	chatToken := chatCmd.String("token", "", "Authentication token")
+	chatSession := chatCmd.String("session", "", "Session ID for resuming conversations")
 	chatConfig := chatCmd.String("config", "", "Configuration file (local mode)")
 	chatZeroConfig := addZeroConfigFlags(chatCmd)
 	chatNoStream := chatCmd.Bool("no-stream", false, "Disable streaming (default: streaming enabled)")
@@ -54,6 +56,7 @@ func ParseArgs(version string) *CLIArgs {
 	taskCmd := flag.NewFlagSet("task", flag.ExitOnError)
 	taskServer := taskCmd.String("server", "", "A2A server URL (enables server mode)")
 	taskToken := taskCmd.String("token", "", "Authentication token")
+	taskSession := taskCmd.String("session", "", "Session ID for task context")
 	taskConfig := taskCmd.String("config", "", "Configuration file (local mode)")
 
 	// Parse command
@@ -114,6 +117,7 @@ func ParseArgs(version string) *CLIArgs {
 		args.ServerURL = *callServer // Don't resolve yet
 		args.Token = *callToken
 		args.Stream = *callStream
+		args.SessionID = *callSession
 		args.ConfigFile = *callConfig
 		callZeroConfig.populateArgs(args)
 
@@ -165,6 +169,7 @@ func ParseArgs(version string) *CLIArgs {
 		args.Command = CommandChat
 		args.ServerURL = *chatServer // Don't resolve yet
 		args.Token = *chatToken
+		args.SessionID = *chatSession
 		args.ConfigFile = *chatConfig
 		chatZeroConfig.populateArgs(args)
 		args.Stream = !*chatNoStream // Streaming is default, --no-stream disables it
@@ -218,6 +223,7 @@ func ParseArgs(version string) *CLIArgs {
 		args.TaskID = taskCmd.Args()[2]
 		args.ServerURL = *taskServer
 		args.Token = *taskToken
+		args.SessionID = *taskSession
 		args.ConfigFile = *taskConfig
 
 	case "help", "--help", "-h":

@@ -9,27 +9,43 @@ Memory in Hector determines how agents remember and use conversation context. He
 
 ## Memory Architecture
 
+Hector uses a **three-layer memory system**:
+
 ```
 ┌─────────────────────────────────────────────────┐
 │                 AGENT                           │
 ├─────────────────────────────────────────────────┤
 │                                                 │
 │  ┌───────────────────────────────────────┐     │
-│  │   WORKING MEMORY (Session)            │     │
-│  │   - Current conversation              │     │
-│  │   - Token-managed                     │     │
+│  │   1. SESSION STORE (Optional)         │     │
+│  │   - Session metadata & history        │     │
+│  │   - SQL database (SQLite/Postgres)    │     │
+│  │   - Survives: Process restarts ✅     │     │
+│  └───────────────────────────────────────┘     │
+│              ↑ Backs                            │
+│  ┌───────────────────────────────────────┐     │
+│  │   2. WORKING MEMORY (Session)         │     │
+│  │   - Active conversation context       │     │
+│  │   - Token-managed strategies          │     │
 │  │   - Auto-summarization                │     │
 │  └───────────────────────────────────────┘     │
 │              ↓ Store      ↑ Recall              │
 │  ┌───────────────────────────────────────┐     │
-│  │   LONG-TERM MEMORY (Persistent)       │     │
-│  │   - Vector database                   │     │
-│  │   - Semantic search                   │     │
-│  │   - Cross-session recall              │     │
+│  │   3. LONG-TERM MEMORY (Optional)      │     │
+│  │   - Vector database for search        │     │
+│  │   - Semantic recall                   │     │
+│  │   - Isolated: agent_id + session_id   │     │
 │  └───────────────────────────────────────┘     │
 │                                                 │
 └─────────────────────────────────────────────────┘
 ```
+
+**Key Points:**
+- **Layer 1 (Session Store)**: Makes working memory persistent across restarts
+- **Layer 2 (Working Memory)**: Manages active conversation (always present)
+- **Layer 3 (Long-Term Memory)**: Provides semantic search (optional enhancement)
+
+See [Setup Session Persistence](../how-to/setup-session-persistence.md) to enable Layer 1.
 
 ---
 

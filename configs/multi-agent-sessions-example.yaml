@@ -1,0 +1,107 @@
+# Example: Multi-Agent System with Shared Session Storage
+# This configuration shows how multiple agents can share the same session store
+# Each agent's sessions are isolated by agent_id in the database
+
+# ============================================================================
+# GLOBAL SESSION STORES
+# ============================================================================
+# Single shared session store for all agents
+# Database contains sessions from all agents, distinguished by agent_id column
+
+session_stores:
+  shared-db:
+    backend: sql
+    sql:
+      driver: sqlite
+      database: ./data/shared-sessions.db
+      max_conns: 25    # Higher connection pool for multi-agent usage
+      max_idle: 5
+
+# ============================================================================
+# AGENTS
+# ============================================================================
+# All three agents share the same session store database
+# Sessions are automatically isolated by agent_id
+
+agents:
+  assistant:
+    name: "General Assistant"
+    description: "Helpful assistant for general queries"
+    llm: "gpt"
+    session_store: "shared-db"  # All agents reference the same store
+    
+    reasoning:
+      engine: chain-of-thought
+      max_iterations: 100
+    
+    memory:
+      strategy: buffer_window
+      window_size: 20
+
+  researcher:
+    name: "Research Agent"
+    description: "Deep research and analysis specialist"
+    llm: "gpt"
+    session_store: "shared-db"  # Shares the same DB, isolated by agent_id
+    
+    reasoning:
+      engine: chain-of-thought
+      max_iterations: 100
+    
+    memory:
+      strategy: summary_buffer
+      budget: 3000
+      threshold: 0.8
+      target: 0.6
+
+  coder:
+    name: "Coding Assistant"
+    description: "Programming help and code generation"
+    llm: "gpt"
+    session_store: "shared-db"  # Shares the same DB, isolated by agent_id
+    
+    reasoning:
+      engine: chain-of-thought
+      max_iterations: 100
+    
+    memory:
+      strategy: buffer_window
+      window_size: 15
+
+# ============================================================================
+# LLM PROVIDERS
+# ============================================================================
+
+llms:
+  gpt:
+    type: openai
+    model: gpt-4o-mini
+    api_key: ${OPENAI_API_KEY}
+
+# ============================================================================
+# USAGE NOTES
+# ============================================================================
+#
+# Database Schema:
+#   sessions table has 'agent_id' column to distinguish between agents
+#   - agent_id = 'assistant' for assistant agent's sessions
+#   - agent_id = 'researcher' for researcher agent's sessions
+#   - agent_id = 'coder' for coder agent's sessions
+#
+# Benefits:
+#   ✅ Single database connection pool (efficient)
+#   ✅ Simplified operational management
+#   ✅ Easy to query all sessions or per-agent sessions
+#   ✅ Automatic session isolation by agent_id
+#
+# Query Examples:
+#   -- All sessions across all agents
+#   SELECT * FROM sessions;
+#
+#   -- Sessions for specific agent
+#   SELECT * FROM sessions WHERE agent_id = 'researcher';
+#
+#   -- Session count by agent
+#   SELECT agent_id, COUNT(*) FROM sessions GROUP BY agent_id;
+#
+

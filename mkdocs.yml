@@ -73,6 +73,7 @@ nav:
     - Build Research System: how-to/build-research-system.md
     - Add Custom Tools: how-to/add-custom-tools.md
     - Setup RAG: how-to/setup-rag.md
+    - Setup Session Persistence: how-to/setup-session-persistence.md
     - Deploy to Production: how-to/deploy-production.md
     - Integrate External Agents: how-to/integrate-external-agents.md
     - Develop Plugins: plugins.md

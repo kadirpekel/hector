@@ -493,6 +493,9 @@ func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, con
 		return "", fmt.Errorf("failed to create strategy: %w", err)
 	}
 
+	// IMPORTANT: Add contextID (A2A session ID) to context so saveToHistory can persist messages
+	ctx = context.WithValue(ctx, "sessionID", contextID)
+
 	streamCh, err := a.execute(ctx, userText, strategy)
 	if err != nil {
 		return "", fmt.Errorf("reasoning failed: %w", err)

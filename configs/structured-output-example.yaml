@@ -52,7 +52,7 @@ agents:
   sentiment_analyzer:
     name: "Sentiment Analyzer"
     description: "Analyzes sentiment and returns structured JSON"
-    llm: "main-llm"
+    llm: "gemini-llm"
     
     # Structured output configuration  
     structured_output:

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/kadirpekel/hector/pkg/a2a/client"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
@@ -82,9 +83,10 @@ func CallCommand(args *CLIArgs) error {
 
 func executeCall(a2aClient client.A2AClient, args *CLIArgs) error {
 
-	// Create message
+	// Create message with optional session ID for conversation continuity
 	msg := &pb.Message{
-		Role: pb.Role_ROLE_USER,
+		ContextId: args.SessionID, // If empty, server will generate new one
+		Role:      pb.Role_ROLE_USER,
 		Content: []*pb.Part{
 			{
 				Part: &pb.Part_Text{Text: args.Input},
@@ -160,7 +162,20 @@ func executeChat(a2aClient client.A2AClient, args *CLIArgs) error {
 		streamInfo = " (streaming)"
 	}
 
-	fmt.Printf("\n🤖 Chat with %s (%s)%s (type 'exit' to quit)\n\n", args.AgentID, mode, streamInfo)
+	// Session management
+	sessionID := args.SessionID
+	if sessionID == "" {
+		// Generate new session ID if not provided
+		sessionID = fmt.Sprintf("cli-chat-%d", time.Now().Unix())
+		fmt.Printf("\n🤖 Chat with %s (%s)%s\n", args.AgentID, mode, streamInfo)
+		fmt.Printf("💾 Session ID: %s\n", sessionID)
+		fmt.Printf("   Resume later with: --session=%s\n", sessionID)
+		fmt.Println("   Type 'exit' to quit\n")
+	} else {
+		fmt.Printf("\n🤖 Chat with %s (%s)%s\n", args.AgentID, mode, streamInfo)
+		fmt.Printf("💾 Resuming session: %s\n", sessionID)
+		fmt.Println("   Type 'exit' to quit\n")
+	}
 
 	// Create reader for user input
 	reader := bufio.NewReader(os.Stdin)
@@ -186,9 +201,10 @@ func executeChat(a2aClient client.A2AClient, args *CLIArgs) error {
 			break
 		}
 
-		// Create message
+		// Create message with consistent session ID for conversation continuity
 		msg := &pb.Message{
-			Role: pb.Role_ROLE_USER,
+			ContextId: sessionID, // Use consistent session ID throughout conversation
+			Role:      pb.Role_ROLE_USER,
 			Content: []*pb.Part{
 				{
 					Part: &pb.Part_Text{Text: input},

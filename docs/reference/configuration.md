@@ -23,6 +23,9 @@ databases:        # Vector databases
 embedders:        # Embedding models
 plugins:          # gRPC plugins
 
+# Session Storage
+session_stores:   # Session persistence stores
+
 # Agents
 agents:           # Agent definitions
 
@@ -429,6 +432,129 @@ databases:
     type: "plugin:custom-db"
     # Plugin-specific configuration
 ```
+
+---
+
+## Session Stores
+
+Session stores provide persistent storage for conversation history and session metadata. When configured, agents can resume conversations after server restarts.
+
+### SQL Session Store (SQLite)
+
+```yaml
+session_stores:
+  local-db:
+    backend: sql
+    sql:
+      driver: sqlite
+      database: ./data/sessions.db
+      max_conns: 10              # Maximum connections
+      max_idle: 2                # Idle connections
+      conn_max_lifetime: 3600    # Seconds (default: 0 = unlimited)
+```
+
+**Best for:** Local development, single-instance deployments
+
+### SQL Session Store (PostgreSQL)
+
+```yaml
+session_stores:
+  postgres-db:
+    backend: sql
+    sql:
+      driver: postgres
+      host: localhost
+      port: 5432
+      user: hector
+      password: "${DB_PASSWORD}"  # From environment
+      database: hector_sessions
+      ssl_mode: require          # disable|require|verify-ca|verify-full
+      max_conns: 100
+      max_idle: 25
+      conn_max_lifetime: 3600
+```
+
+**Best for:** Production deployments, distributed systems
+
+### SQL Session Store (MySQL)
+
+```yaml
+session_stores:
+  mysql-db:
+    backend: sql
+    sql:
+      driver: mysql
+      host: localhost
+      port: 3306
+      user: hector
+      password: "${DB_PASSWORD}"
+      database: hector_sessions
+      max_conns: 100
+      max_idle: 25
+      conn_max_lifetime: 3600
+```
+
+### Agent Configuration
+
+Reference session stores by name:
+
+```yaml
+session_stores:
+  main-db:
+    backend: sql
+    sql:
+      driver: sqlite
+      database: ./data/sessions.db
+
+agents:
+  assistant:
+    session_store: "main-db"  # References global store
+    memory:
+      working:
+        strategy: "summary_buffer"
+```
+
+**Multi-Agent Isolation:** Multiple agents can share a session store. Sessions are isolated by `agent_id` + `session_id`.
+
+### Complete Example
+
+```yaml
+session_stores:
+  # Shared production database
+  prod-db:
+    backend: sql
+    sql:
+      driver: postgres
+      host: db.example.com
+      port: 5432
+      user: hector
+      password: "${HECTOR_DB_PASSWORD}"
+      database: hector_sessions
+      ssl_mode: require
+      max_conns: 200
+      max_idle: 50
+      conn_max_lifetime: 7200
+
+  # Local development database
+  dev-db:
+    backend: sql
+    sql:
+      driver: sqlite
+      database: ./dev-sessions.db
+      max_conns: 5
+
+agents:
+  customer-support:
+    session_store: "prod-db"    # Shares DB, isolated by agent_id
+    
+  sales-assistant:
+    session_store: "prod-db"    # Shares DB, isolated by agent_id
+    
+  dev-agent:
+    session_store: "dev-db"     # Separate database
+```
+
+**See:** [Setup Session Persistence](../how-to/setup-session-persistence.md) for full guide.
 
 ---
 

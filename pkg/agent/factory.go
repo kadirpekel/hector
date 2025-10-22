@@ -12,7 +12,7 @@ import (
 )
 
 // NewAgentServicesWithRegistry creates agent services with registry for orchestration
-func NewAgentServicesWithRegistry(agentConfig *config.AgentConfig, componentManager *component.ComponentManager, registry *AgentRegistry) (reasoning.AgentServices, error) {
+func NewAgentServicesWithRegistry(agentID string, agentConfig *config.AgentConfig, componentManager *component.ComponentManager, registry *AgentRegistry) (reasoning.AgentServices, error) {
 	// Create registry service (nil-safe)
 	var registryService reasoning.AgentRegistryService
 	if registry != nil {
@@ -21,18 +21,21 @@ func NewAgentServicesWithRegistry(agentConfig *config.AgentConfig, componentMana
 		registryService = NewNoOpRegistryService()
 	}
 
-	return newAgentServicesInternal(agentConfig, componentManager, registryService)
+	return newAgentServicesInternal(agentID, agentConfig, componentManager, registryService)
 }
 
 // NewAgentServices creates agent services with all dependencies wired up
 // Returns the configured agent services
 // Deprecated: Use NewAgentServicesWithRegistry instead
-func NewAgentServices(agentConfig *config.AgentConfig, componentManager *component.ComponentManager) (reasoning.AgentServices, error) {
-	return NewAgentServicesWithRegistry(agentConfig, componentManager, nil)
+func NewAgentServices(agentID string, agentConfig *config.AgentConfig, componentManager *component.ComponentManager) (reasoning.AgentServices, error) {
+	return NewAgentServicesWithRegistry(agentID, agentConfig, componentManager, nil)
 }
 
 // newAgentServicesInternal is the internal implementation
-func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager *component.ComponentManager, registryService reasoning.AgentRegistryService) (reasoning.AgentServices, error) {
+func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, componentManager *component.ComponentManager, registryService reasoning.AgentRegistryService) (reasoning.AgentServices, error) {
+	if agentID == "" {
+		return nil, fmt.Errorf("agent ID cannot be empty")
+	}
 	if agentConfig == nil {
 		return nil, fmt.Errorf("agent config cannot be nil")
 	}
@@ -210,11 +213,18 @@ func newAgentServicesInternal(agentConfig *config.AgentConfig, componentManager 
 		Collection:   agentConfig.Memory.LongTerm.Collection,
 	}
 
-	// Create in-memory session service for session management
-	sessionService := memory.NewInMemorySessionService()
+	// Create session service based on configuration
+	// If agentConfig.SessionStore is set, look up the global session store
+	// If not set, use in-memory session service (default)
+	sessionService, err := componentManager.GetSessionService(agentConfig.SessionStore, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session service: %w", err)
+	}
 
-	// Create memory service (using in-memory session service)
+	// Create memory service (using configured session service)
+	// Pass agentID for long-term memory isolation
 	historyService := memory.NewMemoryService(
+		agentID,
 		sessionService,
 		workingStrategy,
 		longTermStrategy,
@@ -331,14 +341,17 @@ func NewAgentFactory(componentManager *component.ComponentManager) *AgentFactory
 // CreateAgent creates a new agent with the given configuration
 // Registry will be nil for agents created through factory (typically tests)
 // For production multi-agent scenarios, use NewAgent directly with a registry
-func (f *AgentFactory) CreateAgent(agentConfig *config.AgentConfig) (*Agent, error) {
+func (f *AgentFactory) CreateAgent(agentID string, agentConfig *config.AgentConfig) (*Agent, error) {
+	if agentID == "" {
+		return nil, fmt.Errorf("agent ID cannot be empty")
+	}
 	if agentConfig == nil {
 		return nil, fmt.Errorf("agent config cannot be nil")
 	}
 
 	// Single place for agent creation logic - delegates to NewAgent
 	// Pass nil registry - orchestration won't be available
-	return NewAgent(agentConfig, f.componentManager, nil)
+	return NewAgent(agentID, agentConfig, f.componentManager, nil)
 }
 
 // CreateAgentWithServices creates an agent with pre-configured services (for testing)

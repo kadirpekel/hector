@@ -82,7 +82,7 @@ func executeServeCommand(args *cli.CLIArgs) {
 			log.Printf("  ✅ External agent '%s' connected to %s", agentID, cfg.URL)
 		} else {
 			// Native agent - create local instance
-			agentInstance, err = agent.NewAgent(&cfg, componentManager, agentRegistry)
+			agentInstance, err = agent.NewAgent(agentID, &cfg, componentManager, agentRegistry)
 			if err != nil {
 				log.Printf("  ⚠️  Failed to create native agent '%s': %v", agentID, err)
 				continue

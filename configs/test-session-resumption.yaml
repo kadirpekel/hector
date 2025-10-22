@@ -1,0 +1,53 @@
+# Test configuration for session resumption
+# Tests both working memory (session store) and long-term memory (vector DB)
+
+session_stores:
+  test-db:
+    backend: sql
+    sql:
+      driver: sqlite
+      database: ./data/sessions.db
+      max_conns: 10
+      max_idle: 2
+
+agents:
+  assistant:
+    name: "Test Assistant"
+    description: "Agent for testing session resumption"
+    llm: "gpt"
+    database: "qdrant"
+    embedder: "ollama"
+    session_store: "test-db"
+    
+    memory:
+      strategy: buffer_window
+      window_size: 10
+      long_term:
+        enabled: true
+        strategy: vector
+        collection: test-memories
+        batch_size: 5
+        auto_recall: true
+        recall_limit: 3
+    
+    reasoning:
+      engine: chain-of-thought
+      max_iterations: 10
+
+llms:
+  gpt:
+    type: openai
+    model: gpt-4o-mini
+    api_key: ${OPENAI_API_KEY}
+
+databases:
+  qdrant:
+    type: qdrant
+    url: http://localhost:6333
+
+embedders:
+  ollama:
+    type: ollama
+    model: nomic-embed-text
+    url: http://localhost:11434
+

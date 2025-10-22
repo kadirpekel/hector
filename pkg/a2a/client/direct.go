@@ -45,7 +45,7 @@ func NewLocalClient(cfg *config.Config) (A2AClient, error) {
 		}
 
 		// Create agent
-		agentInstance, err := agent.NewAgent(&cfg, componentManager, agentRegistry)
+		agentInstance, err := agent.NewAgent(agentID, &cfg, componentManager, agentRegistry)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create agent '%s': %w", agentID, err)
 		}

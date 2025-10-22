@@ -13,6 +13,7 @@ import (
 // MemoryService manages conversation memory using SessionService
 // Session lifecycle is delegated to SessionService (cleaner separation of concerns)
 type MemoryService struct {
+	agentID        string // Agent identifier (for long-term memory isolation)
 	sessionService reasoning.SessionService
 	workingMemory  WorkingMemoryStrategy
 	longTermMemory LongTermMemoryStrategy // Optional (can be nil)
@@ -27,6 +28,7 @@ type MemoryService struct {
 
 // NewMemoryService creates a new memory service using SessionService
 func NewMemoryService(
+	agentID string,
 	sessionService reasoning.SessionService,
 	working WorkingMemoryStrategy,
 	longTerm LongTermMemoryStrategy,
@@ -43,6 +45,7 @@ func NewMemoryService(
 	}
 
 	return &MemoryService{
+		agentID:        agentID,
 		sessionService: sessionService,
 		workingMemory:  working,
 		longTermMemory: longTerm,
@@ -147,7 +150,7 @@ func (s *MemoryService) GetRecentHistory(sessionID string) ([]*pb.Message, error
 	if s.longTermMemory != nil && s.longTermConfig.AutoRecall && len(filteredMessages) > 0 {
 		query := s.getLastUserMessage(filteredMessages)
 		if query != "" {
-			recalled, err := s.longTermMemory.Recall(sessionID, query, s.longTermConfig.RecallLimit)
+			recalled, err := s.longTermMemory.Recall(s.agentID, sessionID, query, s.longTermConfig.RecallLimit)
 			if err != nil {
 				log.Printf("⚠️  Long-term recall failed: %v", err)
 			} else if len(recalled) > 0 {
@@ -256,8 +259,8 @@ func (s *MemoryService) flushLongTermBatch(sessionID string) error {
 		return nil
 	}
 
-	// Store the batch
-	if err := s.longTermMemory.Store(sessionID, batch); err != nil {
+	// Store the batch with agent isolation
+	if err := s.longTermMemory.Store(s.agentID, sessionID, batch); err != nil {
 		return err
 	}
 

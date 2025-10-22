@@ -70,6 +70,7 @@ type CLIArgs struct {
 	Stream     bool
 	Debug      bool
 	Port       int
+	SessionID  string // Session ID for resuming conversations
 
 	// A2A Server options (override config)
 	Host       string

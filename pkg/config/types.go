@@ -468,13 +468,13 @@ type AgentConfig struct {
 	LLM              string                  `yaml:"llm,omitempty"`               // LLM provider reference
 	Database         string                  `yaml:"database,omitempty"`          // Database provider reference
 	Embedder         string                  `yaml:"embedder,omitempty"`          // Embedder provider reference
-	SessionStore     string                  `yaml:"session_store,omitempty"`     // Session store reference (defaults to "default")
 	DocumentStores   []string                `yaml:"document_stores,omitempty"`   // Document store references
 	Prompt           PromptConfig            `yaml:"prompt,omitempty"`            // Prompt configuration
 	Memory           MemoryConfig            `yaml:"memory,omitempty"`            // Memory configuration
 	Reasoning        ReasoningConfig         `yaml:"reasoning,omitempty"`         // Reasoning configuration
 	Search           SearchConfig            `yaml:"search,omitempty"`            // Search configuration
 	Task             TaskConfig              `yaml:"task,omitempty"`              // Task configuration
+	SessionStore     string                  `yaml:"session_store,omitempty"`     // Session store reference (defined globally in session_stores: section)
 	Tools            []string                `yaml:"tools,omitempty"`             // Tool references (defined globally in tools: section)
 	SubAgents        []string                `yaml:"sub_agents,omitempty"`        // For supervisor agents: which agents can be orchestrated (empty = all)
 	Security         SecurityConfig          `yaml:"security,omitempty"`          // Security configuration
@@ -565,6 +565,7 @@ func (c *AgentConfig) Validate() error {
 		if err := c.Task.Validate(); err != nil {
 			return fmt.Errorf("task configuration validation failed: %w", err)
 		}
+		// SessionStore is now a string reference - validated at Config level
 		if err := c.Security.Validate(); err != nil {
 			return fmt.Errorf("security configuration validation failed: %w", err)
 		}
@@ -608,6 +609,7 @@ func (c *AgentConfig) SetDefaults() {
 		c.Reasoning.SetDefaults()
 		c.Search.SetDefaults()
 		c.Task.SetDefaults()
+		// SessionStore is now a string reference - no defaults needed
 		c.Security.SetDefaults()
 
 	case "a2a":
@@ -1218,6 +1220,138 @@ func (c *TaskSQLConfig) Validate() error {
 
 // ConnectionString builds a connection string for the database
 func (c *TaskSQLConfig) ConnectionString() string {
+	switch c.Driver {
+	case "postgres":
+		sslMode := c.SSLMode
+		if sslMode == "" {
+			sslMode = "disable"
+		}
+		// Only include password if it's not empty
+		if c.Password != "" {
+			return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+				c.Host, c.Port, c.Username, c.Password, c.Database, sslMode)
+		}
+		return fmt.Sprintf("host=%s port=%d user=%s dbname=%s sslmode=%s",
+			c.Host, c.Port, c.Username, c.Database, sslMode)
+	case "mysql":
+		return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
+			c.Username, c.Password, c.Host, c.Port, c.Database)
+	case "sqlite":
+		return c.Database
+	default:
+		return ""
+	}
+}
+
+// SessionStoreConfig represents session persistence configuration
+// Presence of configuration implies enabled (no explicit enabled field needed)
+type SessionStoreConfig struct {
+	Backend string            `yaml:"backend,omitempty"` // Backend type: "memory" (default) or "sql"
+	SQL     *SessionSQLConfig `yaml:"sql,omitempty"`     // SQL configuration (required if backend=sql)
+}
+
+// IsEnabled returns true if session store configuration is present
+func (c *SessionStoreConfig) IsEnabled() bool {
+	return c.Backend != "" || c.SQL != nil
+}
+
+// SessionSQLConfig represents SQL backend configuration for session storage
+// Uses the same structure as TaskSQLConfig for consistency
+type SessionSQLConfig struct {
+	Driver   string `yaml:"driver"`              // Database driver: "postgres", "mysql", or "sqlite"
+	Host     string `yaml:"host,omitempty"`      // Database host (not needed for sqlite)
+	Port     int    `yaml:"port,omitempty"`      // Database port (not needed for sqlite)
+	Database string `yaml:"database"`            // Database name or file path (for sqlite)
+	Username string `yaml:"username,omitempty"`  // Database username (not needed for sqlite)
+	Password string `yaml:"password,omitempty"`  // Database password (not needed for sqlite)
+	SSLMode  string `yaml:"ssl_mode,omitempty"`  // SSL mode for postgres: "disable", "require", "verify-ca", "verify-full"
+	MaxConns int    `yaml:"max_conns,omitempty"` // Maximum number of open connections (default: 25)
+	MaxIdle  int    `yaml:"max_idle,omitempty"`  // Maximum number of idle connections (default: 5)
+}
+
+// SetDefaults sets default values for SessionStoreConfig
+func (c *SessionStoreConfig) SetDefaults() {
+	if c.Backend == "" {
+		c.Backend = "memory"
+	}
+	if c.SQL != nil {
+		c.SQL.SetDefaults()
+	}
+}
+
+// SetDefaults sets default values for SessionSQLConfig
+func (c *SessionSQLConfig) SetDefaults() {
+	if c.Driver == "" {
+		c.Driver = "sqlite" // Default to SQLite for simplicity
+	}
+	if c.Host == "" && c.Driver != "sqlite" {
+		c.Host = "localhost"
+	}
+	if c.Port == 0 {
+		switch c.Driver {
+		case "postgres":
+			c.Port = 5432
+		case "mysql":
+			c.Port = 3306
+		}
+	}
+	if c.SSLMode == "" && c.Driver == "postgres" {
+		c.SSLMode = "disable"
+	}
+	if c.MaxConns == 0 {
+		c.MaxConns = 25
+	}
+	if c.MaxIdle == 0 {
+		c.MaxIdle = 5
+	}
+}
+
+// Validate validates the session store configuration
+func (c *SessionStoreConfig) Validate() error {
+	if c.Backend != "" && c.Backend != "memory" && c.Backend != "sql" {
+		return fmt.Errorf("invalid session store backend '%s', must be 'memory' or 'sql'", c.Backend)
+	}
+	if c.Backend == "sql" && c.SQL == nil {
+		return fmt.Errorf("sql configuration is required when backend is 'sql'")
+	}
+	if c.SQL != nil {
+		if err := c.SQL.Validate(); err != nil {
+			return fmt.Errorf("sql config validation failed: %w", err)
+		}
+	}
+	return nil
+}
+
+// Validate validates the session SQL configuration
+func (c *SessionSQLConfig) Validate() error {
+	if c.Driver == "" {
+		return fmt.Errorf("driver is required")
+	}
+	if c.Driver != "postgres" && c.Driver != "mysql" && c.Driver != "sqlite" {
+		return fmt.Errorf("invalid driver '%s', must be 'postgres', 'mysql', or 'sqlite'", c.Driver)
+	}
+	if c.Database == "" {
+		return fmt.Errorf("database is required")
+	}
+	if c.Driver != "sqlite" {
+		if c.Host == "" {
+			return fmt.Errorf("host is required for %s", c.Driver)
+		}
+		if c.Port <= 0 {
+			return fmt.Errorf("port must be positive for %s", c.Driver)
+		}
+	}
+	if c.MaxConns <= 0 {
+		return fmt.Errorf("max_conns must be positive")
+	}
+	if c.MaxIdle < 0 {
+		return fmt.Errorf("max_idle must be non-negative")
+	}
+	return nil
+}
+
+// ConnectionString builds a connection string for the database
+func (c *SessionSQLConfig) ConnectionString() string {
 	switch c.Driver {
 	case "postgres":
 		sslMode := c.SSLMode
