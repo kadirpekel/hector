@@ -68,6 +68,8 @@ nav:
     - Structured Output: core-concepts/structured-output.md
     - Sessions & Streaming: core-concepts/sessions.md
     - Security: core-concepts/security.md
+  - Performance:
+    - Overview: performance/index.md
   - How-To Guides:
     - Build Coding Assistant: how-to/build-coding-assistant.md
     - Build Research System: how-to/build-research-system.md
@@ -81,7 +83,10 @@ nav:
     - CLI Reference: reference/cli.md
     - Configuration: reference/configuration.md
     - API Reference: reference/api.md
-    - Architecture: reference/architecture.md
+    - Architecture:
+      - System Design: reference/architecture.md
+      - Session & Memory: reference/architecture/session-memory.md
+      - Agent Lifecycle: reference/architecture/agent-lifecycle.md
     - A2A Protocol: reference/a2a-protocol.md
 
 # Plugins

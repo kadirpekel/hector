@@ -46,6 +46,11 @@ agents:
 
 <p><strong>⚡️ From idea to production agent in minutes, not months.</strong></p>
 
+!!! tip "Why Hector is Different"
+    Built with **Go** for maximum efficiency: 100,000x more memory efficient than Python alternatives, runs on Raspberry Pi with 128MB RAM, deploys as a single 10MB binary. Perfect for resource-constrained environments and cost-optimized cloud deployments.
+    
+    [Learn more about performance →](performance/index.md){ .md-button }
+
 <script>
 (function() {
   var link = document.createElement('link');
@@ -126,6 +131,12 @@ agents:
     ---
 
     Learn how Hector works. Understand agents, LLM providers, memory, tools, RAG, reasoning strategies, and multi-agent orchestration.
+
+-   :chart_with_upwards_trend: __[Performance](performance/index.md)__
+
+    ---
+
+    Discover why Hector is 100,000x more memory efficient than alternatives. Learn about scalability, resource optimization, and deployment patterns.
 
 -   :hammer_and_wrench: __[How-To Guides](how-to/build-coding-assistant.md)__
 

@@ -17,6 +17,18 @@ Hector is a **declarative AI agent platform** built on three core principles:
 2. **Zero Code Required** - Build agents with YAML configuration
 3. **Production Ready** - Enterprise-grade performance and reliability
 
+!!! info "Looking for Performance & Scaling?"
+    This document covers **system architecture** (how Hector is built).
+    
+    For **performance characteristics** (resource usage, scaling, efficiency), see:
+    
+    - [Performance Overview](../performance/index.md)
+    
+    For **technical deep dives** on architecture:
+    
+    - [Session & Memory Architecture](architecture/session-memory.md)
+    - [Agent Lifecycle & Scalability](architecture/agent-lifecycle.md)
+
 ---
 
 ## System Architecture
@@ -537,9 +549,13 @@ hector call assistant "Hello" --server http://remote:8080
 
 ## Next Steps
 
+### System Reference
 - **[Configuration Reference](configuration.md)** - Complete config options
 - **[API Reference](api.md)** - REST/gRPC APIs
 - **[A2A Protocol](a2a-protocol.md)** - Protocol details
+
+### Performance & Deployment
+- **[Performance Overview](../performance/index.md)** - Resource efficiency & scaling
 - **[Deploy to Production](../how-to/deploy-production.md)** - Production setup
 
 ---
