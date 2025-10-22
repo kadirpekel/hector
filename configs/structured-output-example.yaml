@@ -8,11 +8,13 @@
 # PREREQUISITES:
 # 1. OpenAI API key: export OPENAI_API_KEY="sk-..."
 # 2. Gemini API key (optional): export GEMINI_API_KEY="..."
+# 3. Anthropic API key (optional): export ANTHROPIC_API_KEY="..."
 #
 # QUICK START:
 #   hector serve --config configs/structured-output-example.yaml
-#   hector call sentiment_analyzer "I love this product!"      # OpenAI
-#   hector call gemini_sentiment "This is amazing!"            # Gemini
+#   hector call sentiment_analyzer "I love this product!"      # OpenAI (json_schema mode)
+#   hector call gemini_sentiment "This is amazing!"            # Gemini (native responseSchema)
+#   hector call anthropic_sentiment "This is terrible!"        # Anthropic (prefill technique)
 #   hector call data_extractor "John works at Google as SWE"
 #   hector chat classifier
 #
@@ -31,6 +33,13 @@ llms:
     type: "gemini"
     model: "gemini-2.0-flash-exp"
     api_key: "${GEMINI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 1000
+  
+  anthropic-llm:
+    type: "anthropic"
+    model: "claude-sonnet-4-20250514"
+    api_key: "${ANTHROPIC_API_KEY}"
     temperature: 0.7
     max_tokens: 1000
 
@@ -152,6 +161,36 @@ agents:
         You analyze text sentiment and return structured JSON.
         Provide accurate sentiment classification with confidence scores (0.0-1.0).
 
+  # ============================================================================
+  # ANTHROPIC SENTIMENT ANALYZER - Same task, Anthropic prefill technique
+  # ============================================================================
+  
+  anthropic_sentiment:
+    name: "Anthropic Sentiment Analyzer"
+    description: "Analyzes sentiment using Claude with prefill technique"
+    llm: "anthropic-llm"
+    
+    structured_output:
+      format: json
+      # Anthropic uses PREFILL technique - assistant message starts with "{"
+      # This forces the model to continue with valid JSON
+      prefill: "{"
+      schema:
+        type: object
+        properties:
+          sentiment:
+            type: string
+            enum: ["positive", "negative", "neutral"]
+          confidence:
+            type: number
+        required: ["sentiment", "confidence"]
+        additionalProperties: false
+    
+    prompt:
+      system_role: |
+        You analyze text sentiment and return structured JSON.
+        Provide accurate sentiment classification with confidence scores (0.0-1.0).
+
 # ============================================================================
 # USAGE EXAMPLES
 # ============================================================================
@@ -177,38 +216,25 @@ agents:
 #   {"category": "documentation", "priority": "medium", ...}
 
 # ============================================================================
-# PROVIDER-SPECIFIC FEATURES
+# NATIVE STRUCTURED OUTPUT TECHNIQUES BY PROVIDER
 # ============================================================================
-
-# For Anthropic (Claude):
-# llms:
-#   claude-llm:
-#     type: "anthropic"
-#     model: "claude-sonnet-4-20250514"
-#     api_key: "${ANTHROPIC_API_KEY}"
 #
-# agents:
-#   anthropic_agent:
-#     llm: "claude-llm"
-#     structured_output:
-#       format: json
-#       schema: { ... }
-#       prefill: "{\"sentiment\":"  # Anthropic-specific: forces JSON start
-
-# For Gemini:
-# llms:
-#   gemini-llm:
-#     type: "gemini"
-#     model: "gemini-2.0-flash-exp"
-#     api_key: "${GEMINI_API_KEY}"
+# Each provider uses a DIFFERENT native approach for structured output:
 #
-# agents:
-#   gemini_agent:
-#     llm: "gemini-llm"
-#     structured_output:
-#       format: json
-#       schema: { ... }
-#       property_ordering: ["name", "age", "email"]  # Gemini-specific: consistent ordering
+# 1. OpenAI - response_format with json_schema and strict: true
+#    • Most strict - ALL properties must be in required array
+#    • ALL objects must have additionalProperties: false
+#    • Native API validation ensures 100% schema compliance
+#
+# 2. Gemini - responseMimeType: "application/json" + responseSchema
+#    • Native JSON mode at API level
+#    • Does NOT support additionalProperties field
+#    • Supports propertyOrdering for consistent output
+#
+# 3. Anthropic - PREFILL technique (no native JSON mode parameter)
+#    • Add assistant message starting with "{" to force JSON
+#    • Add schema to system prompt for guidance
+#    • Most flexible but least strict enforcement
 
 # ============================================================================
 # BENEFITS

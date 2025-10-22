@@ -528,9 +528,10 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 
 // GenerateStructured generates a response with structured output
 func (p *AnthropicProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
-	// TODO: Apply prefill if configured (Anthropic-specific optimization)
-	// Currently unused but will be implemented when needed
-	_ = structConfig
+	// Anthropic doesn't have native JSON mode like OpenAI
+	// Instead, we use TWO native Anthropic techniques:
+	// 1. Add schema to system prompt (guides the model)
+	// 2. Use PREFILL technique - add assistant message starting with "{" (forces JSON output)
 
 	// Build system prompt with schema instructions
 	systemPrompt := p.buildSystemPromptWithSchema(structConfig)
@@ -544,15 +545,28 @@ func (p *AnthropicProvider) GenerateStructured(messages []*pb.Message, tools []T
 		}
 	}
 
-	// Make the actual API call using the existing Generate method
-	return p.Generate(messages, tools)
+	// Apply PREFILL technique (Anthropic's native way to force JSON)
+	// Add an assistant message starting with "{" to force JSON output
+	if structConfig != nil && structConfig.Format == "json" {
+		prefill := "{"
+		if structConfig.Prefill != "" {
+			prefill = structConfig.Prefill
+		}
+
+		req.Messages = append(req.Messages, AnthropicMessage{
+			Role:    "assistant",
+			Content: prefill,
+		})
+	}
+
+	// Make the API call with prefilled assistant message
+	return p.makeStructuredRequest(req)
 }
 
 // GenerateStructuredStreaming generates a streaming response with structured output
 func (p *AnthropicProvider) GenerateStructuredStreaming(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
-	// Apply prefill if configured
-	// Note: Prefill would require creating a pb.Message with ROLE_AGENT
-	// For now, skip prefill support in migration.
+	// Anthropic prefill technique for streaming
+	// Note: Prefill is sent as the last assistant message, and streaming continues from there
 
 	// Build system prompt with schema instructions
 	systemPrompt := p.buildSystemPromptWithSchema(structConfig)
@@ -566,13 +580,96 @@ func (p *AnthropicProvider) GenerateStructuredStreaming(messages []*pb.Message, 
 		}
 	}
 
-	// Make the actual API call using the existing GenerateStreaming method
-	return p.GenerateStreaming(messages, tools)
+	// Apply PREFILL technique for streaming
+	prefill := ""
+	if structConfig != nil && structConfig.Format == "json" {
+		prefill = "{"
+		if structConfig.Prefill != "" {
+			prefill = structConfig.Prefill
+		}
+
+		req.Messages = append(req.Messages, AnthropicMessage{
+			Role:    "assistant",
+			Content: prefill,
+		})
+	}
+
+	// Make streaming request and prepend prefill to first chunk
+	chunks := make(chan StreamChunk, 10)
+	go func() {
+		defer close(chunks)
+
+		// First, emit the prefill as initial text
+		if prefill != "" {
+			chunks <- StreamChunk{
+				Type: "text",
+				Text: prefill,
+			}
+		}
+
+		// Then stream the rest from Anthropic using existing method
+		if err := p.makeStreamingRequest(req, chunks); err != nil {
+			chunks <- StreamChunk{Type: "error", Error: err}
+		}
+	}()
+
+	return chunks, nil
 }
 
 // SupportsStructuredOutput returns true (Anthropic supports structured output via prefill)
 func (p *AnthropicProvider) SupportsStructuredOutput() bool {
 	return true
+}
+
+// makeStructuredRequest makes a non-streaming request with prefill handling
+func (p *AnthropicProvider) makeStructuredRequest(req AnthropicRequest) (string, []*protocol.ToolCall, int, error) {
+	// Extract prefill from the last message if it was an assistant message
+	prefill := ""
+	if len(req.Messages) > 0 && req.Messages[len(req.Messages)-1].Role == "assistant" {
+		if content, ok := req.Messages[len(req.Messages)-1].Content.(string); ok {
+			prefill = content
+		}
+	}
+
+	// Make the API request using existing method
+	response, err := p.makeRequest(req)
+	if err != nil {
+		return "", nil, 0, err
+	}
+
+	if response.Error != nil {
+		return "", nil, 0, fmt.Errorf("anthropic API error: %s (type: %s)", response.Error.Message, response.Error.Type)
+	}
+
+	tokensUsed := response.Usage.InputTokens + response.Usage.OutputTokens
+
+	// Extract text and tool calls from content (same as Generate)
+	var text string
+	var toolCalls []*protocol.ToolCall
+
+	for _, content := range response.Content {
+		if content.Type == "text" {
+			text += content.Text
+		} else if content.Type == "tool_use" {
+			var args map[string]interface{}
+			if content.Input != nil {
+				args = *content.Input
+			}
+			toolCalls = append(toolCalls, &protocol.ToolCall{
+				ID:   content.ID,
+				Name: content.Name,
+				Args: args,
+			})
+		}
+	}
+
+	// Prepend the prefill to the response text
+	// Anthropic returns the completion AFTER the prefill, so we need to add it back
+	if prefill != "" {
+		text = prefill + text
+	}
+
+	return text, toolCalls, tokensUsed, nil
 }
 
 // buildSystemPromptWithSchema builds system prompt with schema instructions
