@@ -695,21 +695,20 @@ func (a *Agent) saveToHistory(
 	// Using batch save ensures summarization is checked ONCE per turn, not per message
 	currentTurn := state.GetCurrentTurn()
 
-	// Filter messages to save (only user/assistant with content)
+	// Save ALL messages from current turn (no filtering)
+	// Strategy will decide how to load them back
+	// This includes: USER, AGENT, SYSTEM, UNSPECIFIED (summaries), TOOL messages
 	messagesToSave := make([]*pb.Message, 0, len(currentTurn))
 	for _, msg := range currentTurn {
-		// Only save user/assistant messages (skip system messages if any)
-		if msg.Role == pb.Role_ROLE_USER || msg.Role == pb.Role_ROLE_AGENT {
-			// Save message if it has text content OR tool calls/results
-			textContent := protocol.ExtractTextFromMessage(msg)
-			hasToolCalls := len(protocol.GetToolCallsFromMessage(msg)) > 0
-			hasToolResults := len(protocol.GetToolResultsFromMessage(msg)) > 0
+		// Save message if it has ANY content
+		textContent := protocol.ExtractTextFromMessage(msg)
+		hasToolCalls := len(protocol.GetToolCallsFromMessage(msg)) > 0
+		hasToolResults := len(protocol.GetToolResultsFromMessage(msg)) > 0
 
-			if textContent != "" || hasToolCalls || hasToolResults {
-				messagesToSave = append(messagesToSave, msg)
-			}
+		if textContent != "" || hasToolCalls || hasToolResults {
+			messagesToSave = append(messagesToSave, msg)
 		}
-		// Skip system messages - they're for prompt construction only
+		// Note: Empty messages are skipped regardless of role
 	}
 
 	// Batch save - summarization is checked ONCE at turn boundary

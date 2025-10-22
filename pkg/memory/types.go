@@ -22,7 +22,8 @@ type WorkingMemoryStrategy interface {
 
 	// CheckAndSummarize checks if summarization is needed and performs it
 	// This should be called ONCE per turn to prevent infinite loops
-	CheckAndSummarize(session *hectorcontext.ConversationHistory) error
+	// Returns any new messages that need to be persisted (e.g., summary message)
+	CheckAndSummarize(session *hectorcontext.ConversationHistory) ([]*pb.Message, error)
 
 	// GetMessages retrieves pb.Message directly (no conversion)
 	GetMessages(session *hectorcontext.ConversationHistory) ([]*pb.Message, error)
@@ -32,6 +33,11 @@ type WorkingMemoryStrategy interface {
 
 	// Name returns the strategy identifier
 	Name() string
+
+	// LoadState loads and reconstructs the strategy's state from persistent storage
+	// The strategy decides how to load messages (e.g., from last checkpoint)
+	// Returns a reconstructed ConversationHistory ready for use
+	LoadState(sessionID string, sessionService interface{}) (*hectorcontext.ConversationHistory, error)
 }
 
 // LongTermConfig configures long-term memory behavior

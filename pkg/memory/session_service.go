@@ -86,6 +86,14 @@ func (s *InMemorySessionService) GetMessages(sessionID string, limit int) ([]*pb
 	return messages, nil
 }
 
+// GetMessagesWithOptions returns messages with advanced filtering
+// For in-memory implementation, this provides basic limit support
+// Role filtering and FromMessageID are not implemented for in-memory
+func (s *InMemorySessionService) GetMessagesWithOptions(sessionID string, opts reasoning.LoadOptions) ([]*pb.Message, error) {
+	// For in-memory, just use limit
+	return s.GetMessages(sessionID, opts.Limit)
+}
+
 // GetMessageCount returns the number of messages in a session
 func (s *InMemorySessionService) GetMessageCount(sessionID string) (int, error) {
 	if sessionID == "" {

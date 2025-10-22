@@ -373,6 +373,99 @@ SELECT message_json FROM (
 	return messages, nil
 }
 
+// GetMessagesWithOptions retrieves messages with advanced filtering options
+// This allows strategies to load messages efficiently (e.g., from checkpoint)
+func (s *SQLSessionService) GetMessagesWithOptions(sessionID string, opts reasoning.LoadOptions) ([]*pb.Message, error) {
+	if sessionID == "" {
+		return nil, fmt.Errorf("sessionID cannot be empty")
+	}
+
+	ctx := context.Background()
+
+	// Build query based on dialect
+	query := `SELECT message_id, message_json FROM session_messages WHERE session_id = ?`
+	args := []interface{}{sessionID}
+
+	if s.dialect == "postgres" {
+		query = `SELECT message_id, message_json FROM session_messages WHERE session_id = $1`
+	}
+
+	// Add FromMessageID filter (for checkpoint loading)
+	if opts.FromMessageID != "" {
+		if s.dialect == "postgres" {
+			query += ` AND message_id > $2`
+			args = append(args, opts.FromMessageID)
+		} else {
+			query += ` AND message_id > ?`
+			args = append(args, opts.FromMessageID)
+		}
+	}
+
+	// Add role filter
+	if len(opts.Roles) > 0 {
+		roleStrings := make([]string, len(opts.Roles))
+		for i, role := range opts.Roles {
+			roleStrings[i] = role.String()
+		}
+		// Build IN clause
+		placeholders := ""
+		for i := range roleStrings {
+			if i > 0 {
+				placeholders += ", "
+			}
+			if s.dialect == "postgres" {
+				placeholders += fmt.Sprintf("$%d", len(args)+1+i)
+			} else {
+				placeholders += "?"
+			}
+		}
+		query += ` AND role IN (` + placeholders + `)`
+		for _, rs := range roleStrings {
+			args = append(args, rs)
+		}
+	}
+
+	query += ` ORDER BY sequence_num ASC`
+
+	// Add limit (get last N messages)
+	if opts.Limit > 0 {
+		// Wrap in subquery to get last N
+		if s.dialect == "postgres" {
+			query = `SELECT message_id, message_json FROM (` + query + ` ORDER BY sequence_num DESC LIMIT $` + fmt.Sprintf("%d", len(args)+1) + `) sub ORDER BY sequence_num ASC`
+		} else {
+			query = `SELECT message_id, message_json FROM (` + query + ` ORDER BY sequence_num DESC LIMIT ?) sub ORDER BY sequence_num ASC`
+		}
+		args = append(args, opts.Limit)
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query messages: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []*pb.Message
+	for rows.Next() {
+		var messageID, messageJSON string
+		if err := rows.Scan(&messageID, &messageJSON); err != nil {
+			return nil, fmt.Errorf("failed to scan message: %w", err)
+		}
+
+		message := &pb.Message{}
+		if err := protojson.Unmarshal([]byte(messageJSON), message); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal message: %w", err)
+		}
+
+		messages = append(messages, message)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating messages: %w", err)
+	}
+
+	return messages, nil
+}
+
 // GetMessageCount returns the number of messages in a session
 func (s *SQLSessionService) GetMessageCount(sessionID string) (int, error) {
 	if sessionID == "" {

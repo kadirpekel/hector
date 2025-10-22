@@ -94,7 +94,8 @@ type SessionService interface {
 	// Message-level operations (efficient for relational stores)
 	// These operations work with individual messages, not bulk session state
 	AppendMessage(sessionID string, message *pb.Message) error
-	GetMessages(sessionID string, limit int) ([]*pb.Message, error)
+	GetMessages(sessionID string, limit int) ([]*pb.Message, error) // Deprecated: Use GetMessagesWithOptions
+	GetMessagesWithOptions(sessionID string, opts LoadOptions) ([]*pb.Message, error)
 	GetMessageCount(sessionID string) (int, error)
 
 	// Session metadata operations
@@ -110,6 +111,21 @@ type SessionMetadata struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	Metadata  map[string]interface{}
+}
+
+// LoadOptions defines options for loading messages from session store
+// Used by working memory strategies to control how messages are loaded
+type LoadOptions struct {
+	// Limit: Maximum number of messages to load (0 = all messages)
+	Limit int
+
+	// FromMessageID: Load messages after this message ID (for checkpoint loading)
+	// Empty string = load from beginning
+	FromMessageID string
+
+	// Roles: Filter messages by role (empty = all roles)
+	// Example: []pb.Role{pb.Role_ROLE_USER, pb.Role_ROLE_AGENT}
+	Roles []pb.Role
 }
 
 // HistoryService defines the interface for memory management

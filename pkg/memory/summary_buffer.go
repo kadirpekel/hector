@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	hectorcontext "github.com/kadirpekel/hector/pkg/context"
 	"github.com/kadirpekel/hector/pkg/protocol"
+	"github.com/kadirpekel/hector/pkg/reasoning"
 	"github.com/kadirpekel/hector/pkg/utils"
 )
 
@@ -100,11 +102,17 @@ func (s *SummaryBufferStrategy) AddMessage(session *hectorcontext.ConversationHi
 
 // CheckAndSummarize checks if summarization is needed and performs it
 // This should be called ONCE per turn, not per message
-func (s *SummaryBufferStrategy) CheckAndSummarize(session *hectorcontext.ConversationHistory) error {
+// Returns the summary message if summarization occurred (needs to be persisted)
+func (s *SummaryBufferStrategy) CheckAndSummarize(session *hectorcontext.ConversationHistory) ([]*pb.Message, error) {
 	if s.shouldSummarize(session) {
-		return s.summarize(session)
+		summaryMsg, err := s.summarize(session)
+		if err != nil {
+			return nil, err
+		}
+		// Return summary message so it can be persisted
+		return []*pb.Message{summaryMsg}, nil
 	}
-	return nil
+	return nil, nil
 }
 
 // GetMessages returns messages from the session within token budget
@@ -139,7 +147,8 @@ func (s *SummaryBufferStrategy) shouldSummarize(session *hectorcontext.Conversat
 }
 
 // summarize performs blocking summarization and updates the session
-func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHistory) error {
+// Returns the summary message that needs to be persisted
+func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHistory) (*pb.Message, error) {
 	// Calculate target tokens
 	targetTokens := int(float64(s.tokenBudget) * s.target)
 
@@ -151,7 +160,7 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 	oldMessages := allMessages[:len(allMessages)-len(recentMessages)]
 
 	if len(oldMessages) == 0 {
-		return nil // Nothing to summarize
+		return nil, nil // Nothing to summarize
 	}
 
 	log.Printf("🧠 Summarizing %d messages (keeping %d recent)...",
@@ -169,7 +178,7 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 		if s.statusNotifier != nil {
 			s.statusNotifier("⚠️  Summarization failed, continuing with full history")
 		}
-		return fmt.Errorf("summarization failed: %w", err)
+		return nil, fmt.Errorf("summarization failed: %w", err)
 	}
 
 	log.Printf("✅ Summarized %d messages into %d tokens",
@@ -186,7 +195,7 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 		},
 	}
 	if err := session.AddMessage(summaryMsg); err != nil {
-		return fmt.Errorf("failed to add summary: %w", err)
+		return nil, fmt.Errorf("failed to add summary: %w", err)
 	}
 
 	// Re-add recent messages
@@ -198,7 +207,8 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 
 	log.Printf("🎉 Summarization complete (kept %d recent messages)", len(recentMessages))
 
-	return nil
+	// Return summary message so it can be persisted to database
+	return summaryMsg, nil
 }
 
 // selectRecentMessagesWithMinimum selects recent messages with smart allocation
@@ -258,4 +268,87 @@ func (s *SummaryBufferStrategy) selectRecentMessages(messages []*pb.Message, tok
 	}
 
 	return selected
+}
+
+// LoadState loads and reconstructs the strategy's state from persistent storage
+// For summary_buffer, this detects the last summary message (checkpoint) and loads from there
+func (s *SummaryBufferStrategy) LoadState(sessionID string, sessionService interface{}) (*hectorcontext.ConversationHistory, error) {
+	// Type assert to get the session service
+	sessService, ok := sessionService.(interface {
+		GetMessagesWithOptions(sessionID string, opts reasoning.LoadOptions) ([]*pb.Message, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("session service does not support GetMessagesWithOptions")
+	}
+
+	// Step 1: Load ALL messages from database
+	allMessages, err := sessService.GetMessagesWithOptions(sessionID, reasoning.LoadOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to load messages: %w", err)
+	}
+
+	if len(allMessages) == 0 {
+		// No messages, return empty session
+		return hectorcontext.NewConversationHistory(sessionID)
+	}
+
+	// Step 2: Find last summary message (checkpoint detection)
+	lastSummaryIdx := s.findLastSummaryIndex(allMessages)
+
+	// Step 3: Load from checkpoint forward
+	var messagesToLoad []*pb.Message
+	if lastSummaryIdx >= 0 {
+		// Found checkpoint: Load summary + everything after it
+		messagesToLoad = allMessages[lastSummaryIdx:]
+		log.Printf("📍 Checkpoint detected at message %d/%d, loading %d messages (%.1f%% reduction)",
+			lastSummaryIdx+1, len(allMessages), len(messagesToLoad),
+			float64(len(allMessages)-len(messagesToLoad))/float64(len(allMessages))*100)
+	} else {
+		// No checkpoint found: Load recent N messages to prevent overload
+		maxRecent := 100 // Safety limit
+		if len(allMessages) > maxRecent {
+			messagesToLoad = allMessages[len(allMessages)-maxRecent:]
+			log.Printf("⚠️  No checkpoint found, loading recent %d of %d messages", maxRecent, len(allMessages))
+		} else {
+			messagesToLoad = allMessages
+			log.Printf("📥 Loading all %d messages (no checkpoint needed yet)", len(allMessages))
+		}
+	}
+
+	// Step 4: Reconstruct in-memory session
+	session, err := hectorcontext.NewConversationHistory(sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	for _, msg := range messagesToLoad {
+		if err := session.AddMessage(msg); err != nil {
+			log.Printf("⚠️  Failed to add message to session: %v", err)
+		}
+	}
+
+	log.Printf("✅ Loaded %d messages for session %s", len(messagesToLoad), sessionID)
+	return session, nil
+}
+
+// findLastSummaryIndex finds the index of the last summary message
+// Summary messages are detected by role and content pattern
+func (s *SummaryBufferStrategy) findLastSummaryIndex(messages []*pb.Message) int {
+	// Scan from end to beginning (most recent first)
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+
+		// Detect summary message by:
+		// 1. Role is ROLE_UNSPECIFIED (system-like)
+		// 2. Content starts with "Previous conversation summary:"
+		if msg.Role == pb.Role_ROLE_UNSPECIFIED {
+			text := protocol.ExtractTextFromMessage(msg)
+			if len(text) > 0 && (strings.Contains(text, "Previous conversation summary:") ||
+				strings.Contains(text, "Conversation summary:")) {
+				return i
+			}
+		}
+	}
+
+	return -1 // No summary found
 }

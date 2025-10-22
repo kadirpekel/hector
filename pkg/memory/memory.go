@@ -55,8 +55,15 @@ func NewMemoryService(
 }
 
 // AddToHistory adds a single message to memory
-// DEPRECATED: Use AddBatchToHistory for better performance and correct turn boundaries
-// This method is kept for backward compatibility but skips summarization checks
+//
+// DEPRECATED: Use AddBatchToHistory instead for better performance and correct turn boundaries.
+//
+// This method is retained ONLY for backward compatibility and has limitations:
+//   - Does NOT trigger summarization checks (only AddBatchToHistory does)
+//   - Less efficient than batch operations
+//   - Not used by any core code
+//
+// Migration: Replace AddToHistory(msg) with AddBatchToHistory([]*pb.Message{msg})
 func (s *MemoryService) AddToHistory(sessionID string, msg *pb.Message) error {
 	if sessionID == "" {
 		sessionID = "default"
@@ -101,49 +108,60 @@ func (s *MemoryService) AddBatchToHistory(sessionID string, messages []*pb.Messa
 
 	// 2. NOW check summarization ONCE for the entire batch
 	// This prevents the infinite loop bug where each message triggers summarization
-	allMessages, err := s.sessionService.GetMessages(sessionID, 0)
+	// Use strategy loading (checkpoint-aware, efficient)
+	history, err := s.workingMemory.LoadState(sessionID, s.sessionService)
 	if err != nil {
-		log.Printf("⚠️  Failed to get messages for summarization check: %v", err)
+		log.Printf("⚠️  Failed to load state for summarization check: %v", err)
 		return nil // Don't fail the save operation
 	}
 
-	history := s.messagesToConversationHistory(sessionID, allMessages)
-
 	// Let working memory strategy decide if summarization is needed
 	// This is called ONCE per turn, not once per message
-	if err := s.workingMemory.CheckAndSummarize(history); err != nil {
+	// Strategy has already loaded efficiently (e.g., from checkpoint)
+	newMessages, err := s.workingMemory.CheckAndSummarize(history)
+	if err != nil {
 		log.Printf("⚠️  Summarization check failed: %v", err)
 		// Don't fail - messages are already saved
+	}
+
+	// Save any new messages created by strategy (e.g., summary message)
+	// This is CRITICAL for checkpoint detection to work!
+	if len(newMessages) > 0 {
+		for _, msg := range newMessages {
+			if err := s.sessionService.AppendMessage(sessionID, msg); err != nil {
+				log.Printf("⚠️  Failed to save strategy message: %v", err)
+			} else {
+				log.Printf("💾 Saved strategy message (role: %s)", msg.Role.String())
+			}
+		}
 	}
 
 	return nil
 }
 
 // GetRecentHistory returns messages from memory
-// Applies working memory strategy to filter/transform messages
+// Delegates to strategy to load and reconstruct conversation state
 func (s *MemoryService) GetRecentHistory(sessionID string) ([]*pb.Message, error) {
 	if sessionID == "" {
 		sessionID = "default"
 	}
 
-	// 1. Get all messages from session store
-	// limit=0 means get all messages
-	allMessages, err := s.sessionService.GetMessages(sessionID, 0)
+	// 1. Let strategy load its state from persistent storage
+	// Strategy decides HOW to load (e.g., from checkpoint, last N messages, etc.)
+	history, err := s.workingMemory.LoadState(sessionID, s.sessionService)
 	if err != nil {
-		log.Printf("⚠️  Failed to get messages from session: %v", err)
-		return []*pb.Message{}, nil
+		log.Printf("⚠️  Failed to load state from strategy: %v", err)
+		// Fallback: Create empty history
+		history, _ = hectorcontext.NewConversationHistory(sessionID)
 	}
 
-	// 2. Apply working memory strategy to filter/transform messages
-	// Convert to ConversationHistory for strategy compatibility
-	history := s.messagesToConversationHistory(sessionID, allMessages)
-
-	// Let the strategy decide which messages to return
+	// 2. Get messages from reconstructed history
+	// Strategy has already applied its logic (checkpoint detection, windowing, etc.)
 	filteredMessages, err := s.workingMemory.GetMessages(history)
 	if err != nil {
 		log.Printf("⚠️  Working memory strategy failed: %v", err)
-		// Fallback to all messages if strategy fails
-		filteredMessages = allMessages
+		// Fallback to empty messages if strategy fails
+		return []*pb.Message{}, nil
 	}
 
 	// 3. Auto-recall from long-term (if enabled)
@@ -161,26 +179,6 @@ func (s *MemoryService) GetRecentHistory(sessionID string) ([]*pb.Message, error
 	}
 
 	return filteredMessages, nil
-}
-
-// messagesToConversationHistory converts messages to ConversationHistory for strategy compatibility
-func (s *MemoryService) messagesToConversationHistory(sessionID string, messages []*pb.Message) *hectorcontext.ConversationHistory {
-	history, err := hectorcontext.NewConversationHistory(sessionID)
-	if err != nil {
-		log.Printf("⚠️  Failed to create conversation history: %v", err)
-		// Return empty history if creation fails
-		history, _ = hectorcontext.NewConversationHistory(sessionID)
-		return history
-	}
-
-	// Add native pb.Messages directly (no conversion needed)
-	for _, msg := range messages {
-		if err := history.AddMessage(msg); err != nil {
-			log.Printf("⚠️  Failed to add message to conversation history: %v", err)
-		}
-	}
-
-	return history
 }
 
 // ClearHistory clears memory for a session
