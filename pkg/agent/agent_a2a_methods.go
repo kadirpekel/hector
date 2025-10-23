@@ -16,6 +16,11 @@ import (
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const sessionIDKey contextKey = "sessionID"
+
 func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
 	if req.Request == nil {
 		return nil, status.Error(codes.InvalidArgument, "request message cannot be nil")
@@ -278,10 +283,16 @@ func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (
 	card := &pb.AgentCard{
 		Name:        a.name,
 		Description: a.description,
-		Version:     "1.0.0",
+		Version:     a.getVersion(),
 		Capabilities: &pb.AgentCapabilities{
 			Streaming: true,
 		},
+		// A2A fields from configuration
+		DefaultInputModes:  a.getInputModes(),
+		DefaultOutputModes: a.getOutputModes(),
+		Skills:             a.getSkills(),
+		Provider:           a.getProvider(),
+		DocumentationUrl:   a.getDocumentationURL(),
 	}
 
 	// Populate security information from config
@@ -494,7 +505,7 @@ func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, con
 	}
 
 	// IMPORTANT: Add contextID (A2A session ID) to context so saveToHistory can persist messages
-	ctx = context.WithValue(ctx, "sessionID", contextID)
+	ctx = context.WithValue(ctx, sessionIDKey, contextID)
 
 	streamCh, err := a.execute(ctx, userText, strategy)
 	if err != nil {

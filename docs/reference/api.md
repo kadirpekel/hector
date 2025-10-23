@@ -5,7 +5,7 @@ description: Complete API reference for REST, gRPC, and WebSocket
 
 # API Reference
 
-Hector provides multiple API transports for interacting with agents. All implement the A2A protocol.
+Hector provides multiple API transports for interacting with agents. All APIs implement the [A2A Protocol](https://a2a-protocol.org) specification.
 
 ---
 
@@ -59,10 +59,11 @@ Send a single message to an agent.
 ```json
 {
   "message": {
-    "role": "ROLE_USER",
-    "content": [
+    "role": "user",
+    "parts": [
       {"text": "What is the capital of France?"}
-    ]
+    ],
+    "contextId": "session-123"
   }
 }
 ```
@@ -70,13 +71,21 @@ Send a single message to an agent.
 **Response:**
 ```json
 {
-  "response": {
-    "role": "ROLE_ASSISTANT",
-    "content": [
-      {"text": "The capital of France is Paris."}
-    ]
-  },
-  "task_id": "task_abc123"
+  "task": {
+    "id": "tasks/task_abc123",
+    "contextId": "session-123",
+    "status": {
+      "state": "completed",
+      "message": "Task completed"
+    },
+    "result": {
+      "role": "agent",
+      "parts": [
+        {"text": "The capital of France is Paris."}
+      ],
+      "messageId": "msg_xyz789"
+    }
+  }
 }
 ```
 
@@ -87,8 +96,9 @@ curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
     "message": {
-      "role": "ROLE_USER",
-      "content": [{"text": "Hello"}]
+      "role": "user",
+      "parts": [{"text": "Hello"}],
+      "contextId": "my-session"
     }
   }'
 ```
@@ -97,28 +107,36 @@ curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
 
 Stream responses in real-time using Server-Sent Events.
 
-**Endpoint:** `POST /v1/agents/{agent}/message:sendStream`
+**Endpoint:** `POST /v1/agents/{agent}/message:stream`
 
 **Request:** Same as Send Message
 
 **Response:** Server-Sent Events stream
 ```
-data: {"response":{"content":[{"text":"The"}]}}
-data: {"response":{"content":[{"text":" capital"}]}}
-data: {"response":{"content":[{"text":" of France"}]}}
-data: [DONE]
+event: message
+data: {"message":{"role":"agent","parts":[{"text":"The"}],"messageId":"msg_1"}}
+
+event: message
+data: {"message":{"role":"agent","parts":[{"text":" capital"}],"messageId":"msg_1"}}
+
+event: message
+data: {"message":{"role":"agent","parts":[{"text":" of France"}],"messageId":"msg_1"}}
+
+event: message
+data: {"statusUpdate":{"taskId":"tasks/123","status":{"state":"completed"},"final":true}}
 ```
 
 **Example:**
 ```bash
-curl -N -X POST http://localhost:8081/v1/agents/assistant/message:sendStream \
+curl -N -X POST http://localhost:8081/v1/agents/assistant/message:stream \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
     "message": {
-      "role": "ROLE_USER",
-      "content": [{"text": "Explain quantum computing"}]
+      "role": "user",
+      "parts": [{"text": "Explain quantum computing"}],
+      "contextId": "my-session"
     }
   }'
 ```
@@ -180,18 +198,34 @@ Get status of an async task.
 
 **Endpoint:** `GET /v1/agents/{agent}/tasks/{task_id}`
 
+**Alternative:** `GET /v1/tasks/{task_id}` (agent routing via context)
+
 **Response:**
 ```json
 {
-  "task": {
-    "id": "task_abc123",
-    "status": "completed",
-    "result": {
-      "role": "ROLE_ASSISTANT",
-      "content": [{"text": "Task completed successfully"}]
-    }
-  }
+  "id": "tasks/task_abc123",
+  "contextId": "session-123",
+  "status": {
+    "state": "completed",
+    "message": "Task completed successfully"
+  },
+  "result": {
+    "role": "agent",
+    "parts": [{"text": "Task completed successfully"}],
+    "messageId": "msg_xyz789"
+  },
+  "createdAt": "2025-10-23T10:00:00Z",
+  "updatedAt": "2025-10-23T10:00:05Z"
 }
+```
+
+**Example:**
+```bash
+# Agent-specific endpoint
+curl http://localhost:8081/v1/agents/assistant/tasks/task_abc123
+
+# Generic endpoint (uses context routing)
+curl http://localhost:8081/v1/tasks/task_abc123
 ```
 
 ### Cancel Task
@@ -200,15 +234,41 @@ Cancel a running task.
 
 **Endpoint:** `POST /v1/agents/{agent}/tasks/{task_id}:cancel`
 
+**Alternative:** `POST /v1/tasks/{task_id}:cancel` (agent routing via context)
+
 **Response:**
 ```json
 {
-  "task": {
-    "id": "task_abc123",
-    "status": "cancelled"
-  }
+  "id": "tasks/task_abc123",
+  "contextId": "session-123",
+  "status": {
+    "state": "canceled",
+    "message": "Task cancelled by user"
+  },
+  "createdAt": "2025-10-23T10:00:00Z",
+  "updatedAt": "2025-10-23T10:00:10Z"
 }
 ```
+
+**Example:**
+```bash
+# Agent-specific endpoint
+curl -X POST http://localhost:8081/v1/agents/assistant/tasks/task_abc123:cancel
+
+# Generic endpoint (uses context routing)
+curl -X POST http://localhost:8081/v1/tasks/task_abc123:cancel
+```
+
+**Task States:**
+
+| State | Description |
+|-------|-------------|
+| `submitted` | Task created and queued |
+| `working` | Task is being processed |
+| `completed` | Task finished successfully |
+| `failed` | Task failed with error |
+| `canceled` | Task was cancelled |
+| `input-required` | Task needs user input |
 
 ---
 

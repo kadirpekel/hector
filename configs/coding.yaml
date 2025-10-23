@@ -29,11 +29,71 @@ llms:
 agents:
   coder:
     name: "AI Coding Assistant"
+    description: "Expert AI assistant specialized in software development, code generation, and technical problem-solving"
     llm: "claude"
     
     # 🎯 Quick config shortcuts
     docs_folder: "."         # Auto-creates document store + search tool
     enable_tools: true       # Auto-enables all local tools
+    
+    # A2A Agent Card Configuration
+    a2a:
+      version: "1.0.0"
+      
+      input_modes:
+        - "text/plain"
+        - "application/json"
+        - "text/x-python"
+        - "text/x-go"
+        - "text/x-javascript"
+        - "text/x-typescript"
+        - "text/markdown"
+      
+      output_modes:
+        - "text/plain"
+        - "application/json"
+        - "text/x-python"
+        - "text/x-go"
+        - "text/x-javascript"
+        - "text/x-typescript"
+        - "text/markdown"
+      
+      skills:
+        - id: "code-generation"
+          name: "Code Generation"
+          description: "Generate production-ready code in multiple languages including Python, Go, JavaScript, and TypeScript"
+          tags: ["coding", "generation", "development"]
+          examples:
+            - "Create a REST API in Go"
+            - "Write unit tests for this function"
+            - "Implement a binary search algorithm"
+        
+        - id: "code-review"
+          name: "Code Review & Analysis"
+          description: "Review code for bugs, performance issues, security vulnerabilities, and best practices"
+          tags: ["review", "analysis", "quality"]
+          examples:
+            - "Review this code for security issues"
+            - "Optimize this function for performance"
+            - "Suggest improvements for this class"
+        
+        - id: "semantic-search"
+          name: "Codebase Search"
+          description: "Search and understand large codebases using semantic search and RAG"
+          tags: ["search", "understanding", "rag"]
+          examples:
+            - "Find where authentication is handled"
+            - "Show me database connection code"
+            - "Locate error handling patterns"
+        
+        - id: "refactoring"
+          name: "Code Refactoring"
+          description: "Refactor and improve existing code while maintaining functionality"
+          tags: ["refactoring", "improvement", "maintenance"]
+          examples:
+            - "Refactor this code to use design patterns"
+            - "Extract this logic into a reusable function"
+            - "Simplify this complex function"
     
     # That's it! Everything else is auto-configured:
     # ✅ Document store auto-created from "."

@@ -38,6 +38,8 @@ type sessionRow struct {
 }
 
 // messageRow represents the database schema for messages
+// messageRow is unused but kept for potential future use
+// nolint:unused
 type messageRow struct {
 	ID          int64
 	SessionID   string
@@ -317,7 +319,7 @@ func (s *SQLSessionService) AppendMessages(sessionID string, messages []*pb.Mess
 	// Ensure transaction is rolled back on error
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 

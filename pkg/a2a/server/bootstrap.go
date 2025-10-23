@@ -134,6 +134,9 @@ func Bootstrap(opts BootstrapOptions) (*HectorServer, error) {
 		restGateway.SetAuth(authConfig)
 	}
 
+	// Set service for direct SSE streaming (bypasses grpc-gateway for true SSE format)
+	restGateway.SetService(registryService)
+
 	// Set up agent discovery endpoint
 	// RegistryService implements DiscoverableService interface
 	discovery := transport.NewAgentDiscovery(registryService, authConfig)

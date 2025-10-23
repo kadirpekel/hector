@@ -5,7 +5,7 @@ description: Agent-to-Agent protocol compliance and interoperability
 
 # A2A Protocol
 
-Hector is **100% compliant** with the [A2A Protocol](https://a2a-protocol.org) specification, enabling seamless interoperability with any A2A-compliant system.
+Hector implements the [A2A Protocol](https://a2a-protocol.org) specification for seamless interoperability with any A2A-compliant system.
 
 ---
 
@@ -530,25 +530,74 @@ Hector supports protocol extensions while maintaining compatibility:
 
 ---
 
-## Compliance Testing
+## Testing A2A Endpoints
 
-### Test Your Implementation
+### Agent Discovery
 
 ```bash
-# Check agent discovery
-curl http://localhost:8081/.well-known/a2a
+# Check agent card
+curl http://localhost:8081/.well-known/agent-card.json
 
-# Test message/send
+# With agent name (multi-agent)
+curl "http://localhost:8081/.well-known/agent-card.json?agent=assistant"
+```
+
+### Send Message
+
+```bash
 curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
   -H "Content-Type: application/json" \
-  -d '{"message":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}'
+  -d '{
+    "message": {
+      "role": "user",
+      "parts": [{"text": "Hello"}],
+      "contextId": "session-123"
+    }
+  }'
+```
 
-# Test streaming
-curl -N -H "Accept: text/event-stream" \
-  http://localhost:8081/v1/agents/assistant/message:stream
+### Stream Message (SSE)
 
-# Test task status
-curl http://localhost:8081/v1/agents/assistant/tasks/{task_id}
+```bash
+curl -N -X POST http://localhost:8081/v1/agents/assistant/message:stream \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{
+    "message": {
+      "role": "user",
+      "parts": [{"text": "Hello"}],
+      "contextId": "session-123"
+    }
+  }'
+```
+
+### JSON-RPC
+
+```bash
+curl -X POST http://localhost:8082/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "params": {
+      "message": {
+        "role": "user",
+        "parts": [{"text": "Hello"}],
+        "contextId": "session-123"
+      }
+    },
+    "id": 1
+  }'
+```
+
+### Task Management
+
+```bash
+# Get task status
+curl http://localhost:8081/v1/agents/assistant/tasks/task_abc123
+
+# Cancel task
+curl -X POST http://localhost:8081/v1/agents/assistant/tasks/task_abc123:cancel
 ```
 
 ---

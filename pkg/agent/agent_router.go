@@ -224,11 +224,16 @@ func (s *AgentRouter) getAgentNameOrError(ctx context.Context, req *pb.SendMessa
 		agentName = s.extractAgentName(req)
 	}
 
-	// REMOVED DANGEROUS FALLBACK: Do not auto-route to single agent if agentName is empty
-	// This was causing wrong agent names to work incorrectly
-
+	// If still empty and we only have one agent, use it (single-agent mode)
+	// This is safe because there's only one agent to route to
 	if agentName == "" {
-		return "", status.Error(codes.InvalidArgument, "name not specified (use context_id format: agent_name:session_id)")
+		agentNames := s.registry.ListAgents()
+		if len(agentNames) == 1 {
+			log.Printf("AgentRouter: No agent name specified, using single agent: %s", agentNames[0])
+			return agentNames[0], nil
+		}
+		// Multiple agents require explicit agent specification
+		return "", status.Error(codes.InvalidArgument, "name not specified (use context_id format: agent_name:session_id or set agent-name in metadata)")
 	}
 
 	return agentName, nil
@@ -243,9 +248,11 @@ func (s *AgentRouter) extractAgentName(req *pb.SendMessageRequest) string {
 	// Try context_id format: "agent_name:session_id"
 	if req.Request.ContextId != "" {
 		parts := strings.SplitN(req.Request.ContextId, ":", 2)
-		if len(parts) >= 1 {
+		// Only use it if there are actually 2 parts (agent:session format)
+		if len(parts) == 2 && parts[0] != "" {
 			return parts[0]
 		}
+		// If no colon, context_id is just a session ID, not an agent name
 	}
 
 	// Try metadata - check both "name" (A2A standard) and "agent_id" (legacy)

@@ -484,6 +484,9 @@ type AgentConfig struct {
 	// These provide simple configuration shortcuts that auto-expand to full config
 	DocsFolder  string `yaml:"docs_folder,omitempty"`  // Shortcut: auto-create document store from folder path (mutually exclusive with document_stores)
 	EnableTools bool   `yaml:"enable_tools,omitempty"` // Shortcut: auto-enable all local tools (mutually exclusive with explicit tools list)
+
+	// A2A Agent Card Configuration
+	A2A *A2ACardConfig `yaml:"a2a,omitempty"` // A2A agent card metadata
 }
 
 // Validate implements Config.Validate for AgentConfig
@@ -508,6 +511,13 @@ func (c *AgentConfig) Validate() error {
 		// Valid
 	default:
 		return fmt.Errorf("invalid visibility '%s' (must be 'public', 'internal', or 'private')", c.Visibility)
+	}
+
+	// Validate A2A card configuration if provided
+	if c.A2A != nil {
+		if err := c.A2A.Validate(); err != nil {
+			return fmt.Errorf("a2a configuration: %w", err)
+		}
 	}
 
 	// Validate based on agent type
@@ -1804,4 +1814,98 @@ func (c *PerformanceConfig) SetDefaults() {
 	if c.Timeout == 0 {
 		c.Timeout = 15 * time.Minute
 	}
+}
+
+// ============================================================================
+// A2A AGENT CARD CONFIGURATION
+// ============================================================================
+
+// A2ACardConfig represents A2A agent card metadata configuration
+type A2ACardConfig struct {
+	// Required: Agent version
+	Version string `yaml:"version"` // Agent version (e.g., "1.0.0")
+
+	// Required: Supported input MIME types
+	InputModes []string `yaml:"input_modes"` // e.g., ["text/plain", "application/json"]
+
+	// Required: Supported output MIME types
+	OutputModes []string `yaml:"output_modes"` // e.g., ["text/plain", "application/json"]
+
+	// Required: Agent skills/capabilities
+	Skills []A2ASkillConfig `yaml:"skills"` // Agent skills
+
+	// Optional: Provider information
+	Provider *A2AProviderConfig `yaml:"provider,omitempty"` // Provider metadata
+
+	// Optional: Documentation URL
+	DocumentationURL string `yaml:"documentation_url,omitempty"` // Link to agent documentation
+}
+
+// Validate validates A2ACardConfig
+func (c *A2ACardConfig) Validate() error {
+	if c.Version == "" {
+		return fmt.Errorf("a2a.version is required")
+	}
+	if len(c.InputModes) == 0 {
+		return fmt.Errorf("a2a.input_modes is required and must not be empty")
+	}
+	if len(c.OutputModes) == 0 {
+		return fmt.Errorf("a2a.output_modes is required and must not be empty")
+	}
+	if len(c.Skills) == 0 {
+		return fmt.Errorf("a2a.skills is required and must not be empty")
+	}
+
+	// Validate each skill
+	for i, skill := range c.Skills {
+		if err := skill.Validate(); err != nil {
+			return fmt.Errorf("a2a.skills[%d]: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+// A2ASkillConfig represents a single agent skill/capability
+type A2ASkillConfig struct {
+	// Required: Unique skill identifier
+	ID string `yaml:"id"` // e.g., "code-generation"
+
+	// Required: Human-readable skill name
+	Name string `yaml:"name"` // e.g., "Code Generation"
+
+	// Required: Skill description
+	Description string `yaml:"description"` // e.g., "Generate production-ready code"
+
+	// Optional: Skill tags for categorization
+	Tags []string `yaml:"tags,omitempty"` // e.g., ["coding", "generation"]
+
+	// Optional: Example queries/prompts
+	Examples []string `yaml:"examples,omitempty"` // e.g., ["Create a REST API", "Write unit tests"]
+}
+
+// Validate validates A2ASkillConfig
+func (c *A2ASkillConfig) Validate() error {
+	if c.ID == "" {
+		return fmt.Errorf("skill.id is required")
+	}
+	if c.Name == "" {
+		return fmt.Errorf("skill.name is required")
+	}
+	if c.Description == "" {
+		return fmt.Errorf("skill.description is required")
+	}
+	return nil
+}
+
+// A2AProviderConfig represents agent provider information
+type A2AProviderConfig struct {
+	// Optional: Provider name
+	Name string `yaml:"name,omitempty"` // e.g., "Your Company"
+
+	// Optional: Provider URL
+	URL string `yaml:"url,omitempty"` // e.g., "https://yourcompany.com"
+
+	// Optional: Contact email
+	ContactEmail string `yaml:"contact_email,omitempty"` // e.g., "support@yourcompany.com"
 }

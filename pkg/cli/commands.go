@@ -170,11 +170,11 @@ func executeChat(a2aClient client.A2AClient, args *CLIArgs) error {
 		fmt.Printf("\n🤖 Chat with %s (%s)%s\n", args.AgentID, mode, streamInfo)
 		fmt.Printf("💾 Session ID: %s\n", sessionID)
 		fmt.Printf("   Resume later with: --session=%s\n", sessionID)
-		fmt.Println("   Type 'exit' to quit\n")
+		fmt.Println("   Type 'exit' to quit")
 	} else {
 		fmt.Printf("\n🤖 Chat with %s (%s)%s\n", args.AgentID, mode, streamInfo)
 		fmt.Printf("💾 Resuming session: %s\n", sessionID)
-		fmt.Println("   Type 'exit' to quit\n")
+		fmt.Println("   Type 'exit' to quit")
 	}
 
 	// Create reader for user input

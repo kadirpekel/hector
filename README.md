@@ -11,7 +11,7 @@
 
 [![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
-[![A2A Protocol](https://img.shields.io/badge/A2A%20Compliance-100%25-brightgreen.svg)](https://gohector.dev/reference/a2a-protocol/)
+[![A2A Protocol](https://img.shields.io/badge/A2A%20Protocol-compliant-brightgreen.svg)](https://gohector.dev/reference/a2a-protocol/)
 [![Documentation](https://img.shields.io/badge/docs-gohector.dev-blue.svg)](https://gohector.dev)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 

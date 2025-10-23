@@ -62,6 +62,11 @@ agents:
 }
 
 func TestNew_ZeroConfig_OpenAI(t *testing.T) {
+	// Ensure data directory exists for session database
+	if err := os.MkdirAll("./data", 0755); err != nil {
+		t.Fatalf("Failed to create data directory: %v", err)
+	}
+
 	rt, err := New(Options{
 		ConfigFile: "nonexistent.yaml",
 		Provider:   "openai",
@@ -100,6 +105,11 @@ func TestNew_ZeroConfig_OpenAI(t *testing.T) {
 }
 
 func TestNew_ZeroConfig_Anthropic(t *testing.T) {
+	// Ensure data directory exists for session database
+	if err := os.MkdirAll("./data", 0755); err != nil {
+		t.Fatalf("Failed to create data directory: %v", err)
+	}
+
 	rt, err := New(Options{
 		ConfigFile: "nonexistent.yaml",
 		Provider:   "anthropic",
@@ -135,6 +145,11 @@ func TestNew_ZeroConfig_Anthropic(t *testing.T) {
 }
 
 func TestNew_ZeroConfig_Gemini(t *testing.T) {
+	// Ensure data directory exists for session database
+	if err := os.MkdirAll("./data", 0755); err != nil {
+		t.Fatalf("Failed to create data directory: %v", err)
+	}
+
 	rt, err := New(Options{
 		ConfigFile: "nonexistent.yaml",
 		Provider:   "gemini",
@@ -167,6 +182,11 @@ func TestNew_ZeroConfig_Gemini(t *testing.T) {
 }
 
 func TestNew_ZeroConfig_WithTools(t *testing.T) {
+	// Ensure data directory exists for session database
+	if err := os.MkdirAll("./data", 0755); err != nil {
+		t.Fatalf("Failed to create data directory: %v", err)
+	}
+
 	rt, err := New(Options{
 		ConfigFile: "nonexistent.yaml",
 		Provider:   "openai",
@@ -215,6 +235,11 @@ func TestNew_ZeroConfig_NoAPIKey(t *testing.T) {
 }
 
 func TestNew_ZeroConfig_EnvironmentVariable(t *testing.T) {
+	// Ensure data directory exists for session database
+	if err := os.MkdirAll("./data", 0755); err != nil {
+		t.Fatalf("Failed to create data directory: %v", err)
+	}
+
 	// Set environment variable
 	os.Setenv("OPENAI_API_KEY", "env-key")
 	defer os.Unsetenv("OPENAI_API_KEY")

@@ -114,11 +114,90 @@ func (a *Agent) GetAgentCardSimple() *pb.AgentCard {
 	return &pb.AgentCard{
 		Name:        a.name,
 		Description: a.description,
-		Version:     "1.0.0",
+		Version:     a.getVersion(),
 		Capabilities: &pb.AgentCapabilities{
 			Streaming: true,
 		},
+		// A2A fields from configuration
+		DefaultInputModes:  a.getInputModes(),
+		DefaultOutputModes: a.getOutputModes(),
+		Skills:             a.getSkills(),
+		Provider:           a.getProvider(),
+		DocumentationUrl:   a.getDocumentationURL(),
 	}
+}
+
+// getVersion returns the agent version from config or default
+func (a *Agent) getVersion() string {
+	if a.config.A2A != nil && a.config.A2A.Version != "" {
+		return a.config.A2A.Version
+	}
+	return "1.0.0" // Default version
+}
+
+// getInputModes returns input modes from config
+func (a *Agent) getInputModes() []string {
+	if a.config != nil && a.config.A2A != nil && len(a.config.A2A.InputModes) > 0 {
+		return a.config.A2A.InputModes
+	}
+	// Default if not configured
+	return []string{"text/plain", "application/json"}
+}
+
+// getOutputModes returns output modes from config
+func (a *Agent) getOutputModes() []string {
+	if a.config != nil && a.config.A2A != nil && len(a.config.A2A.OutputModes) > 0 {
+		return a.config.A2A.OutputModes
+	}
+	// Default if not configured
+	return []string{"text/plain", "application/json"}
+}
+
+// getSkills returns skills from config
+func (a *Agent) getSkills() []*pb.AgentSkill {
+	if a.config != nil && a.config.A2A != nil && len(a.config.A2A.Skills) > 0 {
+		// Convert config skills to protobuf skills
+		skills := make([]*pb.AgentSkill, len(a.config.A2A.Skills))
+		for i, skill := range a.config.A2A.Skills {
+			skills[i] = &pb.AgentSkill{
+				Id:          skill.ID,
+				Name:        skill.Name,
+				Description: skill.Description,
+				Tags:        skill.Tags,
+				Examples:    skill.Examples,
+			}
+		}
+		return skills
+	}
+	// Default skill if not configured
+	return []*pb.AgentSkill{
+		{
+			Id:          "general-assistance",
+			Name:        "General Assistance",
+			Description: a.description,
+			Tags:        []string{"conversation", "assistance"},
+		},
+	}
+}
+
+// getProvider returns provider info from config
+func (a *Agent) getProvider() *pb.AgentProvider {
+	if a.config != nil && a.config.A2A != nil && a.config.A2A.Provider != nil {
+		return &pb.AgentProvider{
+			Organization: a.config.A2A.Provider.Name,
+			Url:          a.config.A2A.Provider.URL,
+			// Note: ContactEmail is stored in config but protobuf doesn't have a field for it
+		}
+	}
+	return nil // Optional field
+}
+
+// getDocumentationURL returns documentation URL from config
+func (a *Agent) getDocumentationURL() string {
+	if a.config.A2A != nil {
+		return a.config.A2A.DocumentationURL
+	}
+	return "" // Optional field
 }
 
 // ============================================================================

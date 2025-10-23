@@ -243,7 +243,15 @@ func (m *mockSessionService) AppendMessage(sessionID string, message *pb.Message
 	return nil
 }
 
+func (m *mockSessionService) AppendMessages(sessionID string, messages []*pb.Message) error {
+	return nil
+}
+
 func (m *mockSessionService) GetMessages(sessionID string, limit int) ([]*pb.Message, error) {
+	return nil, nil
+}
+
+func (m *mockSessionService) GetMessagesWithOptions(sessionID string, opts LoadOptions) ([]*pb.Message, error) {
 	return nil, nil
 }
 

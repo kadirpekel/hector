@@ -13,6 +13,11 @@ import (
 	"github.com/kadirpekel/hector/pkg/config"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const sessionIDKey contextKey = "sessionID"
+
 // LocalClient implements A2AClient for in-process agent execution
 type LocalClient struct {
 	config     *config.Config
@@ -82,7 +87,7 @@ func (c *LocalClient) SendMessage(ctx context.Context, agentID string, message *
 	if contextID == "" {
 		contextID = "default" // Fallback to default if not provided
 	}
-	ctx = context.WithValue(ctx, "sessionID", contextID)
+	ctx = context.WithValue(ctx, sessionIDKey, contextID)
 
 	// Call agent directly
 	return agentEntry.Agent.SendMessage(ctx, req)
@@ -107,7 +112,7 @@ func (c *LocalClient) StreamMessage(ctx context.Context, agentID string, message
 	if contextID == "" {
 		contextID = "default" // Fallback to default if not provided
 	}
-	ctx = context.WithValue(ctx, "sessionID", contextID)
+	ctx = context.WithValue(ctx, sessionIDKey, contextID)
 
 	// Create channel for streaming responses
 	streamChan := make(chan *pb.StreamResponse, 10)

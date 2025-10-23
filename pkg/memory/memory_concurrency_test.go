@@ -254,7 +254,7 @@ func TestMemoryService_ConcurrentLongTermBatching(t *testing.T) {
 					},
 				}
 
-				memoryService.AddBatchToHistory(sessionID, messages)
+				_ = memoryService.AddBatchToHistory(sessionID, messages)
 
 				// Small delay to increase likelihood of concurrent batch operations
 				time.Sleep(time.Microsecond)
@@ -314,7 +314,7 @@ func TestMemoryService_ShutdownWithPendingBatches(t *testing.T) {
 					},
 				},
 			}
-			memoryService.AddBatchToHistory(sessionID, messages)
+			_ = memoryService.AddBatchToHistory(sessionID, messages)
 		}
 	}
 
@@ -374,7 +374,7 @@ func TestMemoryService_ConcurrentShutdown(t *testing.T) {
 				},
 			},
 		}
-		memoryService.AddBatchToHistory("test-session", messages)
+		_ = memoryService.AddBatchToHistory("test-session", messages)
 	}
 
 	// Call Shutdown from multiple goroutines
@@ -449,7 +449,7 @@ func TestMemoryService_RaceDetection(t *testing.T) {
 						},
 					},
 				}
-				memoryService.AddBatchToHistory("test-session", messages)
+				_ = memoryService.AddBatchToHistory("test-session", messages)
 			}
 		}(i)
 	}
@@ -459,7 +459,7 @@ func TestMemoryService_RaceDetection(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 100; i++ {
-			memoryService.GetRecentHistory("test-session")
+			_, _ = memoryService.GetRecentHistory("test-session")
 			time.Sleep(time.Microsecond * 10)
 		}
 	}()
@@ -469,7 +469,7 @@ func TestMemoryService_RaceDetection(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		time.Sleep(time.Millisecond * 50)
-		memoryService.ClearHistory("other-session")
+		_ = memoryService.ClearHistory("other-session")
 	}()
 
 	wg.Wait()
@@ -514,9 +514,9 @@ func BenchmarkMemoryService_ConcurrentWrites(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			memoryService.AddBatchToHistory("test-session", message)
+			_ = memoryService.AddBatchToHistory("test-session", message)
 		}
 	})
 
-	memoryService.Shutdown()
+	_ = memoryService.Shutdown()
 }
