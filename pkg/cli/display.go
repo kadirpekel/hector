@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/kadirpekel/hector/pkg/a2a/client"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
@@ -60,6 +61,8 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 	for _, part := range msg.Content {
 		if text := part.GetText(); text != "" {
 			fmt.Print(text)
+			// Flush stdout to ensure streaming output is visible immediately
+			os.Stdout.Sync()
 		}
 	}
 }

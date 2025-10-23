@@ -122,28 +122,43 @@ func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message 
 		defer resp.Body.Close()
 
 		scanner := bufio.NewScanner(resp.Body)
+		var currentEvent string
+		var currentData string
+
 		for scanner.Scan() {
 			line := scanner.Text()
-			if line == "" {
-				continue
-			}
 
-			// grpc-gateway wraps streaming responses in a "result" field
-			var wrapper struct {
-				Result json.RawMessage `json:"result"`
+			// Parse SSE format: "event: message" and "data: {...}"
+			if strings.HasPrefix(line, "event: ") {
+				currentEvent = strings.TrimPrefix(line, "event: ")
+			} else if strings.HasPrefix(line, "data: ") {
+				currentData = strings.TrimPrefix(line, "data: ")
+			} else if line == "" && currentData != "" {
+				// Empty line marks end of SSE event, process it
+				if currentEvent == "message" || currentEvent == "" {
+					// Try to parse as raw StreamResponse (REST gateway format) using protojson
+					var streamResp pb.StreamResponse
+					if err := protojson.Unmarshal([]byte(currentData), &streamResp); err == nil {
+						streamChan <- &streamResp
+					} else {
+						// Fallback: try JSON-RPC wrapper format
+						var rpcResp struct {
+							JSONRPC string          `json:"jsonrpc"`
+							ID      interface{}     `json:"id"`
+							Result  json.RawMessage `json:"result"`
+						}
+						if err := json.Unmarshal([]byte(currentData), &rpcResp); err == nil && rpcResp.Result != nil {
+							// Parse the actual StreamResponse from result
+							if err := protojson.Unmarshal(rpcResp.Result, &streamResp); err == nil {
+								streamChan <- &streamResp
+							}
+						}
+					}
+				}
+				// Reset for next event
+				currentEvent = ""
+				currentData = ""
 			}
-			if err := json.Unmarshal([]byte(line), &wrapper); err != nil {
-				continue
-			}
-
-			// Parse the actual StreamResponse using protojson
-			var streamResp pb.StreamResponse
-			if err := protojson.Unmarshal(wrapper.Result, &streamResp); err != nil {
-				continue
-			}
-
-			// Send the parsed response
-			streamChan <- &streamResp
 		}
 	}()
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // RESTGatewayConfig holds configuration for the REST gateway
@@ -462,13 +464,26 @@ func (g *RESTGateway) handleStreamingMessageSSE(w http.ResponseWriter, r *http.R
 	}
 	agentName := parts[0]
 
-	// Parse request body
-	var req pb.SendMessageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		g.sendSSEError(w, fmt.Sprintf("Invalid request body: %v", err))
+	// Parse request body - read raw JSON first for A2A field mapping
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		g.sendSSEError(w, fmt.Sprintf("Failed to read request body: %v", err))
 		return
 	}
 	defer r.Body.Close()
+
+	// Apply A2A field mapping (parts → content, lowercase roles/states → uppercase enums)
+	bodyBytes = applyA2AFieldMapping(bodyBytes)
+
+	// Parse into protobuf using protojson (handles enums correctly)
+	var req pb.SendMessageRequest
+	unmarshaler := protojson.UnmarshalOptions{
+		DiscardUnknown: true,
+	}
+	if err := unmarshaler.Unmarshal(bodyBytes, &req); err != nil {
+		g.sendSSEError(w, fmt.Sprintf("Invalid request body: %v", err))
+		return
+	}
 
 	log.Printf("REST SSE: agent=%s path=%s", agentName, path)
 
@@ -542,8 +557,12 @@ type restStreamWrapper struct {
 }
 
 func (w *restStreamWrapper) Send(resp *pb.StreamResponse) error {
-	// Convert protobuf to JSON
-	data, err := json.Marshal(resp)
+	// Convert protobuf to JSON using protojson (preserves proper field names)
+	marshaler := protojson.MarshalOptions{
+		UseProtoNames:   false, // Use JSON names (camelCase)
+		EmitUnpopulated: false,
+	}
+	data, err := marshaler.Marshal(resp)
 	if err != nil {
 		return fmt.Errorf("failed to marshal response: %w", err)
 	}

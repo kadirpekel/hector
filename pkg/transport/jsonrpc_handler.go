@@ -226,7 +226,7 @@ func (h *JSONRPCHandler) handleJSONRPC(w http.ResponseWriter, r *http.Request) {
 	log.Printf("JSON-RPC: method=%s id=%v", rpcReq.Method, rpcReq.ID)
 
 	// Apply A2A field mapping before processing
-	mappedParams := h.applyA2AFieldMapping(rpcReq.Params)
+	mappedParams := applyA2AFieldMapping(rpcReq.Params)
 
 	// Route to appropriate handler
 	result, err := h.handleMethod(r.Context(), rpcReq.Method, mappedParams, r)
@@ -273,38 +273,6 @@ func (h *JSONRPCHandler) handleMethod(ctx context.Context, method string, params
 	default:
 		return nil, fmt.Errorf("method not found: %s", method)
 	}
-}
-
-// applyA2AFieldMapping transforms A2A JSON fields to protobuf format
-func (h *JSONRPCHandler) applyA2AFieldMapping(params json.RawMessage) json.RawMessage {
-	var paramsMap map[string]interface{}
-	if err := json.Unmarshal(params, &paramsMap); err != nil {
-		return params // Return unchanged if parsing fails
-	}
-
-	// Look for message object and apply transformations
-	if message, ok := paramsMap["message"].(map[string]interface{}); ok {
-		// Map "parts" → "content" for A2A compatibility
-		if parts, ok := message["parts"]; ok {
-			message["content"] = parts
-			delete(message, "parts")
-		}
-		// Map lowercase "role" values to protobuf enum format
-		if role, ok := message["role"].(string); ok {
-			switch role {
-			case "user":
-				message["role"] = "ROLE_USER"
-			case "agent", "assistant":
-				message["role"] = "ROLE_AGENT"
-			case "system":
-				message["role"] = "ROLE_SYSTEM"
-			}
-		}
-	}
-
-	// Re-marshal the modified params
-	result, _ := json.Marshal(paramsMap)
-	return result
 }
 
 // transformResultForA2A transforms protobuf response to A2A format
@@ -557,8 +525,8 @@ func (h *JSONRPCHandler) handleStreamingMessage(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Apply A2A field mapping (parts → content, lowercase roles → UPPERCASE)
-	mappedParams := h.applyA2AFieldMapping(rpcReq.Params)
+	// Apply A2A field mapping (parts → content, lowercase roles/states → uppercase enums)
+	mappedParams := applyA2AFieldMapping(rpcReq.Params)
 
 	var req pb.SendMessageRequest
 	if err := h.unmarshaler.Unmarshal(mappedParams, &req); err != nil {
