@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/kadirpekel/hector/pkg/a2a/client"
 	"github.com/kadirpekel/hector/pkg/config"
 )
 
@@ -47,13 +48,15 @@ agents:
 		t.Fatal("New() returned nil runtime")
 	}
 
-	// Verify runtime has client and config
-	if rt.Client() == nil {
-		t.Error("Runtime.Client() returned nil")
+	// Verify runtime has config and implements A2AClient
+	if rt == nil {
+		t.Fatal("Runtime is nil")
 	}
 	if rt.Config() == nil {
 		t.Error("Runtime.Config() returned nil")
 	}
+	// Runtime implements A2AClient interface directly
+	var _ client.A2AClient = rt
 
 	// Clean up
 	if err := rt.Close(); err != nil {
@@ -360,12 +363,16 @@ func TestNewLocalClient(t *testing.T) {
 	}
 	cfg.SetDefaults()
 
-	client, err := NewLocalClient(cfg)
+	// Runtime implements A2AClient directly - no separate LocalClient needed
+	rt, err := NewWithConfig(cfg)
 	if err != nil {
-		t.Fatalf("NewLocalClient() error = %v", err)
+		t.Fatalf("NewWithConfig() error = %v", err)
 	}
-	if client == nil {
-		t.Error("NewLocalClient() returned nil")
+	if rt == nil {
+		t.Error("NewWithConfig() returned nil")
 	}
-	client.Close()
+
+	// Verify Runtime implements A2AClient interface
+	var _ client.A2AClient = rt
+	rt.Close()
 }

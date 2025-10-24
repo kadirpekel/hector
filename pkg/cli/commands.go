@@ -88,13 +88,13 @@ func InfoCommand(args *CLIArgs, cfg *config.Config) error {
 
 // CallCommand sends a single message to an agent
 func CallCommand(args *CLIArgs, cfg *config.Config) error {
-	a2aClient, err := createRuntimeClient(args, cfg)
+	client, err := createClient(args, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer a2aClient.Close()
+	defer client.Close()
 
-	return executeCall(a2aClient, args)
+	return executeCall(client, args)
 }
 
 func executeCall(a2aClient client.A2AClient, args *CLIArgs) error {
@@ -145,13 +145,13 @@ func executeCall(a2aClient client.A2AClient, args *CLIArgs) error {
 
 // ChatCommand starts an interactive chat session
 func ChatCommand(args *CLIArgs, cfg *config.Config) error {
-	a2aClient, err := createRuntimeClient(args, cfg)
+	client, err := createClient(args, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer a2aClient.Close()
+	defer client.Close()
 
-	return executeChat(a2aClient, args, cfg)
+	return executeChat(client, args, cfg)
 }
 
 func executeChat(a2aClient client.A2AClient, args *CLIArgs, cfg *config.Config) error {
@@ -256,27 +256,21 @@ func executeChat(a2aClient client.A2AClient, args *CLIArgs, cfg *config.Config) 
 // CLIENT CREATION HELPER
 // ============================================================================
 //
-// createRuntimeClient creates appropriate client based on whether cfg is nil:
-//   - cfg == nil: Client mode → runtime.NewHTTPClient()
-//   - cfg != nil: Local mode → runtime.NewWithConfig(cfg)
-//
-// Benefits:
-//   - Single factory for all execution commands
-//   - Config already validated and defaults set
-//   - No duplicate config loading
+// createClient creates appropriate client based on whether cfg is nil:
+//   - cfg == nil: Client mode → HTTPClient
+//   - cfg != nil: Local mode → Runtime (which implements A2AClient)
 //
 // ============================================================================
 
-// createRuntimeClient creates appropriate client based on config presence
+// createClient creates appropriate client based on config presence
 // Used by call/chat/task commands for execution
-func createRuntimeClient(args *CLIArgs, cfg *config.Config) (client.A2AClient, error) {
+func createClient(args *CLIArgs, cfg *config.Config) (client.A2AClient, error) {
 	if cfg == nil {
 		// Client mode: HTTP client for remote server
 		return runtime.NewHTTPClient(args.ServerURL, args.Token), nil
 	}
 
-	// Local mode: create runtime with pre-validated config
-	// Validate agent exists before expensive initialization
+	// Local mode: validate agent exists before expensive initialization
 	if args.AgentID != "" {
 		if err := cfg.ValidateAgent(args.AgentID); err != nil {
 			return nil, err
@@ -284,11 +278,8 @@ func createRuntimeClient(args *CLIArgs, cfg *config.Config) (client.A2AClient, e
 	}
 
 	// Create runtime with validated config
-	rt, err := runtime.NewWithConfig(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize runtime: %w", err)
-	}
-	return rt.Client(), nil
+	// Runtime implements A2AClient interface directly - no wrapper needed!
+	return runtime.NewWithConfig(cfg)
 }
 
 // ============================================================================

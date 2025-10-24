@@ -9,13 +9,13 @@ import (
 
 // TaskGetCommand retrieves task details
 func TaskGetCommand(args *CLIArgs, cfg *config.Config) error {
-	a2aClient, err := createRuntimeClient(args, cfg)
+	client, err := createClient(args, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer a2aClient.Close()
+	defer client.Close()
 
-	task, err := a2aClient.GetTask(context.Background(), args.AgentID, args.TaskID)
+	task, err := client.GetTask(context.Background(), args.AgentID, args.TaskID)
 	if err != nil {
 		return fmt.Errorf("failed to get task: %w", err)
 	}
@@ -26,13 +26,13 @@ func TaskGetCommand(args *CLIArgs, cfg *config.Config) error {
 
 // TaskCancelCommand cancels a running task
 func TaskCancelCommand(args *CLIArgs, cfg *config.Config) error {
-	a2aClient, err := createRuntimeClient(args, cfg)
+	client, err := createClient(args, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer a2aClient.Close()
+	defer client.Close()
 
-	task, err := a2aClient.CancelTask(context.Background(), args.AgentID, args.TaskID)
+	task, err := client.CancelTask(context.Background(), args.AgentID, args.TaskID)
 	if err != nil {
 		return fmt.Errorf("failed to cancel task: %w", err)
 	}

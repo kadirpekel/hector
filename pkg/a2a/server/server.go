@@ -1,4 +1,3 @@
-// Package server provides the HectorServer which coordinates multiple A2A transports
 package server
 
 import (
@@ -12,12 +11,14 @@ import (
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/auth"
+	"github.com/kadirpekel/hector/pkg/runtime"
 	"github.com/kadirpekel/hector/pkg/transport"
 )
 
 // HectorServer coordinates multiple A2A protocol transports (gRPC, REST, JSON-RPC)
 type HectorServer struct {
 	config       *ServerConfig
+	runtime      *runtime.Runtime // Core runtime foundation
 	registry     *agent.AgentRegistry
 	service      pb.A2AServiceServer
 	grpc         *transport.Server
@@ -143,6 +144,15 @@ func (s *HectorServer) Stop(ctx context.Context) error {
 	if s.jwtValidator != nil {
 		s.jwtValidator.Close()
 		log.Println("   ✅ JWT validator closed")
+	}
+
+	// Close runtime (cleanup components, registry, etc.)
+	if s.runtime != nil {
+		if err := s.runtime.Close(); err != nil {
+			log.Printf("   ⚠️  Runtime cleanup error: %v", err)
+		} else {
+			log.Println("   ✅ Runtime closed")
+		}
 	}
 
 	log.Println("👋 Server shutdown complete")

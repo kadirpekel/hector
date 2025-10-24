@@ -1,4 +1,5 @@
-package client
+// Package runtime - A2AClient interface implementation for local mode
+package runtime
 
 import (
 	"context"
@@ -9,64 +10,22 @@ import (
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/agent"
-	"github.com/kadirpekel/hector/pkg/component"
-	"github.com/kadirpekel/hector/pkg/config"
 )
 
-// LocalClient implements A2AClient for in-process agent execution
-type LocalClient struct {
-	config     *config.Config
-	components *component.ComponentManager
-	registry   *agent.AgentRegistry
-}
-
-// NewLocalClient creates a new local (in-process) A2A client
-func NewLocalClient(cfg *config.Config) (A2AClient, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("config is required")
-	}
-
-	// Create component manager
-	componentManager, err := component.NewComponentManager(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize components: %w", err)
-	}
-
-	// Create agent registry
-	agentRegistry := agent.NewAgentRegistry()
-
-	// Register all configured agents
-	for agentID, agentCfg := range cfg.Agents {
-		cfg := agentCfg
-
-		// Only support native agents in local mode (not external A2A agents)
-		if cfg.Type == "a2a" {
-			continue
-		}
-
-		// Create agent
-		agentInstance, err := agent.NewAgent(agentID, &cfg, componentManager, agentRegistry)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create agent '%s': %w", agentID, err)
-		}
-
-		// Register agent
-		if err := agentRegistry.RegisterAgent(agentID, agentInstance, &cfg, nil); err != nil {
-			return nil, fmt.Errorf("failed to register agent '%s': %w", agentID, err)
-		}
-	}
-
-	return &LocalClient{
-		config:     cfg,
-		components: componentManager,
-		registry:   agentRegistry,
-	}, nil
-}
+// ============================================================================
+// A2AClient Interface Implementation
+// ============================================================================
+//
+// Runtime implements the A2AClient interface directly, eliminating the need
+// for a LocalClient wrapper. This allows Runtime to be used polymorphically
+// with HTTPClient in CLI commands.
+//
+// ============================================================================
 
 // SendMessage sends a non-streaming message to an agent
-func (c *LocalClient) SendMessage(ctx context.Context, agentID string, message *pb.Message) (*pb.SendMessageResponse, error) {
+func (r *Runtime) SendMessage(ctx context.Context, agentID string, message *pb.Message) (*pb.SendMessageResponse, error) {
 	// Get agent from registry
-	agentEntry, ok := c.registry.Get(agentID)
+	agentEntry, ok := r.registry.Get(agentID)
 	if !ok {
 		return nil, fmt.Errorf("agent '%s' not found", agentID)
 	}
@@ -89,9 +48,9 @@ func (c *LocalClient) SendMessage(ctx context.Context, agentID string, message *
 }
 
 // StreamMessage sends a streaming message to an agent
-func (c *LocalClient) StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error) {
+func (r *Runtime) StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error) {
 	// Get agent from registry
-	agentEntry, ok := c.registry.Get(agentID)
+	agentEntry, ok := r.registry.Get(agentID)
 	if !ok {
 		return nil, fmt.Errorf("agent '%s' not found", agentID)
 	}
@@ -130,8 +89,8 @@ func (c *LocalClient) StreamMessage(ctx context.Context, agentID string, message
 }
 
 // ListAgents returns a list of all registered agents
-func (c *LocalClient) ListAgents(ctx context.Context) ([]*pb.AgentCard, error) {
-	entries := c.registry.List()
+func (r *Runtime) ListAgents(ctx context.Context) ([]*pb.AgentCard, error) {
+	entries := r.registry.List()
 	agents := make([]*pb.AgentCard, 0, len(entries))
 
 	for _, entry := range entries {
@@ -158,9 +117,9 @@ func (c *LocalClient) ListAgents(ctx context.Context) ([]*pb.AgentCard, error) {
 }
 
 // GetAgentCard retrieves the agent card for a specific agent
-func (c *LocalClient) GetAgentCard(ctx context.Context, agentID string) (*pb.AgentCard, error) {
+func (r *Runtime) GetAgentCard(ctx context.Context, agentID string) (*pb.AgentCard, error) {
 	// Get agent from registry
-	agentEntry, ok := c.registry.Get(agentID)
+	agentEntry, ok := r.registry.Get(agentID)
 	if !ok {
 		return nil, fmt.Errorf("agent '%s' not found", agentID)
 	}
@@ -169,9 +128,9 @@ func (c *LocalClient) GetAgentCard(ctx context.Context, agentID string) (*pb.Age
 }
 
 // GetTask retrieves a task by ID
-func (c *LocalClient) GetTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
+func (r *Runtime) GetTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
 	// Get agent from registry
-	agentEntry, ok := c.registry.Get(agentID)
+	agentEntry, ok := r.registry.Get(agentID)
 	if !ok {
 		return nil, fmt.Errorf("agent '%s' not found", agentID)
 	}
@@ -185,9 +144,9 @@ func (c *LocalClient) GetTask(ctx context.Context, agentID string, taskID string
 }
 
 // CancelTask cancels a running task
-func (c *LocalClient) CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
+func (r *Runtime) CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
 	// Get agent from registry
-	agentEntry, ok := c.registry.Get(agentID)
+	agentEntry, ok := r.registry.Get(agentID)
 	if !ok {
 		return nil, fmt.Errorf("agent '%s' not found", agentID)
 	}
@@ -200,11 +159,9 @@ func (c *LocalClient) CancelTask(ctx context.Context, agentID string, taskID str
 	return agentEntry.Agent.CancelTask(ctx, req)
 }
 
-// Close releases resources
-func (c *LocalClient) Close() error {
-	// No cleanup needed for local client
-	return nil
-}
+// ============================================================================
+// localStream - gRPC Stream Adapter
+// ============================================================================
 
 // localStream implements pb.A2AService_SendStreamingMessageServer for local mode
 type localStream struct {

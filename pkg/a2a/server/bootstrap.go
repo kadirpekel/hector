@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/kadirpekel/hector/pkg/a2a/pb"
-	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/auth"
-	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/runtime"
 	"github.com/kadirpekel/hector/pkg/transport"
 )
 
@@ -21,68 +19,36 @@ type BootstrapOptions struct {
 }
 
 // Bootstrap creates and initializes a HectorServer from configuration
+// Now uses Runtime as the foundation to avoid duplication
 func Bootstrap(opts BootstrapOptions) (*HectorServer, error) {
 	if opts.Config == nil {
 		return nil, fmt.Errorf("config is required")
 	}
 
-	// Create component manager
-	componentManager, err := component.NewComponentManager(opts.Config)
-	if err != nil {
-		return nil, fmt.Errorf("component initialization failed: %w", err)
-	}
-
 	log.Println("📋 Registering agents...")
 
-	// Create agent registry
-	agentRegistry := agent.NewAgentRegistry()
+	// Use Runtime as the CORE foundation (no duplication!)
+	rt, err := runtime.NewWithConfig(opts.Config)
+	if err != nil {
+		return nil, fmt.Errorf("runtime initialization failed: %w", err)
+	}
 
-	// Register all configured agents
-	agentCount := 0
-	for agentID, agentCfg := range opts.Config.Agents {
-		cfg := agentCfg
+	// Get the registry from Runtime
+	agentRegistry := rt.Registry()
 
-		// Create agent based on type (native vs external)
-		var agentInstance pb.A2AServiceServer
-		var err error
-
-		if cfg.Type == "a2a" {
-			// External A2A agent - create client proxy
-			externalAgent, extErr := agent.NewExternalA2AAgent(&cfg)
-			if extErr != nil {
-				log.Printf("  ⚠️  Failed to create external agent '%s': %v", agentID, extErr)
-				continue
-			}
-			agentInstance = externalAgent
-			log.Printf("  ✅ External agent '%s' connected to %s", agentID, cfg.URL)
-		} else {
-			// Native agent - create local instance
-			agentInstance, err = agent.NewAgent(agentID, &cfg, componentManager, agentRegistry)
-			if err != nil {
-				log.Printf("  ⚠️  Failed to create native agent '%s': %v", agentID, err)
-				continue
-			}
-			log.Printf("  ✅ Native agent '%s' created", agentID)
-		}
-
-		// Set default visibility
-		visibility := cfg.Visibility
+	// Log registered agents with visibility info
+	for _, agentID := range agentRegistry.ListAgents() {
+		entry, _ := agentRegistry.Get(agentID)
+		visibility := entry.Config.Visibility
 		if visibility == "" {
 			visibility = "public"
 		}
 
-		// Register agent
-		if err := agentRegistry.RegisterAgent(agentID, agentInstance, &cfg, nil); err != nil {
-			log.Printf("  ⚠️  Failed to register agent '%s': %v", agentID, err)
-			continue
+		if entry.Config.Type == "a2a" {
+			log.Printf("  ✅ External agent '%s' connected to %s (visibility: %s)", agentID, entry.Config.URL, visibility)
+		} else {
+			log.Printf("  ✅ Native agent '%s' created (visibility: %s)", agentID, visibility)
 		}
-
-		log.Printf("  ✅ Registered agent: %s (visibility: %s)", agentID, visibility)
-		agentCount++
-	}
-
-	if agentCount == 0 {
-		return nil, fmt.Errorf("no agents successfully registered")
 	}
 
 	// Create registry service (wraps the agent registry)
@@ -151,7 +117,7 @@ func Bootstrap(opts BootstrapOptions) (*HectorServer, error) {
 		jsonrpcHandler.SetAuth(authConfig)
 	}
 
-	// Create server instance
+	// Create server instance with Runtime foundation
 	server := &HectorServer{
 		config: &ServerConfig{
 			GRPCAddress:    grpcAddr,
@@ -162,6 +128,7 @@ func Bootstrap(opts BootstrapOptions) (*HectorServer, error) {
 			Issuer:         opts.Config.Global.Auth.Issuer,
 			Audience:       opts.Config.Global.Auth.Audience,
 		},
+		runtime:      rt, // Store Runtime for proper lifecycle management
 		registry:     agentRegistry,
 		service:      registryService,
 		grpc:         grpcServer,

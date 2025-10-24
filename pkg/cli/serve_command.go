@@ -10,11 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/auth"
-	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/runtime"
 	"github.com/kadirpekel/hector/pkg/transport"
 )
 
@@ -35,55 +34,28 @@ func ServeCommand(args *CLIArgs, cfg *config.Config) error {
 		fmt.Printf("🔧 Loaded configuration from: %s\n", args.ConfigFile)
 	}
 
-	// Create agent registry
-	agentRegistry := agent.NewAgentRegistry()
-
-	// Create component manager with agent registry for agent_call tool
-	componentManager, err := component.NewComponentManagerWithAgentRegistry(cfg, agentRegistry)
+	// Create runtime - this initializes ComponentManager, AgentRegistry, and all agents
+	fmt.Println("\n📋 Registering agents...")
+	rt, err := runtime.NewWithConfig(cfg)
 	if err != nil {
-		return fmt.Errorf("component initialization failed: %w", err)
+		return fmt.Errorf("runtime initialization failed: %w", err)
 	}
 
-	// Create agent router (routes A2A requests to individual agents)
-	// Following LangGraph's A2A pattern: router just routes, agents have their own identity
+	// Get registry and create router for transport layer
+	agentRegistry := rt.Registry()
 	agentRouter := agent.NewAgentRouter(agentRegistry)
 
-	// Register all configured agents
-	fmt.Println("\n📋 Registering agents...")
-	for agentID, agentCfg := range cfg.Agents {
-		agentCfgCopy := agentCfg
+	// Register agents with router (for logging only)
+	for _, agentID := range agentRegistry.ListAgents() {
+		entry, _ := agentRegistry.Get(agentID)
+		agentRouter.RegisterAgent(agentID, entry.Agent)
 
-		// Create agent based on type (native vs external)
-		var agentInstance pb.A2AServiceServer
-		var err error
-
-		if agentCfgCopy.Type == "a2a" {
-			// External A2A agent - create client proxy
-			externalAgent, extErr := agent.NewExternalA2AAgent(&agentCfgCopy)
-			if extErr != nil {
-				log.Printf("  ⚠️  Failed to create external agent '%s': %v", agentID, extErr)
-				continue
-			}
-			agentInstance = externalAgent
-			log.Printf("  ✅ External agent '%s' connected to %s", agentID, agentCfgCopy.URL)
+		// Log registration
+		if entry.Config.Type == "a2a" {
+			log.Printf("  ✅ External agent '%s' connected to %s", agentID, entry.Config.URL)
 		} else {
-			// Native agent - create local instance
-			agentInstance, err = agent.NewAgent(agentID, &agentCfgCopy, componentManager, agentRegistry)
-			if err != nil {
-				log.Printf("  ⚠️  Failed to create native agent '%s': %v", agentID, err)
-				continue
-			}
 			log.Printf("  ✅ Native agent '%s' created", agentID)
 		}
-
-		// Register agent in registry (single source of truth)
-		if err := agentRegistry.RegisterAgent(agentID, agentInstance, &agentCfgCopy, nil); err != nil {
-			log.Printf("  ⚠️  Failed to register agent '%s' in registry: %v", agentID, err)
-			continue
-		}
-
-		// Register with router (for logging only)
-		agentRouter.RegisterAgent(agentID, agentInstance)
 	}
 
 	if agentRouter.AgentCount() == 0 {
