@@ -1337,6 +1337,10 @@ func (c *SessionSQLConfig) SetDefaults() {
 	if c.Driver == "" {
 		c.Driver = "sqlite" // Default to SQLite for simplicity
 	}
+	// Set default database path for SQLite
+	if c.Driver == "sqlite" && c.Database == "" {
+		c.Database = "./sessions.db"
+	}
 	if c.Host == "" && c.Driver != "sqlite" {
 		c.Host = "localhost"
 	}

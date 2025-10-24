@@ -602,11 +602,8 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 		SessionStores: map[string]SessionStoreConfig{
 			"default-session-store": {
 				Backend: "sql",
-				SQL: &SessionSQLConfig{
-					Driver:   "sqlite",
-					Database: "./data/sessions.db",
-					MaxConns: 10,
-					MaxIdle:  2,
+				SQL:     &SessionSQLConfig{
+					// All defaults (driver, database path, pool settings) set by SetDefaults()
 				},
 			},
 		},
