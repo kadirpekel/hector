@@ -211,15 +211,15 @@ Send a single message to an agent.
 
 **Usage:**
 ```bash
-hector call [AGENT] MESSAGE [flags]
+hector call MESSAGE [AGENT] [flags]
 ```
 
 **Arguments:**
 
 | Argument | Type | Description | Required |
 |----------|------|-------------|----------|
+| `MESSAGE` | string | Message to send | ✅ Always required |
 | `AGENT` | string | Agent name | ❌ Zero-config / ✅ Config mode / ✅ Client mode |
-| `MESSAGE` | string | Message to send | Always required |
 
 **Flags:**
 
@@ -227,37 +227,42 @@ hector call [AGENT] MESSAGE [flags]
 |------|------|-------------|---------|
 | `--server URL` | string | Connect to remote server | - |
 | `--token TOKEN` | string | Authentication token | - |
-| `--stream` | bool | Enable streaming | `true` |
+| `--[no-]stream` | bool | Enable/disable streaming | `true` (use `--no-stream` to disable) |
 | `--session ID` | string | Session ID for context | - |
-| `--timeout DURATION` | duration | Request timeout | `5m` |
 
 **Zero-Config Flags (local mode only):**
 
-| Flag | Type | Description |
-|------|------|-------------|
-| `--model NAME` | string | Override model |
-| `--provider NAME` | string | Override provider |
-| `--tools` | bool | Enable tools |
+| Flag | Type | Description | Default |
+|------|------|-------------|---------|
+| `--provider NAME` | string | LLM provider | `openai` |
+| `--model NAME` | string | Model name | - |
+| `--api-key KEY` | string | API key | From env |
+| `--base-url URL` | string | Custom API base URL | - |
+| `--tools` | bool | Enable built-in tools | `false` |
+| `--mcp-url URL` | string | MCP server URL | - |
+| `--docs-folder PATH` | string | Documents folder for RAG | - |
 
 **Examples:**
 
 ```bash
-# Zero-config mode (NO agent name)
+# Zero-config mode (NO agent name, message first)
 export OPENAI_API_KEY="sk-..."
 hector call "What is quantum computing?"
+hector call "Write a poem about Go" --tools
 
 # Config mode (agent name REQUIRED and validated immediately)
-hector call --config config.yaml assistant "What is the capital of France?"
-hector call --config config.yaml coder "Fix the bug" --session sess_123
+hector call "What is the capital of France?" assistant --config config.yaml
+hector call "Fix the bug" coder --config config.yaml --session sess_123
 
 # Client mode (agent name REQUIRED)
-hector call --server http://remote:8080 assistant "Hello" --token "eyJ..."
+hector call "Hello" assistant --server http://remote:8080 --token "eyJ..."
 
 # No streaming
-hector call --config config.yaml assistant "Hello" --stream=false
+hector call "Hello" assistant --config config.yaml --no-stream
 
-# With timeout
-hector call --config config.yaml assistant "Complex analysis" --timeout 10m
+# Flags can appear anywhere (Kong flexibility)
+hector call --config config.yaml "What's 2+2?" assistant
+hector call "Help me" --tools --model gpt-4o assistant --config config.yaml
 ```
 
 ---
@@ -291,14 +296,19 @@ hector chat [AGENT] [flags]
 # Zero-config mode (NO agent name)
 export OPENAI_API_KEY="sk-..."
 hector chat
+hector chat --tools --model gpt-4o
 
 # Config mode (agent name REQUIRED and validated immediately)
-hector chat --config config.yaml assistant
-hector chat --config config.yaml coder --session sess_123
+hector chat assistant --config config.yaml
+hector chat coder --config config.yaml --session sess_123
 
 # Client mode (agent name REQUIRED)
-hector chat --server http://remote:8080 assistant
-hector chat --server http://remote:8080 assistant --token "eyJ..."
+hector chat assistant --server http://remote:8080
+hector chat assistant --server http://remote:8080 --token "eyJ..."
+
+# Flags flexible positioning (Kong feature)
+hector chat --config config.yaml assistant
+hector chat assistant --config config.yaml --no-stream
 ```
 
 **In Chat:**
