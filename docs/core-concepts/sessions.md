@@ -101,10 +101,10 @@ hector chat assistant
 hector chat assistant --session my-session
 
 # Single call with session
-hector call assistant "Hello" --session my-session
+hector call "Hello" assistant --session my-session
 
 # Resume later (same session ID = same conversation)
-hector call assistant "Continue where we left off" --session my-session
+hector call "Continue where we left off" assistant --session my-session
 ```
 
 See [CLI Reference](../reference/cli.md#session-support) for full details.

@@ -320,10 +320,10 @@ Resume conversations across CLI invocations:
 
 ```bash
 # With custom session ID
-./hector chat --config config.yaml --session=my-chat assistant
+./hector chat assistant --config config.yaml --session=my-chat
 
 # Auto-generated session ID (displayed on start)
-./hector chat --config config.yaml assistant
+./hector chat assistant --config config.yaml
 # Output: 💾 Session ID: cli-chat-1729612345
 #         Resume later with: --session=cli-chat-1729612345
 ```
@@ -334,7 +334,7 @@ Resume conversations across CLI invocations:
 
 ```bash
 SESSION_ID=$(uuidgen)  # Generate unique ID
-./hector call --session=$SESSION_ID assistant "Hello"
+./hector call "Hello" assistant --session=$SESSION_ID
 ```
 
 **Resume session:**

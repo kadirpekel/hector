@@ -184,13 +184,13 @@ For detailed architecture, see the [Architecture Reference](https://gohector.dev
 
 ```bash
 # 1. Local Mode - In-process execution
-hector call assistant "Hello"
+hector call "Hello" assistant
 
 # 2. Server Mode - Host agents for multiple clients
 hector serve --config agents.yaml
 
 # 3. Client Mode - Connect to remote agents
-hector call assistant "Hello" --server https://remote:8080
+hector call "Hello" assistant --server https://remote:8080
 ```
 
 ---

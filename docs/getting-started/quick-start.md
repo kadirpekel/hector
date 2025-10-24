@@ -136,10 +136,10 @@ Use Hector as a client to connect to any A2A-compliant server.
 
 ```bash
 # Connect to remote server
-hector call assistant "Hello" --server http://remote:8080
+hector call "Hello" assistant --server http://remote:8080
 
 # With authentication
-hector call assistant "Hello" --server http://remote:8080 --token "your-jwt-token"
+hector call "Hello" assistant --server http://remote:8080 --token "your-jwt-token"
 ```
 
 ---
