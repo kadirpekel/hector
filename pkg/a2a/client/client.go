@@ -17,7 +17,7 @@ type A2AClient interface {
 	StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error)
 
 	// ListAgents returns a list of available agents
-	ListAgents(ctx context.Context) ([]AgentInfo, error)
+	ListAgents(ctx context.Context) ([]*pb.AgentCard, error)
 
 	// GetAgentCard retrieves information about a specific agent
 	GetAgentCard(ctx context.Context, agentID string) (*pb.AgentCard, error)
@@ -30,12 +30,4 @@ type A2AClient interface {
 
 	// Close releases any resources held by the client
 	Close() error
-}
-
-// AgentInfo holds basic information about an agent
-type AgentInfo struct {
-	ID          string
-	Name        string
-	Description string
-	Endpoint    string
 }

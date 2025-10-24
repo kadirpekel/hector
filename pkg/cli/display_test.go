@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kadirpekel/hector/pkg/a2a/client"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 )
 
@@ -28,17 +27,20 @@ func captureOutput(f func()) string {
 }
 
 func TestDisplayAgentList(t *testing.T) {
-	agents := []client.AgentInfo{
+	agents := []*pb.AgentCard{
 		{
-			ID:          "agent1",
 			Name:        "Test Agent 1",
 			Description: "Test description 1",
-			Endpoint:    "http://localhost:8081",
+			Url:         "http://localhost:8081",
+			Version:     "1.0.0",
+			Capabilities: &pb.AgentCapabilities{
+				Streaming: true,
+			},
 		},
 		{
-			ID:          "agent2",
 			Name:        "Test Agent 2",
 			Description: "Test description 2",
+			Version:     "2.0.0",
 		},
 	}
 

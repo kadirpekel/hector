@@ -135,26 +135,28 @@ func (c *LocalClient) StreamMessage(ctx context.Context, agentID string, message
 }
 
 // ListAgents returns a list of all registered agents
-func (c *LocalClient) ListAgents(ctx context.Context) ([]AgentInfo, error) {
+func (c *LocalClient) ListAgents(ctx context.Context) ([]*pb.AgentCard, error) {
 	entries := c.registry.List()
-	agents := make([]AgentInfo, 0, len(entries))
+	agents := make([]*pb.AgentCard, 0, len(entries))
 
 	for _, entry := range entries {
-		// Get agent card for more info
+		// Get agent card
 		card, err := entry.Agent.GetAgentCard(ctx, &pb.GetAgentCardRequest{})
-		name := entry.Name
-		description := entry.Config.Description
-		if err == nil && card != nil {
-			name = card.Name
-			description = card.Description
+		if err != nil {
+			// Fallback: create basic card from config
+			card = &pb.AgentCard{
+				Name:        entry.Name,
+				Description: entry.Config.Description,
+				Version:     "1.0.0",
+			}
 		}
 
-		agents = append(agents, AgentInfo{
-			ID:          entry.Name,
-			Name:        name,
-			Description: description,
-			Endpoint:    "local://" + entry.Name,
-		})
+		// Set URL to local endpoint if not already set
+		if card.Url == "" {
+			card.Url = "local://" + entry.Name
+		}
+
+		agents = append(agents, card)
 	}
 
 	return agents, nil

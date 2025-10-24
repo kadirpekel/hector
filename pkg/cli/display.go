@@ -4,27 +4,29 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kadirpekel/hector/pkg/a2a/client"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 )
 
 // DisplayAgentList displays a formatted list of agents
-func DisplayAgentList(agents []client.AgentInfo, mode string) {
+func DisplayAgentList(agents []*pb.AgentCard, mode string) {
 	fmt.Printf("\n📋 Available Agents (%s)\n\n", mode)
 	fmt.Printf("Found %d agent(s):\n\n", len(agents))
 
-	for _, agent := range agents {
-		fmt.Printf("• %s", agent.Name)
-		if agent.ID != agent.Name {
-			fmt.Printf(" (%s)", agent.ID)
+	for _, card := range agents {
+		fmt.Printf("• %s", card.Name)
+		if card.Version != "" {
+			fmt.Printf(" (v%s)", card.Version)
 		}
 		fmt.Println()
 
-		if agent.Description != "" {
-			fmt.Printf("  Description: %s\n", agent.Description)
+		if card.Description != "" {
+			fmt.Printf("  Description: %s\n", card.Description)
 		}
-		if agent.Endpoint != "" {
-			fmt.Printf("  Endpoint: %s\n", agent.Endpoint)
+		if card.Url != "" {
+			fmt.Printf("  URL: %s\n", card.Url)
+		}
+		if card.Capabilities != nil && card.Capabilities.Streaming {
+			fmt.Printf("  Streaming: ✓\n")
 		}
 		fmt.Println()
 	}

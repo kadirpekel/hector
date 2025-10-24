@@ -166,7 +166,7 @@ func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message 
 }
 
 // ListAgents lists all available agents from the server
-func (c *HTTPClient) ListAgents(ctx context.Context) ([]AgentInfo, error) {
+func (c *HTTPClient) ListAgents(ctx context.Context) ([]*pb.AgentCard, error) {
 	url := fmt.Sprintf("%s/v1/agents", c.baseURL)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -189,25 +189,28 @@ func (c *HTTPClient) ListAgents(ctx context.Context) ([]AgentInfo, error) {
 		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var response map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Parse response as JSON with "agents" array
+	var response struct {
+		Agents []json.RawMessage `json:"agents"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Parse agents from response
-	var agents []AgentInfo
-	if agentsList, ok := response["agents"].([]interface{}); ok {
-		for _, a := range agentsList {
-			if agentData, ok := a.(map[string]interface{}); ok {
-				agent := AgentInfo{
-					ID:          getString(agentData, "id", ""),
-					Name:        getString(agentData, "name", ""),
-					Description: getString(agentData, "description", ""),
-					Endpoint:    getString(agentData, "endpoint", ""),
-				}
-				agents = append(agents, agent)
-			}
+	// Parse each agent card using protojson
+	var agents []*pb.AgentCard
+	for _, agentData := range response.Agents {
+		var card pb.AgentCard
+		if err := protojson.Unmarshal(agentData, &card); err != nil {
+			// Skip invalid cards
+			continue
 		}
+		agents = append(agents, &card)
 	}
 
 	return agents, nil

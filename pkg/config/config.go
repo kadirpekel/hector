@@ -652,7 +652,7 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 	}
 
 	agentConfig := AgentConfig{
-		Name:        "assistant",
+		Name:        opts.AgentName,
 		Description: fmt.Sprintf("AI assistant powered by %s (%s)", providerName, opts.Model),
 		Type:        "native",
 		LLM:         opts.Provider,
