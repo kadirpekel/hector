@@ -133,18 +133,30 @@ func routeCommand(ctx *kong.Context, cfg *config.Config) error {
 
 // createZeroConfig creates config based on command and flags
 func createZeroConfig(command string) *config.Config {
-	var opts config.ZeroConfigOptions
+	var cliArgs *cli.CLIArgs
 
 	switch {
 	case command == "serve" || command == "serve <agent-name>":
-		opts = cli.CLI.Serve.ToCLIArgs().ToZeroConfigOptions()
+		cliArgs = cli.CLI.Serve.ToCLIArgs()
 	case command == "call <message> <agent>" || command == "call <message>":
-		opts = cli.CLI.Call.ToCLIArgs().ToZeroConfigOptions()
+		cliArgs = cli.CLI.Call.ToCLIArgs()
 	case command == "chat <agent>" || command == "chat":
-		opts = cli.CLI.Chat.ToCLIArgs().ToZeroConfigOptions()
+		cliArgs = cli.CLI.Chat.ToCLIArgs()
 	default:
 		// Other commands don't support zero-config
 		return nil
+	}
+
+	// Create ZeroConfigOptions directly from CLIArgs - no ToZeroConfigOptions method needed
+	opts := config.ZeroConfigOptions{
+		Provider:    cliArgs.Provider,
+		APIKey:      cliArgs.APIKey,
+		BaseURL:     cliArgs.BaseURL,
+		Model:       cliArgs.Model,
+		EnableTools: cliArgs.Tools,
+		MCPURL:      cliArgs.MCPURL,
+		DocsFolder:  cliArgs.DocsFolder,
+		AgentName:   cliArgs.AgentID,
 	}
 
 	return config.CreateZeroConfig(opts)

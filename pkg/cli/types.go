@@ -1,9 +1,5 @@
 package cli
 
-import (
-	"github.com/kadirpekel/hector/pkg/config"
-)
-
 // ============================================================================
 // COMMAND TYPES
 // ============================================================================
@@ -90,19 +86,4 @@ type CLIArgs struct {
 	EmbedderModel           string
 	VectorDB                string
 	ExplicitZeroConfigFlags bool // Tracks if user explicitly provided zero-config flags
-}
-
-// ToZeroConfigOptions converts CLIArgs to config.ZeroConfigOptions
-// This consolidates the mapping logic in one place to avoid duplication
-func (a *CLIArgs) ToZeroConfigOptions() config.ZeroConfigOptions {
-	return config.ZeroConfigOptions{
-		Provider:    a.Provider,
-		APIKey:      a.APIKey,
-		BaseURL:     a.BaseURL,
-		Model:       a.Model,
-		EnableTools: a.Tools,
-		MCPURL:      a.MCPURL,
-		DocsFolder:  a.DocsFolder,
-		AgentName:   a.AgentID,
-	}
 }
