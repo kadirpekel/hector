@@ -19,7 +19,8 @@ import (
 // contextKey is a custom type for context keys to avoid collisions
 type contextKey string
 
-const sessionIDKey contextKey = "sessionID"
+// SessionIDKey is the context key for storing session IDs
+const SessionIDKey contextKey = "sessionID"
 
 func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
 	if req.Request == nil {
@@ -505,7 +506,7 @@ func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, con
 	}
 
 	// IMPORTANT: Add contextID (A2A session ID) to context so saveToHistory can persist messages
-	ctx = context.WithValue(ctx, sessionIDKey, contextID)
+	ctx = context.WithValue(ctx, SessionIDKey, contextID)
 
 	streamCh, err := a.execute(ctx, userText, strategy)
 	if err != nil {

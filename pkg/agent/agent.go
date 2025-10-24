@@ -247,7 +247,7 @@ func (a *Agent) execute(
 		if historyService != nil {
 			// Extract sessionID from context
 			sessionID := ""
-			if sessionIDValue := ctx.Value("sessionID"); sessionIDValue != nil {
+			if sessionIDValue := ctx.Value(SessionIDKey); sessionIDValue != nil {
 				if sid, ok := sessionIDValue.(string); ok {
 					sessionID = sid
 				}
@@ -750,7 +750,7 @@ func (a *Agent) saveToHistory(
 
 	// Extract sessionID from context
 	sessionID := ""
-	if sessionIDValue := ctx.Value("sessionID"); sessionIDValue != nil {
+	if sessionIDValue := ctx.Value(SessionIDKey); sessionIDValue != nil {
 		if sid, ok := sessionIDValue.(string); ok {
 			sessionID = sid
 		}
