@@ -22,47 +22,33 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
-// ============================================================================
-// COMPONENT MANAGER
-// ============================================================================
-
-// ComponentManager manages all component registries and global configuration
 type ComponentManager struct {
-	// Global configuration
 	globalConfig *config.Config
 
-	// Component registries
 	llmRegistry      *llms.LLMRegistry
 	dbRegistry       *databases.DatabaseRegistry
 	embedderRegistry *embedders.EmbedderRegistry
 	toolRegistry     *tools.ToolRegistry
 
-	// Plugin registry
 	pluginRegistry *plugins.PluginRegistry
 
-	// Session store database connections (shared across agents)
-	sessionStoreDBs map[string]interface{} // map[storeName] -> *sql.DB
+	sessionStoreDBs map[string]interface{}
 }
 
-// NewComponentManager creates a new component manager and initializes all components
 func NewComponentManager(globalConfig *config.Config) (*ComponentManager, error) {
 	return NewComponentManagerWithAgentRegistry(globalConfig, nil)
 }
 
-// NewComponentManagerWithAgentRegistry creates a component manager with agent registry for agent_call tool
 func NewComponentManagerWithAgentRegistry(globalConfig *config.Config, agentRegistry interface{}) (*ComponentManager, error) {
 	ctx := context.Background()
 
-	// Initialize tool registry with configuration and agent registry
 	toolRegistry, err := tools.NewToolRegistryWithConfigAndAgentRegistry(&globalConfig.Tools, agentRegistry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool registry: %w", err)
 	}
 
-	// Initialize plugin registry
 	pluginRegistry := plugins.NewPluginRegistry(nil)
 
-	// Register gRPC plugin loader
 	grpcLoader := plugingrpc.NewGRPCLoader()
 	if err := pluginRegistry.RegisterLoader(grpcLoader); err != nil {
 		return nil, fmt.Errorf("failed to register gRPC loader: %w", err)
@@ -78,24 +64,20 @@ func NewComponentManagerWithAgentRegistry(globalConfig *config.Config, agentRegi
 		sessionStoreDBs:  make(map[string]interface{}),
 	}
 
-	// Discover and load plugins
 	if err := cm.loadPlugins(ctx); err != nil {
 		return nil, fmt.Errorf("failed to load plugins: %w", err)
 	}
 
-	// Initialize LLM providers
 	for name, llmConfig := range cm.globalConfig.LLMs {
-		_, err := cm.llmRegistry.CreateLLMFromConfig(name, &llmConfig)
+		_, err := cm.llmRegistry.CreateLLMFromConfig(name, llmConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize LLM '%s': %w", name, err)
 		}
 	}
 
-	// Initialize only databases that are actually used by agents
 	usedDatabases := make(map[string]bool)
 	usedEmbedders := make(map[string]bool)
 
-	// Collect used services from all agents
 	for _, agentConfig := range cm.globalConfig.Agents {
 		if agentConfig.Database != "" {
 			usedDatabases[agentConfig.Database] = true
@@ -105,92 +87,66 @@ func NewComponentManagerWithAgentRegistry(globalConfig *config.Config, agentRegi
 		}
 	}
 
-	// Initialize only used Database providers
 	for name, dbConfig := range cm.globalConfig.Databases {
 		if usedDatabases[name] {
-			_, err := cm.dbRegistry.CreateDatabaseFromConfig(name, &dbConfig)
+			_, err := cm.dbRegistry.CreateDatabaseFromConfig(name, dbConfig)
 			if err != nil {
 				return nil, fmt.Errorf("failed to initialize database '%s': %w", name, err)
 			}
 		}
 	}
 
-	// Initialize only used Embedder providers
 	for name, embedderConfig := range cm.globalConfig.Embedders {
 		if usedEmbedders[name] {
-			_, err := cm.embedderRegistry.CreateEmbedderFromConfig(name, &embedderConfig)
+			_, err := cm.embedderRegistry.CreateEmbedderFromConfig(name, embedderConfig)
 			if err != nil {
 				return nil, fmt.Errorf("failed to initialize embedder '%s': %w", name, err)
 			}
 		}
 	}
 
-	// Tool registry is already initialized with configuration in constructor
-
-	// Document stores must be explicitly configured by user
-	// No automatic initialization of document stores or search engines
-
 	return cm, nil
 }
 
-// ============================================================================
-// GETTERS
-// ============================================================================
-
-// GetGlobalConfig returns the global configuration
 func (cm *ComponentManager) GetGlobalConfig() *config.Config {
 	return cm.globalConfig
 }
 
-// GetLLMRegistry returns the LLM registry
 func (cm *ComponentManager) GetLLMRegistry() *llms.LLMRegistry {
 	return cm.llmRegistry
 }
 
-// GetDatabaseRegistry returns the database registry
 func (cm *ComponentManager) GetDatabaseRegistry() *databases.DatabaseRegistry {
 	return cm.dbRegistry
 }
 
-// GetEmbedderRegistry returns the embedder registry
 func (cm *ComponentManager) GetEmbedderRegistry() *embedders.EmbedderRegistry {
 	return cm.embedderRegistry
 }
 
-// GetToolRegistry returns the tool registry
 func (cm *ComponentManager) GetToolRegistry() *tools.ToolRegistry {
 	return cm.toolRegistry
 }
 
-// GetPluginRegistry returns the plugin registry
 func (cm *ComponentManager) GetPluginRegistry() *plugins.PluginRegistry {
 	return cm.pluginRegistry
 }
 
-// ============================================================================
-// COMPONENT CREATION HELPERS
-// ============================================================================
-
-// GetLLM returns an LLM provider by name
 func (cm *ComponentManager) GetLLM(name string) (llms.LLMProvider, error) {
 	return cm.llmRegistry.GetLLM(name)
 }
 
-// GetDatabase returns a database provider by name
 func (cm *ComponentManager) GetDatabase(name string) (databases.DatabaseProvider, error) {
 	return cm.dbRegistry.GetDatabase(name)
 }
 
-// GetEmbedder returns an embedder provider by name
 func (cm *ComponentManager) GetEmbedder(name string) (embedders.EmbedderProvider, error) {
 	return cm.embedderRegistry.GetEmbedder(name)
 }
 
-// GetSessionService returns a session service for the given store name and agent ID
-// Creates and caches database connections per store, but creates new service instances per agent
 func (cm *ComponentManager) GetSessionService(storeName string, agentID string) (reasoning.SessionService, error) {
 	if storeName == "" {
-		// No session store configured, return in-memory service
+
 		return memory.NewInMemorySessionService(), nil
 	}
 
@@ -198,70 +154,53 @@ func (cm *ComponentManager) GetSessionService(storeName string, agentID string) 
 		return nil, fmt.Errorf("agent ID is required for session service")
 	}
 
-	// Look up session store config
 	storeConfig, ok := cm.globalConfig.SessionStores[storeName]
 	if !ok {
 		return nil, fmt.Errorf("session store '%s' not found in configuration", storeName)
 	}
 
-	// Handle in-memory backend
 	if storeConfig.Backend == "" || storeConfig.Backend == "memory" {
 		return memory.NewInMemorySessionService(), nil
 	}
 
-	// Handle SQL backend
 	if storeConfig.Backend == "sql" {
 		if storeConfig.SQL == nil {
 			return nil, fmt.Errorf("SQL configuration is required for SQL session store '%s'", storeName)
 		}
 
-		// Get or create shared database connection for this store
 		db, err := cm.getOrCreateSessionStoreDB(storeName, storeConfig.SQL)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get database for session store '%s': %w", storeName, err)
 		}
 
-		// Create a new SQLSessionService instance with the shared DB and agent's ID
 		return memory.NewSQLSessionService(db, storeConfig.SQL.Driver, agentID)
 	}
 
 	return nil, fmt.Errorf("unsupported session store backend '%s' for store '%s'", storeConfig.Backend, storeName)
 }
 
-// getOrCreateSessionStoreDB returns a shared database connection for a session store
-// Caches the connection so multiple agents can share the same connection pool
 func (cm *ComponentManager) getOrCreateSessionStoreDB(storeName string, cfg *config.SessionSQLConfig) (*sql.DB, error) {
-	// Check cache
+
 	if cached, ok := cm.sessionStoreDBs[storeName]; ok {
 		if db, ok := cached.(*sql.DB); ok {
 			return db, nil
 		}
 	}
 
-	// Set defaults and validate
-	cfg.SetDefaults()
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid SQL configuration: %w", err)
-	}
-
-	// Map driver name to actual SQL driver name
 	driverName := cfg.Driver
 	if driverName == "sqlite" {
 		driverName = "sqlite3"
 	}
 
-	// Open database connection
 	db, err := sql.Open(driverName, cfg.ConnectionString())
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Configure connection pool
 	db.SetMaxOpenConns(cfg.MaxConns)
 	db.SetMaxIdleConns(cfg.MaxIdle)
 	db.SetConnMaxLifetime(time.Hour)
 
-	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -270,7 +209,6 @@ func (cm *ComponentManager) getOrCreateSessionStoreDB(storeName string, cfg *con
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Cache the connection
 	cm.sessionStoreDBs[storeName] = db
 
 	fmt.Printf("✅ Session store '%s' connected (driver: %s, database: %s)\n", storeName, cfg.Driver, cfg.Database)
@@ -278,34 +216,25 @@ func (cm *ComponentManager) getOrCreateSessionStoreDB(storeName string, cfg *con
 	return db, nil
 }
 
-// ============================================================================
-// PLUGIN MANAGEMENT
-// ============================================================================
-
-// loadPlugins discovers and loads plugins from configuration
 func (cm *ComponentManager) loadPlugins(ctx context.Context) error {
 	pluginConfig := &cm.globalConfig.Plugins
 
-	// Convert config.PluginDiscoveryConfig to plugins.DiscoveryConfig
 	discoveryConfig := &plugins.DiscoveryConfig{
 		Enabled:            pluginConfig.Discovery.Enabled,
 		Paths:              pluginConfig.Discovery.Paths,
 		ScanSubdirectories: pluginConfig.Discovery.ScanSubdirectories,
 	}
 
-	// Discover plugins from configured paths
 	discovery := plugins.NewPluginDiscovery(discoveryConfig)
 	discoveredPlugins, err := discovery.DiscoverPlugins(ctx)
 	if err != nil {
 		return fmt.Errorf("plugin discovery failed: %w", err)
 	}
 
-	// Load plugins from explicit configuration
 	if err := cm.loadConfiguredPlugins(ctx, pluginConfig); err != nil {
 		return fmt.Errorf("failed to load configured plugins: %w", err)
 	}
 
-	// Load auto-discovered plugins that are enabled
 	if err := cm.loadDiscoveredPlugins(ctx, discoveredPlugins, pluginConfig); err != nil {
 		return fmt.Errorf("failed to load discovered plugins: %w", err)
 	}
@@ -313,51 +242,52 @@ func (cm *ComponentManager) loadPlugins(ctx context.Context) error {
 	return nil
 }
 
-// loadConfiguredPlugins loads plugins from explicit configuration
 func (cm *ComponentManager) loadConfiguredPlugins(ctx context.Context, pluginConfig *config.PluginConfigs) error {
-	// Load LLM provider plugins
+
 	for name, cfg := range pluginConfig.LLMProviders {
-		if !cfg.Enabled {
+		if cfg != nil && !cfg.Enabled {
 			continue
 		}
-		if err := cm.loadAndRegisterPlugin(ctx, name, &cfg, plugins.PluginTypeLLM); err != nil {
-			fmt.Printf("Warning: Failed to load LLM plugin '%s': %v\n", name, err)
+		if cfg != nil {
+			if err := cm.loadAndRegisterPlugin(ctx, name, cfg, plugins.PluginTypeLLM); err != nil {
+				fmt.Printf("Warning: Failed to load LLM plugin '%s': %v\n", name, err)
+			}
 		}
 	}
 
-	// Load Database provider plugins
 	for name, cfg := range pluginConfig.DatabaseProviders {
-		if !cfg.Enabled {
+		if cfg != nil && !cfg.Enabled {
 			continue
 		}
-		if err := cm.loadAndRegisterPlugin(ctx, name, &cfg, plugins.PluginTypeDatabase); err != nil {
-			fmt.Printf("Warning: Failed to load Database plugin '%s': %v\n", name, err)
+		if cfg != nil {
+			if err := cm.loadAndRegisterPlugin(ctx, name, cfg, plugins.PluginTypeDatabase); err != nil {
+				fmt.Printf("Warning: Failed to load Database plugin '%s': %v\n", name, err)
+			}
 		}
 	}
 
-	// Load Embedder provider plugins
 	for name, cfg := range pluginConfig.EmbedderProviders {
-		if !cfg.Enabled {
+		if cfg != nil && !cfg.Enabled {
 			continue
 		}
-		if err := cm.loadAndRegisterPlugin(ctx, name, &cfg, plugins.PluginTypeEmbedder); err != nil {
-			fmt.Printf("Warning: Failed to load Embedder plugin '%s': %v\n", name, err)
+		if cfg != nil {
+			if err := cm.loadAndRegisterPlugin(ctx, name, cfg, plugins.PluginTypeEmbedder); err != nil {
+				fmt.Printf("Warning: Failed to load Embedder plugin '%s': %v\n", name, err)
+			}
 		}
 	}
 
 	return nil
 }
 
-// loadDiscoveredPlugins loads auto-discovered plugins
 func (cm *ComponentManager) loadDiscoveredPlugins(ctx context.Context, discovered []*plugins.DiscoveredPlugin, pluginConfig *config.PluginConfigs) error {
-	// Only load discovered plugins that aren't already explicitly configured
+
 	for _, dp := range discovered {
-		// Check if already configured
+
 		if cm.isPluginConfigured(dp.Name, pluginConfig) {
-			continue // Skip, will be loaded from explicit config
+			continue
 		}
 
-		// Create plugin config from discovery
 		cfg := &config.PluginConfig{
 			Name:    dp.Name,
 			Type:    string(dp.Manifest.Protocol),
@@ -374,7 +304,6 @@ func (cm *ComponentManager) loadDiscoveredPlugins(ctx context.Context, discovere
 	return nil
 }
 
-// isPluginConfigured checks if a plugin is explicitly configured
 func (cm *ComponentManager) isPluginConfigured(name string, pluginConfig *config.PluginConfigs) bool {
 	if _, ok := pluginConfig.LLMProviders[name]; ok {
 		return true
@@ -394,16 +323,14 @@ func (cm *ComponentManager) isPluginConfigured(name string, pluginConfig *config
 	return false
 }
 
-// loadAndRegisterPlugin loads a plugin and registers it with appropriate registry
 func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name string, cfg *config.PluginConfig, pluginType plugins.PluginType) error {
-	// Load manifest from .plugin.yaml file
+
 	manifestPath := cfg.Path + ".plugin.yaml"
 	manifest, err := loadPluginManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("failed to load manifest from %s: %w", manifestPath, err)
 	}
 
-	// Convert config.PluginConfig to plugins.PluginConfig
 	pluginCfg := &plugins.PluginConfig{
 		Name:     name,
 		Type:     plugins.PluginProtocol(cfg.Type),
@@ -413,18 +340,15 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 		Manifest: manifest,
 	}
 
-	// Load the plugin
 	if pluginErr := cm.pluginRegistry.LoadPlugin(ctx, pluginCfg); pluginErr != nil {
 		return err
 	}
 
-	// Get the loaded plugin
 	plugin, err := cm.pluginRegistry.GetPlugin(name)
 	if err != nil {
 		return err
 	}
 
-	// Register with appropriate component registry based on type
 	switch pluginType {
 	case plugins.PluginTypeLLM:
 		llmAdapter, ok := plugin.(*plugingrpc.LLMPluginAdapter)
@@ -432,7 +356,6 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 			return fmt.Errorf("plugin is not an LLM provider")
 		}
 
-		// Create bridge and register
 		llmBridge := &llmPluginBridge{adapter: llmAdapter}
 		if err := cm.llmRegistry.RegisterLLM(name, llmBridge); err != nil {
 			return fmt.Errorf("failed to register LLM plugin: %w", err)
@@ -445,7 +368,6 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 			return fmt.Errorf("plugin is not a Database provider")
 		}
 
-		// Create bridge and register
 		dbBridge := &databasePluginBridge{adapter: dbAdapter}
 		if err := cm.dbRegistry.RegisterDatabase(name, dbBridge); err != nil {
 			return fmt.Errorf("failed to register Database plugin: %w", err)
@@ -458,7 +380,6 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 			return fmt.Errorf("plugin is not an Embedder provider")
 		}
 
-		// Create bridge and register
 		embedderBridge := &embedderPluginBridge{adapter: embedderAdapter}
 		if err := cm.embedderRegistry.RegisterEmbedder(name, embedderBridge); err != nil {
 			return fmt.Errorf("failed to register Embedder plugin: %w", err)
@@ -469,7 +390,6 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 	return nil
 }
 
-// ShutdownPlugins gracefully shuts down all plugins
 func (cm *ComponentManager) ShutdownPlugins(ctx context.Context) error {
 	if cm.pluginRegistry != nil {
 		return cm.pluginRegistry.Shutdown(ctx)
@@ -477,11 +397,28 @@ func (cm *ComponentManager) ShutdownPlugins(ctx context.Context) error {
 	return nil
 }
 
-// ============================================================================
-// PLUGIN HELPER FUNCTIONS
-// ============================================================================
+func (cm *ComponentManager) Close() error {
+	var errors []error
 
-// loadPluginManifest loads a plugin manifest from a .plugin.yaml file
+	for storeName, dbInterface := range cm.sessionStoreDBs {
+		if db, ok := dbInterface.(*sql.DB); ok {
+			if err := db.Close(); err != nil {
+				errors = append(errors, fmt.Errorf("failed to close session store DB '%s': %w", storeName, err))
+			}
+		}
+	}
+
+	ctx := context.Background()
+	if err := cm.ShutdownPlugins(ctx); err != nil {
+		errors = append(errors, fmt.Errorf("plugin shutdown: %w", err))
+	}
+
+	if len(errors) > 0 {
+		return errors[0]
+	}
+	return nil
+}
+
 func loadPluginManifest(manifestPath string) (*plugins.PluginManifest, error) {
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -498,19 +435,12 @@ func loadPluginManifest(manifestPath string) (*plugins.PluginManifest, error) {
 	return &manifestWrapper.Plugin, nil
 }
 
-// ============================================================================
-// PLUGIN BRIDGE IMPLEMENTATIONS
-// ============================================================================
-// These bridge types adapt plugin adapters to component registry interfaces
-// with zero overhead - just simple method forwarding and type conversion.
-
-// llmPluginBridge adapts LLMPluginAdapter to llms.LLMProvider interface
 type llmPluginBridge struct {
 	adapter *plugingrpc.LLMPluginAdapter
 }
 
 func (b *llmPluginBridge) Generate(messages []*pb.Message, tools []llms.ToolDefinition) (text string, toolCalls []*protocol.ToolCall, tokens int, err error) {
-	// Convert pb.Message to plugin Message
+
 	pbMessages := make([]*plugingrpc.Message, len(messages))
 	for i, msg := range messages {
 		textContent := protocol.ExtractTextFromMessage(msg)
@@ -520,10 +450,9 @@ func (b *llmPluginBridge) Generate(messages []*pb.Message, tools []llms.ToolDefi
 		}
 	}
 
-	// Convert llms.ToolDefinition to pb.ToolDefinition
 	pbTools := make([]*plugingrpc.ToolDefinition, len(tools))
 	for i, tool := range tools {
-		// Serialize parameters to JSON
+
 		paramsJSON, _ := json.Marshal(tool.Parameters)
 		pbTools[i] = &plugingrpc.ToolDefinition{
 			Name:           tool.Name,
@@ -532,16 +461,14 @@ func (b *llmPluginBridge) Generate(messages []*pb.Message, tools []llms.ToolDefi
 		}
 	}
 
-	// Call plugin
 	response, err := b.adapter.GetPlugin().Generate(context.Background(), pbMessages, pbTools)
 	if err != nil {
 		return "", nil, 0, err
 	}
 
-	// Convert pb.ToolCall back to protocol.ToolCall
 	llmToolCalls := make([]*protocol.ToolCall, len(response.ToolCalls))
 	for i, tc := range response.ToolCalls {
-		// Deserialize arguments from JSON
+
 		var args map[string]interface{}
 		if err := json.Unmarshal([]byte(tc.ArgumentsJson), &args); err != nil {
 			args = make(map[string]interface{})
@@ -558,7 +485,7 @@ func (b *llmPluginBridge) Generate(messages []*pb.Message, tools []llms.ToolDefi
 }
 
 func (b *llmPluginBridge) GenerateStreaming(messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
-	// Convert messages and tools
+
 	pbMessages := make([]*plugingrpc.Message, len(messages))
 	for i, msg := range messages {
 		textContent := protocol.ExtractTextFromMessage(msg)
@@ -570,7 +497,7 @@ func (b *llmPluginBridge) GenerateStreaming(messages []*pb.Message, tools []llms
 
 	pbTools := make([]*plugingrpc.ToolDefinition, len(tools))
 	for i, tool := range tools {
-		// Serialize parameters to JSON
+
 		paramsJSON, _ := json.Marshal(tool.Parameters)
 		pbTools[i] = &plugingrpc.ToolDefinition{
 			Name:           tool.Name,
@@ -579,13 +506,11 @@ func (b *llmPluginBridge) GenerateStreaming(messages []*pb.Message, tools []llms
 		}
 	}
 
-	// Get plugin streaming channel
 	pbChunks, err := b.adapter.GetPlugin().GenerateStreaming(context.Background(), pbMessages, pbTools)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create output channel and convert chunks
 	llmChunks := make(chan llms.StreamChunk, 10)
 	go func() {
 		defer close(llmChunks)
@@ -595,7 +520,6 @@ func (b *llmPluginBridge) GenerateStreaming(messages []*pb.Message, tools []llms
 				Tokens: int(pbChunk.TokensUsed),
 			}
 
-			// Convert chunk type
 			switch pbChunk.Type {
 			case plugingrpc.ChunkTypeText:
 				llmChunk.Type = "text"
@@ -641,13 +565,12 @@ func (b *llmPluginBridge) Close() error {
 	return b.adapter.Shutdown(context.Background())
 }
 
-// databasePluginBridge adapts DatabasePluginAdapter to databases.DatabaseProvider interface
 type databasePluginBridge struct {
 	adapter *plugingrpc.DatabasePluginAdapter
 }
 
 func (b *databasePluginBridge) Upsert(ctx context.Context, collection string, id string, vector []float32, metadata map[string]interface{}) error {
-	// Convert metadata from interface{} to string
+
 	stringMetadata := make(map[string]string)
 	for k, v := range metadata {
 		stringMetadata[k] = fmt.Sprintf("%v", v)
@@ -661,14 +584,12 @@ func (b *databasePluginBridge) Search(ctx context.Context, collection string, ve
 }
 
 func (b *databasePluginBridge) SearchWithFilter(ctx context.Context, collection string, vector []float32, topK int, filter map[string]interface{}) ([]databases.SearchResult, error) {
-	// NOTE: Plugin interface doesn't support filters yet
-	// We fetch all results and filter client-side
-	pbResults, err := b.adapter.GetPlugin().Search(ctx, collection, vector, int32(topK*2)) // Fetch more to account for filtering
+
+	pbResults, err := b.adapter.GetPlugin().Search(ctx, collection, vector, int32(topK*2))
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert pb.SearchResult to databases.SearchResult and apply filter
 	results := make([]databases.SearchResult, 0, len(pbResults))
 	for _, pbResult := range pbResults {
 		metadata := make(map[string]interface{})
@@ -683,7 +604,6 @@ func (b *databasePluginBridge) SearchWithFilter(ctx context.Context, collection 
 			Metadata: metadata,
 		}
 
-		// Apply filter if provided
 		if len(filter) > 0 {
 			match := true
 			for filterKey, filterValue := range filter {
@@ -693,13 +613,12 @@ func (b *databasePluginBridge) SearchWithFilter(ctx context.Context, collection 
 				}
 			}
 			if !match {
-				continue // Skip this result
+				continue
 			}
 		}
 
 		results = append(results, result)
 
-		// Respect topK limit after filtering
 		if len(results) >= topK {
 			break
 		}
@@ -713,9 +632,7 @@ func (b *databasePluginBridge) Delete(ctx context.Context, collection string, id
 }
 
 func (b *databasePluginBridge) DeleteByFilter(ctx context.Context, collection string, filter map[string]interface{}) error {
-	// NOTE: Plugin interface doesn't support DeleteByFilter yet
-	// This is a limitation - we can't efficiently delete by filter through plugins
-	// For now, return an error indicating this is not supported
+
 	return fmt.Errorf("DeleteByFilter not supported for database plugins (collection: %s)", collection)
 }
 
@@ -731,7 +648,6 @@ func (b *databasePluginBridge) Close() error {
 	return b.adapter.Shutdown(context.Background())
 }
 
-// embedderPluginBridge adapts EmbedderPluginAdapter to embedders.EmbedderProvider interface
 type embedderPluginBridge struct {
 	adapter *plugingrpc.EmbedderPluginAdapter
 }
@@ -759,7 +675,3 @@ func (b *embedderPluginBridge) GetModelName() string {
 func (b *embedderPluginBridge) Close() error {
 	return b.adapter.Shutdown(context.Background())
 }
-
-// ============================================================================
-// AGENT COMPONENT CREATION
-// ============================================================================

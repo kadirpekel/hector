@@ -1,0 +1,22 @@
+services:
+  consul:
+    image: hashicorp/consul:1.17
+    container_name: hector-consul
+    ports:
+      - "8500:8500"  # HTTP API
+      - "8600:8600"  # DNS
+    environment:
+      - CONSUL_BIND_INTERFACE=eth0
+    command: agent -server -ui -bootstrap-expect=1 -client=0.0.0.0
+    volumes:
+      - consul-data:/consul/data
+    networks:
+      - hector-network
+
+volumes:
+  consul-data:
+
+networks:
+  hector-network:
+    driver: bridge
+

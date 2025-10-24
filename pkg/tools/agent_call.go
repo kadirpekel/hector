@@ -9,19 +9,16 @@ import (
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 )
 
-// AgentCallTool enables agents to call other agents in a multi-agent system
 type AgentCallTool struct {
 	name        string
 	description string
 	registry    AgentRegistry
 }
 
-// AgentRegistry interface to avoid import cycle
 type AgentRegistry interface {
 	GetAgent(name string) (pb.A2AServiceServer, error)
 }
 
-// NewAgentCallTool creates a new agent call tool with the given registry
 func NewAgentCallTool(registry AgentRegistry) *AgentCallTool {
 	return &AgentCallTool{
 		name:        "agent_call",
@@ -30,7 +27,6 @@ func NewAgentCallTool(registry AgentRegistry) *AgentCallTool {
 	}
 }
 
-// GetInfo returns metadata about the agent call tool
 func (t *AgentCallTool) GetInfo() ToolInfo {
 	return ToolInfo{
 		Name:        t.name,
@@ -52,24 +48,20 @@ func (t *AgentCallTool) GetInfo() ToolInfo {
 	}
 }
 
-// GetName returns the tool name
 func (t *AgentCallTool) GetName() string {
 	return t.name
 }
 
-// GetDescription returns the tool description
 func (t *AgentCallTool) GetDescription() string {
 	return t.description
 }
 
-// Execute calls another agent with the given message
 func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
 	start := time.Now()
 
-	// Extract arguments - use "agent" and "task" to match legacy interface
 	agentName, ok := args["agent"].(string)
 	if !ok {
-		// Try "agent_name" as fallback
+
 		if agentName, ok = args["agent_name"].(string); !ok {
 			return ToolResult{
 				Success: false,
@@ -80,7 +72,7 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 
 	task, ok := args["task"].(string)
 	if !ok {
-		// Try "message" as fallback
+
 		if task, ok = args["message"].(string); !ok {
 			return ToolResult{
 				Success: false,
@@ -89,7 +81,6 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 		}
 	}
 
-	// Validate agent name
 	agentName = strings.TrimSpace(agentName)
 	if agentName == "" {
 		return ToolResult{
@@ -98,7 +89,6 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 		}, nil
 	}
 
-	// Validate task
 	task = strings.TrimSpace(task)
 	if task == "" {
 		return ToolResult{
@@ -107,7 +97,6 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 		}, nil
 	}
 
-	// Check if registry is available
 	if t.registry == nil {
 		return ToolResult{
 			Success: false,
@@ -115,7 +104,6 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 		}, nil
 	}
 
-	// Get the target agent
 	targetAgent, err := t.registry.GetAgent(agentName)
 	if err != nil {
 		return ToolResult{
@@ -124,11 +112,10 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 		}, fmt.Errorf("agent '%s' not found: %v", agentName, err)
 	}
 
-	// Create the A2A request using current protobuf format
 	request := &pb.SendMessageRequest{
 		Request: &pb.Message{
 			MessageId: fmt.Sprintf("agent_call_%s_%d", agentName, time.Now().UnixNano()),
-			ContextId: fmt.Sprintf("%s:agent_call_session", agentName), // Set context_id for routing
+			ContextId: fmt.Sprintf("%s:agent_call_session", agentName),
 			Content: []*pb.Part{
 				{
 					Part: &pb.Part_Text{Text: task},
@@ -137,7 +124,6 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 		},
 	}
 
-	// Call the target agent
 	response, err := targetAgent.SendMessage(ctx, request)
 	if err != nil {
 		return ToolResult{
@@ -146,13 +132,12 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 		}, fmt.Errorf("failed to call agent '%s': %v", agentName, err)
 	}
 
-	// Extract response content
 	var responseText string
 	if response.Payload != nil {
 		switch payload := response.Payload.(type) {
 		case *pb.SendMessageResponse_Msg:
 			if payload.Msg != nil && len(payload.Msg.Content) > 0 {
-				// Extract text from the first part
+
 				for _, part := range payload.Msg.Content {
 					if textPart := part.GetText(); textPart != "" {
 						responseText = textPart

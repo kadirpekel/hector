@@ -308,22 +308,22 @@ Resume conversations across CLI invocations:
 
 ```bash
 # First call - store information
-./hector call --config config.yaml --session=work assistant \
-  "Remember: meeting at 3pm"
+./hector call "Remember: meeting at 3pm" --agent assistant \
+  --config config.yaml --session=work
 
 # Later - agent remembers!
-./hector call --config config.yaml --session=work assistant \
-  "When is the meeting?"
+./hector call "When is the meeting?" --agent assistant \
+  --config config.yaml --session=work
 ```
 
 **Interactive chat:**
 
 ```bash
 # With custom session ID
-./hector chat --config config.yaml --session=my-chat assistant
+./hector chat --agent assistant --config config.yaml --session=my-chat
 
 # Auto-generated session ID (displayed on start)
-./hector chat --config config.yaml assistant
+./hector chat --agent assistant --config config.yaml
 # Output: 💾 Session ID: cli-chat-1729612345
 #         Resume later with: --session=cli-chat-1729612345
 ```
@@ -334,13 +334,13 @@ Resume conversations across CLI invocations:
 
 ```bash
 SESSION_ID=$(uuidgen)  # Generate unique ID
-./hector call --session=$SESSION_ID assistant "Hello"
+./hector call "Hello" --agent assistant --config config.yaml --session=$SESSION_ID
 ```
 
 **Resume session:**
 
 ```bash
-./hector call --session=$SESSION_ID assistant "Continue"
+./hector call "Continue" --agent assistant --config config.yaml --session=$SESSION_ID
 ```
 
 **Check session in database:**

@@ -1,70 +1,47 @@
-// Package config provides configuration types and utilities for the AI agent framework.
-// This file contains all configuration types in a unified structure.
 package config
 
 import (
 	"fmt"
-	"os"
 	"time"
 )
 
-// ============================================================================
-// PROVIDER CONFIGURATIONS
-// ============================================================================
+const (
+	DefaultOpenAIModel    = "gpt-4o-mini"
+	DefaultAnthropicModel = "claude-3-7-sonnet-latest"
+	DefaultGeminiModel    = "gemini-2.0-flash-exp"
+)
 
-// ProviderConfigs contains all provider configurations
-type ProviderConfigs struct {
-	// LLM providers
-	LLMs map[string]LLMProviderConfig `yaml:"llms,omitempty"`
-
-	// Database providers
-	Databases map[string]DatabaseProviderConfig `yaml:"databases,omitempty"`
-
-	// Embedder providers
-	Embedders map[string]EmbedderProviderConfig `yaml:"embedders,omitempty"`
-}
-
-// ============================================================================
-// PLUGIN CONFIGURATIONS
-// ============================================================================
-
-// PluginDiscoveryConfig contains configuration for plugin discovery
 type PluginDiscoveryConfig struct {
 	Enabled            bool     `yaml:"enabled" json:"enabled"`
 	Paths              []string `yaml:"paths" json:"paths"`
 	ScanSubdirectories bool     `yaml:"scan_subdirectories" json:"scan_subdirectories"`
 }
 
-// SetDefaults sets default values for plugin discovery config
 func (c *PluginDiscoveryConfig) SetDefaults() {
 	if len(c.Paths) == 0 {
 		c.Paths = []string{"./plugins", "~/.hector/plugins"}
 	}
-	// Enabled defaults to true if not explicitly set (checked elsewhere)
+
 }
 
-// Validate validates the plugin discovery configuration
 func (c *PluginDiscoveryConfig) Validate() error {
-	return nil // No strict validation needed
+	return nil
 }
 
-// PluginConfig represents the configuration for a single plugin
 type PluginConfig struct {
 	Name    string                 `yaml:"name" json:"name"`
-	Type    string                 `yaml:"type" json:"type"`       // Must be "grpc"
-	Path    string                 `yaml:"path" json:"path"`       // Path to plugin executable
-	Enabled bool                   `yaml:"enabled" json:"enabled"` // Whether plugin is enabled
-	Config  map[string]interface{} `yaml:"config" json:"config"`   // Plugin-specific configuration
+	Type    string                 `yaml:"type" json:"type"`
+	Path    string                 `yaml:"path" json:"path"`
+	Enabled bool                   `yaml:"enabled" json:"enabled"`
+	Config  map[string]interface{} `yaml:"config" json:"config"`
 }
 
-// SetDefaults sets default values for plugin config
 func (c *PluginConfig) SetDefaults() {
 	if c.Type == "" {
 		c.Type = "grpc"
 	}
 }
 
-// Validate validates the plugin configuration
 func (c *PluginConfig) Validate() error {
 	if c.Name == "" {
 		return fmt.Errorf("plugin name is required")
@@ -78,157 +55,130 @@ func (c *PluginConfig) Validate() error {
 	return nil
 }
 
-// PluginConfigs contains all plugin configurations
 type PluginConfigs struct {
-	// Plugin discovery configuration
 	Discovery PluginDiscoveryConfig `yaml:"plugin_discovery,omitempty" json:"plugin_discovery,omitempty"`
 
-	// Plugin definitions by category
-	LLMProviders        map[string]PluginConfig `yaml:"llm_providers,omitempty" json:"llm_providers,omitempty"`
-	DatabaseProviders   map[string]PluginConfig `yaml:"database_providers,omitempty" json:"database_providers,omitempty"`
-	EmbedderProviders   map[string]PluginConfig `yaml:"embedder_providers,omitempty" json:"embedder_providers,omitempty"`
-	ToolProviders       map[string]PluginConfig `yaml:"tool_providers,omitempty" json:"tool_providers,omitempty"`
-	ReasoningStrategies map[string]PluginConfig `yaml:"reasoning_strategies,omitempty" json:"reasoning_strategies,omitempty"`
+	LLMProviders        map[string]*PluginConfig `yaml:"llm_providers,omitempty" json:"llm_providers,omitempty"`
+	DatabaseProviders   map[string]*PluginConfig `yaml:"database_providers,omitempty" json:"database_providers,omitempty"`
+	EmbedderProviders   map[string]*PluginConfig `yaml:"embedder_providers,omitempty" json:"embedder_providers,omitempty"`
+	ToolProviders       map[string]*PluginConfig `yaml:"tool_providers,omitempty" json:"tool_providers,omitempty"`
+	ReasoningStrategies map[string]*PluginConfig `yaml:"reasoning_strategies,omitempty" json:"reasoning_strategies,omitempty"`
 }
 
-// SetDefaults sets default values for plugin configs
 func (c *PluginConfigs) SetDefaults() {
 	c.Discovery.SetDefaults()
+
+	if c.LLMProviders == nil {
+		c.LLMProviders = make(map[string]*PluginConfig)
+	}
+	if c.DatabaseProviders == nil {
+		c.DatabaseProviders = make(map[string]*PluginConfig)
+	}
+	if c.EmbedderProviders == nil {
+		c.EmbedderProviders = make(map[string]*PluginConfig)
+	}
+	if c.ToolProviders == nil {
+		c.ToolProviders = make(map[string]*PluginConfig)
+	}
+	if c.ReasoningStrategies == nil {
+		c.ReasoningStrategies = make(map[string]*PluginConfig)
+	}
+
 	for name := range c.LLMProviders {
-		cfg := c.LLMProviders[name]
-		cfg.SetDefaults()
-		c.LLMProviders[name] = cfg
+		if c.LLMProviders[name] != nil {
+			c.LLMProviders[name].SetDefaults()
+		}
 	}
 	for name := range c.DatabaseProviders {
-		cfg := c.DatabaseProviders[name]
-		cfg.SetDefaults()
-		c.DatabaseProviders[name] = cfg
+		if c.DatabaseProviders[name] != nil {
+			c.DatabaseProviders[name].SetDefaults()
+		}
 	}
 	for name := range c.EmbedderProviders {
-		cfg := c.EmbedderProviders[name]
-		cfg.SetDefaults()
-		c.EmbedderProviders[name] = cfg
+		if c.EmbedderProviders[name] != nil {
+			c.EmbedderProviders[name].SetDefaults()
+		}
 	}
 	for name := range c.ToolProviders {
-		cfg := c.ToolProviders[name]
-		cfg.SetDefaults()
-		c.ToolProviders[name] = cfg
+		if c.ToolProviders[name] != nil {
+			c.ToolProviders[name].SetDefaults()
+		}
 	}
 	for name := range c.ReasoningStrategies {
-		cfg := c.ReasoningStrategies[name]
-		cfg.SetDefaults()
-		c.ReasoningStrategies[name] = cfg
+		if c.ReasoningStrategies[name] != nil {
+			c.ReasoningStrategies[name].SetDefaults()
+		}
 	}
 }
 
-// Validate validates all plugin configurations
 func (c *PluginConfigs) Validate() error {
 	if err := c.Discovery.Validate(); err != nil {
 		return fmt.Errorf("plugin discovery validation failed: %w", err)
 	}
 	for name, cfg := range c.LLMProviders {
-		if err := cfg.Validate(); err != nil {
-			return fmt.Errorf("LLM provider plugin '%s' validation failed: %w", name, err)
+		if cfg != nil {
+			if err := cfg.Validate(); err != nil {
+				return fmt.Errorf("LLM provider plugin '%s' validation failed: %w", name, err)
+			}
 		}
 	}
 	for name, cfg := range c.DatabaseProviders {
-		if err := cfg.Validate(); err != nil {
-			return fmt.Errorf("database provider plugin '%s' validation failed: %w", name, err)
+		if cfg != nil {
+			if err := cfg.Validate(); err != nil {
+				return fmt.Errorf("database provider plugin '%s' validation failed: %w", name, err)
+			}
 		}
 	}
 	for name, cfg := range c.EmbedderProviders {
-		if err := cfg.Validate(); err != nil {
-			return fmt.Errorf("embedder provider plugin '%s' validation failed: %w", name, err)
+		if cfg != nil {
+			if err := cfg.Validate(); err != nil {
+				return fmt.Errorf("embedder provider plugin '%s' validation failed: %w", name, err)
+			}
 		}
 	}
 	for name, cfg := range c.ToolProviders {
-		if err := cfg.Validate(); err != nil {
-			return fmt.Errorf("tool provider plugin '%s' validation failed: %w", name, err)
+		if cfg != nil {
+			if err := cfg.Validate(); err != nil {
+				return fmt.Errorf("tool provider plugin '%s' validation failed: %w", name, err)
+			}
 		}
 	}
 	for name, cfg := range c.ReasoningStrategies {
-		if err := cfg.Validate(); err != nil {
-			return fmt.Errorf("reasoning strategy plugin '%s' validation failed: %w", name, err)
+		if cfg != nil {
+			if err := cfg.Validate(); err != nil {
+				return fmt.Errorf("reasoning strategy plugin '%s' validation failed: %w", name, err)
+			}
 		}
 	}
 	return nil
 }
 
-// Validate implements Config.Validate for ProviderConfigs
-func (c *ProviderConfigs) Validate() error {
-	for name, llm := range c.LLMs {
-		if err := llm.Validate(); err != nil {
-			return fmt.Errorf("LLM provider '%s' validation failed: %w", name, err)
-		}
-	}
-	for name, db := range c.Databases {
-		if err := db.Validate(); err != nil {
-			return fmt.Errorf("database provider '%s' validation failed: %w", name, err)
-		}
-	}
-	for name, embedder := range c.Embedders {
-		if err := embedder.Validate(); err != nil {
-			return fmt.Errorf("embedder provider '%s' validation failed: %w", name, err)
-		}
-	}
-	return nil
-}
-
-// SetDefaults implements Config.SetDefaults for ProviderConfigs
-func (c *ProviderConfigs) SetDefaults() {
-	for name := range c.LLMs {
-		llm := c.LLMs[name]
-		llm.SetDefaults()
-		c.LLMs[name] = llm
-	}
-	for name := range c.Databases {
-		db := c.Databases[name]
-		db.SetDefaults()
-		c.Databases[name] = db
-	}
-	for name := range c.Embedders {
-		embedder := c.Embedders[name]
-		embedder.SetDefaults()
-		c.Embedders[name] = embedder
-	}
-}
-
-// LLMProviderConfig represents LLM provider configuration
 type LLMProviderConfig struct {
-	Type        string  `yaml:"type"`        // "openai", "anthropic", "gemini"
-	Model       string  `yaml:"model"`       // Model name
-	APIKey      string  `yaml:"api_key"`     // API key (for OpenAI, Anthropic, Gemini)
-	Host        string  `yaml:"host"`        // Host for custom OpenAI-compatible endpoint
-	Temperature float64 `yaml:"temperature"` // Temperature setting
-	MaxTokens   int     `yaml:"max_tokens"`  // Max tokens
-	Timeout     int     `yaml:"timeout"`     // Request timeout in seconds
-	MaxRetries  int     `yaml:"max_retries"` // Max retry attempts for rate limits (default: 5)
-	RetryDelay  int     `yaml:"retry_delay"` // Base retry delay in seconds (default: 2, exponential backoff)
+	Type        string  `yaml:"type"`
+	Model       string  `yaml:"model"`
+	APIKey      string  `yaml:"api_key"`
+	Host        string  `yaml:"host"`
+	Temperature float64 `yaml:"temperature"`
+	MaxTokens   int     `yaml:"max_tokens"`
+	Timeout     int     `yaml:"timeout"`
+	MaxRetries  int     `yaml:"max_retries"`
+	RetryDelay  int     `yaml:"retry_delay"`
 
-	// Structured output configuration (optional)
 	StructuredOutput *StructuredOutputConfig `yaml:"structured_output,omitempty"`
 }
 
-// StructuredOutputConfig represents configuration for structured output
-// Works across all providers (OpenAI, Anthropic, Gemini)
 type StructuredOutputConfig struct {
-	// Format: "json", "xml", "enum"
 	Format string `yaml:"format,omitempty"`
 
-	// Schema: JSON schema as YAML/JSON (for format="json")
 	Schema map[string]interface{} `yaml:"schema,omitempty"`
 
-	// Enum: List of allowed values (for format="enum")
 	Enum []string `yaml:"enum,omitempty"`
 
-	// Prefill: Prefill string for Anthropic (optional, provider-specific)
 	Prefill string `yaml:"prefill,omitempty"`
 
-	// PropertyOrdering: Property order for Gemini (optional, provider-specific)
 	PropertyOrdering []string `yaml:"property_ordering,omitempty"`
 }
 
-// Validate implements Config.Validate for LLMProviderConfig
 func (c *LLMProviderConfig) Validate() error {
 	if c.Type == "" {
 		return fmt.Errorf("type is required")
@@ -239,7 +189,7 @@ func (c *LLMProviderConfig) Validate() error {
 	if c.Host == "" {
 		return fmt.Errorf("host is required")
 	}
-	// API key validation for all providers that require it
+
 	if c.APIKey == "" {
 		switch c.Type {
 		case "openai":
@@ -268,27 +218,25 @@ func (c *LLMProviderConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for LLMProviderConfig
 func (c *LLMProviderConfig) SetDefaults() {
-	// Zero-config: Set default type and model if not specified
-	// Default to OpenAI (requires OPENAI_API_KEY environment variable)
+
 	if c.Type == "" {
 		c.Type = "openai"
 	}
 	if c.Model == "" {
 		switch c.Type {
 		case "openai":
-			c.Model = "gpt-4o"
+			c.Model = DefaultOpenAIModel
 		case "anthropic":
-			c.Model = "claude-3-7-sonnet-latest"
+			c.Model = DefaultAnthropicModel
 		case "gemini":
-			c.Model = "gemini-2.0-flash-exp"
+			c.Model = DefaultGeminiModel
 		default:
-			c.Model = "gpt-4o"
+			c.Model = DefaultOpenAIModel
 		}
 	}
 	if c.Host == "" {
-		// Set default host based on provider type
+
 		switch c.Type {
 		case "openai":
 			c.Host = "https://api.openai.com/v1"
@@ -310,47 +258,31 @@ func (c *LLMProviderConfig) SetDefaults() {
 		c.Timeout = 60
 	}
 	if c.MaxRetries == 0 {
-		// Aggressive retry strategy to support "trust the LLM" philosophy
-		// With 5 retries and exponential backoff (2s, 4s, 8s, 16s, 32s):
-		// - Total max wait: ~62 seconds
-		// - Supports up to 100 iterations without premature failure
+
 		c.MaxRetries = 5
 	}
 	if c.RetryDelay == 0 {
-		// Base delay for exponential backoff (2^attempt * RetryDelay)
+
 		c.RetryDelay = 2
 	}
-	// Set API key from environment if not provided
+
 	if c.APIKey == "" {
-		switch c.Type {
-		case "openai":
-			if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-				c.APIKey = key
-			}
-		case "anthropic":
-			if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
-				c.APIKey = key
-			}
-		case "gemini":
-			if key := os.Getenv("GEMINI_API_KEY"); key != "" {
-				c.APIKey = key
-			}
+		if key := GetProviderAPIKey(c.Type); key != "" {
+			c.APIKey = key
 		}
 	}
 }
 
-// DatabaseProviderConfig represents database provider configuration
 type DatabaseProviderConfig struct {
-	Type     string `yaml:"type"`     // "qdrant"
-	Host     string `yaml:"host"`     // Database host
-	Port     int    `yaml:"port"`     // Database port
-	APIKey   string `yaml:"api_key"`  // API key (optional)
-	Timeout  int    `yaml:"timeout"`  // Connection timeout in seconds
-	UseTLS   bool   `yaml:"use_tls"`  // Use TLS connection
-	Insecure bool   `yaml:"insecure"` // Skip TLS verification
+	Type     string `yaml:"type"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	APIKey   string `yaml:"api_key"`
+	Timeout  int    `yaml:"timeout"`
+	UseTLS   bool   `yaml:"use_tls"`
+	Insecure bool   `yaml:"insecure"`
 }
 
-// Validate implements Config.Validate for DatabaseProviderConfig
 func (c *DatabaseProviderConfig) Validate() error {
 	if c.Type == "" {
 		return fmt.Errorf("type is required")
@@ -367,9 +299,8 @@ func (c *DatabaseProviderConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for DatabaseProviderConfig
 func (c *DatabaseProviderConfig) SetDefaults() {
-	// Zero-config: Set default type and host if not specified
+
 	if c.Type == "" {
 		c.Type = "qdrant"
 	}
@@ -377,24 +308,22 @@ func (c *DatabaseProviderConfig) SetDefaults() {
 		c.Host = "localhost"
 	}
 	if c.Port == 0 {
-		c.Port = 6334 // Default gRPC port
+		c.Port = 6334
 	}
 	if c.Timeout == 0 {
 		c.Timeout = 30
 	}
 }
 
-// EmbedderProviderConfig represents embedder provider configuration
 type EmbedderProviderConfig struct {
-	Type       string `yaml:"type"`        // "ollama"
-	Model      string `yaml:"model"`       // Model name
-	Host       string `yaml:"host"`        // Host for ollama
-	Dimension  int    `yaml:"dimension"`   // Embedding dimension
-	Timeout    int    `yaml:"timeout"`     // Request timeout in seconds
-	MaxRetries int    `yaml:"max_retries"` // Max retry attempts
+	Type       string `yaml:"type"`
+	Model      string `yaml:"model"`
+	Host       string `yaml:"host"`
+	Dimension  int    `yaml:"dimension"`
+	Timeout    int    `yaml:"timeout"`
+	MaxRetries int    `yaml:"max_retries"`
 }
 
-// Validate implements Config.Validate for EmbedderProviderConfig
 func (c *EmbedderProviderConfig) Validate() error {
 	if c.Type == "" {
 		return fmt.Errorf("type is required")
@@ -417,15 +346,13 @@ func (c *EmbedderProviderConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for EmbedderProviderConfig
 func (c *EmbedderProviderConfig) SetDefaults() {
-	// Zero-config: Set default type, model, and host if not specified
-	// Note: Embedders are optional and only needed for semantic search
+
 	if c.Type == "" {
-		c.Type = "ollama" // Ollama is fine for embedders (no function calling needed)
+		c.Type = "ollama"
 	}
 	if c.Model == "" {
-		c.Model = "nomic-embed-text" // Good general-purpose embedder
+		c.Model = "nomic-embed-text"
 	}
 	if c.Host == "" {
 		c.Host = "http://localhost:11434"
@@ -441,97 +368,75 @@ func (c *EmbedderProviderConfig) SetDefaults() {
 	}
 }
 
-// ============================================================================
-// AGENT CONFIGURATIONS
-// ============================================================================
-
-// AgentConfig represents agent configuration
 type AgentConfig struct {
-	// Agent type: "native" (default) or "a2a" (external)
-	Type string `yaml:"type,omitempty"` // Agent type: "native" (default) or "a2a"
+	Type string `yaml:"type,omitempty"`
 
-	// Common fields (both native and external)
-	Name        string `yaml:"name"`        // Agent name
-	Description string `yaml:"description"` // Agent description
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
 
-	// Visibility control
-	// - "public" (default): Discoverable via /agents and callable
-	// - "internal": Not discoverable, but callable if you know the agent ID
-	// - "private": Only callable by local orchestrators, not via external API
-	Visibility string `yaml:"visibility,omitempty"` // Agent visibility: "public" (default), "internal", or "private"
+	Visibility string `yaml:"visibility,omitempty"`
 
-	// External A2A agent fields (when type="a2a")
-	URL         string            `yaml:"url,omitempty"`         // A2A agent URL (e.g., "https://server.com/agents/specialist")
-	Credentials *AgentCredentials `yaml:"credentials,omitempty"` // Authentication credentials for calling this external agent
+	URL         string            `yaml:"url,omitempty"`
+	Credentials *AgentCredentials `yaml:"credentials,omitempty"`
 
-	// Native agent fields (when type="native" or omitted)
-	LLM              string                  `yaml:"llm,omitempty"`               // LLM provider reference
-	Database         string                  `yaml:"database,omitempty"`          // Database provider reference
-	Embedder         string                  `yaml:"embedder,omitempty"`          // Embedder provider reference
-	DocumentStores   []string                `yaml:"document_stores,omitempty"`   // Document store references
-	Prompt           PromptConfig            `yaml:"prompt,omitempty"`            // Prompt configuration
-	Memory           MemoryConfig            `yaml:"memory,omitempty"`            // Memory configuration
-	Reasoning        ReasoningConfig         `yaml:"reasoning,omitempty"`         // Reasoning configuration
-	Search           SearchConfig            `yaml:"search,omitempty"`            // Search configuration
-	Task             TaskConfig              `yaml:"task,omitempty"`              // Task configuration
-	SessionStore     string                  `yaml:"session_store,omitempty"`     // Session store reference (defined globally in session_stores: section)
-	Tools            []string                `yaml:"tools,omitempty"`             // Tool references (defined globally in tools: section)
-	SubAgents        []string                `yaml:"sub_agents,omitempty"`        // For supervisor agents: which agents can be orchestrated (empty = all)
-	Security         SecurityConfig          `yaml:"security,omitempty"`          // Security configuration
-	StructuredOutput *StructuredOutputConfig `yaml:"structured_output,omitempty"` // Structured output configuration
+	LLM              string                  `yaml:"llm,omitempty"`
+	Database         string                  `yaml:"database,omitempty"`
+	Embedder         string                  `yaml:"embedder,omitempty"`
+	DocumentStores   []string                `yaml:"document_stores,omitempty"`
+	Prompt           PromptConfig            `yaml:"prompt,omitempty"`
+	Memory           MemoryConfig            `yaml:"memory,omitempty"`
+	Reasoning        ReasoningConfig         `yaml:"reasoning,omitempty"`
+	Search           SearchConfig            `yaml:"search,omitempty"`
+	Task             *TaskConfig             `yaml:"task,omitempty"`
+	SessionStore     string                  `yaml:"session_store,omitempty"`
+	Tools            []string                `yaml:"tools,omitempty"`
+	SubAgents        []string                `yaml:"sub_agents,omitempty"`
+	Security         *SecurityConfig         `yaml:"security,omitempty"`
+	StructuredOutput *StructuredOutputConfig `yaml:"structured_output,omitempty"`
 
-	// Quick config shortcuts (mutually exclusive with explicit config)
-	// These provide simple configuration shortcuts that auto-expand to full config
-	DocsFolder  string `yaml:"docs_folder,omitempty"`  // Shortcut: auto-create document store from folder path (mutually exclusive with document_stores)
-	EnableTools bool   `yaml:"enable_tools,omitempty"` // Shortcut: auto-enable all local tools (mutually exclusive with explicit tools list)
+	DocsFolder  string `yaml:"docs_folder,omitempty"`
+	EnableTools bool   `yaml:"enable_tools,omitempty"`
 
-	// A2A Agent Card Configuration
-	A2A *A2ACardConfig `yaml:"a2a,omitempty"` // A2A agent card metadata
+	A2A *A2ACardConfig `yaml:"a2a,omitempty"`
 }
 
-// Validate implements Config.Validate for AgentConfig
 func (c *AgentConfig) Validate() error {
 	if c.Name == "" {
 		return fmt.Errorf("name is required")
 	}
 
-	// Normalize type
 	if c.Type == "" {
 		c.Type = "native"
 	}
 
-	// Normalize visibility
 	if c.Visibility == "" {
 		c.Visibility = "public"
 	}
 
-	// Validate visibility
 	switch c.Visibility {
 	case "public", "internal", "private":
-		// Valid
+
 	default:
 		return fmt.Errorf("invalid visibility '%s' (must be 'public', 'internal', or 'private')", c.Visibility)
 	}
 
-	// Validate A2A card configuration if provided
 	if c.A2A != nil {
 		if err := c.A2A.Validate(); err != nil {
 			return fmt.Errorf("a2a configuration: %w", err)
 		}
 	}
 
-	// Validate based on agent type
 	switch c.Type {
 	case "a2a":
-		// External A2A agent - only URL is required
+
 		if c.URL == "" {
 			return fmt.Errorf("url is required for external A2A agents (type=a2a)")
 		}
-		// LLM, Database, etc. should not be specified for external agents
+
 		if c.LLM != "" {
 			return fmt.Errorf("llm should not be specified for external A2A agents (agent has its own LLM)")
 		}
-		// Validate credentials if provided
+
 		if c.Credentials != nil {
 			if err := c.Credentials.Validate(); err != nil {
 				return fmt.Errorf("invalid credentials for external agent: %w", err)
@@ -539,13 +444,11 @@ func (c *AgentConfig) Validate() error {
 		}
 
 	case "native":
-		// Native agent - LLM is required
+
 		if c.LLM == "" {
 			return fmt.Errorf("llm provider reference is required for native agents")
 		}
 
-		// Validate shortcuts are not mixed with explicit config (Option C: Error on ambiguity)
-		// NOTE: Expansion only happens if explicit config is NOT set, so if both are set here, it's a user error
 		if c.DocsFolder != "" && len(c.DocumentStores) > 0 {
 			return fmt.Errorf("docs_folder shortcut and document_stores are mutually exclusive (use one or the other)")
 		}
@@ -553,7 +456,6 @@ func (c *AgentConfig) Validate() error {
 			return fmt.Errorf("enable_tools shortcut and explicit tools list are mutually exclusive (use one or the other)")
 		}
 
-		// Database and embedder are only required if document stores are configured
 		if len(c.DocumentStores) > 0 {
 			if c.Database == "" {
 				return fmt.Errorf("database provider reference is required when document stores are configured")
@@ -562,7 +464,7 @@ func (c *AgentConfig) Validate() error {
 				return fmt.Errorf("embedder provider reference is required when document stores are configured")
 			}
 		}
-		// Validate native agent configs
+
 		if err := c.Prompt.Validate(); err != nil {
 			return fmt.Errorf("prompt configuration validation failed: %w", err)
 		}
@@ -572,12 +474,16 @@ func (c *AgentConfig) Validate() error {
 		if err := c.Search.Validate(); err != nil {
 			return fmt.Errorf("search configuration validation failed: %w", err)
 		}
-		if err := c.Task.Validate(); err != nil {
-			return fmt.Errorf("task configuration validation failed: %w", err)
+		if c.Task != nil {
+			if err := c.Task.Validate(); err != nil {
+				return fmt.Errorf("task configuration validation failed: %w", err)
+			}
 		}
-		// SessionStore is now a string reference - validated at Config level
-		if err := c.Security.Validate(); err != nil {
-			return fmt.Errorf("security configuration validation failed: %w", err)
+
+		if c.Security != nil {
+			if err := c.Security.Validate(); err != nil {
+				return fmt.Errorf("security configuration validation failed: %w", err)
+			}
 		}
 
 	default:
@@ -587,22 +493,19 @@ func (c *AgentConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for AgentConfig
 func (c *AgentConfig) SetDefaults() {
-	// Default to native agent if not specified
+
 	if c.Type == "" {
 		c.Type = "native"
 	}
 
-	// Default visibility
 	if c.Visibility == "" {
 		c.Visibility = "public"
 	}
 
-	// Set defaults based on agent type
 	switch c.Type {
 	case "native":
-		// Zero-config: Set default name and references if not specified
+
 		if c.Name == "" {
 			c.Name = "Assistant"
 		}
@@ -612,36 +515,34 @@ func (c *AgentConfig) SetDefaults() {
 		if c.LLM == "" {
 			c.LLM = "default-llm"
 		}
-		// Database, embedder, and document stores must be explicitly configured - no defaults
 
 		c.Prompt.SetDefaults()
 		c.Memory.SetDefaults()
 		c.Reasoning.SetDefaults()
 		c.Search.SetDefaults()
-		c.Task.SetDefaults()
-		// SessionStore is now a string reference - no defaults needed
-		c.Security.SetDefaults()
+		if c.Task != nil {
+			c.Task.SetDefaults()
+		}
+
+		if c.Security != nil {
+			c.Security.SetDefaults()
+		}
 
 	case "a2a":
-		// External A2A agent - minimal defaults
+
 		if c.Name == "" {
 			c.Name = "External Agent"
 		}
 		if c.Description == "" {
 			c.Description = "External A2A-compliant agent"
 		}
-		// Set defaults for credentials if provided
+
 		if c.Credentials != nil {
 			c.Credentials.SetDefaults()
 		}
 	}
 }
 
-// ============================================================================
-// TOOL CONFIGURATIONS
-// ============================================================================
-
-// CommandToolsConfig represents command tool configuration
 type CommandToolsConfig struct {
 	AllowedCommands  []string      `yaml:"allowed_commands"`
 	WorkingDirectory string        `yaml:"working_directory"`
@@ -649,31 +550,26 @@ type CommandToolsConfig struct {
 	EnableSandboxing bool          `yaml:"enable_sandboxing"`
 }
 
-// Validate implements Config.Validate for CommandToolsConfig
 func (c *CommandToolsConfig) Validate() error {
-	// If sandboxing is disabled, require explicit allowed_commands for security
+
 	if !c.EnableSandboxing && len(c.AllowedCommands) == 0 {
 		return fmt.Errorf("allowed_commands is required when enable_sandboxing is false (security requirement)")
 	}
-	// If sandboxing is enabled (default), empty allowed_commands means "allow all" (safe)
+
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for CommandToolsConfig
 func (c *CommandToolsConfig) SetDefaults() {
-	// Note: Empty AllowedCommands with EnableSandboxing=true means "allow all" (default permissive)
-	// Only restrict commands when sandboxing is explicitly disabled
+
 	if c.WorkingDirectory == "" {
 		c.WorkingDirectory = "./"
 	}
 	if c.MaxExecutionTime == 0 {
 		c.MaxExecutionTime = 30 * time.Second
 	}
-	// EnableSandboxing defaults to true (sandboxing enabled by default for security)
-	// This is set in the zero-config creation, not here
+
 }
 
-// SearchToolConfig represents search tool configuration
 type SearchToolConfig struct {
 	DocumentStores     []string `yaml:"document_stores"`
 	DefaultLimit       int      `yaml:"default_limit"`
@@ -682,7 +578,6 @@ type SearchToolConfig struct {
 	EnabledSearchTypes []string `yaml:"enabled_search_types"`
 }
 
-// Validate implements Config.Validate for SearchToolConfig
 func (c *SearchToolConfig) Validate() error {
 	if c.DefaultLimit <= 0 {
 		return fmt.Errorf("default_limit must be positive")
@@ -693,7 +588,6 @@ func (c *SearchToolConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for SearchToolConfig
 func (c *SearchToolConfig) SetDefaults() {
 	if c.DefaultLimit == 0 {
 		c.DefaultLimit = 10
@@ -709,16 +603,14 @@ func (c *SearchToolConfig) SetDefaults() {
 	}
 }
 
-// FileWriterConfig represents file writer tool configuration
 type FileWriterConfig struct {
 	MaxFileSize       int      `yaml:"max_file_size"`
-	AllowedExtensions []string `yaml:"allowed_extensions"` // Whitelist: only these extensions allowed (empty = allow all)
-	DeniedExtensions  []string `yaml:"denied_extensions"`  // Blacklist: block these extensions
+	AllowedExtensions []string `yaml:"allowed_extensions"`
+	DeniedExtensions  []string `yaml:"denied_extensions"`
 	BackupOnOverwrite bool     `yaml:"backup_on_overwrite"`
 	WorkingDirectory  string   `yaml:"working_directory"`
 }
 
-// Validate implements Config.Validate for FileWriterConfig
 func (c *FileWriterConfig) Validate() error {
 	if c.MaxFileSize < 0 {
 		return fmt.Errorf("max_file_size must be non-negative")
@@ -726,19 +618,16 @@ func (c *FileWriterConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for FileWriterConfig
 func (c *FileWriterConfig) SetDefaults() {
 	if c.MaxFileSize == 0 {
-		c.MaxFileSize = 1048576 // 1MB default
+		c.MaxFileSize = 1048576
 	}
-	// Note: Empty AllowedExtensions means "allow all" (default permissive behavior)
-	// Only set restrictions if explicitly configured by user
+
 	if c.WorkingDirectory == "" {
 		c.WorkingDirectory = "./"
 	}
 }
 
-// SearchReplaceConfig represents search/replace tool configuration
 type SearchReplaceConfig struct {
 	MaxReplacements  int    `yaml:"max_replacements"`
 	ShowDiff         bool   `yaml:"show_diff"`
@@ -746,7 +635,6 @@ type SearchReplaceConfig struct {
 	WorkingDirectory string `yaml:"working_directory"`
 }
 
-// Validate implements Config.Validate for SearchReplaceConfig
 func (c *SearchReplaceConfig) Validate() error {
 	if c.MaxReplacements < 0 {
 		return fmt.Errorf("max_replacements must be non-negative")
@@ -754,7 +642,6 @@ func (c *SearchReplaceConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for SearchReplaceConfig
 func (c *SearchReplaceConfig) SetDefaults() {
 	if c.MaxReplacements == 0 {
 		c.MaxReplacements = 100
@@ -764,134 +651,129 @@ func (c *SearchReplaceConfig) SetDefaults() {
 	}
 }
 
-// ToolConfigs represents tool configuration
-// The Tools field is marked with `,inline` to flatten the YAML structure
 type ToolConfigs struct {
-	Tools map[string]ToolConfig `yaml:",inline"` // Tool configurations (map for easy override, inline to avoid double-nesting)
+	Tools map[string]*ToolConfig `yaml:",inline"`
 }
 
-// Validate implements Config.Validate for ToolConfigs
+func GetDefaultToolConfigs() map[string]*ToolConfig {
+	return map[string]*ToolConfig{
+		"execute_command": {
+			Type:             "command",
+			WorkingDirectory: "./",
+			MaxExecutionTime: "30s",
+			EnableSandboxing: true,
+		},
+		"write_file": {
+			Type:             "write_file",
+			MaxFileSize:      1048576, // 1MB
+			WorkingDirectory: "./",
+		},
+		"search_replace": {
+			Type:             "search_replace",
+			MaxReplacements:  100,
+			WorkingDirectory: "./",
+			BackupEnabled:    true,
+		},
+		"todo_write": {
+			Type: "todo",
+		},
+	}
+}
+
 func (c *ToolConfigs) Validate() error {
 	for name, tool := range c.Tools {
-		if err := tool.Validate(); err != nil {
-			return fmt.Errorf("tool '%s' validation failed: %w", name, err)
+		if tool != nil {
+			if err := tool.Validate(); err != nil {
+				return fmt.Errorf("tool '%s' validation failed: %w", name, err)
+			}
 		}
 	}
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for ToolConfigs
 func (c *ToolConfigs) SetDefaults() {
-	// Initialize the tools map if it's nil
 	if c.Tools == nil {
-		c.Tools = make(map[string]ToolConfig)
+		c.Tools = make(map[string]*ToolConfig)
 	}
 
-	// Zero-config: Create default safe tools (Tier 1) ONLY if no tools are configured
-	// For file editing tools (write_file, search_replace), users must explicitly enable them
 	if len(c.Tools) == 0 {
-		c.Tools = map[string]ToolConfig{
-			"execute_command": {
-				Type:             "command",
-				AllowedCommands:  []string{"ls", "cat", "head", "tail", "pwd", "find", "grep", "wc", "date", "echo", "tree", "du", "df"},
-				WorkingDirectory: "./",
-				MaxExecutionTime: "30s",
-				EnableSandboxing: true,
-			},
-			"todo_write": {
-				Type: "todo",
-			},
-			// NOTE: write_file, search_replace are NOT included in safe defaults
-			// Users must explicitly enable them via configuration for security
+		c.Tools = GetDefaultToolConfigs()
+	}
+
+	for name := range c.Tools {
+		if c.Tools[name] != nil {
+			c.Tools[name].SetDefaults()
 		}
 	}
-
-	// Set defaults for each tool
-	for name, tool := range c.Tools {
-		tool.SetDefaults()
-		c.Tools[name] = tool
-	}
 }
 
-// ToolConfig represents a single tool configuration
 type ToolConfig struct {
-	Type        string `yaml:"type"`                  // Tool type: "command", "write_file", "search_replace", "todo", etc.
-	Enabled     bool   `yaml:"enabled,omitempty"`     // Tool enabled (default: true)
-	Description string `yaml:"description,omitempty"` // Tool description
+	Type        string `yaml:"type"`
+	Enabled     bool   `yaml:"enabled,omitempty"`
+	Description string `yaml:"description,omitempty"`
 
-	// Command tool fields
-	AllowedCommands  []string `yaml:"allowed_commands,omitempty"`   // Allowed commands
-	WorkingDirectory string   `yaml:"working_directory,omitempty"`  // Working directory
-	MaxExecutionTime string   `yaml:"max_execution_time,omitempty"` // Max execution time
-	EnableSandboxing bool     `yaml:"enable_sandboxing,omitempty"`  // Enable sandboxing
+	AllowedCommands  []string `yaml:"allowed_commands,omitempty"`
+	WorkingDirectory string   `yaml:"working_directory,omitempty"`
+	MaxExecutionTime string   `yaml:"max_execution_time,omitempty"`
+	EnableSandboxing bool     `yaml:"enable_sandboxing,omitempty"`
 
-	// File writer tool fields
-	MaxFileSize       int64    `yaml:"max_file_size,omitempty"`      // Max file size in bytes
-	AllowedExtensions []string `yaml:"allowed_extensions,omitempty"` // Whitelist: only these extensions (empty = allow all)
-	DeniedExtensions  []string `yaml:"denied_extensions,omitempty"`  // Blacklist: block these extensions
-	ForbiddenPaths    []string `yaml:"forbidden_paths,omitempty"`    // Forbidden file paths
+	MaxFileSize       int64    `yaml:"max_file_size,omitempty"`
+	AllowedExtensions []string `yaml:"allowed_extensions,omitempty"`
+	DeniedExtensions  []string `yaml:"denied_extensions,omitempty"`
+	ForbiddenPaths    []string `yaml:"forbidden_paths,omitempty"`
 
-	// Search replace tool fields
-	MaxReplacements int  `yaml:"max_replacements,omitempty"` // Max replacements per operation
-	BackupEnabled   bool `yaml:"backup_enabled,omitempty"`   // Enable file backups
+	MaxReplacements int  `yaml:"max_replacements,omitempty"`
+	BackupEnabled   bool `yaml:"backup_enabled,omitempty"`
 
-	// Search tool fields
-	DocumentStores     []string `yaml:"document_stores,omitempty"`      // Document stores to search
-	DefaultLimit       int      `yaml:"default_limit,omitempty"`        // Default result limit
-	MaxLimit           int      `yaml:"max_limit,omitempty"`            // Maximum result limit
-	MaxResults         int      `yaml:"max_results,omitempty"`          // Maximum total results
-	EnabledSearchTypes []string `yaml:"enabled_search_types,omitempty"` // Enabled search types
+	DocumentStores     []string `yaml:"document_stores,omitempty"`
+	DefaultLimit       int      `yaml:"default_limit,omitempty"`
+	MaxLimit           int      `yaml:"max_limit,omitempty"`
+	MaxResults         int      `yaml:"max_results,omitempty"`
+	EnabledSearchTypes []string `yaml:"enabled_search_types,omitempty"`
 
-	// MCP tool fields
-	ServerURL string `yaml:"server_url,omitempty"` // MCP server URL
+	ServerURL string `yaml:"server_url,omitempty"`
 
-	// Generic config for extensibility (for custom/future tools)
-	Config map[string]interface{} `yaml:"config,omitempty"` // Additional tool-specific config
+	Config map[string]interface{} `yaml:"config,omitempty"`
 }
 
-// Validate implements Config.Validate for ToolConfig
 func (c *ToolConfig) Validate() error {
 	if c.Type == "" {
 		return fmt.Errorf("type is required")
 	}
 
-	// Type-specific validation
 	switch c.Type {
 	case "command":
-		// Only require allowed_commands when sandboxing is disabled (same logic as CommandToolsConfig)
+
 		if !c.EnableSandboxing && len(c.AllowedCommands) == 0 {
 			return fmt.Errorf("allowed_commands is required when enable_sandboxing is false (security requirement)")
 		}
-		// If sandboxing is enabled (default), empty allowed_commands means "allow all" (safe)
+
 	case "write_file":
-		// Optional validation
+
 	case "search_replace":
-		// Optional validation
+
 	case "search":
 		if len(c.DocumentStores) == 0 {
 			return fmt.Errorf("document_stores is required for search tool")
 		}
 	case "todo":
-		// No specific validation needed
+
 	default:
-		// Allow unknown types for extensibility
+
 	}
 
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for ToolConfig
 func (c *ToolConfig) SetDefaults() {
-	// Enabled is explicitly false, so check for zero value and set to true
-	// Note: Go's zero value for bool is false, so we can't distinguish between
-	// unset (default) and explicitly set to false in the YAML
-	// We'll assume if it's false, it was unset (unless explicitly "enabled: false")
-	// For now, we'll keep it simple: tools are enabled by default
+
 	c.Enabled = true
 
-	// Type-specific defaults
 	switch c.Type {
 	case "command":
+		if !c.EnableSandboxing {
+			c.EnableSandboxing = true
+		}
 		if c.WorkingDirectory == "" {
 			c.WorkingDirectory = "./"
 		}
@@ -900,7 +782,7 @@ func (c *ToolConfig) SetDefaults() {
 		}
 	case "write_file":
 		if c.MaxFileSize == 0 {
-			c.MaxFileSize = 1048576 // 1MB
+			c.MaxFileSize = 1048576
 		}
 	case "search_replace":
 		if c.MaxReplacements == 0 {
@@ -920,27 +802,21 @@ func (c *ToolConfig) SetDefaults() {
 			c.MaxResults = 100
 		}
 	case "mcp":
-		// No defaults for MCP - ServerURL is provided via flag or env (resolved in CLI layer)
+
 	}
 }
 
-// ============================================================================
-// DOCUMENT STORE CONFIGURATIONS
-// ============================================================================
-
-// DocumentStoreConfig represents document store configuration
 type DocumentStoreConfig struct {
-	Name                string   `yaml:"name"`                 // Store name
-	Source              string   `yaml:"source"`               // Source type
-	Path                string   `yaml:"path"`                 // Source path
-	IncludePatterns     []string `yaml:"include_patterns"`     // Include patterns
-	ExcludePatterns     []string `yaml:"exclude_patterns"`     // Exclude patterns
-	WatchChanges        bool     `yaml:"watch_changes"`        // Watch for changes
-	MaxFileSize         int64    `yaml:"max_file_size"`        // Max file size in bytes
-	IncrementalIndexing bool     `yaml:"incremental_indexing"` // Enable incremental indexing (only index changed files)
+	Name                string   `yaml:"name"`
+	Source              string   `yaml:"source"`
+	Path                string   `yaml:"path"`
+	IncludePatterns     []string `yaml:"include_patterns"`
+	ExcludePatterns     []string `yaml:"exclude_patterns"`
+	WatchChanges        bool     `yaml:"watch_changes"`
+	MaxFileSize         int64    `yaml:"max_file_size"`
+	IncrementalIndexing bool     `yaml:"incremental_indexing"`
 }
 
-// Validate implements Config.Validate for DocumentStoreConfig
 func (c *DocumentStoreConfig) Validate() error {
 	if c.Name == "" {
 		return fmt.Errorf("name is required")
@@ -954,9 +830,8 @@ func (c *DocumentStoreConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for DocumentStoreConfig
 func (c *DocumentStoreConfig) SetDefaults() {
-	// Zero-config: Set default name and source if not specified
+
 	if c.Name == "" {
 		c.Name = "default-docs"
 	}
@@ -966,134 +841,94 @@ func (c *DocumentStoreConfig) SetDefaults() {
 	if c.Path == "" {
 		c.Path = "./"
 	}
-	// Include patterns: Default to supported file types (text + parseable binary documents)
-	// Hector can parse: .pdf, .docx, .xlsx + all text-based files
-	if len(c.IncludePatterns) == 0 {
-		c.IncludePatterns = []string{
-			// Documentation
-			"*.md", "*.markdown", "*.txt", "*.rst", "*.adoc",
-			// Code (common languages)
-			"*.go", "*.py", "*.js", "*.ts", "*.jsx", "*.tsx",
-			"*.java", "*.c", "*.cpp", "*.h", "*.hpp", "*.rs",
-			"*.rb", "*.php", "*.sh", "*.bash", "*.sql",
-			// Config files
-			"*.yaml", "*.yml", "*.json", "*.toml", "*.ini", "*.env", "*.conf",
-			// Web files
-			"*.html", "*.htm", "*.css", "*.xml", "*.svg",
-			// Binary documents (parseable)
-			"*.pdf", "*.docx", "*.xlsx",
-		}
-	}
-	// Exclude patterns: Binary/media files and dependency directories
+
 	if len(c.ExcludePatterns) == 0 {
 		c.ExcludePatterns = []string{
-			// Version control & hidden directories
+
 			"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**",
 
-			// Dependency directories
 			"**/node_modules/**", "**/vendor/**", "**/venv/**", "**/.venv/**",
 			"**/virtualenv/**", "**/env/**", "**/__pycache__/**",
 			"**/.npm/**", "**/.yarn/**", "**/.pnp/**",
 			"**/.bundle/**", "**/gems/**",
 
-			// Build & distribution artifacts
 			"**/dist/**", "**/build/**", "**/out/**", "**/output/**",
 			"**/target/**", "**/.next/**", "**/.nuxt/**", "**/.output/**",
 			"**/bin/**", "**/obj/**", "**/.gradle/**", "**/.m2/**",
 			"**/.cache/**", "**/.parcel-cache/**",
 
-			// IDE & editor files
 			"**/.vscode/**", "**/.idea/**", "**/.eclipse/**",
 			"**/.settings/**", "**/*.swp", "**/*.swo", "**/*~",
 			"**/.DS_Store", "**/Thumbs.db", "**/.directory",
 
-			// Compiled & executable files
 			"*.exe", "*.dll", "*.so", "*.dylib", "*.bin", "*.o", "*.a",
 			"*.obj", "*.lib", "*.class", "*.pyc", "*.pyo", "*.pyd",
 
-			// Image & media files (non-parseable)
 			"*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.ico", "*.webp", "*.svg",
 			"*.mp4", "*.avi", "*.mov", "*.mkv", "*.flv", "*.wmv",
 			"*.mp3", "*.wav", "*.flac", "*.aac", "*.ogg", "*.wma",
 
-			// Archive & compressed files
 			"*.zip", "*.tar", "*.gz", "*.bz2", "*.7z", "*.rar", "*.xz", "*.tgz",
 
-			// Fonts
 			"*.ttf", "*.otf", "*.woff", "*.woff2", "*.eot",
 
-			// Database files
 			"*.db", "*.sqlite", "*.sqlite3", "*.mdb",
 
-			// Log & temporary files
 			"*.log", "*.tmp", "*.temp", "*.bak", "*.swp", "*.cache",
 			"**/logs/**", "**/tmp/**", "**/temp/**",
 
-			// Lock files
 			"**/package-lock.json", "**/yarn.lock", "**/pnpm-lock.yaml",
 			"**/Gemfile.lock", "**/Cargo.lock", "**/poetry.lock",
 
-			// Hector-specific
 			"**/.hector/**", "**/index_state_*.json",
 
-			// Common large directories
 			"**/coverage/**", "**/.nyc_output/**", "**/test-results/**",
 			"**/public/assets/**", "**/static/media/**",
 		}
 	}
 	if c.MaxFileSize == 0 {
-		c.MaxFileSize = 10 * 1024 * 1024 // 10MB default
+		c.MaxFileSize = 10 * 1024 * 1024
 	}
-	// Zero-config: Enable watching by default
+
 	if !c.WatchChanges {
 		c.WatchChanges = true
 	}
 }
 
-// ============================================================================
-// PROMPT CONFIGURATIONS
-// ============================================================================
-
-// TaskConfig represents task service configuration
-// Presence of configuration implies enabled (no explicit enabled field needed)
 type TaskConfig struct {
-	Backend    string         `yaml:"backend,omitempty"`     // Backend type: "memory" (default) or "sql"
-	WorkerPool int            `yaml:"worker_pool,omitempty"` // Max concurrent async tasks (default: 100, 0 = unlimited)
-	SQL        *TaskSQLConfig `yaml:"sql,omitempty"`         // SQL configuration (required if backend=sql)
+	Backend    string         `yaml:"backend,omitempty"`
+	WorkerPool int            `yaml:"worker_pool,omitempty"`
+	SQL        *TaskSQLConfig `yaml:"sql,omitempty"`
 }
 
-// IsEnabled returns true if task configuration is present
 func (c *TaskConfig) IsEnabled() bool {
 	return c.Backend != "" || c.WorkerPool > 0 || c.SQL != nil
 }
 
-// TaskSQLConfig represents SQL backend configuration for tasks
 type TaskSQLConfig struct {
-	Driver   string `yaml:"driver"`              // Database driver: "postgres", "mysql", or "sqlite"
-	Host     string `yaml:"host,omitempty"`      // Database host (not needed for sqlite)
-	Port     int    `yaml:"port,omitempty"`      // Database port (not needed for sqlite)
-	Database string `yaml:"database"`            // Database name or file path (for sqlite)
-	Username string `yaml:"username,omitempty"`  // Database username (not needed for sqlite)
-	Password string `yaml:"password,omitempty"`  // Database password (not needed for sqlite)
-	SSLMode  string `yaml:"ssl_mode,omitempty"`  // SSL mode for postgres: "disable", "require", "verify-ca", "verify-full"
-	MaxConns int    `yaml:"max_conns,omitempty"` // Maximum number of open connections (default: 25)
-	MaxIdle  int    `yaml:"max_idle,omitempty"`  // Maximum number of idle connections (default: 5)
+	Driver   string `yaml:"driver"`
+	Host     string `yaml:"host,omitempty"`
+	Port     int    `yaml:"port,omitempty"`
+	Database string `yaml:"database"`
+	Username string `yaml:"username,omitempty"`
+	Password string `yaml:"password,omitempty"`
+	SSLMode  string `yaml:"ssl_mode,omitempty"`
+	MaxConns int    `yaml:"max_conns,omitempty"`
+	MaxIdle  int    `yaml:"max_idle,omitempty"`
 }
 
-// SetDefaults sets default values for TaskConfig
 func (c *TaskConfig) SetDefaults() {
 	if c.Backend == "" {
 		c.Backend = "memory"
 	}
 	if c.WorkerPool == 0 {
-		c.WorkerPool = 100 // Default: 100 concurrent tasks
+		c.WorkerPool = 100
 	}
 	if c.SQL != nil {
 		c.SQL.SetDefaults()
 	}
 }
 
-// SetDefaults sets default values for TaskSQLConfig
 func (c *TaskSQLConfig) SetDefaults() {
 	if c.Driver == "" {
 		c.Driver = "postgres"
@@ -1120,27 +955,24 @@ func (c *TaskSQLConfig) SetDefaults() {
 	}
 }
 
-// AgentCredentials represents authentication credentials for calling external A2A agents
 type AgentCredentials struct {
-	Type         string `yaml:"type"`                     // Credential type: "bearer", "api_key", "basic"
-	Token        string `yaml:"token,omitempty"`          // For bearer tokens (JWT)
-	APIKey       string `yaml:"api_key,omitempty"`        // For API key authentication
-	APIKeyHeader string `yaml:"api_key_header,omitempty"` // Header name for API key (default: "X-API-Key")
-	Username     string `yaml:"username,omitempty"`       // For basic auth
-	Password     string `yaml:"password,omitempty"`       // For basic auth
+	Type         string `yaml:"type"`
+	Token        string `yaml:"token,omitempty"`
+	APIKey       string `yaml:"api_key,omitempty"`
+	APIKeyHeader string `yaml:"api_key_header,omitempty"`
+	Username     string `yaml:"username,omitempty"`
+	Password     string `yaml:"password,omitempty"`
 }
 
-// SetDefaults sets default values for AgentCredentials
 func (c *AgentCredentials) SetDefaults() {
 	if c.Type == "" {
-		c.Type = "bearer" // Default to bearer token
+		c.Type = "bearer"
 	}
 	if c.Type == "api_key" && c.APIKeyHeader == "" {
 		c.APIKeyHeader = "X-API-Key"
 	}
 }
 
-// Validate validates the agent credentials configuration
 func (c *AgentCredentials) Validate() error {
 	if c.Type == "" {
 		return fmt.Errorf("credential type is required")
@@ -1165,66 +997,61 @@ func (c *AgentCredentials) Validate() error {
 	return nil
 }
 
-// SecurityConfig represents security configuration for an agent
-// Presence of configuration implies enabled (no explicit enabled field needed)
 type SecurityConfig struct {
-	Schemes  map[string]SecurityScheme `yaml:"schemes,omitempty"`  // Security schemes by name (e.g., "BearerAuth")
-	Require  []map[string][]string     `yaml:"require,omitempty"`  // Security requirements (list of OR'd AND sets)
-	JWKSURL  string                    `yaml:"jwks_url,omitempty"` // JWKS URL for JWT validation
-	Issuer   string                    `yaml:"issuer,omitempty"`   // Expected JWT issuer
-	Audience string                    `yaml:"audience,omitempty"` // Expected JWT audience
+	Schemes  map[string]*SecurityScheme `yaml:"schemes,omitempty"`
+	Require  []map[string][]string      `yaml:"require,omitempty"`
+	JWKSURL  string                     `yaml:"jwks_url,omitempty"`
+	Issuer   string                     `yaml:"issuer,omitempty"`
+	Audience string                     `yaml:"audience,omitempty"`
 }
 
-// IsEnabled returns true if security configuration is present
 func (c *SecurityConfig) IsEnabled() bool {
 	return len(c.Schemes) > 0 || len(c.Require) > 0 || c.JWKSURL != "" || c.Issuer != "" || c.Audience != ""
 }
 
-// SecurityScheme represents a single security scheme definition
 type SecurityScheme struct {
-	Type         string `yaml:"type"`                    // Scheme type: "http", "apiKey", "oauth2", "openIdConnect", "mutualTLS"
-	Scheme       string `yaml:"scheme,omitempty"`        // For HTTP auth: "bearer", "basic"
-	BearerFormat string `yaml:"bearer_format,omitempty"` // For bearer tokens: "JWT"
-	Description  string `yaml:"description,omitempty"`   // Human-readable description
-	// For API Key auth
-	In   string `yaml:"in,omitempty"`   // "header", "query", or "cookie"
-	Name string `yaml:"name,omitempty"` // Parameter name for API key
+	Type         string `yaml:"type"`
+	Scheme       string `yaml:"scheme,omitempty"`
+	BearerFormat string `yaml:"bearer_format,omitempty"`
+	Description  string `yaml:"description,omitempty"`
+
+	In   string `yaml:"in,omitempty"`
+	Name string `yaml:"name,omitempty"`
 }
 
-// SetDefaults sets default values for SecurityConfig
 func (c *SecurityConfig) SetDefaults() {
-	// No defaults needed - security is opt-in
+
 }
 
-// Validate validates the security configuration
 func (c *SecurityConfig) Validate() error {
 	if !c.IsEnabled() {
-		return nil // Skip validation if security is disabled
+		return nil
 	}
 	for name, scheme := range c.Schemes {
-		if scheme.Type == "" {
-			return fmt.Errorf("security scheme '%s' must have a type", name)
-		}
-		// Validate based on type
-		switch scheme.Type {
-		case "http":
-			if scheme.Scheme != "bearer" && scheme.Scheme != "basic" {
-				return fmt.Errorf("http security scheme '%s' must have scheme 'bearer' or 'basic'", name)
+		if scheme != nil {
+			if scheme.Type == "" {
+				return fmt.Errorf("security scheme '%s' must have a type", name)
 			}
-		case "apiKey":
-			if scheme.In == "" || scheme.Name == "" {
-				return fmt.Errorf("apiKey security scheme '%s' must have 'in' and 'name' fields", name)
+
+			switch scheme.Type {
+			case "http":
+				if scheme.Scheme != "bearer" && scheme.Scheme != "basic" {
+					return fmt.Errorf("http security scheme '%s' must have scheme 'bearer' or 'basic'", name)
+				}
+			case "apiKey":
+				if scheme.In == "" || scheme.Name == "" {
+					return fmt.Errorf("apiKey security scheme '%s' must have 'in' and 'name' fields", name)
+				}
+			case "oauth2", "openIdConnect", "mutualTLS":
+
+			default:
+				return fmt.Errorf("unsupported security scheme type '%s' for '%s'", scheme.Type, name)
 			}
-		case "oauth2", "openIdConnect", "mutualTLS":
-			// More complex validation can be added here
-		default:
-			return fmt.Errorf("unsupported security scheme type '%s' for '%s'", scheme.Type, name)
 		}
 	}
 	return nil
 }
 
-// Validate validates the task configuration
 func (c *TaskConfig) Validate() error {
 	if c.Backend != "" && c.Backend != "memory" && c.Backend != "sql" {
 		return fmt.Errorf("invalid task backend '%s', must be 'memory' or 'sql'", c.Backend)
@@ -1243,7 +1070,6 @@ func (c *TaskConfig) Validate() error {
 	return nil
 }
 
-// Validate validates the SQL configuration
 func (c *TaskSQLConfig) Validate() error {
 	if c.Driver == "" {
 		return fmt.Errorf("driver is required")
@@ -1271,7 +1097,6 @@ func (c *TaskSQLConfig) Validate() error {
 	return nil
 }
 
-// ConnectionString builds a connection string for the database
 func (c *TaskSQLConfig) ConnectionString() string {
 	switch c.Driver {
 	case "postgres":
@@ -1279,7 +1104,7 @@ func (c *TaskSQLConfig) ConnectionString() string {
 		if sslMode == "" {
 			sslMode = "disable"
 		}
-		// Only include password if it's not empty
+
 		if c.Password != "" {
 			return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 				c.Host, c.Port, c.Username, c.Password, c.Database, sslMode)
@@ -1296,33 +1121,27 @@ func (c *TaskSQLConfig) ConnectionString() string {
 	}
 }
 
-// SessionStoreConfig represents session persistence configuration
-// Presence of configuration implies enabled (no explicit enabled field needed)
 type SessionStoreConfig struct {
-	Backend string            `yaml:"backend,omitempty"` // Backend type: "memory" (default) or "sql"
-	SQL     *SessionSQLConfig `yaml:"sql,omitempty"`     // SQL configuration (required if backend=sql)
+	Backend string            `yaml:"backend,omitempty"`
+	SQL     *SessionSQLConfig `yaml:"sql,omitempty"`
 }
 
-// IsEnabled returns true if session store configuration is present
 func (c *SessionStoreConfig) IsEnabled() bool {
 	return c.Backend != "" || c.SQL != nil
 }
 
-// SessionSQLConfig represents SQL backend configuration for session storage
-// Uses the same structure as TaskSQLConfig for consistency
 type SessionSQLConfig struct {
-	Driver   string `yaml:"driver"`              // Database driver: "postgres", "mysql", or "sqlite"
-	Host     string `yaml:"host,omitempty"`      // Database host (not needed for sqlite)
-	Port     int    `yaml:"port,omitempty"`      // Database port (not needed for sqlite)
-	Database string `yaml:"database"`            // Database name or file path (for sqlite)
-	Username string `yaml:"username,omitempty"`  // Database username (not needed for sqlite)
-	Password string `yaml:"password,omitempty"`  // Database password (not needed for sqlite)
-	SSLMode  string `yaml:"ssl_mode,omitempty"`  // SSL mode for postgres: "disable", "require", "verify-ca", "verify-full"
-	MaxConns int    `yaml:"max_conns,omitempty"` // Maximum number of open connections (default: 25)
-	MaxIdle  int    `yaml:"max_idle,omitempty"`  // Maximum number of idle connections (default: 5)
+	Driver   string `yaml:"driver"`
+	Host     string `yaml:"host,omitempty"`
+	Port     int    `yaml:"port,omitempty"`
+	Database string `yaml:"database"`
+	Username string `yaml:"username,omitempty"`
+	Password string `yaml:"password,omitempty"`
+	SSLMode  string `yaml:"ssl_mode,omitempty"`
+	MaxConns int    `yaml:"max_conns,omitempty"`
+	MaxIdle  int    `yaml:"max_idle,omitempty"`
 }
 
-// SetDefaults sets default values for SessionStoreConfig
 func (c *SessionStoreConfig) SetDefaults() {
 	if c.Backend == "" {
 		c.Backend = "memory"
@@ -1332,10 +1151,13 @@ func (c *SessionStoreConfig) SetDefaults() {
 	}
 }
 
-// SetDefaults sets default values for SessionSQLConfig
 func (c *SessionSQLConfig) SetDefaults() {
 	if c.Driver == "" {
-		c.Driver = "sqlite" // Default to SQLite for simplicity
+		c.Driver = "sqlite"
+	}
+
+	if c.Driver == "sqlite" && c.Database == "" {
+		c.Database = "./sessions.db"
 	}
 	if c.Host == "" && c.Driver != "sqlite" {
 		c.Host = "localhost"
@@ -1359,7 +1181,6 @@ func (c *SessionSQLConfig) SetDefaults() {
 	}
 }
 
-// Validate validates the session store configuration
 func (c *SessionStoreConfig) Validate() error {
 	if c.Backend != "" && c.Backend != "memory" && c.Backend != "sql" {
 		return fmt.Errorf("invalid session store backend '%s', must be 'memory' or 'sql'", c.Backend)
@@ -1375,7 +1196,6 @@ func (c *SessionStoreConfig) Validate() error {
 	return nil
 }
 
-// Validate validates the session SQL configuration
 func (c *SessionSQLConfig) Validate() error {
 	if c.Driver == "" {
 		return fmt.Errorf("driver is required")
@@ -1403,7 +1223,6 @@ func (c *SessionSQLConfig) Validate() error {
 	return nil
 }
 
-// ConnectionString builds a connection string for the database
 func (c *SessionSQLConfig) ConnectionString() string {
 	switch c.Driver {
 	case "postgres":
@@ -1411,7 +1230,7 @@ func (c *SessionSQLConfig) ConnectionString() string {
 		if sslMode == "" {
 			sslMode = "disable"
 		}
-		// Only include password if it's not empty
+
 		if c.Password != "" {
 			return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 				c.Host, c.Port, c.Username, c.Password, c.Database, sslMode)
@@ -1428,73 +1247,54 @@ func (c *SessionSQLConfig) ConnectionString() string {
 	}
 }
 
-// MemoryConfig represents memory and conversation history configuration
 type MemoryConfig struct {
-	// Working memory strategy selection: "buffer_window" or "summary_buffer" (default)
-	// - buffer_window: Simple LIFO, keeps last N messages
-	// - summary_buffer: Token-based with threshold-triggered summarization (DEFAULT)
 	Strategy string `yaml:"strategy,omitempty"`
 
-	// Working memory settings
-	Budget int `yaml:"budget,omitempty"` // Token budget (default: 2000)
+	Budget int `yaml:"budget,omitempty"`
 
-	// Buffer window settings (for buffer_window strategy)
-	WindowSize int `yaml:"window_size,omitempty"` // Number of messages to keep
+	WindowSize int `yaml:"window_size,omitempty"`
 
-	// Summary buffer settings (for summary_buffer strategy)
-	Threshold float64 `yaml:"threshold,omitempty"` // Trigger at % of budget (default: 0.8)
-	Target    float64 `yaml:"target,omitempty"`    // Compress to % of budget (default: 0.6)
+	Threshold float64 `yaml:"threshold,omitempty"`
+	Target    float64 `yaml:"target,omitempty"`
 
-	// Long-term memory configuration (optional)
 	LongTerm LongTermMemoryConfig `yaml:"long_term,omitempty"`
 
-	// Legacy fields (deprecated but kept for backward compatibility)
-	Summarization          bool    `yaml:"summarization,omitempty"`           // Deprecated: use strategy=summary_buffer
-	SummarizationThreshold float64 `yaml:"summarization_threshold,omitempty"` // Deprecated: use threshold
+	Summarization          bool    `yaml:"summarization,omitempty"`
+	SummarizationThreshold float64 `yaml:"summarization_threshold,omitempty"`
 }
 
-// LongTermMemoryConfig configures long-term memory (semantic recall)
-// Presence of configuration implies enabled (no explicit enabled field needed)
 type LongTermMemoryConfig struct {
-	StorageScope string `yaml:"storage_scope,omitempty"` // What to store: "all", "conversational", "summaries_only" (default: "all")
-	BatchSize    int    `yaml:"batch_size,omitempty"`    // Batch size for storage (default: 1 = immediate)
-	AutoRecall   bool   `yaml:"auto_recall,omitempty"`   // Auto-inject memories (default: true when enabled)
-	RecallLimit  int    `yaml:"recall_limit,omitempty"`  // Max memories to recall (default: 5)
-	Collection   string `yaml:"collection,omitempty"`    // Qdrant collection name (default: "hector_session_memory")
+	StorageScope string `yaml:"storage_scope,omitempty"`
+	BatchSize    int    `yaml:"batch_size,omitempty"`
+	AutoRecall   bool   `yaml:"auto_recall,omitempty"`
+	RecallLimit  int    `yaml:"recall_limit,omitempty"`
+	Collection   string `yaml:"collection,omitempty"`
 }
 
-// IsEnabled returns true if long-term memory configuration is present
 func (c *LongTermMemoryConfig) IsEnabled() bool {
 	return c.StorageScope != "" || c.BatchSize > 0 || c.RecallLimit > 0 || c.Collection != ""
 }
 
-// PromptConfig represents prompt configuration
 type PromptConfig struct {
-	// Slot-based customization (preferred)
-	// Note: We use map[string]string for YAML compatibility
-	// Agent will convert to reasoning.PromptSlots
-	PromptSlots map[string]string `yaml:"prompt_slots"` // Override strategy's prompt slots
+	PromptSlots map[string]string `yaml:"prompt_slots"`
 
-	// Alternative: Full prompt override
-	SystemPrompt   string            `yaml:"system_prompt"`   // Full system prompt override (bypasses slots)
-	Instructions   string            `yaml:"instructions"`    // Instructions
-	FullTemplate   string            `yaml:"full_template"`   // Full template
-	Template       string            `yaml:"template"`        // Template
-	Variables      map[string]string `yaml:"variables"`       // Template variables
-	IncludeContext bool              `yaml:"include_context"` // Include context
-	IncludeHistory bool              `yaml:"include_history"` // Include history
-	IncludeTools   bool              `yaml:"include_tools"`   // Include tools
+	SystemPrompt   string            `yaml:"system_prompt"`
+	Instructions   string            `yaml:"instructions"`
+	FullTemplate   string            `yaml:"full_template"`
+	Template       string            `yaml:"template"`
+	Variables      map[string]string `yaml:"variables"`
+	IncludeContext bool              `yaml:"include_context"`
+	IncludeHistory bool              `yaml:"include_history"`
+	IncludeTools   bool              `yaml:"include_tools"`
 
-	// Legacy fields (deprecated - use memory: section instead)
-	MaxHistoryMessages  int     `yaml:"max_history_messages,omitempty"` // Deprecated: use memory.budget
-	MaxContextLength    int     `yaml:"max_context_length,omitempty"`   // Max context length
-	EnableSummarization bool    `yaml:"enable_summarization,omitempty"` // Deprecated: use memory.summarization
-	SummarizeThreshold  float64 `yaml:"summarize_threshold,omitempty"`  // Deprecated: use memory.summarization_threshold
-	SmartMemory         bool    `yaml:"smart_memory,omitempty"`         // Deprecated: automatically enabled when memory.budget is set
-	MemoryBudget        int     `yaml:"memory_budget,omitempty"`        // Deprecated: use memory.budget
+	MaxHistoryMessages  int     `yaml:"max_history_messages,omitempty"`
+	MaxContextLength    int     `yaml:"max_context_length,omitempty"`
+	EnableSummarization bool    `yaml:"enable_summarization,omitempty"`
+	SummarizeThreshold  float64 `yaml:"summarize_threshold,omitempty"`
+	SmartMemory         bool    `yaml:"smart_memory,omitempty"`
+	MemoryBudget        int     `yaml:"memory_budget,omitempty"`
 }
 
-// Validate implements Config.Validate for MemoryConfig
 func (c *MemoryConfig) Validate() error {
 	if c.Budget < 0 {
 		return fmt.Errorf("budget must be non-negative")
@@ -1509,7 +1309,6 @@ func (c *MemoryConfig) Validate() error {
 		return fmt.Errorf("target must be between 0.0 and 1.0")
 	}
 
-	// Validate strategy
 	if c.Strategy != "" && c.Strategy != "buffer_window" && c.Strategy != "summary_buffer" {
 		return fmt.Errorf("invalid strategy '%s', must be 'buffer_window' or 'summary_buffer'", c.Strategy)
 	}
@@ -1517,42 +1316,38 @@ func (c *MemoryConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for MemoryConfig
 func (c *MemoryConfig) SetDefaults() {
-	// Default to summary_buffer strategy
+
 	if c.Strategy == "" {
 		c.Strategy = "summary_buffer"
 	}
 
-	// Handle legacy config migration
 	if c.Summarization && c.Strategy == "summary_buffer" {
-		// Legacy summarization flag maps to summary_buffer
+
 		if c.SummarizationThreshold > 0 {
 			c.Threshold = c.SummarizationThreshold
 		}
 	}
 
-	// Strategy-specific defaults
 	switch c.Strategy {
 	case "buffer_window":
 		if c.WindowSize <= 0 {
-			c.WindowSize = 20 // Keep last 20 messages
+			c.WindowSize = 20
 		}
 
 	case "summary_buffer":
 		if c.Budget <= 0 {
-			c.Budget = 2000 // ~50 messages
+			c.Budget = 2000
 		}
 		if c.Threshold <= 0 {
-			c.Threshold = 0.8 // Trigger at 80% capacity
+			c.Threshold = 0.8
 		}
 		if c.Target <= 0 {
-			c.Target = 0.6 // Compress to 60% capacity
+			c.Target = 0.6
 		}
 	}
 }
 
-// Validate implements Config.Validate for PromptConfig
 func (c *PromptConfig) Validate() error {
 	if c.MaxContextLength < 0 {
 		return fmt.Errorf("max_context_length must be non-negative")
@@ -1560,16 +1355,12 @@ func (c *PromptConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for PromptConfig
 func (c *PromptConfig) SetDefaults() {
-	// DO NOT set a default SystemPrompt - leave it empty to allow slot-based prompts
-	// If both SystemPrompt and prompt_slots are empty, strategies will provide default slots
 
 	if c.MaxContextLength == 0 {
 		c.MaxContextLength = 4000
 	}
 
-	// Legacy field defaults (for backward compatibility)
 	if c.MaxHistoryMessages == 0 {
 		c.MaxHistoryMessages = 10
 	}
@@ -1581,25 +1372,19 @@ func (c *PromptConfig) SetDefaults() {
 	}
 }
 
-// ============================================================================
-// REASONING CONFIGURATIONS
-// ============================================================================
-
-// ReasoningConfig represents reasoning configuration
 type ReasoningConfig struct {
-	Engine                     string  `yaml:"engine"`                       // Reasoning engine (chain-of-thought, supervisor)
-	MaxIterations              int     `yaml:"max_iterations"`               // Max iterations (safety valve, default: 100)
-	EnableSelfReflection       bool    `yaml:"enable_self_reflection"`       // Enable LLM to output internal reasoning with <thinking> tags
-	EnableStructuredReflection *bool   `yaml:"enable_structured_reflection"` // Enable LLM-based structured tool analysis (nil=default true)
-	EnableGoalExtraction       bool    `yaml:"enable_goal_extraction"`       // Enable LLM-based goal extraction (supervisor strategy only)
-	ShowDebugInfo              bool    `yaml:"show_debug_info"`              // Show debug info (iteration counts, tokens, etc.)
-	ShowToolExecution          *bool   `yaml:"show_tool_execution"`          // Show tool execution labels (nil=default true, explicitly configurable)
-	ShowThinking               bool    `yaml:"show_thinking"`                // Show meta-reflection in grayed-out [Thinking: ...] blocks
-	EnableStreaming            *bool   `yaml:"enable_streaming"`             // Enable streaming (nil=default true, explicitly configurable)
-	QualityThreshold           float64 `yaml:"quality_threshold"`            // Quality threshold (0.0-1.0, for future use)
+	Engine                     string  `yaml:"engine"`
+	MaxIterations              int     `yaml:"max_iterations"`
+	EnableSelfReflection       bool    `yaml:"enable_self_reflection"`
+	EnableStructuredReflection *bool   `yaml:"enable_structured_reflection"`
+	EnableGoalExtraction       bool    `yaml:"enable_goal_extraction"`
+	ShowDebugInfo              bool    `yaml:"show_debug_info"`
+	ShowToolExecution          *bool   `yaml:"show_tool_execution"`
+	ShowThinking               bool    `yaml:"show_thinking"`
+	EnableStreaming            *bool   `yaml:"enable_streaming"`
+	QualityThreshold           float64 `yaml:"quality_threshold"`
 }
 
-// Validate implements Config.Validate for ReasoningConfig
 func (c *ReasoningConfig) Validate() error {
 	if c.Engine == "" {
 		return fmt.Errorf("engine is required")
@@ -1613,49 +1398,39 @@ func (c *ReasoningConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for ReasoningConfig
 func (c *ReasoningConfig) SetDefaults() {
 	if c.Engine == "" {
-		c.Engine = "default" // Simple, fast reasoning for zero-config
+		c.Engine = "default"
 	}
 	if c.MaxIterations == 0 {
-		// High limit as safety valve only - trust the LLM to naturally terminate
-		// (matches Cursor's philosophy: loop until no more tool calls)
+
 		c.MaxIterations = 100
 	}
 	if c.QualityThreshold == 0 {
 		c.QualityThreshold = 0.7
 	}
 
-	// Pointer boolean defaults: Only set if not explicitly configured (nil)
-	// This allows us to distinguish between "not set" (nil) and "explicitly false"
 	if c.EnableStreaming == nil {
 		trueVal := true
-		c.EnableStreaming = &trueVal // Default: enabled for better UX
+		c.EnableStreaming = &trueVal
 	}
 	if c.ShowToolExecution == nil {
 		trueVal := true
-		c.ShowToolExecution = &trueVal // Default: enabled for visibility
+		c.ShowToolExecution = &trueVal
 	}
 	if c.EnableStructuredReflection == nil {
 		trueVal := true
-		c.EnableStructuredReflection = &trueVal // Default: enabled (provides better analysis)
+		c.EnableStructuredReflection = &trueVal
 	}
 }
 
-// ============================================================================
-// SEARCH CONFIGURATIONS
-// ============================================================================
-
-// SearchConfig represents search configuration
 type SearchConfig struct {
-	Models           []SearchModel `yaml:"models"`             // Search models
-	TopK             int           `yaml:"top_k"`              // Top K results
-	Threshold        float64       `yaml:"threshold"`          // Similarity threshold
-	MaxContextLength int           `yaml:"max_context_length"` // Max context length
+	Models           []SearchModel `yaml:"models"`
+	TopK             int           `yaml:"top_k"`
+	Threshold        float64       `yaml:"threshold"`
+	MaxContextLength int           `yaml:"max_context_length"`
 }
 
-// Validate implements Config.Validate for SearchConfig
 func (c *SearchConfig) Validate() error {
 	if len(c.Models) == 0 {
 		return fmt.Errorf("at least one search model is required")
@@ -1677,9 +1452,8 @@ func (c *SearchConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for SearchConfig
 func (c *SearchConfig) SetDefaults() {
-	// Zero-config: Create default search model if none exist
+
 	if len(c.Models) == 0 {
 		c.Models = []SearchModel{
 			{
@@ -1704,15 +1478,13 @@ func (c *SearchConfig) SetDefaults() {
 	}
 }
 
-// SearchModel represents a search model configuration
 type SearchModel struct {
-	Name        string `yaml:"name"`          // Model name
-	Collection  string `yaml:"collection"`    // Collection name for vector storage
-	DefaultTopK int    `yaml:"default_top_k"` // Default top K results
-	MaxTopK     int    `yaml:"max_top_k"`     // Maximum top K results
+	Name        string `yaml:"name"`
+	Collection  string `yaml:"collection"`
+	DefaultTopK int    `yaml:"default_top_k"`
+	MaxTopK     int    `yaml:"max_top_k"`
 }
 
-// Validate implements Config.Validate for SearchModel
 func (c *SearchModel) Validate() error {
 	if c.Name == "" {
 		return fmt.Errorf("name is required")
@@ -1732,7 +1504,6 @@ func (c *SearchModel) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for SearchModel
 func (c *SearchModel) SetDefaults() {
 	if c.DefaultTopK == 0 {
 		c.DefaultTopK = 10
@@ -1742,18 +1513,12 @@ func (c *SearchModel) SetDefaults() {
 	}
 }
 
-// ============================================================================
-// GLOBAL CONFIGURATIONS
-// ============================================================================
-
-// LoggingConfig represents logging configuration
 type LoggingConfig struct {
-	Level  string `yaml:"level"`  // Log level
-	Format string `yaml:"format"` // Log format
-	Output string `yaml:"output"` // Output destination
+	Level  string `yaml:"level"`
+	Format string `yaml:"format"`
+	Output string `yaml:"output"`
 }
 
-// Validate implements Config.Validate for LoggingConfig
 func (c *LoggingConfig) Validate() error {
 	validLevels := map[string]bool{
 		"debug": true, "info": true, "warn": true, "error": true,
@@ -1776,7 +1541,6 @@ func (c *LoggingConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for LoggingConfig
 func (c *LoggingConfig) SetDefaults() {
 	if c.Level == "" {
 		c.Level = "info"
@@ -1789,13 +1553,11 @@ func (c *LoggingConfig) SetDefaults() {
 	}
 }
 
-// PerformanceConfig represents performance configuration
 type PerformanceConfig struct {
-	MaxConcurrency int           `yaml:"max_concurrency"` // Max concurrency
-	Timeout        time.Duration `yaml:"timeout"`         // Global timeout
+	MaxConcurrency int           `yaml:"max_concurrency"`
+	Timeout        time.Duration `yaml:"timeout"`
 }
 
-// Validate implements Config.Validate for PerformanceConfig
 func (c *PerformanceConfig) Validate() error {
 	if c.MaxConcurrency <= 0 {
 		return fmt.Errorf("max_concurrency must be positive")
@@ -1806,7 +1568,6 @@ func (c *PerformanceConfig) Validate() error {
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for PerformanceConfig
 func (c *PerformanceConfig) SetDefaults() {
 	if c.MaxConcurrency == 0 {
 		c.MaxConcurrency = 4
@@ -1816,32 +1577,145 @@ func (c *PerformanceConfig) SetDefaults() {
 	}
 }
 
-// ============================================================================
-// A2A AGENT CARD CONFIGURATION
-// ============================================================================
-
-// A2ACardConfig represents A2A agent card metadata configuration
-type A2ACardConfig struct {
-	// Required: Agent version
-	Version string `yaml:"version"` // Agent version (e.g., "1.0.0")
-
-	// Required: Supported input MIME types
-	InputModes []string `yaml:"input_modes"` // e.g., ["text/plain", "application/json"]
-
-	// Required: Supported output MIME types
-	OutputModes []string `yaml:"output_modes"` // e.g., ["text/plain", "application/json"]
-
-	// Required: Agent skills/capabilities
-	Skills []A2ASkillConfig `yaml:"skills"` // Agent skills
-
-	// Optional: Provider information
-	Provider *A2AProviderConfig `yaml:"provider,omitempty"` // Provider metadata
-
-	// Optional: Documentation URL
-	DocumentationURL string `yaml:"documentation_url,omitempty"` // Link to agent documentation
+type A2AServerConfig struct {
+	Host    string `yaml:"host"`
+	Port    int    `yaml:"port"`
+	BaseURL string `yaml:"base_url,omitempty"`
 }
 
-// Validate validates A2ACardConfig
+func (c *A2AServerConfig) IsEnabled() bool {
+	return c.Port > 0 || c.Host != ""
+}
+
+func (c *A2AServerConfig) Validate() error {
+	if c.IsEnabled() {
+		if c.Port <= 0 || c.Port > 65535 {
+			return fmt.Errorf("invalid port: %d", c.Port)
+		}
+	}
+	return nil
+}
+
+func (c *A2AServerConfig) SetDefaults() {
+	if c.Host == "" {
+		c.Host = "0.0.0.0"
+	}
+	if c.Port == 0 {
+		c.Port = 8080
+	}
+}
+
+type AuthConfig struct {
+	JWKSURL  string `yaml:"jwks_url"`
+	Issuer   string `yaml:"issuer"`
+	Audience string `yaml:"audience"`
+}
+
+func (c *AuthConfig) IsEnabled() bool {
+	return c.JWKSURL != "" && c.Issuer != "" && c.Audience != ""
+}
+
+func (c *AuthConfig) Validate() error {
+	if c.IsEnabled() {
+		if c.JWKSURL == "" {
+			return fmt.Errorf("jwks_url is required for authentication")
+		}
+		if c.Issuer == "" {
+			return fmt.Errorf("issuer is required for authentication")
+		}
+		if c.Audience == "" {
+			return fmt.Errorf("audience is required for authentication")
+		}
+	}
+	return nil
+}
+
+func (c *AuthConfig) SetDefaults() {
+}
+
+type ObservabilityConfig struct {
+	Tracing TracingConfig `yaml:"tracing,omitempty"`
+	Metrics MetricsConfig `yaml:"metrics,omitempty"`
+}
+
+type TracingConfig struct {
+	Enabled      bool    `yaml:"enabled"`
+	ExporterType string  `yaml:"exporter_type"`
+	EndpointURL  string  `yaml:"endpoint_url"`
+	SamplingRate float64 `yaml:"sampling_rate"`
+	ServiceName  string  `yaml:"service_name"`
+}
+
+type MetricsConfig struct {
+	Enabled bool `yaml:"enabled"`
+	Port    int  `yaml:"port"`
+}
+
+func (c *ObservabilityConfig) Validate() error {
+	if err := c.Tracing.Validate(); err != nil {
+		return fmt.Errorf("tracing config validation failed: %w", err)
+	}
+	if err := c.Metrics.Validate(); err != nil {
+		return fmt.Errorf("metrics config validation failed: %w", err)
+	}
+	return nil
+}
+
+func (c *ObservabilityConfig) SetDefaults() {
+	c.Tracing.SetDefaults()
+	c.Metrics.SetDefaults()
+}
+
+func (c *TracingConfig) Validate() error {
+	if c.Enabled {
+		if c.EndpointURL == "" {
+			return fmt.Errorf("endpoint_url is required when tracing is enabled")
+		}
+		if c.SamplingRate < 0 || c.SamplingRate > 1 {
+			return fmt.Errorf("sampling_rate must be between 0 and 1")
+		}
+	}
+	return nil
+}
+
+func (c *TracingConfig) SetDefaults() {
+	if c.ServiceName == "" {
+		c.ServiceName = "hector"
+	}
+	if c.SamplingRate == 0 && c.Enabled {
+		c.SamplingRate = 1.0
+	}
+	if c.ExporterType == "" && c.Enabled {
+		c.ExporterType = "jaeger"
+	}
+}
+
+func (c *MetricsConfig) Validate() error {
+	if c.Enabled {
+		if c.Port <= 0 || c.Port > 65535 {
+			return fmt.Errorf("invalid metrics port: %d", c.Port)
+		}
+	}
+	return nil
+}
+
+func (c *MetricsConfig) SetDefaults() {
+}
+
+type A2ACardConfig struct {
+	Version string `yaml:"version"`
+
+	InputModes []string `yaml:"input_modes"`
+
+	OutputModes []string `yaml:"output_modes"`
+
+	Skills []A2ASkillConfig `yaml:"skills"`
+
+	Provider *A2AProviderConfig `yaml:"provider,omitempty"`
+
+	DocumentationURL string `yaml:"documentation_url,omitempty"`
+}
+
 func (c *A2ACardConfig) Validate() error {
 	if c.Version == "" {
 		return fmt.Errorf("a2a.version is required")
@@ -1856,7 +1730,6 @@ func (c *A2ACardConfig) Validate() error {
 		return fmt.Errorf("a2a.skills is required and must not be empty")
 	}
 
-	// Validate each skill
 	for i, skill := range c.Skills {
 		if err := skill.Validate(); err != nil {
 			return fmt.Errorf("a2a.skills[%d]: %w", i, err)
@@ -1866,25 +1739,18 @@ func (c *A2ACardConfig) Validate() error {
 	return nil
 }
 
-// A2ASkillConfig represents a single agent skill/capability
 type A2ASkillConfig struct {
-	// Required: Unique skill identifier
-	ID string `yaml:"id"` // e.g., "code-generation"
+	ID string `yaml:"id"`
 
-	// Required: Human-readable skill name
-	Name string `yaml:"name"` // e.g., "Code Generation"
+	Name string `yaml:"name"`
 
-	// Required: Skill description
-	Description string `yaml:"description"` // e.g., "Generate production-ready code"
+	Description string `yaml:"description"`
 
-	// Optional: Skill tags for categorization
-	Tags []string `yaml:"tags,omitempty"` // e.g., ["coding", "generation"]
+	Tags []string `yaml:"tags,omitempty"`
 
-	// Optional: Example queries/prompts
-	Examples []string `yaml:"examples,omitempty"` // e.g., ["Create a REST API", "Write unit tests"]
+	Examples []string `yaml:"examples,omitempty"`
 }
 
-// Validate validates A2ASkillConfig
 func (c *A2ASkillConfig) Validate() error {
 	if c.ID == "" {
 		return fmt.Errorf("skill.id is required")
@@ -1898,14 +1764,10 @@ func (c *A2ASkillConfig) Validate() error {
 	return nil
 }
 
-// A2AProviderConfig represents agent provider information
 type A2AProviderConfig struct {
-	// Optional: Provider name
-	Name string `yaml:"name,omitempty"` // e.g., "Your Company"
+	Name string `yaml:"name,omitempty"`
 
-	// Optional: Provider URL
-	URL string `yaml:"url,omitempty"` // e.g., "https://yourcompany.com"
+	URL string `yaml:"url,omitempty"`
 
-	// Optional: Contact email
-	ContactEmail string `yaml:"contact_email,omitempty"` // e.g., "support@yourcompany.com"
+	ContactEmail string `yaml:"contact_email,omitempty"`
 }

@@ -12,17 +12,11 @@ import (
 	"github.com/kadirpekel/hector/pkg/httpclient"
 )
 
-// ============================================================================
-// SHARED OLLAMA CLIENT
-// ============================================================================
-
-// Client provides a shared HTTP client for Ollama API interactions
 type Client struct {
 	baseURL    string
 	httpClient *httpclient.Client
 }
 
-// NewClient creates a new Ollama client
 func NewClient(baseURL string) *Client {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
@@ -40,7 +34,6 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
-// NewClientWithTimeout creates a new Ollama client with custom timeout
 func NewClientWithTimeout(baseURL string, timeout time.Duration) *Client {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
@@ -58,7 +51,6 @@ func NewClientWithTimeout(baseURL string, timeout time.Duration) *Client {
 	}
 }
 
-// MakeRequest makes an HTTP request to the Ollama API
 func (c *Client) MakeRequest(ctx context.Context, endpoint string, payload interface{}) (*http.Response, error) {
 	url := c.baseURL + endpoint
 
@@ -86,7 +78,6 @@ func (c *Client) MakeRequest(ctx context.Context, endpoint string, payload inter
 	return resp, nil
 }
 
-// MakeStreamingRequest makes a streaming HTTP request to the Ollama API
 func (c *Client) MakeStreamingRequest(ctx context.Context, endpoint string, payload interface{}) (*http.Response, error) {
 	url := c.baseURL + endpoint
 
@@ -115,7 +106,6 @@ func (c *Client) MakeStreamingRequest(ctx context.Context, endpoint string, payl
 	return resp, nil
 }
 
-// GetBaseURL returns the base URL of the client
 func (c *Client) GetBaseURL() string {
 	return c.baseURL
 }

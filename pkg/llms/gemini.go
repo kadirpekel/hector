@@ -1,4 +1,3 @@
-// Package llms provides LLM provider implementations.
 package llms
 
 import (
@@ -18,90 +17,65 @@ import (
 	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
-// ============================================================================
-// GEMINI PROVIDER IMPLEMENTATION
-// Based on: https://ai.google.dev/gemini-api/docs/structured-output
-// ============================================================================
-
-// GeminiProvider implements LLMProvider for Google Gemini API
 type GeminiProvider struct {
 	config     *config.LLMProviderConfig
 	httpClient *httpclient.Client
 }
 
-// ============================================================================
-// REQUEST/RESPONSE TYPES
-// ============================================================================
-
-// GeminiRequest represents the request payload for Gemini API
 type GeminiRequest struct {
 	Contents          []GeminiContent         `json:"contents"`
-	SystemInstruction *GeminiContent          `json:"systemInstruction,omitempty"` // System instructions (Gemini 1.5+)
+	SystemInstruction *GeminiContent          `json:"systemInstruction,omitempty"`
 	GenerationConfig  *GeminiGenerationConfig `json:"generationConfig,omitempty"`
 	Tools             []GeminiToolSet         `json:"tools,omitempty"`
 }
 
-// GeminiGenerationConfig configures generation parameters
 type GeminiGenerationConfig struct {
 	Temperature      *float64               `json:"temperature,omitempty"`
 	MaxOutputTokens  int                    `json:"maxOutputTokens,omitempty"`
-	ResponseMimeType string                 `json:"responseMimeType,omitempty"` // "application/json" or "text/x.enum"
-	ResponseSchema   map[string]interface{} `json:"responseSchema,omitempty"`   // JSON Schema
+	ResponseMimeType string                 `json:"responseMimeType,omitempty"`
+	ResponseSchema   map[string]interface{} `json:"responseSchema,omitempty"`
 }
 
-// GeminiContent represents content in a message
 type GeminiContent struct {
-	Role  string       `json:"role"` // "user" or "model"
+	Role  string       `json:"role"`
 	Parts []GeminiPart `json:"parts"`
 }
 
-// GeminiPart represents a part of content (text or function call/result)
 type GeminiPart map[string]interface{}
 
-// GeminiToolSet represents a set of tools
 type GeminiToolSet struct {
 	FunctionDeclarations []GeminiFunctionDeclaration `json:"functionDeclarations,omitempty"`
 }
 
-// GeminiFunctionDeclaration represents a function that can be called
 type GeminiFunctionDeclaration struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
-	Parameters  map[string]interface{} `json:"parameters,omitempty"` // JSON Schema
+	Parameters  map[string]interface{} `json:"parameters,omitempty"`
 }
 
-// GeminiResponse represents the response from Gemini API
 type GeminiResponse struct {
 	Candidates    []GeminiCandidate    `json:"candidates"`
 	UsageMetadata *GeminiUsageMetadata `json:"usageMetadata,omitempty"`
 	Error         *GeminiError         `json:"error,omitempty"`
 }
 
-// GeminiCandidate represents a candidate response
 type GeminiCandidate struct {
 	Content      GeminiContent `json:"content"`
 	FinishReason string        `json:"finishReason"`
 }
 
-// GeminiUsageMetadata represents token usage information
 type GeminiUsageMetadata struct {
 	PromptTokenCount     int `json:"promptTokenCount"`
 	CandidatesTokenCount int `json:"candidatesTokenCount"`
 	TotalTokenCount      int `json:"totalTokenCount"`
 }
 
-// GeminiError represents an API error
 type GeminiError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Status  string `json:"status"`
 }
 
-// ============================================================================
-// PROVIDER IMPLEMENTATION
-// ============================================================================
-
-// NewGeminiProviderFromConfig creates a new Gemini provider from configuration
 func NewGeminiProviderFromConfig(cfg *config.LLMProviderConfig) (*GeminiProvider, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("gemini API key is required")
@@ -113,7 +87,6 @@ func NewGeminiProviderFromConfig(cfg *config.LLMProviderConfig) (*GeminiProvider
 	}, nil
 }
 
-// Generate generates a response with function calling support
 func (p *GeminiProvider) Generate(messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
 
 	req := p.buildRequest(messages, tools, nil)
@@ -142,7 +115,6 @@ func (p *GeminiProvider) Generate(messages []*pb.Message, tools []ToolDefinition
 	return p.parseResponse(geminiResp)
 }
 
-// GenerateStreaming generates a streaming response
 func (p *GeminiProvider) GenerateStreaming(messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, tools, nil)
 
@@ -163,7 +135,6 @@ func (p *GeminiProvider) GenerateStreaming(messages []*pb.Message, tools []ToolD
 
 		httpReq.Header.Set("Content-Type", "application/json")
 
-		// Use p.httpClient which has retry logic and backoff configured
 		resp, err := p.httpClient.Do(httpReq)
 		if err != nil {
 			chunks <- StreamChunk{Type: "error", Error: err}
@@ -171,9 +142,8 @@ func (p *GeminiProvider) GenerateStreaming(messages []*pb.Message, tools []ToolD
 		}
 		defer resp.Body.Close()
 
-		// Check for HTTP errors (rate limits, auth failures, etc.)
 		if resp.StatusCode != http.StatusOK {
-			// Read error response body
+
 			bodyBytes, _ := io.ReadAll(resp.Body)
 			err := fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
 			log.Printf("[GEMINI ERROR] %v\n", err)
@@ -187,7 +157,6 @@ func (p *GeminiProvider) GenerateStreaming(messages []*pb.Message, tools []ToolD
 	return chunks, nil
 }
 
-// GenerateStructured generates a response with structured output
 func (p *GeminiProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
 	req := p.buildRequest(messages, tools, structConfig)
 
@@ -211,7 +180,6 @@ func (p *GeminiProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 	return p.parseResponse(geminiResp)
 }
 
-// GenerateStructuredStreaming generates a streaming response with structured output
 func (p *GeminiProvider) GenerateStructuredStreaming(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, tools, structConfig)
 
@@ -232,7 +200,6 @@ func (p *GeminiProvider) GenerateStructuredStreaming(messages []*pb.Message, too
 
 		httpReq.Header.Set("Content-Type", "application/json")
 
-		// Use p.httpClient which has retry logic and backoff configured
 		resp, err := p.httpClient.Do(httpReq)
 		if err != nil {
 			chunks <- StreamChunk{Type: "error", Error: err}
@@ -240,9 +207,8 @@ func (p *GeminiProvider) GenerateStructuredStreaming(messages []*pb.Message, too
 		}
 		defer resp.Body.Close()
 
-		// Check for HTTP errors (rate limits, auth failures, etc.)
 		if resp.StatusCode != http.StatusOK {
-			// Read error response body
+
 			bodyBytes, _ := io.ReadAll(resp.Body)
 			err := fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
 			log.Printf("[GEMINI ERROR] %v\n", err)
@@ -256,43 +222,31 @@ func (p *GeminiProvider) GenerateStructuredStreaming(messages []*pb.Message, too
 	return chunks, nil
 }
 
-// SupportsStructuredOutput returns true (Gemini supports structured output)
 func (p *GeminiProvider) SupportsStructuredOutput() bool {
 	return true
 }
 
-// GetModelName returns the model name
 func (p *GeminiProvider) GetModelName() string {
 	return p.config.Model
 }
 
-// GetMaxTokens returns the maximum tokens for generation
 func (p *GeminiProvider) GetMaxTokens() int {
 	return p.config.MaxTokens
 }
 
-// GetTemperature returns the temperature setting
 func (p *GeminiProvider) GetTemperature() float64 {
 	return p.config.Temperature
 }
 
-// Close closes the provider and releases resources
 func (p *GeminiProvider) Close() error {
 	return nil
 }
 
-// ============================================================================
-// HELPER METHODS
-// ============================================================================
-
-// handleGeminiResponse processes HTTP response and extracts errors
-// Returns (response body, parsed GeminiResponse, error)
 func (p *GeminiProvider) handleGeminiResponse(resp *http.Response, err error) ([]byte, *GeminiResponse, error) {
 	if resp != nil {
 		defer resp.Body.Close()
 	}
 
-	// Even if there's an error, try to read response body
 	if err != nil {
 		if resp != nil && resp.Body != nil {
 			body, readErr := io.ReadAll(resp.Body)
@@ -308,19 +262,16 @@ func (p *GeminiProvider) handleGeminiResponse(resp *http.Response, err error) ([
 		return nil, nil, fmt.Errorf("gemini API request failed: %w", err)
 	}
 
-	// Read response body
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Parse response
 	var geminiResp GeminiResponse
 	if err := json.Unmarshal(respBody, &geminiResp); err != nil {
 		return respBody, nil, fmt.Errorf("failed to parse Gemini response: %w", err)
 	}
 
-	// Check for API errors in response
 	if geminiResp.Error != nil {
 		return respBody, &geminiResp, fmt.Errorf("Gemini API error: %s (code: %d, status: %s)",
 			geminiResp.Error.Message, geminiResp.Error.Code, geminiResp.Error.Status)
@@ -329,7 +280,6 @@ func (p *GeminiProvider) handleGeminiResponse(resp *http.Response, err error) ([
 	return respBody, &geminiResp, nil
 }
 
-// buildRequest builds a Gemini API request
 func (p *GeminiProvider) buildRequest(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) *GeminiRequest {
 	contents, systemInstruction := p.convertMessages(messages)
 	req := &GeminiRequest{
@@ -347,19 +297,16 @@ func (p *GeminiProvider) buildRequest(messages []*pb.Message, tools []ToolDefini
 	return req
 }
 
-// buildGenerationConfig builds generation configuration
 func (p *GeminiProvider) buildGenerationConfig(structConfig *StructuredOutputConfig) *GeminiGenerationConfig {
 	config := &GeminiGenerationConfig{
 		MaxOutputTokens: p.config.MaxTokens,
 	}
 
-	// Only set temperature if not zero (Gemini uses default if omitted)
 	if p.config.Temperature > 0 {
 		temp := p.config.Temperature
 		config.Temperature = &temp
 	}
 
-	// Add structured output configuration
 	if structConfig != nil {
 		switch structConfig.Format {
 		case "json":
@@ -369,24 +316,21 @@ func (p *GeminiProvider) buildGenerationConfig(structConfig *StructuredOutputCon
 			}
 		case "enum":
 			config.ResponseMimeType = "text/x.enum"
-			// Enum handling would be done in schema
+
 		}
 	}
 
 	return config
 }
 
-// convertSchemaToGemini converts schema to Gemini format with property ordering
 func (p *GeminiProvider) convertSchemaToGemini(schema interface{}, propertyOrdering []string) map[string]interface{} {
 	schemaMap, ok := schema.(map[string]interface{})
 	if !ok {
 		return nil
 	}
 
-	// Clean schema - remove unsupported fields for Gemini
 	cleaned := p.cleanSchemaForGemini(schemaMap)
 
-	// Add propertyOrdering if provided (Gemini-specific optimization)
 	if len(propertyOrdering) > 0 {
 		cleaned["propertyOrdering"] = propertyOrdering
 	}
@@ -394,22 +338,20 @@ func (p *GeminiProvider) convertSchemaToGemini(schema interface{}, propertyOrder
 	return cleaned
 }
 
-// cleanSchemaForGemini removes fields that Gemini doesn't support
 func (p *GeminiProvider) cleanSchemaForGemini(schema map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
 
 	for key, value := range schema {
-		// Skip unsupported fields
+
 		if key == "additionalProperties" {
 			continue
 		}
 
-		// Recursively clean nested objects
 		switch v := value.(type) {
 		case map[string]interface{}:
 			result[key] = p.cleanSchemaForGemini(v)
 		case []interface{}:
-			// Clean array elements
+
 			cleanedArray := make([]interface{}, len(v))
 			for i, item := range v {
 				if itemMap, ok := item.(map[string]interface{}); ok {
@@ -427,14 +369,12 @@ func (p *GeminiProvider) cleanSchemaForGemini(schema map[string]interface{}) map
 	return result
 }
 
-// convertMessages converts our Message format to Gemini format
-// Returns (contents, systemInstruction)
 func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiContent, *GeminiContent) {
 	var contents []GeminiContent
 	var systemParts []GeminiPart
 
 	for _, msg := range messages {
-		// Extract system messages for systemInstruction field
+
 		if msg.Role == pb.Role_ROLE_UNSPECIFIED {
 			textContent := protocol.ExtractTextFromMessage(msg)
 			if textContent != "" {
@@ -447,19 +387,17 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 		if msg.Role == pb.Role_ROLE_AGENT {
 			role = "model"
 		} else {
-			// ROLE_USER
+
 			role = "user"
 		}
 
 		var parts []GeminiPart
 
-		// Text content
 		textContent := protocol.ExtractTextFromMessage(msg)
 		if textContent != "" {
 			parts = append(parts, GeminiPart{"text": textContent})
 		}
 
-		// Tool calls (function calls)
 		for _, tc := range protocol.GetToolCallsFromMessage(msg) {
 			parts = append(parts, GeminiPart{
 				"functionCall": map[string]interface{}{
@@ -469,7 +407,6 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 			})
 		}
 
-		// Tool results (check parts for tool results)
 		toolResults := protocol.GetToolResultsFromMessage(msg)
 		for _, toolResult := range toolResults {
 			parts = append(parts, GeminiPart{
@@ -490,7 +427,6 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 		}
 	}
 
-	// Create system instruction if we have system parts
 	var systemInstruction *GeminiContent
 	if len(systemParts) > 0 {
 		systemInstruction = &GeminiContent{
@@ -501,7 +437,6 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 	return contents, systemInstruction
 }
 
-// convertTools converts our ToolDefinition format to Gemini format
 func (p *GeminiProvider) convertTools(tools []ToolDefinition) []GeminiFunctionDeclaration {
 	var funcs []GeminiFunctionDeclaration
 
@@ -512,7 +447,6 @@ func (p *GeminiProvider) convertTools(tools []ToolDefinition) []GeminiFunctionDe
 	return funcs
 }
 
-// parseResponse parses a Gemini response and extracts text and tool calls
 func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []*protocol.ToolCall, int, error) {
 	if len(resp.Candidates) == 0 {
 		return "", nil, 0, fmt.Errorf("no candidates in response")
@@ -523,12 +457,11 @@ func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []*protoco
 	var toolCalls []*protocol.ToolCall
 
 	for _, part := range candidate.Content.Parts {
-		// Extract text
+
 		if text, ok := part["text"].(string); ok {
 			textParts = append(textParts, text)
 		}
 
-		// Extract function calls
 		if fc, ok := part["functionCall"].(map[string]interface{}); ok {
 			name, _ := fc["name"].(string)
 			args, _ := fc["args"].(map[string]interface{})
@@ -551,7 +484,6 @@ func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []*protoco
 	return finalText, toolCalls, tokens, nil
 }
 
-// parseStreamingResponse parses streaming response chunks
 func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- StreamChunk) {
 	scanner := bufio.NewScanner(body)
 	var accumulatedText strings.Builder
@@ -563,7 +495,6 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 		line := scanner.Text()
 		lineCount++
 
-		// Skip empty lines and non-data lines
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
@@ -584,14 +515,13 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 			candidate := resp.Candidates[0]
 
 			for _, part := range candidate.Content.Parts {
-				// Stream text
+
 				if text, ok := part["text"].(string); ok {
 					accumulatedText.WriteString(text)
 					chunks <- StreamChunk{Type: "text", Text: text}
 					chunkCount++
 				}
 
-				// Stream function calls
 				if fc, ok := part["functionCall"].(map[string]interface{}); ok {
 					name, _ := fc["name"].(string)
 					args, _ := fc["args"].(map[string]interface{})
@@ -614,6 +544,5 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 		}
 	}
 
-	// Send done chunk
 	chunks <- StreamChunk{Type: "done", Tokens: totalTokens}
 }

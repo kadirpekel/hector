@@ -4,7 +4,6 @@ import (
 	"testing"
 )
 
-// TestCommandToolsConfig_ValidationWithSandboxing tests the new permissive-by-default logic
 func TestCommandToolsConfig_ValidationWithSandboxing(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -85,7 +84,6 @@ func TestCommandToolsConfig_ValidationWithSandboxing(t *testing.T) {
 	}
 }
 
-// TestCommandToolsConfig_SetDefaults tests default value assignment
 func TestCommandToolsConfig_SetDefaults_Permissive(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -99,10 +97,10 @@ func TestCommandToolsConfig_SetDefaults_Permissive(t *testing.T) {
 				if c.WorkingDirectory != "./" {
 					t.Errorf("expected WorkingDirectory './', got %q", c.WorkingDirectory)
 				}
-				if c.MaxExecutionTime != 30_000_000_000 { // 30 seconds in nanoseconds
+				if c.MaxExecutionTime != 30_000_000_000 {
 					t.Errorf("expected MaxExecutionTime 30s, got %v", c.MaxExecutionTime)
 				}
-				// AllowedCommands should remain nil/empty (permissive by default)
+
 			},
 		},
 		{
@@ -127,7 +125,6 @@ func TestCommandToolsConfig_SetDefaults_Permissive(t *testing.T) {
 	}
 }
 
-// Helper function
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
 		(len(s) > 0 && len(substr) > 0 && s[0:len(substr)] == substr) ||

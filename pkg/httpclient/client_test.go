@@ -75,7 +75,7 @@ func TestNew(t *testing.T) {
 				if client.headerParser == nil {
 					t.Error("Expected headerParser to be set")
 				}
-				// Test the parser
+
 				headers := http.Header{}
 				info := client.headerParser(headers)
 				if info.RetryAfter != 10*time.Second {
@@ -94,7 +94,7 @@ func TestNew(t *testing.T) {
 				if client.strategyFunc == nil {
 					t.Error("Expected strategyFunc to be set")
 				}
-				// Test the strategy
+
 				strategy := client.strategyFunc(500)
 				if strategy != SmartRetry {
 					t.Errorf("Expected SmartRetry, got %v", strategy)
@@ -204,7 +204,7 @@ func TestDefaultRetryStrategy(t *testing.T) {
 }
 
 func TestClient_Do_Success(t *testing.T) {
-	// Create a test server that returns success
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("success"))
@@ -227,7 +227,7 @@ func TestClient_Do_Success(t *testing.T) {
 }
 
 func TestClient_Do_NetworkError(t *testing.T) {
-	// Create a client that will fail to connect
+
 	client := New(WithHTTPClient(&http.Client{Timeout: 1 * time.Millisecond}))
 	req, _ := http.NewRequest("GET", "http://invalid-url-that-does-not-exist:9999", nil)
 
@@ -256,7 +256,7 @@ func TestClient_Do_RetryableError(t *testing.T) {
 	client := New(
 		WithHTTPClient(server.Client()),
 		WithMaxRetries(3),
-		WithBaseDelay(10*time.Millisecond), // Fast retry for testing
+		WithBaseDelay(10*time.Millisecond),
 	)
 	req, _ := http.NewRequest("GET", server.URL, nil)
 
@@ -283,7 +283,7 @@ func TestClient_Do_MaxRetriesExceeded(t *testing.T) {
 	client := New(
 		WithHTTPClient(server.Client()),
 		WithMaxRetries(2),
-		WithBaseDelay(10*time.Millisecond), // Fast retry for testing
+		WithBaseDelay(10*time.Millisecond),
 	)
 	req, _ := http.NewRequest("GET", server.URL, nil)
 
@@ -297,7 +297,6 @@ func TestClient_Do_MaxRetriesExceeded(t *testing.T) {
 		t.Errorf("Do() status code = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
 	}
 
-	// Check if it's a RetryableError
 	retryErr, ok := err.(*RetryableError)
 	if !ok {
 		t.Errorf("Do() error type = %T, want *RetryableError", err)
@@ -305,14 +304,13 @@ func TestClient_Do_MaxRetriesExceeded(t *testing.T) {
 		if retryErr.StatusCode != http.StatusInternalServerError {
 			t.Errorf("RetryableError.StatusCode = %d, want %d", retryErr.StatusCode, http.StatusInternalServerError)
 		}
-		// For conservative retry strategy, RetryAfter can be 0 when max retries exceeded
+
 		if retryErr.RetryAfter < 0 {
 			t.Error("RetryableError.RetryAfter should be >= 0")
 		}
 	}
 
-	// Should have made maxRetries + 1 attempts
-	expectedAttempts := 2 + 1 // maxRetries + 1
+	expectedAttempts := 2 + 1
 	if attemptCount != expectedAttempts {
 		t.Errorf("Expected %d attempts, got %d", expectedAttempts, attemptCount)
 	}
@@ -352,7 +350,7 @@ func TestClient_Do_RateLimitWithRetryAfter(t *testing.T) {
 	if attemptCount != 2 {
 		t.Errorf("Expected 2 attempts, got %d", attemptCount)
 	}
-	// Should have waited at least 1 second for Retry-After
+
 	if duration < 1*time.Second {
 		t.Errorf("Expected to wait at least 1s, waited %v", duration)
 	}
@@ -368,7 +366,7 @@ func TestClient_Do_ConservativeRetryLimit(t *testing.T) {
 
 	client := New(
 		WithHTTPClient(server.Client()),
-		WithMaxRetries(5), // High max retries
+		WithMaxRetries(5),
 		WithBaseDelay(10*time.Millisecond),
 	)
 	req, _ := http.NewRequest("GET", server.URL, nil)
@@ -381,8 +379,7 @@ func TestClient_Do_ConservativeRetryLimit(t *testing.T) {
 		t.Error("Do() response = nil, want non-nil")
 	}
 
-	// Conservative retry should stop after 2 attempts (not 5)
-	expectedAttempts := 2 + 1 // 2 conservative retries + 1 initial attempt
+	expectedAttempts := 2 + 1
 	if attemptCount != expectedAttempts {
 		t.Errorf("Expected %d attempts for conservative retry, got %d", expectedAttempts, attemptCount)
 	}
@@ -453,7 +450,7 @@ func TestClient_attemptRequest(t *testing.T) {
 			if strategy != tt.expectedStrat {
 				t.Errorf("attemptRequest() strategy = %v, want %v", strategy, tt.expectedStrat)
 			}
-			// retryInfo should be empty for these tests
+
 			if retryInfo.RetryAfter != 0 || retryInfo.ResetTime != 0 {
 				t.Errorf("attemptRequest() retryInfo should be empty, got %+v", retryInfo)
 			}
@@ -481,13 +478,13 @@ func TestClient_calculateDelay(t *testing.T) {
 			name:     "smart_retry_exponential_backoff",
 			strategy: SmartRetry,
 			attempt:  0,
-			expected: 1*time.Second + 100*time.Millisecond, // 2^0 * 1s + 10% jitter
+			expected: 1*time.Second + 100*time.Millisecond,
 		},
 		{
 			name:     "smart_retry_exponential_backoff_attempt_1",
 			strategy: SmartRetry,
 			attempt:  1,
-			expected: 2*time.Second + 200*time.Millisecond, // 2^1 * 1s + 10% jitter
+			expected: 2*time.Second + 200*time.Millisecond,
 		},
 		{
 			name:     "smart_retry_with_retry_after",
@@ -505,25 +502,25 @@ func TestClient_calculateDelay(t *testing.T) {
 			retryInfo: RateLimitInfo{
 				ResetTime: time.Now().Add(3 * time.Second).Unix(),
 			},
-			expected: 3 * time.Second, // Approximately
+			expected: 3 * time.Second,
 		},
 		{
 			name:     "conservative_retry_attempt_0",
 			strategy: ConservativeRetry,
 			attempt:  0,
-			expected: 2 * time.Second, // 2 + 0
+			expected: 2 * time.Second,
 		},
 		{
 			name:     "conservative_retry_attempt_1",
 			strategy: ConservativeRetry,
 			attempt:  1,
-			expected: 3 * time.Second, // 2 + 1
+			expected: 3 * time.Second,
 		},
 		{
 			name:     "conservative_retry_attempt_2",
 			strategy: ConservativeRetry,
 			attempt:  2,
-			expected: 0, // Should stop retrying
+			expected: 0,
 		},
 	}
 
@@ -531,7 +528,6 @@ func TestClient_calculateDelay(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := client.calculateDelay(tt.strategy, tt.attempt, tt.retryInfo)
 
-			// For smart retry with reset time, allow some tolerance due to time.Now()
 			if tt.name == "smart_retry_with_reset_time" {
 				if result < 2*time.Second || result > 4*time.Second {
 					t.Errorf("calculateDelay() = %v, want approximately 3s", result)

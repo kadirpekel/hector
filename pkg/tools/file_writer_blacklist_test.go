@@ -11,17 +11,16 @@ import (
 )
 
 func TestFileWriterTool_BlacklistDenied(t *testing.T) {
-	// Create a temporary directory for testing
+
 	tempDir, err := os.MkdirTemp("", "filewriter_blacklist_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create tool with BLACKLIST (deny specific extensions)
 	tool := NewFileWriterTool(&config.FileWriterConfig{
 		MaxFileSize:       1024,
-		DeniedExtensions:  []string{".exe", ".bat", ".sh"}, // Block executables
+		DeniedExtensions:  []string{".exe", ".bat", ".sh"},
 		BackupOnOverwrite: false,
 		WorkingDirectory:  tempDir,
 	})
@@ -87,7 +86,6 @@ func TestFileWriterTool_BlacklistDenied(t *testing.T) {
 					t.Errorf("Expected success=true, got: %v (error: %s)", result.Success, result.Error)
 				}
 
-				// Verify file was actually created
 				filePath := filepath.Join(tempDir, tt.path)
 				if _, err := os.Stat(filePath); os.IsNotExist(err) {
 					t.Errorf("Expected file %s to be created", tt.path)
@@ -106,19 +104,17 @@ func TestFileWriterTool_BlacklistDenied(t *testing.T) {
 }
 
 func TestFileWriterTool_WhitelistAndBlacklist(t *testing.T) {
-	// Create a temporary directory for testing
+
 	tempDir, err := os.MkdirTemp("", "filewriter_both_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create tool with BOTH whitelist and blacklist
-	// Blacklist takes precedence
 	tool := NewFileWriterTool(&config.FileWriterConfig{
 		MaxFileSize:       1024,
-		AllowedExtensions: []string{".py", ".go", ".sh"}, // Whitelist
-		DeniedExtensions:  []string{".sh"},               // But deny .sh
+		AllowedExtensions: []string{".py", ".go", ".sh"},
+		DeniedExtensions:  []string{".sh"},
 		BackupOnOverwrite: false,
 		WorkingDirectory:  tempDir,
 	})

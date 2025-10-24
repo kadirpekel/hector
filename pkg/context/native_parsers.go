@@ -13,12 +13,6 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// ============================================================================
-// NATIVE BINARY DOCUMENT PARSERS
-// ============================================================================
-// These parsers handle binary file formats that cannot be read as plain text
-
-// NativeParserResult represents the result of native document parsing
 type NativeParserResult struct {
 	Success          bool              `json:"success"`
 	Content          string            `json:"content"`
@@ -33,47 +27,34 @@ type NativeParserResult struct {
 	ProcessingTimeMs int64             `json:"processing_time_ms"`
 }
 
-// NativeParser interface for binary document parsers
 type NativeParser interface {
-	// CanParse returns true if this parser can handle the given file
 	CanParse(filePath string) bool
 
-	// Parse extracts text content from a binary document
 	Parse(ctx context.Context, filePath string, fileSize int64) (*NativeParserResult, error)
 
-	// GetSupportedExtensions returns the file extensions this parser supports
 	GetSupportedExtensions() []string
 }
 
-// ============================================================================
-// NATIVE PARSER REGISTRY
-// ============================================================================
-
-// NativeParserRegistry manages native binary document parsers
 type NativeParserRegistry struct {
 	parsers []NativeParser
 }
 
-// NewNativeParserRegistry creates a new native parser registry
 func NewNativeParserRegistry() *NativeParserRegistry {
 	registry := &NativeParserRegistry{
 		parsers: make([]NativeParser, 0),
 	}
 
-	// Register built-in parsers
 	registry.registerBuiltinParsers()
 
 	return registry
 }
 
-// registerBuiltinParsers registers all built-in native parsers
 func (r *NativeParserRegistry) registerBuiltinParsers() {
-	// Register parsers in order of preference (most reliable first)
+
 	r.parsers = append(r.parsers, &PDFParser{})
-	r.parsers = append(r.parsers, &OfficeParser{}) // Handles .docx, .xlsx
+	r.parsers = append(r.parsers, &OfficeParser{})
 }
 
-// FindParser finds a parser that can handle the given file
 func (r *NativeParserRegistry) FindParser(filePath string) NativeParser {
 	for _, parser := range r.parsers {
 		if parser.CanParse(filePath) {
@@ -83,7 +64,6 @@ func (r *NativeParserRegistry) FindParser(filePath string) NativeParser {
 	return nil
 }
 
-// ParseDocument attempts to parse a document using native parsers
 func (r *NativeParserRegistry) ParseDocument(ctx context.Context, filePath string, fileSize int64) (*NativeParserResult, error) {
 	parser := r.FindParser(filePath)
 	if parser == nil {
@@ -96,7 +76,6 @@ func (r *NativeParserRegistry) ParseDocument(ctx context.Context, filePath strin
 	return parser.Parse(ctx, filePath, fileSize)
 }
 
-// GetSupportedExtensions returns all supported file extensions
 func (r *NativeParserRegistry) GetSupportedExtensions() []string {
 	extensions := make(map[string]bool)
 
@@ -114,28 +93,19 @@ func (r *NativeParserRegistry) GetSupportedExtensions() []string {
 	return result
 }
 
-// ============================================================================
-// PDF PARSER
-// ============================================================================
-
-// PDFParser handles PDF document parsing
 type PDFParser struct{}
 
-// CanParse returns true if the file is a PDF
 func (p *PDFParser) CanParse(filePath string) bool {
 	return strings.ToLower(filepath.Ext(filePath)) == ".pdf"
 }
 
-// GetSupportedExtensions returns PDF extensions
 func (p *PDFParser) GetSupportedExtensions() []string {
 	return []string{".pdf"}
 }
 
-// Parse extracts text content from a PDF file
 func (p *PDFParser) Parse(ctx context.Context, filePath string, fileSize int64) (*NativeParserResult, error) {
 	startTime := time.Now()
 
-	// Read PDF file
 	file, err := os.Open(filePath)
 	if err != nil {
 		return &NativeParserResult{
@@ -146,7 +116,6 @@ func (p *PDFParser) Parse(ctx context.Context, filePath string, fileSize int64) 
 	}
 	defer file.Close()
 
-	// Parse PDF
 	reader, err := pdf.NewReader(file, fileSize)
 	if err != nil {
 		return &NativeParserResult{
@@ -156,7 +125,6 @@ func (p *PDFParser) Parse(ctx context.Context, filePath string, fileSize int64) 
 		}, nil
 	}
 
-	// Extract text content
 	var contentParts []string
 	totalPages := reader.NumPage()
 
@@ -179,10 +147,8 @@ func (p *PDFParser) Parse(ctx context.Context, filePath string, fileSize int64) 
 
 	content := strings.Join(contentParts, "\n\n")
 
-	// Extract metadata
 	metadata := p.extractPDFMetadata(reader, filePath)
 
-	// Calculate word count
 	wordCount := int32(len(strings.Fields(content)))
 
 	processingTime := time.Since(startTime).Milliseconds()
@@ -201,46 +167,32 @@ func (p *PDFParser) Parse(ctx context.Context, filePath string, fileSize int64) 
 	}, nil
 }
 
-// extractPDFMetadata extracts metadata from PDF
 func (p *PDFParser) extractPDFMetadata(reader *pdf.Reader, filePath string) map[string]string {
 	metadata := make(map[string]string)
 
-	// Basic metadata
 	metadata["pages"] = fmt.Sprintf("%d", reader.NumPage())
 
-	// File metadata
 	if fileInfo, err := os.Stat(filePath); err == nil {
 		metadata["file_size"] = fmt.Sprintf("%d", fileInfo.Size())
 		metadata["file_modified"] = fileInfo.ModTime().Format(time.RFC3339)
 	}
 
-	// PDF metadata (if available)
-	// Note: The ledongthuc/pdf library doesn't expose metadata directly
-	// We'll use the filename as title for now
 	metadata["title"] = filepath.Base(filePath)
 
 	return metadata
 }
 
-// ============================================================================
-// OFFICE PARSER (Word, PowerPoint, Excel)
-// ============================================================================
-
-// OfficeParser handles Microsoft Office document parsing (.docx, .xlsx)
 type OfficeParser struct{}
 
-// CanParse returns true if the file is an Office document
 func (p *OfficeParser) CanParse(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	return ext == ".docx" || ext == ".xlsx"
 }
 
-// GetSupportedExtensions returns Office document extensions
 func (p *OfficeParser) GetSupportedExtensions() []string {
 	return []string{".docx", ".xlsx"}
 }
 
-// Parse extracts text content from an Office document
 func (p *OfficeParser) Parse(ctx context.Context, filePath string, fileSize int64) (*NativeParserResult, error) {
 	startTime := time.Now()
 	ext := strings.ToLower(filepath.Ext(filePath))
@@ -264,7 +216,6 @@ func (p *OfficeParser) Parse(ctx context.Context, filePath string, fileSize int6
 		}, nil
 	}
 
-	// Calculate word count
 	wordCount := int32(len(strings.Fields(content)))
 	processingTime := time.Since(startTime).Milliseconds()
 
@@ -282,31 +233,26 @@ func (p *OfficeParser) Parse(ctx context.Context, filePath string, fileSize int6
 	}, nil
 }
 
-// parseWordDocument extracts text from a Word document
 func (p *OfficeParser) parseWordDocument(filePath string) (string, string, string, int32, map[string]string) {
-	// Open and read the Word document
+
 	doc, err := docx.ReadDocxFile(filePath)
 	if err != nil {
 		return fmt.Sprintf("Error parsing Word document: %v", err), filepath.Base(filePath), "", 0, make(map[string]string)
 	}
 	defer doc.Close()
 
-	// Extract text content
 	content := doc.Editable().GetContent()
 	title := filepath.Base(filePath)
 	metadata := make(map[string]string)
 
-	// Count paragraphs (approximate)
 	paragraphCount := int32(len(strings.Split(content, "\n\n")))
 
-	// Extract basic metadata
 	metadata["title"] = title
 	metadata["type"] = "Word Document"
 
 	return content, title, "", paragraphCount, metadata
 }
 
-// parseExcelDocument extracts text from an Excel spreadsheet
 func (p *OfficeParser) parseExcelDocument(filePath string) (string, string, string, int32, map[string]string) {
 	f, err := excelize.OpenFile(filePath)
 	if err != nil {
@@ -319,23 +265,19 @@ func (p *OfficeParser) parseExcelDocument(filePath string) (string, string, stri
 	metadata := make(map[string]string)
 	var sheetCount int32
 
-	// Get all sheet names
 	sheets := f.GetSheetList()
 	sheetCount = int32(len(sheets))
 
-	// Extract text from each sheet
 	for _, sheetName := range sheets {
 		var sheetText strings.Builder
 		sheetText.WriteString(fmt.Sprintf("--- Sheet: %s ---\n", sheetName))
 
-		// Get all rows in the sheet
 		rows, err := f.GetRows(sheetName)
 		if err != nil {
 			sheetText.WriteString(fmt.Sprintf("Error reading sheet: %v\n", err))
 			continue
 		}
 
-		// Extract text from cells (limit to first 1000 cells to avoid huge content)
 		cellCount := 0
 		for rowIndex, row := range rows {
 			if cellCount >= 1000 {
@@ -359,7 +301,6 @@ func (p *OfficeParser) parseExcelDocument(filePath string) (string, string, stri
 		}
 	}
 
-	// Extract basic metadata
 	metadata["title"] = title
 	metadata["type"] = "Excel Spreadsheet"
 
@@ -367,11 +308,6 @@ func (p *OfficeParser) parseExcelDocument(filePath string) (string, string, stri
 	return content, title, "", sheetCount, metadata
 }
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-// isBinaryFileType returns true if the file type requires binary parsing
 func isBinaryFileType(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	binaryExtensions := map[string]bool{

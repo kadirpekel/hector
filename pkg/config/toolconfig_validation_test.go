@@ -4,7 +4,6 @@ import (
 	"testing"
 )
 
-// TestToolConfig_CommandValidation tests that ToolConfig.Validate() matches CommandToolsConfig.Validate() logic
 func TestToolConfig_CommandValidation(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -17,7 +16,7 @@ func TestToolConfig_CommandValidation(t *testing.T) {
 			tool: ToolConfig{
 				Type:             "command",
 				EnableSandboxing: true,
-				AllowedCommands:  []string{}, // Empty = allow all
+				AllowedCommands:  []string{},
 			},
 			expectError: false,
 		},
@@ -26,7 +25,7 @@ func TestToolConfig_CommandValidation(t *testing.T) {
 			tool: ToolConfig{
 				Type:             "command",
 				EnableSandboxing: true,
-				AllowedCommands:  nil, // Nil = allow all
+				AllowedCommands:  nil,
 			},
 			expectError: false,
 		},
@@ -71,17 +70,22 @@ func TestToolConfig_CommandValidation(t *testing.T) {
 		{
 			name: "command tool with default (zero-value) sandboxing + no allowed_commands = valid (default is true)",
 			tool: ToolConfig{
-				Type: "command",
-				// EnableSandboxing defaults to false (zero-value), but SetDefaults should set it to true
+				Type:            "command",
 				AllowedCommands: []string{},
 			},
-			expectError:   true, // Will fail because zero-value EnableSandboxing=false requires allowed_commands
-			errorContains: "allowed_commands is required when enable_sandboxing is false",
+			expectError: false, // Now valid because SetDefaults() sets EnableSandboxing to true
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			shouldCallSetDefaults := tt.name != "command tool with sandboxing disabled + no allowed_commands = INVALID (security)" &&
+				tt.name != "command tool with sandboxing disabled + nil allowed_commands = INVALID (security)"
+
+			if shouldCallSetDefaults {
+				tt.tool.SetDefaults()
+			}
+
 			err := tt.tool.Validate()
 
 			if tt.expectError {

@@ -17,12 +17,10 @@ func TestNewSearchReplaceToolForTesting(t *testing.T) {
 		t.Fatal("NewSearchReplaceToolForTesting() returned nil")
 	}
 
-	// Test that the tool has the expected name
 	if tool.GetName() != "search_replace" {
 		t.Errorf("GetName() = %v, want 'search_replace'", tool.GetName())
 	}
 
-	// Test that the tool has a description
 	description := tool.GetDescription()
 	if description == "" {
 		t.Error("GetDescription() should not return empty string")
@@ -37,7 +35,6 @@ func TestSearchReplaceTool_GetInfo(t *testing.T) {
 		t.Fatal("GetInfo() returned empty name")
 	}
 
-	// Verify info structure
 	if info.Description == "" {
 		t.Error("Expected non-empty description")
 	}
@@ -45,7 +42,6 @@ func TestSearchReplaceTool_GetInfo(t *testing.T) {
 		t.Error("Expected at least one parameter")
 	}
 
-	// Check for required parameters
 	hasPathParam := false
 	hasOldStringParam := false
 	hasNewStringParam := false
@@ -88,7 +84,7 @@ func TestSearchReplaceTool_ValidatePath(t *testing.T) {
 		{
 			name:    "valid nested path",
 			path:    "subdir/test.txt",
-			wantErr: true, // Will fail because file doesn't exist
+			wantErr: true,
 			errMsg:  "file does not exist",
 		},
 		{
@@ -230,7 +226,7 @@ func TestSearchReplaceTool_Execute_ValidationOnly(t *testing.T) {
 				"new_string":  "new",
 				"replace_all": true,
 			},
-			wantErr: false, // Will fail at file system level, but validation should pass
+			wantErr: false,
 		},
 	}
 
@@ -246,7 +242,7 @@ func TestSearchReplaceTool_Execute_ValidationOnly(t *testing.T) {
 					t.Errorf("Expected error to contain '%s', got: %v", tt.errMsg, err)
 				}
 			} else {
-				// For valid parameters, we expect file system errors, not validation errors
+
 				if err != nil && strings.Contains(err.Error(), "parameter is required") {
 					t.Errorf("Expected file system error, got validation error: %v", err)
 				}
@@ -341,8 +337,6 @@ func TestSearchReplaceTool_TruncateString(t *testing.T) {
 			maxLen: 5,
 			want:   "th...",
 		},
-		// Note: Skipping test case where maxLen <= 3 as it causes a panic in the original code
-		// This reveals a bug in truncateString function, but we're testing the testable parts
 	}
 
 	for _, tt := range tests {
@@ -358,7 +352,6 @@ func TestSearchReplaceTool_TruncateString(t *testing.T) {
 func TestSearchReplaceTool_ErrorResult(t *testing.T) {
 	tool := NewSearchReplaceToolForTesting()
 
-	// Test error result creation
 	result := tool.errorResult("test error message", time.Now())
 
 	if result.Success {
@@ -373,14 +366,13 @@ func TestSearchReplaceTool_ErrorResult(t *testing.T) {
 }
 
 func TestSearchReplaceTool_WithTempFile(t *testing.T) {
-	// Create a temporary directory for testing
+
 	tempDir, err := os.MkdirTemp("", "searchreplace_test_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create a test file
 	testFile := filepath.Join(tempDir, "test.txt")
 	testContent := "Hello, World!\nThis is a test file.\nHello again!"
 	err = os.WriteFile(testFile, []byte(testContent), 0644)
@@ -388,7 +380,6 @@ func TestSearchReplaceTool_WithTempFile(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Create tool with temp directory
 	tool := NewSearchReplaceTool(&config.SearchReplaceConfig{
 		MaxReplacements:  10,
 		ShowDiff:         true,
@@ -420,7 +411,6 @@ func TestSearchReplaceTool_WithTempFile(t *testing.T) {
 					t.Error("Expected result to mention 'Replaced 1 occurrence'")
 				}
 
-				// Verify file was actually modified
 				filePath := filepath.Join(tempDir, "test.txt")
 				content, err := os.ReadFile(filePath)
 				if err != nil {
@@ -446,7 +436,6 @@ func TestSearchReplaceTool_WithTempFile(t *testing.T) {
 					t.Error("Expected result to mention 'Replaced 2 occurrence'")
 				}
 
-				// Verify file was actually modified
 				filePath := filepath.Join(tempDir, "test.txt")
 				content, err := os.ReadFile(filePath)
 				if err != nil {
@@ -478,7 +467,7 @@ func TestSearchReplaceTool_WithTempFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset file content before each test
+
 			err = os.WriteFile(testFile, []byte(testContent), 0644)
 			if err != nil {
 				t.Fatalf("Failed to reset test file: %v", err)

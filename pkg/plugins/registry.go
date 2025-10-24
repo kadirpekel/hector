@@ -9,16 +9,11 @@ import (
 	"github.com/kadirpekel/hector/pkg/registry"
 )
 
-// ============================================================================
-// PLUGIN REGISTRY
-// ============================================================================
-
-// PluginRegistry manages loaded plugins and their lifecycle
 type PluginRegistry struct {
 	*registry.BaseRegistry[Plugin]
 	mu                  sync.RWMutex
 	loaders             map[PluginProtocol]PluginLoader
-	pluginsByType       map[PluginType][]string // type -> plugin names
+	pluginsByType       map[PluginType][]string
 	lifecycleHooks      *PluginLifecycleHooks
 	autoRestart         bool
 	restartAttempts     int
@@ -26,7 +21,6 @@ type PluginRegistry struct {
 	stopHealthCheck     chan struct{}
 }
 
-// PluginRegistryConfig contains configuration for the plugin registry
 type PluginRegistryConfig struct {
 	AutoRestart         bool
 	MaxRestartAttempts  int
@@ -34,7 +28,6 @@ type PluginRegistryConfig struct {
 	LifecycleHooks      *PluginLifecycleHooks
 }
 
-// NewPluginRegistry creates a new plugin registry
 func NewPluginRegistry(config *PluginRegistryConfig) *PluginRegistry {
 	if config == nil {
 		config = &PluginRegistryConfig{
@@ -56,11 +49,6 @@ func NewPluginRegistry(config *PluginRegistryConfig) *PluginRegistry {
 	}
 }
 
-// ============================================================================
-// LOADER MANAGEMENT
-// ============================================================================
-
-// RegisterLoader registers a plugin loader for a specific protocol
 func (r *PluginRegistry) RegisterLoader(loader PluginLoader) error {
 	if loader == nil {
 		return fmt.Errorf("loader cannot be nil")
@@ -78,7 +66,6 @@ func (r *PluginRegistry) RegisterLoader(loader PluginLoader) error {
 	return nil
 }
 
-// GetLoader retrieves a plugin loader for a specific protocol
 func (r *PluginRegistry) GetLoader(protocol PluginProtocol) (PluginLoader, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -91,54 +78,43 @@ func (r *PluginRegistry) GetLoader(protocol PluginProtocol) (PluginLoader, error
 	return loader, nil
 }
 
-// ============================================================================
-// PLUGIN LOADING
-// ============================================================================
-
-// LoadPlugin loads a plugin from configuration
 func (r *PluginRegistry) LoadPlugin(ctx context.Context, config *PluginConfig) error {
 	if config == nil {
 		return NewPluginError("", "LoadPlugin", "config cannot be nil", nil)
 	}
 
 	if !config.Enabled {
-		return nil // Skip disabled plugins
+		return nil
 	}
 
-	// Get appropriate loader
 	loader, err := r.GetLoader(config.Type)
 	if err != nil {
 		return NewPluginError(config.Name, "LoadPlugin", "failed to get loader", err)
 	}
 
-	// Validate plugin before loading
 	if err := loader.Validate(ctx, config.Path); err != nil {
 		return NewPluginError(config.Name, "LoadPlugin", "validation failed", err)
 	}
 
-	// Call before load hook
 	if r.lifecycleHooks != nil && r.lifecycleHooks.BeforeLoad != nil {
 		if err := r.lifecycleHooks.BeforeLoad(ctx, nil); err != nil {
 			return NewPluginError(config.Name, "LoadPlugin", "before load hook failed", err)
 		}
 	}
 
-	// Load the plugin
 	plugin, err := loader.Load(ctx, config)
 	if err != nil {
 		return NewPluginError(config.Name, "LoadPlugin", "failed to load", err)
 	}
 
-	// Call after load hook
 	if r.lifecycleHooks != nil && r.lifecycleHooks.AfterLoad != nil {
 		if err := r.lifecycleHooks.AfterLoad(ctx, plugin); err != nil {
-			// Try to unload the plugin on hook failure
+
 			_ = loader.Unload(ctx, plugin)
 			return NewPluginError(config.Name, "LoadPlugin", "after load hook failed", err)
 		}
 	}
 
-	// Call before init hook
 	if r.lifecycleHooks != nil && r.lifecycleHooks.BeforeInit != nil {
 		if err := r.lifecycleHooks.BeforeInit(ctx, plugin); err != nil {
 			_ = loader.Unload(ctx, plugin)
@@ -146,13 +122,11 @@ func (r *PluginRegistry) LoadPlugin(ctx context.Context, config *PluginConfig) e
 		}
 	}
 
-	// Initialize the plugin
 	if err := plugin.Initialize(ctx, config.Config); err != nil {
 		_ = loader.Unload(ctx, plugin)
 		return NewPluginError(config.Name, "LoadPlugin", "initialization failed", err)
 	}
 
-	// Call after init hook
 	if r.lifecycleHooks != nil && r.lifecycleHooks.AfterInit != nil {
 		if err := r.lifecycleHooks.AfterInit(ctx, plugin); err != nil {
 			_ = plugin.Shutdown(ctx)
@@ -161,14 +135,12 @@ func (r *PluginRegistry) LoadPlugin(ctx context.Context, config *PluginConfig) e
 		}
 	}
 
-	// Register the plugin
 	if err := r.Register(config.Name, plugin); err != nil {
 		_ = plugin.Shutdown(ctx)
 		_ = loader.Unload(ctx, plugin)
 		return NewPluginError(config.Name, "LoadPlugin", "registration failed", err)
 	}
 
-	// Track plugin by type
 	manifest := plugin.GetManifest()
 	if manifest != nil {
 		r.mu.Lock()
@@ -179,29 +151,24 @@ func (r *PluginRegistry) LoadPlugin(ctx context.Context, config *PluginConfig) e
 	return nil
 }
 
-// UnloadPlugin unloads a plugin by name
 func (r *PluginRegistry) UnloadPlugin(ctx context.Context, name string) error {
 	plugin, exists := r.Get(name)
 	if !exists {
 		return NewPluginError(name, "UnloadPlugin", "plugin not found", ErrPluginNotFound)
 	}
 
-	// Call before unload hook
 	if r.lifecycleHooks != nil && r.lifecycleHooks.BeforeUnload != nil {
 		if err := r.lifecycleHooks.BeforeUnload(ctx, plugin); err != nil {
 			return NewPluginError(name, "UnloadPlugin", "before unload hook failed", err)
 		}
 	}
 
-	// Shutdown the plugin
 	if err := plugin.Shutdown(ctx); err != nil {
 		return NewPluginError(name, "UnloadPlugin", "shutdown failed", err)
 	}
 
-	// Get manifest for cleanup
 	manifest := plugin.GetManifest()
 
-	// Find appropriate loader and unload
 	if manifest != nil {
 		loader, err := r.GetLoader(manifest.Protocol)
 		if err != nil {
@@ -213,12 +180,10 @@ func (r *PluginRegistry) UnloadPlugin(ctx context.Context, name string) error {
 		}
 	}
 
-	// Remove from registry
 	if err := r.Remove(name); err != nil {
 		return NewPluginError(name, "UnloadPlugin", "removal from registry failed", err)
 	}
 
-	// Remove from type tracking
 	if manifest != nil {
 		r.mu.Lock()
 		if plugins, exists := r.pluginsByType[manifest.Type]; exists {
@@ -232,7 +197,6 @@ func (r *PluginRegistry) UnloadPlugin(ctx context.Context, name string) error {
 		r.mu.Unlock()
 	}
 
-	// Call after unload hook
 	if r.lifecycleHooks != nil && r.lifecycleHooks.AfterUnload != nil {
 		if err := r.lifecycleHooks.AfterUnload(ctx, plugin); err != nil {
 			return NewPluginError(name, "UnloadPlugin", "after unload hook failed", err)
@@ -242,11 +206,6 @@ func (r *PluginRegistry) UnloadPlugin(ctx context.Context, name string) error {
 	return nil
 }
 
-// ============================================================================
-// PLUGIN QUERIES
-// ============================================================================
-
-// GetPlugin retrieves a plugin by name
 func (r *PluginRegistry) GetPlugin(name string) (Plugin, error) {
 	plugin, exists := r.Get(name)
 	if !exists {
@@ -255,7 +214,6 @@ func (r *PluginRegistry) GetPlugin(name string) (Plugin, error) {
 	return plugin, nil
 }
 
-// GetPluginsByType retrieves all plugins of a specific type
 func (r *PluginRegistry) GetPluginsByType(pluginType PluginType) ([]Plugin, error) {
 	r.mu.RLock()
 	pluginNames, exists := r.pluginsByType[pluginType]
@@ -275,7 +233,6 @@ func (r *PluginRegistry) GetPluginsByType(pluginType PluginType) ([]Plugin, erro
 	return plugins, nil
 }
 
-// ListPlugins returns all loaded plugin names
 func (r *PluginRegistry) ListPlugins() []string {
 	plugins := r.List()
 	names := make([]string, 0, len(plugins))
@@ -288,7 +245,6 @@ func (r *PluginRegistry) ListPlugins() []string {
 	return names
 }
 
-// GetPluginStatus returns the status of a plugin
 func (r *PluginRegistry) GetPluginStatus(name string) (PluginStatus, error) {
 	plugin, err := r.GetPlugin(name)
 	if err != nil {
@@ -297,11 +253,6 @@ func (r *PluginRegistry) GetPluginStatus(name string) (PluginStatus, error) {
 	return plugin.GetStatus(), nil
 }
 
-// ============================================================================
-// HEALTH MONITORING
-// ============================================================================
-
-// StartHealthChecks starts periodic health checks for all plugins
 func (r *PluginRegistry) StartHealthChecks(ctx context.Context) {
 	ticker := time.NewTicker(r.healthCheckInterval)
 	defer ticker.Stop()
@@ -318,12 +269,10 @@ func (r *PluginRegistry) StartHealthChecks(ctx context.Context) {
 	}
 }
 
-// StopHealthChecks stops health check monitoring
 func (r *PluginRegistry) StopHealthChecks() {
 	close(r.stopHealthCheck)
 }
 
-// performHealthChecks performs health checks on all loaded plugins
 func (r *PluginRegistry) performHealthChecks(ctx context.Context) {
 	plugins := r.List()
 	for _, plugin := range plugins {
@@ -333,23 +282,18 @@ func (r *PluginRegistry) performHealthChecks(ctx context.Context) {
 		}
 
 		if err := plugin.Health(ctx); err != nil {
-			// Plugin is unhealthy
+
 			if r.autoRestart && plugin.GetStatus() == StatusCrashed {
-				// Attempt to restart
+
 				if r.lifecycleHooks != nil && r.lifecycleHooks.OnCrash != nil {
 					_ = r.lifecycleHooks.OnCrash(ctx, plugin)
 				}
-				// TODO: Implement plugin restart logic
+
 			}
 		}
 	}
 }
 
-// ============================================================================
-// SHUTDOWN
-// ============================================================================
-
-// Shutdown shuts down all plugins
 func (r *PluginRegistry) Shutdown(ctx context.Context) error {
 	r.StopHealthChecks()
 

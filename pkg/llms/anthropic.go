@@ -1,4 +1,3 @@
-// Package llms provides LLM provider implementations.
 package llms
 
 import (
@@ -17,23 +16,15 @@ import (
 	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
-// ============================================================================
-// ANTHROPIC PROVIDER IMPLEMENTATION
-// ============================================================================
-
-// AnthropicProvider implements LLMProvider for Anthropic Claude API
 type AnthropicProvider struct {
 	config     *config.LLMProviderConfig
 	httpClient *httpclient.Client
 }
 
-// AnthropicRequest represents the request payload for Anthropic API
-
-// AnthropicTool represents a tool definition in Anthropic format
 type AnthropicTool struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"input_schema"` // JSON Schema
+	InputSchema map[string]interface{} `json:"input_schema"`
 }
 
 type AnthropicRequest struct {
@@ -43,16 +34,14 @@ type AnthropicRequest struct {
 	Temperature float64            `json:"temperature,omitempty"`
 	Stream      bool               `json:"stream"`
 	System      string             `json:"system,omitempty"`
-	Tools       []AnthropicTool    `json:"tools,omitempty"` // Tool use support
+	Tools       []AnthropicTool    `json:"tools,omitempty"`
 }
 
-// AnthropicMessage represents a message in the conversation
 type AnthropicMessage struct {
 	Role    string      `json:"role"`
-	Content interface{} `json:"content"` // Can be string or []AnthropicContent
+	Content interface{} `json:"content"`
 }
 
-// AnthropicResponse represents the response from Anthropic API
 type AnthropicResponse struct {
 	ID         string             `json:"id"`
 	Type       string             `json:"type"`
@@ -64,7 +53,6 @@ type AnthropicResponse struct {
 	Error      *AnthropicError    `json:"error,omitempty"`
 }
 
-// AnthropicStreamResponse represents streaming response chunks
 type AnthropicStreamResponse struct {
 	Type         string             `json:"type"`
 	Index        int                `json:"index,omitempty"`
@@ -74,44 +62,39 @@ type AnthropicStreamResponse struct {
 	Usage        *AnthropicUsage    `json:"usage,omitempty"`
 }
 
-// AnthropicContent represents content blocks in requests and responses
 type AnthropicContent struct {
-	Type      string                  `json:"type"`                  // "text", "tool_use", "tool_result"
-	Text      string                  `json:"text,omitempty"`        // For text content
-	ID        string                  `json:"id,omitempty"`          // Tool call ID (for tool_use)
-	Name      string                  `json:"name,omitempty"`        // Tool name (for tool_use)
-	Input     *map[string]interface{} `json:"input,omitempty"`       // Tool arguments (pointer ensures field presence as {} for tool_use)
-	ToolUseID string                  `json:"tool_use_id,omitempty"` // Tool call ID reference (for tool_result)
-	Content   string                  `json:"content,omitempty"`     // Tool result content (for tool_result)
+	Type      string                  `json:"type"`
+	Text      string                  `json:"text,omitempty"`
+	ID        string                  `json:"id,omitempty"`
+	Name      string                  `json:"name,omitempty"`
+	Input     *map[string]interface{} `json:"input,omitempty"`
+	ToolUseID string                  `json:"tool_use_id,omitempty"`
+	Content   string                  `json:"content,omitempty"`
 }
 
-// AnthropicDelta represents incremental content in streaming
 type AnthropicDelta struct {
 	Type        string `json:"type"`
 	Text        string `json:"text,omitempty"`
-	PartialJSON string `json:"partial_json,omitempty"` // For tool use parameter streaming
+	PartialJSON string `json:"partial_json,omitempty"`
 }
 
-// AnthropicUsage represents token usage information
 type AnthropicUsage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
 }
 
-// AnthropicError represents an API error
 type AnthropicError struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
 }
 
-// NewAnthropicProvider creates a new Anthropic provider
 func NewAnthropicProvider(apiKey string, model string) *AnthropicProvider {
 	config := &config.LLMProviderConfig{
 		Type:        "anthropic",
 		Model:       model,
 		APIKey:      apiKey,
 		Host:        "https://api.anthropic.com",
-		Temperature: 1.0, // Claude default
+		Temperature: 1.0,
 		MaxTokens:   4096,
 		Timeout:     120,
 	}
@@ -120,7 +103,6 @@ func NewAnthropicProvider(apiKey string, model string) *AnthropicProvider {
 	return provider
 }
 
-// NewAnthropicProviderFromConfig creates a new Anthropic provider from config
 func NewAnthropicProviderFromConfig(cfg *config.LLMProviderConfig) (*AnthropicProvider, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("API key is required for Anthropic")
@@ -143,27 +125,22 @@ func NewAnthropicProviderFromConfig(cfg *config.LLMProviderConfig) (*AnthropicPr
 	}, nil
 }
 
-// GetModelName returns the model name
 func (p *AnthropicProvider) GetModelName() string {
 	return p.config.Model
 }
 
-// GetMaxTokens returns the maximum tokens
 func (p *AnthropicProvider) GetMaxTokens() int {
 	return p.config.MaxTokens
 }
 
-// GetTemperature returns the temperature
 func (p *AnthropicProvider) GetTemperature() float64 {
 	return p.config.Temperature
 }
 
-// Close closes the provider
 func (p *AnthropicProvider) Close() error {
 	return nil
 }
 
-// Generate generates a response given conversation messages
 func (p *AnthropicProvider) Generate(messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
 	request := p.buildRequest(messages, false, tools)
 
@@ -178,7 +155,6 @@ func (p *AnthropicProvider) Generate(messages []*pb.Message, tools []ToolDefinit
 
 	tokensUsed := response.Usage.InputTokens + response.Usage.OutputTokens
 
-	// Extract text and tool calls from content
 	var text string
 	var toolCalls []*protocol.ToolCall
 
@@ -186,7 +162,7 @@ func (p *AnthropicProvider) Generate(messages []*pb.Message, tools []ToolDefinit
 		if content.Type == "text" {
 			text += content.Text
 		} else if content.Type == "tool_use" {
-			// Convert to ToolCall
+
 			var args map[string]interface{}
 			if content.Input != nil {
 				args = *content.Input
@@ -202,7 +178,6 @@ func (p *AnthropicProvider) Generate(messages []*pb.Message, tools []ToolDefinit
 	return text, toolCalls, tokensUsed, nil
 }
 
-// GenerateStreaming generates a streaming response given conversation messages
 func (p *AnthropicProvider) GenerateStreaming(messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	request := p.buildRequest(messages, true, tools)
 
@@ -222,16 +197,15 @@ func (p *AnthropicProvider) GenerateStreaming(messages []*pb.Message, tools []To
 	return outputCh, nil
 }
 
-// buildRequest builds an Anthropic request with tool support
 func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, tools []ToolDefinition) AnthropicRequest {
-	// Extract system prompt (Anthropic requires it in a separate field)
+
 	var systemParts []string
 	anthropicMessages := make([]AnthropicMessage, 0, len(messages))
 
 	for _, msg := range messages {
-		// Extract system messages for the system field
+
 		if msg.Role == pb.Role_ROLE_UNSPECIFIED {
-			// ROLE_UNSPECIFIED is used for system messages - add to system field
+
 			textContent := protocol.ExtractTextFromMessage(msg)
 			if textContent != "" {
 				systemParts = append(systemParts, textContent)
@@ -240,7 +214,7 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 		}
 
 		if msg.Role == pb.Role_ROLE_USER {
-			// Regular user message
+
 			textContent := protocol.ExtractTextFromMessage(msg)
 			anthropicMessages = append(anthropicMessages, AnthropicMessage{
 				Role: "user",
@@ -251,10 +225,9 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 			continue
 		}
 
-		// For tool results (check parts for tool result)
 		toolResults := protocol.GetToolResultsFromMessage(msg)
 		if len(toolResults) > 0 {
-			// Convert each tool result to Anthropic format
+
 			for _, toolResult := range toolResults {
 				anthropicMessages = append(anthropicMessages, AnthropicMessage{
 					Role: "user",
@@ -270,13 +243,11 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 			continue
 		}
 
-		// Assistant messages with tool calls
 		toolCalls := protocol.GetToolCallsFromMessage(msg)
 		if msg.Role == pb.Role_ROLE_AGENT && len(toolCalls) > 0 {
-			// Anthropic expects content to be an array with text + tool_use blocks
+
 			contents := []AnthropicContent{}
 
-			// Add text content if present
 			textContent := protocol.ExtractTextFromMessage(msg)
 			if textContent != "" {
 				contents = append(contents, AnthropicContent{
@@ -285,10 +256,8 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 				})
 			}
 
-			// Add tool use blocks
 			for _, tc := range toolCalls {
-				// Ensure Input is never nil (Anthropic requires this field always present for tool_use)
-				// Use pointer to distinguish between "omitted" (nil) and "empty object" (pointer to empty map)
+
 				input := tc.Args
 				if input == nil {
 					input = make(map[string]interface{})
@@ -297,7 +266,7 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 					Type:  "tool_use",
 					ID:    tc.ID,
 					Name:  tc.Name,
-					Input: &input, // Pointer ensures field is always present as {} or {data}
+					Input: &input,
 				})
 			}
 
@@ -306,7 +275,7 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 				Content: contents,
 			})
 		} else if msg.Role == pb.Role_ROLE_AGENT {
-			// Regular assistant message without tool calls
+
 			anthropicMessages = append(anthropicMessages, AnthropicMessage{
 				Role: "assistant",
 				Content: []AnthropicContent{
@@ -319,7 +288,6 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 		}
 	}
 
-	// Combine system parts into single system prompt
 	var systemPrompt string
 	if len(systemParts) > 0 {
 		systemPrompt = strings.Join(systemParts, "\n\n")
@@ -334,7 +302,6 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 		System:      systemPrompt,
 	}
 
-	// Add tools if provided (Anthropic calls them "tools")
 	if len(tools) > 0 {
 		anthropicTools := make([]AnthropicTool, len(tools))
 		for i, tool := range tools {
@@ -349,7 +316,6 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 	return request
 }
 
-// makeRequest makes a non-streaming request to Anthropic API using the generic HTTP client
 func (p *AnthropicProvider) makeRequest(request AnthropicRequest) (*AnthropicResponse, error) {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -360,7 +326,6 @@ func (p *AnthropicProvider) makeRequest(request AnthropicRequest) (*AnthropicRes
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Enable request body reuse for retries
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(jsonData)), nil
 	}
@@ -369,7 +334,6 @@ func (p *AnthropicProvider) makeRequest(request AnthropicRequest) (*AnthropicRes
 	req.Header.Set("x-api-key", p.config.APIKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	// Use generic HTTP client with smart retry
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
@@ -390,7 +354,6 @@ func (p *AnthropicProvider) makeRequest(request AnthropicRequest) (*AnthropicRes
 	return &response, nil
 }
 
-// makeStreamingRequest makes a streaming request to Anthropic API
 func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outputCh chan<- StreamChunk) error {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -401,7 +364,6 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Enable request body reuse for retries
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(jsonData)), nil
 	}
@@ -410,8 +372,6 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 	req.Header.Set("x-api-key", p.config.APIKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	// Use the smart retry client for streaming initial request
-	// The retry logic applies to establishing the connection, not streaming
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to make request: %w", err)
@@ -423,41 +383,34 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Track tool calls and their arguments during streaming
-	// Tool arguments arrive as fragmented JSON strings that must be concatenated
-	toolCalls := make(map[int]*protocol.ToolCall) // index -> tool call metadata
-	toolJSONBuffers := make(map[int]string)       // index -> concatenated JSON fragments
+	toolCalls := make(map[int]*protocol.ToolCall)
+	toolJSONBuffers := make(map[int]string)
 	var totalTokens int
 
-	// Read streaming response line by line (SSE format)
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Skip empty lines and comment lines
 		if line == "" || strings.HasPrefix(line, ":") {
 			continue
 		}
 
-		// Extract JSON data after "data: "
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
 
 		jsonData := strings.TrimPrefix(line, "data: ")
 
-		// Parse JSON response
 		var streamResp AnthropicStreamResponse
 		if err := json.Unmarshal([]byte(jsonData), &streamResp); err != nil {
 			return fmt.Errorf("failed to decode streaming response: %w, data: %s", err, jsonData)
 		}
 
-		// Handle different event types
 		switch streamResp.Type {
 		case "content_block_start":
-			// New content block started (text or tool_use)
+
 			if streamResp.ContentBlock != nil && streamResp.ContentBlock.Type == "tool_use" {
-				// Initialize tool call - arguments will be accumulated from JSON deltas
+
 				toolCalls[streamResp.Index] = &protocol.ToolCall{
 					ID:   streamResp.ContentBlock.ID,
 					Name: streamResp.ContentBlock.Name,
@@ -468,23 +421,20 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 
 		case "content_block_delta":
 			if streamResp.Delta != nil {
-				// Text delta - stream to output as it arrives
+
 				if streamResp.Delta.Text != "" {
 					outputCh <- StreamChunk{Type: "text", Text: streamResp.Delta.Text}
 				}
 
-				// Tool parameter delta - accumulate JSON fragments
-				// Anthropic streams tool arguments as partial JSON strings that must be
-				// concatenated before parsing (e.g., "{\"lo", "cation\"", ": ", "\"Berlin\"}")
 				if streamResp.Delta.Type == "input_json_delta" && streamResp.Delta.PartialJSON != "" {
 					toolJSONBuffers[streamResp.Index] += streamResp.Delta.PartialJSON
 				}
 			}
 
 		case "content_block_stop":
-			// Content block finished - parse and send complete tool call
+
 			if tc, exists := toolCalls[streamResp.Index]; exists {
-				// Parse accumulated JSON fragments into tool arguments
+
 				if jsonStr, hasJSON := toolJSONBuffers[streamResp.Index]; hasJSON && jsonStr != "" {
 					var args map[string]interface{}
 					if err := json.Unmarshal([]byte(jsonStr), &args); err == nil {
@@ -492,7 +442,6 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 					}
 				}
 
-				// Send complete tool call to agent
 				outputCh <- StreamChunk{
 					Type:     "tool_call",
 					ToolCall: tc,
@@ -500,13 +449,13 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 			}
 
 		case "message_delta":
-			// Usage information in delta
+
 			if streamResp.Usage != nil {
 				totalTokens = streamResp.Usage.OutputTokens
 			}
 
 		case "message_stop":
-			// Stream finished - send done chunk with total tokens
+
 			outputCh <- StreamChunk{
 				Type:   "done",
 				Tokens: totalTokens,
@@ -522,18 +471,8 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 	return nil
 }
 
-// ============================================================================
-// STRUCTURED OUTPUT METHODS
-// ============================================================================
-
-// GenerateStructured generates a response with structured output
 func (p *AnthropicProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
-	// Anthropic doesn't have native JSON mode like OpenAI
-	// Instead, we use TWO native Anthropic techniques:
-	// 1. Add schema to system prompt (guides the model)
-	// 2. Use PREFILL technique - add assistant message starting with "{" (forces JSON output)
 
-	// Build system prompt with schema instructions
 	systemPrompt := p.buildSystemPromptWithSchema(structConfig)
 
 	req := p.buildRequest(messages, false, tools)
@@ -545,8 +484,6 @@ func (p *AnthropicProvider) GenerateStructured(messages []*pb.Message, tools []T
 		}
 	}
 
-	// Apply PREFILL technique (Anthropic's native way to force JSON)
-	// Add an assistant message starting with "{" to force JSON output
 	if structConfig != nil && structConfig.Format == "json" {
 		prefill := "{"
 		if structConfig.Prefill != "" {
@@ -559,16 +496,11 @@ func (p *AnthropicProvider) GenerateStructured(messages []*pb.Message, tools []T
 		})
 	}
 
-	// Make the API call with prefilled assistant message
 	return p.makeStructuredRequest(req)
 }
 
-// GenerateStructuredStreaming generates a streaming response with structured output
 func (p *AnthropicProvider) GenerateStructuredStreaming(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
-	// Anthropic prefill technique for streaming
-	// Note: Prefill is sent as the last assistant message, and streaming continues from there
 
-	// Build system prompt with schema instructions
 	systemPrompt := p.buildSystemPromptWithSchema(structConfig)
 
 	req := p.buildRequest(messages, true, tools)
@@ -580,7 +512,6 @@ func (p *AnthropicProvider) GenerateStructuredStreaming(messages []*pb.Message, 
 		}
 	}
 
-	// Apply PREFILL technique for streaming
 	prefill := ""
 	if structConfig != nil && structConfig.Format == "json" {
 		prefill = "{"
@@ -594,12 +525,10 @@ func (p *AnthropicProvider) GenerateStructuredStreaming(messages []*pb.Message, 
 		})
 	}
 
-	// Make streaming request and prepend prefill to first chunk
 	chunks := make(chan StreamChunk, 10)
 	go func() {
 		defer close(chunks)
 
-		// First, emit the prefill as initial text
 		if prefill != "" {
 			chunks <- StreamChunk{
 				Type: "text",
@@ -607,7 +536,6 @@ func (p *AnthropicProvider) GenerateStructuredStreaming(messages []*pb.Message, 
 			}
 		}
 
-		// Then stream the rest from Anthropic using existing method
 		if err := p.makeStreamingRequest(req, chunks); err != nil {
 			chunks <- StreamChunk{Type: "error", Error: err}
 		}
@@ -616,14 +544,12 @@ func (p *AnthropicProvider) GenerateStructuredStreaming(messages []*pb.Message, 
 	return chunks, nil
 }
 
-// SupportsStructuredOutput returns true (Anthropic supports structured output via prefill)
 func (p *AnthropicProvider) SupportsStructuredOutput() bool {
 	return true
 }
 
-// makeStructuredRequest makes a non-streaming request with prefill handling
 func (p *AnthropicProvider) makeStructuredRequest(req AnthropicRequest) (string, []*protocol.ToolCall, int, error) {
-	// Extract prefill from the last message if it was an assistant message
+
 	prefill := ""
 	if len(req.Messages) > 0 && req.Messages[len(req.Messages)-1].Role == "assistant" {
 		if content, ok := req.Messages[len(req.Messages)-1].Content.(string); ok {
@@ -631,7 +557,6 @@ func (p *AnthropicProvider) makeStructuredRequest(req AnthropicRequest) (string,
 		}
 	}
 
-	// Make the API request using existing method
 	response, err := p.makeRequest(req)
 	if err != nil {
 		return "", nil, 0, err
@@ -643,7 +568,6 @@ func (p *AnthropicProvider) makeStructuredRequest(req AnthropicRequest) (string,
 
 	tokensUsed := response.Usage.InputTokens + response.Usage.OutputTokens
 
-	// Extract text and tool calls from content (same as Generate)
 	var text string
 	var toolCalls []*protocol.ToolCall
 
@@ -663,8 +587,6 @@ func (p *AnthropicProvider) makeStructuredRequest(req AnthropicRequest) (string,
 		}
 	}
 
-	// Prepend the prefill to the response text
-	// Anthropic returns the completion AFTER the prefill, so we need to add it back
 	if prefill != "" {
 		text = prefill + text
 	}
@@ -672,7 +594,6 @@ func (p *AnthropicProvider) makeStructuredRequest(req AnthropicRequest) (string,
 	return text, toolCalls, tokensUsed, nil
 }
 
-// buildSystemPromptWithSchema builds system prompt with schema instructions
 func (p *AnthropicProvider) buildSystemPromptWithSchema(structConfig *StructuredOutputConfig) string {
 	if structConfig == nil || structConfig.Schema == nil {
 		return ""

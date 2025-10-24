@@ -6,7 +6,7 @@ import (
 
 func TestConfig_AgentAccess(t *testing.T) {
 	config := &Config{
-		Agents: map[string]AgentConfig{
+		Agents: map[string]*AgentConfig{
 			"test-agent": {
 				Name: "Test Agent",
 				LLM:  "test-llm",
@@ -14,14 +14,12 @@ func TestConfig_AgentAccess(t *testing.T) {
 		},
 	}
 
-	// Test direct access to agents map
 	if agent, exists := config.Agents["test-agent"]; !exists {
 		t.Error("Expected agent 'test-agent' to exist")
 	} else if agent.Name != "Test Agent" {
 		t.Errorf("Agent name = %v, want %v", agent.Name, "Test Agent")
 	}
 
-	// Test non-existing agent
 	if _, exists := config.Agents["non-existing"]; exists {
 		t.Error("Expected agent 'non-existing' to not exist")
 	}
@@ -29,7 +27,7 @@ func TestConfig_AgentAccess(t *testing.T) {
 
 func TestConfig_LLMAccess(t *testing.T) {
 	config := &Config{
-		LLMs: map[string]LLMProviderConfig{
+		LLMs: map[string]*LLMProviderConfig{
 			"test-llm": {
 				Type:  "openai",
 				Model: "gpt-4o-mini",
@@ -37,14 +35,12 @@ func TestConfig_LLMAccess(t *testing.T) {
 		},
 	}
 
-	// Test direct access to LLMs map
 	if llm, exists := config.LLMs["test-llm"]; !exists {
 		t.Error("Expected LLM 'test-llm' to exist")
 	} else if llm.Type != "openai" {
 		t.Errorf("LLM type = %v, want %v", llm.Type, "openai")
 	}
 
-	// Test non-existing LLM
 	if _, exists := config.LLMs["non-existing"]; exists {
 		t.Error("Expected LLM 'non-existing' to not exist")
 	}
@@ -52,7 +48,7 @@ func TestConfig_LLMAccess(t *testing.T) {
 
 func TestConfig_AgentCount(t *testing.T) {
 	config := &Config{
-		Agents: map[string]AgentConfig{
+		Agents: map[string]*AgentConfig{
 			"agent1": {Name: "Agent 1", LLM: "llm1"},
 			"agent2": {Name: "Agent 2", LLM: "llm2"},
 			"agent3": {Name: "Agent 3", LLM: "llm3"},
@@ -66,7 +62,7 @@ func TestConfig_AgentCount(t *testing.T) {
 
 func TestConfig_LLMCount(t *testing.T) {
 	config := &Config{
-		LLMs: map[string]LLMProviderConfig{
+		LLMs: map[string]*LLMProviderConfig{
 			"llm1": {Type: "openai", Model: "gpt-4o-mini"},
 			"llm2": {Type: "anthropic", Model: "claude-3-5-sonnet"},
 		},
@@ -80,7 +76,6 @@ func TestConfig_LLMCount(t *testing.T) {
 func TestConfig_EmptyConfig(t *testing.T) {
 	config := &Config{}
 
-	// Test empty config
 	if len(config.Agents) != 0 {
 		t.Errorf("Empty config should have 0 agents, got %v", len(config.Agents))
 	}

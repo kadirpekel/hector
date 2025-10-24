@@ -3,7 +3,7 @@ package cli
 import "testing"
 
 func TestCLIArgs_AllFields(t *testing.T) {
-	// Test that all expected fields exist
+
 	args := CLIArgs{
 		ConfigFile:    "test.yaml",
 		Debug:         true,
@@ -24,7 +24,6 @@ func TestCLIArgs_AllFields(t *testing.T) {
 		VectorDB:      "db",
 	}
 
-	// Just verify we can set all fields
 	if args.ConfigFile != "test.yaml" {
 		t.Error("Failed to set ConfigFile")
 	}

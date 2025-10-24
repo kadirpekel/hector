@@ -13,12 +13,10 @@ func TestNewTodoToolForTesting(t *testing.T) {
 		t.Fatal("NewTodoToolForTesting() returned nil")
 	}
 
-	// Test that the tool has the expected name
 	if tool.GetName() != "todo_write" {
 		t.Errorf("GetName() = %v, want 'todo_write'", tool.GetName())
 	}
 
-	// Test that the tool has a description
 	description := tool.GetDescription()
 	if description == "" {
 		t.Error("GetDescription() should not return empty string")
@@ -33,7 +31,6 @@ func TestTodoTool_GetInfo(t *testing.T) {
 		t.Fatal("GetInfo() returned empty name")
 	}
 
-	// Verify info structure
 	if info.Description == "" {
 		t.Error("Expected non-empty description")
 	}
@@ -41,7 +38,6 @@ func TestTodoTool_GetInfo(t *testing.T) {
 		t.Error("Expected at least one parameter")
 	}
 
-	// Check for required parameters
 	hasMergeParam := false
 	for _, param := range info.Parameters {
 		if param.Name == "merge" {
@@ -135,7 +131,7 @@ func TestTodoTool_Execute_WithCorrectParameters(t *testing.T) {
 				"merge": true,
 				"todos": []interface{}{},
 			},
-			wantSuccess: false, // Empty array should fail validation
+			wantSuccess: false,
 		},
 	}
 
@@ -162,7 +158,6 @@ func TestTodoTool_Execute_WithCorrectParameters(t *testing.T) {
 func TestTodoTool_GetTodos(t *testing.T) {
 	tool := NewTodoToolForTesting()
 
-	// Add some todos first
 	ctx := context.Background()
 	_, err := tool.Execute(ctx, map[string]interface{}{
 		"merge": true,
@@ -188,7 +183,6 @@ func TestTodoTool_GetTodos(t *testing.T) {
 		t.Errorf("GetTodos() returned %d todos, want 2", len(todos))
 	}
 
-	// Verify todo properties
 	if todos[0].Content != "First todo" && todos[1].Content != "First todo" {
 		t.Error("Expected to find 'First todo'")
 	}
@@ -200,7 +194,6 @@ func TestTodoTool_GetTodos(t *testing.T) {
 func TestTodoTool_GetTodosSummary(t *testing.T) {
 	tool := NewTodoToolForTesting()
 
-	// Add todos with different statuses
 	ctx := context.Background()
 	_, err := tool.Execute(ctx, map[string]interface{}{
 		"merge": true,
@@ -231,7 +224,6 @@ func TestTodoTool_GetTodosSummary(t *testing.T) {
 		t.Fatal("GetTodosSummary() returned empty string")
 	}
 
-	// Verify summary contains expected information
 	if !strings.Contains(summary, "pending") {
 		t.Errorf("Expected summary to contain 'pending', got: %s", summary)
 	}
@@ -246,7 +238,6 @@ func TestTodoTool_GetTodosSummary(t *testing.T) {
 func TestTodoTool_GetTodos_JSONSerializable(t *testing.T) {
 	tool := NewTodoToolForTesting()
 
-	// Add a todo
 	ctx := context.Background()
 	_, err := tool.Execute(ctx, map[string]interface{}{
 		"merge": true,
@@ -267,13 +258,11 @@ func TestTodoTool_GetTodos_JSONSerializable(t *testing.T) {
 		t.Errorf("Expected 1 todo, got %d", len(todos))
 	}
 
-	// Verify it's JSON serializable
 	data, err := json.Marshal(todos)
 	if err != nil {
 		t.Fatalf("JSON marshal error = %v", err)
 	}
 
-	// Verify it can be unmarshaled back
 	var unmarshaled []TodoItem
 	if err := json.Unmarshal(data, &unmarshaled); err != nil {
 		t.Fatalf("JSON unmarshal error = %v", err)
@@ -285,10 +274,4 @@ func TestTodoTool_GetTodos_JSONSerializable(t *testing.T) {
 	if unmarshaled[0].Content != "Test todo" {
 		t.Errorf("Expected content 'Test todo', got '%s'", unmarshaled[0].Content)
 	}
-}
-
-// contains is a helper function to check if string contains substring
-// nolint:unused
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
 }

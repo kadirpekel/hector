@@ -6,7 +6,6 @@ import (
 	"github.com/kadirpekel/hector/pkg/config"
 )
 
-// TestShouldExclude tests the shouldExclude function with various patterns
 func TestShouldExclude(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -14,7 +13,7 @@ func TestShouldExclude(t *testing.T) {
 		path     string
 		expected bool
 	}{
-		// Directory patterns
+
 		{
 			name:     "Exclude node_modules directory",
 			excludes: []string{"**/node_modules/**"},
@@ -40,7 +39,6 @@ func TestShouldExclude(t *testing.T) {
 			expected: true,
 		},
 
-		// File extension patterns
 		{
 			name:     "Exclude .log files",
 			excludes: []string{"*.log"},
@@ -60,7 +58,6 @@ func TestShouldExclude(t *testing.T) {
 			expected: true,
 		},
 
-		// Specific file patterns
 		{
 			name:     "Exclude .DS_Store",
 			excludes: []string{"**/.DS_Store"},
@@ -74,7 +71,6 @@ func TestShouldExclude(t *testing.T) {
 			expected: true,
 		},
 
-		// Should NOT exclude (valid files)
 		{
 			name:     "Include .go file",
 			excludes: []string{"**/node_modules/**", "*.log"},
@@ -94,7 +90,6 @@ func TestShouldExclude(t *testing.T) {
 			expected: false,
 		},
 
-		// Multiple patterns
 		{
 			name:     "Multiple exclusions - match first",
 			excludes: []string{"*.log", "*.tmp", "*.cache"},
@@ -108,7 +103,6 @@ func TestShouldExclude(t *testing.T) {
 			expected: true,
 		},
 
-		// Edge cases
 		{
 			name:     "Empty exclude list",
 			excludes: []string{},
@@ -125,12 +119,12 @@ func TestShouldExclude(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a document store with test configuration
+
 			ds := &DocumentStore{
 				config: &config.DocumentStoreConfig{
 					ExcludePatterns: tt.excludes,
 				},
-				sourcePath: "/project", // Base path for relative resolution
+				sourcePath: "/project",
 			}
 
 			result := ds.shouldExclude(tt.path)
@@ -141,7 +135,6 @@ func TestShouldExclude(t *testing.T) {
 	}
 }
 
-// TestDefaultExcludePatterns verifies that default exclusions are comprehensive
 func TestDefaultExcludePatterns(t *testing.T) {
 	cfg := &config.DocumentStoreConfig{}
 	cfg.SetDefaults()
@@ -150,7 +143,6 @@ func TestDefaultExcludePatterns(t *testing.T) {
 		t.Fatal("Expected default exclude patterns to be set")
 	}
 
-	// Verify key exclusions exist
 	expectedPatterns := []string{
 		"**/node_modules/**",
 		"**/.git/**",
@@ -177,9 +169,7 @@ func TestDefaultExcludePatterns(t *testing.T) {
 	t.Logf("✅ Default exclude patterns count: %d", len(cfg.ExcludePatterns))
 }
 
-// TestEmptyFileSkipping would need to be an integration test
-// as it requires actual file I/O
 func TestEmptyFileSkipping(t *testing.T) {
 	t.Skip("Empty file skipping is tested via integration test - requires file I/O")
-	// The logic is in indexDirectory() at line 328-331
+
 }

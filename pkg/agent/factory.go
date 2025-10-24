@@ -11,9 +11,8 @@ import (
 	"github.com/kadirpekel/hector/pkg/tools"
 )
 
-// NewAgentServicesWithRegistry creates agent services with registry for orchestration
 func NewAgentServicesWithRegistry(agentID string, agentConfig *config.AgentConfig, componentManager *component.ComponentManager, registry *AgentRegistry) (reasoning.AgentServices, error) {
-	// Create registry service (nil-safe)
+
 	var registryService reasoning.AgentRegistryService
 	if registry != nil {
 		registryService = NewRegistryService(registry)
@@ -24,7 +23,6 @@ func NewAgentServicesWithRegistry(agentID string, agentConfig *config.AgentConfi
 	return newAgentServicesInternal(agentID, agentConfig, componentManager, registryService)
 }
 
-// newAgentServicesInternal is the internal implementation
 func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, componentManager *component.ComponentManager, registryService reasoning.AgentRegistryService) (reasoning.AgentServices, error) {
 	if agentID == "" {
 		return nil, fmt.Errorf("agent ID cannot be empty")
@@ -36,33 +34,28 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 		return nil, fmt.Errorf("component manager cannot be nil")
 	}
 
-	// Initialize LLM
 	llm, err := componentManager.GetLLM(agentConfig.LLM)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get LLM '%s': %w", agentConfig.LLM, err)
 	}
 
-	// Initialize services
 	toolRegistry := componentManager.GetToolRegistry()
 
-	// Create the strategy early to check for required tools
 	strategy, err := reasoning.CreateStrategy(agentConfig.Reasoning.Engine, agentConfig.Reasoning)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create reasoning strategy: %w", err)
 	}
 
-	// Auto-register strategy-required tools (e.g., todo_write for ChainOfThought, agent_call for Supervisor)
 	requiredTools := strategy.GetRequiredTools()
 	for _, reqTool := range requiredTools {
-		// Check if tool already exists
+
 		if _, err := toolRegistry.GetTool(reqTool.Name); err == nil {
-			// Tool already exists, skip
+
 			continue
 		}
 
-		// Tool doesn't exist - auto-create if requested
 		if reqTool.AutoCreate {
-			// Extract agent registry from registry service
+
 			var agentReg interface{}
 			if registryService != nil {
 				if regSvc, ok := registryService.(*RegistryService); ok {
@@ -77,10 +70,9 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 		}
 	}
 
-	// Create context service - only if document stores are configured
 	var contextService reasoning.ContextService
 	if len(agentConfig.DocumentStores) > 0 {
-		// Document stores require both database and embedder
+
 		if agentConfig.Database == "" {
 			return nil, fmt.Errorf("database is required when document stores are configured")
 		}
@@ -88,7 +80,6 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 			return nil, fmt.Errorf("embedder is required when document stores are configured")
 		}
 
-		// Get database and embedder for search engine
 		db, err := componentManager.GetDatabase(agentConfig.Database)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get database '%s': %w", agentConfig.Database, err)
@@ -104,9 +95,8 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 			return nil, fmt.Errorf("failed to create search engine: %w", err)
 		}
 
-		// Resolve document store names to actual configs and initialize them
 		globalConfig := componentManager.GetGlobalConfig()
-		var documentStoreConfigs []config.DocumentStoreConfig
+		var documentStoreConfigs []*config.DocumentStoreConfig
 		for _, storeName := range agentConfig.DocumentStores {
 			storeConfig, exists := globalConfig.DocumentStores[storeName]
 			if !exists {
@@ -115,23 +105,19 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 			documentStoreConfigs = append(documentStoreConfigs, storeConfig)
 		}
 
-		// Initialize document stores from resolved configs
 		if err := hectorcontext.InitializeDocumentStoresFromConfig(documentStoreConfigs, searchEngine); err != nil {
 			return nil, fmt.Errorf("failed to initialize document stores: %w", err)
 		}
 
 		contextService = NewContextService(searchEngine)
 	} else {
-		// No document stores configured - create a no-op context service
+
 		contextService = NewNoOpContextService()
 	}
 
-	// Create services (order matters due to dependencies)
 	llmService := NewLLMService(llm)
 	toolService := NewToolService(toolRegistry, agentConfig.Tools)
 
-	// Create memory service with working memory strategy
-	// Create summarization service if needed for summary_buffer strategy
 	var summarizer *SummarizationService
 	if agentConfig.Memory.Strategy == "summary_buffer" || agentConfig.Memory.Strategy == "" {
 		var err error
@@ -143,7 +129,6 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 		}
 	}
 
-	// Create working memory strategy using the factory
 	workingStrategy, err := memory.NewWorkingMemoryStrategy(memory.WorkingMemoryConfig{
 		Strategy:   agentConfig.Memory.Strategy,
 		WindowSize: agentConfig.Memory.WindowSize,
@@ -157,10 +142,9 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 		return nil, fmt.Errorf("failed to create working memory strategy: %w", err)
 	}
 
-	// Create long-term memory strategy (optional)
 	var longTermStrategy memory.LongTermMemoryStrategy
 	if agentConfig.Memory.LongTerm.IsEnabled() {
-		// Long-term memory requires database + embedder (direct access, not SearchEngine)
+
 		if agentConfig.Database == "" {
 			return nil, fmt.Errorf("long-term memory requires database to be configured")
 		}
@@ -168,7 +152,6 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 			return nil, fmt.Errorf("long-term memory requires embedder to be configured")
 		}
 
-		// Get database and embedder directly
 		db, err := componentManager.GetDatabase(agentConfig.Database)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get database '%s': %w", agentConfig.Database, err)
@@ -179,7 +162,6 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 			return nil, fmt.Errorf("failed to get embedder '%s': %w", agentConfig.Embedder, err)
 		}
 
-		// Create vector memory strategy with direct database + embedder access
 		longTermStrategy, err = memory.NewVectorMemoryStrategy(
 			db,
 			embedder,
@@ -196,7 +178,6 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 			agentConfig.Memory.LongTerm.RecallLimit)
 	}
 
-	// Build long-term config
 	longTermConfig := memory.LongTermConfig{
 		Enabled:      agentConfig.Memory.LongTerm.IsEnabled(),
 		StorageScope: memory.StorageScope(agentConfig.Memory.LongTerm.StorageScope),
@@ -206,16 +187,11 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 		Collection:   agentConfig.Memory.LongTerm.Collection,
 	}
 
-	// Create session service based on configuration
-	// If agentConfig.SessionStore is set, look up the global session store
-	// If not set, use in-memory session service (default)
 	sessionService, err := componentManager.GetSessionService(agentConfig.SessionStore, agentID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session service: %w", err)
 	}
 
-	// Create memory service (using configured session service)
-	// Pass agentID for long-term memory isolation
 	historyService := memory.NewMemoryService(
 		agentID,
 		sessionService,
@@ -224,12 +200,10 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 		longTermConfig,
 	)
 
-	// contextService already created above based on document store availability
 	promptService := NewPromptService(agentConfig.Prompt, contextService, historyService)
 
-	// Create task service if enabled
 	var taskService reasoning.TaskService
-	if agentConfig.Task.IsEnabled() {
+	if agentConfig.Task != nil && agentConfig.Task.IsEnabled() {
 		switch agentConfig.Task.Backend {
 		case "memory":
 			taskService = NewInMemoryTaskService()
@@ -247,29 +221,25 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 		}
 	}
 
-	// Create agent services for dependency injection
-	// Note: SessionService is the in-memory implementation, HistoryService is the MemoryService
 	agentServices := reasoning.NewAgentServices(
 		agentConfig.Reasoning,
 		llmService,
 		toolService,
 		contextService,
 		promptService,
-		sessionService, // SessionService (in-memory)
-		historyService, // HistoryService (memory service)
+		sessionService,
+		historyService,
 		registryService,
-		taskService, // TaskService (may be nil)
+		taskService,
 	)
 
 	return agentServices, nil
 }
 
-// registerRequiredTool creates and registers a required tool in the registry
 func registerRequiredToolWithAgentRegistry(registry *tools.ToolRegistry, reqTool reasoning.RequiredTool, agentRegistry interface{}) error {
-	// Create a local tool source for the required tool
+
 	localSource := tools.NewLocalToolSource("strategy-required")
 
-	// Create the tool based on type
 	var tool tools.Tool
 	switch reqTool.Type {
 	case "todo":
@@ -281,20 +251,20 @@ func registerRequiredToolWithAgentRegistry(registry *tools.ToolRegistry, reqTool
 				registry = ar
 			}
 		}
-		// Validate registry is available
+
 		if registry == nil {
 			return fmt.Errorf("agent_call tool requires agent registry but none was provided")
 		}
 		tool = tools.NewAgentCallTool(registry)
 	case "command":
-		// Create a basic command tool with safe defaults
-		cmdTool, err := tools.NewCommandToolWithConfig(reqTool.Name, config.ToolConfig{
+		toolConfig := &config.ToolConfig{
 			Type:             "command",
 			AllowedCommands:  []string{"ls", "cat", "pwd", "echo"},
 			WorkingDirectory: "./",
 			MaxExecutionTime: "30s",
 			EnableSandboxing: true,
-		})
+		}
+		cmdTool, err := tools.NewCommandToolWithConfig(reqTool.Name, toolConfig)
 		if err != nil {
 			return err
 		}
@@ -303,64 +273,9 @@ func registerRequiredToolWithAgentRegistry(registry *tools.ToolRegistry, reqTool
 		return fmt.Errorf("unsupported required tool type: %s", reqTool.Type)
 	}
 
-	// Register the tool in the local source
 	if err := localSource.RegisterTool(tool); err != nil {
 		return err
 	}
 
-	// Register the source in the registry
 	return registry.RegisterSource(localSource)
-}
-
-// ============================================================================
-// AGENT FACTORY - SINGLE SOURCE OF TRUTH FOR AGENT CREATION
-// ============================================================================
-
-// AgentFactory creates and configures agent instances
-type AgentFactory struct {
-	componentManager *component.ComponentManager
-}
-
-// NewAgentFactory creates a new agent factory
-func NewAgentFactory(componentManager *component.ComponentManager) *AgentFactory {
-	if componentManager == nil {
-		return nil
-	}
-	return &AgentFactory{
-		componentManager: componentManager,
-	}
-}
-
-// CreateAgent creates a new agent with the given configuration
-// Registry will be nil for agents created through factory (typically tests)
-// For production multi-agent scenarios, use NewAgent directly with a registry
-func (f *AgentFactory) CreateAgent(agentID string, agentConfig *config.AgentConfig) (*Agent, error) {
-	if agentID == "" {
-		return nil, fmt.Errorf("agent ID cannot be empty")
-	}
-	if agentConfig == nil {
-		return nil, fmt.Errorf("agent config cannot be nil")
-	}
-
-	// Single place for agent creation logic - delegates to NewAgent
-	// Pass nil registry - orchestration won't be available
-	return NewAgent(agentID, agentConfig, f.componentManager, nil)
-}
-
-// CreateAgentWithServices creates an agent with pre-configured services (for testing)
-func (f *AgentFactory) CreateAgentWithServices(agentConfig *config.AgentConfig, services reasoning.AgentServices) (*Agent, error) {
-	if agentConfig == nil {
-		return nil, fmt.Errorf("agent config cannot be nil")
-	}
-	if services == nil {
-		return nil, fmt.Errorf("agent services cannot be nil")
-	}
-
-	// Create agent with provided services
-	return &Agent{
-		name:        agentConfig.Name,
-		description: agentConfig.Description,
-		config:      agentConfig,
-		services:    services,
-	}, nil
 }

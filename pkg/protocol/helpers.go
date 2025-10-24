@@ -5,12 +5,6 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// ============================================================================
-// MESSAGE CREATION HELPERS
-// Pure A2A protocol - no extensions, just native Part types
-// ============================================================================
-
-// CreateUserMessage creates a new pb.Message with ROLE_USER and text content.
 func CreateUserMessage(text string) *pb.Message {
 	return &pb.Message{
 		Role: pb.Role_ROLE_USER,
@@ -22,7 +16,6 @@ func CreateUserMessage(text string) *pb.Message {
 	}
 }
 
-// CreateTextMessage creates a new pb.Message with a given role and text content.
 func CreateTextMessage(role pb.Role, text string) *pb.Message {
 	return &pb.Message{
 		Role: role,
@@ -34,27 +27,18 @@ func CreateTextMessage(role pb.Role, text string) *pb.Message {
 	}
 }
 
-// ============================================================================
-// TOOL CALLING HELPERS
-// Uses native A2A DataPart for structured tool call/result data
-// ============================================================================
-
-// ToolCall represents a tool invocation
-// This is a helper struct for encoding/decoding tool calls from DataPart
 type ToolCall struct {
 	ID   string                 `json:"id"`
 	Name string                 `json:"name"`
 	Args map[string]interface{} `json:"arguments"`
 }
 
-// ToolResult represents the result of a tool execution
 type ToolResult struct {
 	ToolCallID string `json:"tool_call_id"`
 	Content    string `json:"content"`
 	Error      string `json:"error,omitempty"`
 }
 
-// CreateToolCallPart creates a Part containing a tool call using DataPart
 func CreateToolCallPart(toolCall *ToolCall) *pb.Part {
 	data, _ := structpb.NewStruct(map[string]interface{}{
 		"id":        toolCall.ID,
@@ -74,7 +58,6 @@ func CreateToolCallPart(toolCall *ToolCall) *pb.Part {
 	}
 }
 
-// CreateToolResultPart creates a Part containing a tool result using DataPart
 func CreateToolResultPart(result *ToolResult) *pb.Part {
 	data, _ := structpb.NewStruct(map[string]interface{}{
 		"tool_call_id": result.ToolCallID,
@@ -94,7 +77,6 @@ func CreateToolResultPart(result *ToolResult) *pb.Part {
 	}
 }
 
-// IsToolCallPart checks if a part represents a tool call
 func IsToolCallPart(part *pb.Part) bool {
 	if part == nil || part.Metadata == nil {
 		return false
@@ -105,7 +87,6 @@ func IsToolCallPart(part *pb.Part) bool {
 	return false
 }
 
-// IsToolResultPart checks if a part represents a tool result
 func IsToolResultPart(part *pb.Part) bool {
 	if part == nil || part.Metadata == nil {
 		return false
@@ -116,7 +97,6 @@ func IsToolResultPart(part *pb.Part) bool {
 	return false
 }
 
-// ExtractToolCall extracts a ToolCall from a DataPart
 func ExtractToolCall(part *pb.Part) *ToolCall {
 	if !IsToolCallPart(part) {
 		return nil
@@ -143,7 +123,6 @@ func ExtractToolCall(part *pb.Part) *ToolCall {
 	return tc
 }
 
-// ExtractToolResult extracts a ToolResult from a DataPart
 func ExtractToolResult(part *pb.Part) *ToolResult {
 	if !IsToolResultPart(part) {
 		return nil
@@ -170,7 +149,6 @@ func ExtractToolResult(part *pb.Part) *ToolResult {
 	return result
 }
 
-// GetToolCallsFromMessage extracts all tool calls from a message
 func GetToolCallsFromMessage(msg *pb.Message) []*ToolCall {
 	if msg == nil {
 		return nil
@@ -185,7 +163,6 @@ func GetToolCallsFromMessage(msg *pb.Message) []*ToolCall {
 	return toolCalls
 }
 
-// GetToolResultsFromMessage extracts all tool results from a message
 func GetToolResultsFromMessage(msg *pb.Message) []*ToolResult {
 	if msg == nil {
 		return nil
@@ -200,11 +177,6 @@ func GetToolResultsFromMessage(msg *pb.Message) []*ToolResult {
 	return results
 }
 
-// ============================================================================
-// CONTENT EXTRACTION HELPERS
-// ============================================================================
-
-// ExtractTextFromMessage extracts the first text content from a pb.Message.
 func ExtractTextFromMessage(msg *pb.Message) string {
 	if msg == nil || len(msg.Content) == 0 {
 		return ""
@@ -217,7 +189,6 @@ func ExtractTextFromMessage(msg *pb.Message) string {
 	return ""
 }
 
-// ExtractAllTextFromMessage extracts all text parts concatenated
 func ExtractAllTextFromMessage(msg *pb.Message) string {
 	if msg == nil || len(msg.Content) == 0 {
 		return ""
@@ -231,7 +202,6 @@ func ExtractAllTextFromMessage(msg *pb.Message) string {
 	return result
 }
 
-// ExtractTextFromTask extracts the text content from the last user message in a pb.Task.
 func ExtractTextFromTask(task *pb.Task) string {
 	if task == nil || len(task.History) == 0 {
 		return ""
@@ -244,7 +214,6 @@ func ExtractTextFromTask(task *pb.Task) string {
 	return ""
 }
 
-// HasToolCalls checks if a message contains any tool calls
 func HasToolCalls(msg *pb.Message) bool {
 	if msg == nil {
 		return false
@@ -257,7 +226,6 @@ func HasToolCalls(msg *pb.Message) bool {
 	return false
 }
 
-// HasToolResults checks if a message contains any tool results
 func HasToolResults(msg *pb.Message) bool {
 	if msg == nil {
 		return false

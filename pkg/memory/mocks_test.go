@@ -9,12 +9,8 @@ import (
 	"github.com/kadirpekel/hector/pkg/databases"
 )
 
-// ============================================================================
-// MOCK DATABASE PROVIDER
-// ============================================================================
-
 type MockDatabaseProvider struct {
-	storage    map[string]map[string]*databases.SearchResult // collection -> id -> result
+	storage    map[string]map[string]*databases.SearchResult
 	searchFunc func(ctx context.Context, collection string, vector []float32, topK int, filter map[string]interface{}) ([]databases.SearchResult, error)
 }
 
@@ -29,7 +25,6 @@ func (m *MockDatabaseProvider) Upsert(ctx context.Context, collection string, id
 		m.storage[collection] = make(map[string]*databases.SearchResult)
 	}
 
-	// Store with content from metadata
 	content := ""
 	if c, ok := metadata["content"].(string); ok {
 		content = c
@@ -51,12 +46,11 @@ func (m *MockDatabaseProvider) Search(ctx context.Context, collection string, ve
 }
 
 func (m *MockDatabaseProvider) SearchWithFilter(ctx context.Context, collection string, vector []float32, topK int, filter map[string]interface{}) ([]databases.SearchResult, error) {
-	// Use custom search function if provided
+
 	if m.searchFunc != nil {
 		return m.searchFunc(ctx, collection, vector, topK, filter)
 	}
 
-	// Default: return all results in collection that match filter
 	results := []databases.SearchResult{}
 
 	items, exists := m.storage[collection]
@@ -65,7 +59,7 @@ func (m *MockDatabaseProvider) SearchWithFilter(ctx context.Context, collection 
 	}
 
 	for _, item := range items {
-		// Apply filter if provided
+
 		if len(filter) > 0 {
 			match := true
 			for filterKey, filterValue := range filter {
@@ -102,7 +96,6 @@ func (m *MockDatabaseProvider) DeleteByFilter(ctx context.Context, collection st
 		return nil
 	}
 
-	// Find and delete matching items
 	for id, item := range items {
 		match := true
 		for filterKey, filterValue := range filter {
@@ -135,7 +128,6 @@ func (m *MockDatabaseProvider) Close() error {
 	return nil
 }
 
-// Helper methods for testing
 func (m *MockDatabaseProvider) GetStoredCount(collection string) int {
 	if m.storage[collection] == nil {
 		return 0
@@ -147,10 +139,6 @@ func (m *MockDatabaseProvider) SetSearchFunc(fn func(ctx context.Context, collec
 	m.searchFunc = fn
 }
 
-// ============================================================================
-// MOCK EMBEDDER PROVIDER
-// ============================================================================
-
 type MockEmbedderProvider struct {
 	embedFunc func(text string) ([]float32, error)
 }
@@ -158,12 +146,12 @@ type MockEmbedderProvider struct {
 func NewMockEmbedderProvider() *MockEmbedderProvider {
 	return &MockEmbedderProvider{
 		embedFunc: func(text string) ([]float32, error) {
-			// Default: simple hash-based embedding for testing
+
 			hash := 0
 			for _, c := range text {
 				hash = hash*31 + int(c)
 			}
-			// Generate a simple 3-dimensional vector
+
 			return []float32{float32(hash % 100), float32((hash / 100) % 100), float32((hash / 10000) % 100)}, nil
 		},
 	}
@@ -185,14 +173,9 @@ func (m *MockEmbedderProvider) Close() error {
 	return nil
 }
 
-// Helper methods for testing
 func (m *MockEmbedderProvider) SetEmbedFunc(fn func(text string) ([]float32, error)) {
 	m.embedFunc = fn
 }
-
-// ============================================================================
-// MOCK SUMMARIZER (for working memory tests)
-// ============================================================================
 
 type MockSummarizer struct {
 	summaries []string

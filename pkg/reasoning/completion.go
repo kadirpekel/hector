@@ -9,33 +9,24 @@ import (
 	"github.com/kadirpekel/hector/pkg/llms"
 )
 
-// ============================================================================
-// TASK COMPLETION VERIFICATION
-// Uses structured output to verify if a task is truly complete
-// ============================================================================
-
-// CompletionAssessment represents the LLM's assessment of task completion
 type CompletionAssessment struct {
 	IsComplete     bool     `json:"is_complete"`
 	Confidence     float64  `json:"confidence"`
 	MissingActions []string `json:"missing_actions"`
-	Quality        string   `json:"quality"`        // "excellent", "good", "needs_improvement"
-	Recommendation string   `json:"recommendation"` // "stop", "continue", "clarify"
+	Quality        string   `json:"quality"`
+	Recommendation string   `json:"recommendation"`
 	Reasoning      string   `json:"reasoning"`
 }
 
-// AssessTaskCompletion uses structured output to determine if a task is complete
-// This prevents premature stopping on complex multi-step tasks
 func AssessTaskCompletion(
 	ctx context.Context,
 	originalQuery string,
 	assistantResponse string,
 	services AgentServices,
 ) (*CompletionAssessment, error) {
-	// Build completion assessment prompt
+
 	prompt := buildCompletionPrompt(originalQuery, assistantResponse)
 
-	// Define structured output schema
 	schema := map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
@@ -84,12 +75,10 @@ func AssessTaskCompletion(
 		Schema: schema,
 	}
 
-	// Get LLM service
 	llmService := services.LLM()
 
-	// Check if LLM service is available and supports structured output
 	if llmService == nil || !llmService.SupportsStructuredOutput() {
-		// Fallback: assume complete if no tool calls
+
 		return &CompletionAssessment{
 			IsComplete:     true,
 			Confidence:     0.7,
@@ -100,14 +89,13 @@ func AssessTaskCompletion(
 		}, nil
 	}
 
-	// Make structured LLM call
 	messages := []*pb.Message{
 		{Role: pb.Role_ROLE_USER, Content: []*pb.Part{{Part: &pb.Part_Text{Text: prompt}}}},
 	}
 
 	text, _, _, err := llmService.GenerateStructured(messages, nil, config)
 	if err != nil {
-		// Fallback on error
+
 		return &CompletionAssessment{
 			IsComplete:     true,
 			Confidence:     0.7,
@@ -118,10 +106,9 @@ func AssessTaskCompletion(
 		}, nil
 	}
 
-	// Parse response
 	var assessment CompletionAssessment
 	if err := json.Unmarshal([]byte(text), &assessment); err != nil {
-		// Fallback on parse error
+
 		return &CompletionAssessment{
 			IsComplete:     true,
 			Confidence:     0.7,
@@ -135,7 +122,6 @@ func AssessTaskCompletion(
 	return &assessment, nil
 }
 
-// buildCompletionPrompt creates the prompt for completion assessment
 func buildCompletionPrompt(originalQuery string, assistantResponse string) string {
 	return fmt.Sprintf(`You are evaluating whether an AI agent has fully completed a user's request.
 

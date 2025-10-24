@@ -8,38 +8,28 @@ import (
 	"time"
 )
 
-// ============================================================================
-// TODO MANAGEMENT TOOL - Matches Cursor's todo_write functionality
-// ============================================================================
-
-// TodoTool provides task/todo management capabilities
-// This allows the LLM to create, update, and track todos systematically
 type TodoTool struct {
 	mu    sync.RWMutex
-	todos map[string][]TodoItem // Per-session todos (sessionID -> todos)
+	todos map[string][]TodoItem
 }
 
-// TodoItem represents a single todo/task
 type TodoItem struct {
 	ID      string `json:"id"`
 	Content string `json:"content"`
-	Status  string `json:"status"` // "pending", "in_progress", "completed", "canceled"
+	Status  string `json:"status"`
 }
 
-// TodoWriteRequest represents the parameters for todo_write
 type TodoWriteRequest struct {
-	Merge bool       `json:"merge"` // If true, merge with existing; if false, replace
-	Todos []TodoItem `json:"todos"` // List of todos
+	Merge bool       `json:"merge"`
+	Todos []TodoItem `json:"todos"`
 }
 
-// NewTodoTool creates a new todo management tool
 func NewTodoTool() *TodoTool {
 	return &TodoTool{
 		todos: make(map[string][]TodoItem),
 	}
 }
 
-// GetInfo implements Tool interface
 func (t *TodoTool) GetInfo() ToolInfo {
 	return ToolInfo{
 		Name:        "todo_write",
@@ -81,35 +71,29 @@ func (t *TodoTool) GetInfo() ToolInfo {
 	}
 }
 
-// GetName implements Tool interface
 func (t *TodoTool) GetName() string {
 	return "todo_write"
 }
 
-// GetDescription implements Tool interface
 func (t *TodoTool) GetDescription() string {
 	return "Create and manage todos for complex tasks"
 }
 
-// Execute implements Tool interface
 func (t *TodoTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
 	start := time.Now()
 
-	// Extract merge flag
 	merge, ok := args["merge"].(bool)
 	if !ok {
 		return t.errorResult("merge parameter is required (true/false)", start),
 			fmt.Errorf("merge parameter is required")
 	}
 
-	// Extract todos array
 	todosRaw, ok := args["todos"].([]interface{})
 	if !ok || len(todosRaw) == 0 {
 		return t.errorResult("todos parameter is required and must be a non-empty array", start),
 			fmt.Errorf("todos parameter is required")
 	}
 
-	// Parse todos
 	todos := make([]TodoItem, 0, len(todosRaw))
 	for i, todoRaw := range todosRaw {
 		todoMap, ok := todoRaw.(map[string]interface{})
@@ -127,7 +111,6 @@ func (t *TodoTool) Execute(ctx context.Context, args map[string]interface{}) (To
 				fmt.Errorf("incomplete todo item")
 		}
 
-		// Validate status
 		if !isValidStatus(status) {
 			return t.errorResult(fmt.Sprintf("todo item %d has invalid status: %s", i, status), start),
 				fmt.Errorf("invalid status")
@@ -140,49 +123,43 @@ func (t *TodoTool) Execute(ctx context.Context, args map[string]interface{}) (To
 		})
 	}
 
-	// Session ID (for multi-session support)
-	// In single-agent mode, use "default"
 	sessionID := "default"
 	if sid, ok := ctx.Value("session_id").(string); ok {
 		sessionID = sid
 	}
 
-	// Update todos
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	if merge {
-		// Merge: Update existing todos by ID
+
 		existing := t.todos[sessionID]
 		if existing == nil {
 			existing = make([]TodoItem, 0)
 		}
 
-		// Create a map for quick lookup
 		existingMap := make(map[string]*TodoItem)
 		for i := range existing {
 			existingMap[existing[i].ID] = &existing[i]
 		}
 
-		// Update existing todos
 		for _, newTodo := range todos {
 			if existingTodo, found := existingMap[newTodo.ID]; found {
-				// Update existing
+
 				existingTodo.Content = newTodo.Content
 				existingTodo.Status = newTodo.Status
 			} else {
-				// Add new
+
 				existing = append(existing, newTodo)
 			}
 		}
 
 		t.todos[sessionID] = existing
 	} else {
-		// Replace: Set new todos
+
 		t.todos[sessionID] = todos
 	}
 
-	// Generate summary
 	summary := t.generateSummary(sessionID)
 
 	return ToolResult{
@@ -198,7 +175,6 @@ func (t *TodoTool) Execute(ctx context.Context, args map[string]interface{}) (To
 	}, nil
 }
 
-// GetTodos returns current todos for a session (for system to inject into context)
 func (t *TodoTool) GetTodos(sessionID string) []TodoItem {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -212,13 +188,11 @@ func (t *TodoTool) GetTodos(sessionID string) []TodoItem {
 		return []TodoItem{}
 	}
 
-	// Return a copy
 	result := make([]TodoItem, len(todos))
 	copy(result, todos)
 	return result
 }
 
-// GetTodosSummary returns a formatted summary of current todos
 func (t *TodoTool) GetTodosSummary(sessionID string) string {
 	if sessionID == "" {
 		sessionID = "default"
@@ -230,11 +204,10 @@ func (t *TodoTool) GetTodosSummary(sessionID string) string {
 	return t.generateSummary(sessionID)
 }
 
-// generateSummary creates a human-readable summary of todos
 func (t *TodoTool) generateSummary(sessionID string) string {
 	todos := t.todos[sessionID]
 	if len(todos) == 0 {
-		return "✅ No active todos"
+		return "No active todos"
 	}
 
 	var pending, inProgress, completed, canceled int
@@ -251,10 +224,9 @@ func (t *TodoTool) generateSummary(sessionID string) string {
 		}
 	}
 
-	summary := fmt.Sprintf("📋 Todo Summary: %d total (%d pending, %d in progress, %d completed, %d canceled)\n\n",
+	summary := fmt.Sprintf("Todo Summary: %d total (%d pending, %d in progress, %d completed, %d canceled)\n\n",
 		len(todos), pending, inProgress, completed, canceled)
 
-	// List all todos
 	for _, todo := range todos {
 		icon := getStatusIcon(todo.Status)
 		summary += fmt.Sprintf("%s [%s] %s\n", icon, todo.ID, todo.Content)
@@ -263,7 +235,6 @@ func (t *TodoTool) generateSummary(sessionID string) string {
 	return summary
 }
 
-// errorResult creates an error ToolResult
 func (t *TodoTool) errorResult(message string, start time.Time) ToolResult {
 	return ToolResult{
 		Success:       false,
@@ -273,28 +244,25 @@ func (t *TodoTool) errorResult(message string, start time.Time) ToolResult {
 	}
 }
 
-// isValidStatus checks if a status is valid
 func isValidStatus(status string) bool {
 	return status == "pending" || status == "in_progress" || status == "completed" || status == "canceled"
 }
 
-// getStatusIcon returns an icon for a status
 func getStatusIcon(status string) string {
 	switch status {
 	case "pending":
-		return "⏳"
+		return "[PENDING]"
 	case "in_progress":
-		return "🔄"
+		return "[IN PROGRESS]"
 	case "completed":
-		return "✅"
+		return "[DONE]"
 	case "canceled":
-		return "❌"
+		return "[CANCELLED]"
 	default:
-		return "❓"
+		return "[UNKNOWN]"
 	}
 }
 
-// FormatTodosForContext formats todos as a string for injection into LLM context
 func FormatTodosForContext(todos []TodoItem) string {
 	if len(todos) == 0 {
 		return ""
@@ -315,7 +283,6 @@ func FormatTodosForContext(todos []TodoItem) string {
 	return result
 }
 
-// MarshalTodos converts todos to JSON for storage/transmission
 func MarshalTodos(todos []TodoItem) (string, error) {
 	data, err := json.MarshalIndent(todos, "", "  ")
 	if err != nil {

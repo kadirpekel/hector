@@ -10,7 +10,6 @@ import (
 	"github.com/kadirpekel/hector/pkg/embedders"
 )
 
-// Mock implementations for testing
 type mockDatabaseProvider struct {
 	upsertFunc func(ctx context.Context, collection string, id string, vector []float32, metadata map[string]interface{}) error
 	searchFunc func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error)
@@ -35,7 +34,7 @@ func (m *mockDatabaseProvider) Delete(ctx context.Context, collection string, id
 }
 
 func (m *mockDatabaseProvider) SearchWithFilter(ctx context.Context, collection string, vector []float32, topK int, filter map[string]interface{}) ([]databases.SearchResult, error) {
-	// For testing purposes, delegate to Search
+
 	return m.Search(ctx, collection, vector, topK)
 }
 
@@ -139,7 +138,7 @@ func TestNewSearchEngine(t *testing.T) {
 			searchConfig: config.SearchConfig{
 				Models: []config.SearchModel{
 					{
-						Name:       "", // Empty name
+						Name:       "",
 						Collection: "test-collection",
 					},
 				},
@@ -154,7 +153,7 @@ func TestNewSearchEngine(t *testing.T) {
 				Models: []config.SearchModel{
 					{
 						Name:       "test-model",
-						Collection: "", // Empty collection
+						Collection: "",
 					},
 				},
 			},
@@ -169,7 +168,7 @@ func TestNewSearchEngine(t *testing.T) {
 					{
 						Name:        "test-model",
 						Collection:  "test-collection",
-						DefaultTopK: -1, // Invalid
+						DefaultTopK: -1,
 					},
 				},
 			},
@@ -185,7 +184,7 @@ func TestNewSearchEngine(t *testing.T) {
 						Name:        "test-model",
 						Collection:  "test-collection",
 						DefaultTopK: 10,
-						MaxTopK:     5, // Less than default
+						MaxTopK:     5,
 					},
 				},
 			},
@@ -217,7 +216,7 @@ func TestNewSearchEngine(t *testing.T) {
 }
 
 func TestSearchEngine_IngestDocument(t *testing.T) {
-	// Create a mock database that tracks calls
+
 	var upsertCalled bool
 	var upsertCollection, upsertID string
 	var upsertVector []float32
@@ -286,7 +285,7 @@ func TestSearchEngine_IngestDocument(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset tracking variables
+
 			upsertCalled = false
 			upsertCollection = ""
 			upsertID = ""
@@ -328,7 +327,7 @@ func TestSearchEngine_IngestDocument(t *testing.T) {
 }
 
 func TestSearchEngine_Search(t *testing.T) {
-	// Create mock database that returns test results
+
 	mockDB := &mockDatabaseProvider{
 		searchFunc: func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error) {
 			results := make([]databases.SearchResult, limit)
@@ -450,7 +449,7 @@ func TestSearchEngine_Search(t *testing.T) {
 }
 
 func TestSearchEngine_SearchModels(t *testing.T) {
-	// Create mock database that returns different results for different collections
+
 	mockDB := &mockDatabaseProvider{
 		searchFunc: func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error) {
 			results := make([]databases.SearchResult, limit)
@@ -719,13 +718,13 @@ func TestSearchEngine_QueryProcessing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// We can't directly test processQuery as it's private, but we can test it through Search
+
 			ctx := context.Background()
 			_, err := engine.Search(ctx, tt.query, 5)
 			if err != nil {
 				t.Errorf("Search() error = %v, want nil", err)
 			}
-			// The actual processing is tested indirectly through the search functionality
+
 		})
 	}
 }
@@ -745,10 +744,8 @@ func TestSearchEngine_Concurrency(t *testing.T) {
 		t.Fatalf("NewSearchEngine() error = %v", err)
 	}
 
-	// Test concurrent access
 	done := make(chan bool, 3)
 
-	// Goroutine 1: Search
 	go func() {
 		for i := 0; i < 5; i++ {
 			ctx := context.Background()
@@ -760,7 +757,6 @@ func TestSearchEngine_Concurrency(t *testing.T) {
 		done <- true
 	}()
 
-	// Goroutine 2: Ingest documents
 	go func() {
 		for i := 0; i < 5; i++ {
 			ctx := context.Background()
@@ -772,7 +768,6 @@ func TestSearchEngine_Concurrency(t *testing.T) {
 		done <- true
 	}()
 
-	// Goroutine 3: Get status
 	go func() {
 		for i := 0; i < 5; i++ {
 			_ = engine.GetStatus()
@@ -780,7 +775,6 @@ func TestSearchEngine_Concurrency(t *testing.T) {
 		done <- true
 	}()
 
-	// Wait for all goroutines to complete
 	<-done
 	<-done
 	<-done

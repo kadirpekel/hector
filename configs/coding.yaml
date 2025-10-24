@@ -1,22 +1,3 @@
-# ============================================================================
-# CODING ASSISTANT - Simple Configuration
-# ============================================================================
-#
-# This is the recommended configuration for getting started quickly.
-# Uses shortcuts for minimal setup. For advanced options, see coding-advanced.yaml
-#
-# PREREQUISITES:
-# 1. Anthropic API key: export ANTHROPIC_API_KEY="sk-ant-..."
-# 2. Qdrant running: docker run -p 6334:6334 -p 6334:6334 qdrant/qdrant
-# 3. Ollama with embeddings: ollama pull nomic-embed-text
-#
-# QUICK START:
-#   hector serve --config configs/coding.yaml
-#   hector chat --config configs/coding.yaml coder
-#
-# ============================================================================
-
-# LLM Configuration
 llms:
   claude:
     type: "anthropic"
@@ -24,22 +5,15 @@ llms:
     api_key: "${ANTHROPIC_API_KEY}"
     temperature: 0.0
     max_tokens: 8000
-
-# Coding Assistant Agent
 agents:
   coder:
     name: "AI Coding Assistant"
     description: "Expert AI assistant specialized in software development, code generation, and technical problem-solving"
     llm: "claude"
-    
-    # 🎯 Quick config shortcuts
-    docs_folder: "."         # Auto-creates document store + search tool
-    enable_tools: true       # Auto-enables all local tools
-    
-    # A2A Agent Card Configuration
+    docs_folder: "."         
+    enable_tools: true       
     a2a:
       version: "1.0.0"
-      
       input_modes:
         - "text/plain"
         - "application/json"
@@ -48,7 +22,6 @@ agents:
         - "text/x-javascript"
         - "text/x-typescript"
         - "text/markdown"
-      
       output_modes:
         - "text/plain"
         - "application/json"
@@ -57,7 +30,6 @@ agents:
         - "text/x-javascript"
         - "text/x-typescript"
         - "text/markdown"
-      
       skills:
         - id: "code-generation"
           name: "Code Generation"
@@ -67,7 +39,6 @@ agents:
             - "Create a REST API in Go"
             - "Write unit tests for this function"
             - "Implement a binary search algorithm"
-        
         - id: "code-review"
           name: "Code Review & Analysis"
           description: "Review code for bugs, performance issues, security vulnerabilities, and best practices"
@@ -76,7 +47,6 @@ agents:
             - "Review this code for security issues"
             - "Optimize this function for performance"
             - "Suggest improvements for this class"
-        
         - id: "semantic-search"
           name: "Codebase Search"
           description: "Search and understand large codebases using semantic search and RAG"
@@ -85,7 +55,6 @@ agents:
             - "Find where authentication is handled"
             - "Show me database connection code"
             - "Locate error handling patterns"
-        
         - id: "refactoring"
           name: "Code Refactoring"
           description: "Refactor and improve existing code while maintaining functionality"
@@ -94,88 +63,28 @@ agents:
             - "Refactor this code to use design patterns"
             - "Extract this logic into a reusable function"
             - "Simplify this complex function"
-    
-    # That's it! Everything else is auto-configured:
-    # ✅ Document store auto-created from "."
-    # ✅ Qdrant database auto-configured (localhost:6333)
-    # ✅ Ollama embedder auto-configured (localhost:11434)
-    # ✅ All tools auto-enabled (execute_command, write_file, search_replace, todo_write)
-    # ✅ Search tool auto-configured for the document store
-    
-    # Optional: Customize prompt (or omit for defaults)
     prompt:
       prompt_slots:
         system_role: |
           You are an expert AI coding assistant.
           You operate like a pair programmer in Cursor.
-
           Your capabilities:
           - Semantic code search to understand codebases
           - File creation and modification
           - Command execution for testing and validation
           - Step-by-step reasoning
-
         reasoning_instructions: |
           Always implement changes rather than just suggesting them.
           Use semantic search to understand patterns before making changes.
-
-    # Optional: Customize reasoning (or omit for defaults)
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 100
-      enable_self_reflection: true       # LLM outputs <thinking> tags for better reasoning
-      enable_structured_reflection: true # LLM-based tool analysis (default: true)
+      enable_self_reflection: true       
+      enable_structured_reflection: true 
       enable_streaming: true
       show_tool_execution: true
-      show_thinking: true                # Show [Thinking: ...] meta-reflection blocks
-
-    # Optional: Customize memory (or omit for defaults)
+      show_thinking: true                
     memory:
       working:
         strategy: "summary_buffer"
         budget: 4000
-
-# ============================================================================
-# COMPARISON
-# ============================================================================
-#
-# BEFORE (coding.yaml):     ~450 lines with explicit configuration
-# AFTER (this file):        ~80 lines with shortcuts
-#
-# The shortcuts auto-expand to:
-# - databases:
-#     default-database:
-#       type: "qdrant"
-#       host: "localhost"
-#       port: 6334
-# - embedders:
-#     default-embedder:
-#       type: "ollama"
-#       model: "nomic-embed-text"
-#       host: "http://localhost:11434"
-# - document_stores:
-#     cwd-<hash>:
-#       name: "cwd-<hash>"
-#       source: "directory"
-#       path: "."
-#       watch_changes: true
-#       max_file_size: 52428800  # 50MB
-#       incremental_indexing: true
-# - tools:
-#     execute_command:
-#       type: "command"
-#       enable_sandboxing: true
-#     write_file:
-#       type: "write_file"
-#       max_file_size: 1048576  # 1MB
-#     search_replace:
-#       type: "search_replace"
-#       max_replacements: 100
-#     todo_write:
-#       type: "todo"
-#     search:
-#       type: "search"
-#       document_stores: ["cwd-<hash>"]
-#
-# ============================================================================
-

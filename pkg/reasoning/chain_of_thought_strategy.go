@@ -7,63 +7,42 @@ import (
 	"github.com/kadirpekel/hector/pkg/tools"
 )
 
-// ============================================================================
-// CHAIN-OF-THOUGHT STRATEGY
-// Simple iterative reasoning - stops when no tool calls remain
-// Includes systematic todo tracking for complex multi-step tasks
-// ============================================================================
-
-// ChainOfThoughtStrategy implements the chain-of-thought reasoning strategy
-// This is the simplest strategy: iterate until no more tool calls
 type ChainOfThoughtStrategy struct{}
 
-// NewChainOfThoughtStrategy creates a new chain-of-thought strategy
 func NewChainOfThoughtStrategy() *ChainOfThoughtStrategy {
 	return &ChainOfThoughtStrategy{}
 }
 
-// PrepareIteration implements ReasoningStrategy
-// Chain-of-thought doesn't need any special preparation
 func (s *ChainOfThoughtStrategy) PrepareIteration(iteration int, state *ReasoningState) error {
 	return nil
 }
 
-// ShouldStop implements ReasoningStrategy
-// Stop when no tool calls OR when todos were complete and agent keeps looping
 func (s *ChainOfThoughtStrategy) ShouldStop(text string, toolCalls []*protocol.ToolCall, state *ReasoningState) bool {
-	// Stop if no tool calls (natural termination - this is the expected path)
+
 	if len(toolCalls) == 0 {
 		return true
 	}
 
-	// Deterministic stop: if todos were complete LAST iteration and agent is STILL calling tools
-	// This prevents infinite loops where agent keeps calling tools after all todos are marked complete
-	// The agent gets ONE iteration after marking todos complete to provide a summary
 	todoTool := s.getTodoTool(state)
 	if todoTool != nil {
 		todos := todoTool.GetTodos("default")
 		allComplete := len(todos) > 0 && s.allTodosComplete(todos)
 
-		// Check if todos were complete in the previous iteration
 		todosWereCompleteLast := false
 		if val, ok := state.GetToolState()["todos_complete"]; ok {
 			todosWereCompleteLast, _ = val.(bool)
 		}
 
-		// If todos were complete last iteration AND still complete AND agent is still calling tools
-		// → Agent is looping, stop now
 		if todosWereCompleteLast && allComplete {
 			return true
 		}
 
-		// Update tool state for next iteration
 		state.GetToolState()["todos_complete"] = allComplete
 	}
 
 	return false
 }
 
-// allTodosComplete checks if all todos are marked as completed or canceled
 func (s *ChainOfThoughtStrategy) allTodosComplete(todos []tools.TodoItem) bool {
 	for _, todo := range todos {
 		if todo.Status != "completed" && todo.Status != "canceled" {
@@ -73,8 +52,6 @@ func (s *ChainOfThoughtStrategy) allTodosComplete(todos []tools.TodoItem) bool {
 	return true
 }
 
-// AfterIteration implements ReasoningStrategy with self-reflection
-// Evaluates progress, updates todos, and assesses approach effectiveness
 func (s *ChainOfThoughtStrategy) AfterIteration(
 	iteration int,
 	text string,
@@ -82,38 +59,34 @@ func (s *ChainOfThoughtStrategy) AfterIteration(
 	results []ToolResult,
 	state *ReasoningState,
 ) error {
-	// Self-reflection: Evaluate progress made in this iteration (controlled by show_thinking)
+
 	if state.ShowThinking() && state.GetOutputChannel() != nil {
-		// Check if structured reflection is enabled in config
+
 		useStructuredReflection := false
 		if state.GetServices() != nil {
 			cfg := state.GetServices().GetConfig()
 			useStructuredReflection = cfg.EnableStructuredReflection != nil && *cfg.EnableStructuredReflection
 		}
 
-		// Use structured reflection if enabled and services available
 		if useStructuredReflection && state.GetServices() != nil && state.GetContext() != nil {
 			analysis, err := AnalyzeToolResults(state.GetContext(), toolCalls, results, state.GetServices())
 			if err == nil {
 				s.displayStructuredReflection(iteration, analysis, state)
-				// Store analysis in state for potential use by agent
+
 				state.GetCustomState()["reflection_analysis"] = analysis
 			} else {
-				// Fallback to heuristic reflection
+
 				s.reflectOnProgress(iteration, text, toolCalls, results, state)
 			}
 		} else {
-			// Use simple heuristic reflection when structured reflection is disabled
+
 			s.reflectOnProgress(iteration, text, toolCalls, results, state)
 		}
 	}
 
-	// Rely on LLM to explicitly call todo_write with merge=true for updates
-
 	return nil
 }
 
-// displayStructuredReflection displays reflection based on structured LLM analysis
 func (s *ChainOfThoughtStrategy) displayStructuredReflection(
 	iteration int,
 	analysis *ReflectionAnalysis,
@@ -123,18 +96,15 @@ func (s *ChainOfThoughtStrategy) displayStructuredReflection(
 		return
 	}
 
-	// Use thinking block format for clean, grayed-out output
 	output := ThinkingBlock(fmt.Sprintf("Iteration %d: Analyzing results", iteration))
 
-	// Show tool execution summary
 	if len(analysis.SuccessfulTools) > 0 {
-		output += ThinkingBlock(fmt.Sprintf("✅ Succeeded: %s", formatStringList(analysis.SuccessfulTools)))
+		output += ThinkingBlock(fmt.Sprintf("[SUCCESS] Tools: %s", formatStringList(analysis.SuccessfulTools)))
 	}
 	if len(analysis.FailedTools) > 0 {
-		output += ThinkingBlock(fmt.Sprintf("❌ Failed: %s", formatStringList(analysis.FailedTools)))
+		output += ThinkingBlock(fmt.Sprintf("[FAILED] Tools: %s", formatStringList(analysis.FailedTools)))
 	}
 
-	// Show confidence and recommendation
 	var recommendation string
 	if analysis.ShouldPivot {
 		recommendation = "Pivot approach"
@@ -156,7 +126,6 @@ func (s *ChainOfThoughtStrategy) displayStructuredReflection(
 	state.GetOutputChannel() <- output
 }
 
-// reflectOnProgress performs self-reflection and outputs thinking blocks (fallback heuristic method)
 func (s *ChainOfThoughtStrategy) reflectOnProgress(
 	iteration int,
 	text string,
@@ -164,39 +133,33 @@ func (s *ChainOfThoughtStrategy) reflectOnProgress(
 	results []ToolResult,
 	state *ReasoningState,
 ) {
-	// Count tool calls (assuming all executed successfully if no error in results)
-	// Note: ToolResult doesn't have a Success field, so we count all executed tools
+
 	successCount := len(results)
 	failCount := 0
 
-	// Check if any results indicate errors (would be in the content/error field)
-	// For now, assume all executed tools were successful unless we detect error patterns
 	for _, result := range results {
-		// Simple heuristic: if content contains "Error:" or "failed", count as failure
+
 		if len(result.Content) > 0 && (contains(result.Content, "Error:") || contains(result.Content, "failed")) {
 			failCount++
 			successCount--
 		}
 	}
 
-	// Output reflection using thinking block format
 	if len(toolCalls) > 0 {
 		output := ThinkingBlock(fmt.Sprintf("Iteration %d: Evaluating progress", iteration))
 		output += ThinkingBlock(fmt.Sprintf("Tools executed: %s", formatToolList(toolCalls)))
 		output += ThinkingBlock(fmt.Sprintf("Success/Fail: %s", formatSuccessRatio(successCount, failCount)))
 
-		// Evaluate approach effectiveness
 		if failCount > 0 {
-			output += ThinkingBlock("⚠️  Some tools failed - may need to pivot approach")
+			output += ThinkingBlock("Warning: Some tools failed - may need to pivot approach")
 		} else if successCount > 0 {
-			output += ThinkingBlock("✅ All tools succeeded - making progress")
+			output += ThinkingBlock("[SUCCESS] All tools succeeded - making progress")
 		}
 
 		state.GetOutputChannel() <- output
 	}
 }
 
-// Helper functions for formatting reflection output
 func formatStringList(items []string) string {
 	if len(items) == 0 {
 		return "none"
@@ -228,7 +191,6 @@ func formatSuccessRatio(success, fail int) string {
 	return fmt.Sprintf("%d/%d", success, total)
 }
 
-// contains checks if a string contains a substring (simple helper)
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || indexOf(s, substr) >= 0)
 }
@@ -242,21 +204,17 @@ func indexOf(s, substr string) int {
 	return -1
 }
 
-// GetContextInjection implements ReasoningStrategy
-// ChainOfThought injects current todos to enable systematic task tracking
 func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) string {
-	// Access todo tool from services
+
 	if state.GetServices() == nil {
 		return ""
 	}
 
-	// Get the todo tool instance
 	todoTool := s.getTodoTool(state)
 	if todoTool == nil {
 		return ""
 	}
 
-	// Get todos for the default session (single-agent mode)
 	sessionID := "default"
 	todos := todoTool.GetTodos(sessionID)
 
@@ -264,50 +222,44 @@ func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) stri
 		return ""
 	}
 
-	// Display todos to user if thinking is enabled
 	if state.ShowThinking() && state.GetOutputChannel() != nil {
 		s.displayTodos(todos, state.GetOutputChannel())
 	}
 
-	// Format todos for LLM context
 	return tools.FormatTodosForContext(todos)
 }
 
-// displayTodos shows the current todo list to the user
 func (s *ChainOfThoughtStrategy) displayTodos(todos []tools.TodoItem, outputCh chan<- string) {
-	outputCh <- "\n\033[90m📋 **Current Tasks:**\n"
+	outputCh <- "\n\033[90m**Current Tasks:**\n"
 	for i, todo := range todos {
 		var status string
 		switch todo.Status {
 		case "pending":
-			status = "⏳"
+			status = "[PENDING]"
 		case "in_progress":
-			status = "🔄"
+			status = "[IN PROGRESS]"
 		case "completed":
-			status = "✅"
+			status = "[DONE]"
 		case "canceled":
-			status = "❌"
+			status = "[CANCELLED]"
 		default:
-			status = "○"
+			status = "[UNKNOWN]"
 		}
 		outputCh <- fmt.Sprintf("  %d. %s %s\n", i+1, status, todo.Content)
 	}
 	outputCh <- "\033[0m\n"
 }
 
-// getTodoTool retrieves the todo_write tool (guaranteed to exist due to GetRequiredTools)
 func (s *ChainOfThoughtStrategy) getTodoTool(state *ReasoningState) *tools.TodoTool {
 	if state.GetServices() == nil || state.GetServices().Tools() == nil {
 		return nil
 	}
 
-	// Get the todo tool from the tool service
 	tool, err := state.GetServices().Tools().GetTool("todo_write")
 	if err != nil {
 		return nil
 	}
 
-	// Type assert to TodoTool
 	todoTool, ok := tool.(*tools.TodoTool)
 	if !ok {
 		return nil
@@ -316,32 +268,25 @@ func (s *ChainOfThoughtStrategy) getTodoTool(state *ReasoningState) *tools.TodoT
 	return todoTool
 }
 
-// GetName implements ReasoningStrategy
 func (s *ChainOfThoughtStrategy) GetName() string {
 	return "Chain-of-Thought"
 }
 
-// GetDescription implements ReasoningStrategy
 func (s *ChainOfThoughtStrategy) GetDescription() string {
 	return "Iterative reasoning with native LLM function calling (OpenAI, Anthropic)"
 }
 
-// GetRequiredTools implements ReasoningStrategy
-// ChainOfThought requires todo_write for systematic task management
 func (s *ChainOfThoughtStrategy) GetRequiredTools() []RequiredTool {
 	return []RequiredTool{
 		{
 			Name:        "todo_write",
 			Type:        "todo",
 			Description: "Required for systematic task tracking in complex multi-step workflows",
-			AutoCreate:  true, // Always create if not configured
+			AutoCreate:  true,
 		},
 	}
 }
 
-// GetPromptSlots implements ReasoningStrategy
-// ChainOfThought provides a Cursor-inspired default prompt adapted for Hector
-// Based on Cursor's proven prompt structure, adapted for our tool ecosystem
 func (s *ChainOfThoughtStrategy) GetPromptSlots() PromptSlots {
 	return PromptSlots{
 		SystemRole: `You are an AI assistant helping users solve problems and accomplish tasks.

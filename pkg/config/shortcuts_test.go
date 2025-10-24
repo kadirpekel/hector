@@ -6,12 +6,13 @@ import (
 
 func TestAgentShortcuts_DocsFolder(t *testing.T) {
 	cfg := &Config{
-		LLMs: map[string]LLMProviderConfig{
+		LLMs: map[string]*LLMProviderConfig{
 			"test-llm": {
-				Type: "openai",
+				Type:   "openai",
+				APIKey: "test-key",
 			},
 		},
-		Agents: map[string]AgentConfig{
+		Agents: map[string]*AgentConfig{
 			"test-agent": {
 				Name:       "Test Agent",
 				LLM:        "test-llm",
@@ -20,10 +21,12 @@ func TestAgentShortcuts_DocsFolder(t *testing.T) {
 		},
 	}
 
-	// Apply defaults (this should expand shortcuts)
-	cfg.SetDefaults()
+	processedCfg, err := ProcessConfigPipeline(cfg)
+	if err != nil {
+		t.Fatalf("ProcessConfigPipeline failed: %v", err)
+	}
+	cfg = processedCfg
 
-	// Check that document store was auto-created
 	agent := cfg.Agents["test-agent"]
 	if len(agent.DocumentStores) == 0 {
 		t.Fatal("DocumentStores should be auto-populated from docs_folder")
@@ -32,7 +35,6 @@ func TestAgentShortcuts_DocsFolder(t *testing.T) {
 		t.Fatalf("Should have exactly 1 document store, got %d", len(agent.DocumentStores))
 	}
 
-	// Check that the document store exists in config
 	storeName := agent.DocumentStores[0]
 	store, exists := cfg.DocumentStores[storeName]
 	if !exists {
@@ -42,7 +44,6 @@ func TestAgentShortcuts_DocsFolder(t *testing.T) {
 		t.Errorf("Document store path should be './test-folder', got '%s'", store.Path)
 	}
 
-	// Check that database and embedder were auto-set
 	if agent.Database != "default-database" {
 		t.Errorf("Database should be 'default-database', got '%s'", agent.Database)
 	}
@@ -50,7 +51,6 @@ func TestAgentShortcuts_DocsFolder(t *testing.T) {
 		t.Errorf("Embedder should be 'default-embedder', got '%s'", agent.Embedder)
 	}
 
-	// Check that search tool was auto-created
 	searchTool, exists := cfg.Tools.Tools["search"]
 	if !exists {
 		t.Fatal("Search tool should be auto-created")
@@ -72,12 +72,13 @@ func TestAgentShortcuts_DocsFolder(t *testing.T) {
 
 func TestAgentShortcuts_EnableTools(t *testing.T) {
 	cfg := &Config{
-		LLMs: map[string]LLMProviderConfig{
+		LLMs: map[string]*LLMProviderConfig{
 			"test-llm": {
-				Type: "openai",
+				Type:   "openai",
+				APIKey: "test-key",
 			},
 		},
-		Agents: map[string]AgentConfig{
+		Agents: map[string]*AgentConfig{
 			"test-agent": {
 				Name:        "Test Agent",
 				LLM:         "test-llm",
@@ -86,16 +87,17 @@ func TestAgentShortcuts_EnableTools(t *testing.T) {
 		},
 	}
 
-	// Apply defaults (this should expand shortcuts)
-	cfg.SetDefaults()
+	processedCfg, err := ProcessConfigPipeline(cfg)
+	if err != nil {
+		t.Fatalf("ProcessConfigPipeline failed: %v", err)
+	}
+	cfg = processedCfg
 
-	// Check that tools were auto-enabled (nil = all tools)
 	agent := cfg.Agents["test-agent"]
 	if agent.Tools != nil {
 		t.Error("Tools should be nil (meaning all tools available)")
 	}
 
-	// Check that core tools were auto-configured
 	if _, exists := cfg.Tools.Tools["execute_command"]; !exists {
 		t.Error("execute_command should be auto-configured")
 	}
@@ -112,27 +114,23 @@ func TestAgentShortcuts_EnableTools(t *testing.T) {
 
 func TestAgentShortcuts_MutuallyExclusive_DocsFolder(t *testing.T) {
 	cfg := &Config{
-		LLMs: map[string]LLMProviderConfig{
+		LLMs: map[string]*LLMProviderConfig{
 			"test-llm": {
 				Type:   "openai",
 				APIKey: "test-api-key",
 			},
 		},
-		Agents: map[string]AgentConfig{
+		Agents: map[string]*AgentConfig{
 			"test-agent": {
 				Name:           "Test Agent",
 				LLM:            "test-llm",
 				DocsFolder:     "./test-folder",
-				DocumentStores: []string{"explicit-store"}, // Both shortcut and explicit
+				DocumentStores: []string{"explicit-store"},
 			},
 		},
 	}
 
-	// Apply defaults first
-	cfg.SetDefaults()
-
-	// Validation should fail (mutually exclusive)
-	err := cfg.Validate()
+	_, err := ProcessConfigPipeline(cfg)
 	if err == nil {
 		t.Fatal("Should error when both docs_folder and document_stores are specified")
 	}
@@ -143,24 +141,22 @@ func TestAgentShortcuts_MutuallyExclusive_DocsFolder(t *testing.T) {
 
 func TestAgentShortcuts_MutuallyExclusive_EnableTools(t *testing.T) {
 	cfg := &Config{
-		LLMs: map[string]LLMProviderConfig{
+		LLMs: map[string]*LLMProviderConfig{
 			"test-llm": {
 				Type:   "openai",
 				APIKey: "test-api-key",
 			},
 		},
-		Agents: map[string]AgentConfig{
+		Agents: map[string]*AgentConfig{
 			"test-agent": {
 				Name:        "Test Agent",
 				LLM:         "test-llm",
 				EnableTools: true,
-				Tools:       []string{"write_file"}, // Both shortcut and explicit
+				Tools:       []string{"write_file"},
 			},
 		},
 	}
 
-	// Validation should fail BEFORE SetDefaults (during Validate on the raw config)
-	// The validation happens in AgentConfig.Validate() which is called before expansion
 	agent := cfg.Agents["test-agent"]
 	err := agent.Validate()
 	if err == nil {
@@ -173,37 +169,37 @@ func TestAgentShortcuts_MutuallyExclusive_EnableTools(t *testing.T) {
 
 func TestAgentShortcuts_Combined(t *testing.T) {
 	cfg := &Config{
-		LLMs: map[string]LLMProviderConfig{
+		LLMs: map[string]*LLMProviderConfig{
 			"test-llm": {
 				Type:   "openai",
 				APIKey: "test-api-key",
 			},
 		},
-		Agents: map[string]AgentConfig{
+		Agents: map[string]*AgentConfig{
 			"test-agent": {
 				Name:        "Test Agent",
 				LLM:         "test-llm",
 				DocsFolder:  "./test-folder",
-				EnableTools: true, // Both shortcuts
+				EnableTools: true,
 			},
 		},
 	}
 
-	// Apply defaults (this should expand both shortcuts)
-	cfg.SetDefaults()
+	processedCfg, err := ProcessConfigPipeline(cfg)
+	if err != nil {
+		t.Fatalf("ProcessConfigPipeline failed: %v", err)
+	}
+	cfg = processedCfg
 
-	// Check document store expansion
 	agent := cfg.Agents["test-agent"]
 	if len(agent.DocumentStores) == 0 {
 		t.Error("DocumentStores should be auto-populated")
 	}
 
-	// Check tools expansion
 	if agent.Tools != nil {
 		t.Error("Tools should be nil (all tools available)")
 	}
 
-	// Check that both search tool and other tools were created
 	if _, exists := cfg.Tools.Tools["search"]; !exists {
 		t.Error("Search tool should be created")
 	}
@@ -214,12 +210,9 @@ func TestAgentShortcuts_Combined(t *testing.T) {
 		t.Error("write_file should be created")
 	}
 
-	// Check that execute_command has sandboxing enabled (which allows empty allowed_commands)
 	execCmd := cfg.Tools.Tools["execute_command"]
 	if !execCmd.EnableSandboxing {
 		t.Error("execute_command should have sandboxing enabled")
 	}
 
-	// Note: Full validation requires all LLM/DB/Embedder configs to be valid
-	// The key test is that shortcuts expanded correctly (which we verified above)
 }

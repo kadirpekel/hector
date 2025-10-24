@@ -1,32 +1,15 @@
-# Hector Configuration with JWT Authentication
-# This example shows how to enable authentication using any OAuth2/OIDC provider
-
 global:
-  # A2A Server Configuration
   a2a_server:
     host: "0.0.0.0"
     port: 8080
     base_url: "http://localhost:8080"
-  
-  # Authentication Configuration (Optional - disabled by default)
-  # Hector is a JWT consumer - it validates tokens from external auth providers
-  # Works with: Auth0, Keycloak, Authura, Okta, Google, or any OAuth2/OIDC provider
   auth:
-    # JWKS URL - Where Hector fetches public keys to validate JWTs
-    # This URL is auto-refreshed every 15 minutes to handle key rotation
     jwks_url: "https://your-auth-provider.com/.well-known/jwks.json"
-    
-    # Issuer - Expected token issuer (must match `iss` claim in JWT)
     issuer: "https://your-auth-provider.com"
-    
-    # Audience - Expected token audience (must match `aud` claim in JWT)
     audience: "hector-api"
-
-# Agent Definitions
 agents:
-  # Public agent - no auth required
   public_agent:
-    visibility: public
+    visibility: public1
     name: "Public Agent"
     description: "Accessible without authentication"
     llm: "main-llm"
@@ -35,8 +18,6 @@ agents:
     prompt:
       system_role: |
         You are a helpful assistant accessible to everyone.
-  
-  # Secure agent - requires authentication
   secure_agent:
     visibility: public
     name: "Secure Agent"
@@ -47,8 +28,6 @@ agents:
     prompt:
       system_role: |
         You are a secure assistant. Only authenticated users can access you.
-  
-  # Private agent - only for orchestrators
   helper_agent:
     visibility: private
     name: "Helper Agent"
@@ -59,8 +38,6 @@ agents:
     prompt:
       system_role: |
         You are an internal helper agent.
-
-# LLM Configuration
 llms:
   main-llm:
     type: "openai"
@@ -68,91 +45,3 @@ llms:
     api_key: "${OPENAI_API_KEY}"
     temperature: 0.7
     max_tokens: 4000
-
-# ============================================================================
-# PROVIDER EXAMPLES
-# ============================================================================
-
-# Auth0:
-# auth:
-#   enabled: true
-#   jwks_url: "https://YOUR-TENANT.auth0.com/.well-known/jwks.json"
-#   issuer: "https://YOUR-TENANT.auth0.com/"
-#   audience: "hector-api"
-
-# Keycloak:
-# auth:
-#   enabled: true
-#   jwks_url: "https://keycloak.example.com/realms/hector/protocol/openid-connect/certs"
-#   issuer: "https://keycloak.example.com/realms/hector"
-#   audience: "hector-api"
-
-# Authura (once JWKS endpoint is added):
-# auth:
-#   enabled: true
-#   jwks_url: "https://authura.example.com/.well-known/jwks.json"
-#   issuer: "https://authura.example.com"
-#   audience: "hector-api"
-
-# Google:
-# auth:
-#   enabled: true
-#   jwks_url: "https://www.googleapis.com/oauth2/v3/certs"
-#   issuer: "https://accounts.google.com"
-#   audience: "YOUR-CLIENT-ID.apps.googleusercontent.com"
-
-# Custom Provider:
-# auth:
-#   enabled: true
-#   jwks_url: "https://your-custom-auth.com/jwks.json"
-#   issuer: "https://your-custom-auth.com"
-#   audience: "hector-api"
-
-# ============================================================================
-# USAGE
-# ============================================================================
-
-# 1. Start Hector with auth enabled:
-#    $ hector serve --config configs/auth-example.yaml
-
-# 2. Get a token from your auth provider:
-#    $ curl -X POST https://your-auth-provider.com/oauth/token \
-#      -d '{"client_id":"...","client_secret":"...","audience":"hector-api","grant_type":"client_credentials"}'
-
-# 3. Call Hector with the token:
-#    $ curl -H "Authorization: Bearer <token>" \
-#      http://localhost:8080/agents/secure_agent/tasks \
-#      -d '{"task":"Hello, secure world!"}'
-
-# 4. Hector automatically:
-#    - Extracts token from Authorization header
-#    - Fetches JWKS from your provider (cached)
-#    - Verifies JWT signature
-#    - Checks expiration
-#    - Extracts claims (user, role, tenant)
-#    - Processes request or returns 401 if invalid
-
-# ============================================================================
-# WHAT HECTOR DOES (Consumer)
-# ============================================================================
-
-# ✅ Validates JWT signatures using provider's JWKS
-# ✅ Checks token expiration
-# ✅ Extracts claims (sub, email, role, tenant_id)
-# ✅ Enforces permissions
-# ✅ Auto-refreshes JWKS (key rotation support)
-
-# ============================================================================
-# WHAT HECTOR DOES NOT DO (Provider)
-# ============================================================================
-
-# ❌ Handle user login/logout
-# ❌ Issue tokens
-# ❌ Manage users
-# ❌ Store passwords
-# ❌ Implement OAuth2 flows
-# ❌ Terminate SSL/TLS
-
-# All of this is handled by your auth provider!
-# Hector just validates tokens. Simple and secure.
-

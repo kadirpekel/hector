@@ -1,65 +1,231 @@
-// Package config provides configuration types and utilities for the AI agent framework.
-// This file contains the main unified configuration entry point.
 package config
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 )
 
-// ============================================================================
-// MAIN UNIFIED CONFIGURATION
-// ============================================================================
+const (
+	DefaultMaxDocumentStoreSize = 50 * 1024 * 1024
+)
 
-// Config represents the complete configuration
-// Similar to docker-compose.yml, this is the single entry point for all configuration
+func ProcessConfigPipeline(cfg *Config) (*Config, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("ProcessConfigPipeline: config cannot be nil")
+	}
+
+	cfg.PreProcess()
+
+	cfg.SetDefaults()
+
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("ProcessConfigPipeline: validation failed: %w", err)
+	}
+
+	return cfg, nil
+}
+
+func (c *Config) PreProcess() {
+	c.initializeMaps()
+
+	for _, agent := range c.Agents {
+		if agent.DocsFolder != "" && len(agent.DocumentStores) == 0 {
+			c.expandDocsFolder(agent)
+		}
+
+		if agent.EnableTools && len(agent.Tools) == 0 {
+			c.expandEnableTools()
+		}
+	}
+}
+
+func (c *Config) initializeMaps() {
+	if c.LLMs == nil {
+		c.LLMs = make(map[string]*LLMProviderConfig)
+	}
+	if c.Databases == nil {
+		c.Databases = make(map[string]*DatabaseProviderConfig)
+	}
+	if c.Embedders == nil {
+		c.Embedders = make(map[string]*EmbedderProviderConfig)
+	}
+	if c.Agents == nil {
+		c.Agents = make(map[string]*AgentConfig)
+	}
+	if c.DocumentStores == nil {
+		c.DocumentStores = make(map[string]*DocumentStoreConfig)
+	}
+	if c.SessionStores == nil {
+		c.SessionStores = make(map[string]*SessionStoreConfig)
+	}
+}
+
+func (c *Config) expandDocsFolder(agent *AgentConfig) {
+	storeName := generateStoreNameFromPath(agent.DocsFolder)
+
+	docStoreConfig := &DocumentStoreConfig{
+		Name:                storeName,
+		Source:              "directory",
+		Path:                agent.DocsFolder,
+		WatchChanges:        true,
+		MaxFileSize:         DefaultMaxDocumentStoreSize,
+		IncrementalIndexing: true,
+	}
+	c.DocumentStores[storeName] = docStoreConfig
+
+	agent.DocumentStores = []string{storeName}
+	agent.DocsFolder = ""
+
+	if agent.Database == "" {
+		if _, exists := c.Databases["default-database"]; !exists {
+			c.Databases["default-database"] = &DatabaseProviderConfig{}
+		}
+		agent.Database = "default-database"
+	}
+
+	if agent.Embedder == "" {
+		if _, exists := c.Embedders["default-embedder"]; !exists {
+			c.Embedders["default-embedder"] = &EmbedderProviderConfig{}
+		}
+		agent.Embedder = "default-embedder"
+	}
+
+	if c.Tools.Tools == nil {
+		c.Tools.Tools = make(map[string]*ToolConfig)
+	}
+	if _, exists := c.Tools.Tools["search"]; !exists {
+		c.Tools.Tools["search"] = &ToolConfig{
+			Type:           "search",
+			DocumentStores: []string{storeName},
+		}
+	}
+}
+
+func (c *Config) expandEnableTools() {
+	if c.Tools.Tools == nil {
+		c.Tools.Tools = make(map[string]*ToolConfig)
+	}
+
+	for toolName, toolConfig := range GetDefaultToolConfigs() {
+		if _, exists := c.Tools.Tools[toolName]; !exists {
+			c.Tools.Tools[toolName] = toolConfig
+		}
+	}
+}
+
+func (c *Config) SetDefaults() {
+	c.Global.SetDefaults()
+
+	if c.LLMs == nil {
+		c.LLMs = make(map[string]*LLMProviderConfig)
+	}
+	if c.Databases == nil {
+		c.Databases = make(map[string]*DatabaseProviderConfig)
+	}
+	if c.Embedders == nil {
+		c.Embedders = make(map[string]*EmbedderProviderConfig)
+	}
+	if c.Agents == nil {
+		c.Agents = make(map[string]*AgentConfig)
+	}
+	if c.DocumentStores == nil {
+		c.DocumentStores = make(map[string]*DocumentStoreConfig)
+	}
+	if c.SessionStores == nil {
+		c.SessionStores = make(map[string]*SessionStoreConfig)
+	}
+
+	if len(c.LLMs) == 0 {
+		c.LLMs["default-llm"] = &LLMProviderConfig{}
+	}
+	if len(c.Databases) == 0 {
+		c.Databases["default-database"] = &DatabaseProviderConfig{}
+	}
+	if len(c.Embedders) == 0 {
+		c.Embedders["default-embedder"] = &EmbedderProviderConfig{}
+	}
+	if len(c.Agents) == 0 {
+		c.Agents["default-agent"] = &AgentConfig{}
+	}
+
+	for name := range c.LLMs {
+		if c.LLMs[name] != nil {
+			c.LLMs[name].SetDefaults()
+		}
+	}
+
+	for name := range c.Databases {
+		if c.Databases[name] != nil {
+			c.Databases[name].SetDefaults()
+		}
+	}
+
+	for name := range c.Embedders {
+		if c.Embedders[name] != nil {
+			c.Embedders[name].SetDefaults()
+		}
+	}
+
+	for name := range c.Agents {
+		if c.Agents[name] != nil {
+			c.Agents[name].SetDefaults()
+		}
+	}
+
+	c.Tools.SetDefaults()
+
+	for name := range c.DocumentStores {
+		if c.DocumentStores[name] != nil {
+			c.DocumentStores[name].SetDefaults()
+		}
+	}
+
+	for name := range c.SessionStores {
+		if c.SessionStores[name] != nil {
+			c.SessionStores[name].SetDefaults()
+		}
+	}
+
+	c.Plugins.SetDefaults()
+}
+
 type Config struct {
-	// Version and metadata
 	Version     string            `yaml:"version,omitempty"`
 	Name        string            `yaml:"name,omitempty"`
 	Description string            `yaml:"description,omitempty"`
 	Metadata    map[string]string `yaml:"metadata,omitempty"`
 
-	// Global settings
 	Global GlobalSettings `yaml:"global,omitempty"`
 
-	// Service configurations (direct access, no providers wrapper)
-	LLMs      map[string]LLMProviderConfig      `yaml:"llms,omitempty"`
-	Databases map[string]DatabaseProviderConfig `yaml:"databases,omitempty"`
-	Embedders map[string]EmbedderProviderConfig `yaml:"embedders,omitempty"`
+	LLMs      map[string]*LLMProviderConfig      `yaml:"llms,omitempty"`
+	Databases map[string]*DatabaseProviderConfig `yaml:"databases,omitempty"`
+	Embedders map[string]*EmbedderProviderConfig `yaml:"embedders,omitempty"`
 
-	// Agent definitions
-	Agents map[string]AgentConfig `yaml:"agents,omitempty"`
+	Agents map[string]*AgentConfig `yaml:"agents,omitempty"`
 
-	// Tool configurations
 	Tools ToolConfigs `yaml:"tools,omitempty"`
 
-	// Document store configurations
-	DocumentStores map[string]DocumentStoreConfig `yaml:"document_stores,omitempty"`
+	DocumentStores map[string]*DocumentStoreConfig `yaml:"document_stores,omitempty"`
 
-	// Session store configurations (shared across agents)
-	SessionStores map[string]SessionStoreConfig `yaml:"session_stores,omitempty"`
+	SessionStores map[string]*SessionStoreConfig `yaml:"session_stores,omitempty"`
 
-	// Plugin configurations
 	Plugins PluginConfigs `yaml:"plugins,omitempty"`
 }
 
-// ValidateAgent checks if an agent exists in the configuration
-// Returns error with list of available agents if not found
 func (c *Config) ValidateAgent(agentID string) error {
-	// For zero-config mode, we only have one default agent
+
 	if len(c.Agents) == 0 {
-		// Zero-config will create default agent, skip validation
+
 		return nil
 	}
 
-	// Check if agent exists
 	if _, exists := c.Agents[agentID]; !exists {
-		// Build list of available agents
+
 		availableAgents := make([]string, 0, len(c.Agents))
 		for name := range c.Agents {
 			availableAgents = append(availableAgents, name)
@@ -76,283 +242,159 @@ func (c *Config) ValidateAgent(agentID string) error {
 	return nil
 }
 
-// Validate implements Config.Validate for Config
 func (c *Config) Validate() error {
-	// Validate global settings
+
 	if err := c.Global.Validate(); err != nil {
 		return fmt.Errorf("global settings validation failed: %w", err)
 	}
 
-	// Validate LLMs
 	for name, llm := range c.LLMs {
-		if err := llm.Validate(); err != nil {
-			return fmt.Errorf("LLM '%s' validation failed: %w", name, err)
+		if llm != nil {
+			if err := llm.Validate(); err != nil {
+				return fmt.Errorf("LLM '%s' validation failed: %w", name, err)
+			}
 		}
 	}
 
-	// Validate databases
 	for name, db := range c.Databases {
-		if err := db.Validate(); err != nil {
-			return fmt.Errorf("database '%s' validation failed: %w", name, err)
+		if db != nil {
+			if err := db.Validate(); err != nil {
+				return fmt.Errorf("database '%s' validation failed: %w", name, err)
+			}
 		}
 	}
 
-	// Validate embedders
 	for name, embedder := range c.Embedders {
-		if err := embedder.Validate(); err != nil {
-			return fmt.Errorf("embedder '%s' validation failed: %w", name, err)
+		if embedder != nil {
+			if err := embedder.Validate(); err != nil {
+				return fmt.Errorf("embedder '%s' validation failed: %w", name, err)
+			}
 		}
 	}
 
-	// Validate agents
 	for name, agent := range c.Agents {
-		if err := agent.Validate(); err != nil {
-			return fmt.Errorf("agent '%s' validation failed: %w", name, err)
+		if agent != nil {
+			if err := agent.Validate(); err != nil {
+				return fmt.Errorf("agent '%s' validation failed: %w", name, err)
+			}
 		}
 	}
 
-	// Validate tools
 	if err := c.Tools.Validate(); err != nil {
 		return fmt.Errorf("tools validation failed: %w", err)
 	}
 
-	// Validate document stores
 	for name, store := range c.DocumentStores {
-		if err := store.Validate(); err != nil {
-			return fmt.Errorf("document store '%s' validation failed: %w", name, err)
+		if store != nil {
+			if err := store.Validate(); err != nil {
+				return fmt.Errorf("document store '%s' validation failed: %w", name, err)
+			}
 		}
 	}
 
-	// Validate session stores
 	for name, store := range c.SessionStores {
-		if err := store.Validate(); err != nil {
-			return fmt.Errorf("session store '%s' validation failed: %w", name, err)
+		if store != nil {
+			if err := store.Validate(); err != nil {
+				return fmt.Errorf("session store '%s' validation failed: %w", name, err)
+			}
 		}
 	}
 
-	// Validate plugins
 	if err := c.Plugins.Validate(); err != nil {
 		return fmt.Errorf("plugins validation failed: %w", err)
+	}
+
+	if err := c.validateReferences(); err != nil {
+		return fmt.Errorf("reference validation failed: %w", err)
 	}
 
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for Config
-func (c *Config) SetDefaults() {
-	// Set global defaults
-	c.Global.SetDefaults()
+func (c *Config) validateReferences() error {
+	for agentName, agent := range c.Agents {
+		if agent == nil {
+			continue
+		}
 
-	// Initialize maps if nil
-	if c.LLMs == nil {
-		c.LLMs = make(map[string]LLMProviderConfig)
-	}
-	if c.Databases == nil {
-		c.Databases = make(map[string]DatabaseProviderConfig)
-	}
-	if c.Embedders == nil {
-		c.Embedders = make(map[string]EmbedderProviderConfig)
-	}
-	if c.Agents == nil {
-		c.Agents = make(map[string]AgentConfig)
-	}
-	if c.DocumentStores == nil {
-		c.DocumentStores = make(map[string]DocumentStoreConfig)
-	}
-	if c.SessionStores == nil {
-		c.SessionStores = make(map[string]SessionStoreConfig)
-	}
+		if agent.Type != "native" {
+			continue
+		}
 
-	// Zero-config: Create default services if none exist
-	if len(c.LLMs) == 0 {
-		c.LLMs["default-llm"] = LLMProviderConfig{}
-	}
-	if len(c.Databases) == 0 {
-		c.Databases["default-database"] = DatabaseProviderConfig{}
-	}
-	if len(c.Embedders) == 0 {
-		c.Embedders["default-embedder"] = EmbedderProviderConfig{}
-	}
-	// Document stores must be explicitly configured - no defaults
-
-	// Zero-config: Create default agent if none exist
-	if len(c.Agents) == 0 {
-		c.Agents["default-agent"] = AgentConfig{}
-	}
-
-	// Set LLM defaults (now handles zero-config)
-	for name := range c.LLMs {
-		llm := c.LLMs[name]
-		llm.SetDefaults()
-		c.LLMs[name] = llm
-	}
-
-	// Set database defaults (now handles zero-config)
-	for name := range c.Databases {
-		db := c.Databases[name]
-		db.SetDefaults()
-		c.Databases[name] = db
-	}
-
-	// Set embedder defaults (now handles zero-config)
-	for name := range c.Embedders {
-		embedder := c.Embedders[name]
-		embedder.SetDefaults()
-		c.Embedders[name] = embedder
-	}
-
-	// Expand agent shortcuts BEFORE setting agent defaults
-	// This allows shortcuts to auto-create document stores, databases, embedders, and tools
-	// NOTE: Validation of mutual exclusivity happens in AgentConfig.Validate() AFTER this expansion
-	for agentID, agent := range c.Agents {
-		// Shortcut 1: docs_folder -> auto-create document store (only if document_stores not explicitly set)
-		if agent.DocsFolder != "" && len(agent.DocumentStores) == 0 {
-			// Generate unique store name from path
-			storeName := generateStoreNameFromPath(agent.DocsFolder)
-
-			// Create document store config
-			docStoreConfig := DocumentStoreConfig{
-				Name:                storeName,
-				Source:              "directory",
-				Path:                agent.DocsFolder,
-				WatchChanges:        true,
-				MaxFileSize:         50 * 1024 * 1024, // 50MB
-				IncrementalIndexing: true,
-				// Use default include/exclude patterns (set in DocumentStoreConfig.SetDefaults)
-			}
-			c.DocumentStores[storeName] = docStoreConfig
-
-			// Auto-assign document store to agent
-			agent.DocumentStores = []string{storeName}
-
-			// Clear the shortcut field after successful expansion (so validation doesn't see both)
-			agent.DocsFolder = ""
-
-			// Auto-create database and embedder if not already set
-			if agent.Database == "" {
-				if _, exists := c.Databases["default-database"]; !exists {
-					c.Databases["default-database"] = DatabaseProviderConfig{}
-				}
-				agent.Database = "default-database"
-			}
-			if agent.Embedder == "" {
-				if _, exists := c.Embedders["default-embedder"]; !exists {
-					c.Embedders["default-embedder"] = EmbedderProviderConfig{}
-				}
-				agent.Embedder = "default-embedder"
-			}
-
-			// Auto-enable search tool for this agent if not already configured
-			if c.Tools.Tools == nil {
-				c.Tools.Tools = make(map[string]ToolConfig)
-			}
-			if _, exists := c.Tools.Tools["search"]; !exists {
-				c.Tools.Tools["search"] = ToolConfig{
-					Type:           "search",
-					DocumentStores: []string{storeName},
-				}
+		if agent.LLM != "" {
+			if _, exists := c.LLMs[agent.LLM]; !exists {
+				return fmt.Errorf("agent '%s': llm '%s' not found (available: %v)",
+					agentName, agent.LLM, mapKeys(c.LLMs))
 			}
 		}
 
-		// Shortcut 2: enable_tools -> auto-enable all local tools (only if tools not explicitly set)
-		if agent.EnableTools && len(agent.Tools) == 0 {
-			// nil means all tools available
-			agent.Tools = nil
-
-			// Clear the shortcut field after successful expansion (so validation doesn't see both)
-			agent.EnableTools = false
-
-			// Initialize tools config with default local tools if not already set
-			if c.Tools.Tools == nil {
-				c.Tools.Tools = make(map[string]ToolConfig)
-			}
-
-			// Ensure core local tools are configured
-			toolDefaults := map[string]ToolConfig{
-				"execute_command": {
-					Type:             "command",
-					Enabled:          true,
-					WorkingDirectory: "./",
-					MaxExecutionTime: "30s",
-					EnableSandboxing: true, // Sandboxing enabled by default (allows all commands safely)
-					AllowedCommands:  nil,  // nil = allow all (when sandboxing enabled)
-				},
-				"write_file": {
-					Type:             "write_file",
-					MaxFileSize:      1048576, // 1MB
-					WorkingDirectory: "./",
-				},
-				"search_replace": {
-					Type:             "search_replace",
-					MaxReplacements:  100,
-					WorkingDirectory: "./",
-					BackupEnabled:    true,
-				},
-				"todo_write": {
-					Type: "todo",
-				},
-			}
-
-			// Add default tools if not already configured
-			for toolName, toolConfig := range toolDefaults {
-				if _, exists := c.Tools.Tools[toolName]; !exists {
-					c.Tools.Tools[toolName] = toolConfig
-				}
+		if agent.Database != "" {
+			if _, exists := c.Databases[agent.Database]; !exists {
+				return fmt.Errorf("agent '%s': database '%s' not found (available: %v)",
+					agentName, agent.Database, mapKeys(c.Databases))
 			}
 		}
 
-		// Update agent in map
-		c.Agents[agentID] = agent
+		if agent.Embedder != "" {
+			if _, exists := c.Embedders[agent.Embedder]; !exists {
+				return fmt.Errorf("agent '%s': embedder '%s' not found (available: %v)",
+					agentName, agent.Embedder, mapKeys(c.Embedders))
+			}
+		}
+
+		for _, storeName := range agent.DocumentStores {
+			if _, exists := c.DocumentStores[storeName]; !exists {
+				return fmt.Errorf("agent '%s': document store '%s' not found (available: %v)",
+					agentName, storeName, mapKeys(c.DocumentStores))
+			}
+		}
+
+		if agent.SessionStore != "" {
+			if _, exists := c.SessionStores[agent.SessionStore]; !exists {
+				return fmt.Errorf("agent '%s': session store '%s' not found (available: %v)",
+					agentName, agent.SessionStore, mapKeys(c.SessionStores))
+			}
+		}
 	}
 
-	// Set agent defaults (now handles zero-config)
-	for name := range c.Agents {
-		agent := c.Agents[name]
-		agent.SetDefaults()
-		c.Agents[name] = agent
+	for toolName, tool := range c.Tools.Tools {
+		if tool == nil {
+			continue
+		}
+
+		if tool.Type == "search" {
+			for _, storeName := range tool.DocumentStores {
+				if _, exists := c.DocumentStores[storeName]; !exists {
+					return fmt.Errorf("tool '%s': document store '%s' not found (available: %v)",
+						toolName, storeName, mapKeys(c.DocumentStores))
+				}
+			}
+		}
 	}
 
-	// Set tool defaults
-	c.Tools.SetDefaults()
-
-	// Set document store defaults (now handles zero-config)
-	for name := range c.DocumentStores {
-		store := c.DocumentStores[name]
-		store.SetDefaults()
-		c.DocumentStores[name] = store
-	}
-
-	// Set session store defaults
-	for name := range c.SessionStores {
-		store := c.SessionStores[name]
-		store.SetDefaults()
-		c.SessionStores[name] = store
-	}
-
-	// Set plugin defaults
-	c.Plugins.SetDefaults()
+	return nil
 }
 
-// ============================================================================
-// GLOBAL SETTINGS
-// ============================================================================
+func mapKeys[K comparable, V any](m map[K]V) []K {
+	keys := make([]K, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
 
-// GlobalSettings contains global configuration settings
 type GlobalSettings struct {
-	// Logging configuration
 	Logging LoggingConfig `yaml:"logging,omitempty"`
 
-	// Performance settings
 	Performance PerformanceConfig `yaml:"performance,omitempty"`
 
-	// A2A Server configuration
 	A2AServer A2AServerConfig `yaml:"a2a_server,omitempty"`
 
-	// Authentication configuration
 	Auth AuthConfig `yaml:"auth,omitempty"`
+
+	Observability ObservabilityConfig `yaml:"observability,omitempty"`
 }
 
-// Validate implements Config.Validate for GlobalSettings
 func (c *GlobalSettings) Validate() error {
 	if err := c.Logging.Validate(); err != nil {
 		return fmt.Errorf("logging config validation failed: %w", err)
@@ -366,428 +408,137 @@ func (c *GlobalSettings) Validate() error {
 	if err := c.Auth.Validate(); err != nil {
 		return fmt.Errorf("auth config validation failed: %w", err)
 	}
+	if err := c.Observability.Validate(); err != nil {
+		return fmt.Errorf("observability config validation failed: %w", err)
+	}
 	return nil
 }
 
-// SetDefaults implements Config.SetDefaults for GlobalSettings
 func (c *GlobalSettings) SetDefaults() {
 	c.Logging.SetDefaults()
 	c.Performance.SetDefaults()
 	c.A2AServer.SetDefaults()
 	c.Auth.SetDefaults()
+	c.Observability.SetDefaults()
 }
 
-// ============================================================================
-// A2A SERVER CONFIGURATION
-// ============================================================================
-
-// A2AServerConfig contains configuration for the A2A protocol server
-// Presence of configuration implies enabled (no explicit enabled field needed)
-type A2AServerConfig struct {
-	Host    string `yaml:"host"`
-	Port    int    `yaml:"port"`
-	BaseURL string `yaml:"base_url,omitempty"` // Public URL for agent cards
-}
-
-// IsEnabled returns true if A2A server configuration is present and valid
-func (c *A2AServerConfig) IsEnabled() bool {
-	return c.Port > 0 || c.Host != ""
-}
-
-// Validate validates the A2A server configuration
-func (c *A2AServerConfig) Validate() error {
-	if c.IsEnabled() {
-		if c.Port <= 0 || c.Port > 65535 {
-			return fmt.Errorf("invalid port: %d", c.Port)
-		}
-	}
-	return nil
-}
-
-// SetDefaults sets default values for A2A server configuration
-func (c *A2AServerConfig) SetDefaults() {
-	if c.Host == "" {
-		c.Host = "0.0.0.0"
-	}
-	if c.Port == 0 {
-		c.Port = 8080
-	}
-}
-
-// ============================================================================
-// AUTHENTICATION CONFIGURATION
-// ============================================================================
-
-// AuthConfig contains authentication configuration
-// Hector is a JWT consumer - it validates tokens from external auth providers
-// Presence of configuration implies enabled (no explicit enabled field needed)
-type AuthConfig struct {
-	JWKSURL  string `yaml:"jwks_url"` // JWKS URL from auth provider (e.g., https://auth0.com/.well-known/jwks.json)
-	Issuer   string `yaml:"issuer"`   // Expected token issuer (e.g., https://auth0.com/)
-	Audience string `yaml:"audience"` // Expected token audience (e.g., "hector-api")
-}
-
-// IsEnabled returns true if authentication configuration is present and valid
-func (c *AuthConfig) IsEnabled() bool {
-	return c.JWKSURL != "" && c.Issuer != "" && c.Audience != ""
-}
-
-// Validate validates the authentication configuration
-func (c *AuthConfig) Validate() error {
-	if c.IsEnabled() {
-		if c.JWKSURL == "" {
-			return fmt.Errorf("jwks_url is required for authentication")
-		}
-		if c.Issuer == "" {
-			return fmt.Errorf("issuer is required for authentication")
-		}
-		if c.Audience == "" {
-			return fmt.Errorf("audience is required for authentication")
-		}
-	}
-	return nil
-}
-
-// SetDefaults sets default values for auth configuration
-func (c *AuthConfig) SetDefaults() {
-	// No defaults - auth is opt-in
-}
-
-// ============================================================================
-// CONFIGURATION LOADING
-// ============================================================================
-
-// LoadConfig loads the complete configuration from a YAML file
-// This is the main entry point for configuration loading
-// If the file doesn't exist, attempts to create zero-config from environment
-func LoadConfig(filePath string) (*Config, error) {
-	// Check if file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		// File doesn't exist - return zero-config default (may fail if no env vars set)
-		return createZeroConfig()
-	}
-
-	var config Config
-	if err := loadConfig(filePath, &config); err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-	return &config, nil
-}
-
-// LoadConfigFromString loads configuration from a YAML string
-func LoadConfigFromString(yamlContent string) (*Config, error) {
-	var config Config
-	if err := loadConfigFromString(yamlContent, &config); err != nil {
-		return nil, fmt.Errorf("failed to load config from string: %w", err)
-	}
-	return &config, nil
-}
-
-// Default agent name for zero-config mode
 const DefaultAgentName = "assistant"
 
-// ZeroConfigOptions holds configuration options for zero-config mode
-type ZeroConfigOptions struct {
-	Provider    string // LLM provider: "openai", "anthropic", "gemini"
-	APIKey      string // API key for the selected provider
-	BaseURL     string // API base URL
-	Model       string // Model name
-	EnableTools bool   // Enable all local tools
-	MCPURL      string // MCP server URL for tool integration
-	DocsFolder  string // Document store folder path (RAG support)
-	AgentName   string // Agent name/ID (defaults to DefaultAgentName)
-}
+func CreateZeroConfig(source interface{}) *Config {
+	provider := extractStringField(source, "Provider")
+	apiKey := extractStringField(source, "APIKey")
+	baseURL := extractStringField(source, "BaseURL")
+	model := extractStringField(source, "Model")
+	enableTools := extractBoolField(source, "Tools")
+	mcpURL := extractStringField(source, "MCPURL")
+	docsFolder := extractStringField(source, "DocsFolder")
+	embedderModel := extractStringField(source, "EmbedderModel")
+	agentName := extractStringField(source, "AgentName")
 
-// CreateZeroConfig creates a configuration for zero-config mode
-// Supports openai, anthropic, and gemini providers
-func CreateZeroConfig(opts ZeroConfigOptions) *Config {
-	// Resolve API key from environment if not provided via flags
-	if opts.APIKey == "" {
-		if opts.Provider != "" {
-			// Provider specified: look for matching API key
-			switch opts.Provider {
-			case "openai":
-				opts.APIKey = os.Getenv("OPENAI_API_KEY")
-			case "anthropic":
-				opts.APIKey = os.Getenv("ANTHROPIC_API_KEY")
-			case "gemini":
-				opts.APIKey = os.Getenv("GEMINI_API_KEY")
-			}
+	if apiKey == "" {
+		if provider != "" {
+			apiKey = GetProviderAPIKey(provider)
 		} else {
-			// Auto-detect provider from available API keys (priority: OpenAI → Anthropic → Gemini)
-			if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-				opts.APIKey = key
-				opts.Provider = "openai"
-			} else if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
-				opts.APIKey = key
-				opts.Provider = "anthropic"
-			} else if key := os.Getenv("GEMINI_API_KEY"); key != "" {
-				opts.APIKey = key
-				opts.Provider = "gemini"
+			if key := GetProviderAPIKey("openai"); key != "" {
+				apiKey = key
+				provider = "openai"
+			} else if key := GetProviderAPIKey("anthropic"); key != "" {
+				apiKey = key
+				provider = "anthropic"
+			} else if key := GetProviderAPIKey("gemini"); key != "" {
+				apiKey = key
+				provider = "gemini"
 			}
 		}
 	}
 
-	// Resolve MCP URL from environment if not provided
-	if opts.MCPURL == "" {
-		opts.MCPURL = os.Getenv("MCP_URL")
+	if mcpURL == "" {
+		mcpURL = os.Getenv("MCP_URL")
 	}
 
-	// Default to OpenAI if provider not specified
-	if opts.Provider == "" {
-		opts.Provider = "openai"
+	if provider == "" {
+		provider = "openai"
 	}
 
-	// Default to DefaultAgentName if agent name not specified
-	if opts.AgentName == "" {
-		opts.AgentName = DefaultAgentName
+	if agentName == "" {
+		agentName = DefaultAgentName
 	}
 
-	// Note: API key validation happens in Config.Validate() via LLMProviderConfig.Validate()
-	// This allows proper error handling through the runtime initialization flow
-
-	// Set provider-specific defaults
-	switch opts.Provider {
-	case "openai":
-		if opts.BaseURL == "" {
-			opts.BaseURL = "https://api.openai.com/v1"
-		}
-		if opts.Model == "" {
-			opts.Model = "gpt-4o-mini"
-		}
-	case "anthropic":
-		if opts.BaseURL == "" {
-			opts.BaseURL = "https://api.anthropic.com"
-		}
-		if opts.Model == "" {
-			// Use Claude Sonnet 4.5 (latest as of Feb 2025)
-			// See: https://docs.anthropic.com/en/docs/about-claude/models/overview
-			opts.Model = "claude-sonnet-4-5-20250929"
-		}
-	case "gemini":
-		if opts.BaseURL == "" {
-			// Note: Don't include /v1beta here, it's added by the Gemini provider
-			opts.BaseURL = "https://generativelanguage.googleapis.com"
-		}
-		if opts.Model == "" {
-			opts.Model = "gemini-2.0-flash-exp"
-		}
-	default:
-		// Unknown provider, use as-is with OpenAI defaults
-		if opts.BaseURL == "" {
-			opts.BaseURL = "https://api.openai.com/v1"
-		}
-		if opts.Model == "" {
-			opts.Model = "gpt-4o-mini"
-		}
+	llmConfig := &LLMProviderConfig{
+		Type: provider,
+	}
+	if apiKey != "" {
+		llmConfig.APIKey = apiKey
+	}
+	if baseURL != "" {
+		llmConfig.Host = baseURL
+	}
+	if model != "" {
+		llmConfig.Model = model
 	}
 
 	cfg := &Config{
 		Name: "Zero Config Mode",
-		LLMs: map[string]LLMProviderConfig{
-			opts.Provider: {
-				Type:        opts.Provider,
-				Model:       opts.Model,
-				APIKey:      opts.APIKey,
-				Host:        opts.BaseURL,
-				Temperature: 0.7,
-				MaxTokens:   4096,
-				Timeout:     120,
-			},
+		LLMs: map[string]*LLMProviderConfig{
+			provider: llmConfig,
 		},
-		Databases:      make(map[string]DatabaseProviderConfig),
-		Embedders:      make(map[string]EmbedderProviderConfig),
-		DocumentStores: make(map[string]DocumentStoreConfig),
-		// Add session persistence for CLI conversation continuity
-		SessionStores: map[string]SessionStoreConfig{
-			"default-session-store": {
-				Backend: "sql",
-				SQL: &SessionSQLConfig{
-					Driver:   "sqlite",
-					Database: "./data/sessions.db",
-					MaxConns: 10,
-					MaxIdle:  2,
-				},
-			},
-		},
-	}
-
-	// Configure document store if folder provided
-	if opts.DocsFolder != "" {
-		// Generate a unique store name based on the source path to avoid conflicts
-		storeName := generateStoreNameFromPath(opts.DocsFolder)
-
-		// Create a default document store configuration for zero-config mode
-		docStoreConfig := DocumentStoreConfig{
-			Name:            storeName,
-			Source:          "directory",
-			Path:            opts.DocsFolder,
-			IncludePatterns: []string{"*.md", "*.txt", "*.go", "*.py", "*.js", "*.ts", "*.yaml", "*.yml", "*.json", "*.xml", "*.html", "*.csv", "*.pdf", "*.docx", "*.xlsx"},
-			// ExcludePatterns: Leave empty to use comprehensive defaults from SetDefaults()
-			WatchChanges:        true,
-			MaxFileSize:         50 * 1024 * 1024, // 50MB
-			IncrementalIndexing: true,
-		}
-
-		// Add to document stores
-		if cfg.DocumentStores == nil {
-			cfg.DocumentStores = make(map[string]DocumentStoreConfig)
-		}
-		cfg.DocumentStores[storeName] = docStoreConfig
-
-		// Enable search tool for the agent
-		if cfg.Tools.Tools == nil {
-			cfg.Tools.Tools = make(map[string]ToolConfig)
-		}
-		cfg.Tools.Tools["search"] = ToolConfig{
-			Type:           "search",
-			DocumentStores: []string{storeName},
-		}
-	}
-
-	// Configure agent
-	providerName := opts.Provider
-	if providerName == "" {
-		providerName = "OpenAI"
+		Databases:      make(map[string]*DatabaseProviderConfig),
+		Embedders:      make(map[string]*EmbedderProviderConfig),
+		DocumentStores: make(map[string]*DocumentStoreConfig),
+		SessionStores:  make(map[string]*SessionStoreConfig),
 	}
 
 	agentConfig := AgentConfig{
-		Name:        "assistant",
-		Description: fmt.Sprintf("AI assistant powered by %s (%s)", providerName, opts.Model),
-		Type:        "native",
-		LLM:         opts.Provider,
-		Visibility:  "public",
-		// Don't override system prompt - let strategy use its optimized defaults
-		// Don't auto-enable context inclusion - let users choose
-		Prompt: PromptConfig{},
-		Reasoning: ReasoningConfig{
-			Engine:        "chain-of-thought",
-			MaxIterations: 100,
-		},
-		// Enable session persistence for conversation continuity
-		SessionStore: "default-session-store",
+		Name: agentName,
+		Type: "native",
+		LLM:  provider,
 	}
 
-	// Add document store to agent if docs folder provided
-	if opts.DocsFolder != "" {
-		storeName := generateStoreNameFromPath(opts.DocsFolder)
-		agentConfig.DocumentStores = []string{storeName}
-		agentConfig.Database = "default-database"
-		agentConfig.Embedder = "default-embedder"
-
-		// Create default database and embedder configurations
-		cfg.Databases["default-database"] = DatabaseProviderConfig{
-			Type:    "qdrant",
-			Host:    "localhost",
-			Port:    6334,
-			Timeout: 30,
-		}
-		cfg.Embedders["default-embedder"] = EmbedderProviderConfig{
-			Type:      "ollama",
-			Model:     "nomic-embed-text",
-			Host:      "http://localhost:11434",
-			Dimension: 768,
-			Timeout:   30,
+	if docsFolder != "" {
+		agentConfig.DocsFolder = docsFolder
+		if embedderModel != "" {
+			cfg.Embedders["default-embedder"] = &EmbedderProviderConfig{
+				Model: embedderModel,
+			}
 		}
 	}
 
-	// Configure tools
-	if opts.EnableTools {
-		// Enable all local tools
-		agentConfig.Tools = nil // nil means all tools available
-
-		// Initialize tools config with local tool sources
-		if cfg.Tools.Tools == nil {
-			cfg.Tools.Tools = make(map[string]ToolConfig)
-		}
-
-		// Add default local tools with proper configurations
-		cfg.Tools.Tools["command"] = ToolConfig{
-			Type:    "command",
-			Enabled: true,
-			AllowedCommands: []string{
-				"ls", "cat", "head", "tail", "pwd", "find", "grep", "wc",
-				"date", "echo", "tree", "du", "df", "git", "npm", "go",
-				"curl", "wget", "chmod", "mkdir", "rm", "mv", "cp",
-			},
-			WorkingDirectory: "./",
-			MaxExecutionTime: "30s",
-			EnableSandboxing: false, // Disable for easier development
-		}
-
-		cfg.Tools.Tools["file_writer"] = ToolConfig{
-			Type:             "file_writer",
-			Enabled:          true,
-			MaxFileSize:      1048576, // 1MB
-			WorkingDirectory: "./",
-			// Note: AllowedExtensions intentionally not set = allow ALL file types (default permissive)
-		}
-
-		cfg.Tools.Tools["search_replace"] = ToolConfig{
-			Type:             "search_replace",
-			Enabled:          true,
-			MaxReplacements:  100,
-			WorkingDirectory: "./",
-			BackupEnabled:    true,
-		}
-
-		cfg.Tools.Tools["todo"] = ToolConfig{
-			Type:    "todo",
-			Enabled: true,
-		}
-	} else if opts.MCPURL != "" {
-		// Enable MCP tools - nil means all tools available (including discovered MCP tools)
+	if enableTools {
+		agentConfig.EnableTools = true
+	} else if mcpURL != "" {
 		agentConfig.Tools = nil
 	} else {
-		// No tools
 		agentConfig.Tools = []string{}
 	}
 
-	cfg.Agents = map[string]AgentConfig{
-		opts.AgentName: agentConfig,
+	cfg.Agents = map[string]*AgentConfig{
+		agentName: &agentConfig,
 	}
 
-	// Configure MCP tool if URL provided
-	if opts.MCPURL != "" {
+	if mcpURL != "" {
 		if cfg.Tools.Tools == nil {
-			cfg.Tools.Tools = make(map[string]ToolConfig)
+			cfg.Tools.Tools = make(map[string]*ToolConfig)
 		}
-		cfg.Tools.Tools["mcp"] = ToolConfig{
+		cfg.Tools.Tools["mcp"] = &ToolConfig{
 			Type:      "mcp",
 			Enabled:   true,
-			ServerURL: opts.MCPURL,
+			ServerURL: mcpURL,
 		}
 	}
-
-	// Set defaults
-	cfg.SetDefaults()
 
 	return cfg
 }
 
-// createZeroConfig creates a minimal default configuration (for backward compatibility)
-func createZeroConfig() (*Config, error) {
-	cfg := CreateZeroConfig(ZeroConfigOptions{})
-	return cfg, nil
-}
-
-// ============================================================================
-// HELPER METHODS
-// ============================================================================
-
-// GetAgent returns an agent configuration by name
 func (c *Config) GetAgent(name string) (*AgentConfig, bool) {
 	agent, exists := c.Agents[name]
-	return &agent, exists
+	return agent, exists
 }
 
-// GetDocumentStore returns a document store configuration by name
 func (c *Config) GetDocumentStore(name string) (*DocumentStoreConfig, bool) {
 	store, exists := c.DocumentStores[name]
-	return &store, exists
+	return store, exists
 }
 
-// ListAgents returns a list of all agent names
 func (c *Config) ListAgents() []string {
 	agents := make([]string, 0, len(c.Agents))
 	for name := range c.Agents {
@@ -796,7 +547,6 @@ func (c *Config) ListAgents() []string {
 	return agents
 }
 
-// ListDocumentStores returns a list of all document store names
 func (c *Config) ListDocumentStores() []string {
 	stores := make([]string, 0, len(c.DocumentStores))
 	for name := range c.DocumentStores {
@@ -805,34 +555,60 @@ func (c *Config) ListDocumentStores() []string {
 	return stores
 }
 
-// generateStoreNameFromPath creates a unique store name based on the source path
-// This ensures different directories get different collections and index states
+func extractStringField(source any, fieldName string) string {
+	v := reflect.ValueOf(source)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	field := v.FieldByName(fieldName)
+	if !field.IsValid() || !field.CanInterface() {
+		return ""
+	}
+
+	if field.Kind() != reflect.String {
+		return ""
+	}
+
+	return field.String()
+}
+
+func extractBoolField(source any, fieldName string) bool {
+	v := reflect.ValueOf(source)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	field := v.FieldByName(fieldName)
+	if !field.IsValid() || !field.CanInterface() {
+		return false
+	}
+
+	if field.Kind() != reflect.Bool {
+		return false
+	}
+
+	return field.Bool()
+}
+
 func generateStoreNameFromPath(sourcePath string) string {
-	// Normalize the path to handle different path separators and trailing slashes
 	normalizedPath := filepath.Clean(sourcePath)
 
-	// Get the absolute path to ensure uniqueness
 	absPath, err := filepath.Abs(normalizedPath)
 	if err != nil {
-		// Fallback to normalized path if absolute path fails
 		absPath = normalizedPath
 	}
 
-	// Create a hash of the FULL path for uniqueness
-	hash := md5.Sum([]byte(absPath))
-	hashStr := hex.EncodeToString(hash[:])[:8] // Use first 8 characters for brevity
+	hash := sha256.Sum256([]byte(absPath))
+	hashStr := hex.EncodeToString(hash[:])[:12]
 
-	// Get the directory name for readability
 	dirName := filepath.Base(absPath)
 	if dirName == "" || dirName == "." {
 		dirName = "root"
 	}
 
-	// Clean the directory name to be safe for use as a collection name
 	dirName = strings.ReplaceAll(dirName, " ", "_")
 	dirName = strings.ReplaceAll(dirName, "-", "_")
 
-	// Return a combination of directory name and hash for uniqueness
-	// The hash is based on the FULL absolute path, so 8 chars is sufficient
 	return fmt.Sprintf("docs_%s_%s", dirName, hashStr)
 }

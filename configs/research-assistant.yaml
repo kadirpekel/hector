@@ -1,89 +1,49 @@
-# ============================================================================
-# SIMPLE MULTI-AGENT RESEARCH ASSISTANT - HECTOR IMPLEMENTATION
-# ============================================================================
-# 
-# This configuration implements a simple 3-agent research system:
-# ✅ Coordinator - orchestrates the workflow
-# ✅ Researcher - gathers information from web sources  
-# ✅ Analyst - analyzes findings and identifies insights
-# ✅ Writer - creates structured reports
-#
-# PREREQUISITES:
-# 1. API Key: export OPENAI_API_KEY="sk-..."
-#
-# USAGE:
-# 1. Start: hector serve --config configs/research-assistant.yaml
-# 2. Research: hector call coordinator "Research sustainable AI development"
-# ============================================================================
-
 agents:
-  # ==========================================================================
-  # COORDINATOR AGENT - Orchestrates the research workflow
-  # ==========================================================================
   coordinator:
     name: "Research Coordinator"
     description: "Coordinates research tasks using 3 specialist agents"
     llm: "gpt-4o"
-    
     reasoning:
-      engine: "supervisor"  # Built-in orchestration
+      engine: "supervisor"  
       max_iterations: 10
       enable_streaming: true
-    
     tools:
       - "agent_call"
-    
     prompt:
       system_role: |
         You coordinate research tasks using 3 specialists:
         - researcher: Gathers information from web sources
         - analyst: Analyzes findings and identifies insights  
         - writer: Creates structured reports
-        
         Process: researcher → analyst → writer → deliver final report
-        
         Always call agents in sequence and build on previous results.
-
-  # ==========================================================================
-  # RESEARCHER AGENT - Gathers information from web sources
-  # ==========================================================================
   researcher:
     name: "Web Researcher"
     description: "Gathers information from web sources"
     llm: "gpt-4o-mini"
-    
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 5
       enable_streaming: true
-    
     tools:
       - "execute_command"
-    
     prompt:
       system_role: |
         You research topics by searching the web and gathering information.
         Use curl to search and extract key facts from multiple sources.
         Focus on credible, recent information.
-        
         Provide structured output with:
         - Key findings organized by theme
         - Source URLs and credibility assessment
         - Summary of main insights
-
-  # ==========================================================================
-  # ANALYST AGENT - Analyzes findings and identifies insights
-  # ==========================================================================
   analyst:
     name: "Research Analyst"
     description: "Analyzes research findings to identify key insights"
     llm: "gpt-4o-mini"
-    
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 5
       enable_streaming: true
-    
     prompt:
       system_role: |
         You analyze research findings to identify:
@@ -91,93 +51,43 @@ agents:
         - Important insights and trends
         - Gaps or contradictions in the information
         - Implications and significance
-        
         Provide clear, structured analysis that builds on the research data.
-
-  # ==========================================================================
-  # WRITER AGENT - Creates structured reports
-  # ==========================================================================
   writer:
     name: "Report Writer"
     description: "Creates well-structured reports from research analysis"
     llm: "gpt-4o-mini"
-    
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 5
       enable_streaming: true
-    
     tools:
       - "write_file"
-    
     prompt:
       system_role: |
         You create well-structured reports from research analysis.
         Use clear headings, bullet points, and proper citations.
         Save the final report as a markdown file.
-        
         Report structure:
-        # [Topic] Research Report
-        ## Executive Summary
-        ## Key Findings
-        ## Analysis & Insights
-        ## Implications
-        ## Sources
-
-# ============================================================================
-# LLM CONFIGURATION
-# ============================================================================
-
 llms:
   gpt-4o:
     type: "openai"
     model: "gpt-4o"
     api_key: "${OPENAI_API_KEY}"
-    temperature: 0.3  # Lower for consistent coordination
+    temperature: 0.3  
     max_tokens: 4000
-  
   gpt-4o-mini:
     type: "openai"
     model: "gpt-4o-mini"
     api_key: "${OPENAI_API_KEY}"
-    temperature: 0.5  # Balanced for analysis
+    temperature: 0.5  
     max_tokens: 3000
-
-# ============================================================================
-# TOOLS CONFIGURATION
-# ============================================================================
-
 tools:
   execute_command:
     type: command
-    # Permissive defaults: allows all commands (sandboxed)
     working_directory: "./"
     max_execution_time: "30s"
     enable_sandboxing: true
-  
   write_file:
     type: write_file
     working_directory: "./reports"
-    max_file_size: 1048576  # 1MB
-
-# ============================================================================
-# USAGE EXAMPLES
-# ============================================================================
-
-# Start the research assistant:
-#   $ hector serve --config configs/research-assistant.yaml
-
-# Conduct research:
-#   $ hector call coordinator "Research sustainable AI development practices"
-#   $ hector call coordinator "Research quantum computing applications"
-#   $ hector call coordinator "Research remote work productivity tools"
-
-# Interactive research session:
-#   $ hector chat coordinator
-
-# Expected workflow:
-# 1. Coordinator receives research request
-# 2. Researcher gathers information from web sources
-# 3. Analyst analyzes findings and identifies insights
-# 4. Writer creates structured report and saves to file
-# 5. Coordinator delivers final result
+    max_file_size: 1048576  

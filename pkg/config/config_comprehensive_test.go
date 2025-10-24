@@ -14,13 +14,13 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "valid_minimal_config",
 			config: &Config{
-				Agents: map[string]AgentConfig{
+				Agents: map[string]*AgentConfig{
 					"test-agent": {
 						Name: "Test Agent",
 						LLM:  "test-llm",
 					},
 				},
-				LLMs: map[string]LLMProviderConfig{
+				LLMs: map[string]*LLMProviderConfig{
 					"test-llm": {
 						Type:   "openai",
 						Model:  "gpt-4o",
@@ -34,13 +34,13 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "valid_complete_config",
 			config: &Config{
-				Agents: map[string]AgentConfig{
+				Agents: map[string]*AgentConfig{
 					"test-agent": {
 						Name: "Test Agent",
 						LLM:  "test-llm",
 					},
 				},
-				LLMs: map[string]LLMProviderConfig{
+				LLMs: map[string]*LLMProviderConfig{
 					"test-llm": {
 						Type:   "openai",
 						Model:  "gpt-4o",
@@ -69,13 +69,13 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "invalid_agent_config",
 			config: &Config{
-				Agents: map[string]AgentConfig{
+				Agents: map[string]*AgentConfig{
 					"test-agent": {
-						Name: "", // Missing name
+						Name: "",
 						LLM:  "test-llm",
 					},
 				},
-				LLMs: map[string]LLMProviderConfig{
+				LLMs: map[string]*LLMProviderConfig{
 					"test-llm": {
 						Type:  "openai",
 						Model: "gpt-4o",
@@ -88,15 +88,15 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "invalid_llm_config",
 			config: &Config{
-				Agents: map[string]AgentConfig{
+				Agents: map[string]*AgentConfig{
 					"test-agent": {
 						Name: "Test Agent",
 						LLM:  "test-llm",
 					},
 				},
-				LLMs: map[string]LLMProviderConfig{
+				LLMs: map[string]*LLMProviderConfig{
 					"test-llm": {
-						Type:  "", // Missing type
+						Type:  "",
 						Model: "gpt-4o",
 						Host:  "https://api.openai.com/v1",
 					},
@@ -107,13 +107,13 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "invalid_global_settings",
 			config: &Config{
-				Agents: map[string]AgentConfig{
+				Agents: map[string]*AgentConfig{
 					"test-agent": {
 						Name: "Test Agent",
 						LLM:  "test-llm",
 					},
 				},
-				LLMs: map[string]LLMProviderConfig{
+				LLMs: map[string]*LLMProviderConfig{
 					"test-llm": {
 						Type:  "openai",
 						Model: "gpt-4o",
@@ -122,7 +122,7 @@ func TestConfig_Validate(t *testing.T) {
 				},
 				Global: GlobalSettings{
 					Logging: LoggingConfig{
-						Level:  "invalid", // Invalid log level
+						Level:  "invalid",
 						Format: "text",
 						Output: "stdout",
 					},
@@ -133,14 +133,13 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name:    "empty_config",
 			config:  &Config{},
-			wantErr: true, // Empty config will fail validation due to missing API key for default LLM
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Only set defaults for tests that should pass validation
-			// Don't set defaults for invalid configs - we want to test validation of incomplete configs
+
 			if !tt.wantErr {
 				tt.config.SetDefaults()
 			}
@@ -163,7 +162,7 @@ func TestConfig_SetDefaults(t *testing.T) {
 			name:   "empty_config",
 			config: &Config{},
 			validateConfig: func(t *testing.T, config *Config) {
-				// Should create default services
+
 				if len(config.LLMs) == 0 {
 					t.Error("SetDefaults() should create default LLM")
 				}
@@ -177,19 +176,17 @@ func TestConfig_SetDefaults(t *testing.T) {
 					t.Error("SetDefaults() should create default agent")
 				}
 
-				// Check default LLM
 				if llm, exists := config.LLMs["default-llm"]; exists {
 					if llm.Type != "openai" {
 						t.Errorf("Default LLM type = %v, want %v", llm.Type, "openai")
 					}
-					if llm.Model != "gpt-4o" {
-						t.Errorf("Default LLM model = %v, want %v", llm.Model, "gpt-4o")
+					if llm.Model != DefaultOpenAIModel {
+						t.Errorf("Default LLM model = %v, want %v", llm.Model, DefaultOpenAIModel)
 					}
 				} else {
 					t.Error("Default LLM 'default-llm' should exist")
 				}
 
-				// Check default agent
 				if agent, exists := config.Agents["default-agent"]; exists {
 					if agent.Name != "Assistant" {
 						t.Errorf("Default agent name = %v, want %v", agent.Name, "Assistant")
@@ -205,13 +202,13 @@ func TestConfig_SetDefaults(t *testing.T) {
 		{
 			name: "config_with_existing_services",
 			config: &Config{
-				LLMs: map[string]LLMProviderConfig{
+				LLMs: map[string]*LLMProviderConfig{
 					"custom-llm": {
 						Type:  "anthropic",
 						Model: "claude-3-5-sonnet",
 					},
 				},
-				Agents: map[string]AgentConfig{
+				Agents: map[string]*AgentConfig{
 					"custom-agent": {
 						Name: "Custom Agent",
 						LLM:  "custom-llm",
@@ -219,7 +216,7 @@ func TestConfig_SetDefaults(t *testing.T) {
 				},
 			},
 			validateConfig: func(t *testing.T, config *Config) {
-				// Should not create defaults when services already exist
+
 				if len(config.LLMs) != 1 {
 					t.Errorf("Should have 1 LLM, got %d", len(config.LLMs))
 				}
@@ -227,7 +224,6 @@ func TestConfig_SetDefaults(t *testing.T) {
 					t.Errorf("Should have 1 agent, got %d", len(config.Agents))
 				}
 
-				// Should still create defaults for missing services
 				if len(config.Databases) == 0 {
 					t.Error("SetDefaults() should create default database")
 				}
@@ -239,10 +235,9 @@ func TestConfig_SetDefaults(t *testing.T) {
 		{
 			name: "config_with_partial_llm",
 			config: &Config{
-				LLMs: map[string]LLMProviderConfig{
+				LLMs: map[string]*LLMProviderConfig{
 					"partial-llm": {
 						Type: "openai",
-						// Missing model and host
 					},
 				},
 			},
@@ -274,18 +269,18 @@ func TestConfig_SetDefaults(t *testing.T) {
 
 func TestConfig_HelperMethods(t *testing.T) {
 	config := &Config{
-		Agents: map[string]AgentConfig{
+		Agents: map[string]*AgentConfig{
 			"agent1": {Name: "Agent 1", LLM: "llm1"},
 			"agent2": {Name: "Agent 2", LLM: "llm2"},
 		},
-		DocumentStores: map[string]DocumentStoreConfig{
+		DocumentStores: map[string]*DocumentStoreConfig{
 			"store1": {Name: "Store 1", Source: "directory", Path: "./docs"},
 			"store2": {Name: "Store 2", Source: "directory", Path: "./data"},
 		},
 	}
 
 	t.Run("GetAgent", func(t *testing.T) {
-		// Test existing agent
+
 		agent, exists := config.GetAgent("agent1")
 		if !exists {
 			t.Error("GetAgent() should return true for existing agent")
@@ -294,7 +289,6 @@ func TestConfig_HelperMethods(t *testing.T) {
 			t.Errorf("GetAgent() name = %v, want %v", agent.Name, "Agent 1")
 		}
 
-		// Test non-existing agent
 		_, exists = config.GetAgent("non-existing")
 		if exists {
 			t.Error("GetAgent() should return false for non-existing agent")
@@ -302,7 +296,7 @@ func TestConfig_HelperMethods(t *testing.T) {
 	})
 
 	t.Run("GetDocumentStore", func(t *testing.T) {
-		// Test existing document store
+
 		store, exists := config.GetDocumentStore("store1")
 		if !exists {
 			t.Error("GetDocumentStore() should return true for existing store")
@@ -311,7 +305,6 @@ func TestConfig_HelperMethods(t *testing.T) {
 			t.Errorf("GetDocumentStore() name = %v, want %v", store.Name, "Store 1")
 		}
 
-		// Test non-existing document store
 		_, exists = config.GetDocumentStore("non-existing")
 		if exists {
 			t.Error("GetDocumentStore() should return false for non-existing store")
@@ -324,7 +317,6 @@ func TestConfig_HelperMethods(t *testing.T) {
 			t.Errorf("ListAgents() length = %v, want %v", len(agents), 2)
 		}
 
-		// Check that both agents are in the list
 		agentMap := make(map[string]bool)
 		for _, agent := range agents {
 			agentMap[agent] = true
@@ -340,7 +332,6 @@ func TestConfig_HelperMethods(t *testing.T) {
 			t.Errorf("ListDocumentStores() length = %v, want %v", len(stores), 2)
 		}
 
-		// Check that both stores are in the list
 		storeMap := make(map[string]bool)
 		for _, store := range stores {
 			storeMap[store] = true
@@ -353,8 +344,8 @@ func TestConfig_HelperMethods(t *testing.T) {
 
 func TestConfig_EmptyMaps(t *testing.T) {
 	config := &Config{
-		Agents:         make(map[string]AgentConfig),
-		DocumentStores: make(map[string]DocumentStoreConfig),
+		Agents:         make(map[string]*AgentConfig),
+		DocumentStores: make(map[string]*DocumentStoreConfig),
 	}
 
 	t.Run("EmptyAgents", func(t *testing.T) {

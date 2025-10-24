@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// TestItem is a simple struct for testing
 type TestItem struct {
 	ID   string
 	Name string
@@ -38,7 +37,7 @@ func TestBaseRegistry_Register(t *testing.T) {
 		{
 			name: "register duplicate item",
 			item: TestItem{
-				ID:   "test-1", // Same ID as first test
+				ID:   "test-1",
 				Name: "Test Item 2",
 			},
 			wantErr: true,
@@ -58,7 +57,6 @@ func TestBaseRegistry_Register(t *testing.T) {
 func TestBaseRegistry_Get(t *testing.T) {
 	registry := NewBaseRegistry[TestItem]()
 
-	// Register a test item
 	testItem := TestItem{
 		ID:   "test-1",
 		Name: "Test Item 1",
@@ -107,13 +105,11 @@ func TestBaseRegistry_Get(t *testing.T) {
 func TestBaseRegistry_List(t *testing.T) {
 	registry := NewBaseRegistry[TestItem]()
 
-	// Initially empty
 	items := registry.List()
 	if len(items) != 0 {
 		t.Errorf("BaseRegistry.List() length = %v, want %v", len(items), 0)
 	}
 
-	// Register multiple items
 	testItems := []TestItem{
 		{ID: "test-1", Name: "Test Item 1"},
 		{ID: "test-2", Name: "Test Item 2"},
@@ -127,13 +123,11 @@ func TestBaseRegistry_List(t *testing.T) {
 		}
 	}
 
-	// Check list
 	items = registry.List()
 	if len(items) != len(testItems) {
 		t.Errorf("BaseRegistry.List() length = %v, want %v", len(items), len(testItems))
 	}
 
-	// Verify all items are present
 	itemMap := make(map[string]TestItem)
 	for _, item := range items {
 		itemMap[item.ID] = item
@@ -151,7 +145,6 @@ func TestBaseRegistry_List(t *testing.T) {
 func TestBaseRegistry_Remove(t *testing.T) {
 	registry := NewBaseRegistry[TestItem]()
 
-	// Register a test item
 	testItem := TestItem{
 		ID:   "test-1",
 		Name: "Test Item 1",
@@ -185,7 +178,6 @@ func TestBaseRegistry_Remove(t *testing.T) {
 				t.Errorf("BaseRegistry.Remove() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			// Verify item is actually removed
 			if !tt.wantErr {
 				_, exists := registry.Get(tt.itemID)
 				if exists {
@@ -199,12 +191,10 @@ func TestBaseRegistry_Remove(t *testing.T) {
 func TestBaseRegistry_Count(t *testing.T) {
 	registry := NewBaseRegistry[TestItem]()
 
-	// Initially empty
 	if count := registry.Count(); count != 0 {
 		t.Errorf("BaseRegistry.Count() = %v, want %v", count, 0)
 	}
 
-	// Register items
 	testItems := []TestItem{
 		{ID: "test-1", Name: "Test Item 1"},
 		{ID: "test-2", Name: "Test Item 2"},
@@ -226,7 +216,6 @@ func TestBaseRegistry_Count(t *testing.T) {
 func TestBaseRegistry_Clear(t *testing.T) {
 	registry := NewBaseRegistry[TestItem]()
 
-	// Register some items
 	testItems := []TestItem{
 		{ID: "test-1", Name: "Test Item 1"},
 		{ID: "test-2", Name: "Test Item 2"},
@@ -239,15 +228,12 @@ func TestBaseRegistry_Clear(t *testing.T) {
 		}
 	}
 
-	// Verify items exist
 	if count := registry.Count(); count != len(testItems) {
 		t.Errorf("BaseRegistry.Count() before clear = %v, want %v", count, len(testItems))
 	}
 
-	// Clear registry
 	registry.Clear()
 
-	// Verify registry is empty
 	if count := registry.Count(); count != 0 {
 		t.Errorf("BaseRegistry.Count() after clear = %v, want %v", count, 0)
 	}
@@ -257,7 +243,6 @@ func TestBaseRegistry_Clear(t *testing.T) {
 		t.Errorf("BaseRegistry.List() after clear length = %v, want %v", len(items), 0)
 	}
 
-	// Verify individual items are gone
 	for _, item := range testItems {
 		_, exists := registry.Get(item.ID)
 		if exists {
@@ -269,10 +254,8 @@ func TestBaseRegistry_Clear(t *testing.T) {
 func TestBaseRegistry_Concurrency(t *testing.T) {
 	registry := NewBaseRegistry[TestItem]()
 
-	// Test concurrent access
 	done := make(chan bool, 2)
 
-	// Goroutine 1: Register items
 	go func() {
 		defer func() { done <- true }()
 		for i := 0; i < 100; i++ {
@@ -284,7 +267,6 @@ func TestBaseRegistry_Concurrency(t *testing.T) {
 		}
 	}()
 
-	// Goroutine 2: Read items
 	go func() {
 		defer func() { done <- true }()
 		for i := 0; i < 100; i++ {
@@ -294,11 +276,9 @@ func TestBaseRegistry_Concurrency(t *testing.T) {
 		}
 	}()
 
-	// Wait for both goroutines to complete
 	<-done
 	<-done
 
-	// Verify final state
 	if count := registry.Count(); count != 100 {
 		t.Errorf("BaseRegistry.Count() after concurrent access = %v, want %v", count, 100)
 	}

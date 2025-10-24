@@ -9,34 +9,22 @@ import (
 	"google.golang.org/grpc"
 )
 
-// ============================================================================
-// LLM PROVIDER PLUGIN
-// ============================================================================
-
-// LLMProviderPlugin is the plugin.Plugin implementation for LLM providers
 type LLMProviderPlugin struct {
 	plugin.Plugin
 	Impl LLMProvider
 }
 
-// GRPCServer registers the LLM provider gRPC server
 func (p *LLMProviderPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) error {
 	pb.RegisterLLMProviderServer(s, &LLMProviderGRPCServer{Impl: p.Impl})
 	return nil
 }
 
-// GRPCClient returns the LLM provider gRPC client
 func (p *LLMProviderPlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
 	return &LLMProviderGRPCClient{
 		client: pb.NewLLMProviderClient(c),
 	}, nil
 }
 
-// ============================================================================
-// LLM GRPC SERVER (for plugin implementations)
-// ============================================================================
-
-// LLMProviderGRPCServer is the gRPC server that the plugin implements
 type LLMProviderGRPCServer struct {
 	pb.UnimplementedLLMProviderServer
 	Impl LLMProvider
@@ -76,12 +64,12 @@ func (s *LLMProviderGRPCServer) Health(ctx context.Context, req *pb.HealthReques
 }
 
 func (s *LLMProviderGRPCServer) GetManifest(ctx context.Context, req *pb.ManifestRequest) (*pb.ManifestResponse, error) {
-	// Manifest is handled by the plugin registry, not the implementation
+
 	return &pb.ManifestResponse{}, nil
 }
 
 func (s *LLMProviderGRPCServer) GetStatus(ctx context.Context, req *pb.StatusRequest) (*pb.StatusResponse, error) {
-	// Status is handled by the plugin registry, not the implementation
+
 	return &pb.StatusResponse{Status: "ready"}, nil
 }
 
@@ -108,11 +96,6 @@ func (s *LLMProviderGRPCServer) GetModelInfo(ctx context.Context, req *pb.Empty)
 	return s.Impl.GetModelInfo(ctx)
 }
 
-// ============================================================================
-// LLM GRPC CLIENT (Hector uses this to talk to plugins)
-// ============================================================================
-
-// LLMProviderGRPCClient is the gRPC client implementation
 type LLMProviderGRPCClient struct {
 	client pb.LLMProviderClient
 }
@@ -153,7 +136,7 @@ func (c *LLMProviderGRPCClient) GenerateStreaming(ctx context.Context, messages 
 				return
 			}
 			if err != nil {
-				// Send error chunk
+
 				chunks <- &pb.StreamChunk{
 					Type:  pb.StreamChunk_ERROR,
 					Error: err.Error(),
@@ -193,32 +176,21 @@ func (c *LLMProviderGRPCClient) Health(ctx context.Context) error {
 	return nil
 }
 
-// ============================================================================
-// DATABASE PROVIDER PLUGIN
-// ============================================================================
-
-// DatabaseProviderPlugin is the plugin.Plugin implementation for Database providers
 type DatabaseProviderPlugin struct {
 	plugin.Plugin
 	Impl DatabaseProvider
 }
 
-// GRPCServer registers the Database provider gRPC server
 func (p *DatabaseProviderPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) error {
 	pb.RegisterDatabaseProviderServer(s, &DatabaseProviderGRPCServer{Impl: p.Impl})
 	return nil
 }
 
-// GRPCClient returns the Database provider gRPC client
 func (p *DatabaseProviderPlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
 	return &DatabaseProviderGRPCClient{
 		client: pb.NewDatabaseProviderClient(c),
 	}, nil
 }
-
-// ============================================================================
-// DATABASE GRPC SERVER
-// ============================================================================
 
 type DatabaseProviderGRPCServer struct {
 	pb.UnimplementedDatabaseProviderServer
@@ -296,10 +268,6 @@ func (s *DatabaseProviderGRPCServer) DeleteCollection(ctx context.Context, req *
 	}
 	return &pb.DeleteCollectionResponse{Success: true}, nil
 }
-
-// ============================================================================
-// DATABASE GRPC CLIENT
-// ============================================================================
 
 type DatabaseProviderGRPCClient struct {
 	client pb.DatabaseProviderClient
@@ -410,32 +378,21 @@ func (c *DatabaseProviderGRPCClient) Health(ctx context.Context) error {
 	return nil
 }
 
-// ============================================================================
-// EMBEDDER PROVIDER PLUGIN
-// ============================================================================
-
-// EmbedderProviderPlugin is the plugin.Plugin implementation for Embedder providers
 type EmbedderProviderPlugin struct {
 	plugin.Plugin
 	Impl EmbedderProvider
 }
 
-// GRPCServer registers the Embedder provider gRPC server
 func (p *EmbedderProviderPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) error {
 	pb.RegisterEmbedderProviderServer(s, &EmbedderProviderGRPCServer{Impl: p.Impl})
 	return nil
 }
 
-// GRPCClient returns the Embedder provider gRPC client
 func (p *EmbedderProviderPlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
 	return &EmbedderProviderGRPCClient{
 		client: pb.NewEmbedderProviderClient(c),
 	}, nil
 }
-
-// ============================================================================
-// EMBEDDER GRPC SERVER
-// ============================================================================
 
 type EmbedderProviderGRPCServer struct {
 	pb.UnimplementedEmbedderProviderServer
@@ -485,10 +442,6 @@ func (s *EmbedderProviderGRPCServer) Embed(ctx context.Context, req *pb.EmbedReq
 func (s *EmbedderProviderGRPCServer) GetEmbedderInfo(ctx context.Context, req *pb.Empty) (*pb.EmbedderInfo, error) {
 	return s.Impl.GetEmbedderInfo(ctx)
 }
-
-// ============================================================================
-// EMBEDDER GRPC CLIENT
-// ============================================================================
 
 type EmbedderProviderGRPCClient struct {
 	client pb.EmbedderProviderClient
@@ -542,11 +495,6 @@ func (c *EmbedderProviderGRPCClient) Health(ctx context.Context) error {
 	return nil
 }
 
-// ============================================================================
-// COMMON ERROR TYPE
-// ============================================================================
-
-// PluginError represents an error from a plugin
 type PluginError struct {
 	Message string
 }

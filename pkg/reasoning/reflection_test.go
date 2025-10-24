@@ -89,12 +89,10 @@ func TestFallbackAnalysis(t *testing.T) {
 				t.Errorf("ShouldPivot = %v, want %v", analysis.ShouldPivot, tt.wantPivot)
 			}
 
-			// Confidence should be in valid range
 			if analysis.Confidence < 0.0 || analysis.Confidence > 1.0 {
 				t.Errorf("Confidence = %f, should be between 0.0 and 1.0", analysis.Confidence)
 			}
 
-			// Recommendation should be valid
 			validRecommendations := map[string]bool{
 				"continue":       true,
 				"retry_failed":   true,
@@ -123,12 +121,10 @@ func TestBuildAnalysisPrompt(t *testing.T) {
 
 	prompt := buildAnalysisPrompt(toolCalls, results)
 
-	// Check that prompt contains key elements
 	if prompt == "" {
 		t.Error("buildAnalysisPrompt() returned empty string")
 	}
 
-	// Should mention the tool name
 	if len(prompt) < 50 {
 		t.Errorf("buildAnalysisPrompt() returned suspiciously short prompt: %s", prompt)
 	}
@@ -157,7 +153,7 @@ func TestTruncateString(t *testing.T) {
 			name:    "needs truncation",
 			input:   "hello world this is a long string",
 			maxLen:  10,
-			wantLen: 13, // 10 + "..." = 13
+			wantLen: 13,
 		},
 	}
 
@@ -168,7 +164,6 @@ func TestTruncateString(t *testing.T) {
 				t.Errorf("truncateString() length = %d, want %d", len(result), tt.wantLen)
 			}
 
-			// Should not truncate if input is shorter
 			if len(tt.input) <= tt.maxLen && result != tt.input {
 				t.Errorf("truncateString() should not modify strings shorter than maxLen")
 			}
@@ -177,7 +172,7 @@ func TestTruncateString(t *testing.T) {
 }
 
 func TestAnalyzeToolResults_EmptyResults(t *testing.T) {
-	// Create minimal mock services
+
 	services := &mockAgentServices{}
 
 	analysis, err := AnalyzeToolResults(
@@ -195,7 +190,6 @@ func TestAnalyzeToolResults_EmptyResults(t *testing.T) {
 		t.Fatal("AnalyzeToolResults() returned nil analysis")
 	}
 
-	// Empty results should return successful analysis with defaults
 	if len(analysis.SuccessfulTools) != 0 {
 		t.Errorf("Empty results should have 0 successful tools, got %d", len(analysis.SuccessfulTools))
 	}
@@ -205,7 +199,6 @@ func TestAnalyzeToolResults_EmptyResults(t *testing.T) {
 	}
 }
 
-// Mock implementation for testing
 type mockAgentServices struct{}
 
 func (m *mockAgentServices) GetConfig() config.ReasoningConfig {
@@ -215,7 +208,7 @@ func (m *mockAgentServices) GetConfig() config.ReasoningConfig {
 }
 
 func (m *mockAgentServices) LLM() LLMService {
-	// Return nil to trigger fallback analysis
+
 	return nil
 }
 
@@ -228,7 +221,7 @@ func (m *mockAgentServices) Prompt() PromptService {
 }
 
 func (m *mockAgentServices) Session() SessionService {
-	// Return a mock that implements all methods including UpdateSession
+
 	return &mockSessionService{}
 }
 
@@ -236,7 +229,6 @@ func (m *mockAgentServices) Task() TaskService {
 	return nil
 }
 
-// mockSessionService is a minimal mock for testing (updated for message-level interface)
 type mockSessionService struct{}
 
 func (m *mockSessionService) AppendMessage(sessionID string, message *pb.Message) error {

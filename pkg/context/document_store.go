@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
@@ -20,53 +21,36 @@ import (
 	"github.com/kadirpekel/hector/pkg/databases"
 )
 
-// ============================================================================
-// DOCUMENT STORE CONSTANTS AND CONFIGURATION
-// ============================================================================
-
 const (
-	// DefaultMaxFileSize is the default maximum file size for indexing (5MB)
 	DefaultMaxFileSize = 5 * 1024 * 1024
 
-	// DefaultUpdateChannelSize is the default size for the update channel
 	DefaultUpdateChannelSize = 100
 
-	// DefaultFileWatchTimeout is the default timeout for file watching operations
 	DefaultFileWatchTimeout = 10 * time.Second
 
-	// MaxConcurrentIndexing is the maximum number of concurrent indexing operations
-	// Reduced to prevent overwhelming Ollama with too many embedding requests
 	MaxConcurrentIndexing = 3
 )
 
-// Document types
 const (
 	DocumentTypeCode     = "code"
 	DocumentTypeConfig   = "config"
 	DocumentTypeMarkdown = "markdown"
 	DocumentTypeText     = "text"
 	DocumentTypeScript   = "script"
-	DocumentTypeBinary   = "binary" // Binary documents (PDF, Word, etc.)
+	DocumentTypeBinary   = "binary"
 	DocumentTypeUnknown  = "unknown"
 )
 
-// File operations
 const (
 	OperationCreate = "create"
 	OperationModify = "modify"
 	OperationDelete = "delete"
 )
 
-// Default indexing timeout
 const (
-	DefaultIndexingTimeout = 120 * time.Second // 2 minutes per document
+	DefaultIndexingTimeout = 120 * time.Second
 )
 
-// ============================================================================
-// DOCUMENT STORE ERRORS - STANDARDIZED ERROR TYPES
-// ============================================================================
-
-// DocumentStoreError represents errors in document store operations
 type DocumentStoreError struct {
 	StoreName string
 	Operation string
@@ -87,7 +71,6 @@ func (e *DocumentStoreError) Unwrap() error {
 	return e.Err
 }
 
-// NewDocumentStoreError creates a new document store error
 func NewDocumentStoreError(storeName, operation, message, filePath string, err error) *DocumentStoreError {
 	return &DocumentStoreError{
 		StoreName: storeName,
@@ -99,11 +82,6 @@ func NewDocumentStoreError(storeName, operation, message, filePath string, err e
 	}
 }
 
-// ============================================================================
-// DOCUMENT TYPES AND STRUCTURES
-// ============================================================================
-
-// Document represents document metadata during indexing
 type Document struct {
 	ID           string            `json:"id"`
 	Path         string            `json:"path"`
@@ -117,20 +95,17 @@ type Document struct {
 	LastModified time.Time         `json:"last_modified"`
 	Metadata     map[string]string `json:"metadata"`
 
-	// Extracted entities for code files
 	Functions []string `json:"functions,omitempty"`
 	Structs   []string `json:"structs,omitempty"`
 	Imports   []string `json:"imports,omitempty"`
 }
 
-// DocumentUpdate represents a file change event
 type DocumentUpdate struct {
 	FilePath  string    `json:"file_path"`
 	Operation string    `json:"operation"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// DocumentStoreStatus represents the status of a document store
 type DocumentStoreStatus struct {
 	Name          string    `json:"name"`
 	SourcePath    string    `json:"source_path"`
@@ -141,35 +116,25 @@ type DocumentStoreStatus struct {
 	DocumentCount int       `json:"document_count"`
 }
 
-// ============================================================================
-// DOCUMENT STORE - ENHANCED WITH PROPER STRUCTURE
-// ============================================================================
-
-// DocumentStore manages indexed documents for any directory using vector database
 type DocumentStore struct {
 	mu     sync.RWMutex
 	name   string
 	config *config.DocumentStoreConfig
 	status *DocumentStoreStatus
 
-	// Core components
 	searchEngine *SearchEngine
 	sourcePath   string
 
-	// Native binary parsers
 	nativeParsers *NativeParserRegistry
 
-	// File watching components
 	watcher       *fsnotify.Watcher
 	updateChannel chan DocumentUpdate
 	ctx           context.Context
 	cancel        context.CancelFunc
 
-	// Indexing state
 	indexingSemaphore chan struct{}
 }
 
-// NewDocumentStore creates a new document store with enhanced validation and configuration
 func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *SearchEngine) (*DocumentStore, error) {
 	if storeConfig == nil {
 		return nil, NewDocumentStoreError("", "NewDocumentStore", "store config is required", "", nil)
@@ -178,12 +143,14 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 		return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "search engine is required", "", nil)
 	}
 
-	// Validate and set defaults
-	if err := validateAndSetDefaults(storeConfig); err != nil {
-		return nil, err
+	if storeConfig.MaxFileSize == 0 {
+		storeConfig.MaxFileSize = DefaultMaxFileSize
 	}
 
-	// Initialize context for file watching
+	if _, err := os.Stat(storeConfig.Path); os.IsNotExist(err) {
+		return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "source path does not exist", storeConfig.Path, err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	store := &DocumentStore{
@@ -206,7 +173,6 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 		},
 	}
 
-	// Initialize file watcher if change tracking is enabled
 	if storeConfig.WatchChanges {
 		if err := store.initializeWatcher(); err != nil {
 			cancel()
@@ -217,43 +183,6 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 	return store, nil
 }
 
-// ============================================================================
-// VALIDATION AND CONFIGURATION
-// ============================================================================
-
-// validateAndSetDefaults validates and sets default values for store config
-func validateAndSetDefaults(storeConfig *config.DocumentStoreConfig) error {
-	if storeConfig.Name == "" {
-		return NewDocumentStoreError("", "validateAndSetDefaults", "store name is required", "", nil)
-	}
-	if storeConfig.Path == "" {
-		return NewDocumentStoreError(storeConfig.Name, "validateAndSetDefaults", "source path is required", "", nil)
-	}
-	if storeConfig.Source == "" {
-		storeConfig.Source = "directory" // Default source type
-	}
-
-	// Set defaults
-	if storeConfig.MaxFileSize == 0 {
-		storeConfig.MaxFileSize = DefaultMaxFileSize
-	}
-	if len(storeConfig.IncludePatterns) == 0 {
-		storeConfig.IncludePatterns = []string{"*"} // Include all by default
-	}
-
-	// Validate source path exists
-	if _, err := os.Stat(storeConfig.Path); os.IsNotExist(err) {
-		return NewDocumentStoreError(storeConfig.Name, "validateAndSetDefaults", "source path does not exist", storeConfig.Path, err)
-	}
-
-	return nil
-}
-
-// ============================================================================
-// INDEXING OPERATIONS - ENHANCED
-// ============================================================================
-
-// StartIndexing begins indexing the document store with enhanced error handling
 func (ds *DocumentStore) StartIndexing() error {
 	ds.mu.Lock()
 	if ds.status.IsIndexing {
@@ -270,7 +199,7 @@ func (ds *DocumentStore) StartIndexing() error {
 		ds.mu.Unlock()
 	}()
 
-	fmt.Printf("🔍 Indexing document store '%s' from: %s\n", ds.name, ds.sourcePath)
+	fmt.Printf("Indexing document store '%s' from: %s\n", ds.name, ds.sourcePath)
 
 	switch ds.config.Source {
 	case "directory":
@@ -282,11 +211,9 @@ func (ds *DocumentStore) StartIndexing() error {
 	}
 }
 
-// indexDirectory indexes a local directory with enhanced error handling and progress tracking
 func (ds *DocumentStore) indexDirectory() error {
 	ctx := context.Background()
 
-	// Load existing index state if incremental indexing is enabled
 	var existingDocs map[string]int64
 	var err error
 	if ds.config.IncrementalIndexing {
@@ -308,52 +235,44 @@ func (ds *DocumentStore) indexDirectory() error {
 	var failCount int32
 	var skippedCount int32
 
-	// Track files found during walk (for cleanup and state saving)
 	foundFiles := make(map[string]bool)
-	indexedFiles := make(map[string]int64) // Track successfully indexed files with timestamps
+	indexedFiles := make(map[string]int64)
 	var filesMu sync.Mutex
 
 	err = filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			atomic.AddInt32(&failCount, 1)
 			log.Printf("Warning: Failed to access %s: %v", path, err)
-			return nil // Continue with other files
+			return nil
 		}
 
-		// Skip directories
 		if info.IsDir() {
 			return nil
 		}
 
-		// Skip empty files
 		if info.Size() == 0 {
 			return nil
 		}
 
-		// Apply filters
 		if ds.shouldExclude(path) || !ds.shouldInclude(path) {
 			return nil
 		}
 
-		// Skip large files
 		if info.Size() > ds.config.MaxFileSize {
 			return nil
 		}
 
-		// Track this file as found (for cleanup)
 		relPath, _ := filepath.Rel(ds.sourcePath, path)
 		filesMu.Lock()
 		foundFiles[relPath] = true
 		filesMu.Unlock()
 
-		// Check if file needs reindexing (incremental indexing)
 		if !ds.shouldReindexFile(path, info.ModTime(), existingDocs) {
 			atomic.AddInt32(&skippedCount, 1)
 			return nil
 		}
 
-		// Index the document with semaphore control
-		ds.indexingSemaphore <- struct{}{} // Acquire semaphore
+		ds.indexingSemaphore <- struct{}{}
 		indexedCount.Add(1)
 		go func(p string, i os.FileInfo) {
 			defer func() {
@@ -361,7 +280,7 @@ func (ds *DocumentStore) indexDirectory() error {
 					log.Printf("Panic while indexing %s: %v", p, r)
 					atomic.AddInt32(&failCount, 1)
 				}
-				<-ds.indexingSemaphore // Release semaphore
+				<-ds.indexingSemaphore
 				indexedCount.Done()
 			}()
 
@@ -370,7 +289,7 @@ func (ds *DocumentStore) indexDirectory() error {
 				log.Printf("Warning: Failed to index %s: %v", p, err)
 			} else {
 				atomic.AddInt32(&successCount, 1)
-				// Track successfully indexed file with its timestamp
+
 				rp, _ := filepath.Rel(ds.sourcePath, p)
 				filesMu.Lock()
 				indexedFiles[rp] = i.ModTime().Unix()
@@ -385,10 +304,8 @@ func (ds *DocumentStore) indexDirectory() error {
 		return NewDocumentStoreError(ds.name, "indexDirectory", "directory walk failed", ds.sourcePath, err)
 	}
 
-	// Wait for all indexing operations to complete
 	indexedCount.Wait()
 
-	// Cleanup deleted files if incremental indexing is enabled
 	if ds.config.IncrementalIndexing {
 		if err := ds.cleanupDeletedFiles(ctx, existingDocs, foundFiles); err != nil {
 			log.Printf("Warning: Cleanup of deleted files failed: %v", err)
@@ -399,54 +316,46 @@ func (ds *DocumentStore) indexDirectory() error {
 	ds.status.DocumentCount = int(successCount)
 	ds.mu.Unlock()
 
-	// Save index state for incremental indexing
 	if ds.config.IncrementalIndexing {
-		// Merge: keep timestamps for unchanged files, update for re-indexed files
+
 		finalState := make(map[string]int64)
 
-		// Start with existing files that weren't re-indexed (the unchanged ones)
 		for path, ts := range existingDocs {
-			if foundFiles[path] { // File still exists
+			if foundFiles[path] {
 				finalState[path] = ts
 			}
 		}
 
-		// Update with newly indexed files (overwrites existing entries)
 		for path, ts := range indexedFiles {
 			finalState[path] = ts
 		}
 
-		// Save state (totalChunks is approximate - we track files, not chunks)
 		if err := ds.saveIndexState(finalState, len(finalState)*3); err != nil {
 			log.Printf("Warning: Failed to save index state: %v", err)
 		}
 	}
 
-	// Enhanced status message for incremental indexing
 	if ds.config.IncrementalIndexing && skippedCount > 0 {
-		fmt.Printf("✅ Document store '%s' indexed: %d new/modified, %d unchanged, %d errors\n",
+		fmt.Printf("Document store '%s' indexed: %d new/modified, %d unchanged, %d errors\n",
 			ds.name, successCount, skippedCount, failCount)
 	} else {
-		fmt.Printf("✅ Document store '%s' indexed: %d documents (%d errors)\n",
+		fmt.Printf("Document store '%s' indexed: %d documents (%d errors)\n",
 			ds.name, successCount, failCount)
 	}
 
-	// Notify user if file watching is enabled
 	if ds.config.WatchChanges {
-		fmt.Printf("👁️  File watching enabled - changes will be automatically indexed\n")
+		fmt.Printf("File watching enabled - changes will be automatically indexed\n")
 	}
 
 	return nil
 }
 
-// indexGitRepository indexes a git repository (currently delegates to directory indexing)
 func (ds *DocumentStore) indexGitRepository() error {
-	// Check if the path is a git repository
+
 	if !ds.isGitRepository(ds.sourcePath) {
 		return fmt.Errorf("path %s is not a git repository", ds.sourcePath)
 	}
 
-	// Use git to get all tracked files
 	cmd := exec.Command("git", "ls-files")
 	cmd.Dir = ds.sourcePath
 	output, err := cmd.Output()
@@ -454,7 +363,6 @@ func (ds *DocumentStore) indexGitRepository() error {
 		return fmt.Errorf("failed to list git files: %w", err)
 	}
 
-	// Process each tracked file
 	files := strings.Split(string(output), "\n")
 	for _, file := range files {
 		if file == "" {
@@ -464,12 +372,12 @@ func (ds *DocumentStore) indexGitRepository() error {
 		fullPath := filepath.Join(ds.sourcePath, file)
 		info, err := os.Stat(fullPath)
 		if err != nil {
-			continue // Skip files that don't exist
+			continue
 		}
 
 		if !info.IsDir() {
 			if err := ds.indexDocument(fullPath, info); err != nil {
-				// Log error but continue processing other files
+
 				fmt.Printf("Warning: failed to index file %s: %v\n", fullPath, err)
 			}
 		}
@@ -478,22 +386,18 @@ func (ds *DocumentStore) indexGitRepository() error {
 	return nil
 }
 
-// isGitRepository checks if the given path is a git repository
 func (ds *DocumentStore) isGitRepository(path string) bool {
 	gitDir := filepath.Join(path, ".git")
 	info, err := os.Stat(gitDir)
 	return err == nil && info.IsDir()
 }
 
-// indexDocument indexes a single document into vector database with enhanced processing
-// Now uses chunking to split large files into smaller, semantically meaningful pieces
 func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 	relPath, _ := filepath.Rel(ds.sourcePath, path)
 
-	// Try to parse with plugin first, fallback to text reading
 	content, err := ds.extractContentWithPlugins(path, info)
 	if err != nil {
-		// Fallback to reading as text
+
 		contentBytes, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return NewDocumentStoreError(ds.name, "indexDocument", "failed to read file", path, readErr)
@@ -501,29 +405,29 @@ func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 		content = string(contentBytes)
 	}
 
-	// Create document with enhanced metadata
+	content = ds.cleanUTF8Content(content)
+
+	if content == "" {
+		return nil
+	}
+
 	doc := ds.createDocument(relPath, info, content)
 
-	// Extract metadata based on file type
 	ds.extractMetadata(doc)
 
-	// Prepare metadata for vector database
 	metadata := ds.prepareVectorMetadata(doc)
 
-	// Chunk the content for better semantic search
-	chunks := ds.chunkContent(doc.Content, 800) // ~800 chars per chunk
+	chunks := ds.chunkContent(doc.Content, 800)
 
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultIndexingTimeout)
 	defer cancel()
 
-	// Index each chunk separately with line number tracking
 	for i, chunk := range chunks {
-		// Generate a proper UUID for each chunk
+
 		chunkKey := fmt.Sprintf("%s:chunk:%d", relPath, i)
 		hash := md5.Sum([]byte(fmt.Sprintf("%s:%s", ds.name, chunkKey)))
 		chunkID := uuid.NewMD5(uuid.Nil, hash[:]).String()
 
-		// Add chunk-specific metadata with line numbers
 		chunkMetadata := make(map[string]interface{})
 		for k, v := range metadata {
 			chunkMetadata[k] = v
@@ -532,7 +436,7 @@ func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 		chunkMetadata["chunk_total"] = len(chunks)
 		chunkMetadata["start_line"] = chunk.StartLine
 		chunkMetadata["end_line"] = chunk.EndLine
-		chunkMetadata["content"] = chunk.Content // Store chunk content in metadata for retrieval
+		chunkMetadata["content"] = chunk.Content
 
 		if err := ds.searchEngine.IngestDocument(ctx, chunkID, chunk.Content, chunkMetadata); err != nil {
 			return NewDocumentStoreError(ds.name, "indexDocument", "failed to ingest chunk", path, err)
@@ -542,9 +446,8 @@ func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 	return nil
 }
 
-// extractContentWithPlugins attempts to extract content using native parsers or plugins
 func (ds *DocumentStore) extractContentWithPlugins(path string, info os.FileInfo) (string, error) {
-	// First try native parsers for binary files
+
 	if isBinaryFileType(path) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
@@ -558,33 +461,26 @@ func (ds *DocumentStore) extractContentWithPlugins(path string, info os.FileInfo
 			return "", fmt.Errorf("native parser failed: %s", result.Error)
 		}
 
-		// Log successful parsing
 		if result.ProcessingTimeMs > 0 {
-			log.Printf("✅ Parsed %s with native parser (%dms)", path, result.ProcessingTimeMs)
+			log.Printf("Parsed %s with native parser (%dms)", path, result.ProcessingTimeMs)
 		}
 
 		return result.Content, nil
 	}
 
-	// For non-binary files, fall back to plain text reading
-	// Plugin system integration will be implemented when needed
 	return "", fmt.Errorf("no native parser available for text files - use plain text reading")
 }
 
-// ContentChunk represents a chunk of content with line number tracking
 type ContentChunk struct {
 	Content   string
 	StartLine int
 	EndLine   int
 }
 
-// chunkContent splits content into smaller chunks for better semantic search
-// Now tracks line numbers for precise code references
 func (ds *DocumentStore) chunkContent(content string, targetSize int) []ContentChunk {
 	lines := strings.Split(content, "\n")
 	totalLines := len(lines)
 
-	// If content is small, return as single chunk
 	if len(content) <= targetSize {
 		return []ContentChunk{{
 			Content:   content,
@@ -599,7 +495,7 @@ func (ds *DocumentStore) chunkContent(content string, targetSize int) []ContentC
 	currentLine := 1
 
 	for _, line := range lines {
-		// If adding this line would exceed target size, save current chunk
+
 		if currentChunk.Len() > 0 && currentChunk.Len()+len(line)+1 > targetSize {
 			chunks = append(chunks, ContentChunk{
 				Content:   currentChunk.String(),
@@ -617,7 +513,6 @@ func (ds *DocumentStore) chunkContent(content string, targetSize int) []ContentC
 		currentLine++
 	}
 
-	// Add the last chunk if not empty
 	if currentChunk.Len() > 0 {
 		chunks = append(chunks, ContentChunk{
 			Content:   currentChunk.String(),
@@ -629,11 +524,22 @@ func (ds *DocumentStore) chunkContent(content string, targetSize int) []ContentC
 	return chunks
 }
 
-// ============================================================================
-// DOCUMENT PROCESSING AND METADATA EXTRACTION
-// ============================================================================
+func (ds *DocumentStore) cleanUTF8Content(content string) string {
 
-// createDocument creates a document from file information
+	if utf8.ValidString(content) {
+		return content
+	}
+
+	cleaned := strings.ToValidUTF8(content, "")
+
+	invalidRatio := float64(len(content)-len(cleaned)) / float64(len(content))
+	if invalidRatio > 0.5 {
+		return ""
+	}
+
+	return cleaned
+}
+
 func (ds *DocumentStore) createDocument(relPath string, info os.FileInfo, content string) *Document {
 	doc := &Document{
 		ID:           ds.generateDocumentID(relPath),
@@ -646,16 +552,13 @@ func (ds *DocumentStore) createDocument(relPath string, info os.FileInfo, conten
 		Metadata:     make(map[string]string),
 	}
 
-	// Detect document type and language
 	doc.Type, doc.Language = ds.detectTypeAndLanguage(relPath)
 
-	// Extract title
 	doc.Title = ds.extractTitle(doc)
 
 	return doc
 }
 
-// detectTypeAndLanguage detects the document type and language from file extension
 func (ds *DocumentStore) detectTypeAndLanguage(path string) (string, string) {
 	ext := strings.ToLower(filepath.Ext(path))
 
@@ -678,7 +581,7 @@ func (ds *DocumentStore) detectTypeAndLanguage(path string) (string, string) {
 		".md":   DocumentTypeMarkdown,
 		".txt":  DocumentTypeText,
 		".sh":   DocumentTypeScript,
-		// Binary document types
+
 		".pdf":  DocumentTypeBinary,
 		".docx": DocumentTypeBinary,
 		".xlsx": DocumentTypeBinary,
@@ -703,7 +606,7 @@ func (ds *DocumentStore) detectTypeAndLanguage(path string) (string, string) {
 		".md":   "markdown",
 		".txt":  "text",
 		".sh":   "shell",
-		// Binary document languages
+
 		".pdf":  "pdf",
 		".docx": "word",
 		".xlsx": "excel",
@@ -722,19 +625,17 @@ func (ds *DocumentStore) detectTypeAndLanguage(path string) (string, string) {
 	return docType, language
 }
 
-// extractTitle extracts the title from a document
 func (ds *DocumentStore) extractTitle(doc *Document) string {
 	switch doc.Type {
 	case DocumentTypeMarkdown:
 		return ds.extractMarkdownTitle(doc.Content)
 	case DocumentTypeCode:
-		return doc.Name // Use filename for code files
+		return doc.Name
 	default:
 		return doc.Name
 	}
 }
 
-// extractMarkdownTitle extracts title from markdown content
 func (ds *DocumentStore) extractMarkdownTitle(content string) string {
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
@@ -746,7 +647,6 @@ func (ds *DocumentStore) extractMarkdownTitle(content string) string {
 	return ""
 }
 
-// extractMetadata extracts metadata based on document type
 func (ds *DocumentStore) extractMetadata(doc *Document) {
 	switch doc.Language {
 	case "go":
@@ -758,28 +658,24 @@ func (ds *DocumentStore) extractMetadata(doc *Document) {
 	}
 }
 
-// extractGoMetadata extracts Go-specific metadata
 func (ds *DocumentStore) extractGoMetadata(doc *Document) {
 	lines := strings.Split(doc.Content, "\n")
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 
-		// Extract functions
 		if strings.HasPrefix(line, "func ") {
 			if funcName := ds.extractGoFunctionName(line); funcName != "" {
 				doc.Functions = append(doc.Functions, funcName)
 			}
 		}
 
-		// Extract structs
 		if strings.HasPrefix(line, "type ") && strings.Contains(line, "struct") {
 			if structName := ds.extractGoStructName(line); structName != "" {
 				doc.Structs = append(doc.Structs, structName)
 			}
 		}
 
-		// Extract imports
 		if strings.HasPrefix(line, "import ") || (strings.Contains(line, `"`) && strings.Contains(line, "/")) {
 			if importPath := ds.extractGoImport(line); importPath != "" {
 				doc.Imports = append(doc.Imports, importPath)
@@ -788,7 +684,6 @@ func (ds *DocumentStore) extractGoMetadata(doc *Document) {
 	}
 }
 
-// extractYAMLMetadata extracts YAML-specific metadata
 func (ds *DocumentStore) extractYAMLMetadata(doc *Document) {
 	lines := strings.Split(doc.Content, "\n")
 	var keys []string
@@ -811,7 +706,6 @@ func (ds *DocumentStore) extractYAMLMetadata(doc *Document) {
 	}
 }
 
-// extractMarkdownMetadata extracts markdown-specific metadata
 func (ds *DocumentStore) extractMarkdownMetadata(doc *Document) {
 	lines := strings.Split(doc.Content, "\n")
 	var headers []string
@@ -831,11 +725,6 @@ func (ds *DocumentStore) extractMarkdownMetadata(doc *Document) {
 	}
 }
 
-// ============================================================================
-// HELPER METHODS FOR METADATA EXTRACTION
-// ============================================================================
-
-// extractGoFunctionName extracts function name from Go function declaration
 func (ds *DocumentStore) extractGoFunctionName(line string) string {
 	parts := strings.Fields(line)
 	if len(parts) >= 2 {
@@ -848,7 +737,6 @@ func (ds *DocumentStore) extractGoFunctionName(line string) string {
 	return ""
 }
 
-// extractGoStructName extracts struct name from Go struct declaration
 func (ds *DocumentStore) extractGoStructName(line string) string {
 	parts := strings.Fields(line)
 	if len(parts) >= 2 {
@@ -857,7 +745,6 @@ func (ds *DocumentStore) extractGoStructName(line string) string {
 	return ""
 }
 
-// extractGoImport extracts import path from Go import statement
 func (ds *DocumentStore) extractGoImport(line string) string {
 	if strings.Contains(line, `"`) {
 		start := strings.Index(line, `"`)
@@ -869,18 +756,12 @@ func (ds *DocumentStore) extractGoImport(line string) string {
 	return ""
 }
 
-// ============================================================================
-// SEARCH AND RETRIEVAL OPERATIONS
-// ============================================================================
-
-// Search searches documents in this store using vector database
 func (ds *DocumentStore) Search(ctx context.Context, query string, limit int) ([]databases.SearchResult, error) {
-	// Create filter to search only this store's collection
+
 	filter := map[string]interface{}{
 		"store_name": ds.name,
 	}
 
-	// Use the search engine to perform vector similarity search with store filter
 	results, err := ds.searchEngine.SearchWithFilter(ctx, query, limit, filter)
 	if err != nil {
 		return nil, NewDocumentStoreError(ds.name, "Search", "vector search failed", "", err)
@@ -889,7 +770,6 @@ func (ds *DocumentStore) Search(ctx context.Context, query string, limit int) ([
 	return results, nil
 }
 
-// GetDocument retrieves a document by ID from vector database
 func (ds *DocumentStore) GetDocument(id string) (databases.SearchResult, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultFileWatchTimeout)
 	defer cancel()
@@ -902,97 +782,124 @@ func (ds *DocumentStore) GetDocument(id string) (databases.SearchResult, bool) {
 	return results[0], true
 }
 
-// ============================================================================
-// FILE FILTERING AND PATTERN MATCHING
-// ============================================================================
-
-// shouldExclude checks if a file should be excluded based on patterns
-// Supports both simple string matching and glob patterns
 func (ds *DocumentStore) shouldExclude(path string) bool {
-	// Get relative path for pattern matching
+
 	relPath, err := filepath.Rel(ds.sourcePath, path)
 	if err != nil {
-		relPath = path // Fallback to absolute path
+		relPath = path
 	}
 
-	// Normalize separators for cross-platform compatibility
 	normalizedPath := filepath.ToSlash(relPath)
 
 	for _, pattern := range ds.config.ExcludePatterns {
-		// Pattern types:
-		// 1. Directory patterns: **/node_modules/**
-		// 2. File patterns: *.log
-		// 3. Specific paths: .git
 
-		// Normalize pattern
 		normalizedPattern := filepath.ToSlash(pattern)
 
-		// Check for directory patterns (**/dirname/**)
+		if matched, err := filepath.Match(normalizedPattern, normalizedPath); err == nil && matched {
+			return true
+		}
+
 		if strings.HasPrefix(normalizedPattern, "**/") && strings.HasSuffix(normalizedPattern, "/**") {
 			dirName := strings.Trim(normalizedPattern, "*/")
-			// Check if path contains this directory
+
 			if strings.Contains("/"+normalizedPath+"/", "/"+dirName+"/") {
 				return true
 			}
 		}
 
-		// Check for glob patterns (*.ext, **/*.swp)
-		if strings.Contains(normalizedPattern, "*") {
-			// Try matching with filepath.Match for simple patterns
-			matched, err := filepath.Match(normalizedPattern, filepath.Base(normalizedPath))
-			if err == nil && matched {
+		if strings.HasPrefix(normalizedPattern, "*.") {
+			ext := strings.TrimPrefix(normalizedPattern, "*")
+			if strings.HasSuffix(normalizedPath, ext) {
 				return true
 			}
+		}
 
-			// Try matching against full path for ** patterns
-			if strings.Contains(normalizedPattern, "**") {
-				// Convert ** to * for simple matching
-				simplePattern := strings.ReplaceAll(normalizedPattern, "**/", "")
-				simplePattern = strings.ReplaceAll(simplePattern, "/**", "")
-				if strings.Contains(normalizedPath, simplePattern) {
+		if strings.Contains(normalizedPattern, "**") {
+
+			if strings.HasPrefix(normalizedPattern, "**/") {
+				simplePattern := strings.TrimPrefix(normalizedPattern, "**/")
+				if matched, err := filepath.Match(simplePattern, filepath.Base(normalizedPath)); err == nil && matched {
 					return true
 				}
 			}
 		}
 
-		// Simple substring match (for .DS_Store, etc.)
-		if strings.Contains(normalizedPath, normalizedPattern) {
-			return true
+		if !strings.Contains(normalizedPattern, "*") {
+
+			if strings.Contains(normalizedPath, normalizedPattern) {
+				return true
+			}
 		}
 	}
 
 	return false
 }
 
-// shouldInclude checks if a file should be included based on patterns
 func (ds *DocumentStore) shouldInclude(path string) bool {
 	if len(ds.config.IncludePatterns) == 0 {
 		return true
 	}
 
+	relPath, err := filepath.Rel(ds.sourcePath, path)
+	if err != nil {
+		relPath = path
+	}
+
+	normalizedPath := filepath.ToSlash(relPath)
+
 	for _, pattern := range ds.config.IncludePatterns {
+
+		normalizedPattern := filepath.ToSlash(pattern)
+
 		if pattern == "*" {
 			return true
 		}
-		if strings.HasSuffix(path, strings.TrimPrefix(pattern, "*")) {
+
+		if matched, err := filepath.Match(normalizedPattern, normalizedPath); err == nil && matched {
 			return true
+		}
+
+		if strings.HasPrefix(normalizedPattern, "**/") && strings.HasSuffix(normalizedPattern, "/**") {
+			dirName := strings.Trim(normalizedPattern, "*/")
+
+			if strings.Contains("/"+normalizedPath+"/", "/"+dirName+"/") {
+				return true
+			}
+		}
+
+		if strings.HasPrefix(normalizedPattern, "*.") {
+			ext := strings.TrimPrefix(normalizedPattern, "*")
+			if strings.HasSuffix(normalizedPath, ext) {
+				return true
+			}
+		}
+
+		if strings.Contains(normalizedPattern, "**") {
+
+			if strings.HasPrefix(normalizedPattern, "**/") {
+				simplePattern := strings.TrimPrefix(normalizedPattern, "**/")
+				if matched, err := filepath.Match(simplePattern, filepath.Base(normalizedPath)); err == nil && matched {
+					return true
+				}
+			}
+		}
+
+		if !strings.Contains(normalizedPattern, "*") {
+
+			if strings.Contains(normalizedPath, normalizedPattern) {
+				return true
+			}
 		}
 	}
 	return false
 }
 
-// ============================================================================
-// UTILITY METHODS
-// ============================================================================
-
-// generateDocumentID generates a consistent UUID based on store name and file path
 func (ds *DocumentStore) generateDocumentID(path string) string {
 	fullPath := fmt.Sprintf("%s:%s", ds.name, path)
 	hash := md5.Sum([]byte(fullPath))
 	return uuid.NewMD5(uuid.Nil, hash[:]).String()
 }
 
-// prepareVectorMetadata prepares metadata for vector database ingestion
 func (ds *DocumentStore) prepareVectorMetadata(doc *Document) map[string]interface{} {
 	metadata := map[string]interface{}{
 		"path":          doc.Path,
@@ -1010,7 +917,6 @@ func (ds *DocumentStore) prepareVectorMetadata(doc *Document) map[string]interfa
 		"indexed_at":    time.Now().Unix(),
 	}
 
-	// Add custom metadata
 	for k, v := range doc.Metadata {
 		metadata[k] = v
 	}
@@ -1018,25 +924,14 @@ func (ds *DocumentStore) prepareVectorMetadata(doc *Document) map[string]interfa
 	return metadata
 }
 
-// ============================================================================
-// STATUS AND HEALTH METHODS
-// ============================================================================
-
-// GetStatus returns detailed status information
 func (ds *DocumentStore) GetStatus() *DocumentStoreStatus {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
-	// Return a copy to prevent external modification
 	statusCopy := *ds.status
 	return &statusCopy
 }
 
-// ============================================================================
-// FILE WATCHING OPERATIONS
-// ============================================================================
-
-// initializeWatcher initializes the file system watcher
 func (ds *DocumentStore) initializeWatcher() error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -1046,7 +941,6 @@ func (ds *DocumentStore) initializeWatcher() error {
 	return nil
 }
 
-// StartWatching enables automatic file change tracking
 func (ds *DocumentStore) StartWatching() error {
 	if !ds.config.WatchChanges || ds.watcher == nil {
 		return NewDocumentStoreError(ds.name, "StartWatching", "file watching not enabled", "", nil)
@@ -1060,9 +954,6 @@ func (ds *DocumentStore) StartWatching() error {
 	ds.status.IsWatching = true
 	ds.mu.Unlock()
 
-	// File watching started (verbose logging removed)
-
-	// Set up file watching
 	if err := ds.setupFileWatching(); err != nil {
 		ds.mu.Lock()
 		ds.status.IsWatching = false
@@ -1070,15 +961,12 @@ func (ds *DocumentStore) StartWatching() error {
 		return NewDocumentStoreError(ds.name, "StartWatching", "failed to setup file watching", "", err)
 	}
 
-	// Start background processing
 	go ds.processUpdates()
 	go ds.watchFileEvents()
 
-	// File watching enabled (verbose logging removed)
 	return nil
 }
 
-// StopWatching disables automatic file change tracking
 func (ds *DocumentStore) StopWatching() error {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
@@ -1087,7 +975,7 @@ func (ds *DocumentStore) StopWatching() error {
 		return nil
 	}
 
-	fmt.Printf("🛑 Stopping file watching for store '%s'...\n", ds.name)
+	fmt.Printf("Stopping file watching for store '%s'...\n", ds.name)
 
 	ds.cancel()
 	if ds.watcher != nil {
@@ -1096,25 +984,22 @@ func (ds *DocumentStore) StopWatching() error {
 	close(ds.updateChannel)
 	ds.status.IsWatching = false
 
-	fmt.Printf("✅ File watching stopped for store '%s'\n", ds.name)
+	fmt.Printf("File watching stopped for store '%s'\n", ds.name)
 	return nil
 }
 
-// setupFileWatching sets up file system watching
 func (ds *DocumentStore) setupFileWatching() error {
-	// Add the source directory
+
 	err := ds.watcher.Add(ds.sourcePath)
 	if err != nil {
 		return NewDocumentStoreError(ds.name, "setupFileWatching", "failed to watch source directory", ds.sourcePath, err)
 	}
 
-	// Walk and add subdirectories
 	return filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		// Skip excluded directories
 		if ds.shouldExclude(path) {
 			if info.IsDir() {
 				return filepath.SkipDir
@@ -1122,7 +1007,6 @@ func (ds *DocumentStore) setupFileWatching() error {
 			return nil
 		}
 
-		// Add directories to watcher
 		if info.IsDir() {
 			err := ds.watcher.Add(path)
 			if err != nil {
@@ -1134,7 +1018,6 @@ func (ds *DocumentStore) setupFileWatching() error {
 	})
 }
 
-// watchFileEvents processes file system events
 func (ds *DocumentStore) watchFileEvents() {
 	for {
 		select {
@@ -1154,9 +1037,8 @@ func (ds *DocumentStore) watchFileEvents() {
 	}
 }
 
-// handleFileEvent processes individual file system events
 func (ds *DocumentStore) handleFileEvent(event fsnotify.Event) {
-	// Skip if file doesn't match our patterns
+
 	if ds.shouldExclude(event.Name) || !ds.shouldInclude(event.Name) {
 		return
 	}
@@ -1177,10 +1059,9 @@ func (ds *DocumentStore) handleFileEvent(event fsnotify.Event) {
 	case event.Op&fsnotify.Remove == fsnotify.Remove:
 		operation = OperationDelete
 	default:
-		return // Ignore other operations
+		return
 	}
 
-	// Send update to processing channel
 	select {
 	case ds.updateChannel <- DocumentUpdate{
 		FilePath:  event.Name,
@@ -1194,7 +1075,6 @@ func (ds *DocumentStore) handleFileEvent(event fsnotify.Event) {
 	}
 }
 
-// processUpdates handles incremental document updates
 func (ds *DocumentStore) processUpdates() {
 	for {
 		select {
@@ -1205,14 +1085,10 @@ func (ds *DocumentStore) processUpdates() {
 				return
 			}
 
-			// Silent processing - files are automatically re-indexed by file watcher
-			// Users will see the updated files when they search/use them
-			// Verbose per-file logging is too noisy during active development
 		}
 	}
 }
 
-// RefreshDocument re-indexes a specific document
 func (ds *DocumentStore) RefreshDocument(relativePath string) error {
 	fullPath := filepath.Join(ds.sourcePath, relativePath)
 	info, err := os.Stat(fullPath)
@@ -1224,42 +1100,34 @@ func (ds *DocumentStore) RefreshDocument(relativePath string) error {
 	return ds.indexDocument(fullPath, info)
 }
 
-// ============================================================================
-// INCREMENTAL INDEXING SUPPORT
-// ============================================================================
-
-// IndexedFileInfo stores metadata about an indexed file for incremental indexing
 type IndexedFileInfo struct {
 	Path         string
-	LastModified int64 // Unix timestamp
+	LastModified int64
 }
 
-// IndexState stores the complete index state for incremental indexing
 type IndexState struct {
 	StoreName   string           `json:"store_name"`
 	SourcePath  string           `json:"source_path"`
 	LastIndexed time.Time        `json:"last_indexed"`
-	Files       map[string]int64 `json:"files"` // path -> last_modified timestamp
+	Files       map[string]int64 `json:"files"`
 	TotalFiles  int              `json:"total_files"`
 	TotalChunks int              `json:"total_chunks"`
 }
 
-// getIndexStatePath returns the path to the index state file
 func (ds *DocumentStore) getIndexStatePath() string {
-	// Store in .hector directory to keep it out of version control
+
 	stateDir := filepath.Join(ds.sourcePath, ".hector")
-	// Use store name in filename to support multiple stores
+
 	return filepath.Join(stateDir, fmt.Sprintf("index_state_%s.json", ds.name))
 }
 
-// loadIndexState loads the index state from local file
 func (ds *DocumentStore) loadIndexState() (map[string]int64, error) {
 	statePath := ds.getIndexStatePath()
 
 	data, err := os.ReadFile(statePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// No state file yet - first run
+
 			return make(map[string]int64), nil
 		}
 		return nil, fmt.Errorf("failed to read index state: %w", err)
@@ -1270,7 +1138,6 @@ func (ds *DocumentStore) loadIndexState() (map[string]int64, error) {
 		return nil, fmt.Errorf("failed to parse index state: %w", err)
 	}
 
-	// Validate state matches current configuration
 	if state.StoreName != ds.name || state.SourcePath != ds.sourcePath {
 		log.Printf("Index state mismatch (store: %s vs %s, path: %s vs %s), rebuilding index",
 			state.StoreName, ds.name, state.SourcePath, ds.sourcePath)
@@ -1280,12 +1147,10 @@ func (ds *DocumentStore) loadIndexState() (map[string]int64, error) {
 	return state.Files, nil
 }
 
-// saveIndexState saves the index state to local file
 func (ds *DocumentStore) saveIndexState(files map[string]int64, totalChunks int) error {
 	statePath := ds.getIndexStatePath()
 	stateDir := filepath.Dir(statePath)
 
-	// Create .hector directory if it doesn't exist
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
 		return fmt.Errorf("failed to create state directory: %w", err)
 	}
@@ -1304,68 +1169,54 @@ func (ds *DocumentStore) saveIndexState(files map[string]int64, totalChunks int)
 		return fmt.Errorf("failed to marshal index state: %w", err)
 	}
 
-	// Write atomically using temp file + rename
 	tempPath := statePath + ".tmp"
 	if err := os.WriteFile(tempPath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write index state: %w", err)
 	}
 
 	if err := os.Rename(tempPath, statePath); err != nil {
-		os.Remove(tempPath) // Clean up temp file
+		os.Remove(tempPath)
 		return fmt.Errorf("failed to save index state: %w", err)
 	}
 
 	return nil
 }
 
-// shouldReindexFile determines if a file needs to be re-indexed based on modification time
 func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time, existingDocs map[string]int64) bool {
-	// If incremental indexing is disabled, always reindex
+
 	if !ds.config.IncrementalIndexing {
 		return true
 	}
 
-	// If existingDocs is empty, reindex everything (first run)
 	if len(existingDocs) == 0 {
 		return true
 	}
 
-	// Get relative path
 	relPath, err := filepath.Rel(ds.sourcePath, path)
 	if err != nil {
-		return true // If we can't get relative path, reindex to be safe
+		return true
 	}
 
-	// Check if file exists in our index
 	storedModTime, exists := existingDocs[relPath]
 	if !exists {
-		// New file, needs indexing
+
 		return true
 	}
 
-	// Compare modification times (using Unix timestamps for consistency)
 	currentUnix := currentModTime.Unix()
-	if currentUnix > storedModTime {
-		// File has been modified since last indexing
-		return true
-	}
-
-	// File is unchanged, skip reindexing
-	return false
+	return currentUnix > storedModTime
 }
 
-// cleanupDeletedFiles removes documents from the index for files that no longer exist
 func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs map[string]int64, foundFiles map[string]bool) error {
 	if !ds.config.IncrementalIndexing || len(existingDocs) == 0 {
-		// Only cleanup during incremental indexing
+
 		return nil
 	}
 
 	deletedCount := 0
 	for path := range existingDocs {
 		if !foundFiles[path] {
-			// File no longer exists in the directory, remove from index
-			// Delete all chunks for this file
+
 			filter := map[string]interface{}{
 				"store_name": ds.name,
 				"path":       path,
@@ -1380,22 +1231,16 @@ func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs m
 	}
 
 	if deletedCount > 0 {
-		fmt.Printf("🗑️  Cleaned up %d deleted file(s) from index '%s'\n", deletedCount, ds.name)
+		fmt.Printf("Cleaned up %d deleted file(s) from index '%s'\n", deletedCount, ds.name)
 	}
 
 	return nil
 }
 
-// ============================================================================
-// CLEANUP AND RESOURCE MANAGEMENT
-// ============================================================================
-
-// Close closes the document store and cleans up resources
 func (ds *DocumentStore) Close() error {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
-	// Stop file watching
 	if ds.status.IsWatching {
 		ds.cancel()
 		if ds.watcher != nil {
@@ -1408,17 +1253,11 @@ func (ds *DocumentStore) Close() error {
 	return nil
 }
 
-// ============================================================================
-// DOCUMENT STORE REGISTRY - ENHANCED MANAGEMENT
-// ============================================================================
-
-// DocumentStoreRegistry manages a global registry of document stores
 type DocumentStoreRegistry struct {
 	mu     sync.RWMutex
 	stores map[string]*DocumentStore
 }
 
-// Global registry instance
 var globalDocumentStoreRegistry *DocumentStoreRegistry
 
 func init() {
@@ -1427,7 +1266,6 @@ func init() {
 	}
 }
 
-// RegisterDocumentStore registers a document store in the global registry
 func RegisterDocumentStore(store *DocumentStore) {
 	globalDocumentStoreRegistry.mu.Lock()
 	defer globalDocumentStoreRegistry.mu.Unlock()
@@ -1435,7 +1273,6 @@ func RegisterDocumentStore(store *DocumentStore) {
 	globalDocumentStoreRegistry.stores[store.name] = store
 }
 
-// GetDocumentStoreFromRegistry retrieves a document store by name from registry
 func GetDocumentStoreFromRegistry(name string) (*DocumentStore, bool) {
 	globalDocumentStoreRegistry.mu.RLock()
 	defer globalDocumentStoreRegistry.mu.RUnlock()
@@ -1444,7 +1281,6 @@ func GetDocumentStoreFromRegistry(name string) (*DocumentStore, bool) {
 	return store, exists
 }
 
-// ListDocumentStoresFromRegistry returns all available document store names
 func ListDocumentStoresFromRegistry() []string {
 	globalDocumentStoreRegistry.mu.RLock()
 	defer globalDocumentStoreRegistry.mu.RUnlock()
@@ -1456,7 +1292,6 @@ func ListDocumentStoresFromRegistry() []string {
 	return names
 }
 
-// GetDocumentStoreStats returns statistics for all registered stores
 func GetDocumentStoreStats() map[string]interface{} {
 	globalDocumentStoreRegistry.mu.RLock()
 	defer globalDocumentStoreRegistry.mu.RUnlock()
@@ -1469,45 +1304,40 @@ func GetDocumentStoreStats() map[string]interface{} {
 	return stats
 }
 
-// UnregisterDocumentStore removes a document store from registry
 func UnregisterDocumentStore(name string) {
 	globalDocumentStoreRegistry.mu.Lock()
 	defer globalDocumentStoreRegistry.mu.Unlock()
 
 	if store, exists := globalDocumentStoreRegistry.stores[name]; exists {
-		// Stop file watching if active
+
 		if store.status.IsWatching {
 			_ = store.StopWatching()
 		}
-		// Close the store
+
 		store.Close()
 		delete(globalDocumentStoreRegistry.stores, name)
 	}
 }
 
-// InitializeDocumentStoresFromConfig creates and registers document stores from config
-func InitializeDocumentStoresFromConfig(configs []config.DocumentStoreConfig, searchEngine *SearchEngine) error {
+func InitializeDocumentStoresFromConfig(configs []*config.DocumentStoreConfig, searchEngine *SearchEngine) error {
 	if len(configs) == 0 {
 		return nil
 	}
 
 	for _, config := range configs {
-		store, err := NewDocumentStore(&config, searchEngine)
+		store, err := NewDocumentStore(config, searchEngine)
 		if err != nil {
 			fmt.Printf("Warning: Failed to create document store %s: %v\n", config.Name, err)
 			continue
 		}
 
-		// Register the store
 		RegisterDocumentStore(store)
 
-		// Start indexing SYNCHRONOUSLY (wait for completion)
 		if err := store.StartIndexing(); err != nil {
 			fmt.Printf("Warning: Failed to index document store %s: %v\n", config.Name, err)
 			continue
 		}
 
-		// Start file watching in background (after indexing completes)
 		if store.config.WatchChanges {
 			go func(s *DocumentStore, name string) {
 				if err := s.StartWatching(); err != nil {

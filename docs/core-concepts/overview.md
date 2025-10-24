@@ -169,7 +169,7 @@ Hector agents can run in different modes:
 Agent runs in-process for a single command:
 
 ```bash
-hector call assistant "Hello"
+hector call "Hello" --agent assistant --config config.yaml
 ```
 
 - **Use when:** Quick experiments, CI/CD, scripting
@@ -193,7 +193,7 @@ hector serve --config config.yaml
 Connect to a remote Hector server:
 
 ```bash
-hector call assistant "Hello" --server http://remote:8080
+hector call "Hello" --agent assistant --server http://remote:8080
 ```
 
 - **Use when:** Distributed systems, shared agents

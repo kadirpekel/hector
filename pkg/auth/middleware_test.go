@@ -17,7 +17,6 @@ import (
 func TestJWTValidator_HTTPMiddleware(t *testing.T) {
 	validator, privateKey, issuer, audience, _ := setupTestValidator(t)
 
-	// Test handler that checks claims
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		claims := GetClaims(r)
 		if claims == nil {
@@ -89,13 +88,13 @@ func TestJWTValidator_HTTPMiddleware(t *testing.T) {
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   `{"error":"Unauthorized: `,
 			setupToken: func() string {
-				// Create expired token
+
 				token := jwt.New()
 				_ = token.Set(jwt.IssuerKey, issuer)
 				_ = token.Set(jwt.AudienceKey, audience)
 				_ = token.Set(jwt.SubjectKey, "test-user-123")
 				_ = token.Set(jwt.IssuedAtKey, time.Now().Add(-2*time.Hour))
-				_ = token.Set(jwt.ExpirationKey, time.Now().Add(-1*time.Hour)) // Expired 1 hour ago
+				_ = token.Set(jwt.ExpirationKey, time.Now().Add(-1*time.Hour))
 
 				key, err := jwk.FromRaw(privateKey)
 				if err != nil {
@@ -131,13 +130,13 @@ func TestJWTValidator_HTTPMiddleware(t *testing.T) {
 
 			body := rr.Body.String()
 			if tt.expectedStatus == http.StatusOK {
-				// For successful requests, check that body contains expected JSON (ignoring whitespace)
+
 				body = strings.TrimSpace(body)
 				if body != tt.expectedBody {
 					t.Errorf("Response body = %v, want %v", body, tt.expectedBody)
 				}
 			} else {
-				// For error requests, check that body contains expected error message
+
 				if !strings.Contains(body, tt.expectedBody) {
 					t.Errorf("Response body = %v, should contain %v", body, tt.expectedBody)
 				}
@@ -149,7 +148,6 @@ func TestJWTValidator_HTTPMiddleware(t *testing.T) {
 func TestGetClaims(t *testing.T) {
 	validator, privateKey, issuer, audience, _ := setupTestValidator(t)
 
-	// Create test token
 	tokenString, err := createTestJWT(privateKey, issuer, audience, "test-user-123", map[string]interface{}{
 		"email":     "test@example.com",
 		"role":      "admin",
@@ -170,7 +168,6 @@ func TestGetClaims(t *testing.T) {
 				req := httptest.NewRequest("GET", "/test", nil)
 				req.Header.Set("Authorization", "Bearer "+tokenString)
 
-				// Simulate middleware processing
 				claimsInterface, err := validator.ValidateToken(req.Context(), tokenString)
 				if err != nil {
 					t.Fatalf("Failed to validate token: %v", err)
@@ -240,7 +237,6 @@ func TestGetClaims(t *testing.T) {
 func TestRequireRole(t *testing.T) {
 	validator, privateKey, issuer, audience, _ := setupTestValidator(t)
 
-	// Test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("Access granted"))
@@ -292,7 +288,7 @@ func TestRequireRole(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create token with specific role
+
 			tokenString, err := createTestJWT(privateKey, issuer, audience, "test-user-123", map[string]interface{}{
 				"email": "test@example.com",
 				"role":  tt.tokenRole,
@@ -301,7 +297,6 @@ func TestRequireRole(t *testing.T) {
 				t.Fatalf("Failed to create test JWT: %v", err)
 			}
 
-			// Create middleware
 			middleware := RequireRole(validator, tt.allowedRoles...)
 
 			req := httptest.NewRequest("GET", "/test", nil)
@@ -325,7 +320,6 @@ func TestRequireRole(t *testing.T) {
 func TestRequireTenant(t *testing.T) {
 	validator, privateKey, issuer, audience, _ := setupTestValidator(t)
 
-	// Test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("Access granted"))
@@ -377,7 +371,7 @@ func TestRequireTenant(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create token with specific tenant ID
+
 			tokenString, err := createTestJWT(privateKey, issuer, audience, "test-user-123", map[string]interface{}{
 				"email":     "test@example.com",
 				"role":      "user",
@@ -387,7 +381,6 @@ func TestRequireTenant(t *testing.T) {
 				t.Fatalf("Failed to create test JWT: %v", err)
 			}
 
-			// Create middleware
 			middleware := RequireTenant(validator, tt.allowedTenants...)
 
 			req := httptest.NewRequest("GET", "/test", nil)
@@ -411,17 +404,14 @@ func TestRequireTenant(t *testing.T) {
 func TestRequireRole_WithoutToken(t *testing.T) {
 	validator, _, _, _, _ := setupTestValidator(t)
 
-	// Test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("Access granted"))
 	})
 
-	// Create middleware
 	middleware := RequireRole(validator, "admin")
 
 	req := httptest.NewRequest("GET", "/test", nil)
-	// No Authorization header
 
 	rr := httptest.NewRecorder()
 	middleware(testHandler).ServeHTTP(rr, req)
@@ -440,17 +430,14 @@ func TestRequireRole_WithoutToken(t *testing.T) {
 func TestRequireTenant_WithoutToken(t *testing.T) {
 	validator, _, _, _, _ := setupTestValidator(t)
 
-	// Test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("Access granted"))
 	})
 
-	// Create middleware
 	middleware := RequireTenant(validator, "tenant-123")
 
 	req := httptest.NewRequest("GET", "/test", nil)
-	// No Authorization header
 
 	rr := httptest.NewRecorder()
 	middleware(testHandler).ServeHTTP(rr, req)

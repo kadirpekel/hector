@@ -518,7 +518,7 @@ Single binary deployment. No external services required (except for chosen featu
 ### Local Mode
 
 ```bash
-hector call assistant "Hello"
+hector call "Hello" --agent assistant --config config.yaml
 ```
 
 - In-process execution
@@ -538,7 +538,7 @@ hector serve --config config.yaml
 ### Client Mode
 
 ```bash
-hector call assistant "Hello" --server http://remote:8080
+hector call "Hello" --agent assistant --server http://remote:8080
 ```
 
 - Connect to remote servers

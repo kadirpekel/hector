@@ -5,11 +5,6 @@ import (
 	"testing"
 )
 
-// ============================================================================
-// THINKING BLOCK FORMATTING TESTS
-// Tests the debug/thinking output formatters
-// ============================================================================
-
 func TestThinkingBlock(t *testing.T) {
 	tests := []struct {
 		name string
@@ -36,12 +31,10 @@ func TestThinkingBlock(t *testing.T) {
 				t.Errorf("Expected '%s' in output, got: %s", tt.want, result)
 			}
 
-			// Should contain ANSI color codes for terminal formatting
 			if !strings.Contains(result, "\033[") {
 				t.Error("Expected ANSI color codes in output")
 			}
 
-			// Should be wrapped in [Thinking: ...]
 			if !strings.Contains(result, "[Thinking:") {
 				t.Error("Expected [Thinking: wrapper")
 			}
@@ -94,7 +87,6 @@ func TestThinkingGoalExtraction(t *testing.T) {
 				}
 			}
 
-			// Should contain ANSI color codes
 			if !strings.Contains(result, "\033[") {
 				t.Error("Expected ANSI color codes in output")
 			}
@@ -149,12 +141,10 @@ func TestThinkingReflection(t *testing.T) {
 				t.Errorf("Expected missing '%s' in output", tt.wantMissing)
 			}
 
-			// Should contain confidence percentage
 			if !strings.Contains(result, "%") {
 				t.Error("Expected confidence percentage in output")
 			}
 
-			// Should contain ANSI color codes
 			if !strings.Contains(result, "\033[") {
 				t.Error("Expected ANSI color codes in output")
 			}
@@ -194,7 +184,6 @@ func TestThinkingQualityCheck(t *testing.T) {
 				t.Errorf("Expected reason '%s' in output", tt.wantReason)
 			}
 
-			// Should contain confidence percentage
 			if !strings.Contains(result, "%") {
 				t.Error("Expected confidence percentage in output")
 			}
@@ -209,7 +198,6 @@ func TestThinkingQualityCheck(t *testing.T) {
 				}
 			}
 
-			// Should contain ANSI color codes
 			if !strings.Contains(result, "\033[") {
 				t.Error("Expected ANSI color codes in output")
 			}
@@ -260,22 +248,9 @@ func TestThinkingProgress(t *testing.T) {
 				t.Errorf("Expected action '%s' in output", tt.action)
 			}
 
-			// Should contain ANSI color codes
 			if !strings.Contains(result, "\033[") {
 				t.Error("Expected ANSI color codes in output")
 			}
 		})
 	}
 }
-
-// ============================================================================
-// COVERAGE SUMMARY
-// These tests cover:
-// - ThinkingBlock: Basic formatting with ANSI codes
-// - ThinkingGoalExtraction: Main goal + sub-goals display
-// - ThinkingReflection: Accomplished/missing/confidence display
-// - ThinkingQualityCheck: Confidence + continue/stop decision
-// - ThinkingProgress: Iteration progress display
-//
-// All functions in thinking.go now have 100% test coverage
-// ============================================================================

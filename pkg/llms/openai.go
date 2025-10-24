@@ -1,4 +1,3 @@
-// Package llms provides LLM provider implementations.
 package llms
 
 import (
@@ -17,11 +16,6 @@ import (
 	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
-// ============================================================================
-// COMMON HELPERS
-// ============================================================================
-
-// createHTTPClient creates a configured HTTP client for LLM providers
 func createHTTPClient(cfg *config.LLMProviderConfig) *httpclient.Client {
 	return httpclient.New(
 		httpclient.WithHTTPClient(&http.Client{
@@ -32,21 +26,11 @@ func createHTTPClient(cfg *config.LLMProviderConfig) *httpclient.Client {
 	)
 }
 
-// ============================================================================
-// OPENAI PROVIDER - CONSOLIDATED (Function Calling Only)
-// ============================================================================
-
-// OpenAIProvider implements LLMProvider for OpenAI API with native function calling
 type OpenAIProvider struct {
 	config     *config.LLMProviderConfig
 	httpClient *httpclient.Client
 }
 
-// ============================================================================
-// REQUEST/RESPONSE TYPES
-// ============================================================================
-
-// OpenAIRequest represents the request payload for OpenAI API
 type OpenAIRequest struct {
 	Model               string                `json:"model"`
 	Messages            []OpenAIMessage       `json:"messages"`
@@ -54,118 +38,91 @@ type OpenAIRequest struct {
 	MaxCompletionTokens int                   `json:"max_completion_tokens,omitempty"`
 	Temperature         float64               `json:"temperature"`
 	Stream              bool                  `json:"stream"`
-	Tools               []OpenAITool          `json:"tools,omitempty"`           // Function calling
-	ToolChoice          string                `json:"tool_choice,omitempty"`     // "auto", "required", "none"
-	ResponseFormat      *OpenAIResponseFormat `json:"response_format,omitempty"` // Structured output
+	Tools               []OpenAITool          `json:"tools,omitempty"`
+	ToolChoice          string                `json:"tool_choice,omitempty"`
+	ResponseFormat      *OpenAIResponseFormat `json:"response_format,omitempty"`
 }
 
-// OpenAIResponse represents the response from OpenAI API
 type OpenAIResponse struct {
 	Choices []Choice `json:"choices"`
 	Usage   Usage    `json:"usage"`
 	Error   *Error   `json:"error,omitempty"`
 }
 
-// OpenAIStreamResponse represents streaming response chunks
 type OpenAIStreamResponse struct {
 	Choices []StreamChoice `json:"choices"`
-	Usage   *Usage         `json:"usage,omitempty"` // Token usage (may be included in final chunks)
+	Usage   *Usage         `json:"usage,omitempty"`
 	Error   *Error         `json:"error,omitempty"`
 }
 
-// OpenAIMessage represents a message in OpenAI's format
 type OpenAIMessage struct {
 	Role       string           `json:"role"`
-	Content    *string          `json:"content"`                // Always present, can be empty string
-	ToolCalls  []OpenAIToolCall `json:"tool_calls,omitempty"`   // Tool calls from assistant
-	ToolCallID string           `json:"tool_call_id,omitempty"` // Tool result reference
+	Content    *string          `json:"content"`
+	ToolCalls  []OpenAIToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string           `json:"tool_call_id,omitempty"`
 }
 
-// Choice represents a response choice
 type Choice struct {
 	Message      OpenAIMessage `json:"message"`
 	FinishReason string        `json:"finish_reason"`
 }
 
-// StreamChoice represents a streaming response choice
 type StreamChoice struct {
 	Delta        Delta  `json:"delta"`
 	FinishReason string `json:"finish_reason"`
 }
 
-// Delta represents incremental content in streaming (including tool calls)
 type Delta struct {
 	Content   string           `json:"content,omitempty"`
 	ToolCalls []OpenAIToolCall `json:"tool_calls,omitempty"`
 }
 
-// Usage represents token usage information
 type Usage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
 }
 
-// Error represents an API error
 type Error struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Code    string `json:"code"`
 }
 
-// ============================================================================
-// STRUCTURED OUTPUT TYPES (OpenAI-specific)
-// ============================================================================
-
-// OpenAIResponseFormat configures structured output
 type OpenAIResponseFormat struct {
-	Type       string            `json:"type"` // "json_object" or "json_schema"
+	Type       string            `json:"type"`
 	JSONSchema *OpenAIJSONSchema `json:"json_schema,omitempty"`
 }
 
-// OpenAIJSONSchema represents a JSON schema for structured output
 type OpenAIJSONSchema struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description,omitempty"`
 	Schema      map[string]interface{} `json:"schema"`
-	Strict      bool                   `json:"strict,omitempty"` // Enable strict validation
+	Strict      bool                   `json:"strict,omitempty"`
 }
 
-// ============================================================================
-// FUNCTION CALLING TYPES
-// ============================================================================
-
-// OpenAITool represents a tool definition in OpenAI format
 type OpenAITool struct {
-	Type     string             `json:"type"` // Always "function"
+	Type     string             `json:"type"`
 	Function OpenAIToolFunction `json:"function"`
 }
 
-// OpenAIToolFunction represents the function details
 type OpenAIToolFunction struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
-	Parameters  map[string]interface{} `json:"parameters"` // JSON Schema
+	Parameters  map[string]interface{} `json:"parameters"`
 }
 
-// OpenAIToolCall represents a tool call in the response
 type OpenAIToolCall struct {
 	ID       string             `json:"id"`
-	Type     string             `json:"type"` // Always "function"
+	Type     string             `json:"type"`
 	Function OpenAIFunctionCall `json:"function"`
 }
 
-// OpenAIFunctionCall represents the function being called
 type OpenAIFunctionCall struct {
 	Name      string `json:"name"`
-	Arguments string `json:"arguments"` // JSON string
+	Arguments string `json:"arguments"`
 }
 
-// ============================================================================
-// CONSTRUCTORS
-// ============================================================================
-
-// NewOpenAIProvider creates a new OpenAI provider
 func NewOpenAIProvider(apiKey string, model string) *OpenAIProvider {
 	cfg := &config.LLMProviderConfig{
 		Type:        "openai",
@@ -181,14 +138,8 @@ func NewOpenAIProvider(apiKey string, model string) *OpenAIProvider {
 	return provider
 }
 
-// NewOpenAIProviderFromConfig creates a new OpenAI provider from config
 func NewOpenAIProviderFromConfig(cfg *config.LLMProviderConfig) (*OpenAIProvider, error) {
-	cfg.SetDefaults()
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
 
-	// Create HTTP client with OpenAI-specific header parsing
 	httpClient := httpclient.New(
 		httpclient.WithHTTPClient(&http.Client{
 			Timeout: time.Duration(cfg.Timeout) * time.Second,
@@ -204,11 +155,6 @@ func NewOpenAIProviderFromConfig(cfg *config.LLMProviderConfig) (*OpenAIProvider
 	}, nil
 }
 
-// ============================================================================
-// INTERFACE IMPLEMENTATION
-// ============================================================================
-
-// Generate generates a response with native function calling
 func (p *OpenAIProvider) Generate(messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
 	request := p.buildRequest(messages, false, tools)
 
@@ -228,13 +174,11 @@ func (p *OpenAIProvider) Generate(messages []*pb.Message, tools []ToolDefinition
 	choice := response.Choices[0]
 	tokensUsed := response.Usage.TotalTokens
 
-	// Extract text content (may be empty if only tool calls)
 	text := ""
 	if choice.Message.Content != nil {
 		text = *choice.Message.Content
 	}
 
-	// Check if model wants to call tools
 	var toolCalls []*protocol.ToolCall
 	if len(choice.Message.ToolCalls) > 0 {
 		toolCalls, err = parseToolCalls(choice.Message.ToolCalls)
@@ -243,11 +187,9 @@ func (p *OpenAIProvider) Generate(messages []*pb.Message, tools []ToolDefinition
 		}
 	}
 
-	// Return both text and tool calls (both can be present)
 	return text, toolCalls, tokensUsed, nil
 }
 
-// GenerateStreaming generates a streaming response with function calling
 func (p *OpenAIProvider) GenerateStreaming(messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	request := p.buildRequest(messages, true, tools)
 
@@ -267,36 +209,26 @@ func (p *OpenAIProvider) GenerateStreaming(messages []*pb.Message, tools []ToolD
 	return outputCh, nil
 }
 
-// GetModelName returns the model name
 func (p *OpenAIProvider) GetModelName() string {
 	return p.config.Model
 }
 
-// GetMaxTokens returns the maximum tokens for generation
 func (p *OpenAIProvider) GetMaxTokens() int {
 	return p.config.MaxTokens
 }
 
-// GetTemperature returns the temperature setting
 func (p *OpenAIProvider) GetTemperature() float64 {
 	return p.config.Temperature
 }
 
-// Close closes the provider and releases resources
 func (p *OpenAIProvider) Close() error {
 	return nil
 }
 
-// ============================================================================
-// STRUCTURED OUTPUT METHODS
-// ============================================================================
-
-// GenerateStructured generates a response with structured output
 func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
-	// OpenAI doesn't support tools with strict JSON schema mode, so pass empty tools
+
 	req := p.buildRequest(messages, false, nil)
 
-	// Add structured output configuration
 	if structConfig != nil && structConfig.Format == "json" {
 		if structConfig.Schema != nil {
 			schema, ok := structConfig.Schema.(map[string]interface{})
@@ -309,18 +241,17 @@ func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 				JSONSchema: &OpenAIJSONSchema{
 					Name:   "response",
 					Schema: schema,
-					Strict: true, // Enable strict validation
+					Strict: true,
 				},
 			}
 		} else {
-			// Fallback to simple JSON mode if no schema provided
+
 			req.ResponseFormat = &OpenAIResponseFormat{
 				Type: "json_object",
 			}
 		}
 	}
 
-	// Make actual API call using existing makeRequest method
 	response, err := p.makeRequest(req)
 	if err != nil {
 		return "", nil, 0, err
@@ -337,13 +268,11 @@ func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 	choice := response.Choices[0]
 	tokensUsed := response.Usage.TotalTokens
 
-	// Extract text content (may be empty if only tool calls)
 	text := ""
 	if choice.Message.Content != nil {
 		text = *choice.Message.Content
 	}
 
-	// Check if model wants to call tools
 	var toolCalls []*protocol.ToolCall
 	if len(choice.Message.ToolCalls) > 0 {
 		toolCalls, err = parseToolCalls(choice.Message.ToolCalls)
@@ -355,11 +284,9 @@ func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 	return text, toolCalls, tokensUsed, nil
 }
 
-// GenerateStructuredStreaming generates a streaming response with structured output
 func (p *OpenAIProvider) GenerateStructuredStreaming(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, true, tools)
 
-	// Add structured output configuration
 	if structConfig != nil && structConfig.Format == "json" && structConfig.Schema != nil {
 		schema, ok := structConfig.Schema.(map[string]interface{})
 		if !ok {
@@ -376,7 +303,6 @@ func (p *OpenAIProvider) GenerateStructuredStreaming(messages []*pb.Message, too
 		}
 	}
 
-	// Make actual streaming API call using existing makeStreamingRequest method
 	outputCh := make(chan StreamChunk, 100)
 
 	go func() {
@@ -393,16 +319,10 @@ func (p *OpenAIProvider) GenerateStructuredStreaming(messages []*pb.Message, too
 	return outputCh, nil
 }
 
-// SupportsStructuredOutput returns true (OpenAI supports structured output)
 func (p *OpenAIProvider) SupportsStructuredOutput() bool {
 	return true
 }
 
-// ============================================================================
-// INTERNAL HELPERS
-// ============================================================================
-
-// roleToOpenAI converts protobuf Role to OpenAI role string
 func roleToOpenAI(role pb.Role) string {
 	switch role {
 	case pb.Role_ROLE_USER:
@@ -410,22 +330,21 @@ func roleToOpenAI(role pb.Role) string {
 	case pb.Role_ROLE_AGENT:
 		return "assistant"
 	case pb.Role_ROLE_UNSPECIFIED:
-		// ROLE_UNSPECIFIED is used for system messages throughout the codebase
+
 		return "system"
 	default:
 		return "system"
 	}
 }
 
-// buildRequest builds an OpenAI request
 func (p *OpenAIProvider) buildRequest(messages []*pb.Message, stream bool, tools []ToolDefinition) OpenAIRequest {
-	// Convert universal Message to OpenAI-specific message format
+
 	openaiMessages := make([]OpenAIMessage, 0, len(messages))
 	for _, msg := range messages {
-		// Check for tool results first (OpenAI requires role="tool" for these)
+
 		toolResults := protocol.GetToolResultsFromMessage(msg)
 		if len(toolResults) > 0 {
-			// OpenAI expects one tool result per message with role="tool"
+
 			for _, tr := range toolResults {
 				content := tr.Content
 				openaiMsg := OpenAIMessage{
@@ -438,16 +357,13 @@ func (p *OpenAIProvider) buildRequest(messages []*pb.Message, stream bool, tools
 			continue
 		}
 
-		// OpenAI requires content to always be present (even if empty string)
-		// Using pointer to ensure it's always included in JSON, never null
 		content := protocol.ExtractTextFromMessage(msg)
 
 		openaiMsg := OpenAIMessage{
 			Role:    roleToOpenAI(msg.Role),
-			Content: &content, // Always include content, even if empty
+			Content: &content,
 		}
 
-		// Handle tool calls (from assistant via metadata)
 		toolCalls := protocol.GetToolCallsFromMessage(msg)
 		if len(toolCalls) > 0 {
 			openaiMsg.ToolCalls = make([]OpenAIToolCall, len(toolCalls))
@@ -474,23 +390,20 @@ func (p *OpenAIProvider) buildRequest(messages []*pb.Message, stream bool, tools
 		Stream:      stream,
 	}
 
-	// Set max tokens based on model (o1 models use max_completion_tokens)
 	if strings.HasPrefix(p.config.Model, "o1-") || strings.HasPrefix(p.config.Model, "o3-") {
 		request.MaxCompletionTokens = p.config.MaxTokens
 	} else {
 		request.MaxTokens = p.config.MaxTokens
 	}
 
-	// Add tools if provided
 	if len(tools) > 0 {
 		request.Tools = convertToOpenAITools(tools)
-		request.ToolChoice = "auto" // Let model decide
+		request.ToolChoice = "auto"
 	}
 
 	return request
 }
 
-// convertToOpenAITools converts common ToolDefinition to OpenAI format
 func convertToOpenAITools(tools []ToolDefinition) []OpenAITool {
 	result := make([]OpenAITool, len(tools))
 	for i, tool := range tools {
@@ -502,12 +415,11 @@ func convertToOpenAITools(tools []ToolDefinition) []OpenAITool {
 	return result
 }
 
-// parseToolCalls extracts tool calls from OpenAI response
 func parseToolCalls(openaiToolCalls []OpenAIToolCall) ([]*protocol.ToolCall, error) {
 	result := make([]*protocol.ToolCall, len(openaiToolCalls))
 
 	for i, tc := range openaiToolCalls {
-		// Parse arguments JSON string into map
+
 		var args map[string]interface{}
 		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
 			return nil, fmt.Errorf("failed to parse tool arguments: %w", err)
@@ -523,7 +435,6 @@ func parseToolCalls(openaiToolCalls []OpenAIToolCall) ([]*protocol.ToolCall, err
 	return result, nil
 }
 
-// makeRequest makes a non-streaming request to OpenAI using the generic HTTP client
 func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, error) {
 	requestBody, err := json.Marshal(request)
 	if err != nil {
@@ -535,29 +446,26 @@ func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, er
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
-	// Enable request body reuse for retries
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(requestBody)), nil
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	// Only set Authorization header if API key is provided (not needed for Ollama, etc.)
+
 	if p.config.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
 	}
 
-	// Use generic HTTP client with smart retry
 	resp, err := p.httpClient.Do(req)
 	if resp != nil {
 		defer resp.Body.Close()
 	}
 
-	// Even if there's an error, try to read the response body for error details
 	if err != nil {
 		if resp != nil && resp.Body != nil {
 			body, readErr := io.ReadAll(resp.Body)
 			if readErr == nil && len(body) > 0 {
-				// Try to parse error details
+
 				var errorResp struct {
 					Error struct {
 						Message string `json:"message"`
@@ -581,7 +489,7 @@ func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, er
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		// Try to parse error details
+
 		var errorResp struct {
 			Error struct {
 				Message string `json:"message"`
@@ -604,7 +512,6 @@ func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, er
 	return &response, nil
 }
 
-// makeStreamingRequest handles streaming responses with function calling
 func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh chan<- StreamChunk) error {
 	requestBody, err := json.Marshal(request)
 	if err != nil {
@@ -616,19 +523,16 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 		return fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
-	// Enable request body reuse for retries
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(requestBody)), nil
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	// Only set Authorization header if API key is provided (not needed for Ollama, etc.)
+
 	if p.config.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
 	}
 
-	// Use the smart retry client for streaming initial request
-	// The retry logic applies to establishing the connection, not streaming
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
@@ -641,7 +545,7 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 	}
 
 	reader := bufio.NewReader(resp.Body)
-	// Map to accumulate tool calls by index (OpenAI uses index for streaming)
+
 	toolCallsMap := make(map[int]*OpenAIToolCall)
 	totalTokens := 0
 
@@ -659,27 +563,24 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 			continue
 		}
 
-		// Skip "data: " prefix
 		if !bytes.HasPrefix(line, []byte("data: ")) {
 			continue
 		}
 		line = line[6:]
 
-		// Check for stream end
 		if bytes.Equal(line, []byte("[DONE]")) {
 			break
 		}
 
 		var streamResp OpenAIStreamResponse
 		if err := json.Unmarshal(line, &streamResp); err != nil {
-			continue // Skip malformed chunks
+			continue
 		}
 
 		if streamResp.Error != nil {
 			return fmt.Errorf("API error: %s", streamResp.Error.Message)
 		}
 
-		// Extract token usage if available (some models include it)
 		if streamResp.Usage != nil {
 			totalTokens = streamResp.Usage.TotalTokens
 		}
@@ -690,7 +591,6 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 
 		choice := streamResp.Choices[0]
 
-		// Handle text content
 		if choice.Delta.Content != "" {
 			outputCh <- StreamChunk{
 				Type: "text",
@@ -698,21 +598,17 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 			}
 		}
 
-		// Handle tool calls (accumulated by index across chunks)
 		for _, deltaCall := range choice.Delta.ToolCalls {
-			// OpenAI uses index to identify which tool call this chunk belongs to
-			// We need to get the index from the streaming tool call
-			// For now, accumulate by merging into existing tool calls
+
 			if deltaCall.ID != "" {
-				// First chunk with full tool call structure
+
 				toolCallsMap[len(toolCallsMap)] = &OpenAIToolCall{
 					ID:       deltaCall.ID,
 					Type:     deltaCall.Type,
 					Function: deltaCall.Function,
 				}
 			} else {
-				// Subsequent chunks with incremental arguments
-				// Append to the last tool call
+
 				if len(toolCallsMap) > 0 {
 					lastIdx := len(toolCallsMap) - 1
 					if toolCall, exists := toolCallsMap[lastIdx]; exists {
@@ -722,9 +618,8 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 			}
 		}
 
-		// Check for completion
 		if choice.FinishReason == "stop" || choice.FinishReason == "tool_calls" {
-			// Convert map to slice for final processing
+
 			var accumulatedToolCalls []OpenAIToolCall
 			for i := 0; i < len(toolCallsMap); i++ {
 				if toolCall, exists := toolCallsMap[i]; exists {
@@ -732,7 +627,6 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 				}
 			}
 
-			// Send accumulated tool calls if any
 			if len(accumulatedToolCalls) > 0 {
 				toolCalls, err := parseToolCalls(accumulatedToolCalls)
 				if err == nil {
@@ -748,7 +642,6 @@ func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh ch
 		}
 	}
 
-	// Send completion signal with token count
 	outputCh <- StreamChunk{
 		Type:   "done",
 		Tokens: totalTokens,

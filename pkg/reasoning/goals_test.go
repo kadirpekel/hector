@@ -23,7 +23,6 @@ func TestExtractGoals_EmptyQuery(t *testing.T) {
 		t.Fatal("ExtractGoals() returned nil decomposition")
 	}
 
-	// Should have at least one subtask
 	if len(decomposition.Subtasks) == 0 {
 		t.Error("ExtractGoals() returned no subtasks")
 	}
@@ -48,7 +47,6 @@ func TestExtractGoals_WithAgents(t *testing.T) {
 		t.Fatal("ExtractGoals() returned nil")
 	}
 
-	// Validate required fields
 	if decomposition.MainGoal == "" {
 		t.Error("MainGoal should not be empty")
 	}
@@ -61,7 +59,6 @@ func TestExtractGoals_WithAgents(t *testing.T) {
 		t.Error("RequiredAgents should not be empty")
 	}
 
-	// Validate execution order
 	validOrders := map[string]bool{
 		"sequential":   true,
 		"parallel":     true,
@@ -90,7 +87,6 @@ func TestExtractGoals_SubtaskValidation(t *testing.T) {
 		t.Fatal("Expected at least one subtask")
 	}
 
-	// Validate subtask fields
 	for i, subtask := range decomposition.Subtasks {
 		if subtask.ID == "" {
 			t.Errorf("Subtask %d has empty ID", i)
@@ -108,7 +104,6 @@ func TestExtractGoals_SubtaskValidation(t *testing.T) {
 			t.Errorf("Subtask %d has invalid Priority = %d, should be 1-5", i, subtask.Priority)
 		}
 
-		// DependsOn can be empty, but should be non-nil
 		if subtask.DependsOn == nil {
 			t.Errorf("Subtask %d has nil DependsOn", i)
 		}
@@ -125,7 +120,6 @@ func TestBuildGoalExtractionPrompt(t *testing.T) {
 		t.Error("buildGoalExtractionPrompt() returned empty string")
 	}
 
-	// Check that prompt is substantial
 	if len(prompt) < 100 {
 		t.Errorf("buildGoalExtractionPrompt() returned suspiciously short prompt: %s", prompt)
 	}
@@ -141,7 +135,6 @@ func TestBuildGoalExtractionPrompt_NoAgents(t *testing.T) {
 		t.Error("buildGoalExtractionPrompt() returned empty string")
 	}
 
-	// Should handle empty agents gracefully
 	if len(prompt) < 50 {
 		t.Error("buildGoalExtractionPrompt() returned too short prompt")
 	}
@@ -185,7 +178,6 @@ func TestExtractGoals_FallbackScenarios(t *testing.T) {
 				t.Fatal("ExtractGoals() returned nil")
 			}
 
-			// Even in fallback, should have valid decomposition
 			if len(decomposition.Subtasks) == 0 {
 				t.Error("Fallback should still produce at least one subtask")
 			}

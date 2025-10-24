@@ -7,11 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kadirpekel/hector/pkg/a2a/client"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 )
 
-// captureOutput captures stdout during function execution
 func captureOutput(f func()) string {
 	old := os.Stdout
 	r, w, _ := os.Pipe()
@@ -28,17 +26,20 @@ func captureOutput(f func()) string {
 }
 
 func TestDisplayAgentList(t *testing.T) {
-	agents := []client.AgentInfo{
+	agents := []*pb.AgentCard{
 		{
-			ID:          "agent1",
 			Name:        "Test Agent 1",
 			Description: "Test description 1",
-			Endpoint:    "http://localhost:8081",
+			Url:         "http://localhost:8081",
+			Version:     "1.0.0",
+			Capabilities: &pb.AgentCapabilities{
+				Streaming: true,
+			},
 		},
 		{
-			ID:          "agent2",
 			Name:        "Test Agent 2",
 			Description: "Test description 2",
+			Version:     "2.0.0",
 		},
 	}
 
@@ -46,7 +47,6 @@ func TestDisplayAgentList(t *testing.T) {
 		DisplayAgentList(agents, "Test Mode")
 	})
 
-	// Verify output contains expected information
 	if !strings.Contains(output, "Test Mode") {
 		t.Error("Output should contain mode")
 	}
@@ -78,7 +78,6 @@ func TestDisplayAgentCard(t *testing.T) {
 		DisplayAgentCard("test-id", card)
 	})
 
-	// Verify output contains expected information
 	if !strings.Contains(output, "test-id") {
 		t.Error("Output should contain agent ID")
 	}
@@ -223,12 +222,11 @@ func TestDisplayGoodbye(t *testing.T) {
 		DisplayGoodbye()
 	})
 
-	if !strings.Contains(output, "Goodbye") || !strings.Contains(output, "👋") {
+	if !strings.Contains(output, "Goodbye") {
 		t.Error("Output should contain goodbye message")
 	}
 }
 
-// Test error type
 type testError struct {
 	msg string
 }

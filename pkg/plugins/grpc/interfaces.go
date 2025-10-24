@@ -6,12 +6,6 @@ import (
 	pb "github.com/kadirpekel/hector/pkg/plugins/grpc/proto"
 )
 
-// ============================================================================
-// PLUGIN INTERFACES
-// ============================================================================
-// These interfaces are implemented by plugins and used by Hector
-
-// LLMProvider interface for LLM plugins
 type LLMProvider interface {
 	Initialize(ctx context.Context, config map[string]string) error
 	Generate(ctx context.Context, messages []*pb.Message, tools []*pb.ToolDefinition) (*pb.GenerateResponse, error)
@@ -21,7 +15,6 @@ type LLMProvider interface {
 	Health(ctx context.Context) error
 }
 
-// DatabaseProvider interface for database plugins
 type DatabaseProvider interface {
 	Initialize(ctx context.Context, config map[string]string) error
 	Upsert(ctx context.Context, collection string, id string, vector []float32, metadata map[string]string) error
@@ -33,7 +26,6 @@ type DatabaseProvider interface {
 	Health(ctx context.Context) error
 }
 
-// EmbedderProvider interface for embedder plugins
 type EmbedderProvider interface {
 	Initialize(ctx context.Context, config map[string]string) error
 	Embed(ctx context.Context, text string) ([]float32, error)
@@ -42,7 +34,6 @@ type EmbedderProvider interface {
 	Health(ctx context.Context) error
 }
 
-// DocumentParserProvider interface for document parser plugins
 type DocumentParserProvider interface {
 	Initialize(ctx context.Context, config map[string]string) error
 	ParseDocument(ctx context.Context, filePath string, fileSize int64, mimeType string, config map[string]string) (*pb.ParseDocumentResponse, error)

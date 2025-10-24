@@ -1,20 +1,11 @@
-# Mixed Agents Example - Native + External A2A Agents
-# Demonstrates Hector's ability to orchestrate both local and remote agents
-
 global:
   a2a_server:
     enabled: true
     host: "0.0.0.0"
     port: 8080
-
-# Define both native and external agents in the same config!
 agents:
-  # ============================================================================
-  # NATIVE AGENTS - Run locally in this Hector instance
-  # ============================================================================
-  
   local_researcher:
-    type: "native"  # Optional - defaults to "native"
+    type: "native"  
     name: "Local Research Agent"
     description: "Native agent that gathers information"
     llm: "main-llm"
@@ -27,9 +18,7 @@ agents:
       system_role: |
         You are a research specialist. Gather comprehensive information
         and provide clear, well-structured summaries.
-  
   local_writer:
-    # type: "native" is implied when omitted
     name: "Local Content Writer"
     description: "Native agent that creates written content"
     llm: "main-llm"
@@ -42,73 +31,42 @@ agents:
       system_role: |
         You are a professional content writer. Create clear,
         engaging content with proper structure.
-  
-  # ============================================================================
-  # EXTERNAL A2A AGENTS - Remote agents accessed via A2A protocol
-  # NOTE: For local testing, use gRPC format: "localhost:PORT"
-  # For production, use HTTPS format: "https://remote-server.com"
-  # ============================================================================
-  
   external_specialist:
-    type: "a2a"  # External A2A agent
+    type: "a2a"  
     name: "External Specialist"
     description: "External A2A agent with specialized capabilities"
-    url: "localhost:8080"  # Local gRPC endpoint for testing
-    # No LLM, reasoning, or tools needed - external agent has its own!
-  
+    url: "localhost:8080"  
   partner_analyst:
     type: "a2a"
     name: "Partner Analysis Agent"
     description: "Third-party A2A agent for data analysis"
-    url: "localhost:8082"  # Local gRPC endpoint for testing
-    # Hector transparently integrates it - users see it like any other agent
-  
-  # ============================================================================
-  # ORCHESTRATOR - Coordinates ALL agents (native + external)
-  # ============================================================================
-  
+    url: "localhost:8082"  
   orchestrator:
     type: "native"
     name: "Hybrid Orchestrator"
     description: "Orchestrates both local and external agents"
     llm: "main-llm"
     tools:
-      - agent_call  # Can call BOTH native and external agents!
+      - agent_call  
     reasoning:
       engine: "supervisor"
-      max_iterations: 10  # Reduced from 20 - prevents excessive agent_call loops
-    
-    # Memory configuration for multi-agent orchestration
-    # 
-    # ARCHITECTURE NOTE: Summarization now occurs ONCE per turn (at turn boundaries)
-    # Previously, each message triggered a summarization check, causing infinite loops.
-    # The fix ensures all messages in a turn are saved first, then ONE summarization check.
-    #
-    # Each agent_call adds ~3-5 messages per iteration
+      max_iterations: 10  
     memory:
       working:
         strategy: "summary_buffer"
-        budget: 16000      # 16K tokens - handles 5-10 multi-agent turns
-        threshold: 0.85    # Trigger at 85%
-        target: 0.70       # Compress to 70%
-    
+        budget: 16000      
+        threshold: 0.85    
+        target: 0.70       
     prompt:
       system_role: |
         You orchestrate a team of specialized agents.
-        
         AVAILABLE AGENTS:
         - local_researcher: Local research specialist (native)
         - local_writer: Local content creator (native)
         - external_specialist: Remote specialist (external A2A)
         - partner_analyst: Partner's analyst (external A2A)
-        
         Delegate tasks to the most appropriate agent, whether local or remote.
         The A2A protocol makes them all equally accessible!
-
-# ============================================================================
-# LLM CONFIGURATION (only for native agents)
-# ============================================================================
-
 llms:
   main-llm:
     type: "openai"
@@ -116,54 +74,11 @@ llms:
     api_key: "${OPENAI_API_KEY}"
     temperature: 0.7
     max_tokens: 4000
-
-# ============================================================================
-# TOOLS CONFIGURATION (only for native agents)
-# ============================================================================
-
 tools:
   execute_command:
     type: command
-    enable_sandboxing: true  # Required for security
+    enable_sandboxing: true  
     working_directory: "."
-  
   write_file:
     type: write_file
     working_directory: "./output"
-
-# ============================================================================
-# USAGE EXAMPLES
-# ============================================================================
-
-# Start server (exposes ALL agents - native and external):
-#   $ hector serve --config configs/mixed-agents-example.yaml
-
-# List all agents (you'll see both types):
-#   $ hector list
-#   📋 Available agents:
-#     🤖 Local Research Agent (local_researcher) [native]
-#     🤖 Local Content Writer (local_writer) [native]
-#     🤖 External Specialist (external_specialist) [external]
-#     🤖 Partner Analysis Agent (partner_analyst) [external]
-#     🤖 Hybrid Orchestrator (orchestrator) [native]
-
-# Call any agent (native or external - same API!):
-#   $ hector call local_researcher "Research AI trends"
-#   $ hector call external_specialist "Analyze data X"
-
-# Orchestrator can use ALL agents:
-#   $ hector call orchestrator "Research AI, analyze with partner, write report"
-#   
-#   The orchestrator will:
-#   1. Call local_researcher (native)
-#   2. Call partner_analyst (external A2A)
-#   3. Call local_writer (native)
-#   4. Synthesize results
-
-# Key Benefits:
-# ✅ Single YAML configuration for entire multi-agent system
-# ✅ Mix local and remote agents seamlessly
-# ✅ No code required - pure declarative
-# ✅ A2A protocol makes everything interoperable
-# ✅ Orchestrators work with any agent type
-

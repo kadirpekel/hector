@@ -23,7 +23,6 @@ func TestAssessTaskCompletion_EmptyResponse(t *testing.T) {
 		t.Fatal("AssessTaskCompletion() returned nil assessment")
 	}
 
-	// Should default to complete for providers without structured output
 	if !assessment.IsComplete {
 		t.Errorf("Expected IsComplete=true for provider without structured output, got false")
 	}
@@ -43,13 +42,10 @@ func TestBuildCompletionPrompt(t *testing.T) {
 		t.Error("buildCompletionPrompt() returned empty string")
 	}
 
-	// Check that prompt contains key elements
 	if len(prompt) < 100 {
 		t.Errorf("buildCompletionPrompt() returned suspiciously short prompt: %s", prompt)
 	}
 
-	// Should mention the query and response
-	// Basic sanity check - actual content is in the prompt
 	if len(query) > 0 && len(response) > 0 && len(prompt) < len(query)+len(response) {
 		t.Error("buildCompletionPrompt() seems to be missing query or response")
 	}
@@ -97,7 +93,6 @@ func TestAssessTaskCompletion_WithMockServices(t *testing.T) {
 				t.Fatal("AssessTaskCompletion() returned nil")
 			}
 
-			// Validate fields
 			if assessment.Confidence < 0.0 || assessment.Confidence > 1.0 {
 				t.Errorf("Confidence = %f, should be between 0.0 and 1.0", assessment.Confidence)
 			}

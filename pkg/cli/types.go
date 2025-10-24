@@ -1,41 +1,28 @@
 package cli
 
-import "github.com/kadirpekel/hector/pkg/config"
-
-// ============================================================================
-// COMMAND TYPES
-// ============================================================================
-
-// CommandType represents a CLI command
 type CommandType string
 
 const (
-	CommandServe CommandType = "serve"
-	CommandList  CommandType = "list"
-	CommandInfo  CommandType = "info"
-	CommandCall  CommandType = "call"
-	CommandChat  CommandType = "chat"
-	CommandTask  CommandType = "task"
-	CommandHelp  CommandType = "help"
+	CommandVersion CommandType = "version"
+	CommandServe   CommandType = "serve"
+	CommandList    CommandType = "list"
+	CommandInfo    CommandType = "info"
+	CommandCall    CommandType = "call"
+	CommandChat    CommandType = "chat"
+	CommandTask    CommandType = "task"
+	CommandHelp    CommandType = "help"
 )
 
-// ============================================================================
-// CLI MODES
-// ============================================================================
-
-// CLIMode represents the operational mode of the CLI
 type CLIMode string
 
 const (
-	// Deployment modes
-	ModeServerZeroConfig CLIMode = "server-zero-config" // 'serve' without config file
-	ModeServerConfig     CLIMode = "server-config"      // 'serve' with config file
-	ModeClient           CLIMode = "client"             // Connect to remote server (--server)
-	ModeLocalZeroConfig  CLIMode = "local-zero-config"  // In-process, no config file
-	ModeLocalConfig      CLIMode = "local-config"       // In-process with config file
+	ModeServerZeroConfig CLIMode = "server-zero-config"
+	ModeServerConfig     CLIMode = "server-config"
+	ModeClient           CLIMode = "client"
+	ModeLocalZeroConfig  CLIMode = "local-zero-config"
+	ModeLocalConfig      CLIMode = "local-config"
 )
 
-// String returns a human-readable string for the CLI mode
 func (m CLIMode) String() string {
 	switch m {
 	case ModeServerZeroConfig:
@@ -53,31 +40,24 @@ func (m CLIMode) String() string {
 	}
 }
 
-// ============================================================================
-// CLI ARGUMENTS
-// ============================================================================
-
-// CLIArgs holds parsed command line arguments
 type CLIArgs struct {
 	Command    CommandType
 	ConfigFile string
 	ServerURL  string
 	AgentID    string
 	TaskID     string
-	TaskAction string // For task command: "get" or "cancel"
+	TaskAction string
 	Input      string
 	Token      string
 	Stream     bool
 	Debug      bool
 	Port       int
-	SessionID  string // Session ID for resuming conversations
+	SessionID  string
 
-	// A2A Server options (override config)
 	Host       string
 	A2ABaseURL string
 
-	// Zero-config mode options
-	Provider                string // Detected provider: "openai", "anthropic", "gemini"
+	Provider                string
 	APIKey                  string
 	BaseURL                 string
 	Model                   string
@@ -86,20 +66,7 @@ type CLIArgs struct {
 	DocsFolder              string
 	EmbedderModel           string
 	VectorDB                string
-	ExplicitZeroConfigFlags bool // Tracks if user explicitly provided zero-config flags
-}
+	ExplicitZeroConfigFlags bool
 
-// ToZeroConfigOptions converts CLIArgs to config.ZeroConfigOptions
-// This consolidates the mapping logic in one place to avoid duplication
-func (a *CLIArgs) ToZeroConfigOptions() config.ZeroConfigOptions {
-	return config.ZeroConfigOptions{
-		Provider:    a.Provider,
-		APIKey:      a.APIKey,
-		BaseURL:     a.BaseURL,
-		Model:       a.Model,
-		EnableTools: a.Tools,
-		MCPURL:      a.MCPURL,
-		DocsFolder:  a.DocsFolder,
-		AgentName:   a.AgentID,
-	}
+	Mode CLIMode
 }

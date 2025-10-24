@@ -7,11 +7,10 @@ import (
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 )
 
-// MockClient implements A2AClient for testing
 type MockClient struct {
 	SendMessageFunc   func(ctx context.Context, agentID string, message *pb.Message) (*pb.SendMessageResponse, error)
 	StreamMessageFunc func(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error)
-	ListAgentsFunc    func(ctx context.Context) ([]AgentInfo, error)
+	ListAgentsFunc    func(ctx context.Context) ([]*pb.AgentCard, error)
 	GetAgentCardFunc  func(ctx context.Context, agentID string) (*pb.AgentCard, error)
 	CloseFunc         func() error
 }
@@ -32,11 +31,11 @@ func (m *MockClient) StreamMessage(ctx context.Context, agentID string, message 
 	return ch, nil
 }
 
-func (m *MockClient) ListAgents(ctx context.Context) ([]AgentInfo, error) {
+func (m *MockClient) ListAgents(ctx context.Context) ([]*pb.AgentCard, error) {
 	if m.ListAgentsFunc != nil {
 		return m.ListAgentsFunc(ctx)
 	}
-	return []AgentInfo{}, nil
+	return []*pb.AgentCard{}, nil
 }
 
 func (m *MockClient) GetAgentCard(ctx context.Context, agentID string) (*pb.AgentCard, error) {
@@ -128,7 +127,6 @@ func TestMockClient_StreamMessage(t *testing.T) {
 		t.Fatalf("StreamMessage() error = %v", err)
 	}
 
-	// Read from stream
 	count := 0
 	for range streamChan {
 		count++
@@ -140,13 +138,13 @@ func TestMockClient_StreamMessage(t *testing.T) {
 }
 
 func TestMockClient_ListAgents(t *testing.T) {
-	expectedAgents := []AgentInfo{
-		{ID: "agent1", Name: "Agent 1"},
-		{ID: "agent2", Name: "Agent 2"},
+	expectedAgents := []*pb.AgentCard{
+		{Name: "agent1", Description: "Agent 1"},
+		{Name: "agent2", Description: "Agent 2"},
 	}
 
 	mock := &MockClient{
-		ListAgentsFunc: func(ctx context.Context) ([]AgentInfo, error) {
+		ListAgentsFunc: func(ctx context.Context) ([]*pb.AgentCard, error) {
 			return expectedAgents, nil
 		},
 	}
@@ -211,7 +209,6 @@ func TestNewHTTPClient(t *testing.T) {
 		t.Error("NewHTTPClient() returned nil")
 	}
 
-	// Verify it implements A2AClient
 	var _ A2AClient = client
 
 	client.Close()
@@ -222,27 +219,5 @@ func TestHTTPClient_Close(t *testing.T) {
 	err := client.Close()
 	if err != nil {
 		t.Errorf("Close() error = %v", err)
-	}
-}
-
-func TestAgentInfo(t *testing.T) {
-	info := AgentInfo{
-		ID:          "agent1",
-		Name:        "Agent 1",
-		Description: "Test agent",
-		Endpoint:    "http://localhost:8081",
-	}
-
-	if info.ID != "agent1" {
-		t.Error("Failed to set ID")
-	}
-	if info.Name != "Agent 1" {
-		t.Error("Failed to set Name")
-	}
-	if info.Description != "Test agent" {
-		t.Error("Failed to set Description")
-	}
-	if info.Endpoint != "http://localhost:8081" {
-		t.Error("Failed to set Endpoint")
 	}
 }

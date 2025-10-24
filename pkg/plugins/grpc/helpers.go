@@ -5,19 +5,6 @@ import (
 	pb "github.com/kadirpekel/hector/pkg/plugins/grpc/proto"
 )
 
-// ============================================================================
-// PLUGIN AUTHOR HELPERS
-// ============================================================================
-// These functions make it easier for plugin authors to create plugins
-
-// ServeLLMPlugin starts serving an LLM provider plugin
-// This is the main entry point for LLM plugin executables
-//
-// Example usage in your plugin's main.go:
-//
-//	func main() {
-//	    grpc.ServeLLMPlugin(&MyLLMProvider{})
-//	}
 func ServeLLMPlugin(impl LLMProvider) {
 	plugin.Serve(&plugin.ServeConfig{
 		HandshakeConfig: GetHandshakeConfig(),
@@ -28,14 +15,6 @@ func ServeLLMPlugin(impl LLMProvider) {
 	})
 }
 
-// ServeDatabasePlugin starts serving a Database provider plugin
-// This is the main entry point for Database plugin executables
-//
-// Example usage in your plugin's main.go:
-//
-//	func main() {
-//	    grpc.ServeDatabasePlugin(&MyDatabaseProvider{})
-//	}
 func ServeDatabasePlugin(impl DatabaseProvider) {
 	plugin.Serve(&plugin.ServeConfig{
 		HandshakeConfig: GetHandshakeConfig(),
@@ -46,14 +25,6 @@ func ServeDatabasePlugin(impl DatabaseProvider) {
 	})
 }
 
-// ServeEmbedderPlugin starts serving an Embedder provider plugin
-// This is the main entry point for Embedder plugin executables
-//
-// Example usage in your plugin's main.go:
-//
-//	func main() {
-//	    grpc.ServeEmbedderPlugin(&MyEmbedderProvider{})
-//	}
 func ServeEmbedderPlugin(impl EmbedderProvider) {
 	plugin.Serve(&plugin.ServeConfig{
 		HandshakeConfig: GetHandshakeConfig(),
@@ -64,29 +35,19 @@ func ServeEmbedderPlugin(impl EmbedderProvider) {
 	})
 }
 
-// ============================================================================
-// TYPE ALIASES FOR CONVENIENCE
-// ============================================================================
-// Export proto types for plugin authors
-
 type (
-	// Message types
 	Message        = pb.Message
 	ToolDefinition = pb.ToolDefinition
 	ToolCall       = pb.ToolCall
 
-	// Response types
 	GenerateResponse = pb.GenerateResponse
 	StreamChunk      = pb.StreamChunk
 	ModelInfo        = pb.ModelInfo
 
-	// Database types
 	SearchResult = pb.SearchResult
 
-	// Embedder types
 	EmbedderInfo = pb.EmbedderInfo
 
-	// Common types
 	Empty              = pb.Empty
 	InitializeRequest  = pb.InitializeRequest
 	InitializeResponse = pb.InitializeResponse
@@ -100,11 +61,6 @@ type (
 	StatusResponse     = pb.StatusResponse
 )
 
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-// Plugin types
 const (
 	PluginTypeLLM            = "llm_provider"
 	PluginTypeDatabase       = "database_provider"
@@ -114,7 +70,6 @@ const (
 	PluginTypeDocumentParser = "document_parser"
 )
 
-// Stream chunk types
 const (
 	ChunkTypeText     = pb.StreamChunk_TEXT
 	ChunkTypeToolCall = pb.StreamChunk_TOOL_CALL

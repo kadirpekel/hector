@@ -16,7 +16,6 @@ func TestSupervisorStrategy_PrepareIteration(t *testing.T) {
 	strategy := NewSupervisorStrategy()
 	state := NewReasoningState()
 
-	// PrepareIteration should not return an error
 	err := strategy.PrepareIteration(1, state)
 	if err != nil {
 		t.Errorf("PrepareIteration() error = %v", err)
@@ -27,13 +26,11 @@ func TestSupervisorStrategy_ShouldStop(t *testing.T) {
 	strategy := NewSupervisorStrategy()
 	state := NewReasoningState()
 
-	// ShouldStop should return true when no tool calls
 	shouldStop := strategy.ShouldStop("test text", []*protocol.ToolCall{}, state)
 	if !shouldStop {
 		t.Error("ShouldStop() should return true when no tool calls")
 	}
 
-	// ShouldStop should return false when there are tool calls
 	toolCalls := []*protocol.ToolCall{
 		{Name: "test_tool", Args: map[string]interface{}{}},
 	}
@@ -47,7 +44,6 @@ func TestSupervisorStrategy_AfterIteration(t *testing.T) {
 	strategy := NewSupervisorStrategy()
 	state := NewReasoningState()
 
-	// AfterIteration should not return an error
 	err := strategy.AfterIteration(1, "test text", []*protocol.ToolCall{}, []ToolResult{}, state)
 	if err != nil {
 		t.Errorf("AfterIteration() error = %v", err)
@@ -80,8 +76,6 @@ func TestSupervisorStrategy_GetRequiredTools(t *testing.T) {
 	strategy := NewSupervisorStrategy()
 	tools := strategy.GetRequiredTools()
 
-	// Supervisor strategy might not require any specific tools
-	// Just check that it doesn't panic and returns a slice
 	if tools == nil {
 		t.Error("GetRequiredTools() should not return nil")
 	}

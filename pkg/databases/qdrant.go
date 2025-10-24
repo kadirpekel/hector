@@ -9,21 +9,6 @@ import (
 	"github.com/qdrant/go-client/qdrant"
 )
 
-// ============================================================================
-// QDRANT PROVIDER CONFIGURATION
-// ============================================================================
-
-// QdrantConfig is defined in config/providers.go
-
-// Methods SetDefaults, GetProviderType, and GetProviderName are defined in config/providers.go
-
-// Methods Validate and SetDefaults are defined in config/providers.go
-
-// ============================================================================
-// QDRANT PROVIDER IMPLEMENTATION
-// ============================================================================
-
-// NewQdrantDatabaseProvider creates a new Qdrant vector database with default configuration
 func NewQdrantDatabaseProvider() (DatabaseProvider, error) {
 	config := &config.DatabaseProviderConfig{
 		Type:    "qdrant",
@@ -36,14 +21,8 @@ func NewQdrantDatabaseProvider() (DatabaseProvider, error) {
 	return NewQdrantDatabaseProviderFromConfig(config)
 }
 
-// NewQdrantDatabaseProviderFromConfig creates a new Qdrant vector database from config
 func NewQdrantDatabaseProviderFromConfig(config *config.DatabaseProviderConfig) (DatabaseProvider, error) {
-	config.SetDefaults()
-	if err := config.Validate(); err != nil {
-		return nil, err
-	}
 
-	// Create Qdrant client
 	client, err := qdrant.NewClient(&qdrant.Config{
 		Host:   config.Host,
 		Port:   config.Port,
@@ -60,28 +39,20 @@ func NewQdrantDatabaseProviderFromConfig(config *config.DatabaseProviderConfig) 
 	}, nil
 }
 
-// ============================================================================
-// QDRANT DATABASE IMPLEMENTATION
-// ============================================================================
-
-// newQdrantDatabaseProvider creates a new Qdrant vector database
-
-// qdrantDatabaseProvider is a Qdrant vector database implementation
 type qdrantDatabaseProvider struct {
 	client *qdrant.Client
 	config *config.DatabaseProviderConfig
 }
 
-// Upsert adds or updates a vector in the database
 func (db *qdrantDatabaseProvider) Upsert(ctx context.Context, collection string, id string, vector []float32, metadata map[string]interface{}) error {
-	// Check if collection exists, create if it doesn't
+
 	exists, err := db.client.CollectionExists(ctx, collection)
 	if err != nil {
 		return fmt.Errorf("failed to check if collection exists: %w", err)
 	}
 
 	if !exists {
-		// Create collection with vector size based on the provided vector
+
 		err = db.client.CreateCollection(ctx, &qdrant.CreateCollection{
 			CollectionName: collection,
 			VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
@@ -90,16 +61,15 @@ func (db *qdrantDatabaseProvider) Upsert(ctx context.Context, collection string,
 			}),
 		})
 		if err != nil {
-			// Handle the case where collection was created by another concurrent operation
+
 			if strings.Contains(err.Error(), "already exists") {
-				// Collection was created by another process, continue with upsert
+
 			} else {
 				return fmt.Errorf("failed to create collection: %w", err)
 			}
 		}
 	}
 
-	// Convert metadata to Qdrant format
 	payload := make(map[string]*qdrant.Value)
 	for key, value := range metadata {
 		val, err := qdrant.NewValue(value)
@@ -109,14 +79,12 @@ func (db *qdrantDatabaseProvider) Upsert(ctx context.Context, collection string,
 		payload[key] = val
 	}
 
-	// Create point
 	point := &qdrant.PointStruct{
 		Id:      qdrant.NewID(id),
 		Vectors: qdrant.NewVectors(vector...),
 		Payload: payload,
 	}
 
-	// Upsert point
 	_, err = db.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: collection,
 		Points:         []*qdrant.PointStruct{point},
@@ -128,14 +96,12 @@ func (db *qdrantDatabaseProvider) Upsert(ctx context.Context, collection string,
 	return nil
 }
 
-// Search performs vector similarity search
 func (db *qdrantDatabaseProvider) Search(ctx context.Context, collection string, queryVector []float32, topK int) ([]SearchResult, error) {
 	return db.SearchWithFilter(ctx, collection, queryVector, topK, nil)
 }
 
-// SearchWithFilter performs vector similarity search with metadata filtering
 func (db *qdrantDatabaseProvider) SearchWithFilter(ctx context.Context, collection string, queryVector []float32, topK int, filter map[string]interface{}) ([]SearchResult, error) {
-	// Create search request
+
 	searchRequest := &qdrant.SearchPoints{
 		CollectionName: collection,
 		Vector:         queryVector,
@@ -144,31 +110,27 @@ func (db *qdrantDatabaseProvider) SearchWithFilter(ctx context.Context, collecti
 		WithVectors:    qdrant.NewWithVectors(true),
 	}
 
-	// Add filter if provided
 	if len(filter) > 0 {
 		searchRequest.Filter = buildQdrantFilter(filter)
 	}
 
-	// Perform search using the Points client
 	pointsClient := db.client.GetPointsClient()
 	searchResult, err := pointsClient.Search(ctx, searchRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search points: %w", err)
 	}
 
-	// Convert results
 	return convertQdrantResults(searchResult.Result), nil
 }
 
-// buildQdrantFilter converts a map filter to Qdrant filter format
 func buildQdrantFilter(filter map[string]interface{}) *qdrant.Filter {
 	conditions := make([]*qdrant.Condition, 0, len(filter))
 
 	for key, value := range filter {
-		// Create match condition for each filter key-value pair
+
 		val, err := qdrant.NewValue(value)
 		if err != nil {
-			continue // Skip invalid values
+			continue
 		}
 
 		condition := &qdrant.Condition{
@@ -191,11 +153,10 @@ func buildQdrantFilter(filter map[string]interface{}) *qdrant.Filter {
 	}
 }
 
-// convertQdrantResults converts Qdrant search results to our SearchResult format
 func convertQdrantResults(points []*qdrant.ScoredPoint) []SearchResult {
 	var results []SearchResult
 	for _, point := range points {
-		// Extract ID
+
 		var id string
 		if point.Id != nil {
 			if point.Id.PointIdOptions != nil {
@@ -208,7 +169,6 @@ func convertQdrantResults(points []*qdrant.ScoredPoint) []SearchResult {
 			}
 		}
 
-		// Extract vector
 		var vector []float32
 		if point.Vectors != nil {
 			if vectorData := point.Vectors.GetVector(); vectorData != nil {
@@ -218,17 +178,16 @@ func convertQdrantResults(points []*qdrant.ScoredPoint) []SearchResult {
 						vector = v.Dense.Data
 					}
 				default:
-					// Handle other vector types or nil case
+
 					vector = []float32{}
 				}
 			}
 		}
 
-		// Extract metadata
 		metadata := make(map[string]interface{})
 		if point.Payload != nil {
 			for key, value := range point.Payload {
-				// Convert Qdrant Value back to interface{}
+
 				switch v := value.Kind.(type) {
 				case *qdrant.Value_StringValue:
 					metadata[key] = v.StringValue
@@ -239,7 +198,7 @@ func convertQdrantResults(points []*qdrant.ScoredPoint) []SearchResult {
 				case *qdrant.Value_BoolValue:
 					metadata[key] = v.BoolValue
 				case *qdrant.Value_ListValue:
-					// Convert list value to Go slice
+
 					if v.ListValue != nil {
 						list := make([]interface{}, len(v.ListValue.Values))
 						for i, item := range v.ListValue.Values {
@@ -264,10 +223,8 @@ func convertQdrantResults(points []*qdrant.ScoredPoint) []SearchResult {
 			}
 		}
 
-		// Extract score
 		score := point.Score
 
-		// Extract content from metadata if available
 		content := ""
 		if contentValue, exists := metadata["content"]; exists {
 			if contentStr, ok := contentValue.(string); ok {
@@ -287,19 +244,17 @@ func convertQdrantResults(points []*qdrant.ScoredPoint) []SearchResult {
 	return results
 }
 
-// CreateCollection creates a collection if it doesn't exist
 func (db *qdrantDatabaseProvider) CreateCollection(ctx context.Context, collection string, vectorSize uint64) error {
-	// Check if collection exists
+
 	exists, err := db.client.CollectionExists(ctx, collection)
 	if err != nil {
 		return fmt.Errorf("failed to check if collection exists: %w", err)
 	}
 
 	if exists {
-		return nil // Collection already exists
+		return nil
 	}
 
-	// Create collection
 	err = db.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: collection,
 		VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
@@ -314,9 +269,8 @@ func (db *qdrantDatabaseProvider) CreateCollection(ctx context.Context, collecti
 	return nil
 }
 
-// Delete removes a document from the database
 func (db *qdrantDatabaseProvider) Delete(ctx context.Context, collection string, id string) error {
-	// Delete a specific point by ID
+
 	deletePoints := &qdrant.DeletePoints{
 		CollectionName: collection,
 		Points: &qdrant.PointsSelector{
@@ -336,12 +290,10 @@ func (db *qdrantDatabaseProvider) Delete(ctx context.Context, collection string,
 	return nil
 }
 
-// DeleteByFilter removes documents matching the filter
 func (db *qdrantDatabaseProvider) DeleteByFilter(ctx context.Context, collection string, filter map[string]interface{}) error {
-	// Create filter condition
+
 	qdrantFilter := buildQdrantFilter(filter)
 
-	// Delete points matching filter
 	deletePoints := &qdrant.DeletePoints{
 		CollectionName: collection,
 		Points: &qdrant.PointsSelector{
@@ -358,7 +310,6 @@ func (db *qdrantDatabaseProvider) DeleteByFilter(ctx context.Context, collection
 	return nil
 }
 
-// DeleteCollection removes a collection
 func (db *qdrantDatabaseProvider) DeleteCollection(ctx context.Context, collection string) error {
 	err := db.client.DeleteCollection(ctx, collection)
 	if err != nil {
@@ -367,7 +318,6 @@ func (db *qdrantDatabaseProvider) DeleteCollection(ctx context.Context, collecti
 	return nil
 }
 
-// Close closes the Qdrant client
 func (db *qdrantDatabaseProvider) Close() error {
 	return db.client.Close()
 }

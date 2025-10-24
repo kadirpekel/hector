@@ -15,29 +15,25 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-// HTTPClient implements A2AClient for remote A2A servers over HTTP/REST
 type HTTPClient struct {
 	baseURL string
 	token   string
 	client  *http.Client
 }
 
-// NewHTTPClient creates a new HTTP-based A2A client
 func NewHTTPClient(baseURL, token string) A2AClient {
 	return &HTTPClient{
 		baseURL: strings.TrimSuffix(baseURL, "/"),
 		token:   token,
 		client: &http.Client{
-			Timeout: 300 * time.Second, // Long timeout for streaming
+			Timeout: 300 * time.Second,
 		},
 	}
 }
 
-// SendMessage sends a non-streaming message to an agent
 func (c *HTTPClient) SendMessage(ctx context.Context, agentID string, message *pb.Message) (*pb.SendMessageResponse, error) {
 	url := fmt.Sprintf("%s/v1/agents/%s/message:send", c.baseURL, agentID)
 
-	// Build request using protojson
 	reqProto := &pb.SendMessageRequest{
 		Request: message,
 	}
@@ -80,11 +76,9 @@ func (c *HTTPClient) SendMessage(ctx context.Context, agentID string, message *p
 	return &response, nil
 }
 
-// StreamMessage sends a streaming message to an agent
 func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error) {
 	url := fmt.Sprintf("%s/v1/agents/%s/message:stream", c.baseURL, agentID)
 
-	// Build request using protojson
 	reqProto := &pb.SendMessageRequest{
 		Request: message,
 	}
@@ -114,7 +108,6 @@ func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message 
 		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Create channel for streaming responses
 	streamChan := make(chan *pb.StreamResponse, 10)
 
 	go func() {
@@ -128,34 +121,33 @@ func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message 
 		for scanner.Scan() {
 			line := scanner.Text()
 
-			// Parse SSE format: "event: message" and "data: {...}"
 			if strings.HasPrefix(line, "event: ") {
 				currentEvent = strings.TrimPrefix(line, "event: ")
 			} else if strings.HasPrefix(line, "data: ") {
 				currentData = strings.TrimPrefix(line, "data: ")
 			} else if line == "" && currentData != "" {
-				// Empty line marks end of SSE event, process it
+
 				if currentEvent == "message" || currentEvent == "" {
-					// Try to parse as raw StreamResponse (REST gateway format) using protojson
+
 					var streamResp pb.StreamResponse
 					if err := protojson.Unmarshal([]byte(currentData), &streamResp); err == nil {
 						streamChan <- &streamResp
 					} else {
-						// Fallback: try JSON-RPC wrapper format
+
 						var rpcResp struct {
 							JSONRPC string          `json:"jsonrpc"`
 							ID      interface{}     `json:"id"`
 							Result  json.RawMessage `json:"result"`
 						}
 						if err := json.Unmarshal([]byte(currentData), &rpcResp); err == nil && rpcResp.Result != nil {
-							// Parse the actual StreamResponse from result
+
 							if err := protojson.Unmarshal(rpcResp.Result, &streamResp); err == nil {
 								streamChan <- &streamResp
 							}
 						}
 					}
 				}
-				// Reset for next event
+
 				currentEvent = ""
 				currentData = ""
 			}
@@ -165,8 +157,7 @@ func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message 
 	return streamChan, nil
 }
 
-// ListAgents lists all available agents from the server
-func (c *HTTPClient) ListAgents(ctx context.Context) ([]AgentInfo, error) {
+func (c *HTTPClient) ListAgents(ctx context.Context) ([]*pb.AgentCard, error) {
 	url := fmt.Sprintf("%s/v1/agents", c.baseURL)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -189,31 +180,31 @@ func (c *HTTPClient) ListAgents(ctx context.Context) ([]AgentInfo, error) {
 		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var response map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var response struct {
+		Agents []json.RawMessage `json:"agents"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Parse agents from response
-	var agents []AgentInfo
-	if agentsList, ok := response["agents"].([]interface{}); ok {
-		for _, a := range agentsList {
-			if agentData, ok := a.(map[string]interface{}); ok {
-				agent := AgentInfo{
-					ID:          getString(agentData, "id", ""),
-					Name:        getString(agentData, "name", ""),
-					Description: getString(agentData, "description", ""),
-					Endpoint:    getString(agentData, "endpoint", ""),
-				}
-				agents = append(agents, agent)
-			}
+	var agents []*pb.AgentCard
+	for _, agentData := range response.Agents {
+		var card pb.AgentCard
+		if err := protojson.Unmarshal(agentData, &card); err != nil {
+
+			continue
 		}
+		agents = append(agents, &card)
 	}
 
 	return agents, nil
 }
 
-// GetAgentCard retrieves the agent card for a specific agent
 func (c *HTTPClient) GetAgentCard(ctx context.Context, agentID string) (*pb.AgentCard, error) {
 	url := fmt.Sprintf("%s/v1/agents/%s/.well-known/agent-card.json", c.baseURL, agentID)
 
@@ -237,20 +228,17 @@ func (c *HTTPClient) GetAgentCard(ctx context.Context, agentID string) (*pb.Agen
 		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse generic JSON (A2A spec format)
 	var cardData map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&cardData); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Convert to pb.AgentCard
 	card := &pb.AgentCard{
 		Name:        getString(cardData, "name", ""),
 		Description: getString(cardData, "description", ""),
 		Version:     getString(cardData, "version", ""),
 	}
 
-	// Parse capabilities if present
 	if caps, ok := cardData["capabilities"].(map[string]interface{}); ok {
 		card.Capabilities = &pb.AgentCapabilities{
 			Streaming: getBool(caps, "streaming", false),
@@ -260,7 +248,6 @@ func (c *HTTPClient) GetAgentCard(ctx context.Context, agentID string) (*pb.Agen
 	return card, nil
 }
 
-// GetTask retrieves a task by ID
 func (c *HTTPClient) GetTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
 	url := fmt.Sprintf("%s/v1/agents/%s/tasks/%s", c.baseURL, agentID, taskID)
 
@@ -297,7 +284,6 @@ func (c *HTTPClient) GetTask(ctx context.Context, agentID string, taskID string)
 	return &task, nil
 }
 
-// CancelTask cancels a running task
 func (c *HTTPClient) CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
 	url := fmt.Sprintf("%s/v1/agents/%s/tasks/%s:cancel", c.baseURL, agentID, taskID)
 
@@ -335,12 +321,12 @@ func (c *HTTPClient) CancelTask(ctx context.Context, agentID string, taskID stri
 	return &task, nil
 }
 
-// Close releases resources (HTTP client doesn't need cleanup)
 func (c *HTTPClient) Close() error {
+
+	c.client.CloseIdleConnections()
 	return nil
 }
 
-// Helper functions for JSON parsing
 func getString(m map[string]interface{}, key, defaultVal string) string {
 	if val, ok := m[key].(string); ok {
 		return val

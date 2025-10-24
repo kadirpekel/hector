@@ -1,6 +1,6 @@
 ---
 title: Hector Documentation
-description: Pure A2A-Native Declarative AI Agent Platform - Complete Documentation
+description: Declarative A2A-Native AI Agent Platform - Complete Documentation
 hide:
   - navigation
   - toc
@@ -14,9 +14,9 @@ hide:
 
 <div class="hero-section">
   <div class="hero-content">
-    <p class="hero-slogan">Build AI agents without code</p>
+    <p class="hero-slogan">Declarative A2A-Native AI Agent Platform</p>
     
-    <p>A declarative A2A native AI agent platform. Define sophisticated agents through simple YAML configuration.</p>
+    <p>Production-ready framework for building, deploying, and orchestrating AI agents at scale.</p>
     
     <p><strong>Built with Go</strong> for production performance, single-binary deployment, and true portability.</p>
     
@@ -25,7 +25,7 @@ hide:
 agents:
   assistant:
     llm: gpt-4o
-    tools: [search, write_file, execute_command]
+    tools: [search, write_file, search_replace]
     reasoning:
       engine: chain-of-thought
       max_iterations: 100
@@ -42,14 +42,7 @@ agents:
   </div>
 </div>
 
-<p><strong>Hector</strong> eliminates code from agent development. Get multi-agent orchestration, advanced memory management, and seamless interoperability through the <a href="https://a2a-protocol.org">Agent-to-Agent protocol</a> out of the box. Hector handles the complexity so you can focus on building intelligent systems.</p>
-
-<p><strong>⚡️ From idea to production agent in minutes, not months.</strong></p>
-
-!!! tip "Why Hector is Different"
-    Built with **Go** for maximum efficiency: 100,000x more memory efficient than Python alternatives, runs on Raspberry Pi with 128MB RAM, deploys as a single 10MB binary. Perfect for resource-constrained environments and cost-optimized cloud deployments.
-    
-    [Learn more about performance →](performance/index.md){ .md-button }
+Hector is an AI agent framework designed for production deployment, built in Go for performance and operational simplicity. Define sophisticated multi-agent systems through declarative YAML configuration without writing code.
 
 <script>
 (function() {
@@ -79,89 +72,52 @@ agents:
 })();
 </script>
 
-## Why Hector?
+## Quick Start
+
+```bash
+# Install
+go install github.com/kadirpekel/hector/cmd/hector@latest
+
+# Configure
+export OPENAI_API_KEY="sk-..."
+
+# Run server
+hector serve --config agents.yaml
+
+# Or use locally
+hector call "Explain quantum computing"
+```
+
+[Installation Guide →](getting-started/installation.md){ .md-button .md-button--primary }
+[Quick Start Tutorial →](getting-started/quick-start.md){ .md-button }
+
+## Key Features
 
 <div class="grid cards" markdown>
 
--   :zap: __For Developers__
+-   :zap: __Zero-Code Development__
 
-    ---
+    Define agents through YAML configuration. No programming required.
 
-    - **Zero-code agent development** - YAML configuration only
-    - **Instant setup** - Working agent in 5 minutes
-    - **Advanced memory** - Working & long-term memory strategies
-    - **RAG & semantic search** - Built-in vector store integration
-    - **Rich tool ecosystem** - Built-in tools, MCP, and plugins
+-   :link: __A2A Protocol Native__
 
--   :building_construction: __For Enterprises__
+    Standards-compliant agent communication and federation.
 
-    ---
+-   :brain: __Advanced Memory__
 
-    - **True interoperability** - Native A2A protocol support
-    - **Multi-agent orchestration** - Coordinate specialized agents
-    - **Production security** - JWT auth, API keys, agent-level security
-    - **Distributed architecture** - Local, server, or client modes
-    - **Multi-transport APIs** - REST, SSE, WebSocket, gRPC
+    Working memory strategies and vector-based long-term memory with RAG.
 
--   :busts_in_silhouette: __For Teams__
+-   :hammer_and_wrench: __Rich Tool Ecosystem__
 
-    ---
+    Built-in tools, MCP support, and custom plugin system.
 
-    - **Simple configuration** - Human-readable YAML
-    - **Declarative approach** - No code to maintain
-    - **Built with Go** - Production performance, single binary, no dependencies
-    - **Flexible deployment** - Docker, Kubernetes, systemd
-    - **Extensible platform** - Custom plugins via gRPC
-    - **Open source** - AGPL-3.0 licensed
+-   :thought_balloon: __Reasoning Engines__
+
+    Chain-of-thought and supervisor strategies for single and multi-agent workflows.
+
+-   :shield: __Production Ready__
+
+    Observability, authentication, distributed configuration, and security controls.
 
 </div>
 
-## Get Started
-
-<div class="grid cards" markdown>
-
--   :rocket: __[Getting Started](getting-started/installation.md)__
-
-    ---
-
-    New to Hector? Start here. Install Hector, run your first agent, and validate your setup in under 5 minutes.
-
--   :books: __[Core Concepts](core-concepts/overview.md)__
-
-    ---
-
-    Learn how Hector works. Understand agents, LLM providers, memory, tools, RAG, reasoning strategies, and multi-agent orchestration.
-
--   :chart_with_upwards_trend: __[Performance](performance/index.md)__
-
-    ---
-
-    Discover why Hector is 100,000x more memory efficient than alternatives. Learn about scalability, resource optimization, and deployment patterns.
-
--   :hammer_and_wrench: __[How-To Guides](how-to/build-coding-assistant.md)__
-
-    ---
-
-    Step-by-step tutorials for common tasks. Build a coding assistant, set up RAG, deploy to production, or integrate external A2A agents.
-
--   :book: __[CLI Reference](reference/cli.md)__
-
-    ---
-
-    Complete command-line interface reference with all commands, flags, and options.
-
--   :gear: __[Configuration](reference/configuration.md)__
-
-    ---
-
-    Complete YAML configuration reference for agents, LLMs, tools, memory, and deployment.
-
--   :globe_with_meridians: __[API Reference](reference/api.md)__
-
-    ---
-
-    REST, gRPC, WebSocket, and JSON-RPC API documentation with examples.
-
-</div>
-
-If you're looking for something specific you can use the search bar at the top of the page.

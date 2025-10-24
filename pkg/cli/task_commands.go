@@ -3,48 +3,39 @@ package cli
 import (
 	"context"
 	"fmt"
+
+	"github.com/kadirpekel/hector/pkg/config"
 )
 
-// TaskGetCommand retrieves task details
-func TaskGetCommand(args *CLIArgs) error {
-	// Create client
-	a2aClient, err := createClient(args)
+func TaskGetCommand(args *TaskGetCmd, cfg *config.Config, mode CLIMode) error {
+	client, err := createClient(args, cfg, mode)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer a2aClient.Close()
+	defer client.Close()
 
-	// Get task
-	task, err := a2aClient.GetTask(context.Background(), args.AgentID, args.TaskID)
+	task, err := client.GetTask(context.Background(), args.Agent, args.TaskID)
 	if err != nil {
 		return fmt.Errorf("failed to get task: %w", err)
 	}
 
-	// Display
 	DisplayTask(task)
-
 	return nil
 }
 
-// TaskCancelCommand cancels a running task
-func TaskCancelCommand(args *CLIArgs) error {
-	// Create client
-	a2aClient, err := createClient(args)
+func TaskCancelCommand(args *TaskCancelCmd, cfg *config.Config, mode CLIMode) error {
+	client, err := createClient(args, cfg, mode)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	defer a2aClient.Close()
+	defer client.Close()
 
-	// Cancel task
-	task, err := a2aClient.CancelTask(context.Background(), args.AgentID, args.TaskID)
+	task, err := client.CancelTask(context.Background(), args.Agent, args.TaskID)
 	if err != nil {
 		return fmt.Errorf("failed to cancel task: %w", err)
 	}
 
 	fmt.Printf("✅ Task cancelled successfully\n\n")
-
-	// Display updated task
 	DisplayTask(task)
-
 	return nil
 }

@@ -8,18 +8,12 @@ import (
 	"github.com/kadirpekel/hector/pkg/config"
 )
 
-// ============================================================================
-// LOCAL - BUILT-IN TOOL SOURCE
-// ============================================================================
-
-// LocalToolSource manages built-in/local tools
 type LocalToolSource struct {
 	name  string
 	tools map[string]Tool
 	mu    sync.RWMutex
 }
 
-// NewLocalToolSource creates a new local tool source
 func NewLocalToolSource(name string) *LocalToolSource {
 	if name == "" {
 		name = "local"
@@ -31,21 +25,18 @@ func NewLocalToolSource(name string) *LocalToolSource {
 	}
 }
 
-// NewLocalToolSourceWithConfig creates a new local tool source from configuration
-func NewLocalToolSourceWithConfig(toolConfigs map[string]config.ToolConfig) (*LocalToolSource, error) {
+func NewLocalToolSourceWithConfig(toolConfigs map[string]*config.ToolConfig) (*LocalToolSource, error) {
 	return NewLocalToolSourceWithConfigAndAgentRegistry(toolConfigs, nil)
 }
 
-// NewLocalToolSourceWithConfigAndAgentRegistry creates a local tool source with agent registry for agent_call tool
-func NewLocalToolSourceWithConfigAndAgentRegistry(toolConfigs map[string]config.ToolConfig, agentRegistry interface{}) (*LocalToolSource, error) {
+func NewLocalToolSourceWithConfigAndAgentRegistry(toolConfigs map[string]*config.ToolConfig, agentRegistry interface{}) (*LocalToolSource, error) {
 	source := &LocalToolSource{
 		name:  "local",
 		tools: make(map[string]Tool),
 	}
 
-	// Register tools defined in the configuration
 	for toolName, toolConfig := range toolConfigs {
-		if !toolConfig.Enabled {
+		if toolConfig == nil || !toolConfig.Enabled {
 			continue
 		}
 
@@ -64,14 +55,14 @@ func NewLocalToolSourceWithConfigAndAgentRegistry(toolConfigs map[string]config.
 		case "todo":
 			tool = NewTodoTool()
 		case "agent_call":
-			// Create agent_call tool with registry reference
+
 			var registry AgentRegistry
 			if agentRegistry != nil {
 				if ar, ok := agentRegistry.(AgentRegistry); ok {
 					registry = ar
 				}
 			}
-			// Validate registry is available
+
 			if registry == nil {
 				return nil, fmt.Errorf("agent_call tool requires agent registry but none was provided")
 			}
@@ -93,17 +84,14 @@ func NewLocalToolSourceWithConfigAndAgentRegistry(toolConfigs map[string]config.
 	return source, nil
 }
 
-// GetName returns the source name
 func (r *LocalToolSource) GetName() string {
 	return r.name
 }
 
-// GetType returns the source type
 func (r *LocalToolSource) GetType() string {
 	return "local"
 }
 
-// RegisterTool adds a tool to the local source
 func (r *LocalToolSource) RegisterTool(tool Tool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -118,21 +106,18 @@ func (r *LocalToolSource) RegisterTool(tool Tool) error {
 	}
 
 	r.tools[name] = tool
-	// Quietly register tool (verbose logging removed for cleaner output)
+
 	return nil
 }
 
-// DiscoverTools discovers tools (for local source, this is a no-op since tools are pre-registered)
 func (r *LocalToolSource) DiscoverTools(ctx context.Context) error {
-	// Local tools are registered manually, so discovery is immediate
+
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	// Tools are pre-registered, discovery is a no-op for local source
 	return nil
 }
 
-// ListTools returns all tools in this source
 func (r *LocalToolSource) ListTools() []ToolInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -140,7 +125,7 @@ func (r *LocalToolSource) ListTools() []ToolInfo {
 	var tools []ToolInfo
 	for _, tool := range r.tools {
 		info := tool.GetInfo()
-		// Mark as local tool
+
 		info.ServerURL = r.name
 		tools = append(tools, info)
 	}
@@ -148,7 +133,6 @@ func (r *LocalToolSource) ListTools() []ToolInfo {
 	return tools
 }
 
-// GetTool retrieves a specific tool by name
 func (r *LocalToolSource) GetTool(name string) (Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -157,7 +141,6 @@ func (r *LocalToolSource) GetTool(name string) (Tool, bool) {
 	return tool, exists
 }
 
-// RemoveTool removes a tool from the source
 func (r *LocalToolSource) RemoveTool(name string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

@@ -41,7 +41,7 @@ func TestCreateStrategy(t *testing.T) {
 			name:            "empty engine",
 			engine:          "",
 			reasoningConfig: &config.ReasoningConfig{},
-			wantErr:         false, // Empty engine defaults to chain-of-thought
+			wantErr:         false,
 		},
 	}
 
@@ -67,7 +67,6 @@ func TestListAvailableStrategies(t *testing.T) {
 		t.Error("ListAvailableStrategies() should return at least one strategy")
 	}
 
-	// Check that we have the expected strategies
 	expectedStrategies := []string{"chain-of-thought", "supervisor"}
 	for _, expected := range expectedStrategies {
 		found := false

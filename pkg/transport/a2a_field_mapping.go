@@ -4,38 +4,34 @@ import (
 	"encoding/json"
 )
 
-// applyA2AFieldMapping transforms A2A JSON fields to protobuf format.
-// This handles the mapping between A2A specification's camelCase field names
-// and protobuf's internal representation:
-//   - parts → content
-//   - lowercase roles (user/agent) → uppercase enum format (ROLE_USER/ROLE_AGENT)
-//   - lowercase states (submitted/working/etc) → uppercase enum format (TASK_STATE_*)
 func applyA2AFieldMapping(data []byte) []byte {
 	var bodyMap map[string]interface{}
 	if err := json.Unmarshal(data, &bodyMap); err != nil {
-		return data // Return unchanged if parsing fails
+		return data
 	}
 
-	// Look for message object and apply transformations
-	if message, ok := bodyMap["message"].(map[string]interface{}); ok {
-		// Map "parts" → "content" for A2A compatibility
-		if parts, ok := message["parts"]; ok {
-			message["content"] = parts
-			delete(message, "parts")
+	if message, ok := bodyMap["message"].(map[string]interface{}); ok && bodyMap["request"] == nil {
+		bodyMap["request"] = message
+		delete(bodyMap, "message")
+	}
+
+	if request, ok := bodyMap["request"].(map[string]interface{}); ok {
+
+		if parts, ok := request["parts"]; ok {
+			request["content"] = parts
+			delete(request, "parts")
 		}
 
-		// Map lowercase "role" values to protobuf enum format
-		if role, ok := message["role"].(string); ok {
+		if role, ok := request["role"].(string); ok {
 			switch role {
 			case "user":
-				message["role"] = "ROLE_USER"
+				request["role"] = "ROLE_USER"
 			case "agent", "assistant":
-				message["role"] = "ROLE_AGENT"
+				request["role"] = "ROLE_AGENT"
 			}
 		}
 	}
 
-	// Look for task object and apply state transformations
 	if task, ok := bodyMap["task"].(map[string]interface{}); ok {
 		if status, ok := task["status"].(map[string]interface{}); ok {
 			if state, ok := status["state"].(string); ok {
@@ -44,15 +40,13 @@ func applyA2AFieldMapping(data []byte) []byte {
 		}
 	}
 
-	// Re-marshal
 	result, err := json.Marshal(bodyMap)
 	if err != nil {
-		return data // Return original if marshaling fails
+		return data
 	}
 	return result
 }
 
-// normalizeTaskState converts lowercase task states to uppercase enum format
 func normalizeTaskState(state string) string {
 	switch state {
 	case "submitted":

@@ -17,7 +17,6 @@ func TestChainOfThoughtStrategy_PrepareIteration(t *testing.T) {
 	strategy := NewChainOfThoughtStrategy()
 	state := NewReasoningState()
 
-	// PrepareIteration should not return an error
 	err := strategy.PrepareIteration(1, state)
 	if err != nil {
 		t.Errorf("PrepareIteration() error = %v", err)
@@ -28,13 +27,11 @@ func TestChainOfThoughtStrategy_ShouldStop(t *testing.T) {
 	strategy := NewChainOfThoughtStrategy()
 	state := NewReasoningState()
 
-	// ShouldStop should return true when no tool calls
 	shouldStop := strategy.ShouldStop("test text", []*protocol.ToolCall{}, state)
 	if !shouldStop {
 		t.Error("ShouldStop() should return true when no tool calls")
 	}
 
-	// ShouldStop should return false when there are tool calls
 	toolCalls := []*protocol.ToolCall{
 		{Name: "test_tool", Args: map[string]interface{}{}},
 	}
@@ -48,7 +45,6 @@ func TestChainOfThoughtStrategy_AfterIteration(t *testing.T) {
 	strategy := NewChainOfThoughtStrategy()
 	state := NewReasoningState()
 
-	// AfterIteration should not return an error
 	err := strategy.AfterIteration(1, "test text", []*protocol.ToolCall{}, []ToolResult{}, state)
 	if err != nil {
 		t.Errorf("AfterIteration() error = %v", err)
@@ -85,7 +81,6 @@ func TestChainOfThoughtStrategy_GetRequiredTools(t *testing.T) {
 		t.Error("GetRequiredTools() should return at least one tool")
 	}
 
-	// Check if todo_write tool is required
 	foundTodoTool := false
 	for _, tool := range tools {
 		if tool.Name == "todo_write" {

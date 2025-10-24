@@ -10,28 +10,20 @@ import (
 	"github.com/kadirpekel/hector/pkg/config"
 )
 
-// ============================================================================
-// COMMAND EXECUTOR - SECURE SHELL COMMAND EXECUTION
-// ============================================================================
-
-// CommandTool handles secure command execution
 type CommandTool struct {
 	config *config.CommandToolsConfig
 }
 
-// NewCommandTool creates a new command tool with secure defaults
 func NewCommandTool(commandConfig *config.CommandToolsConfig) *CommandTool {
 	if commandConfig == nil {
 		commandConfig = &config.CommandToolsConfig{
-			AllowedCommands:  nil, // nil = allow all (when sandboxing enabled)
+			AllowedCommands:  nil,
 			WorkingDirectory: "./",
 			MaxExecutionTime: 30 * time.Second,
-			EnableSandboxing: true, // Sandboxing enabled by default for security
+			EnableSandboxing: true,
 		}
 	}
 
-	// Apply defaults if not set
-	// Note: Empty AllowedCommands with EnableSandboxing=true means "allow all" (default permissive)
 	if commandConfig.WorkingDirectory == "" {
 		commandConfig.WorkingDirectory = "./"
 	}
@@ -42,16 +34,17 @@ func NewCommandTool(commandConfig *config.CommandToolsConfig) *CommandTool {
 	return &CommandTool{config: commandConfig}
 }
 
-// NewCommandToolWithConfig creates a command tool from a ToolConfig configuration
-func NewCommandToolWithConfig(name string, toolConfig config.ToolConfig) (*CommandTool, error) {
-	// Build CommandToolsConfig from flat ToolConfig structure
+func NewCommandToolWithConfig(name string, toolConfig *config.ToolConfig) (*CommandTool, error) {
+	if toolConfig == nil {
+		return nil, fmt.Errorf("tool config is required")
+	}
+
 	commandConfig := &config.CommandToolsConfig{
 		AllowedCommands:  toolConfig.AllowedCommands,
 		WorkingDirectory: toolConfig.WorkingDirectory,
 		EnableSandboxing: toolConfig.EnableSandboxing,
 	}
 
-	// Parse MaxExecutionTime
 	if toolConfig.MaxExecutionTime != "" {
 		duration, err := time.ParseDuration(toolConfig.MaxExecutionTime)
 		if err != nil {
@@ -60,15 +53,13 @@ func NewCommandToolWithConfig(name string, toolConfig config.ToolConfig) (*Comma
 		commandConfig.MaxExecutionTime = duration
 	}
 
-	// Apply defaults
 	commandConfig.SetDefaults()
 
 	return NewCommandTool(commandConfig), nil
 }
 
-// Execute runs a command with security checks and timeout protection
 func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
-	// Extract parameters - support both "command" and "input" for flexibility
+
 	command, ok := args["command"].(string)
 	if !ok || command == "" {
 		return t.createErrorResult("command parameter is required", fmt.Errorf("command parameter is required"))
@@ -76,35 +67,29 @@ func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) 
 
 	workingDir, _ := args["working_dir"].(string)
 
-	// Set working directory
 	if workingDir == "" {
 		workingDir = t.config.WorkingDirectory
 	}
 
-	// Security validation
 	if err := t.validateCommand(command); err != nil {
 		return t.createErrorResult(err.Error(), err)
 	}
 
-	// Apply timeout
 	if t.config.MaxExecutionTime > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, t.config.MaxExecutionTime)
 		defer cancel()
 	}
 
-	// Execute command through shell for consistent behavior
 	return t.executeCommand(ctx, command, workingDir)
 }
 
-// validateCommand performs security validation on the command
 func (t *CommandTool) validateCommand(command string) error {
-	// If sandboxing is enabled (default) and no allowed_commands specified, allow all (safe)
+
 	if t.config.EnableSandboxing && len(t.config.AllowedCommands) == 0 {
 		return nil
 	}
 
-	// If sandboxing is disabled OR allowed_commands is specified, enforce the whitelist
 	baseCmd := t.extractBaseCommand(command)
 	if !t.isCommandAllowed(baseCmd) {
 		return fmt.Errorf("command not allowed: %s (allowed: %v)", baseCmd, t.config.AllowedCommands)
@@ -113,7 +98,6 @@ func (t *CommandTool) validateCommand(command string) error {
 	return nil
 }
 
-// executeCommand executes the validated command
 func (t *CommandTool) executeCommand(ctx context.Context, command, workingDir string) (ToolResult, error) {
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Dir = workingDir
@@ -143,7 +127,6 @@ func (t *CommandTool) executeCommand(ctx context.Context, command, workingDir st
 	return result, err
 }
 
-// createErrorResult creates a standardized error result
 func (t *CommandTool) createErrorResult(message string, err error) (ToolResult, error) {
 	return ToolResult{
 		Success:  false,
@@ -152,9 +135,8 @@ func (t *CommandTool) createErrorResult(message string, err error) (ToolResult, 
 	}, err
 }
 
-// extractBaseCommand gets the first command from a complex shell command
 func (t *CommandTool) extractBaseCommand(command string) string {
-	// Handle pipes, redirects, etc. - get the first command
+
 	parts := strings.FieldsFunc(command, func(r rune) bool {
 		return r == '|' || r == '>' || r == '<' || r == ';'
 	})
@@ -163,7 +145,6 @@ func (t *CommandTool) extractBaseCommand(command string) string {
 		return ""
 	}
 
-	// Get first word of first command
 	firstCmd := strings.TrimSpace(parts[0])
 	cmdParts := strings.Fields(firstCmd)
 	if len(cmdParts) == 0 {
@@ -173,14 +154,12 @@ func (t *CommandTool) extractBaseCommand(command string) string {
 	return cmdParts[0]
 }
 
-// isCommandAllowed checks if a command is in the allowed list
 func (t *CommandTool) isCommandAllowed(command string) bool {
-	// If no allowed commands configured, allow all (when sandboxing enabled)
+
 	if len(t.config.AllowedCommands) == 0 {
 		return true
 	}
 
-	// Check against whitelist
 	for _, allowed := range t.config.AllowedCommands {
 		if command == allowed {
 			return true
@@ -189,7 +168,6 @@ func (t *CommandTool) isCommandAllowed(command string) bool {
 	return false
 }
 
-// GetInfo returns tool information for the Tool interface
 func (t *CommandTool) GetInfo() ToolInfo {
 	return ToolInfo{
 		Name:        "execute_command",
@@ -212,12 +190,10 @@ func (t *CommandTool) GetInfo() ToolInfo {
 	}
 }
 
-// GetName returns the tool name
 func (t *CommandTool) GetName() string {
 	return "execute_command"
 }
 
-// GetDescription returns the tool description
 func (t *CommandTool) GetDescription() string {
 	return "Execute shell commands for file operations, system tasks, and development workflows. Use 'sed -n \"START,ENDp\" FILE' to read specific line ranges."
 }

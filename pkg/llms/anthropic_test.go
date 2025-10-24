@@ -15,7 +15,7 @@ import (
 )
 
 func TestNewAnthropicProvider(t *testing.T) {
-	// Test basic functionality
+
 	provider := NewAnthropicProvider("sk-ant-test-key", "claude-3-5-sonnet-20241022")
 
 	if provider == nil {
@@ -36,7 +36,7 @@ func TestNewAnthropicProvider(t *testing.T) {
 }
 
 func TestNewAnthropicProviderFromConfig(t *testing.T) {
-	// Test valid config
+
 	config := &config.LLMProviderConfig{
 		Type:    "anthropic",
 		Model:   "claude-3-5-sonnet-20241022",
@@ -68,10 +68,9 @@ func TestAnthropicProvider_GetModelName(t *testing.T) {
 }
 
 func TestAnthropicProvider_GetMaxTokens(t *testing.T) {
-	// Test with default provider (should have default max tokens)
+
 	provider := NewAnthropicProvider("sk-ant-test-key", "claude-3-5-sonnet-20241022")
 
-	// Default should be 4096 based on the NewAnthropicProvider function
 	expectedTokens := 4096
 	if provider.GetMaxTokens() != expectedTokens {
 		t.Errorf("GetMaxTokens() = %v, want %v", provider.GetMaxTokens(), expectedTokens)
@@ -79,10 +78,9 @@ func TestAnthropicProvider_GetMaxTokens(t *testing.T) {
 }
 
 func TestAnthropicProvider_GetTemperature(t *testing.T) {
-	// Test with default provider (should have default temperature)
+
 	provider := NewAnthropicProvider("sk-ant-test-key", "claude-3-5-sonnet-20241022")
 
-	// Default should be 1.0 based on the NewAnthropicProvider function
 	expectedTemp := 1.0
 	if provider.GetTemperature() != expectedTemp {
 		t.Errorf("GetTemperature() = %v, want %v", provider.GetTemperature(), expectedTemp)
@@ -92,7 +90,6 @@ func TestAnthropicProvider_GetTemperature(t *testing.T) {
 func TestAnthropicProvider_Close(t *testing.T) {
 	provider := NewAnthropicProvider("sk-ant-test-key", "claude-3-5-sonnet-20241022")
 
-	// Should not panic and should return nil
 	err := provider.Close()
 	if err != nil {
 		t.Errorf("Close() error = %v, want nil", err)
@@ -100,9 +97,9 @@ func TestAnthropicProvider_Close(t *testing.T) {
 }
 
 func TestAnthropicProvider_Generate_Success(t *testing.T) {
-	// Create a mock server
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request
+
 		if r.Method != "POST" {
 			t.Errorf("Expected POST request, got %s", r.Method)
 		}
@@ -110,25 +107,21 @@ func TestAnthropicProvider_Generate_Success(t *testing.T) {
 			t.Errorf("Expected /v1/messages, got %s", r.URL.Path)
 		}
 
-		// Check authorization header
 		auth := r.Header.Get("x-api-key")
 		if auth != "sk-ant-test-key" {
 			t.Errorf("Expected x-api-key header, got %s", auth)
 		}
 
-		// Check anthropic version header
 		version := r.Header.Get("anthropic-version")
 		if version != "2023-06-01" {
 			t.Errorf("Expected anthropic-version 2023-06-01, got %s", version)
 		}
 
-		// Parse request body
 		var req AnthropicRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Errorf("Failed to decode request: %v", err)
 		}
 
-		// Verify request structure
 		if req.Model != "claude-3-5-sonnet-20241022" {
 			t.Errorf("Expected model claude-3-5-sonnet-20241022, got %s", req.Model)
 		}
@@ -139,7 +132,6 @@ func TestAnthropicProvider_Generate_Success(t *testing.T) {
 			t.Errorf("Expected user role, got %s", req.Messages[0].Role)
 		}
 
-		// Send mock response
 		response := AnthropicResponse{
 			Content: []AnthropicContent{
 				{
@@ -158,7 +150,6 @@ func TestAnthropicProvider_Generate_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Create provider with test server
 	config := &config.LLMProviderConfig{
 		Type:   "anthropic",
 		Model:  "claude-3-5-sonnet-20241022",
@@ -171,7 +162,6 @@ func TestAnthropicProvider_Generate_Success(t *testing.T) {
 		t.Fatalf("NewAnthropicProviderFromConfig() error = %v", err)
 	}
 
-	// Test Generate
 	messages := []*pb.Message{
 		protocol.CreateUserMessage("Hello"),
 	}
@@ -194,15 +184,14 @@ func TestAnthropicProvider_Generate_Success(t *testing.T) {
 }
 
 func TestAnthropicProvider_Generate_WithTools(t *testing.T) {
-	// Create a mock server
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Parse request body
+
 		var req AnthropicRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Errorf("Failed to decode request: %v", err)
 		}
 
-		// Verify tools in request
 		if len(req.Tools) != 1 {
 			t.Errorf("Expected 1 tool, got %d", len(req.Tools))
 		}
@@ -210,7 +199,6 @@ func TestAnthropicProvider_Generate_WithTools(t *testing.T) {
 			t.Errorf("Expected tool name test_tool, got %s", req.Tools[0].Name)
 		}
 
-		// Send mock response with tool use
 		response := AnthropicResponse{
 			Content: []AnthropicContent{
 				{
@@ -233,7 +221,6 @@ func TestAnthropicProvider_Generate_WithTools(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Create provider with test server
 	config := &config.LLMProviderConfig{
 		Type:   "anthropic",
 		Model:  "claude-3-5-sonnet-20241022",
@@ -246,7 +233,6 @@ func TestAnthropicProvider_Generate_WithTools(t *testing.T) {
 		t.Fatalf("NewAnthropicProviderFromConfig() error = %v", err)
 	}
 
-	// Test Generate with tools
 	messages := []*pb.Message{
 		protocol.CreateUserMessage("Use the test tool"),
 	}
@@ -288,14 +274,13 @@ func TestAnthropicProvider_Generate_WithTools(t *testing.T) {
 }
 
 func TestAnthropicProvider_Generate_HTTPError(t *testing.T) {
-	// Create a mock server that returns an error
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte("Internal Server Error"))
 	}))
 	defer server.Close()
 
-	// Create provider with test server
 	config := &config.LLMProviderConfig{
 		Type:   "anthropic",
 		Model:  "claude-3-5-sonnet-20241022",
@@ -308,7 +293,6 @@ func TestAnthropicProvider_Generate_HTTPError(t *testing.T) {
 		t.Fatalf("NewAnthropicProviderFromConfig() error = %v", err)
 	}
 
-	// Test Generate with HTTP error
 	messages := []*pb.Message{
 		protocol.CreateUserMessage("Hello"),
 	}
@@ -322,14 +306,13 @@ func TestAnthropicProvider_Generate_HTTPError(t *testing.T) {
 }
 
 func TestAnthropicProvider_Generate_InvalidJSON(t *testing.T) {
-	// Create a mock server that returns invalid JSON
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte("invalid json"))
 	}))
 	defer server.Close()
 
-	// Create provider with test server
 	config := &config.LLMProviderConfig{
 		Type:   "anthropic",
 		Model:  "claude-3-5-sonnet-20241022",
@@ -342,7 +325,6 @@ func TestAnthropicProvider_Generate_InvalidJSON(t *testing.T) {
 		t.Fatalf("NewAnthropicProviderFromConfig() error = %v", err)
 	}
 
-	// Test Generate with invalid JSON
 	messages := []*pb.Message{
 		protocol.CreateUserMessage("Hello"),
 	}
@@ -356,9 +338,9 @@ func TestAnthropicProvider_Generate_InvalidJSON(t *testing.T) {
 }
 
 func TestAnthropicProvider_GenerateStreaming_Success(t *testing.T) {
-	// Create a mock server
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request
+
 		if r.Method != "POST" {
 			t.Errorf("Expected POST request, got %s", r.Method)
 		}
@@ -366,7 +348,6 @@ func TestAnthropicProvider_GenerateStreaming_Success(t *testing.T) {
 			t.Errorf("Expected /v1/messages, got %s", r.URL.Path)
 		}
 
-		// Parse request body
 		var req AnthropicRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Errorf("Failed to decode request: %v", err)
@@ -376,11 +357,9 @@ func TestAnthropicProvider_GenerateStreaming_Success(t *testing.T) {
 			t.Error("Expected stream=true in request")
 		}
 
-		// Send streaming response
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Transfer-Encoding", "chunked")
 
-		// Send multiple chunks
 		chunks := []string{
 			`event: message_start
 data: {"type": "message_start", "message": {"id": "msg_123", "type": "message", "role": "assistant", "content": [], "model": "claude-3-5-sonnet-20241022", "stop_reason": null, "stop_sequence": null, "usage": {"input_tokens": 10, "output_tokens": 0}}}`,
@@ -404,7 +383,6 @@ data: {"type": "message_stop"}`,
 	}))
 	defer server.Close()
 
-	// Create provider with test server
 	config := &config.LLMProviderConfig{
 		Type:   "anthropic",
 		Model:  "claude-3-5-sonnet-20241022",
@@ -417,7 +395,6 @@ data: {"type": "message_stop"}`,
 		t.Fatalf("NewAnthropicProviderFromConfig() error = %v", err)
 	}
 
-	// Test GenerateStreaming
 	messages := []*pb.Message{
 		protocol.CreateUserMessage("Hello"),
 	}
@@ -429,7 +406,6 @@ data: {"type": "message_stop"}`,
 		t.Errorf("GenerateStreaming() error = %v, want nil", err)
 	}
 
-	// Collect chunks
 	var chunks []StreamChunk
 	for chunk := range ch {
 		chunks = append(chunks, chunk)
@@ -439,7 +415,6 @@ data: {"type": "message_stop"}`,
 		t.Errorf("Expected at least 2 chunks, got %d", len(chunks))
 	}
 
-	// Check first text chunk
 	foundText := false
 	for _, chunk := range chunks {
 		if chunk.Type == "text" && strings.Contains(chunk.Text, "Hello") {
@@ -453,14 +428,13 @@ data: {"type": "message_stop"}`,
 }
 
 func TestAnthropicProvider_GenerateStreaming_Error(t *testing.T) {
-	// Create a mock server that returns an error
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte("Internal Server Error"))
 	}))
 	defer server.Close()
 
-	// Create provider with test server
 	config := &config.LLMProviderConfig{
 		Type:   "anthropic",
 		Model:  "claude-3-5-sonnet-20241022",
@@ -473,7 +447,6 @@ func TestAnthropicProvider_GenerateStreaming_Error(t *testing.T) {
 		t.Fatalf("NewAnthropicProviderFromConfig() error = %v", err)
 	}
 
-	// Test GenerateStreaming with error
 	messages := []*pb.Message{
 		protocol.CreateUserMessage("Hello"),
 	}
@@ -482,11 +455,10 @@ func TestAnthropicProvider_GenerateStreaming_Error(t *testing.T) {
 	ch, err := provider.GenerateStreaming(messages, tools)
 
 	if err != nil {
-		// If there's an immediate error, that's expected
+
 		return
 	}
 
-	// If no immediate error, check that the channel eventually sends an error
 	hasError := false
 	for chunk := range ch {
 		if chunk.Type == "error" {
@@ -501,13 +473,12 @@ func TestAnthropicProvider_GenerateStreaming_Error(t *testing.T) {
 }
 
 func TestAnthropicProvider_WithCustomHTTPClient(t *testing.T) {
-	// Create custom HTTP client
+
 	customClient := httpclient.New(
 		httpclient.WithMaxRetries(1),
 		httpclient.WithBaseDelay(100*time.Millisecond),
 	)
 
-	// Create a mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := AnthropicResponse{
 			Content: []AnthropicContent{
@@ -527,7 +498,6 @@ func TestAnthropicProvider_WithCustomHTTPClient(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Create provider with custom client
 	config := &config.LLMProviderConfig{
 		Type:   "anthropic",
 		Model:  "claude-3-5-sonnet-20241022",
@@ -540,10 +510,8 @@ func TestAnthropicProvider_WithCustomHTTPClient(t *testing.T) {
 		t.Fatalf("NewAnthropicProviderFromConfig() error = %v", err)
 	}
 
-	// Replace the HTTP client
 	provider.httpClient = customClient
 
-	// Test Generate with custom client
 	messages := []*pb.Message{
 		protocol.CreateUserMessage("Hello"),
 	}
@@ -563,25 +531,22 @@ func TestAnthropicProvider_WithCustomHTTPClient(t *testing.T) {
 }
 
 func TestAnthropicProvider_MessageConversion(t *testing.T) {
-	// Test conversion from universal Message format to Anthropic format
+
 	_ = []*pb.Message{
 		protocol.CreateUserMessage("Hello"),
 		protocol.CreateTextMessage(pb.Role_ROLE_AGENT, "Hi there!"),
 		protocol.CreateTextMessage(pb.Role_ROLE_USER, "You are a helpful assistant"),
 	}
 
-	// This would be tested through the actual Generate method
-	// but we can test the conversion logic indirectly
 	provider := NewAnthropicProvider("sk-ant-test-key", "claude-3-5-sonnet-20241022")
 
-	// Test that the provider can handle different message types
 	if provider.GetModelName() != "claude-3-5-sonnet-20241022" {
 		t.Errorf("GetModelName() = %v, want claude-3-5-sonnet-20241022", provider.GetModelName())
 	}
 }
 
 func TestAnthropicProvider_ToolConversion(t *testing.T) {
-	// Test conversion from universal ToolDefinition format to Anthropic format
+
 	_ = []ToolDefinition{
 		{
 			Name:        "test_tool",
@@ -603,11 +568,8 @@ func TestAnthropicProvider_ToolConversion(t *testing.T) {
 		},
 	}
 
-	// This would be tested through the actual Generate method
-	// but we can test the conversion logic indirectly
 	provider := NewAnthropicProvider("sk-ant-test-key", "claude-3-5-sonnet-20241022")
 
-	// Test that the provider can handle tool definitions
 	if provider.GetModelName() != "claude-3-5-sonnet-20241022" {
 		t.Errorf("GetModelName() = %v, want claude-3-5-sonnet-20241022", provider.GetModelName())
 	}

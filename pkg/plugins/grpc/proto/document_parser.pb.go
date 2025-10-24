@@ -1,14 +1,9 @@
-// Code generated manually for document parser plugin.
-// TODO: Replace with proper protoc-generated code when protoc is available.
-// source: document_parser.proto
-
 package proto
 
 import (
 	"context"
 )
 
-// ParseDocumentRequest requests parsing of a document
 type ParseDocumentRequest struct {
 	FilePath       string            `json:"file_path"`
 	FileSize       int64             `json:"file_size"`
@@ -17,7 +12,6 @@ type ParseDocumentRequest struct {
 	TimeoutSeconds int32             `json:"timeout_seconds"`
 }
 
-// ParseDocumentResponse returns the parsed document content
 type ParseDocumentResponse struct {
 	Success          bool              `json:"success"`
 	Content          string            `json:"content"`
@@ -33,28 +27,23 @@ type ParseDocumentResponse struct {
 	ProcessingTimeMs int64             `json:"processing_time_ms"`
 }
 
-// GetSupportedExtensionsRequest requests supported file extensions
 type GetSupportedExtensionsRequest struct{}
 
-// GetSupportedExtensionsResponse returns supported extensions and MIME types
 type GetSupportedExtensionsResponse struct {
 	Extensions []string `json:"extensions"`
 	MimeTypes  []string `json:"mime_types"`
 }
 
-// DocumentParserServiceClient is a simplified client interface
 type DocumentParserServiceClient interface {
 	ParseDocument(ctx context.Context, req *ParseDocumentRequest) (*ParseDocumentResponse, error)
 	GetSupportedExtensions(ctx context.Context, req *GetSupportedExtensionsRequest) (*GetSupportedExtensionsResponse, error)
 }
 
-// DocumentParserServiceServer is a simplified server interface
 type DocumentParserServiceServer interface {
 	ParseDocument(ctx context.Context, req *ParseDocumentRequest) (*ParseDocumentResponse, error)
 	GetSupportedExtensions(ctx context.Context, req *GetSupportedExtensionsRequest) (*GetSupportedExtensionsResponse, error)
 }
 
-// UnimplementedDocumentParserServiceServer provides default implementations
 type UnimplementedDocumentParserServiceServer struct{}
 
 func (UnimplementedDocumentParserServiceServer) ParseDocument(ctx context.Context, req *ParseDocumentRequest) (*ParseDocumentResponse, error) {

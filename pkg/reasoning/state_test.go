@@ -7,11 +7,6 @@ import (
 	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
-// ============================================================================
-// REASONING STATE TESTS
-// Tests the shared state management for reasoning iterations
-// ============================================================================
-
 func TestNewReasoningState(t *testing.T) {
 	state := NewReasoningState()
 
@@ -74,7 +69,6 @@ func TestNewReasoningState(t *testing.T) {
 func TestReasoningState_CustomState(t *testing.T) {
 	state := NewReasoningState()
 
-	// Test storing and retrieving custom state
 	state.GetCustomState()["test_key"] = "test_value"
 	state.GetCustomState()["counter"] = 42
 	state.GetCustomState()["flag"] = true
@@ -95,7 +89,6 @@ func TestReasoningState_CustomState(t *testing.T) {
 func TestReasoningState_Conversation(t *testing.T) {
 	state := NewReasoningState()
 
-	// Add history messages (from previous turns)
 	historyMsgs := []*pb.Message{
 		protocol.CreateUserMessage("Previous question"),
 		{
@@ -105,32 +98,27 @@ func TestReasoningState_Conversation(t *testing.T) {
 	}
 	state.SetHistory(historyMsgs)
 
-	// Add current turn messages
 	state.AddCurrentTurnMessage(protocol.CreateUserMessage("Hello"))
 	state.AddCurrentTurnMessage(&pb.Message{
 		Role:    pb.Role_ROLE_AGENT,
 		Content: []*pb.Part{{Part: &pb.Part_Text{Text: "Hi there"}}},
 	})
 
-	// Test History
 	history := state.GetHistory()
 	if len(history) != 2 {
 		t.Errorf("Expected 2 history messages, got %d", len(history))
 	}
 
-	// Test CurrentTurn
 	currentTurn := state.GetCurrentTurn()
 	if len(currentTurn) != 2 {
 		t.Errorf("Expected 2 current turn messages, got %d", len(currentTurn))
 	}
 
-	// Test AllMessages
 	all := state.AllMessages()
 	if len(all) != 4 {
 		t.Errorf("Expected 4 total messages, got %d", len(all))
 	}
 
-	// Verify order: history first, then current turn
 	if all[0].Role != pb.Role_ROLE_USER {
 		t.Error("First message should be user (history)")
 	}
@@ -148,7 +136,6 @@ func TestReasoningState_Conversation(t *testing.T) {
 func TestReasoningState_AssistantResponse(t *testing.T) {
 	state := NewReasoningState()
 
-	// Build response incrementally using mutation method
 	state.AppendResponse("Part 1")
 	state.AppendResponse(" Part 2")
 	state.AppendResponse(" Part 3")
@@ -164,10 +151,8 @@ func TestReasoningState_AssistantResponse(t *testing.T) {
 func TestReasoningState_FirstIterationToolCalls(t *testing.T) {
 	state := NewReasoningState()
 
-	// Simulate first iteration
 	state.NextIteration()
 
-	// Record tool calls from first iteration
 	calls := []*protocol.ToolCall{
 		{ID: "call-1", Name: "search"},
 		{ID: "call-2", Name: "write_file"},
@@ -191,7 +176,6 @@ func TestReasoningState_FirstIterationToolCalls(t *testing.T) {
 func TestReasoningState_Iteration(t *testing.T) {
 	state := NewReasoningState()
 
-	// Simulate iterations using atomic increment
 	for i := 1; i <= 5; i++ {
 		currentIter := state.NextIteration()
 		if currentIter != i {
@@ -206,7 +190,6 @@ func TestReasoningState_Iteration(t *testing.T) {
 func TestReasoningState_TotalTokens(t *testing.T) {
 	state := NewReasoningState()
 
-	// Accumulate tokens using mutation method
 	state.AddTokens(100)
 	state.AddTokens(250)
 	state.AddTokens(150)
@@ -220,7 +203,6 @@ func TestReasoningState_TotalTokens(t *testing.T) {
 func TestReasoningState_ToolState(t *testing.T) {
 	state := NewReasoningState()
 
-	// Test storing tool-specific state
 	state.GetToolState()["todos_complete"] = true
 	state.GetToolState()["file_watcher_active"] = false
 	state.GetToolState()["retry_count"] = 3
@@ -241,7 +223,6 @@ func TestReasoningState_ToolState(t *testing.T) {
 func TestReasoningState_AgentContext(t *testing.T) {
 	state := NewReasoningState()
 
-	// Test agent name
 	if state.AgentName() != "" {
 		t.Error("AgentName should be empty initially")
 	}
@@ -251,7 +232,6 @@ func TestReasoningState_AgentContext(t *testing.T) {
 		t.Errorf("Expected 'test-agent', got '%s'", state.AgentName())
 	}
 
-	// Test sub-agents
 	if len(state.SubAgents()) != 0 {
 		t.Error("SubAgents should be empty initially")
 	}
@@ -270,7 +250,7 @@ func TestReasoningState_AgentContext(t *testing.T) {
 }
 
 func TestReasoningState_Flags(t *testing.T) {
-	// Test ShowThinking flag via builder
+
 	state, err := Builder().
 		WithQuery("test query").
 		WithShowThinking(false).
@@ -284,7 +264,6 @@ func TestReasoningState_Flags(t *testing.T) {
 		t.Error("ShowThinking should be false")
 	}
 
-	// Test with ShowThinking = true
 	state2, err := Builder().
 		WithQuery("test query").
 		WithShowThinking(true).
@@ -298,7 +277,6 @@ func TestReasoningState_Flags(t *testing.T) {
 		t.Error("ShowThinking should be true")
 	}
 
-	// Test ShowDebugInfo flag via builder
 	state3, err := Builder().
 		WithQuery("test query").
 		WithShowDebugInfo(false).
@@ -312,7 +290,6 @@ func TestReasoningState_Flags(t *testing.T) {
 		t.Error("ShowDebugInfo should be false")
 	}
 
-	// Test with ShowDebugInfo = true
 	state4, err := Builder().
 		WithQuery("test query").
 		WithShowDebugInfo(true).
@@ -341,23 +318,3 @@ func TestReasoningState_Query(t *testing.T) {
 		t.Errorf("Expected query to be '%s', got '%s'", query, state.Query())
 	}
 }
-
-// ============================================================================
-// COVERAGE SUMMARY
-// These tests cover:
-// - NewReasoningState: Initialization
-// - CustomState: Key-value storage for strategy-specific data
-// - History/CurrentTurn: Separated message tracking (old history vs new messages)
-// - AllMessages: Combining history + current turn
-// - AddCurrentTurnMessage: Helper for adding messages
-// - AssistantResponse: Incremental response building
-// - FirstIterationToolCalls: Tool call tracking
-// - Iteration: Counter management
-// - TotalTokens: Token accumulation
-// - ToolState: Tool-specific state (replaces TodosWereCompleteLastIteration)
-// - AgentContext: Typed accessors for agent name and sub-agents
-// - Flags: ShowThinking, ShowDebugInfo
-// - Query: Original user query storage
-//
-// All functions and fields in state.go now have 100% test coverage
-// ============================================================================

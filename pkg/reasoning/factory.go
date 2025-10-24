@@ -6,12 +6,6 @@ import (
 	"github.com/kadirpekel/hector/pkg/config"
 )
 
-// ============================================================================
-// STRATEGY FACTORY
-// Creates reasoning strategies based on configuration
-// ============================================================================
-
-// CreateStrategy creates a reasoning strategy based on engine type
 func CreateStrategy(engineType string, config config.ReasoningConfig) (ReasoningStrategy, error) {
 	switch engineType {
 	case "default", "", "chain-of-thought":
@@ -23,7 +17,6 @@ func CreateStrategy(engineType string, config config.ReasoningConfig) (Reasoning
 	}
 }
 
-// ListAvailableStrategies returns information about all available reasoning strategies
 func ListAvailableStrategies() []StrategyInfo {
 	return []StrategyInfo{
 		{
@@ -99,7 +92,6 @@ func ListAvailableStrategies() []StrategyInfo {
 	}
 }
 
-// StrategyInfo describes a reasoning strategy
 type StrategyInfo struct {
 	Name        string
 	Description string
@@ -107,7 +99,6 @@ type StrategyInfo struct {
 	Parameters  []StrategyParameter
 }
 
-// StrategyParameter describes a strategy parameter
 type StrategyParameter struct {
 	Name        string
 	Type        string

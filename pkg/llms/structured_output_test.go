@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// TestStructuredOutputConfig tests structured output configuration
 func TestStructuredOutputConfig(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -57,7 +56,7 @@ func TestStructuredOutputConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Verify config can be marshaled/unmarshaled
+
 			data, err := json.Marshal(tt.config)
 			if err != nil {
 				t.Fatalf("Failed to marshal config: %v", err)
@@ -75,7 +74,6 @@ func TestStructuredOutputConfig(t *testing.T) {
 	}
 }
 
-// TestJSONSchemaValidation tests JSON schema structure
 func TestJSONSchemaValidation(t *testing.T) {
 	schema := &JSONSchema{
 		Type: "object",
@@ -98,13 +96,11 @@ func TestJSONSchemaValidation(t *testing.T) {
 		Required: []string{"name", "age"},
 	}
 
-	// Verify it can be marshaled
 	data, err := json.Marshal(schema)
 	if err != nil {
 		t.Fatalf("Failed to marshal schema: %v", err)
 	}
 
-	// Verify it unmarshals back correctly
 	var decoded JSONSchema
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("Failed to unmarshal schema: %v", err)
@@ -119,15 +115,13 @@ func TestJSONSchemaValidation(t *testing.T) {
 	}
 }
 
-// TestStructuredOutputProviderInterface tests that all providers implement the interface
 func TestStructuredOutputProviderInterface(t *testing.T) {
-	// These should compile if providers implement the interface correctly
+
 	var _ StructuredOutputProvider = (*OpenAIProvider)(nil)
 	var _ StructuredOutputProvider = (*AnthropicProvider)(nil)
 	var _ StructuredOutputProvider = (*GeminiProvider)(nil)
 }
 
-// TestProviderSupportsStructuredOutput tests that providers report correct support
 func TestProviderSupportsStructuredOutput(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -162,7 +156,6 @@ func TestProviderSupportsStructuredOutput(t *testing.T) {
 	}
 }
 
-// Example configurations for documentation
 func ExampleStructuredOutputConfig_sentiment() {
 	config := &StructuredOutputConfig{
 		Format: "json",
@@ -191,7 +184,7 @@ func ExampleStructuredOutputConfig_sentiment() {
 
 	data, _ := json.MarshalIndent(config, "", "  ")
 	_ = data
-	// Use this config with any provider that implements StructuredOutputProvider
+
 }
 
 func ExampleStructuredOutputConfig_enum() {
@@ -202,7 +195,7 @@ func ExampleStructuredOutputConfig_enum() {
 
 	data, _ := json.MarshalIndent(config, "", "  ")
 	_ = data
-	// Gemini: Sets responseMimeType to "text/x.enum"
+
 }
 
 func ExampleStructuredOutputConfig_anthropicPrefill() {
@@ -215,12 +208,12 @@ func ExampleStructuredOutputConfig_anthropicPrefill() {
 				"summary":     map[string]interface{}{"type": "string"},
 			},
 		},
-		Prefill: "{\"report_type\":", // Anthropic-specific optimization
+		Prefill: "{\"report_type\":",
 	}
 
 	data, _ := json.MarshalIndent(config, "", "  ")
 	_ = data
-	// Anthropic will start response with the prefill, ensuring JSON output
+
 }
 
 func ExampleStructuredOutputConfig_geminiPropertyOrdering() {
@@ -234,10 +227,10 @@ func ExampleStructuredOutputConfig_geminiPropertyOrdering() {
 				"email": map[string]interface{}{"type": "string"},
 			},
 		},
-		PropertyOrdering: []string{"name", "age", "email"}, // Gemini-specific optimization
+		PropertyOrdering: []string{"name", "age", "email"},
 	}
 
 	data, _ := json.MarshalIndent(config, "", "  ")
 	_ = data
-	// Gemini will order properties consistently as specified
+
 }

@@ -58,8 +58,8 @@ func TestTokenCounter_Count(t *testing.T) {
 	tests := []struct {
 		name      string
 		text      string
-		minTokens int // Minimum expected tokens
-		maxTokens int // Maximum expected tokens
+		minTokens int
+		maxTokens int
 	}{
 		{
 			name:      "Empty string",
@@ -113,7 +113,7 @@ func TestTokenCounter_CountMessages(t *testing.T) {
 		{
 			name:      "Empty messages",
 			messages:  []Message{},
-			minTokens: 3, // Reply priming tokens
+			minTokens: 3,
 			maxTokens: 3,
 		},
 		{
@@ -204,7 +204,6 @@ func TestTokenCounter_FitWithinLimit(t *testing.T) {
 					len(fitted), len(tt.messages))
 			}
 
-			// Verify fitted messages are within limit
 			if len(fitted) > 0 {
 				tokenCount := counter.CountMessages(fitted)
 				if tokenCount > tt.maxTokens {
@@ -213,7 +212,6 @@ func TestTokenCounter_FitWithinLimit(t *testing.T) {
 				}
 			}
 
-			// Verify messages are from the end (most recent)
 			if len(fitted) > 0 && len(fitted) < len(tt.messages) {
 				lastOriginal := tt.messages[len(tt.messages)-1]
 				lastFitted := fitted[len(fitted)-1]
@@ -226,19 +224,17 @@ func TestTokenCounter_FitWithinLimit(t *testing.T) {
 }
 
 func TestTokenCounter_Caching(t *testing.T) {
-	// Create first counter
+
 	counter1, err := NewTokenCounter("gpt-4o")
 	if err != nil {
 		t.Fatalf("Failed to create first counter: %v", err)
 	}
 
-	// Create second counter with same model
 	counter2, err := NewTokenCounter("gpt-4o")
 	if err != nil {
 		t.Fatalf("Failed to create second counter: %v", err)
 	}
 
-	// Both should work correctly
 	text := "Test caching"
 	count1 := counter1.Count(text)
 	count2 := counter2.Count(text)
@@ -272,7 +268,7 @@ func TestEstimateTokens(t *testing.T) {
 		{
 			name: "10 characters",
 			text: "hellohello",
-			want: 2, // 10 / 4 = 2
+			want: 2,
 		},
 	}
 
@@ -315,7 +311,7 @@ func TestGetEncodingForModel(t *testing.T) {
 		{
 			name:  "Unknown model",
 			model: "unknown-model",
-			want:  "cl100k_base", // Default
+			want:  "cl100k_base",
 		},
 	}
 

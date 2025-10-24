@@ -1,32 +1,26 @@
-//go:build integration
-
 package component
 
 import (
+	"context"
 	"testing"
 
 	"github.com/kadirpekel/hector/pkg/config"
 )
 
-// ============================================================================
-// COMPONENT MANAGER TESTS - Critical System Initialization
-// Tests focus on verifying registries are initialized, not full integration
-// ============================================================================
-
 func createMinimalConfig() *config.Config {
 	return &config.Config{
-		LLMs:      make(map[string]config.LLMProviderConfig),
-		Databases: make(map[string]config.DatabaseProviderConfig),
-		Embedders: make(map[string]config.EmbedderProviderConfig),
-		Agents:    make(map[string]config.AgentConfig),
-		Tools:     config.ToolConfigs{Tools: make(map[string]config.ToolConfig)},
+		LLMs:      make(map[string]*config.LLMProviderConfig),
+		Databases: make(map[string]*config.DatabaseProviderConfig),
+		Embedders: make(map[string]*config.EmbedderProviderConfig),
+		Agents:    make(map[string]*config.AgentConfig),
+		Tools:     config.ToolConfigs{Tools: make(map[string]*config.ToolConfig)},
 		Plugins: config.PluginConfigs{
 			Discovery:           config.PluginDiscoveryConfig{Enabled: false},
-			LLMProviders:        make(map[string]config.PluginConfig),
-			DatabaseProviders:   make(map[string]config.PluginConfig),
-			EmbedderProviders:   make(map[string]config.PluginConfig),
-			ToolProviders:       make(map[string]config.PluginConfig),
-			ReasoningStrategies: make(map[string]config.PluginConfig),
+			LLMProviders:        make(map[string]*config.PluginConfig),
+			DatabaseProviders:   make(map[string]*config.PluginConfig),
+			EmbedderProviders:   make(map[string]*config.PluginConfig),
+			ToolProviders:       make(map[string]*config.PluginConfig),
+			ReasoningStrategies: make(map[string]*config.PluginConfig),
 		},
 	}
 }
@@ -39,7 +33,6 @@ func TestNewComponentManager_MinimalConfig(t *testing.T) {
 		t.Fatalf("NewComponentManager failed with minimal config: %v", err)
 	}
 
-	// Verify all registries are initialized
 	if cm.GetLLMRegistry() == nil {
 		t.Error("LLM registry is nil")
 	}
@@ -89,7 +82,7 @@ func TestComponentManager_AllGettersReturnNonNil(t *testing.T) {
 	}
 }
 
-func TestComponentManager_GetLLM_NotFound(t *testing.T) {
+func TestComponentManager_GetLLM_NotFound_Integration(t *testing.T) {
 	cfg := createMinimalConfig()
 	cm, err := NewComponentManager(cfg)
 	if err != nil {
@@ -102,7 +95,7 @@ func TestComponentManager_GetLLM_NotFound(t *testing.T) {
 	}
 }
 
-func TestComponentManager_GetDatabase_NotFound(t *testing.T) {
+func TestComponentManager_GetDatabase_NotFound_Integration(t *testing.T) {
 	cfg := createMinimalConfig()
 	cm, err := NewComponentManager(cfg)
 	if err != nil {
@@ -115,7 +108,7 @@ func TestComponentManager_GetDatabase_NotFound(t *testing.T) {
 	}
 }
 
-func TestComponentManager_GetEmbedder_NotFound(t *testing.T) {
+func TestComponentManager_GetEmbedder_NotFound_Integration(t *testing.T) {
 	cfg := createMinimalConfig()
 	cm, err := NewComponentManager(cfg)
 	if err != nil {
@@ -135,28 +128,27 @@ func TestComponentManager_ShutdownPlugins(t *testing.T) {
 		t.Fatalf("NewComponentManager failed: %v", err)
 	}
 
-	// Should not panic even with no plugins loaded
-	err = cm.ShutdownPlugins(nil)
+	err = cm.ShutdownPlugins(context.TODO())
 	if err != nil {
 		t.Errorf("ShutdownPlugins returned error: %v", err)
 	}
 }
 
-func TestIsPluginConfigured(t *testing.T) {
+func TestIsPluginConfigured_Integration(t *testing.T) {
 	cfg := createMinimalConfig()
-	cfg.Plugins.LLMProviders = map[string]config.PluginConfig{
+	cfg.Plugins.LLMProviders = map[string]*config.PluginConfig{
 		"llm-plugin": {Name: "llm-plugin", Enabled: true},
 	}
-	cfg.Plugins.DatabaseProviders = map[string]config.PluginConfig{
+	cfg.Plugins.DatabaseProviders = map[string]*config.PluginConfig{
 		"db-plugin": {Name: "db-plugin", Enabled: true},
 	}
-	cfg.Plugins.EmbedderProviders = map[string]config.PluginConfig{
+	cfg.Plugins.EmbedderProviders = map[string]*config.PluginConfig{
 		"embedder-plugin": {Name: "embedder-plugin", Enabled: true},
 	}
-	cfg.Plugins.ToolProviders = map[string]config.PluginConfig{
+	cfg.Plugins.ToolProviders = map[string]*config.PluginConfig{
 		"tool-plugin": {Name: "tool-plugin", Enabled: true},
 	}
-	cfg.Plugins.ReasoningStrategies = map[string]config.PluginConfig{
+	cfg.Plugins.ReasoningStrategies = map[string]*config.PluginConfig{
 		"reasoning-plugin": {Name: "reasoning-plugin", Enabled: true},
 	}
 
@@ -187,22 +179,3 @@ func TestIsPluginConfigured(t *testing.T) {
 		})
 	}
 }
-
-// ============================================================================
-// COVERAGE NOTES:
-// These tests cover the critical initialization paths:
-// - Registry creation (LLM, Database, Embedder, Tool, Plugin)
-// - Config storage
-// - Error handling for missing components
-// - Plugin configuration checks
-// - Graceful shutdown
-//
-// NOT tested (would require real services):
-// - Actual LLM initialization with API keys
-// - Actual database connections (Qdrant)
-// - Actual embedder connections (Ollama)
-// - Plugin loading from disk
-//
-// These tests verify the WIRING works, which is the critical part.
-// Full integration tests would test actual service connections.
-// ============================================================================

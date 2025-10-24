@@ -5,11 +5,6 @@ import (
 	"sync"
 )
 
-// ============================================================================
-// GENERIC REGISTRY IMPLEMENTATION
-// ============================================================================
-
-// Registry represents a generic registry interface
 type Registry[T any] interface {
 	Register(name string, item T) error
 	Get(name string) (T, bool)
@@ -19,20 +14,17 @@ type Registry[T any] interface {
 	Clear()
 }
 
-// BaseRegistry provides a generic thread-safe registry implementation
 type BaseRegistry[T any] struct {
 	mu    sync.RWMutex
 	items map[string]T
 }
 
-// NewBaseRegistry creates a new base registry
 func NewBaseRegistry[T any]() *BaseRegistry[T] {
 	return &BaseRegistry[T]{
 		items: make(map[string]T),
 	}
 }
 
-// Register adds an item to the registry
 func (r *BaseRegistry[T]) Register(name string, item T) error {
 	if name == "" {
 		return fmt.Errorf("name cannot be empty")
@@ -49,7 +41,6 @@ func (r *BaseRegistry[T]) Register(name string, item T) error {
 	return nil
 }
 
-// Get retrieves an item by name
 func (r *BaseRegistry[T]) Get(name string) (T, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -58,7 +49,6 @@ func (r *BaseRegistry[T]) Get(name string) (T, bool) {
 	return item, exists
 }
 
-// List returns all registered items
 func (r *BaseRegistry[T]) List() []T {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -70,7 +60,6 @@ func (r *BaseRegistry[T]) List() []T {
 	return items
 }
 
-// Remove removes an item from the registry
 func (r *BaseRegistry[T]) Remove(name string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -83,7 +72,6 @@ func (r *BaseRegistry[T]) Remove(name string) error {
 	return nil
 }
 
-// Count returns the number of registered items
 func (r *BaseRegistry[T]) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -91,7 +79,6 @@ func (r *BaseRegistry[T]) Count() int {
 	return len(r.items)
 }
 
-// Clear removes all items from the registry
 func (r *BaseRegistry[T]) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()

@@ -10,7 +10,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// InMemoryTaskService implements reasoning.TaskService
 type InMemoryTaskService struct {
 	mu            sync.RWMutex
 	tasks         map[string]*pb.Task

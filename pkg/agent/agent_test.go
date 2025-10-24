@@ -55,46 +55,38 @@ func TestNewAgent(t *testing.T) {
 }
 
 func TestAgent_GetAgentCard(t *testing.T) {
-	// This test requires a fully functional component manager
-	// For now, we'll skip it and focus on testing the core logic
+
 	t.Skip("Skipping test that requires full component manager setup")
 }
 
 func TestAgent_ExecuteTask(t *testing.T) {
-	// This test requires a fully functional component manager
-	// For now, we'll skip it and focus on testing the core logic
+
 	t.Skip("Skipping test that requires full component manager setup")
 }
 
 func TestAgent_ExecuteTaskStreaming(t *testing.T) {
-	// This test requires a fully functional component manager
-	// For now, we'll skip it and focus on testing the core logic
+
 	t.Skip("Skipping test that requires full component manager setup")
 }
 
 func TestAgent_ClearHistory(t *testing.T) {
-	// This test requires a fully functional component manager
-	// For now, we'll skip it and focus on testing the core logic
+
 	t.Skip("Skipping test that requires full component manager setup")
 }
 
 func TestAgent_GetName(t *testing.T) {
-	// This test requires a fully functional component manager
-	// For now, we'll skip it and focus on testing the core logic
+
 	t.Skip("Skipping test that requires full component manager setup")
 }
 
 func TestAgent_GetDescription(t *testing.T) {
-	// This test requires a fully functional component manager
-	// For now, we'll skip it and focus on testing the core logic
+
 	t.Skip("Skipping test that requires full component manager setup")
 }
 
 func TestAgent_GetConfig(t *testing.T) {
-	// This test requires a fully functional component manager
-	// For now, we'll skip it and focus on testing the core logic
+
 	t.Skip("Skipping test that requires full component manager setup")
 }
 
-// MockComponentManager is a simple mock for testing
 type MockComponentManager struct{}

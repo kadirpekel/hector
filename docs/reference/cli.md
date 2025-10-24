@@ -14,11 +14,12 @@ Complete reference for all Hector command-line commands and options.
 | Command | Purpose | Example |
 |---------|---------|---------|
 | `hector version` | Show version | `hector version` |
+| `hector validate` | Validate config | `hector validate config.yaml` |
 | `hector serve` | Start server | `hector serve --config config.yaml` |
 | `hector list` | List agents | `hector list` |
 | `hector info` | Agent details | `hector info assistant` |
-| `hector call` | Single message | `hector call assistant "Hello"` |
-| `hector chat` | Interactive chat | `hector chat assistant` |
+| `hector call` | Single message | `hector call "Hello" --agent assistant --config config.yaml` |
+| `hector chat` | Interactive chat | `hector chat --agent assistant --config config.yaml` |
 
 ---
 
@@ -28,11 +29,20 @@ Available for all commands:
 
 | Flag | Type | Description | Default |
 |------|------|-------------|---------|
-| `--config FILE` | string | Configuration file path | None (required for config mode) |
+| `--config PATH` | string | Configuration path (file path or backend key) | None (zero-config if omitted) |
+| `--config-type TYPE` | string | Configuration backend (`file`, `consul`, `etcd`, `zookeeper`) | `file` |
+| `--config-watch` | bool | Watch for configuration changes and auto-reload | `false` |
+| `--config-endpoints ENDPOINTS` | string | Comma-separated backend endpoints | Backend-specific defaults |
 | `--debug` | bool | Enable debug logging | `false` |
-| `--log-level LEVEL` | string | Log level (debug/info/warn/error) | `info` |
-| `--log-format FORMAT` | string | Log format (text/json) | `text` |
 | `--help` | bool | Show help | - |
+
+**Configuration Backends:**
+- `file` - Local YAML file (default)
+- `consul` - HashiCorp Consul KV store
+- `etcd` - Etcd distributed key-value store
+- `zookeeper` - Apache ZooKeeper
+
+See [Distributed Configuration](distributed-configuration.md) for detailed usage.
 
 ---
 
@@ -51,6 +61,168 @@ hector version
 ```
 Hector version 0.x.x
 ```
+
+---
+
+### hector validate
+
+Validate configuration file syntax, semantics, and references.
+
+**Usage:**
+```bash
+hector validate CONFIG [flags]
+```
+
+**Arguments:**
+
+| Argument | Type | Description | Required |
+|----------|------|-------------|----------|
+| `CONFIG` | string | Configuration file path | ✅ Always required |
+
+**Flags:**
+
+| Flag | Type | Description | Default |
+|------|------|-------------|---------|
+| `-f, --format` | string | Output format: `compact`, `verbose`, `json` | `compact` |
+| `-p, --print-config` | bool | Print expanded configuration | `false` |
+
+**What Gets Validated:**
+
+- ✅ Configuration file syntax (YAML/JSON)
+- ✅ LLM provider configurations (API keys, models, endpoints)
+- ✅ Database provider settings (connection strings, drivers)
+- ✅ Embedder configurations (models, dimensions)
+- ✅ Agent configurations (types, LLM references, tools)
+- ✅ Tool configurations (command sandboxing, file size limits)
+- ✅ Document stores (path existence, embedder references)
+- ✅ Session stores (backend types, SQL configurations)
+- ✅ Plugin discovery and loading
+- ✅ Cross-reference validation (agent → LLM → database links)
+
+**Output Formats:**
+
+**Compact (default)** - One-line format ideal for CI/CD:
+```bash
+$ hector validate config.yaml
+config.yaml: valid
+```
+
+**Verbose** - Human-readable detailed output:
+```bash
+$ hector validate config.yaml --format=verbose
+Configuration Validation Successful
+===================================
+
+File:   config.yaml
+Status: ✓ Valid
+```
+
+**JSON** - Machine-parseable for tooling:
+```bash
+$ hector validate config.yaml --format=json
+{
+  "valid": true,
+  "file": "config.yaml"
+}
+```
+
+**Examples:**
+
+```bash
+# Basic validation
+hector validate config.yaml
+
+# Verbose output with details
+hector validate config.yaml --format=verbose
+
+# JSON output for CI/CD pipelines
+hector validate config.yaml --format=json | jq .valid
+
+# Print expanded configuration (shows defaults, shortcuts, env vars)
+hector validate config.yaml --print-config
+
+# Print expanded config as JSON
+hector validate config.yaml --print-config --format=json
+```
+
+**Exit Codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Configuration is valid |
+| `1` | Configuration has errors |
+
+**Configuration Expansion:**
+
+When using `--print-config`, the command shows the configuration after full processing:
+
+```bash
+# Original config with shortcuts
+# docs_folder: "."
+# enable_tools: true
+
+# Expanded config shows:
+# - Auto-created document_stores
+# - Auto-created default-database and default-embedder
+# - All tool configurations with defaults
+# - Environment variables resolved
+```
+
+**Use Cases:**
+
+1. **Pre-deployment Validation:**
+```bash
+#!/bin/bash
+if hector validate prod-config.yaml; then
+  hector serve --config prod-config.yaml
+else
+  echo "Invalid configuration - deployment aborted"
+  exit 1
+fi
+```
+
+2. **CI/CD Integration:**
+```yaml
+# .github/workflows/validate.yml
+- name: Validate Hector configs
+  run: |
+    for config in configs/*.yaml; do
+      hector validate "$config" --format=json || exit 1
+    done
+```
+
+3. **Configuration Debugging:**
+```bash
+# See what the config becomes after processing
+hector validate config.yaml --print-config > expanded.yaml
+diff config.yaml expanded.yaml
+```
+
+4. **Documentation Generation:**
+```bash
+# Extract final config for documentation
+hector validate config.yaml --print-config --format=json > config-schema.json
+```
+
+**Error Messages:**
+
+When other commands encounter config errors, they provide helpful hints:
+
+```bash
+$ hector serve --config bad-config.yaml
+Configuration validation failed in bad-config.yaml:
+  agent 'assistant' validation failed: llm 'nonexistent' not found
+
+Hint: Run 'hector validate bad-config.yaml' for detailed diagnostics
+```
+
+**Best Practices:**
+
+- ✅ Validate configs before committing to version control
+- ✅ Add validation to CI/CD pipelines
+- ✅ Use `--print-config` to understand shortcut expansions
+- ✅ Use JSON output for automated tooling
+- ✅ Validate before production deployments
 
 ---
 
@@ -211,53 +383,58 @@ Send a single message to an agent.
 
 **Usage:**
 ```bash
-hector call [AGENT] MESSAGE [flags]
+hector call MESSAGE [flags]
 ```
 
 **Arguments:**
 
 | Argument | Type | Description | Required |
 |----------|------|-------------|----------|
-| `AGENT` | string | Agent name | ❌ Zero-config / ✅ Config mode / ✅ Client mode |
-| `MESSAGE` | string | Message to send | Always required |
+| `MESSAGE` | string | Message to send | ✅ Always required |
 
 **Flags:**
 
 | Flag | Type | Description | Default |
 |------|------|-------------|---------|
+| `--agent NAME` | string | Agent name (required with `--config` or `--server`) | - |
 | `--server URL` | string | Connect to remote server | - |
 | `--token TOKEN` | string | Authentication token | - |
-| `--stream` | bool | Enable streaming | `true` |
+| `--[no-]stream` | bool | Enable/disable streaming | `true` (use `--no-stream` to disable) |
 | `--session ID` | string | Session ID for context | - |
-| `--timeout DURATION` | duration | Request timeout | `5m` |
 
 **Zero-Config Flags (local mode only):**
 
-| Flag | Type | Description |
-|------|------|-------------|
-| `--model NAME` | string | Override model |
-| `--provider NAME` | string | Override provider |
-| `--tools` | bool | Enable tools |
+| Flag | Type | Description | Default |
+|------|------|-------------|---------|
+| `--provider NAME` | string | LLM provider | `openai` |
+| `--model NAME` | string | Model name | - |
+| `--api-key KEY` | string | API key | From env |
+| `--base-url URL` | string | Custom API base URL | - |
+| `--tools` | bool | Enable built-in tools | `false` |
+| `--mcp-url URL` | string | MCP server URL | - |
+| `--docs-folder PATH` | string | Documents folder for RAG | - |
 
 **Examples:**
 
 ```bash
-# Zero-config mode (NO agent name)
+# Zero-config mode (NO --agent flag needed)
 export OPENAI_API_KEY="sk-..."
 hector call "What is quantum computing?"
+hector call "Write a poem about Go" --tools
 
-# Config mode (agent name REQUIRED and validated immediately)
-hector call --config config.yaml assistant "What is the capital of France?"
-hector call --config config.yaml coder "Fix the bug" --session sess_123
+# Config mode (--agent flag REQUIRED)
+hector call "What is the capital of France?" --agent assistant --config config.yaml
+hector call "Fix the bug" --agent coder --config config.yaml --session sess_123
 
-# Client mode (agent name REQUIRED)
-hector call --server http://remote:8080 assistant "Hello" --token "eyJ..."
+# Client mode (--agent flag REQUIRED)
+hector call "Hello" --agent assistant --server http://remote:8080 --token "eyJ..."
 
 # No streaming
-hector call --config config.yaml assistant "Hello" --stream=false
+hector call "Hello" --agent assistant --config config.yaml --no-stream
 
-# With timeout
-hector call --config config.yaml assistant "Complex analysis" --timeout 10m
+# Flags can appear anywhere (Kong flexibility)
+hector call --config config.yaml --agent assistant "What's 2+2?"
+hector call "Help me" --tools --model gpt-4o
 ```
 
 ---
@@ -268,37 +445,50 @@ Interactive chat with an agent.
 
 **Usage:**
 ```bash
-hector chat [AGENT] [flags]
+hector chat [flags]
 ```
-
-**Arguments:**
-
-| Argument | Type | Description | Required |
-|----------|------|-------------|----------|
-| `AGENT` | string | Agent name | ❌ Zero-config / ✅ Config mode / ✅ Client mode |
 
 **Flags:**
 
 | Flag | Type | Description |
 |------|------|-------------|
+| `--agent NAME` | string | Agent name (required with `--config` or `--server`) |
 | `--server URL` | string | Connect to remote server |
 | `--token TOKEN` | string | Authentication token |
 | `--session ID` | string | Session ID for context |
+| `--[no-]stream` | bool | Enable/disable streaming (default: enabled) |
+
+**Zero-Config Flags (local mode only):**
+
+| Flag | Type | Description | Default |
+|------|------|-------------|---------|
+| `--provider NAME` | string | LLM provider | `openai` |
+| `--model NAME` | string | Model name | - |
+| `--api-key KEY` | string | API key | From env |
+| `--base-url URL` | string | Custom API base URL | - |
+| `--tools` | bool | Enable built-in tools | `false` |
+| `--mcp-url URL` | string | MCP server URL | - |
+| `--docs-folder PATH` | string | Documents folder for RAG | - |
 
 **Examples:**
 
 ```bash
-# Zero-config mode (NO agent name)
+# Zero-config mode (NO --agent flag needed)
 export OPENAI_API_KEY="sk-..."
 hector chat
+hector chat --tools --model gpt-4o
 
-# Config mode (agent name REQUIRED and validated immediately)
-hector chat --config config.yaml assistant
-hector chat --config config.yaml coder --session sess_123
+# Config mode (--agent flag REQUIRED)
+hector chat --agent assistant --config config.yaml
+hector chat --agent coder --config config.yaml --session sess_123
 
-# Client mode (agent name REQUIRED)
-hector chat --server http://remote:8080 assistant
-hector chat --server http://remote:8080 assistant --token "eyJ..."
+# Client mode (--agent flag REQUIRED)
+hector chat --agent assistant --server http://remote:8080
+hector chat --agent assistant --server http://remote:8080 --token "eyJ..."
+
+# Flags flexible positioning (Kong feature)
+hector chat --config config.yaml --agent assistant
+hector chat --agent assistant --config config.yaml --no-stream
 ```
 
 **In Chat:**
@@ -317,11 +507,11 @@ The `--session` flag enables conversation resumption across multiple CLI invocat
 
 ```bash
 # First conversation
-hector call --config config.yaml --session work assistant "Remember: meeting at 3pm"
+hector call "Remember: meeting at 3pm" --agent assistant --config config.yaml --session work
 # Agent: Got it! Meeting at 3pm.
 
 # Later (even after restart)
-hector call --config config.yaml --session work assistant "When is the meeting?"
+hector call "When is the meeting?" --agent assistant --config config.yaml --session work
 # Agent: The meeting is at 3pm.
 ```
 
@@ -346,13 +536,13 @@ hector call --config config.yaml --session work assistant "When is the meeting?"
 
 ```bash
 # First session
-hector chat --config config.yaml --session my-chat assistant
+hector chat --agent assistant --config config.yaml --session my-chat
 You: Remember my name is Alice
 Agent: Got it, Alice!
 You: exit
 
 # Resume later
-hector chat --config config.yaml --session my-chat assistant
+hector chat --agent assistant --config config.yaml --session my-chat
 You: What's my name?
 Agent: Your name is Alice.
 ```
@@ -361,10 +551,10 @@ Agent: Your name is Alice.
 
 ```bash
 # Store information
-hector call --config config.yaml --session work assistant "Project ALPHA started"
+hector call "Project ALPHA started" --agent assistant --config config.yaml --session work
 
 # Query later
-hector call --config config.yaml --session work assistant "What project did we start?"
+hector call "What project did we start?" --agent assistant --config config.yaml --session work
 # Agent remembers: Project ALPHA
 ```
 
@@ -372,7 +562,7 @@ hector call --config config.yaml --session work assistant "What project did we s
 
 ```bash
 # Chat generates and displays session ID
-hector chat --config config.yaml assistant
+hector chat --agent assistant --config config.yaml
 # Output: 💾 Session ID: cli-chat-1729612345
 #         Resume later with: --session=cli-chat-1729612345
 ```
@@ -420,7 +610,7 @@ Run agents in-process without a server.
 
 **Example:**
 ```bash
-hector call assistant "Hello" --config config.yaml
+hector call "Hello" --agent assistant --config config.yaml
 ```
 
 ### Server Mode
@@ -456,7 +646,7 @@ Connect to a remote A2A server.
 
 **Example:**
 ```bash
-hector call assistant "Hello" --server http://remote:8080
+hector call "Hello" --agent assistant --server http://remote:8080
 ```
 
 ---
@@ -524,7 +714,7 @@ hector call "What is recursion?"
 
 ```bash
 hector serve --config dev-config.yaml &
-hector chat assistant
+hector chat --agent assistant --config dev-config.yaml
 ```
 
 ### Production Deployment
@@ -544,7 +734,7 @@ export HECTOR_SERVER="https://agents.company.com"
 export HECTOR_TOKEN="eyJ..."
 
 hector list --server $HECTOR_SERVER --token $HECTOR_TOKEN
-hector call assistant "task" --server $HECTOR_SERVER --token $HECTOR_TOKEN
+hector call "task" --agent assistant --server $HECTOR_SERVER --token $HECTOR_TOKEN
 ```
 
 ### Scripting
@@ -561,8 +751,8 @@ SERVER_PID=$!
 sleep 5
 
 # Run tasks
-hector call assistant "Analyze data" > results.txt
-hector call assistant "Generate report" >> results.txt
+hector call "Analyze data" --agent assistant --config config.yaml > results.txt
+hector call "Generate report" --agent assistant --config config.yaml >> results.txt
 
 # Cleanup
 kill $SERVER_PID
@@ -620,7 +810,7 @@ Available agents in config:
 **Solution:**
 ```bash
 # Use an agent that exists in your config
-hector call --config config.yaml assistant "Hello"
+hector call "Hello" --agent assistant --config config.yaml
 
 # Check available agents
 hector list --config config.yaml

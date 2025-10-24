@@ -13,36 +13,31 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	// Database drivers
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// SQLTaskService implements reasoning.TaskService with SQL backend
-// Supports PostgreSQL, MySQL, and SQLite via database/sql
 type SQLTaskService struct {
 	db            *sql.DB
-	dialect       string // "postgres", "mysql", or "sqlite"
+	dialect       string
 	subscribers   map[string][]chan *pb.StreamResponse
 	subscribersMu sync.RWMutex
 }
 
-// taskRow represents the database schema for tasks
 type taskRow struct {
 	ID         string
 	ContextID  string
 	State      string
-	StatusJSON string // JSON-encoded TaskStatus
-	Artifacts  string // JSON-encoded []Artifact
-	History    string // JSON-encoded []Message
-	Metadata   string // JSON-encoded map[string]interface{}
+	StatusJSON string
+	Artifacts  string
+	History    string
+	Metadata   string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
 
 const (
-	// SQL schema (compatible with all three databases)
 	createTableSQL = `
 CREATE TABLE IF NOT EXISTS tasks (
     id VARCHAR(255) PRIMARY KEY,
@@ -62,16 +57,14 @@ CREATE INDEX IF NOT EXISTS idx_tasks_updated_at ON tasks(updated_at);
 `
 )
 
-// NewSQLTaskService creates a new SQL-backed task service
 func NewSQLTaskService(db *sql.DB, dialect string) (*SQLTaskService, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database connection is required")
 	}
 
-	// Validate dialect
 	switch dialect {
 	case "postgres", "mysql", "sqlite":
-		// Valid
+
 	default:
 		return nil, fmt.Errorf("unsupported dialect: %s (supported: postgres, mysql, sqlite)", dialect)
 	}
@@ -82,7 +75,6 @@ func NewSQLTaskService(db *sql.DB, dialect string) (*SQLTaskService, error) {
 		subscribers: make(map[string][]chan *pb.StreamResponse),
 	}
 
-	// Initialize schema
 	if err := s.initSchema(); err != nil {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
@@ -90,37 +82,30 @@ func NewSQLTaskService(db *sql.DB, dialect string) (*SQLTaskService, error) {
 	return s, nil
 }
 
-// NewSQLTaskServiceFromConfig creates a new SQL task service from configuration
 func NewSQLTaskServiceFromConfig(cfg *config.TaskSQLConfig) (*SQLTaskService, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("SQL configuration is required")
 	}
 
-	// Set defaults and validate
 	cfg.SetDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
-	// Map driver name to actual SQL driver name
-	// Config uses "sqlite" but the go-sqlite3 driver registers as "sqlite3"
 	driverName := cfg.Driver
 	if driverName == "sqlite" {
 		driverName = "sqlite3"
 	}
 
-	// Open database connection
 	db, err := sql.Open(driverName, cfg.ConnectionString())
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Configure connection pool
 	db.SetMaxOpenConns(cfg.MaxConns)
 	db.SetMaxIdleConns(cfg.MaxIdle)
 	db.SetConnMaxLifetime(time.Hour)
 
-	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -129,18 +114,15 @@ func NewSQLTaskServiceFromConfig(cfg *config.TaskSQLConfig) (*SQLTaskService, er
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Create service
 	return NewSQLTaskService(db, cfg.Driver)
 }
 
-// initSchema creates the tasks table if it doesn't exist
 func (s *SQLTaskService) initSchema() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// For SQLite, we need to adjust the create index syntax
 	schemaSQL := createTableSQL
-	// Note: All dialects use the same schema for now
+
 	_ = s.dialect
 
 	_, err := s.db.ExecContext(ctx, schemaSQL)
@@ -151,7 +133,6 @@ func (s *SQLTaskService) initSchema() error {
 	return nil
 }
 
-// CreateTask implements reasoning.TaskService
 func (s *SQLTaskService) CreateTask(ctx context.Context, contextID string, initialMessage *pb.Message) (*pb.Task, error) {
 	if contextID == "" {
 		return nil, fmt.Errorf("context_id is required")
@@ -181,13 +162,11 @@ func (s *SQLTaskService) CreateTask(ctx context.Context, contextID string, initi
 		task.History = append(task.History, initialMessage)
 	}
 
-	// Serialize to JSON
 	row, err := s.taskToRow(task)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize task: %w", err)
 	}
 
-	// Insert into database
 	query := `
 INSERT INTO tasks (id, context_id, state, status_json, artifacts, history, metadata, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -208,7 +187,6 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		return nil, fmt.Errorf("failed to insert task: %w", err)
 	}
 
-	// Notify subscribers
 	s.notifySubscribers(taskID, &pb.StreamResponse{
 		Payload: &pb.StreamResponse_Task{
 			Task: task,
@@ -218,7 +196,6 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	return task, nil
 }
 
-// GetTask implements reasoning.TaskService
 func (s *SQLTaskService) GetTask(ctx context.Context, taskID string) (*pb.Task, error) {
 	query := `
 SELECT id, context_id, state, status_json, artifacts, history, metadata, created_at, updated_at
@@ -249,15 +226,13 @@ WHERE id = $1
 	return s.rowToTask(&row)
 }
 
-// UpdateTaskStatus implements reasoning.TaskService
 func (s *SQLTaskService) UpdateTaskStatus(ctx context.Context, taskID string, state pb.TaskState, message *pb.Message) error {
-	// First, get the current task
+
 	task, err := s.GetTask(ctx, taskID)
 	if err != nil {
 		return err
 	}
 
-	// Update status
 	now := timestamppb.Now()
 	task.Status = &pb.TaskStatus{
 		State:     state,
@@ -265,7 +240,6 @@ func (s *SQLTaskService) UpdateTaskStatus(ctx context.Context, taskID string, st
 		Timestamp: now,
 	}
 
-	// Serialize and update
 	row, err := s.taskToRow(task)
 	if err != nil {
 		return fmt.Errorf("failed to serialize task: %w", err)
@@ -289,7 +263,6 @@ WHERE id = $4
 		return fmt.Errorf("failed to update task status: %w", err)
 	}
 
-	// Notify subscribers
 	isFinal := isTerminalState(state)
 	event := &pb.TaskStatusUpdateEvent{
 		TaskId:    taskID,
@@ -311,7 +284,6 @@ WHERE id = $4
 	return nil
 }
 
-// AddTaskArtifact implements reasoning.TaskService
 func (s *SQLTaskService) AddTaskArtifact(ctx context.Context, taskID string, artifact *pb.Artifact) error {
 	task, err := s.GetTask(ctx, taskID)
 	if err != nil {
@@ -347,7 +319,6 @@ WHERE id = $3
 		return fmt.Errorf("failed to add artifact: %w", err)
 	}
 
-	// Notify subscribers
 	event := &pb.TaskArtifactUpdateEvent{
 		TaskId:    taskID,
 		ContextId: task.ContextId,
@@ -365,7 +336,6 @@ WHERE id = $3
 	return nil
 }
 
-// AddTaskMessage implements reasoning.TaskService
 func (s *SQLTaskService) AddTaskMessage(ctx context.Context, taskID string, message *pb.Message) error {
 	task, err := s.GetTask(ctx, taskID)
 	if err != nil {
@@ -407,7 +377,6 @@ WHERE id = $3
 	return nil
 }
 
-// CancelTask implements reasoning.TaskService
 func (s *SQLTaskService) CancelTask(ctx context.Context, taskID string) (*pb.Task, error) {
 	task, err := s.GetTask(ctx, taskID)
 	if err != nil {
@@ -426,7 +395,6 @@ func (s *SQLTaskService) CancelTask(ctx context.Context, taskID string) (*pb.Tas
 	return s.GetTask(ctx, taskID)
 }
 
-// ListTasksByContext implements reasoning.TaskService
 func (s *SQLTaskService) ListTasksByContext(ctx context.Context, contextID string) ([]*pb.Task, error) {
 	query := `
 SELECT id, context_id, state, status_json, artifacts, history, metadata, created_at, updated_at
@@ -472,9 +440,8 @@ ORDER BY created_at DESC
 	return tasks, nil
 }
 
-// SubscribeToTask implements reasoning.TaskService
 func (s *SQLTaskService) SubscribeToTask(ctx context.Context, taskID string) (<-chan *pb.StreamResponse, error) {
-	// Verify task exists
+
 	_, err := s.GetTask(ctx, taskID)
 	if err != nil {
 		return nil, err
@@ -489,7 +456,6 @@ func (s *SQLTaskService) SubscribeToTask(ctx context.Context, taskID string) (<-
 	return ch, nil
 }
 
-// Close implements reasoning.TaskService
 func (s *SQLTaskService) Close() error {
 	s.subscribersMu.Lock()
 	defer s.subscribersMu.Unlock()
@@ -501,7 +467,6 @@ func (s *SQLTaskService) Close() error {
 	return s.db.Close()
 }
 
-// notifySubscribers sends an event to all subscribers of a task
 func (s *SQLTaskService) notifySubscribers(taskID string, event *pb.StreamResponse) {
 	s.subscribersMu.RLock()
 	subscribers := s.subscribers[taskID]
@@ -511,12 +476,11 @@ func (s *SQLTaskService) notifySubscribers(taskID string, event *pb.StreamRespon
 		select {
 		case ch <- event:
 		default:
-			// Skip if channel is full
+
 		}
 	}
 }
 
-// closeTaskSubscribers closes all subscriber channels for a task
 func (s *SQLTaskService) closeTaskSubscribers(taskID string) {
 	s.subscribersMu.Lock()
 	defer s.subscribersMu.Unlock()
@@ -527,20 +491,17 @@ func (s *SQLTaskService) closeTaskSubscribers(taskID string) {
 	delete(s.subscribers, taskID)
 }
 
-// taskToRow converts a pb.Task to a database row
 func (s *SQLTaskService) taskToRow(task *pb.Task) (*taskRow, error) {
 	now := time.Now()
 
-	// Serialize status using protojson
 	statusJSON, err := protojson.Marshal(task.Status)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal status: %w", err)
 	}
 
-	// Serialize artifacts using protojson (they are protobuf messages)
 	var artifactsData []byte
 	if len(task.Artifacts) > 0 {
-		// Marshal each artifact to json.RawMessage and then marshal the array
+
 		rawArtifacts := make([]json.RawMessage, len(task.Artifacts))
 		for i, artifact := range task.Artifacts {
 			artJSON, err := protojson.Marshal(artifact)
@@ -558,10 +519,9 @@ func (s *SQLTaskService) taskToRow(task *pb.Task) (*taskRow, error) {
 		artifactsData = []byte("[]")
 	}
 
-	// Serialize history using protojson (they are protobuf messages)
 	var historyData []byte
 	if len(task.History) > 0 {
-		// Marshal each message to json.RawMessage and then marshal the array
+
 		rawMessages := make([]json.RawMessage, len(task.History))
 		for i, msg := range task.History {
 			msgJSON, err := protojson.Marshal(msg)
@@ -579,7 +539,6 @@ func (s *SQLTaskService) taskToRow(task *pb.Task) (*taskRow, error) {
 		historyData = []byte("[]")
 	}
 
-	// Serialize metadata
 	metadataData, err := json.Marshal(task.Metadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
@@ -598,14 +557,12 @@ func (s *SQLTaskService) taskToRow(task *pb.Task) (*taskRow, error) {
 	}, nil
 }
 
-// rowToTask converts a database row to a pb.Task
 func (s *SQLTaskService) rowToTask(row *taskRow) (*pb.Task, error) {
 	task := &pb.Task{
 		Id:        row.ID,
 		ContextId: row.ContextID,
 	}
 
-	// Deserialize status
 	if row.StatusJSON != "" {
 		task.Status = &pb.TaskStatus{}
 		err := protojson.Unmarshal([]byte(row.StatusJSON), task.Status)
@@ -614,9 +571,8 @@ func (s *SQLTaskService) rowToTask(row *taskRow) (*pb.Task, error) {
 		}
 	}
 
-	// Deserialize artifacts using protojson
 	if row.Artifacts != "" && row.Artifacts != "[]" {
-		// Parse JSON array manually to unmarshal each artifact
+
 		var rawArtifacts []json.RawMessage
 		err := json.Unmarshal([]byte(row.Artifacts), &rawArtifacts)
 		if err != nil {
@@ -636,9 +592,8 @@ func (s *SQLTaskService) rowToTask(row *taskRow) (*pb.Task, error) {
 		task.Artifacts = make([]*pb.Artifact, 0)
 	}
 
-	// Deserialize history using protojson
 	if row.History != "" && row.History != "[]" {
-		// Parse JSON array manually to unmarshal each message
+
 		var rawMessages []json.RawMessage
 		err := json.Unmarshal([]byte(row.History), &rawMessages)
 		if err != nil {
@@ -658,7 +613,6 @@ func (s *SQLTaskService) rowToTask(row *taskRow) (*pb.Task, error) {
 		task.History = make([]*pb.Message, 0)
 	}
 
-	// Deserialize metadata
 	if row.Metadata != "" && row.Metadata != "{}" {
 		err := json.Unmarshal([]byte(row.Metadata), &task.Metadata)
 		if err != nil {

@@ -9,12 +9,6 @@ import (
 	"github.com/kadirpekel/hector/pkg/llms"
 )
 
-// ============================================================================
-// GOAL EXTRACTION FOR SUPERVISOR STRATEGY
-// Uses structured output to decompose tasks into subtasks and identify agents
-// ============================================================================
-
-// Subtask represents a single subtask in a decomposed plan
 type Subtask struct {
 	ID          string   `json:"id"`
 	Description string   `json:"description"`
@@ -23,28 +17,24 @@ type Subtask struct {
 	Priority    int      `json:"priority"`
 }
 
-// TaskDecomposition represents a structured plan for task execution
 type TaskDecomposition struct {
 	MainGoal       string    `json:"main_goal"`
 	Subtasks       []Subtask `json:"subtasks"`
-	ExecutionOrder string    `json:"execution_order"` // "sequential", "parallel", "hierarchical"
+	ExecutionOrder string    `json:"execution_order"`
 	RequiredAgents []string  `json:"required_agents"`
 	Strategy       string    `json:"strategy"`
 	Reasoning      string    `json:"reasoning"`
 }
 
-// ExtractGoals uses structured output to decompose a task into subtasks
-// This helps supervisor agents plan multi-agent orchestration
 func ExtractGoals(
 	ctx context.Context,
 	userQuery string,
 	availableAgents []string,
 	services AgentServices,
 ) (*TaskDecomposition, error) {
-	// Build goal extraction prompt
+
 	prompt := buildGoalExtractionPrompt(userQuery, availableAgents)
 
-	// Define structured output schema
 	schema := map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
@@ -116,12 +106,10 @@ func ExtractGoals(
 		Schema: schema,
 	}
 
-	// Get LLM service
 	llmService := services.LLM()
 
-	// Check if LLM service is available and supports structured output
 	if llmService == nil || !llmService.SupportsStructuredOutput() {
-		// Fallback: simple decomposition
+
 		return &TaskDecomposition{
 			MainGoal: userQuery,
 			Subtasks: []Subtask{
@@ -140,14 +128,13 @@ func ExtractGoals(
 		}, nil
 	}
 
-	// Make structured LLM call
 	messages := []*pb.Message{
 		{Role: pb.Role_ROLE_USER, Content: []*pb.Part{{Part: &pb.Part_Text{Text: prompt}}}},
 	}
 
 	text, _, _, err := llmService.GenerateStructured(messages, nil, config)
 	if err != nil {
-		// Fallback on error
+
 		return &TaskDecomposition{
 			MainGoal: userQuery,
 			Subtasks: []Subtask{
@@ -166,10 +153,9 @@ func ExtractGoals(
 		}, nil
 	}
 
-	// Parse response
 	var decomposition TaskDecomposition
 	if err := json.Unmarshal([]byte(text), &decomposition); err != nil {
-		// Fallback on parse error
+
 		return &TaskDecomposition{
 			MainGoal: userQuery,
 			Subtasks: []Subtask{
@@ -191,7 +177,6 @@ func ExtractGoals(
 	return &decomposition, nil
 }
 
-// buildGoalExtractionPrompt creates the prompt for goal extraction
 func buildGoalExtractionPrompt(userQuery string, availableAgents []string) string {
 	agentsInfo := "No specific agents available (use general agent types)"
 	if len(availableAgents) > 0 {

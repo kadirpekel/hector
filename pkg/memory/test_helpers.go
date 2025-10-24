@@ -9,23 +9,15 @@ import (
 	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
-// ============================================================================
-// TEST HELPERS
-// Shared helpers for all history strategy tests
-// ============================================================================
-
-// DeterministicSummarizer provides predictable summarization for testing
 type DeterministicSummarizer struct {
 	CallCount    int
-	SummaryCalls [][]*pb.Message // Track what was summarized
+	SummaryCalls [][]*pb.Message
 }
 
-// SummarizeConversation creates deterministic summaries
 func (d *DeterministicSummarizer) SummarizeConversation(ctx context.Context, messages []*pb.Message) (string, error) {
 	d.CallCount++
 	d.SummaryCalls = append(d.SummaryCalls, messages)
 
-	// Create deterministic summary
 	var parts []string
 	for _, msg := range messages {
 		textContent := protocol.ExtractTextFromMessage(msg)

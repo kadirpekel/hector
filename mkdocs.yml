@@ -68,6 +68,7 @@ nav:
     - Structured Output: core-concepts/structured-output.md
     - Sessions & Streaming: core-concepts/sessions.md
     - Security: core-concepts/security.md
+    - Observability: core-concepts/observability.md
   - Performance:
     - Overview: performance/index.md
   - How-To Guides:

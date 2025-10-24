@@ -12,12 +12,10 @@ func TestNewMCPToolSource(t *testing.T) {
 		t.Fatal("NewMCPToolSource() returned nil")
 	}
 
-	// Test that the source has the expected name
 	if source.GetName() != "test-mcp" {
 		t.Errorf("GetName() = %v, want 'test-mcp'", source.GetName())
 	}
 
-	// Test that the source has the expected type
 	if source.GetType() != "mcp" {
 		t.Errorf("GetType() = %v, want 'mcp'", source.GetType())
 	}
@@ -29,14 +27,13 @@ func TestNewMCPToolSource_WithEmptyName(t *testing.T) {
 		t.Fatal("NewMCPToolSource() returned nil")
 	}
 
-	// Should default to "mcp"
 	if source.GetName() != "mcp" {
 		t.Errorf("GetName() = %v, want 'mcp'", source.GetName())
 	}
 }
 
 func TestNewMCPToolSourceWithConfig(t *testing.T) {
-	// Test NewMCPToolSourceWithConfig
+
 	source, err := NewMCPToolSourceWithConfig("http://localhost:8080")
 	if err != nil {
 		t.Fatalf("NewMCPToolSourceWithConfig() error = %v", err)
@@ -45,19 +42,17 @@ func TestNewMCPToolSourceWithConfig(t *testing.T) {
 		t.Fatal("NewMCPToolSourceWithConfig() returned nil")
 	}
 
-	// Should have default name
 	if source.GetName() != "mcp" {
 		t.Errorf("GetName() = %v, want 'mcp'", source.GetName())
 	}
 
-	// Should have correct type
 	if source.GetType() != "mcp" {
 		t.Errorf("GetType() = %v, want 'mcp'", source.GetType())
 	}
 }
 
 func TestNewMCPToolSourceWithConfig_EmptyURL(t *testing.T) {
-	// Test with empty URL
+
 	_, err := NewMCPToolSourceWithConfig("")
 	if err == nil {
 		t.Error("Expected error when URL is empty")
@@ -109,7 +104,6 @@ func TestMCPToolSource_GetType(t *testing.T) {
 func TestMCPToolSource_ListTools(t *testing.T) {
 	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server")
 
-	// Initially should be empty (no tools discovered yet)
 	tools := source.ListTools()
 	if len(tools) != 0 {
 		t.Errorf("Expected 0 tools initially, got %d", len(tools))
@@ -119,7 +113,6 @@ func TestMCPToolSource_ListTools(t *testing.T) {
 func TestMCPToolSource_GetTool(t *testing.T) {
 	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server")
 
-	// Test getting non-existent tool
 	_, exists := source.GetTool("non-existent")
 	if exists {
 		t.Error("Expected false when getting non-existent tool")
@@ -129,7 +122,6 @@ func TestMCPToolSource_GetTool(t *testing.T) {
 func TestMCPToolSource_DiscoverTools_WithoutURL(t *testing.T) {
 	source := NewMCPToolSource("test-mcp", "", "Test MCP server")
 
-	// Test DiscoverTools without URL
 	ctx := context.Background()
 	err := source.DiscoverTools(ctx)
 	if err == nil {
@@ -140,7 +132,6 @@ func TestMCPToolSource_DiscoverTools_WithoutURL(t *testing.T) {
 func TestMCPToolSource_DiscoverTools_WithInvalidURL(t *testing.T) {
 	source := NewMCPToolSource("test-mcp", "http://invalid-url-that-does-not-exist:9999", "Test MCP server")
 
-	// Test DiscoverTools with invalid URL
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -156,19 +147,17 @@ func TestMCPToolSource_ForTesting(t *testing.T) {
 		t.Fatal("NewMCPToolSourceForTesting() returned nil")
 	}
 
-	// Test that the source has the expected name
 	if source.GetName() != "test-mcp" {
 		t.Errorf("GetName() = %v, want 'test-mcp'", source.GetName())
 	}
 
-	// Test that the source has the expected type
 	if source.GetType() != "mcp" {
 		t.Errorf("GetType() = %v, want 'mcp'", source.GetType())
 	}
 }
 
 func TestMCPToolSource_RequestResponse(t *testing.T) {
-	// Test MCP request/response structures
+
 	request := Request{
 		JSONRPC: "2.0",
 		ID:      1,
@@ -186,7 +175,6 @@ func TestMCPToolSource_RequestResponse(t *testing.T) {
 		t.Errorf("Expected Method 'tools/list', got %s", request.Method)
 	}
 
-	// Test response structure
 	response := Response{
 		JSONRPC: "2.0",
 		ID:      1,
@@ -206,7 +194,7 @@ func TestMCPToolSource_RequestResponse(t *testing.T) {
 }
 
 func TestMCPToolSource_Error(t *testing.T) {
-	// Test MCP error structure
+
 	error := Error{
 		Code:    -32601,
 		Message: "Method not found",
@@ -221,7 +209,7 @@ func TestMCPToolSource_Error(t *testing.T) {
 }
 
 func TestMCPToolSource_CallParams(t *testing.T) {
-	// Test CallParams structure
+
 	params := CallParams{
 		Name:      "test_tool",
 		Arguments: map[string]interface{}{"arg1": "value1"},
@@ -239,7 +227,7 @@ func TestMCPToolSource_CallParams(t *testing.T) {
 }
 
 func TestMCPToolSource_MCPTool(t *testing.T) {
-	// Test MCPTool structure
+
 	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server")
 
 	toolInfo := ToolInfo{
@@ -254,7 +242,6 @@ func TestMCPToolSource_MCPTool(t *testing.T) {
 		source:   source,
 	}
 
-	// Test MCPTool methods
 	if tool.GetName() != "test_tool" {
 		t.Errorf("GetName() = %v, want 'test_tool'", tool.GetName())
 	}
@@ -287,7 +274,6 @@ func TestMCPToolSource_MCPTool_Execute(t *testing.T) {
 		source:   source,
 	}
 
-	// Test Execute with invalid URL (should fail)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -310,7 +296,6 @@ func TestMCPToolSource_MCPTool_Execute(t *testing.T) {
 func TestMCPToolSource_Concurrency(t *testing.T) {
 	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server")
 
-	// Test concurrent access to ListTools and GetTool
 	done := make(chan bool, 2)
 
 	go func() {
@@ -323,15 +308,13 @@ func TestMCPToolSource_Concurrency(t *testing.T) {
 		done <- true
 	}()
 
-	// Wait for both goroutines to complete
 	<-done
 	<-done
 
-	// Should not panic or cause issues
 }
 
 func TestMCPToolSource_WithConfig_InvalidURL(t *testing.T) {
-	// Test with invalid URL
+
 	_, err := NewMCPToolSourceWithConfig("not-a-valid-url")
 	if err != nil {
 		t.Errorf("NewMCPToolSourceWithConfig() should not error on invalid URL format, got: %v", err)
@@ -341,7 +324,6 @@ func TestMCPToolSource_WithConfig_InvalidURL(t *testing.T) {
 func TestMCPToolSource_HTTPClient(t *testing.T) {
 	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server")
 
-	// Verify HTTP client is initialized
 	if source.httpClient == nil {
 		t.Error("Expected HTTP client to be initialized")
 	}
@@ -350,7 +332,6 @@ func TestMCPToolSource_HTTPClient(t *testing.T) {
 func TestMCPToolSource_ForTesting_HTTPClient(t *testing.T) {
 	source := NewMCPToolSourceForTesting("test-mcp", "http://localhost:8080")
 
-	// Verify HTTP client is initialized with test-friendly settings
 	if source.httpClient == nil {
 		t.Error("Expected HTTP client to be initialized")
 	}

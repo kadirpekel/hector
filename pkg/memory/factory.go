@@ -4,20 +4,18 @@ import (
 	"fmt"
 )
 
-// WorkingMemoryConfig contains configuration for creating a working memory strategy
 type WorkingMemoryConfig struct {
-	Strategy   string               // Strategy name: "buffer_window", "summary_buffer"
-	WindowSize int                  // For buffer_window: number of messages to keep
-	Budget     int                  // For summary_buffer: token budget
-	Threshold  float64              // For summary_buffer: trigger threshold
-	Target     float64              // For summary_buffer: compression target
-	Model      string               // Model name for token counting
-	Summarizer SummarizationService // Summarization service (for summary_buffer)
+	Strategy   string
+	WindowSize int
+	Budget     int
+	Threshold  float64
+	Target     float64
+	Model      string
+	Summarizer SummarizationService
 }
 
-// NewWorkingMemoryStrategy creates a new working memory strategy based on configuration
 func NewWorkingMemoryStrategy(config WorkingMemoryConfig) (WorkingMemoryStrategy, error) {
-	// Default to summary_buffer if not specified
+
 	strategy := config.Strategy
 	if strategy == "" {
 		strategy = "summary_buffer"
@@ -30,7 +28,7 @@ func NewWorkingMemoryStrategy(config WorkingMemoryConfig) (WorkingMemoryStrategy
 		})
 
 	case "summary_buffer":
-		// Validate required fields for summary_buffer
+
 		if config.Model == "" {
 			return nil, fmt.Errorf("model is required for summary_buffer strategy")
 		}

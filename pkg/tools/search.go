@@ -12,40 +12,36 @@ import (
 	hectorcontext "github.com/kadirpekel/hector/pkg/context"
 )
 
-// SearchTool provides search capabilities across configured document stores
 type SearchTool struct {
 	config          *config.SearchToolConfig
-	availableStores []string // Names of document stores this tool can access
+	availableStores []string
 }
 
-// SearchRequest represents a search query from an agent
 type SearchRequest struct {
 	Query    string            `json:"query"`
-	Type     string            `json:"type"`     // "content", "file", "function", "struct"
-	Stores   []string          `json:"stores"`   // Which document stores to search, empty = all
-	Language string            `json:"language"` // Filter by language: "go", "yaml", "markdown"
-	Limit    int               `json:"limit"`    // Max results, default 10
-	Context  map[string]string `json:"context"`  // Additional search context
+	Type     string            `json:"type"`
+	Stores   []string          `json:"stores"`
+	Language string            `json:"language"`
+	Limit    int               `json:"limit"`
+	Context  map[string]string `json:"context"`
 }
 
-// DocumentSearchResult represents a single search result from document stores
 type DocumentSearchResult struct {
 	DocumentID string            `json:"document_id"`
 	StoreName  string            `json:"store_name"`
 	FilePath   string            `json:"file_path"`
 	Title      string            `json:"title"`
-	Content    string            `json:"content"`               // Relevant content snippet
-	Type       string            `json:"type"`                  // Document type
-	Language   string            `json:"language"`              // Programming language
-	Score      float64           `json:"score"`                 // Relevance score
-	StartLine  int               `json:"start_line,omitempty"`  // Start line of chunk
-	EndLine    int               `json:"end_line,omitempty"`    // End line of chunk
-	LineNumber int               `json:"line_number,omitempty"` // Line number in the source file
-	MatchType  string            `json:"match_type"`            // "title", "content", "function", "struct"
+	Content    string            `json:"content"`
+	Type       string            `json:"type"`
+	Language   string            `json:"language"`
+	Score      float64           `json:"score"`
+	StartLine  int               `json:"start_line,omitempty"`
+	EndLine    int               `json:"end_line,omitempty"`
+	LineNumber int               `json:"line_number,omitempty"`
+	MatchType  string            `json:"match_type"`
 	Metadata   map[string]string `json:"metadata"`
 }
 
-// SearchResponse contains search results and metadata
 type SearchResponse struct {
 	Results     []DocumentSearchResult `json:"results"`
 	Total       int                    `json:"total"`
@@ -55,19 +51,17 @@ type SearchResponse struct {
 	Suggestions []string               `json:"suggestions,omitempty"`
 }
 
-// NewSearchTool creates a new search tool with configuration
 func NewSearchTool(searchConfig *config.SearchToolConfig) *SearchTool {
 	if searchConfig == nil {
-		// Default configuration
+
 		searchConfig = &config.SearchToolConfig{
-			DocumentStores:     []string{}, // Will use all available stores
+			DocumentStores:     []string{},
 			DefaultLimit:       10,
 			MaxLimit:           50,
 			EnabledSearchTypes: []string{"content", "file", "function", "struct"},
 		}
 	}
 
-	// Set defaults
 	if searchConfig.DefaultLimit == 0 {
 		searchConfig.DefaultLimit = 10
 	}
@@ -84,9 +78,11 @@ func NewSearchTool(searchConfig *config.SearchToolConfig) *SearchTool {
 	}
 }
 
-// NewSearchToolWithConfig creates a search tool from a ToolConfig configuration
-func NewSearchToolWithConfig(name string, toolConfig config.ToolConfig) (*SearchTool, error) {
-	// Build SearchToolConfig from flat ToolConfig structure
+func NewSearchToolWithConfig(name string, toolConfig *config.ToolConfig) (*SearchTool, error) {
+	if toolConfig == nil {
+		return nil, fmt.Errorf("tool config is required")
+	}
+
 	searchConfig := &config.SearchToolConfig{
 		DocumentStores:     toolConfig.DocumentStores,
 		DefaultLimit:       toolConfig.DefaultLimit,
@@ -95,17 +91,14 @@ func NewSearchToolWithConfig(name string, toolConfig config.ToolConfig) (*Search
 		EnabledSearchTypes: toolConfig.EnabledSearchTypes,
 	}
 
-	// Apply defaults
 	searchConfig.SetDefaults()
 
 	return NewSearchTool(searchConfig), nil
 }
 
-// getAvailableStores returns the document stores this tool can access
 func (t *SearchTool) getAvailableStores() map[string]*hectorcontext.DocumentStore {
 	stores := make(map[string]*hectorcontext.DocumentStore)
 
-	// If no specific stores configured, use all available
 	if len(t.availableStores) == 0 {
 		storeNames := hectorcontext.ListDocumentStoresFromRegistry()
 		for _, name := range storeNames {
@@ -114,7 +107,7 @@ func (t *SearchTool) getAvailableStores() map[string]*hectorcontext.DocumentStor
 			}
 		}
 	} else {
-		// Use only configured stores
+
 		for _, name := range t.availableStores {
 			if store, exists := hectorcontext.GetDocumentStoreFromRegistry(name); exists {
 				stores[name] = store
@@ -125,11 +118,9 @@ func (t *SearchTool) getAvailableStores() map[string]*hectorcontext.DocumentStor
 	return stores
 }
 
-// performSearch performs a search across document stores (internal method)
 func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (string, error) {
 	start := time.Now()
 
-	// Validate and set limits
 	if req.Limit == 0 {
 		req.Limit = t.config.DefaultLimit
 	}
@@ -137,36 +128,32 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 		req.Limit = t.config.MaxLimit
 	}
 
-	// Validate search type is enabled
 	if !t.isSearchTypeEnabled(req.Type) {
 		return t.createErrorResponse(fmt.Sprintf("Search type '%s' is not enabled", req.Type))
 	}
 
-	// Get available stores
 	availableStores := t.getAvailableStores()
 	if len(availableStores) == 0 {
 		return t.createErrorResponse("No document stores available")
 	}
 
-	// Determine which stores to search
 	storesToSearch := t.getStoresToSearch(req.Stores, availableStores)
 	if len(storesToSearch) == 0 {
 		return t.createErrorResponse("No matching document stores found")
 	}
 
-	// Perform search across selected stores
 	var allResults []DocumentSearchResult
 	var storesUsed []string
 
 	for _, storeName := range storesToSearch {
 		store, exists := hectorcontext.GetDocumentStoreFromRegistry(storeName)
 		if !exists {
-			fmt.Printf("⚠️  Store %s not found in registry\n", storeName)
+			fmt.Printf("Warning: Store %s not found in registry\n", storeName)
 			continue
 		}
 		results, err := t.searchInStore(ctx, store, storeName, req)
 		if err != nil {
-			fmt.Printf("❌ Search in store %s failed: %v\n", storeName, err)
+			fmt.Printf("Error: Search in store %s failed: %v\n", storeName, err)
 			continue
 		}
 
@@ -174,15 +161,12 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 		storesUsed = append(storesUsed, storeName)
 	}
 
-	// Sort results by score
 	t.sortResultsByScore(allResults)
 
-	// Limit results
 	if len(allResults) > req.Limit {
 		allResults = allResults[:req.Limit]
 	}
 
-	// Create response
 	response := SearchResponse{
 		Results:    allResults,
 		Total:      len(allResults),
@@ -191,12 +175,10 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 		StoresUsed: storesUsed,
 	}
 
-	// Add suggestions if no results found
 	if len(allResults) == 0 {
 		response.Suggestions = t.generateSuggestions(req)
 	}
 
-	// Convert to JSON
 	responseJSON, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal search response: %w", err)
@@ -205,19 +187,16 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 	return string(responseJSON), nil
 }
 
-// searchInStore searches within a specific document store
 func (t *SearchTool) searchInStore(ctx context.Context, store *hectorcontext.DocumentStore, storeName string, req SearchRequest) ([]DocumentSearchResult, error) {
 	var results []DocumentSearchResult
 
-	// Use the document store's search method (vector DB backend)
 	searchResults, err := store.Search(ctx, req.Query, req.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("store search failed: %w", err)
 	}
 
-	// Convert SearchResult to DocumentSearchResult
 	for _, result := range searchResults {
-		// Extract metadata
+
 		language := ""
 		filePath := ""
 		title := ""
@@ -238,12 +217,10 @@ func (t *SearchTool) searchInStore(ctx context.Context, store *hectorcontext.Doc
 			}
 		}
 
-		// Apply language filter if specified
 		if req.Language != "" && language != req.Language {
 			continue
 		}
 
-		// Extract line numbers from metadata
 		startLine := 0
 		endLine := 0
 		if result.Metadata != nil {
@@ -255,20 +232,17 @@ func (t *SearchTool) searchInStore(ctx context.Context, store *hectorcontext.Doc
 			}
 		}
 
-		// Get content from metadata and format with prominent line numbers
 		content := ""
 		if result.Metadata != nil {
 			if c, ok := result.Metadata["content"].(string); ok {
 				rawContent := c
 				wasTruncated := false
 
-				// Truncate if too long
 				if len(rawContent) > 2000 {
 					rawContent = rawContent[:2000]
 					wasTruncated = true
 				}
 
-				// Format with prominent line number header
 				if startLine > 0 && endLine > 0 {
 					header := fmt.Sprintf("📄 %s (lines %d-%d)\n%s",
 						filePath,
@@ -277,7 +251,7 @@ func (t *SearchTool) searchInStore(ctx context.Context, store *hectorcontext.Doc
 						strings.Repeat("-", 60))
 
 					if wasTruncated {
-						content = fmt.Sprintf("%s\n%s\n\n⚠️  TRUNCATED - Use: sed -n \"%d,%dp\" %s",
+						content = fmt.Sprintf("%s\n%s\n\nWarning: TRUNCATED - Use: sed -n \"%d,%dp\" %s",
 							header,
 							rawContent,
 							startLine,
@@ -307,7 +281,6 @@ func (t *SearchTool) searchInStore(ctx context.Context, store *hectorcontext.Doc
 			Metadata:   make(map[string]string),
 		}
 
-		// Convert metadata to string map
 		if result.Metadata != nil {
 			for k, v := range result.Metadata {
 				if str, ok := v.(string); ok {
@@ -322,9 +295,6 @@ func (t *SearchTool) searchInStore(ctx context.Context, store *hectorcontext.Doc
 	return results, nil
 }
 
-// Helper methods
-
-// isSearchTypeEnabled checks if a search type is enabled
 func (t *SearchTool) isSearchTypeEnabled(searchType string) bool {
 	for _, enabled := range t.config.EnabledSearchTypes {
 		if enabled == searchType {
@@ -334,10 +304,9 @@ func (t *SearchTool) isSearchTypeEnabled(searchType string) bool {
 	return false
 }
 
-// getStoresToSearch determines which stores to search based on request and availability
 func (t *SearchTool) getStoresToSearch(requestedStores []string, availableStores map[string]*hectorcontext.DocumentStore) []string {
 	if len(requestedStores) == 0 {
-		// Return all available stores
+
 		var allStores []string
 		for name := range availableStores {
 			allStores = append(allStores, name)
@@ -345,7 +314,6 @@ func (t *SearchTool) getStoresToSearch(requestedStores []string, availableStores
 		return allStores
 	}
 
-	// Filter requested stores to only include available ones
 	var validStores []string
 	for _, name := range requestedStores {
 		if _, exists := availableStores[name]; exists {
@@ -356,19 +324,16 @@ func (t *SearchTool) getStoresToSearch(requestedStores []string, availableStores
 	return validStores
 }
 
-// sortResultsByScore sorts results by score in descending order using quicksort
 func (t *SearchTool) sortResultsByScore(results []DocumentSearchResult) {
 	if len(results) <= 1 {
 		return
 	}
 
-	// Use Go's built-in sort for better performance
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].Score > results[j].Score
 	})
 }
 
-// generateSuggestions generates helpful suggestions when no results are found
 func (t *SearchTool) generateSuggestions(req SearchRequest) []string {
 	suggestions := []string{
 		"Try a more specific search term",
@@ -389,7 +354,6 @@ func (t *SearchTool) generateSuggestions(req SearchRequest) []string {
 	return suggestions
 }
 
-// createErrorResponse creates a standardized error response
 func (t *SearchTool) createErrorResponse(message string) (string, error) {
 	response := SearchResponse{
 		Results:     []DocumentSearchResult{},
@@ -404,7 +368,6 @@ func (t *SearchTool) createErrorResponse(message string) (string, error) {
 	return string(responseJSON), nil
 }
 
-// minInt returns the minimum of two integers
 func minInt(a, b int) int {
 	if a < b {
 		return a
@@ -412,9 +375,6 @@ func minInt(a, b int) int {
 	return b
 }
 
-// Tool interface implementation
-
-// GetInfo returns tool information for the Tool interface
 func (t *SearchTool) GetInfo() ToolInfo {
 	return ToolInfo{
 		Name:        "search",
@@ -461,21 +421,17 @@ func (t *SearchTool) GetInfo() ToolInfo {
 	}
 }
 
-// GetName returns the tool name
 func (t *SearchTool) GetName() string {
 	return "search"
 }
 
-// GetDescription returns the tool description
 func (t *SearchTool) GetDescription() string {
 	return "Search across configured document stores for files, content, functions, or structs using semantic search. Results include line numbers for precise code references."
 }
 
-// Execute executes the search tool with structured arguments (Tool interface)
 func (t *SearchTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
 	start := time.Now()
 
-	// Extract parameters from args
 	query, _ := args["query"].(string)
 	if query == "" {
 		return ToolResult{
@@ -486,14 +442,12 @@ func (t *SearchTool) Execute(ctx context.Context, args map[string]interface{}) (
 		}, fmt.Errorf("query parameter is required")
 	}
 
-	// Build search request
 	req := SearchRequest{
 		Query: query,
 		Type:  getStringWithDefault(args, "type", "content"),
 		Limit: getIntWithDefault(args, "limit", 10),
 	}
 
-	// Handle stores parameter (can be array or single string)
 	if stores, ok := args["stores"]; ok {
 		switch v := stores.(type) {
 		case []interface{}:
@@ -515,7 +469,6 @@ func (t *SearchTool) Execute(ctx context.Context, args map[string]interface{}) (
 		req.Language = language
 	}
 
-	// Execute the search using the existing method
 	content, err := t.performSearch(ctx, req)
 	if err != nil {
 		return ToolResult{
@@ -534,12 +487,11 @@ func (t *SearchTool) Execute(ctx context.Context, args map[string]interface{}) (
 		Metadata: map[string]interface{}{
 			"source":                  "local",
 			"tool_type":               "search",
-			"reflection_context_size": 2000, // Search returns multiple results, needs more context
+			"reflection_context_size": 2000,
 		},
 	}, nil
 }
 
-// Helper functions for parameter extraction
 func getStringWithDefault(args map[string]interface{}, key, defaultValue string) string {
 	if val, ok := args[key].(string); ok {
 		return val

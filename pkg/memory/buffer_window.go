@@ -38,10 +38,8 @@ func (s *BufferWindowStrategy) AddMessage(session *hectorcontext.ConversationHis
 	return session.AddMessage(msg)
 }
 
-// CheckAndSummarize for buffer window strategy (no-op, no summarization needed)
-// Returns nil since this strategy doesn't create summary messages
 func (s *BufferWindowStrategy) CheckAndSummarize(session *hectorcontext.ConversationHistory) ([]*pb.Message, error) {
-	// Buffer window doesn't need summarization - it just keeps last N messages
+
 	return nil, nil
 }
 
@@ -50,10 +48,8 @@ func (s *BufferWindowStrategy) GetMessages(session *hectorcontext.ConversationHi
 	return messages, nil
 }
 
-// LoadState loads and reconstructs the strategy's state from persistent storage
-// For buffer_window, this simply loads the last N messages
 func (s *BufferWindowStrategy) LoadState(sessionID string, sessionService interface{}) (*hectorcontext.ConversationHistory, error) {
-	// Type assert to get the session service
+
 	sessService, ok := sessionService.(interface {
 		GetMessagesWithOptions(sessionID string, opts reasoning.LoadOptions) ([]*pb.Message, error)
 	})
@@ -61,7 +57,6 @@ func (s *BufferWindowStrategy) LoadState(sessionID string, sessionService interf
 		return nil, fmt.Errorf("session service does not support GetMessagesWithOptions")
 	}
 
-	// Load last N messages (window size)
 	messages, err := sessService.GetMessagesWithOptions(sessionID, reasoning.LoadOptions{
 		Limit: s.windowSize,
 	})
@@ -69,7 +64,6 @@ func (s *BufferWindowStrategy) LoadState(sessionID string, sessionService interf
 		return nil, fmt.Errorf("failed to load messages: %w", err)
 	}
 
-	// Reconstruct in-memory session
 	session, err := hectorcontext.NewConversationHistory(sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)

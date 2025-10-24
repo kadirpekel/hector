@@ -58,7 +58,7 @@ func TestParseOpenAIRateLimitHeaders(t *testing.T) {
 				"x-ratelimit-reset-requests": "1640995300",
 			},
 			expected: RateLimitInfo{
-				ResetTime: 1640995200, // Token reset should take priority
+				ResetTime: 1640995200,
 			},
 		},
 		{
@@ -138,7 +138,7 @@ func TestParseOpenAIRateLimitHeaders(t *testing.T) {
 			if result.TokensRemaining != tt.expected.TokensRemaining {
 				t.Errorf("ParseOpenAIRateLimitHeaders() TokensRemaining = %d, want %d", result.TokensRemaining, tt.expected.TokensRemaining)
 			}
-			// OpenAI doesn't have separate input/output token fields
+
 			if result.InputTokensRemaining != tt.expected.InputTokensRemaining {
 				t.Errorf("ParseOpenAIRateLimitHeaders() InputTokensRemaining = %d, want %d", result.InputTokensRemaining, tt.expected.InputTokensRemaining)
 			}
@@ -182,7 +182,7 @@ func TestParseAnthropicRateLimitHeaders(t *testing.T) {
 				"anthropic-ratelimit-input-tokens-reset": "2021-12-31T23:59:59Z",
 			},
 			expected: RateLimitInfo{
-				ResetTime: 1640995199, // Unix timestamp for 2021-12-31T23:59:59Z
+				ResetTime: 1640995199,
 			},
 		},
 		{
@@ -211,7 +211,7 @@ func TestParseAnthropicRateLimitHeaders(t *testing.T) {
 				"anthropic-ratelimit-requests-reset":      "2021-12-31T23:59:57Z",
 			},
 			expected: RateLimitInfo{
-				ResetTime: 1640995199, // Input tokens should take priority
+				ResetTime: 1640995199,
 			},
 		},
 		{
@@ -312,7 +312,7 @@ func TestParseAnthropicRateLimitHeaders(t *testing.T) {
 			if result.OutputTokensRemaining != tt.expected.OutputTokensRemaining {
 				t.Errorf("ParseAnthropicRateLimitHeaders() OutputTokensRemaining = %d, want %d", result.OutputTokensRemaining, tt.expected.OutputTokensRemaining)
 			}
-			// Anthropic doesn't have combined tokens field
+
 			if result.TokensRemaining != tt.expected.TokensRemaining {
 				t.Errorf("ParseAnthropicRateLimitHeaders() TokensRemaining = %d, want %d", result.TokensRemaining, tt.expected.TokensRemaining)
 			}
@@ -330,32 +330,32 @@ func TestRateLimitHeaderParsers_EdgeCases(t *testing.T) {
 			name:   "openai_case_insensitive_headers",
 			parser: ParseOpenAIRateLimitHeaders,
 			headers: map[string]string{
-				"retry-after":                    "30",         // Lowercase
-				"X-RATELIMIT-RESET-TOKENS":       "1640995200", // Uppercase
-				"x-ratelimit-remaining-requests": "100",        // Mixed case
+				"retry-after":                    "30",
+				"X-RATELIMIT-RESET-TOKENS":       "1640995200",
+				"x-ratelimit-remaining-requests": "100",
 			},
 		},
 		{
 			name:   "anthropic_case_insensitive_headers",
 			parser: ParseAnthropicRateLimitHeaders,
 			headers: map[string]string{
-				"RETRY-AFTER":                            "30",                   // Uppercase
-				"anthropic-ratelimit-input-tokens-reset": "2021-12-31T23:59:59Z", // Lowercase
-				"ANTHROPIC-RATELIMIT-REQUESTS-REMAINING": "100",                  // Uppercase
+				"RETRY-AFTER":                            "30",
+				"anthropic-ratelimit-input-tokens-reset": "2021-12-31T23:59:59Z",
+				"ANTHROPIC-RATELIMIT-REQUESTS-REMAINING": "100",
 			},
 		},
 		{
 			name:   "openai_multiple_values",
 			parser: ParseOpenAIRateLimitHeaders,
 			headers: map[string]string{
-				"Retry-After": "30, 60", // Multiple values (should use first)
+				"Retry-After": "30, 60",
 			},
 		},
 		{
 			name:   "anthropic_multiple_values",
 			parser: ParseAnthropicRateLimitHeaders,
 			headers: map[string]string{
-				"retry-after": "45, 90", // Multiple values (should use first)
+				"retry-after": "45, 90",
 			},
 		},
 	}
@@ -369,7 +369,6 @@ func TestRateLimitHeaderParsers_EdgeCases(t *testing.T) {
 
 			result := tt.parser(headers)
 
-			// Should not panic and should return valid result
 			if result.RetryAfter < 0 {
 				t.Errorf("Parser should not return negative RetryAfter: %v", result.RetryAfter)
 			}

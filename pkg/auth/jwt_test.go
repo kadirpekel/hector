@@ -14,26 +14,23 @@ import (
 )
 
 func TestNewJWTValidator(t *testing.T) {
-	// Generate test key pair
+
 	_, publicKey, err := generateRSAKeyPair()
 	if err != nil {
 		t.Fatalf("Failed to generate key pair: %v", err)
 	}
 
-	// Create JWKS
 	keyset, err := createJWKS(publicKey)
 	if err != nil {
 		t.Fatalf("Failed to create JWKS: %v", err)
 	}
 
-	// Create test server for JWKS endpoint
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/.well-known/jwks.json" {
 			http.NotFound(w, r)
 			return
 		}
 
-		// Convert keyset to JSON
 		keysetJSON, err := json.Marshal(keyset)
 		if err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -82,14 +79,14 @@ func TestNewJWTValidator(t *testing.T) {
 			jwksURL:   jwksURL,
 			issuer:    "",
 			audience:  audience,
-			wantError: false, // Issuer can be empty, validation happens during token validation
+			wantError: false,
 		},
 		{
 			name:      "empty_audience",
 			jwksURL:   jwksURL,
 			issuer:    issuer,
 			audience:  "",
-			wantError: false, // Audience can be empty, validation happens during token validation
+			wantError: false,
 		},
 	}
 
@@ -128,26 +125,23 @@ func TestNewJWTValidator(t *testing.T) {
 }
 
 func TestJWTValidator_ValidateToken(t *testing.T) {
-	// Generate test key pair
+
 	privateKey, publicKey, err := generateRSAKeyPair()
 	if err != nil {
 		t.Fatalf("Failed to generate key pair: %v", err)
 	}
 
-	// Create JWKS
 	keyset, err := createJWKS(publicKey)
 	if err != nil {
 		t.Fatalf("Failed to create JWKS: %v", err)
 	}
 
-	// Create test server for JWKS endpoint
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/.well-known/jwks.json" {
 			http.NotFound(w, r)
 			return
 		}
 
-		// Convert keyset to JSON
 		keysetJSON, err := json.Marshal(keyset)
 		if err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -164,7 +158,6 @@ func TestJWTValidator_ValidateToken(t *testing.T) {
 	audience := "test-audience"
 	subject := "test-user-123"
 
-	// Create validator
 	validator, err := NewJWTValidator(jwksURL, issuer, audience)
 	if err != nil {
 		t.Fatalf("Failed to create validator: %v", err)
@@ -235,7 +228,7 @@ func TestJWTValidator_ValidateToken(t *testing.T) {
 				if claims.Custom["custom_field"] != "custom_value" {
 					t.Errorf("Claims.Custom[custom_field] = %v, want custom_value", claims.Custom["custom_field"])
 				}
-				// Note: numeric values might be stored as float64 in JWT
+
 				if claims.Custom["numeric_field"] != 42 && claims.Custom["numeric_field"] != float64(42) {
 					t.Errorf("Claims.Custom[numeric_field] = %v, want 42", claims.Custom["numeric_field"])
 				}
@@ -269,21 +262,20 @@ func TestJWTValidator_ValidateToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create token
+
 			tokenClaims := make(map[string]interface{})
 			for k, v := range tt.claims {
 				tokenClaims[k] = v
 			}
 
-			// Handle expired token case
 			if tt.name == "expired_token" {
-				// Create expired token manually
+
 				token := jwt.New()
 				_ = token.Set(jwt.IssuerKey, tt.issuer)
 				_ = token.Set(jwt.AudienceKey, tt.audience)
 				_ = token.Set(jwt.SubjectKey, tt.subject)
 				_ = token.Set(jwt.IssuedAtKey, time.Now().Add(-2*time.Hour))
-				_ = token.Set(jwt.ExpirationKey, time.Now().Add(-1*time.Hour)) // Expired 1 hour ago
+				_ = token.Set(jwt.ExpirationKey, time.Now().Add(-1*time.Hour))
 
 				key, err := jwk.FromRaw(privateKey)
 				if err != nil {
@@ -338,26 +330,23 @@ func TestJWTValidator_ValidateToken(t *testing.T) {
 }
 
 func TestJWTValidator_ValidateToken_InvalidToken(t *testing.T) {
-	// Generate test key pair
+
 	_, publicKey, err := generateRSAKeyPair()
 	if err != nil {
 		t.Fatalf("Failed to generate key pair: %v", err)
 	}
 
-	// Create JWKS
 	keyset, err := createJWKS(publicKey)
 	if err != nil {
 		t.Fatalf("Failed to create JWKS: %v", err)
 	}
 
-	// Create test server for JWKS endpoint
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/.well-known/jwks.json" {
 			http.NotFound(w, r)
 			return
 		}
 
-		// Convert keyset to JSON
 		keysetJSON, err := json.Marshal(keyset)
 		if err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -373,7 +362,6 @@ func TestJWTValidator_ValidateToken_InvalidToken(t *testing.T) {
 	issuer := "https://test-issuer.com"
 	audience := "test-audience"
 
-	// Create validator
 	validator, err := NewJWTValidator(jwksURL, issuer, audience)
 	if err != nil {
 		t.Fatalf("Failed to create validator: %v", err)
@@ -424,13 +412,11 @@ func TestJWTValidator_ValidateToken_InvalidToken(t *testing.T) {
 }
 
 func TestJWTValidator_Close(t *testing.T) {
-	// Use setupTestValidator helper
+
 	validator, privateKey, issuer, audience, _ := setupTestValidator(t)
 
-	// Test Close method - should not panic
 	validator.Close()
 
-	// Test that validator still works after Close
 	tokenString, err := createTestJWT(privateKey, issuer, audience, "test-user", map[string]interface{}{
 		"email": "test@example.com",
 	})
@@ -445,7 +431,7 @@ func TestJWTValidator_Close(t *testing.T) {
 }
 
 func TestClaims_Structure(t *testing.T) {
-	// Test Claims struct creation and field access
+
 	claims := &Claims{
 		Subject:  "test-user-123",
 		Email:    "test@example.com",

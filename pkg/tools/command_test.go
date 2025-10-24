@@ -12,12 +12,10 @@ func TestNewCommandToolForTesting(t *testing.T) {
 		t.Fatal("NewCommandToolForTesting() returned nil")
 	}
 
-	// Test that the tool has the expected name
 	if tool.GetName() != "execute_command" {
 		t.Errorf("GetName() = %v, want 'execute_command'", tool.GetName())
 	}
 
-	// Test that the tool has a description
 	description := tool.GetDescription()
 	if description == "" {
 		t.Error("GetDescription() should not return empty string")
@@ -32,7 +30,6 @@ func TestCommandTool_GetInfo(t *testing.T) {
 		t.Fatal("GetInfo() returned empty name")
 	}
 
-	// Verify info structure
 	if info.Description == "" {
 		t.Error("Expected non-empty description")
 	}
@@ -40,7 +37,6 @@ func TestCommandTool_GetInfo(t *testing.T) {
 		t.Error("Expected at least one parameter")
 	}
 
-	// Check for required parameters
 	hasCommandParam := false
 	for _, param := range info.Parameters {
 		if param.Name == "command" && param.Required {
@@ -192,10 +188,8 @@ func TestCommandTool_Execute_ValidationOnly(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "missing command",
-			args: map[string]interface{}{
-				// missing command field
-			},
+			name:    "missing command",
+			args:    map[string]interface{}{},
 			wantErr: true,
 		},
 		{
@@ -210,7 +204,7 @@ func TestCommandTool_Execute_ValidationOnly(t *testing.T) {
 			args: map[string]interface{}{
 				"command": "echo hello",
 			},
-			wantErr: false, // Will fail at execution, but validation should pass
+			wantErr: false,
 		},
 	}
 
@@ -219,8 +213,6 @@ func TestCommandTool_Execute_ValidationOnly(t *testing.T) {
 			ctx := context.Background()
 			_, err := tool.Execute(ctx, tt.args)
 
-			// We're only testing validation here, not execution
-			// The error should be about missing/invalid command, not execution failure
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected validation error, got nil")

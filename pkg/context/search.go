@@ -12,32 +12,18 @@ import (
 	"github.com/kadirpekel/hector/pkg/embedders"
 )
 
-// ============================================================================
-// SEARCH CONSTANTS AND CONFIGURATION
-// ============================================================================
-
 const (
-	// DefaultTopK is the default number of results per model
 	DefaultTopK = 10
 
-	// MaxTopK is the maximum number of results per model
 	MaxTopK = 100
 
-	// DefaultSearchTimeout is the default timeout for search operations
 	DefaultSearchTimeout = 30 * time.Second
 
-	// MinQueryLength is the minimum query length for search
 	MinQueryLength = 1
 
-	// MaxQueryLength is the maximum query length for search
 	MaxQueryLength = 10000
 )
 
-// ============================================================================
-// SEARCH ERRORS - STANDARDIZED ERROR TYPES
-// ============================================================================
-
-// SearchError represents errors in search operations
 type SearchError struct {
 	Component string
 	Operation string
@@ -57,7 +43,6 @@ func (e *SearchError) Unwrap() error {
 	return e.Err
 }
 
-// NewSearchError creates a new search error
 func NewSearchError(component, operation, message, query string, err error) *SearchError {
 	return &SearchError{
 		Component: component,
@@ -68,11 +53,6 @@ func NewSearchError(component, operation, message, query string, err error) *Sea
 	}
 }
 
-// ============================================================================
-// SEARCH ENGINE - ENHANCED WITH PROPER STRUCTURE
-// ============================================================================
-
-// SearchEngine handles search operations across multiple models with enhanced error handling and validation
 type SearchEngine struct {
 	mu       sync.RWMutex
 	db       databases.DatabaseProvider
@@ -81,7 +61,6 @@ type SearchEngine struct {
 	models   map[string]config.SearchModel
 }
 
-// NewSearchEngine creates a new search engine with proper validation and configuration
 func NewSearchEngine(db databases.DatabaseProvider, embedder embedders.EmbedderProvider, searchConfig config.SearchConfig) (*SearchEngine, error) {
 	if db == nil {
 		return nil, NewSearchError("SearchEngine", "NewSearchEngine", "database provider is required", "", nil)
@@ -97,7 +76,6 @@ func NewSearchEngine(db databases.DatabaseProvider, embedder embedders.EmbedderP
 		models:   make(map[string]config.SearchModel),
 	}
 
-	// Initialize and validate models
 	if err := engine.initializeModels(); err != nil {
 		return nil, err
 	}
@@ -105,7 +83,6 @@ func NewSearchEngine(db databases.DatabaseProvider, embedder embedders.EmbedderP
 	return engine, nil
 }
 
-// initializeModels initializes and validates search models
 func (se *SearchEngine) initializeModels() error {
 	if len(se.config.Models) == 0 {
 		return NewSearchError("SearchEngine", "initializeModels", "no search models configured", "", nil)
@@ -116,7 +93,6 @@ func (se *SearchEngine) initializeModels() error {
 			return err
 		}
 
-		// Set defaults if not specified
 		modelWithDefaults := model
 		if modelWithDefaults.DefaultTopK == 0 {
 			modelWithDefaults.DefaultTopK = DefaultTopK
@@ -131,7 +107,6 @@ func (se *SearchEngine) initializeModels() error {
 	return nil
 }
 
-// validateModel validates a single search model
 func (se *SearchEngine) validateModel(model config.SearchModel) error {
 	if model.Name == "" {
 		return NewSearchError("SearchEngine", "validateModel", "model name is required", "", nil)
@@ -148,11 +123,6 @@ func (se *SearchEngine) validateModel(model config.SearchModel) error {
 	return nil
 }
 
-// ============================================================================
-// QUERY VALIDATION AND PROCESSING
-// ============================================================================
-
-// validateQuery validates a search query
 func (se *SearchEngine) validateQuery(query string) error {
 	if query == "" {
 		return NewSearchError("SearchEngine", "validateQuery", "query cannot be empty", "", nil)
@@ -166,36 +136,26 @@ func (se *SearchEngine) validateQuery(query string) error {
 	return nil
 }
 
-// processQuery processes and normalizes a search query
 func (se *SearchEngine) processQuery(query string) string {
-	// Trim whitespace and normalize
+
 	processed := strings.TrimSpace(query)
 
-	// Enhanced query processing
 	processed = strings.ToLower(processed)
 
-	// Remove common stop words
 	stopWords := []string{"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"}
 	for _, stopWord := range stopWords {
 		processed = strings.ReplaceAll(processed, " "+stopWord+" ", " ")
 	}
 
-	// Clean up multiple spaces
 	processed = strings.Join(strings.Fields(processed), " ")
 
 	return processed
 }
 
-// ============================================================================
-// CORE SEARCH OPERATIONS - ENHANCED
-// ============================================================================
-
-// IngestDocument ingests a document into the vector database with enhanced validation
 func (se *SearchEngine) IngestDocument(ctx context.Context, docID, content string, metadata map[string]interface{}) error {
 	se.mu.RLock()
 	defer se.mu.RUnlock()
 
-	// Validate inputs
 	if docID == "" {
 		return NewSearchError("SearchEngine", "IngestDocument", "document ID cannot be empty", "", nil)
 	}
@@ -203,7 +163,6 @@ func (se *SearchEngine) IngestDocument(ctx context.Context, docID, content strin
 		return NewSearchError("SearchEngine", "IngestDocument", "content cannot be empty", docID, nil)
 	}
 
-	// Get collection name from metadata (store_name) or fallback to first collection
 	collection := se.getCollectionFromMetadata(metadata)
 	if collection == "" {
 		var err error
@@ -213,7 +172,6 @@ func (se *SearchEngine) IngestDocument(ctx context.Context, docID, content strin
 		}
 	}
 
-	// Generate embedding with timeout
 	embedCtx, cancel := context.WithTimeout(ctx, DefaultSearchTimeout)
 	defer cancel()
 
@@ -222,10 +180,8 @@ func (se *SearchEngine) IngestDocument(ctx context.Context, docID, content strin
 		return NewSearchError("SearchEngine", "IngestDocument", "failed to generate embedding", docID, err)
 	}
 
-	// Prepare metadata
 	preparedMetadata := se.prepareMetadata(content, metadata)
 
-	// Upsert into database
 	if err := se.db.Upsert(embedCtx, collection, docID, vector, preparedMetadata); err != nil {
 		return NewSearchError("SearchEngine", "IngestDocument", "failed to upsert document", docID, err)
 	}
@@ -233,18 +189,15 @@ func (se *SearchEngine) IngestDocument(ctx context.Context, docID, content strin
 	return nil
 }
 
-// SearchModels performs vector similarity search across specified models with enhanced error handling
 func (se *SearchEngine) SearchModels(ctx context.Context, query string, topKPerModel int, modelNames ...string) (map[string][]databases.SearchResult, error) {
 	se.mu.RLock()
 	defer se.mu.RUnlock()
 
-	// Validate and process query
 	if err := se.validateQuery(query); err != nil {
 		return nil, err
 	}
 	processedQuery := se.processQuery(query)
 
-	// Validate topK parameter
 	if topKPerModel <= 0 {
 		topKPerModel = DefaultTopK
 	}
@@ -252,13 +205,11 @@ func (se *SearchEngine) SearchModels(ctx context.Context, query string, topKPerM
 		topKPerModel = MaxTopK
 	}
 
-	// Determine which models to search
 	modelsToSearch, err := se.determineModelsToSearch(modelNames)
 	if err != nil {
 		return nil, err
 	}
 
-	// Generate embedding once for all models
 	embedCtx, cancel := context.WithTimeout(ctx, DefaultSearchTimeout)
 	defer cancel()
 
@@ -267,12 +218,11 @@ func (se *SearchEngine) SearchModels(ctx context.Context, query string, topKPerM
 		return nil, NewSearchError("SearchEngine", "SearchModels", "failed to generate embedding", processedQuery, err)
 	}
 
-	// Search each model
 	results := make(map[string][]databases.SearchResult, len(modelsToSearch))
 	for _, modelName := range modelsToSearch {
 		modelResults, err := se.searchModel(embedCtx, modelName, vector, topKPerModel)
 		if err != nil {
-			// Log error but continue with other models
+
 			continue
 		}
 		if len(modelResults) > 0 {
@@ -283,23 +233,19 @@ func (se *SearchEngine) SearchModels(ctx context.Context, query string, topKPerM
 	return results, nil
 }
 
-// Search performs vector similarity search and returns flattened results with enhanced processing
 func (se *SearchEngine) Search(ctx context.Context, query string, limit int) ([]databases.SearchResult, error) {
 	return se.SearchWithFilter(ctx, query, limit, nil)
 }
 
-// SearchWithFilter performs vector similarity search with metadata filtering
 func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limit int, filter map[string]interface{}) ([]databases.SearchResult, error) {
 	se.mu.RLock()
 	defer se.mu.RUnlock()
 
-	// Validate and process query
 	if err := se.validateQuery(query); err != nil {
 		return nil, err
 	}
 	processedQuery := se.processQuery(query)
 
-	// Validate limit
 	if limit <= 0 {
 		limit = DefaultTopK
 	}
@@ -307,7 +253,6 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 		limit = MaxTopK
 	}
 
-	// Generate embedding
 	embedCtx, cancel := context.WithTimeout(ctx, DefaultSearchTimeout)
 	defer cancel()
 
@@ -316,7 +261,6 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 		return nil, NewSearchError("SearchEngine", "SearchWithFilter", "failed to generate embedding", processedQuery, err)
 	}
 
-	// Get collection from filter (store_name) or fallback to first collection
 	collection := se.getCollectionFromFilter(filter)
 	if collection == "" {
 		collection, err = se.getFirstCollection()
@@ -325,7 +269,6 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 		}
 	}
 
-	// Search with filter
 	results, err := se.db.SearchWithFilter(embedCtx, collection, vector, limit, filter)
 	if err != nil {
 		return nil, NewSearchError("SearchEngine", "SearchWithFilter", "database search failed", processedQuery, err)
@@ -334,26 +277,18 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 	return results, nil
 }
 
-// DeleteByFilter removes documents matching the filter from all collections
 func (se *SearchEngine) DeleteByFilter(ctx context.Context, filter map[string]interface{}) error {
 	se.mu.RLock()
 	defer se.mu.RUnlock()
 
-	// Get first collection
 	collection, err := se.getFirstCollection()
 	if err != nil {
 		return err
 	}
 
-	// Delete using filter
 	return se.db.DeleteByFilter(ctx, collection, filter)
 }
 
-// ============================================================================
-// HELPER METHODS - PRIVATE AND OPTIMIZED
-// ============================================================================
-
-// getFirstCollection returns the first available model's collection
 func (se *SearchEngine) getFirstCollection() (string, error) {
 	if len(se.models) == 0 {
 		return "", NewSearchError("SearchEngine", "getFirstCollection", "no models configured", "", nil)
@@ -366,13 +301,11 @@ func (se *SearchEngine) getFirstCollection() (string, error) {
 	return "", NewSearchError("SearchEngine", "getFirstCollection", "no valid collections found", "", nil)
 }
 
-// getCollectionFromMetadata extracts collection name from document metadata
 func (se *SearchEngine) getCollectionFromMetadata(metadata map[string]interface{}) string {
 	if metadata == nil {
 		return ""
 	}
 
-	// Look for store_name in metadata to determine collection
 	if storeName, ok := metadata["store_name"].(string); ok && storeName != "" {
 		return storeName
 	}
@@ -380,13 +313,11 @@ func (se *SearchEngine) getCollectionFromMetadata(metadata map[string]interface{
 	return ""
 }
 
-// getCollectionFromFilter extracts collection name from search filter
 func (se *SearchEngine) getCollectionFromFilter(filter map[string]interface{}) string {
 	if filter == nil {
 		return ""
 	}
 
-	// Look for store_name in filter to determine collection
 	if storeName, ok := filter["store_name"].(string); ok && storeName != "" {
 		return storeName
 	}
@@ -394,10 +325,9 @@ func (se *SearchEngine) getCollectionFromFilter(filter map[string]interface{}) s
 	return ""
 }
 
-// determineModelsToSearch determines which models to search based on input
 func (se *SearchEngine) determineModelsToSearch(modelNames []string) ([]string, error) {
 	if len(modelNames) == 0 {
-		// Search all models
+
 		allModels := make([]string, 0, len(se.models))
 		for modelName := range se.models {
 			allModels = append(allModels, modelName)
@@ -405,13 +335,12 @@ func (se *SearchEngine) determineModelsToSearch(modelNames []string) ([]string, 
 		return allModels, nil
 	}
 
-	// Validate specified models
 	validModels := make([]string, 0, len(modelNames))
 	for _, modelName := range modelNames {
 		if _, exists := se.models[modelName]; exists {
 			validModels = append(validModels, modelName)
 		}
-		// Note: We silently skip invalid models rather than failing
+
 	}
 
 	if len(validModels) == 0 {
@@ -421,20 +350,17 @@ func (se *SearchEngine) determineModelsToSearch(modelNames []string) ([]string, 
 	return validModels, nil
 }
 
-// searchModel searches a single model
 func (se *SearchEngine) searchModel(ctx context.Context, modelName string, vector []float32, topK int) ([]databases.SearchResult, error) {
 	model, exists := se.models[modelName]
 	if !exists {
 		return nil, NewSearchError("SearchEngine", "searchModel", "model not found", modelName, nil)
 	}
 
-	// Search the model
 	modelResults, err := se.db.Search(ctx, model.Collection, vector, topK)
 	if err != nil {
 		return nil, NewSearchError("SearchEngine", "searchModel", "database search failed", modelName, err)
 	}
 
-	// Convert and enhance results
 	convertedResults := make([]databases.SearchResult, len(modelResults))
 	for i, result := range modelResults {
 		convertedResults[i] = databases.SearchResult{
@@ -450,31 +376,22 @@ func (se *SearchEngine) searchModel(ctx context.Context, modelName string, vecto
 	return convertedResults, nil
 }
 
-// prepareMetadata prepares metadata for document ingestion
 func (se *SearchEngine) prepareMetadata(content string, metadata map[string]interface{}) map[string]interface{} {
 	prepared := make(map[string]interface{})
 
-	// Add content
 	prepared["content"] = content
 
-	// Add existing metadata
-	{ // Always iterate
+	{
 		for k, v := range metadata {
 			prepared[k] = v
 		}
 	}
 
-	// Add ingestion timestamp
 	prepared["ingested_at"] = time.Now().Unix()
 
 	return prepared
 }
 
-// ============================================================================
-// HEALTH AND STATUS METHODS
-// ============================================================================
-
-// GetStatus returns detailed status information
 func (se *SearchEngine) GetStatus() map[string]interface{} {
 	se.mu.RLock()
 	defer se.mu.RUnlock()

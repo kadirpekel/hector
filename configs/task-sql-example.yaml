@@ -1,31 +1,22 @@
-# Example: Task Service with SQLite backend
-# This configuration enables task tracking with SQLite database (file-based)
-# Perfect for development, testing, or single-server deployments
-
 agents:
   assistant:
     name: "SQL Task Assistant (SQLite)"
     description: "Agent with SQLite task persistence"
     llm: "gpt"
-    
-    # Task configuration - presence of this section enables async task support
     task:
-      backend: sql        # Use SQL backend instead of in-memory
-      worker_pool: 100    # Max concurrent async tasks (default: 100, 0 = unlimited)
+      backend: sql        
+      worker_pool: 100    
       sql:
-        driver: sqlite    # Database driver: sqlite, postgres, or mysql
-        database: ./data/tasks.db  # File path (will be created if doesn't exist)
-        max_conns: 10     # SQLite has limited write concurrency
-        max_idle: 2       # Idle connection pool size
-
+        driver: sqlite    
+        database: ./data/tasks.db  
+        max_conns: 10     
+        max_idle: 2       
     reasoning:
       engine: chain-of-thought
       max_iterations: 100
-
     memory:
       strategy: buffer_window
       window_size: 20
-
 llms:
   gpt:
     type: openai

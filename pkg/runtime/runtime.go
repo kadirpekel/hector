@@ -1,144 +1,139 @@
-// Package runtime provides runtime initialization and management for Hector
 package runtime
 
 import (
 	"fmt"
-	"os"
+	"log"
 
 	"github.com/kadirpekel/hector/pkg/a2a/client"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"github.com/kadirpekel/hector/pkg/agent"
+	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
 )
 
-// Runtime manages the Hector runtime environment
 type Runtime struct {
-	config *config.Config
-	client client.A2AClient
+	config     *config.Config
+	components *component.ComponentManager
+	registry   *agent.AgentRegistry
 }
 
-// Options holds options for runtime initialization
 type Options struct {
-	// Config file path
 	ConfigFile string
 
-	// Zero-config options (used if ConfigFile doesn't exist)
-	Provider   string // LLM provider: "openai" (default), "anthropic", "gemini"
+	Provider   string
 	APIKey     string
 	BaseURL    string
 	Model      string
 	Tools      bool
 	MCPURL     string
 	DocsFolder string
-	AgentName  string // Agent name/ID for zero-config agent (default: "assistant")
+	AgentName  string
 }
 
-// ToZeroConfigOptions converts runtime Options to config.ZeroConfigOptions
-// This consolidates the mapping logic in one place to avoid duplication
-func (o *Options) ToZeroConfigOptions() config.ZeroConfigOptions {
-	return config.ZeroConfigOptions{
-		Provider:    o.Provider,
-		APIKey:      o.APIKey,
-		BaseURL:     o.BaseURL,
-		Model:       o.Model,
-		EnableTools: o.Tools,
-		MCPURL:      o.MCPURL,
-		DocsFolder:  o.DocsFolder,
-		AgentName:   o.AgentName,
-	}
+func (r *Runtime) Registry() *agent.AgentRegistry {
+	return r.registry
 }
 
-// New creates a new Runtime instance
-func New(opts Options) (*Runtime, error) {
-	cfg, err := loadOrCreateConfig(opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load configuration: %w", err)
-	}
-
-	// Create local client
-	a2aClient, err := client.NewLocalClient(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
-	}
-
-	return &Runtime{
-		config: cfg,
-		client: a2aClient,
-	}, nil
+func (r *Runtime) Components() *component.ComponentManager {
+	return r.components
 }
 
-// Client returns the A2A client for this runtime
-func (r *Runtime) Client() client.A2AClient {
-	return r.client
-}
-
-// Config returns the configuration for this runtime
 func (r *Runtime) Config() *config.Config {
 	return r.config
 }
 
-// Close releases resources held by the runtime
 func (r *Runtime) Close() error {
-	if r.client != nil {
-		return r.client.Close()
+	var errors []error
+
+	if r.components != nil {
+		if err := r.components.Close(); err != nil {
+			errors = append(errors, fmt.Errorf("component manager cleanup: %w", err))
+			log.Printf("Warning: Component manager cleanup error: %v", err)
+		}
+	}
+
+	if len(errors) > 0 {
+		return errors[0]
 	}
 	return nil
 }
 
-// loadOrCreateConfig loads config from file or creates zero-config if file doesn't exist
-func loadOrCreateConfig(opts Options) (*config.Config, error) {
-	// Try to load from file first
-	if _, err := os.Stat(opts.ConfigFile); err == nil {
-		cfg, err := config.LoadConfig(opts.ConfigFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load config file: %w", err)
-		}
-
-		cfg.SetDefaults()
-		if err := cfg.Validate(); err != nil {
-			return nil, fmt.Errorf("invalid configuration: %w", err)
-		}
-
-		return cfg, nil
-	}
-
-	// File doesn't exist, create zero-config using consolidated method
-	cfg := config.CreateZeroConfig(opts.ToZeroConfigOptions())
-
-	// Validate the configuration
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid zero-config: %w", err)
-	}
-
-	return cfg, nil
-}
-
-// NewHTTPClient creates an HTTP-based A2A client (server mode)
 func NewHTTPClient(serverURL, token string) client.A2AClient {
 	return client.NewHTTPClient(serverURL, token)
 }
 
-// NewLocalClient creates a local (in-process) A2A client with custom config
-func NewLocalClient(cfg *config.Config) (client.A2AClient, error) {
-	return client.NewLocalClient(cfg)
-}
-
-// LoadConfigForValidation loads config without creating expensive client
-// Used by CLI to validate agent exists before initialization
-func LoadConfigForValidation(configFile string, opts Options) (*config.Config, error) {
-	opts.ConfigFile = configFile
-	return loadOrCreateConfig(opts)
-}
-
-// NewWithConfig creates a runtime with pre-loaded config
-// Used after validation to avoid double-loading config
 func NewWithConfig(cfg *config.Config) (*Runtime, error) {
-	// Create local client with validated config
-	a2aClient, err := client.NewLocalClient(cfg)
+	if cfg == nil {
+		return nil, fmt.Errorf("config is required")
+	}
+
+	agentRegistry := agent.NewAgentRegistry()
+
+	componentManager, err := component.NewComponentManagerWithAgentRegistry(cfg, agentRegistry)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
+		return nil, fmt.Errorf("failed to initialize components: %w", err)
+	}
+
+	var failures []string
+	successCount := 0
+
+	var cleanupOnError = func() {
+		if err := componentManager.Close(); err != nil {
+			log.Printf("⚠️  Warning: Failed to cleanup component manager on error: %v", err)
+		}
+	}
+
+	for agentID, agentCfg := range cfg.Agents {
+		agentCfgCopy := agentCfg
+
+		var agentInstance pb.A2AServiceServer
+		var err error
+
+		if agentCfgCopy.Type == "a2a" {
+
+			externalAgent, extErr := agent.NewExternalA2AAgent(agentCfgCopy)
+			if extErr != nil {
+				failures = append(failures, fmt.Sprintf("%s: %v", agentID, extErr))
+				log.Printf("  Warning: Failed to create external agent '%s': %v", agentID, extErr)
+				continue
+			}
+			agentInstance = externalAgent
+		} else {
+
+			agentInstance, err = agent.NewAgent(agentID, agentCfgCopy, componentManager, agentRegistry)
+			if err != nil {
+				failures = append(failures, fmt.Sprintf("%s: %v", agentID, err))
+				log.Printf("  Warning: Failed to create native agent '%s': %v", agentID, err)
+				continue
+			}
+		}
+
+		if err := agentRegistry.RegisterAgent(agentID, agentInstance, agentCfgCopy, nil); err != nil {
+			failures = append(failures, fmt.Sprintf("%s (registration): %v", agentID, err))
+			log.Printf("  Warning: Failed to register agent '%s': %v", agentID, err)
+			continue
+		}
+
+		successCount++
+	}
+
+	if successCount == 0 {
+		cleanupOnError()
+		if len(failures) > 0 {
+			return nil, fmt.Errorf("failed to initialize any agents (attempted: %d, failures: %v)",
+				len(cfg.Agents), failures)
+		}
+		return nil, fmt.Errorf("no agents configured")
+	}
+
+	if len(failures) > 0 {
+		log.Printf("Warning: %d/%d agents failed to initialize: %v",
+			len(failures), len(cfg.Agents), failures)
 	}
 
 	return &Runtime{
-		config: cfg,
-		client: a2aClient,
+		config:     cfg,
+		components: componentManager,
+		registry:   agentRegistry,
 	}, nil
 }

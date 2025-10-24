@@ -16,12 +16,10 @@ func TestNewSearchToolForTesting(t *testing.T) {
 		t.Fatal("NewSearchToolForTesting() returned nil")
 	}
 
-	// Test that the tool has the expected name
 	if tool.GetName() != "search" {
 		t.Errorf("GetName() = %v, want 'search'", tool.GetName())
 	}
 
-	// Test that the tool has a description
 	description := tool.GetDescription()
 	if description == "" {
 		t.Error("GetDescription() should not return empty string")
@@ -36,7 +34,6 @@ func TestSearchTool_GetInfo(t *testing.T) {
 		t.Fatal("GetInfo() returned empty name")
 	}
 
-	// Verify info structure
 	if info.Description == "" {
 		t.Error("Expected non-empty description")
 	}
@@ -44,7 +41,6 @@ func TestSearchTool_GetInfo(t *testing.T) {
 		t.Error("Expected at least one parameter")
 	}
 
-	// Check for required parameters
 	hasQueryParam := false
 	for _, param := range info.Parameters {
 		if param.Name == "query" && param.Required {
@@ -96,7 +92,7 @@ func TestSearchTool_Execute_ValidationOnly(t *testing.T) {
 			args: map[string]interface{}{
 				"query": "test search",
 			},
-			wantErr: false, // Will fail at document store level, but validation should pass
+			wantErr: false,
 		},
 		{
 			name: "valid query with explicit type",
@@ -152,7 +148,7 @@ func TestSearchTool_Execute_ValidationOnly(t *testing.T) {
 					t.Errorf("Expected error to contain '%s', got: %v", tt.errMsg, err)
 				}
 			} else {
-				// For valid parameters, we expect document store errors, not validation errors
+
 				if err != nil && strings.Contains(err.Error(), "query parameter is required") {
 					t.Errorf("Expected document store error, got validation error: %v", err)
 				}
@@ -292,13 +288,11 @@ func TestSearchTool_CreateErrorResponse(t *testing.T) {
 		t.Fatalf("createErrorResponse() error = %v, want nil", err)
 	}
 
-	// Parse the JSON response
 	var searchResponse SearchResponse
 	if err := json.Unmarshal([]byte(response), &searchResponse); err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
 
-	// Verify response structure
 	if searchResponse.Total != 0 {
 		t.Errorf("Expected Total = 0, got %d", searchResponse.Total)
 	}
@@ -369,7 +363,6 @@ func TestSearchTool_IsSearchTypeEnabled(t *testing.T) {
 func TestSearchTool_GetStoresToSearch(t *testing.T) {
 	tool := NewSearchToolForTesting()
 
-	// Create mock document stores
 	availableStores := map[string]*hectorcontext.DocumentStore{
 		"store1": {},
 		"store2": {},
@@ -384,7 +377,7 @@ func TestSearchTool_GetStoresToSearch(t *testing.T) {
 		{
 			name:            "empty requested stores - should return all",
 			requestedStores: []string{},
-			expected:        []string{"store1", "store2", "store3"}, // Order may vary
+			expected:        []string{"store1", "store2", "store3"},
 		},
 		{
 			name:            "single matching store",
@@ -415,12 +408,11 @@ func TestSearchTool_GetStoresToSearch(t *testing.T) {
 				t.Errorf("getStoresToSearch() returned %d stores, want %d", len(result), len(tt.expected))
 			}
 
-			// For the empty requested stores case, we need to check that all stores are returned
 			if len(tt.requestedStores) == 0 {
 				if len(result) != 3 {
 					t.Errorf("Expected 3 stores for empty request, got %d", len(result))
 				}
-				// Check that all expected stores are present
+
 				storeMap := make(map[string]bool)
 				for _, store := range result {
 					storeMap[store] = true
@@ -431,7 +423,7 @@ func TestSearchTool_GetStoresToSearch(t *testing.T) {
 					}
 				}
 			} else {
-				// For specific requests, check exact matches
+
 				for i, expected := range tt.expected {
 					if i >= len(result) || result[i] != expected {
 						t.Errorf("getStoresToSearch()[%d] = %v, want %v", i, result[i], expected)
@@ -454,7 +446,6 @@ func TestSearchTool_SortResultsByScore(t *testing.T) {
 
 	tool.sortResultsByScore(results)
 
-	// Verify results are sorted by score (highest first)
 	expectedOrder := []string{"doc2", "doc4", "doc1", "doc3"}
 	for i, expected := range expectedOrder {
 		if results[i].DocumentID != expected {
@@ -462,7 +453,6 @@ func TestSearchTool_SortResultsByScore(t *testing.T) {
 		}
 	}
 
-	// Verify scores are in descending order
 	for i := 1; i < len(results); i++ {
 		if results[i-1].Score < results[i].Score {
 			t.Errorf("Results not sorted by score: %f < %f", results[i-1].Score, results[i].Score)
@@ -484,7 +474,6 @@ func TestSearchTool_GenerateSuggestions(t *testing.T) {
 		t.Error("Expected at least one suggestion")
 	}
 
-	// Verify suggestions contain helpful text
 	allSuggestions := strings.Join(suggestions, " ")
 	if !strings.Contains(strings.ToLower(allSuggestions), "search") {
 		t.Error("Expected suggestions to contain 'search'")
@@ -541,7 +530,7 @@ func TestSearchTool_MinInt(t *testing.T) {
 }
 
 func TestSearchTool_WithCustomConfig(t *testing.T) {
-	// Test with custom configuration
+
 	config := &config.SearchToolConfig{
 		DocumentStores:     []string{"custom-store"},
 		DefaultLimit:       3,
@@ -555,12 +544,10 @@ func TestSearchTool_WithCustomConfig(t *testing.T) {
 		t.Fatal("NewSearchTool() returned nil")
 	}
 
-	// Test that custom config is applied
 	if tool.GetName() != "search" {
 		t.Errorf("GetName() = %v, want 'search'", tool.GetName())
 	}
 
-	// Test with nil config (should use defaults)
 	toolWithDefaults := NewSearchTool(nil)
 	if toolWithDefaults == nil {
 		t.Fatal("NewSearchTool(nil) returned nil")
@@ -572,8 +559,8 @@ func TestSearchTool_WithCustomConfig(t *testing.T) {
 }
 
 func TestSearchTool_WithConfig(t *testing.T) {
-	// Test NewSearchToolWithConfig
-	toolConfig := config.ToolConfig{
+
+	toolConfig := &config.ToolConfig{
 		DocumentStores:     []string{"config-store"},
 		DefaultLimit:       2,
 		MaxLimit:           4,

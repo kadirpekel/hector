@@ -6,42 +6,27 @@ import (
 	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
-// ============================================================================
-// SUPERVISOR STRATEGY
-// Optimized for multi-agent orchestration and delegation
-// ============================================================================
-
-// SupervisorStrategy implements a reasoning strategy specialized for coordinating
-// multiple agents. It provides better prompting and logic for:
-// - Task decomposition
-// - Agent selection and delegation
-// - Result synthesis
 type SupervisorStrategy struct {
-	// Embed ChainOfThought for base functionality
 	*ChainOfThoughtStrategy
 }
 
-// NewSupervisorStrategy creates a new supervisor strategy
 func NewSupervisorStrategy() *SupervisorStrategy {
 	return &SupervisorStrategy{
 		ChainOfThoughtStrategy: NewChainOfThoughtStrategy(),
 	}
 }
 
-// PrepareIteration implements ReasoningStrategy
-// Supervisor extracts goals on first iteration (if enabled), then delegates to base strategy
 func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningState) error {
-	// On first iteration, optionally extract goals for task decomposition
+
 	if iteration == 1 && state.GetServices() != nil {
 		cfg := state.GetServices().GetConfig()
 		if cfg.EnableGoalExtraction {
-			// Extract goals using structured output
+
 			decomposition, err := ExtractGoals(state.GetContext(), state.Query(), []string{}, state.GetServices())
 			if err == nil {
-				// Store decomposition in custom state
+
 				state.GetCustomState()["task_decomposition"] = decomposition
 
-				// Display decomposition if thinking is enabled
 				if state.ShowThinking() && state.GetOutputChannel() != nil {
 					s.displayTaskDecomposition(decomposition, state.GetOutputChannel())
 				}
@@ -49,11 +34,9 @@ func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningSta
 		}
 	}
 
-	// Delegate to base strategy
 	return s.ChainOfThoughtStrategy.PrepareIteration(iteration, state)
 }
 
-// displayTaskDecomposition shows the extracted task plan to the user using thinking blocks
 func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecomposition, outputCh chan<- string) {
 	output := ThinkingBlock(fmt.Sprintf("Task Decomposition: %s", decomposition.MainGoal))
 	output += ThinkingBlock(fmt.Sprintf("Execution Order: %s", decomposition.ExecutionOrder))
@@ -73,15 +56,11 @@ func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecompo
 	outputCh <- output
 }
 
-// ShouldStop implements ReasoningStrategy
-// Supervisor uses same stopping logic as chain-of-thought
 func (s *SupervisorStrategy) ShouldStop(text string, toolCalls []*protocol.ToolCall, state *ReasoningState) bool {
-	// Stop when no more tool calls (including agent_call)
+
 	return s.ChainOfThoughtStrategy.ShouldStop(text, toolCalls, state)
 }
 
-// AfterIteration implements ReasoningStrategy
-// Uses chain-of-thought's reflection logic
 func (s *SupervisorStrategy) AfterIteration(
 	iteration int,
 	text string,
@@ -92,16 +71,12 @@ func (s *SupervisorStrategy) AfterIteration(
 	return s.ChainOfThoughtStrategy.AfterIteration(iteration, text, toolCalls, results, state)
 }
 
-// GetContextInjection implements ReasoningStrategy
-// Injects both base context (todos) and available agents list
 func (s *SupervisorStrategy) GetContextInjection(state *ReasoningState) string {
-	// Get base context injection (todos, etc.)
+
 	baseContext := s.ChainOfThoughtStrategy.GetContextInjection(state)
 
-	// Build available agents list dynamically
 	agentsList := s.buildAvailableAgentsContext(state)
 
-	// Combine both contexts
 	if agentsList != "" {
 		if baseContext != "" {
 			return baseContext + "\n\n" + agentsList
@@ -112,7 +87,6 @@ func (s *SupervisorStrategy) GetContextInjection(state *ReasoningState) string {
 	return baseContext
 }
 
-// buildAvailableAgentsContext builds the agent list context injection
 func (s *SupervisorStrategy) buildAvailableAgentsContext(state *ReasoningState) string {
 	availableAgents := s.getAvailableAgents(state)
 
@@ -120,19 +94,17 @@ func (s *SupervisorStrategy) buildAvailableAgentsContext(state *ReasoningState) 
 		return ""
 	}
 
-	context := "⚠️ AVAILABLE AGENTS (THESE ARE THE ONLY AGENTS YOU CAN CALL):\n"
+	context := "AVAILABLE AGENTS (THESE ARE THE ONLY AGENTS YOU CAN CALL):\n"
 	for agentID, description := range availableAgents {
 		context += fmt.Sprintf("- %s: %s\n", agentID, description)
 	}
-	context += "\n⚠️ CRITICAL: You MUST ONLY use the agent IDs listed above.\n"
+	context += "\nCRITICAL: You MUST ONLY use the agent IDs listed above.\n"
 	context += "DO NOT invent or assume other agents exist.\n"
 	context += "If a task needs a different type of agent, use the closest match from the list."
 
 	return context
 }
 
-// GetRequiredTools implements ReasoningStrategy
-// Supervisor requires both todo_write and agent_call for orchestration
 func (s *SupervisorStrategy) GetRequiredTools() []RequiredTool {
 	return []RequiredTool{
 		{
@@ -145,59 +117,45 @@ func (s *SupervisorStrategy) GetRequiredTools() []RequiredTool {
 			Name:        "agent_call",
 			Type:        "agent_call",
 			Description: "Required for delegating tasks to other agents in multi-agent orchestration",
-			AutoCreate:  true, // Can be auto-created when registry is available
+			AutoCreate:  true,
 		},
 	}
 }
 
-// getAvailableAgents returns map of available agents from reasoning state
-// Uses agent registry service from state.Services and filters by:
-// - sub_agents config (explicit whitelist)
-// - visibility rules (for auto-discovery)
-// - current agent (prevent self-calls)
-// Returns map[agentID]description for LLM prompt injection
 func (s *SupervisorStrategy) getAvailableAgents(state *ReasoningState) map[string]string {
 	agents := make(map[string]string)
 
-	// Get registry service from services
 	if state == nil || state.GetServices() == nil || state.GetServices().Registry() == nil {
 		return agents
 	}
 
 	registry := state.GetServices().Registry()
 
-	// Get current agent name to exclude it from available agents
 	currentAgentName := s.getCurrentAgentName(state)
 
-	// Check if we should filter to specific sub-agents
 	subAgents := s.getSubAgentsFromConfig(state)
 
-	// Get agent entries from registry service (returns A2A AgentCards)
 	var agentEntries []AgentRegistryEntry
 	if len(subAgents) > 0 {
-		// EXPLICIT MODE: sub_agents specified - show all listed agents regardless of visibility
-		// This allows orchestrators to explicitly control which agents (including internal) they can call
+
 		agentEntries = registry.FilterAgents(subAgents)
 	} else {
-		// AUTO-DISCOVERY MODE: No sub_agents - apply visibility rules
-		// Show: public + private (NOT internal, which requires explicit knowledge)
+
 		allAgents := registry.ListAgents()
 		agentEntries = make([]AgentRegistryEntry, 0, len(allAgents))
 
 		for _, entry := range allAgents {
-			// Include public and private agents for auto-discovery
-			// Exclude internal agents (they require explicit listing in sub_agents)
+
 			if entry.Visibility != "internal" {
 				agentEntries = append(agentEntries, entry)
 			}
 		}
 	}
 
-	// Build map for prompt injection, excluding current agent
 	for _, entry := range agentEntries {
-		// Skip the current agent to prevent self-calls
+
 		if entry.ID != currentAgentName {
-			// Use A2A AgentCard description
+
 			agents[entry.ID] = entry.Card.Description
 		}
 	}
@@ -205,7 +163,6 @@ func (s *SupervisorStrategy) getAvailableAgents(state *ReasoningState) map[strin
 	return agents
 }
 
-// getSubAgentsFromConfig extracts sub_agents list from state
 func (s *SupervisorStrategy) getSubAgentsFromConfig(state *ReasoningState) []string {
 	subAgents := state.SubAgents()
 	if len(subAgents) == 0 {
@@ -214,13 +171,10 @@ func (s *SupervisorStrategy) getSubAgentsFromConfig(state *ReasoningState) []str
 	return subAgents
 }
 
-// getCurrentAgentName extracts the current agent's name from state
 func (s *SupervisorStrategy) getCurrentAgentName(state *ReasoningState) string {
 	return state.AgentName()
 }
 
-// buildToolUsageGuidance creates agent_call usage guidance
-// Note: Specific agent examples are injected via GetContextInjection()
 func (s *SupervisorStrategy) buildToolUsageGuidance() string {
 	return `Use agent_call to delegate tasks to specialized agents.
 
@@ -238,9 +192,6 @@ Common orchestration patterns:
 Think strategically about which agents to involve and in what order.`
 }
 
-// GetPromptSlots implements ReasoningStrategy
-// Supervisor provides specialized prompts for orchestration
-// Note: Available agents are injected dynamically via GetContextInjection(), not here
 func (s *SupervisorStrategy) GetPromptSlots() PromptSlots {
 	return PromptSlots{
 		SystemRole: `You are a supervisor agent that coordinates multiple specialized agents to accomplish complex tasks.
@@ -288,12 +239,10 @@ SYNTHESIS GUIDELINES:
 	}
 }
 
-// GetName implements ReasoningStrategy
 func (s *SupervisorStrategy) GetName() string {
 	return "supervisor"
 }
 
-// GetDescription implements ReasoningStrategy
 func (s *SupervisorStrategy) GetDescription() string {
 	return "Supervisor strategy optimized for multi-agent orchestration and delegation"
 }

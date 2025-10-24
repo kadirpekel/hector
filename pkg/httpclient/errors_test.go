@@ -182,7 +182,7 @@ func TestRetryableError_IsRetryable(t *testing.T) {
 }
 
 func TestRetryableError_ErrorInterface(t *testing.T) {
-	// Test that RetryableError implements the error interface
+
 	err := &RetryableError{
 		StatusCode: 429,
 		Message:    "Rate limit exceeded",
@@ -194,7 +194,6 @@ func TestRetryableError_ErrorInterface(t *testing.T) {
 		t.Error("RetryableError should implement error interface")
 	}
 
-	// Test that we can call Error() method
 	errorString := err.Error()
 	if errorString == "" {
 		t.Error("RetryableError.Error() should not return empty string")
@@ -202,7 +201,7 @@ func TestRetryableError_ErrorInterface(t *testing.T) {
 }
 
 func TestRetryableError_ErrorWrapping(t *testing.T) {
-	// Test that RetryableError properly wraps underlying errors
+
 	underlyingErr := errors.New("network timeout")
 	retryErr := &RetryableError{
 		StatusCode: 408,
@@ -211,18 +210,15 @@ func TestRetryableError_ErrorWrapping(t *testing.T) {
 		Err:        underlyingErr,
 	}
 
-	// Test Unwrap
 	unwrapped := retryErr.Unwrap()
 	if unwrapped != underlyingErr {
 		t.Errorf("Unwrap() = %v, want %v", unwrapped, underlyingErr)
 	}
 
-	// Test that errors.Is works
 	if !errors.Is(retryErr, underlyingErr) {
 		t.Error("errors.Is should return true for wrapped error")
 	}
 
-	// Test that errors.As works
 	var asRetryErr *RetryableError
 	if !errors.As(retryErr, &asRetryErr) {
 		t.Error("errors.As should work with RetryableError")
@@ -288,7 +284,7 @@ func TestRetryableError_RealWorldScenarios(t *testing.T) {
 				return &RetryableError{
 					StatusCode: 500,
 					Message:    "Internal server error",
-					RetryAfter: 0, // No specific retry time
+					RetryAfter: 0,
 					Err:        errors.New("HTTP 500"),
 				}
 			},
@@ -359,7 +355,7 @@ func TestRetryableError_RealWorldScenarios(t *testing.T) {
 }
 
 func TestRetryableError_ErrorChain(t *testing.T) {
-	// Test error chaining with multiple levels
+
 	rootErr := errors.New("root cause")
 	wrappedErr := &RetryableError{
 		StatusCode: 429,
@@ -368,23 +364,19 @@ func TestRetryableError_ErrorChain(t *testing.T) {
 		Err:        rootErr,
 	}
 
-	// Test that we can unwrap to the root error
 	unwrapped := wrappedErr.Unwrap()
 	if unwrapped != rootErr {
 		t.Errorf("Unwrap() = %v, want %v", unwrapped, rootErr)
 	}
 
-	// Test that errors.Is works with the root error
 	if !errors.Is(wrappedErr, rootErr) {
 		t.Error("errors.Is should return true for root error")
 	}
 
-	// Test that errors.Is works with the RetryableError itself
 	if !errors.Is(wrappedErr, wrappedErr) {
 		t.Error("errors.Is should return true for the error itself")
 	}
 
-	// Test that we can extract the RetryableError
 	var retryErr *RetryableError
 	if !errors.As(wrappedErr, &retryErr) {
 		t.Error("errors.As should work with RetryableError")

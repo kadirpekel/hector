@@ -17,12 +17,10 @@ func TestNewFileWriterToolForTesting(t *testing.T) {
 		t.Fatal("NewFileWriterToolForTesting() returned nil")
 	}
 
-	// Test that the tool has the expected name
 	if tool.GetName() != "write_file" {
 		t.Errorf("GetName() = %v, want 'write_file'", tool.GetName())
 	}
 
-	// Test that the tool has a description
 	description := tool.GetDescription()
 	if description == "" {
 		t.Error("GetDescription() should not return empty string")
@@ -37,7 +35,6 @@ func TestFileWriterTool_GetInfo(t *testing.T) {
 		t.Fatal("GetInfo() returned empty name")
 	}
 
-	// Verify info structure
 	if info.Description == "" {
 		t.Error("Expected non-empty description")
 	}
@@ -45,7 +42,6 @@ func TestFileWriterTool_GetInfo(t *testing.T) {
 		t.Error("Expected at least one parameter")
 	}
 
-	// Check for required parameters
 	hasPathParam := false
 	hasContentParam := false
 	for _, param := range info.Parameters {
@@ -205,7 +201,7 @@ func TestFileWriterTool_Execute_ValidationOnly(t *testing.T) {
 			name: "content too large",
 			args: map[string]interface{}{
 				"path":    "test.txt",
-				"content": strings.Repeat("a", 2000), // Larger than 1024 byte limit
+				"content": strings.Repeat("a", 2000),
 			},
 			wantErr: true,
 			errMsg:  "content exceeds max file size",
@@ -216,7 +212,7 @@ func TestFileWriterTool_Execute_ValidationOnly(t *testing.T) {
 				"path":    "test.txt",
 				"content": "test content",
 			},
-			wantErr: false, // Will fail at file system level, but validation should pass
+			wantErr: false,
 		},
 		{
 			name: "backup parameter",
@@ -241,7 +237,7 @@ func TestFileWriterTool_Execute_ValidationOnly(t *testing.T) {
 					t.Errorf("Expected error to contain '%s', got: %v", tt.errMsg, err)
 				}
 			} else {
-				// For valid parameters, we expect file system errors, not validation errors
+
 				if err != nil && strings.Contains(err.Error(), "parameter is required") {
 					t.Errorf("Expected file system error, got validation error: %v", err)
 				}
@@ -253,7 +249,6 @@ func TestFileWriterTool_Execute_ValidationOnly(t *testing.T) {
 func TestFileWriterTool_ErrorResult(t *testing.T) {
 	tool := NewFileWriterToolForTesting()
 
-	// Test error result creation
 	result := tool.errorResult("test error message", time.Now())
 
 	if result.Success {
@@ -268,17 +263,16 @@ func TestFileWriterTool_ErrorResult(t *testing.T) {
 }
 
 func TestFileWriterTool_DefaultAllowAll(t *testing.T) {
-	// Create a temporary directory for testing
+
 	tempDir, err := os.MkdirTemp("", "filewriter_default_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create tool with NO extension restrictions (default: allow all)
 	tool := NewFileWriterTool(&config.FileWriterConfig{
 		MaxFileSize:       1024,
-		AllowedExtensions: nil, // nil/empty = Allow ALL extensions (default)
+		AllowedExtensions: nil,
 		BackupOnOverwrite: false,
 		WorkingDirectory:  tempDir,
 	})
@@ -365,7 +359,6 @@ func TestFileWriterTool_DefaultAllowAll(t *testing.T) {
 					t.Errorf("Expected success=true, got: %v", result.Success)
 				}
 
-				// Verify file was actually created
 				filePath := filepath.Join(tempDir, tt.path)
 				if _, err := os.Stat(filePath); os.IsNotExist(err) {
 					t.Errorf("Expected file %s to be created", tt.path)
@@ -380,17 +373,16 @@ func TestFileWriterTool_DefaultAllowAll(t *testing.T) {
 }
 
 func TestFileWriterTool_WhitelistRestrictions(t *testing.T) {
-	// Create a temporary directory for testing
+
 	tempDir, err := os.MkdirTemp("", "filewriter_whitelist_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create tool with WHITELIST (only specific extensions allowed)
 	tool := NewFileWriterTool(&config.FileWriterConfig{
 		MaxFileSize:       1024,
-		AllowedExtensions: []string{".txt", ".md", ""}, // Only .txt, .md, and extensionless
+		AllowedExtensions: []string{".txt", ".md", ""},
 		BackupOnOverwrite: false,
 		WorkingDirectory:  tempDir,
 	})
@@ -463,14 +455,13 @@ func TestFileWriterTool_WhitelistRestrictions(t *testing.T) {
 }
 
 func TestFileWriterTool_WithTempDir(t *testing.T) {
-	// Create a temporary directory for testing
+
 	tempDir, err := os.MkdirTemp("", "filewriter_test_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create tool with temp directory
 	tool := NewFileWriterTool(&config.FileWriterConfig{
 		MaxFileSize:       1024,
 		AllowedExtensions: []string{".txt", ".md"},
@@ -500,7 +491,6 @@ func TestFileWriterTool_WithTempDir(t *testing.T) {
 					t.Error("Expected result to mention 'created'")
 				}
 
-				// Verify file was actually created
 				filePath := filepath.Join(tempDir, "test.txt")
 				if _, err := os.Stat(filePath); os.IsNotExist(err) {
 					t.Error("Expected file to be created")
@@ -509,7 +499,7 @@ func TestFileWriterTool_WithTempDir(t *testing.T) {
 		},
 		{
 			name:        "overwrite existing file",
-			path:        "test.txt", // Same file as above
+			path:        "test.txt",
 			content:     "Updated content",
 			backup:      false,
 			wantSuccess: true,
@@ -521,7 +511,6 @@ func TestFileWriterTool_WithTempDir(t *testing.T) {
 					t.Error("Expected result to mention 'overwritten' or 'created'")
 				}
 
-				// Verify file content was updated
 				filePath := filepath.Join(tempDir, "test.txt")
 				content, err := os.ReadFile(filePath)
 				if err != nil {
@@ -543,7 +532,6 @@ func TestFileWriterTool_WithTempDir(t *testing.T) {
 					t.Error("Expected success=true")
 				}
 
-				// Verify subdirectory and file were created
 				filePath := filepath.Join(tempDir, "subdir", "nested.txt")
 				if _, err := os.Stat(filePath); os.IsNotExist(err) {
 					t.Error("Expected nested file to be created")

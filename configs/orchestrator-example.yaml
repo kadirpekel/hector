@@ -1,18 +1,9 @@
-# Orchestrator Agent Example Configuration
-# Demonstrates multi-agent orchestration using agent_call tool
-# Run with: hector serve --config configs/orchestrator-example.yaml
-
 global:
   a2a_server:
     enabled: true
     host: "0.0.0.0"
     port: 8080
-
 agents:
-  # ============================================================================
-  # SPECIALIZED AGENTS - Each has specific expertise
-  # ============================================================================
-  
   researcher:
     name: "Research Agent"
     description: "Gathers and synthesizes information from various sources"
@@ -28,9 +19,7 @@ agents:
         1. Gather comprehensive information on topics
         2. Synthesize findings into clear summaries
         3. Cite sources when possible
-        
         Be thorough but concise. Focus on key facts and insights.
-  
   analyst:
     name: "Analysis Agent"
     description: "Analyzes data and provides insights"
@@ -44,9 +33,7 @@ agents:
         1. Examine data and information critically
         2. Identify patterns and trends
         3. Provide actionable insights
-        
         Be analytical and objective. Support conclusions with evidence.
-  
   writer:
     name: "Content Writer"
     description: "Creates well-structured written content"
@@ -62,91 +49,60 @@ agents:
         1. Create clear, engaging content
         2. Structure information logically
         3. Adapt tone to audience
-        
         Write professionally but accessibly. Focus on clarity.
-  
-  # ============================================================================
-  # ORCHESTRATOR AGENT - Coordinates the specialists
-  # ============================================================================
-  
   orchestrator:
     name: "Task Orchestrator"
     description: "Coordinates multiple agents to solve complex tasks"
     llm: "main-llm"
     tools:
-      - agent_call  # THE KEY TOOL for orchestration
+      - agent_call  
     reasoning:
-      engine: "supervisor"  # Optimized for multi-agent orchestration!
-      max_iterations: 10  # Reduced from 20 - prevents excessive agent_call loops
-    # sub_agents: ["researcher", "analyst", "writer"]  # Optional: specify which agents to orchestrate (omit = all agents)
-    
-    # Memory configuration for multi-agent orchestration
-    # 
-    # ARCHITECTURE NOTE: Summarization now occurs ONCE per turn (at turn boundaries)
-    # Previously, each message triggered a summarization check, causing infinite loops
-    # when the conversation exceeded the budget. The fix ensures batch processing where
-    # all messages in a turn are saved first, then a single summarization check occurs.
-    #
-    # Each agent_call iteration adds ~3-5 messages (request, tool call, result)
-    # With max_iterations: 10 and 3-5 agent calls per turn, expect 30-50 messages/turn
-    # Default budget of 2000 tokens was too small, causing frequent summarization
+      engine: "supervisor"  
+      max_iterations: 10  
     memory:
       working:
         strategy: "summary_buffer"
-        budget: 16000      # 16K tokens (8x default) - handles 5-10 turns with multiple agent calls
-        threshold: 0.85    # Trigger at 85% (13,600 tokens)
-        target: 0.70       # Compress to 70% (11,200 tokens)
-
+        budget: 16000      
+        threshold: 0.85    
+        target: 0.70       
     prompt:
       system_role: |
         You are an orchestrator agent that coordinates specialized agents 
         to accomplish complex tasks efficiently.
-        
         AVAILABLE AGENTS:
         - researcher: Gathers and synthesizes information
         - analyst: Analyzes data and provides insights
         - writer: Creates well-structured written content
-        
         YOUR PROCESS:
         1. UNDERSTAND: Break down the user's request into subtasks
         2. PLAN: Determine which agents to use and in what order
         3. DELEGATE: Use agent_call tool to execute each subtask
         4. SYNTHESIZE: Combine results into a coherent final output
-        
         DELEGATION GUIDELINES:
         - Pass clear, focused tasks to each agent
         - Build on previous results (reference them in new tasks)
         - Don't just concatenate outputs - add your synthesis
         - Think about dependencies (what info do you need first?)
-        
         AGENT_CALL TOOL USAGE:
         Use this format:
         {
           "agent": "researcher",
           "task": "Research AI agent frameworks in 2025"
         }
-        
         EXAMPLE WORKFLOW:
         User: "Research and analyze AI frameworks, then write a report"
         1. Call researcher: "Research AI agent frameworks"
         2. Call analyst: "Analyze these frameworks: [research results]"
         3. Call writer: "Write report on: [analysis results]"
         4. Synthesize: Review outputs and present final report
-      
       tool_usage: |
         Use agent_call to delegate subtasks to specialized agents.
         Each delegation should have a clear, specific task.
         Build on previous results by referencing them.
-      
       communication_style: |
         Be clear about your orchestration process.
         Explain which agents you're calling and why.
         Synthesize their outputs into a unified response.
-
-# ============================================================================
-# LLM CONFIGURATION
-# ============================================================================
-
 llms:
   main-llm:
     type: "openai"
@@ -154,118 +110,11 @@ llms:
     api_key: "${OPENAI_API_KEY}"
     temperature: 0.7
     max_tokens: 4000
-
-# ============================================================================
-# TOOLS CONFIGURATION
-# ============================================================================
-
 tools:
   execute_command:
     type: command
-    enable_sandboxing: true  # Required for security
+    enable_sandboxing: true  
     working_directory: "."
-  
   write_file:
     type: write_file
     working_directory: "./output"
-
-# ============================================================================
-# MEMORY CONFIGURATION FOR ORCHESTRATORS
-# ============================================================================
-# Multi-agent orchestration generates MANY messages:
-#   - Each agent_call: 5-10 messages (task, reasoning, tool call, response, synthesis)
-#   - Default budget: 2000 tokens → too small!
-#   - Result: Constant summarization, slow performance
-#
-# SOLUTION: Use larger budget (16K tokens) for orchestrator agents
-# This prevents the summarization loop you saw with "🧠 Summarizing 218 messages..."
-#
-# If you still see frequent summarization:
-#   1. Increase budget: 32000 (32K tokens)
-#   2. OR use buffer_window: strategy: "buffer_window", window_size: 200
-#   3. OR reduce agent_call frequency: fewer, more focused delegations
-
-# ============================================================================
-# USAGE EXAMPLES
-# ============================================================================
-
-# Start server:
-#   $ hector serve --config configs/orchestrator-example.yaml
-
-# Test individual agents:
-#   $ hector call researcher "Research Rust programming language"
-#   $ hector call analyst "What are key trends in AI?"
-#   $ hector call writer "Write a brief intro to AI agents"
-
-# Test orchestrator (multi-agent coordination):
-#   $ hector call orchestrator "Research AI agent frameworks, analyze the top 3, and write a comparison report"
-#   $ hector call orchestrator "Gather info on climate change, analyze the data, and write a summary"
-#   $ hector call orchestrator "Research Python vs Rust, analyze performance differences, and write recommendations"
-
-# Interactive chat with orchestrator:
-#   $ hector chat orchestrator
-
-# Expected behavior:
-# The orchestrator will:
-# 1. Break down your request
-# 2. Call researcher for information
-# 3. Call analyst for insights
-# 4. Call writer for content creation
-# 5. Synthesize everything into final output
-
-# ============================================================================
-# TROUBLESHOOTING: "Why is summarization happening constantly?"
-# ============================================================================
-#
-# SYMPTOM:
-#   🧠 Summarizing 218 messages (keeping 84 recent)...
-#   🧠 Summarizing 219 messages (keeping 84 recent)...
-#   [Long waits between agent calls, even with only 2-3 user messages]
-#
-# ROOT CAUSE:
-#   Multi-agent orchestration generates MANY messages per iteration:
-#     • Each agent_call iteration adds 3-5 messages:
-#       - Assistant response (text)
-#       - Tool call (agent_call with parameters)
-#       - Tool result (sub-agent's response)
-#   
-#   Example: User makes 3 requests, orchestrator makes 5 agent_calls each:
-#     • Turn 1: 1 user msg + (5 iterations × 3 msgs) = 16 messages
-#     • Turn 2: 1 user msg + (5 iterations × 3 msgs) = 32 total
-#     • Turn 3: 1 user msg + (15 iterations × 3 msgs) = 77 total
-#   
-#   With max_iterations: 20, you can easily hit 200+ messages in 3 turns!
-#   Default budget: 2000 tokens → exceeded after ~50 messages → constant summarization
-#
-# FIX OPTIONS:
-#
-# Option 1: Reduce max_iterations (RECOMMENDED - prevents over-iteration)
-#   reasoning:
-#     engine: "supervisor"
-#     max_iterations: 10      # Reduced from 20 (fewer iterations = fewer messages)
-#
-# Option 2: Larger memory budget (handles more turns without summarization)
-#   memory:
-#     working:
-#       strategy: "summary_buffer"
-#       budget: 16000          # 16K tokens (vs default 2000)
-#       threshold: 0.85        # Trigger at 85%
-#       target: 0.70           # Compress to 70%
-#
-# Option 3: Buffer window (simpler, no summarization, but loses old context)
-#   memory:
-#     working:
-#       strategy: "buffer_window"
-#       window_size: 200       # Keep last 200 messages
-#
-# Option 4: Prompt the orchestrator to be more efficient
-#   Add to system_role:
-#     "Be efficient: delegate 3-5 tasks maximum per request.
-#      Avoid redundant agent calls. Synthesize once at the end."
-#
-# BEST PRACTICE:
-#   ✅ Use max_iterations: 5-10 (orchestrators should delegate, not loop excessively)
-#   ✅ Use budget: 16000 (8x default, handles 5-10 multi-agent turns)
-#   ✅ Use supervisor engine (optimized for delegation)
-#   ✅ Monitor message counts in logs to tune settings
-

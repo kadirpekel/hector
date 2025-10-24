@@ -95,16 +95,16 @@ rpc StreamMessage(SendMessageRequest) returns (stream MessageChunk)
 
 ```bash
 # Interactive chat (automatic session)
-hector chat assistant
+hector chat --agent assistant --config config.yaml
 
 # Specify session ID for resumption
-hector chat assistant --session my-session
+hector chat --agent assistant --config config.yaml --session my-session
 
 # Single call with session
-hector call assistant "Hello" --session my-session
+hector call "Hello" --agent assistant --config config.yaml --session my-session
 
 # Resume later (same session ID = same conversation)
-hector call assistant "Continue where we left off" --session my-session
+hector call "Continue where we left off" --agent assistant --config config.yaml --session my-session
 ```
 
 See [CLI Reference](../reference/cli.md#session-support) for full details.
@@ -277,7 +277,7 @@ for {
 
 ```bash
 # Streaming enabled by default in CLI
-hector call assistant "Explain quantum computing"
+hector call "Explain quantum computing" --agent assistant --config config.yaml
 # Response streams as it's generated
 ```
 

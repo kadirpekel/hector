@@ -1,51 +1,30 @@
-# Example configuration demonstrating A2A security features
-# This shows how to configure JWT authentication for an agent
-
-# Provider configurations
 providers:
   llms:
     default-llm:
       type: "openai"
       model: "gpt-4o"
       api_key: "${OPENAI_API_KEY}"
-
-# Agent configurations
 agents:
   secure-agent:
     name: "Secure Agent"
     description: "An agent that requires JWT authentication"
     llm: "default-llm"
-    
-    # Security configuration
     security:
       enabled: true
-      
-      # Define security schemes
       schemes:
         BearerAuth:
           type: "http"
           scheme: "bearer"
           bearer_format: "JWT"
           description: "JWT Bearer token authentication"
-      
-      # Specify security requirements
-      # This is a list of OR'd AND sets
-      # Each entry represents one way to authenticate
       require:
-        - BearerAuth: []  # Require BearerAuth scheme
-      
-      # JWT validation configuration
+        - BearerAuth: []  
       jwks_url: "https://your-auth-server.com/.well-known/jwks.json"
       issuer: "https://your-auth-server.com/"
       audience: "your-agent-api"
-
-# Server configuration
 server:
   auth:
     enabled: true
     jwks_url: "https://your-auth-server.com/.well-known/jwks.json"
     issuer: "https://your-auth-server.com/"
     audience: "your-agent-api"
-    # Optional: specify expected roles/scopes
-    # required_roles: ["agent-user"]
-

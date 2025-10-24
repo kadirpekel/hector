@@ -16,10 +16,9 @@ import (
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
 
-// contextKey is a custom type for context keys to avoid collisions
 type contextKey string
 
-const sessionIDKey contextKey = "sessionID"
+const SessionIDKey contextKey = "sessionID"
 
 func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
 	if req.Request == nil {
@@ -185,15 +184,12 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 			return status.Errorf(codes.Internal, "reasoning failed: %v", err)
 		}
 
-		// Generate message ID once for all chunks
 		messageID := fmt.Sprintf("msg-%d", time.Now().UnixNano())
 		var fullResponse strings.Builder
 
-		// ✅ FIX: Stream each chunk to client in real-time (token-by-token)
 		for chunk := range streamCh {
 			fullResponse.WriteString(chunk)
 
-			// Send chunk immediately to client (real streaming!)
 			if chunk != "" {
 				chunkMsg := &pb.Message{
 					MessageId: messageID,
@@ -214,9 +210,8 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 			}
 		}
 
-		// Store complete message in task history
 		responseMessage := a.createResponseMessage(fullResponse.String(), contextID, task.Id)
-		responseMessage.MessageId = messageID // Use same ID as streamed chunks
+		responseMessage.MessageId = messageID
 
 		if err := a.services.Task().AddTaskMessage(ctx, task.Id, responseMessage); err != nil {
 			return status.Errorf(codes.Internal, "failed to add response message: %v", err)
@@ -253,10 +248,8 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 		return status.Errorf(codes.Internal, "reasoning failed: %v", err)
 	}
 
-	// Generate message ID once for all chunks
 	messageID := fmt.Sprintf("msg-%d", time.Now().UnixNano())
 
-	// ✅ FIX: Stream each chunk to client in real-time (token-by-token)
 	for chunk := range streamCh {
 		if chunk != "" {
 			chunkMsg := &pb.Message{
@@ -287,7 +280,7 @@ func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (
 		Capabilities: &pb.AgentCapabilities{
 			Streaming: true,
 		},
-		// A2A fields from configuration
+
 		DefaultInputModes:  a.getInputModes(),
 		DefaultOutputModes: a.getOutputModes(),
 		Skills:             a.getSkills(),
@@ -295,8 +288,7 @@ func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (
 		DocumentationUrl:   a.getDocumentationURL(),
 	}
 
-	// Populate security information from config
-	if a.config != nil && a.config.Security.IsEnabled() && len(a.config.Security.Schemes) > 0 {
+	if a.config != nil && a.config.Security != nil && a.config.Security.IsEnabled() && len(a.config.Security.Schemes) > 0 {
 		card.SecuritySchemes = make(map[string]*pb.SecurityScheme)
 		for name, scheme := range a.config.Security.Schemes {
 			pbScheme := convertConfigSecurityScheme(scheme)
@@ -305,7 +297,6 @@ func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (
 			}
 		}
 
-		// Convert security requirements
 		if len(a.config.Security.Require) > 0 {
 			card.Security = make([]*pb.Security, 0, len(a.config.Security.Require))
 			for _, reqSet := range a.config.Security.Require {
@@ -323,8 +314,11 @@ func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (
 	return card, nil
 }
 
-// convertConfigSecurityScheme converts config.SecurityScheme to pb.SecurityScheme
-func convertConfigSecurityScheme(scheme config.SecurityScheme) *pb.SecurityScheme {
+func convertConfigSecurityScheme(scheme *config.SecurityScheme) *pb.SecurityScheme {
+	if scheme == nil {
+		return nil
+	}
+
 	switch scheme.Type {
 	case "http":
 		return &pb.SecurityScheme{
@@ -346,7 +340,7 @@ func convertConfigSecurityScheme(scheme config.SecurityScheme) *pb.SecuritySchem
 				},
 			},
 		}
-	// Other scheme types can be added here as needed
+
 	default:
 		return nil
 	}
@@ -372,7 +366,7 @@ func (a *Agent) GetTask(ctx context.Context, req *pb.GetTaskRequest) (*pb.Task, 
 	}
 
 	if req.HistoryLength > 0 && len(task.History) > int(req.HistoryLength) {
-		// Create a copy to avoid copying locks in protobuf message
+
 		taskCopy := &pb.Task{
 			Id:        task.Id,
 			ContextId: task.ContextId,
@@ -504,8 +498,7 @@ func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, con
 		return "", fmt.Errorf("failed to create strategy: %w", err)
 	}
 
-	// IMPORTANT: Add contextID (A2A session ID) to context so saveToHistory can persist messages
-	ctx = context.WithValue(ctx, sessionIDKey, contextID)
+	ctx = context.WithValue(ctx, SessionIDKey, contextID)
 
 	streamCh, err := a.execute(ctx, userText, strategy)
 	if err != nil {

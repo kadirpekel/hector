@@ -20,8 +20,8 @@ func TestLLMProviderConfig_SetDefaults(t *testing.T) {
 				if config.Type != "openai" {
 					t.Errorf("Default type = %v, want %v", config.Type, "openai")
 				}
-				if config.Model != "gpt-4o" {
-					t.Errorf("Default model = %v, want %v", config.Model, "gpt-4o")
+				if config.Model != DefaultOpenAIModel {
+					t.Errorf("Default model = %v, want %v", config.Model, DefaultOpenAIModel)
 				}
 				if config.Host != "https://api.openai.com/v1" {
 					t.Errorf("Default host = %v, want %v", config.Host, "https://api.openai.com/v1")
@@ -112,9 +112,9 @@ func TestLLMProviderConfig_SetDefaults(t *testing.T) {
 				Type:        "openai",
 				Model:       "gpt-4o",
 				Host:        "https://api.openai.com/v1",
-				Temperature: 0, // Zero value should be set to default
-				MaxTokens:   0, // Zero value should be set to default
-				Timeout:     0, // Zero value should be set to default
+				Temperature: 0,
+				MaxTokens:   0,
+				Timeout:     0,
 			},
 			validateConfig: func(t *testing.T, config LLMProviderConfig) {
 				if config.Temperature != 0.7 {
@@ -132,12 +132,11 @@ func TestLLMProviderConfig_SetDefaults(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up environment variables
+
 			for key, value := range tt.envVars {
 				os.Setenv(key, value)
 			}
 
-			// Clean up environment variables after test
 			defer func() {
 				for key := range tt.envVars {
 					os.Unsetenv(key)
@@ -200,8 +199,8 @@ func TestDatabaseProviderConfig_SetDefaults(t *testing.T) {
 			config: DatabaseProviderConfig{
 				Type:    "qdrant",
 				Host:    "localhost",
-				Port:    0, // Zero value should be set to default
-				Timeout: 0, // Zero value should be set to default
+				Port:    0,
+				Timeout: 0,
 			},
 			validateConfig: func(t *testing.T, config DatabaseProviderConfig) {
 				if config.Port != 6334 {
@@ -279,9 +278,9 @@ func TestEmbedderProviderConfig_SetDefaults(t *testing.T) {
 				Type:       "ollama",
 				Model:      "nomic-embed-text",
 				Host:       "http://localhost:11434",
-				Dimension:  0, // Zero value should be set to default
-				Timeout:    0, // Zero value should be set to default
-				MaxRetries: 0, // Zero value should be set to default
+				Dimension:  0,
+				Timeout:    0,
+				MaxRetries: 0,
 			},
 			validateConfig: func(t *testing.T, config EmbedderProviderConfig) {
 				if config.Dimension != 768 {
@@ -398,7 +397,7 @@ func TestGlobalSettings_SetDefaults(t *testing.T) {
 			name:   "empty_config_defaults",
 			config: GlobalSettings{},
 			validateConfig: func(t *testing.T, config GlobalSettings) {
-				// Logging defaults
+
 				if config.Logging.Level != "info" {
 					t.Errorf("Default log level = %v, want %v", config.Logging.Level, "info")
 				}
@@ -409,7 +408,6 @@ func TestGlobalSettings_SetDefaults(t *testing.T) {
 					t.Errorf("Default log output = %v, want %v", config.Logging.Output, "stdout")
 				}
 
-				// Performance defaults
 				if config.Performance.MaxConcurrency != 4 {
 					t.Errorf("Default max concurrency = %v, want %v", config.Performance.MaxConcurrency, 4)
 				}
@@ -417,7 +415,6 @@ func TestGlobalSettings_SetDefaults(t *testing.T) {
 					t.Errorf("Default timeout = %v, want %v", config.Performance.Timeout, 15*time.Minute)
 				}
 
-				// A2A Server defaults
 				if config.A2AServer.Host != "0.0.0.0" {
 					t.Errorf("Default A2A host = %v, want %v", config.A2AServer.Host, "0.0.0.0")
 				}
@@ -604,7 +601,7 @@ func TestAuthConfig_SetDefaults(t *testing.T) {
 			name:   "empty_config_no_defaults",
 			config: AuthConfig{},
 			validateConfig: func(t *testing.T, config AuthConfig) {
-				// Auth config should not set any defaults
+
 				if config.JWKSURL != "" {
 					t.Errorf("JWKS URL should remain empty: %v", config.JWKSURL)
 				}

@@ -1,4 +1,3 @@
-// Package plugins provides plugin discovery and management.
 package plugins
 
 import (
@@ -11,23 +10,16 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
-// ============================================================================
-// PLUGIN DISCOVERY
-// ============================================================================
-
-// DiscoveryConfig contains configuration for plugin discovery
 type DiscoveryConfig struct {
 	Enabled            bool     `yaml:"enabled" json:"enabled"`
 	Paths              []string `yaml:"paths" json:"paths"`
 	ScanSubdirectories bool     `yaml:"scan_subdirectories" json:"scan_subdirectories"`
 }
 
-// PluginDiscovery handles discovering plugins in configured paths
 type PluginDiscovery struct {
 	config *DiscoveryConfig
 }
 
-// NewPluginDiscovery creates a new plugin discovery instance
 func NewPluginDiscovery(config *DiscoveryConfig) *PluginDiscovery {
 	if config == nil {
 		config = &DiscoveryConfig{
@@ -41,7 +33,6 @@ func NewPluginDiscovery(config *DiscoveryConfig) *PluginDiscovery {
 	}
 }
 
-// DiscoveredPlugin represents a discovered plugin before loading
 type DiscoveredPlugin struct {
 	Name         string
 	Path         string
@@ -49,26 +40,20 @@ type DiscoveredPlugin struct {
 	Manifest     *PluginManifest
 }
 
-// ============================================================================
-// DISCOVERY METHODS
-// ============================================================================
-
-// DiscoverPlugins scans configured paths for plugins
 func (d *PluginDiscovery) DiscoverPlugins(ctx context.Context) ([]*DiscoveredPlugin, error) {
 	if !d.config.Enabled {
 		return nil, nil
 	}
 
 	var discovered []*DiscoveredPlugin
-	seen := make(map[string]bool) // Prevent duplicates
+	seen := make(map[string]bool)
 
 	for _, path := range d.config.Paths {
-		// Expand home directory
+
 		expandedPath := expandPath(path)
 
-		// Check if path exists
 		if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
-			continue // Skip non-existent paths
+			continue
 		}
 
 		plugins, err := d.scanPath(ctx, expandedPath)
@@ -76,7 +61,6 @@ func (d *PluginDiscovery) DiscoverPlugins(ctx context.Context) ([]*DiscoveredPlu
 			return nil, fmt.Errorf("failed to scan path '%s': %w", path, err)
 		}
 
-		// Add unique plugins
 		for _, plugin := range plugins {
 			if !seen[plugin.Path] {
 				discovered = append(discovered, plugin)
@@ -88,11 +72,9 @@ func (d *PluginDiscovery) DiscoverPlugins(ctx context.Context) ([]*DiscoveredPlu
 	return discovered, nil
 }
 
-// scanPath scans a specific path for plugins
 func (d *PluginDiscovery) scanPath(ctx context.Context, path string) ([]*DiscoveredPlugin, error) {
 	var plugins []*DiscoveredPlugin
 
-	// Check if this is a direct plugin path (has .plugin.yaml)
 	manifestPath := path + ".plugin.yaml"
 	if _, err := os.Stat(manifestPath); err == nil {
 		plugin, err := d.loadPluginFromManifest(path, manifestPath)
@@ -105,25 +87,22 @@ func (d *PluginDiscovery) scanPath(ctx context.Context, path string) ([]*Discove
 		return plugins, nil
 	}
 
-	// Otherwise, scan directory
 	if d.config.ScanSubdirectories {
 		err := filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 
-			// Skip directories
 			if info.IsDir() {
 				return nil
 			}
 
-			// Look for .plugin.yaml files
 			if strings.HasSuffix(filePath, ".plugin.yaml") {
-				// Get the executable path (remove .plugin.yaml)
+
 				execPath := strings.TrimSuffix(filePath, ".plugin.yaml")
 				plugin, err := d.loadPluginFromManifest(execPath, filePath)
 				if err != nil {
-					// Log error but continue scanning
+
 					fmt.Printf("Warning: Failed to load plugin manifest '%s': %v\n", filePath, err)
 					return nil
 				}
@@ -139,7 +118,7 @@ func (d *PluginDiscovery) scanPath(ctx context.Context, path string) ([]*Discove
 			return nil, fmt.Errorf("failed to walk directory '%s': %w", path, err)
 		}
 	} else {
-		// Only scan immediate directory
+
 		entries, err := os.ReadDir(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read directory '%s': %w", path, err)
@@ -169,15 +148,13 @@ func (d *PluginDiscovery) scanPath(ctx context.Context, path string) ([]*Discove
 	return plugins, nil
 }
 
-// loadPluginFromManifest loads a plugin from its manifest file
 func (d *PluginDiscovery) loadPluginFromManifest(execPath, manifestPath string) (*DiscoveredPlugin, error) {
-	// Read manifest file
+
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read manifest: %w", err)
 	}
 
-	// Parse manifest
 	var manifestWrapper struct {
 		Plugin PluginManifest `yaml:"plugin"`
 	}
@@ -187,23 +164,19 @@ func (d *PluginDiscovery) loadPluginFromManifest(execPath, manifestPath string) 
 
 	manifest := &manifestWrapper.Plugin
 
-	// Validate manifest
 	if err := d.validateManifest(manifest); err != nil {
 		return nil, fmt.Errorf("invalid manifest: %w", err)
 	}
 
-	// Check if executable exists
 	if _, err := os.Stat(execPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("plugin executable not found: %s", execPath)
 	}
 
-	// Check if executable is actually executable
 	info, err := os.Stat(execPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat executable: %w", err)
 	}
 
-	// Check executable permissions (Unix-like systems)
 	if info.Mode()&0111 == 0 {
 		return nil, fmt.Errorf("plugin is not executable: %s", execPath)
 	}
@@ -216,7 +189,6 @@ func (d *PluginDiscovery) loadPluginFromManifest(execPath, manifestPath string) 
 	}, nil
 }
 
-// validateManifest validates a plugin manifest
 func (d *PluginDiscovery) validateManifest(manifest *PluginManifest) error {
 	if manifest.Name == "" {
 		return fmt.Errorf("manifest missing 'name' field")
@@ -231,7 +203,6 @@ func (d *PluginDiscovery) validateManifest(manifest *PluginManifest) error {
 		return fmt.Errorf("manifest missing 'protocol' field")
 	}
 
-	// Validate plugin type
 	validTypes := map[PluginType]bool{
 		PluginTypeLLM:            true,
 		PluginTypeDatabase:       true,
@@ -244,7 +215,6 @@ func (d *PluginDiscovery) validateManifest(manifest *PluginManifest) error {
 		return fmt.Errorf("invalid plugin type: %s", manifest.Type)
 	}
 
-	// Validate protocol (only gRPC is supported)
 	if manifest.Protocol != ProtocolGRPC {
 		return fmt.Errorf("invalid protocol: %s (only 'grpc' is supported)", manifest.Protocol)
 	}
@@ -252,11 +222,6 @@ func (d *PluginDiscovery) validateManifest(manifest *PluginManifest) error {
 	return nil
 }
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-// expandPath expands ~ to home directory
 func expandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
@@ -268,11 +233,6 @@ func expandPath(path string) string {
 	return path
 }
 
-// ============================================================================
-// PLUGIN FILTERING
-// ============================================================================
-
-// FilterByType filters discovered plugins by type
 func FilterByType(plugins []*DiscoveredPlugin, pluginType PluginType) []*DiscoveredPlugin {
 	var filtered []*DiscoveredPlugin
 	for _, plugin := range plugins {
@@ -283,7 +243,6 @@ func FilterByType(plugins []*DiscoveredPlugin, pluginType PluginType) []*Discove
 	return filtered
 }
 
-// FilterByProtocol filters discovered plugins by protocol
 func FilterByProtocol(plugins []*DiscoveredPlugin, protocol PluginProtocol) []*DiscoveredPlugin {
 	var filtered []*DiscoveredPlugin
 	for _, plugin := range plugins {
@@ -294,7 +253,6 @@ func FilterByProtocol(plugins []*DiscoveredPlugin, protocol PluginProtocol) []*D
 	return filtered
 }
 
-// FilterByName filters discovered plugins by name
 func FilterByName(plugins []*DiscoveredPlugin, name string) *DiscoveredPlugin {
 	for _, plugin := range plugins {
 		if plugin.Manifest != nil && plugin.Manifest.Name == name {

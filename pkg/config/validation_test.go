@@ -228,7 +228,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 				Host: "localhost",
 				Port: 70000,
 			},
-			wantErr: false, // Current validation doesn't check upper bound
+			wantErr: false,
 		},
 		{
 			name: "negative_timeout",
@@ -455,7 +455,7 @@ func TestAgentConfig_Validate(t *testing.T) {
 				Type: "a2a",
 				Name: "External Agent",
 				URL:  "https://example.com/agents/test",
-				LLM:  "test-llm", // Should not be specified for A2A agents
+				LLM:  "test-llm",
 			},
 			wantErr: true,
 		},
@@ -474,7 +474,6 @@ func TestAgentConfig_Validate(t *testing.T) {
 				Name:           "Test Agent",
 				LLM:            "test-llm",
 				DocumentStores: []string{"test-store"},
-				// Missing Database
 			},
 			wantErr: true,
 		},
@@ -486,7 +485,6 @@ func TestAgentConfig_Validate(t *testing.T) {
 				LLM:            "test-llm",
 				Database:       "test-db",
 				DocumentStores: []string{"test-store"},
-				// Missing Embedder
 			},
 			wantErr: true,
 		},
@@ -552,12 +550,8 @@ func TestGlobalSettings_Validate(t *testing.T) {
 					MaxConcurrency: 4,
 					Timeout:        15 * time.Minute,
 				},
-				A2AServer: A2AServerConfig{
-					// Empty config (disabled)
-				},
-				Auth: AuthConfig{
-					// Empty config (disabled)
-				},
+				A2AServer: A2AServerConfig{},
+				Auth:      AuthConfig{},
 			},
 			wantErr: false,
 		},
@@ -775,10 +769,8 @@ func TestA2AServerConfig_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:   "valid_disabled_server",
-			config: A2AServerConfig{
-				// Empty config - should be valid (disabled)
-			},
+			name:    "valid_disabled_server",
+			config:  A2AServerConfig{},
 			wantErr: false,
 		},
 		{
@@ -794,14 +786,14 @@ func TestA2AServerConfig_Validate(t *testing.T) {
 			config: A2AServerConfig{
 				Port: 0,
 			},
-			wantErr: false, // Port 0 means disabled, which is valid
+			wantErr: false,
 		},
 		{
 			name: "invalid_port_negative",
 			config: A2AServerConfig{
 				Port: -1,
 			},
-			wantErr: false, // Negative port means disabled, which is valid
+			wantErr: false,
 		},
 		{
 			name: "invalid_port_too_high",
@@ -838,10 +830,8 @@ func TestAuthConfig_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:   "valid_disabled_auth",
-			config: AuthConfig{
-				// Empty config - should be valid (disabled)
-			},
+			name:    "valid_disabled_auth",
+			config:  AuthConfig{},
 			wantErr: false,
 		},
 		{
@@ -850,7 +840,7 @@ func TestAuthConfig_Validate(t *testing.T) {
 				Issuer:   "https://auth.example.com/",
 				Audience: "hector-api",
 			},
-			wantErr: false, // Incomplete config means disabled, which is valid
+			wantErr: false,
 		},
 		{
 			name: "missing_issuer",
@@ -858,7 +848,7 @@ func TestAuthConfig_Validate(t *testing.T) {
 				JWKSURL:  "https://auth.example.com/.well-known/jwks.json",
 				Audience: "hector-api",
 			},
-			wantErr: false, // Incomplete config means disabled, which is valid
+			wantErr: false,
 		},
 		{
 			name: "missing_audience",
@@ -866,7 +856,7 @@ func TestAuthConfig_Validate(t *testing.T) {
 				JWKSURL: "https://auth.example.com/.well-known/jwks.json",
 				Issuer:  "https://auth.example.com/",
 			},
-			wantErr: false, // Incomplete config means disabled, which is valid
+			wantErr: false,
 		},
 	}
 

@@ -9,38 +9,13 @@ import (
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 )
 
-// ConversationHistory is an IN-MEMORY working buffer for conversation messages
-//
-// PURPOSE:
-//   - Temporary storage during strategy operations (e.g., summarization)
-//   - Message manipulation (add, remove, truncate)
-//   - In-memory message accumulation
-//
-// THIS IS NOT:
-//
-//	❌ A cache (doesn't fetch from persistent storage)
-//	❌ A persistent store (lost on restart)
-//	❌ A source of truth (SessionService is the source of truth)
-//
-// OWNERSHIP:
-//   - Created by WorkingMemoryStrategy during LoadState
-//   - Used temporarily for message management
-//   - Discarded after strategy operations complete
-//
-// LIFECYCLE:
-//  1. Strategy calls LoadState()
-//  2. ConversationHistory created and populated
-//  3. Strategy uses it for operations (e.g., CheckAndSummarize)
-//  4. Results returned, ConversationHistory discarded
-//
-// See pkg/memory/README.md for complete ownership model
 type ConversationHistory struct {
 	mu          sync.RWMutex
 	SessionID   string
 	Messages    []*pb.Message
 	Context     map[string]interface{}
 	LastUpdated time.Time
-	MaxMessages int // Safety limit to prevent memory exhaustion
+	MaxMessages int
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }

@@ -10,8 +10,6 @@ import (
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
 
-// Mock implementations for testing
-
 type mockSessionService struct {
 	mu       sync.Mutex
 	messages map[string][]*pb.Message
@@ -100,7 +98,7 @@ func (m *mockWorkingMemory) LoadState(sessionID string, sessionService interface
 type mockLongTermMemory struct {
 	mu      sync.Mutex
 	stored  map[string][]*pb.Message
-	storeCh chan bool // For synchronization in tests
+	storeCh chan bool
 }
 
 func newMockLongTermMemory() *mockLongTermMemory {
@@ -117,7 +115,6 @@ func (m *mockLongTermMemory) Store(agentID string, sessionID string, messages []
 	key := agentID + ":" + sessionID
 	m.stored[key] = append(m.stored[key], messages...)
 
-	// Signal that a store happened
 	select {
 	case m.storeCh <- true:
 	default:
@@ -149,7 +146,6 @@ func (m *mockLongTermMemory) GetStoredCount(agentID string, sessionID string) in
 	return len(m.stored[key])
 }
 
-// Test concurrent AddBatchToHistory calls
 func TestMemoryService_ConcurrentAddBatch(t *testing.T) {
 	sessionService := newMockSessionService()
 	workingMemory := &mockWorkingMemory{}
@@ -169,7 +165,6 @@ func TestMemoryService_ConcurrentAddBatch(t *testing.T) {
 		config,
 	)
 
-	// Run 100 concurrent operations
 	numGoroutines := 100
 	messagesPerGoroutine := 10
 	var wg sync.WaitGroup
@@ -199,7 +194,6 @@ func TestMemoryService_ConcurrentAddBatch(t *testing.T) {
 
 	wg.Wait()
 
-	// Verify all messages were saved
 	count, err := sessionService.GetMessageCount("test-session")
 	if err != nil {
 		t.Fatalf("GetMessageCount failed: %v", err)
@@ -213,7 +207,6 @@ func TestMemoryService_ConcurrentAddBatch(t *testing.T) {
 	t.Logf("✅ Concurrent test passed: %d messages from %d goroutines", count, numGoroutines)
 }
 
-// Test concurrent long-term memory batching
 func TestMemoryService_ConcurrentLongTermBatching(t *testing.T) {
 	sessionService := newMockSessionService()
 	workingMemory := &mockWorkingMemory{}
@@ -221,7 +214,7 @@ func TestMemoryService_ConcurrentLongTermBatching(t *testing.T) {
 
 	config := LongTermConfig{
 		Enabled:      true,
-		BatchSize:    10, // Small batch size to trigger frequent flushes
+		BatchSize:    10,
 		StorageScope: StorageScopeAll,
 	}
 
@@ -233,7 +226,6 @@ func TestMemoryService_ConcurrentLongTermBatching(t *testing.T) {
 		config,
 	)
 
-	// Run 50 concurrent operations
 	numGoroutines := 50
 	messagesPerGoroutine := 20
 	var wg sync.WaitGroup
@@ -256,7 +248,6 @@ func TestMemoryService_ConcurrentLongTermBatching(t *testing.T) {
 
 				_ = memoryService.AddBatchToHistory(sessionID, messages)
 
-				// Small delay to increase likelihood of concurrent batch operations
 				time.Sleep(time.Microsecond)
 			}
 		}(i)
@@ -264,12 +255,10 @@ func TestMemoryService_ConcurrentLongTermBatching(t *testing.T) {
 
 	wg.Wait()
 
-	// Flush any remaining batches
 	if err := memoryService.Shutdown(); err != nil {
 		t.Fatalf("Shutdown failed: %v", err)
 	}
 
-	// Verify long-term memory received all messages
 	stored := longTermMemory.GetStoredCount("test-agent", "test-session")
 	expected := numGoroutines * messagesPerGoroutine
 
@@ -280,7 +269,6 @@ func TestMemoryService_ConcurrentLongTermBatching(t *testing.T) {
 	t.Logf("✅ Concurrent long-term batching passed: %d messages stored", stored)
 }
 
-// Test Shutdown with pending batches
 func TestMemoryService_ShutdownWithPendingBatches(t *testing.T) {
 	sessionService := newMockSessionService()
 	workingMemory := &mockWorkingMemory{}
@@ -288,7 +276,7 @@ func TestMemoryService_ShutdownWithPendingBatches(t *testing.T) {
 
 	config := LongTermConfig{
 		Enabled:      true,
-		BatchSize:    100, // Large batch size to keep messages pending
+		BatchSize:    100,
 		StorageScope: StorageScopeAll,
 	}
 
@@ -300,9 +288,8 @@ func TestMemoryService_ShutdownWithPendingBatches(t *testing.T) {
 		config,
 	)
 
-	// Add messages to multiple sessions
 	sessions := []string{"session1", "session2", "session3"}
-	messagesPerSession := 50 // Less than batch size, so they stay pending
+	messagesPerSession := 50
 
 	for _, sessionID := range sessions {
 		for i := 0; i < messagesPerSession; i++ {
@@ -318,7 +305,6 @@ func TestMemoryService_ShutdownWithPendingBatches(t *testing.T) {
 		}
 	}
 
-	// Before shutdown, nothing should be in long-term memory
 	for _, sessionID := range sessions {
 		stored := longTermMemory.GetStoredCount("test-agent", sessionID)
 		if stored != 0 {
@@ -326,12 +312,10 @@ func TestMemoryService_ShutdownWithPendingBatches(t *testing.T) {
 		}
 	}
 
-	// Shutdown should flush all pending batches
 	if err := memoryService.Shutdown(); err != nil {
 		t.Fatalf("Shutdown failed: %v", err)
 	}
 
-	// After shutdown, all messages should be in long-term memory
 	for _, sessionID := range sessions {
 		stored := longTermMemory.GetStoredCount("test-agent", sessionID)
 		if stored != messagesPerSession {
@@ -344,7 +328,6 @@ func TestMemoryService_ShutdownWithPendingBatches(t *testing.T) {
 		len(sessions), messagesPerSession)
 }
 
-// Test concurrent Shutdown calls (should be idempotent)
 func TestMemoryService_ConcurrentShutdown(t *testing.T) {
 	sessionService := newMockSessionService()
 	workingMemory := &mockWorkingMemory{}
@@ -364,7 +347,6 @@ func TestMemoryService_ConcurrentShutdown(t *testing.T) {
 		config,
 	)
 
-	// Add some pending messages
 	for i := 0; i < 50; i++ {
 		messages := []*pb.Message{
 			{
@@ -377,7 +359,6 @@ func TestMemoryService_ConcurrentShutdown(t *testing.T) {
 		_ = memoryService.AddBatchToHistory("test-session", messages)
 	}
 
-	// Call Shutdown from multiple goroutines
 	numGoroutines := 10
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
@@ -396,14 +377,12 @@ func TestMemoryService_ConcurrentShutdown(t *testing.T) {
 	wg.Wait()
 	close(errors)
 
-	// Check for errors
 	for err := range errors {
 		if err != nil {
 			t.Errorf("Concurrent shutdown returned error: %v", err)
 		}
 	}
 
-	// All messages should be stored (exactly once, not duplicated)
 	stored := longTermMemory.GetStoredCount("test-agent", "test-session")
 	if stored != 50 {
 		t.Errorf("Expected 50 stored messages, got %d (possible duplicate flush)", stored)
@@ -412,7 +391,6 @@ func TestMemoryService_ConcurrentShutdown(t *testing.T) {
 	t.Logf("✅ Concurrent shutdown test passed: %d goroutines, no duplicates", numGoroutines)
 }
 
-// Test race conditions with -race flag
 func TestMemoryService_RaceDetection(t *testing.T) {
 	sessionService := newMockSessionService()
 	workingMemory := &mockWorkingMemory{}
@@ -432,10 +410,8 @@ func TestMemoryService_RaceDetection(t *testing.T) {
 		config,
 	)
 
-	// Mix of operations that could race
 	var wg sync.WaitGroup
 
-	// Writer goroutines
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
 		go func(id int) {
@@ -454,7 +430,6 @@ func TestMemoryService_RaceDetection(t *testing.T) {
 		}(i)
 	}
 
-	// Reader goroutine (GetRecentHistory)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -464,7 +439,6 @@ func TestMemoryService_RaceDetection(t *testing.T) {
 		}
 	}()
 
-	// Clear goroutine
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -474,7 +448,6 @@ func TestMemoryService_RaceDetection(t *testing.T) {
 
 	wg.Wait()
 
-	// Final shutdown
 	if err := memoryService.Shutdown(); err != nil {
 		t.Fatalf("Shutdown failed: %v", err)
 	}
@@ -482,7 +455,6 @@ func TestMemoryService_RaceDetection(t *testing.T) {
 	t.Logf("✅ Race detection test passed (run with -race flag to verify)")
 }
 
-// Benchmark concurrent performance
 func BenchmarkMemoryService_ConcurrentWrites(b *testing.B) {
 	sessionService := newMockSessionService()
 	workingMemory := &mockWorkingMemory{}

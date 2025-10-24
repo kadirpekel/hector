@@ -1,4 +1,3 @@
-// Package auth provides authentication and authorization.
 package auth
 
 import (
@@ -15,7 +14,6 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
-// Test helper functions
 func generateRSAKeyPair() (*rsa.PrivateKey, *rsa.PublicKey, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -49,7 +47,6 @@ func createJWKS(publicKey *rsa.PublicKey) (jwk.Set, error) {
 func createTestJWT(privateKey *rsa.PrivateKey, issuer, audience, subject string, claims map[string]interface{}) (string, error) {
 	token := jwt.New()
 
-	// Set standard claims
 	if err := token.Set(jwt.IssuerKey, issuer); err != nil {
 		return "", err
 	}
@@ -66,20 +63,17 @@ func createTestJWT(privateKey *rsa.PrivateKey, issuer, audience, subject string,
 		return "", err
 	}
 
-	// Set custom claims
 	for key, value := range claims {
 		if err := token.Set(key, value); err != nil {
 			return "", err
 		}
 	}
 
-	// Sign token with key ID
 	key, err := jwk.FromRaw(privateKey)
 	if err != nil {
 		return "", err
 	}
 
-	// Set the same key ID as in JWKS
 	if err := key.Set(jwk.KeyIDKey, "test-key-id"); err != nil {
 		return "", err
 	}
@@ -93,26 +87,23 @@ func createTestJWT(privateKey *rsa.PrivateKey, issuer, audience, subject string,
 }
 
 func setupTestValidator(t testing.TB) (*JWTValidator, *rsa.PrivateKey, string, string, string) {
-	// Generate test key pair
+
 	privateKey, publicKey, err := generateRSAKeyPair()
 	if err != nil {
 		t.Fatalf("Failed to generate key pair: %v", err)
 	}
 
-	// Create JWKS
 	keyset, err := createJWKS(publicKey)
 	if err != nil {
 		t.Fatalf("Failed to create JWKS: %v", err)
 	}
 
-	// Create test server for JWKS endpoint
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/.well-known/jwks.json" {
 			http.NotFound(w, r)
 			return
 		}
 
-		// Convert keyset to JSON
 		keysetJSON, err := json.Marshal(keyset)
 		if err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -127,7 +118,6 @@ func setupTestValidator(t testing.TB) (*JWTValidator, *rsa.PrivateKey, string, s
 	issuer := "https://test-issuer.com"
 	audience := "test-audience"
 
-	// Create validator
 	validator, err := NewJWTValidator(jwksURL, issuer, audience)
 	if err != nil {
 		t.Fatalf("Failed to create validator: %v", err)
