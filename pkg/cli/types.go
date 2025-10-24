@@ -1,6 +1,9 @@
 package cli
 
-import "github.com/kadirpekel/hector/pkg/config"
+import (
+	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/runtime"
+)
 
 // ============================================================================
 // COMMAND TYPES
@@ -101,5 +104,21 @@ func (a *CLIArgs) ToZeroConfigOptions() config.ZeroConfigOptions {
 		MCPURL:      a.MCPURL,
 		DocsFolder:  a.DocsFolder,
 		AgentName:   a.AgentID,
+	}
+}
+
+// ToRuntimeOptions converts CLIArgs to runtime.Options
+// Used by commands that need to create runtime instances
+func (a *CLIArgs) ToRuntimeOptions() runtime.Options {
+	return runtime.Options{
+		ConfigFile: a.ConfigFile,
+		Provider:   a.Provider,
+		APIKey:     a.APIKey,
+		BaseURL:    a.BaseURL,
+		Model:      a.Model,
+		Tools:      a.Tools,
+		MCPURL:     a.MCPURL,
+		DocsFolder: a.DocsFolder,
+		AgentName:  a.AgentID,
 	}
 }
