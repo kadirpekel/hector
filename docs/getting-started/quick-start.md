@@ -148,11 +148,11 @@ hector call "Hello" assistant --server http://remote:8080 --token "your-jwt-toke
 
 | Command | Purpose | Example |
 |---------|---------|---------|
+| `hector version` | Show version | `hector version` |
 | `hector call` | Send a single message | `hector call "Hello"` (zero-config) |
 | `hector chat` | Interactive conversation | `hector chat` (zero-config) |
 | `hector serve` | Start server | `hector serve --config config.yaml` |
 | `hector list` | List available agents | `hector list` |
-| `hector version` | Show version | `hector version` |
 
 ---
 

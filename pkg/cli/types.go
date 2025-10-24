@@ -12,13 +12,14 @@ import (
 type CommandType string
 
 const (
-	CommandServe CommandType = "serve"
-	CommandList  CommandType = "list"
-	CommandInfo  CommandType = "info"
-	CommandCall  CommandType = "call"
-	CommandChat  CommandType = "chat"
-	CommandTask  CommandType = "task"
-	CommandHelp  CommandType = "help"
+	CommandVersion CommandType = "version"
+	CommandServe   CommandType = "serve"
+	CommandList    CommandType = "list"
+	CommandInfo    CommandType = "info"
+	CommandCall    CommandType = "call"
+	CommandChat    CommandType = "chat"
+	CommandTask    CommandType = "task"
+	CommandHelp    CommandType = "help"
 )
 
 // ============================================================================

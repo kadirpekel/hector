@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -18,6 +19,21 @@ import (
 // ============================================================================
 // COMMAND ARCHITECTURE
 // ============================================================================
+
+// VersionCommand shows Hector version information
+func VersionCommand(args *CLIArgs, cfg *config.Config) error {
+	// Get version from build info (same as main.go)
+	version := "dev"
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if info.Main.Version != "(devel)" && info.Main.Version != "" {
+			version = info.Main.Version
+		}
+	}
+
+	fmt.Printf("Hector version %s\n", version)
+	return nil
+}
+
 //
 // Unified Config-First Architecture:
 //

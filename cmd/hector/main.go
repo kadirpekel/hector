@@ -104,6 +104,8 @@ func main() {
 // routeCommand routes Kong context to appropriate command handler
 func routeCommand(ctx *kong.Context, cfg *config.Config) error {
 	switch ctx.Command() {
+	case "version":
+		return cli.VersionCommand(cli.CLI.Version.ToCLIArgs(), cfg)
 	case "serve", "serve <agent-name>":
 		return cli.ServeCommand(cli.CLI.Serve.ToCLIArgs(), cfg)
 	case "list":

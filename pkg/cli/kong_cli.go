@@ -25,12 +25,13 @@ var CLI struct {
 	Debug  bool   `short:"d" help:"Enable debug mode"`
 
 	// Commands
-	Serve ServeCmd `cmd:"" help:"Start the A2A server to host agents"`
-	List  ListCmd  `cmd:"" help:"List all available agents"`
-	Info  InfoCmd  `cmd:"" help:"Display detailed agent information"`
-	Call  CallCmd  `cmd:"" help:"Send a single message to an agent"`
-	Chat  ChatCmd  `cmd:"" help:"Start an interactive chat session with an agent"`
-	Task  TaskCmd  `cmd:"" help:"Task operations (get or cancel)"`
+	Version VersionCmd `cmd:"" help:"Show Hector version information"`
+	Serve   ServeCmd   `cmd:"" help:"Start the A2A server to host agents"`
+	List    ListCmd    `cmd:"" help:"List all available agents"`
+	Info    InfoCmd    `cmd:"" help:"Display detailed agent information"`
+	Call    CallCmd    `cmd:"" help:"Send a single message to an agent"`
+	Chat    ChatCmd    `cmd:"" help:"Start an interactive chat session with an agent"`
+	Task    TaskCmd    `cmd:"" help:"Task operations (get or cancel)"`
 }
 
 // ============================================================================
@@ -53,6 +54,15 @@ type ZeroConfigFlags struct {
 type ClientModeFlags struct {
 	Server string `help:"A2A server URL (enables client mode)" env:"HECTOR_SERVER" placeholder:"URL"`
 	Token  string `help:"Authentication token for server access" env:"HECTOR_TOKEN"`
+}
+
+// ============================================================================
+// VERSION COMMAND
+// ============================================================================
+
+// VersionCmd shows Hector version information
+type VersionCmd struct {
+	// No flags needed for version command
 }
 
 // ============================================================================
@@ -165,6 +175,15 @@ type TaskCancelCmd struct {
 // ============================================================================
 // HELPER FUNCTIONS - Convert Kong structs to CLIArgs
 // ============================================================================
+
+// ToCLIArgs converts VersionCmd to legacy CLIArgs format
+func (v *VersionCmd) ToCLIArgs() *CLIArgs {
+	return &CLIArgs{
+		Command:    CommandVersion,
+		ConfigFile: CLI.Config,
+		Debug:      CLI.Debug,
+	}
+}
 
 // ToCLIArgs converts ServeCmd to legacy CLIArgs format
 func (s *ServeCmd) ToCLIArgs() *CLIArgs {
