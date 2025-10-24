@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -13,49 +13,35 @@ import (
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/auth"
-	"github.com/kadirpekel/hector/pkg/cli"
 	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/transport"
 )
 
-// executeServeCommand handles the 'serve' command - starts the A2A server
-func executeServeCommand(args *cli.CLIArgs) {
-
-	// Load configuration (from file or zero-config mode)
-	loadResult, err := config.LoadOrCreateConfig(args.ConfigFile, args.ToZeroConfigOptions())
-	if err != nil {
-		cli.Fatalf("Failed to load configuration: %v", err)
-	}
-
-	hectorConfig := loadResult.Config
-
+// ServeCommand starts the A2A server to host agents
+func ServeCommand(args *CLIArgs, cfg *config.Config) error {
+	// Config is already loaded, validated, and defaults set by main.go
 	// Display config mode info
-	if loadResult.IsZeroConfig {
+	if args.ConfigFile == "" {
+		// Zero-config mode
 		if args.Debug {
-			fmt.Print(config.FormatZeroConfigDebug(loadResult.ResolvedOpts))
+			fmt.Print(formatZeroConfigDebug(args))
 		}
 		// Show MCP info even without debug flag (like we do for MCP discovery)
-		if loadResult.ResolvedOpts.MCPURL != "" && !args.Debug {
-			fmt.Printf("🔌 MCP server: %s\n", loadResult.ResolvedOpts.MCPURL)
+		if args.MCPURL != "" && !args.Debug {
+			fmt.Printf("🔌 MCP server: %s\n", args.MCPURL)
 		}
 	} else if args.Debug {
 		fmt.Printf("🔧 Loaded configuration from: %s\n", args.ConfigFile)
-	}
-
-	// Set defaults and validate
-	hectorConfig.SetDefaults()
-	if err := hectorConfig.Validate(); err != nil {
-		cli.Fatalf("Invalid configuration: %v", err)
 	}
 
 	// Create agent registry
 	agentRegistry := agent.NewAgentRegistry()
 
 	// Create component manager with agent registry for agent_call tool
-	componentManager, err := component.NewComponentManagerWithAgentRegistry(hectorConfig, agentRegistry)
+	componentManager, err := component.NewComponentManagerWithAgentRegistry(cfg, agentRegistry)
 	if err != nil {
-		cli.Fatalf("Component initialization failed: %v", err)
+		return fmt.Errorf("component initialization failed: %w", err)
 	}
 
 	// Create agent router (routes A2A requests to individual agents)
@@ -64,25 +50,25 @@ func executeServeCommand(args *cli.CLIArgs) {
 
 	// Register all configured agents
 	fmt.Println("\n📋 Registering agents...")
-	for agentID, agentCfg := range hectorConfig.Agents {
-		cfg := agentCfg
+	for agentID, agentCfg := range cfg.Agents {
+		agentCfgCopy := agentCfg
 
 		// Create agent based on type (native vs external)
 		var agentInstance pb.A2AServiceServer
 		var err error
 
-		if cfg.Type == "a2a" {
+		if agentCfgCopy.Type == "a2a" {
 			// External A2A agent - create client proxy
-			externalAgent, extErr := agent.NewExternalA2AAgent(&cfg)
+			externalAgent, extErr := agent.NewExternalA2AAgent(&agentCfgCopy)
 			if extErr != nil {
 				log.Printf("  ⚠️  Failed to create external agent '%s': %v", agentID, extErr)
 				continue
 			}
 			agentInstance = externalAgent
-			log.Printf("  ✅ External agent '%s' connected to %s", agentID, cfg.URL)
+			log.Printf("  ✅ External agent '%s' connected to %s", agentID, agentCfgCopy.URL)
 		} else {
 			// Native agent - create local instance
-			agentInstance, err = agent.NewAgent(agentID, &cfg, componentManager, agentRegistry)
+			agentInstance, err = agent.NewAgent(agentID, &agentCfgCopy, componentManager, agentRegistry)
 			if err != nil {
 				log.Printf("  ⚠️  Failed to create native agent '%s': %v", agentID, err)
 				continue
@@ -91,7 +77,7 @@ func executeServeCommand(args *cli.CLIArgs) {
 		}
 
 		// Register agent in registry (single source of truth)
-		if err := agentRegistry.RegisterAgent(agentID, agentInstance, &cfg, nil); err != nil {
+		if err := agentRegistry.RegisterAgent(agentID, agentInstance, &agentCfgCopy, nil); err != nil {
 			log.Printf("  ⚠️  Failed to register agent '%s' in registry: %v", agentID, err)
 			continue
 		}
@@ -101,7 +87,7 @@ func executeServeCommand(args *cli.CLIArgs) {
 	}
 
 	if agentRouter.AgentCount() == 0 {
-		log.Fatalf("❌ No agents successfully registered")
+		return fmt.Errorf("no agents successfully registered")
 	}
 
 	// Determine addresses - CLI flags override config (conventional pattern)
@@ -116,37 +102,37 @@ func executeServeCommand(args *cli.CLIArgs) {
 	baseURL = ""
 
 	// Load config values if A2A server is configured (presence implies enabled)
-	hasA2AConfig := hectorConfig.Global.A2AServer.IsEnabled()
+	hasA2AConfig := cfg.Global.A2AServer.IsEnabled()
 	if hasA2AConfig {
-		if hectorConfig.Global.A2AServer.Port > 0 {
-			basePort = hectorConfig.Global.A2AServer.Port
+		if cfg.Global.A2AServer.Port > 0 {
+			basePort = cfg.Global.A2AServer.Port
 		}
-		if hectorConfig.Global.A2AServer.Host != "" {
-			serverHost = hectorConfig.Global.A2AServer.Host
+		if cfg.Global.A2AServer.Host != "" {
+			serverHost = cfg.Global.A2AServer.Host
 		}
-		if hectorConfig.Global.A2AServer.BaseURL != "" {
-			baseURL = hectorConfig.Global.A2AServer.BaseURL
+		if cfg.Global.A2AServer.BaseURL != "" {
+			baseURL = cfg.Global.A2AServer.BaseURL
 		}
 	}
 
 	// CLI flags override config (conventional behavior)
 	if args.Port != 8080 { // User specified --port (different from default)
-		if hasA2AConfig && hectorConfig.Global.A2AServer.Port > 0 && args.Port != hectorConfig.Global.A2AServer.Port {
-			overrides = append(overrides, fmt.Sprintf("port: %d (config: %d)", args.Port, hectorConfig.Global.A2AServer.Port))
+		if hasA2AConfig && cfg.Global.A2AServer.Port > 0 && args.Port != cfg.Global.A2AServer.Port {
+			overrides = append(overrides, fmt.Sprintf("port: %d (config: %d)", args.Port, cfg.Global.A2AServer.Port))
 		}
 		basePort = args.Port
 	}
 
 	if args.Host != "" { // User specified --host
-		if hasA2AConfig && hectorConfig.Global.A2AServer.Host != "" && args.Host != hectorConfig.Global.A2AServer.Host {
-			overrides = append(overrides, fmt.Sprintf("host: %s (config: %s)", args.Host, hectorConfig.Global.A2AServer.Host))
+		if hasA2AConfig && cfg.Global.A2AServer.Host != "" && args.Host != cfg.Global.A2AServer.Host {
+			overrides = append(overrides, fmt.Sprintf("host: %s (config: %s)", args.Host, cfg.Global.A2AServer.Host))
 		}
 		serverHost = args.Host
 	}
 
 	if args.A2ABaseURL != "" { // User specified --a2a-base-url
-		if hasA2AConfig && hectorConfig.Global.A2AServer.BaseURL != "" && args.A2ABaseURL != hectorConfig.Global.A2AServer.BaseURL {
-			overrides = append(overrides, fmt.Sprintf("base_url: %s (config: %s)", args.A2ABaseURL, hectorConfig.Global.A2AServer.BaseURL))
+		if hasA2AConfig && cfg.Global.A2AServer.BaseURL != "" && args.A2ABaseURL != cfg.Global.A2AServer.BaseURL {
+			overrides = append(overrides, fmt.Sprintf("base_url: %s (config: %s)", args.A2ABaseURL, cfg.Global.A2AServer.BaseURL))
 		}
 		baseURL = args.A2ABaseURL
 	}
@@ -174,12 +160,12 @@ func executeServeCommand(args *cli.CLIArgs) {
 	// Configure authentication
 	var authConfig *transport.AuthConfig
 	var jwtValidator *auth.JWTValidator
-	if hectorConfig.Global.Auth.IsEnabled() {
+	if cfg.Global.Auth.IsEnabled() {
 		var err error
 		jwtValidator, err = auth.NewJWTValidator(
-			hectorConfig.Global.Auth.JWKSURL,
-			hectorConfig.Global.Auth.Issuer,
-			hectorConfig.Global.Auth.Audience,
+			cfg.Global.Auth.JWKSURL,
+			cfg.Global.Auth.Issuer,
+			cfg.Global.Auth.Audience,
 		)
 		if err != nil {
 			log.Printf("⚠️  Failed to initialize JWT validator: %v", err)
@@ -244,7 +230,7 @@ func executeServeCommand(args *cli.CLIArgs) {
 		}
 	}()
 
-	log.Printf("\n🎉 Hector v%s - All transports started!", getVersion())
+	log.Printf("\n🎉 Hector - All transports started!")
 	log.Printf("📡 Agents available: %d", agentRouter.AgentCount())
 	for _, agentID := range agentRouter.ListAgents() {
 		log.Printf("   • %s", agentID)
@@ -308,8 +294,29 @@ func executeServeCommand(args *cli.CLIArgs) {
 		for _, err := range shutdownErrors {
 			log.Printf("   - %v", err)
 		}
-		os.Exit(1)
+		return fmt.Errorf("shutdown errors occurred")
 	}
 
 	log.Printf("👋 All servers shut down gracefully")
+	return nil
+}
+
+// formatZeroConfigDebug returns formatted debug output for zero-config mode
+// Reconstructed from CLI args
+func formatZeroConfigDebug(args *CLIArgs) string {
+	output := "🔧 Zero-config mode:\n"
+	output += fmt.Sprintf("  Provider: %s\n", args.Provider)
+	output += fmt.Sprintf("  Model: %s\n", args.Model)
+	if args.BaseURL != "" {
+		output += fmt.Sprintf("  Base URL: %s\n", args.BaseURL)
+	}
+	if args.MCPURL != "" {
+		output += fmt.Sprintf("  MCP URL: %s\n", args.MCPURL)
+	}
+	if args.DocsFolder != "" {
+		output += fmt.Sprintf("  Docs Folder: %s\n", args.DocsFolder)
+	}
+	output += fmt.Sprintf("  Tools: %t\n", args.Tools)
+	output += fmt.Sprintf("  Agent Name: %s\n", config.DefaultAgentName)
+	return output
 }

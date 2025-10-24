@@ -19,108 +19,76 @@ import (
 // COMMAND ARCHITECTURE
 // ============================================================================
 //
-// Commands are organized into two categories based on initialization requirements:
+// Unified Config-First Architecture:
 //
-// 1. METADATA COMMANDS (list, info)
-//    Client Mode:  createRuntimeClient() → runtime.NewHTTPClient()
-//    Local Modes:  loadConfigLightweight() → config only, no runtime
-//    Result:       Fast metadata queries without expensive initialization
+// Config is loaded ONCE in main.go before any command execution:
+//   - Client mode: cfg = nil (uses server URL + token)
+//   - Local modes: cfg = loaded/created, validated, defaults set
 //
-// 2. EXECUTION COMMANDS (call, chat, task)
-//    Client Mode:  createRuntimeClient() → runtime.NewHTTPClient()
-//    Local Modes:  createRuntimeClient() → runtime.New() with full stack
-//    Result:       Complete execution environment with all components
+// All commands receive (args, cfg):
+//   - If cfg == nil: Client mode (use HTTP client)
+//   - If cfg != nil: Local mode (use config directly or pass to runtime)
 //
-// Key Design Principles:
-// - Client mode: ALL commands use createRuntimeClient() for consistency
-// - Local metadata: Skip runtime, use loadConfigLightweight() for speed
-// - Local execution: Full runtime via createRuntimeClient() for agent operations
-// - Single factory pattern eliminates duplication across all commands
+// Benefits:
+//   - Single point of config loading (main.go)
+//   - Fail fast on config errors
+//   - No duplicate validation/defaults
+//   - Consistent pattern across all commands
 //
 // ============================================================================
 
 // ListCommand lists all available agents
-func ListCommand(args *CLIArgs) error {
-	mode := DetectMode(args)
+func ListCommand(args *CLIArgs, cfg *config.Config) error {
+	if cfg == nil {
+		// Client mode: use HTTP client
+		httpClient := runtime.NewHTTPClient(args.ServerURL, args.Token)
+		defer httpClient.Close()
 
-	switch mode {
-	case ModeClient:
-		// Client mode: use runtime client factory
-		a2aClient, err := createRuntimeClient(args)
-		if err != nil {
-			return fmt.Errorf("failed to create client: %w", err)
-		}
-		defer a2aClient.Close()
-
-		agents, err := a2aClient.ListAgents(context.Background())
+		agents, err := httpClient.ListAgents(context.Background())
 		if err != nil {
 			return fmt.Errorf("failed to list agents: %w", err)
 		}
 
-		DisplayAgentList(agents, mode.String())
+		DisplayAgentList(agents, "Client Mode")
 		return nil
-
-	case ModeLocalConfig, ModeLocalZeroConfig:
-		// Local modes: lightweight config read (no runtime initialization)
-		cfg, err := loadConfigLightweight(args)
-		if err != nil {
-			return err
-		}
-
-		agents := buildAgentCardsFromConfig(cfg)
-		DisplayAgentList(agents, mode.String())
-		return nil
-
-	default:
-		return fmt.Errorf("list command not supported in %s mode", mode.String())
 	}
+
+	// Local mode: use config directly (no runtime needed)
+	agents := buildAgentCardsFromConfig(cfg)
+	DisplayAgentList(agents, "Local Mode")
+	return nil
 }
 
 // InfoCommand displays agent information
-func InfoCommand(args *CLIArgs) error {
-	mode := DetectMode(args)
+func InfoCommand(args *CLIArgs, cfg *config.Config) error {
+	if cfg == nil {
+		// Client mode: use HTTP client
+		httpClient := runtime.NewHTTPClient(args.ServerURL, args.Token)
+		defer httpClient.Close()
 
-	switch mode {
-	case ModeClient:
-		// Client mode: use runtime client factory
-		a2aClient, err := createRuntimeClient(args)
-		if err != nil {
-			return fmt.Errorf("failed to create client: %w", err)
-		}
-		defer a2aClient.Close()
-
-		card, err := a2aClient.GetAgentCard(context.Background(), args.AgentID)
+		card, err := httpClient.GetAgentCard(context.Background(), args.AgentID)
 		if err != nil {
 			return fmt.Errorf("failed to get agent card: %w", err)
 		}
 
 		DisplayAgentCard(args.AgentID, card)
 		return nil
-
-	case ModeLocalConfig, ModeLocalZeroConfig:
-		// Local modes: lightweight config read (no runtime initialization)
-		cfg, err := loadConfigLightweight(args)
-		if err != nil {
-			return err
-		}
-
-		// Validate agent exists
-		if err := cfg.ValidateAgent(args.AgentID); err != nil {
-			return err
-		}
-
-		card := buildAgentCardFromConfig(cfg, args.AgentID)
-		DisplayAgentCard(args.AgentID, card)
-		return nil
-
-	default:
-		return fmt.Errorf("info command not supported in %s mode", mode.String())
 	}
+
+	// Local mode: use config directly (no runtime needed)
+	// Validate agent exists
+	if err := cfg.ValidateAgent(args.AgentID); err != nil {
+		return err
+	}
+
+	card := buildAgentCardFromConfig(cfg, args.AgentID)
+	DisplayAgentCard(args.AgentID, card)
+	return nil
 }
 
 // CallCommand sends a single message to an agent
-func CallCommand(args *CLIArgs) error {
-	a2aClient, err := createRuntimeClient(args)
+func CallCommand(args *CLIArgs, cfg *config.Config) error {
+	a2aClient, err := createRuntimeClient(args, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
@@ -176,19 +144,22 @@ func executeCall(a2aClient client.A2AClient, args *CLIArgs) error {
 }
 
 // ChatCommand starts an interactive chat session
-func ChatCommand(args *CLIArgs) error {
-	a2aClient, err := createRuntimeClient(args)
+func ChatCommand(args *CLIArgs, cfg *config.Config) error {
+	a2aClient, err := createRuntimeClient(args, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 	defer a2aClient.Close()
 
-	return executeChat(a2aClient, args)
+	return executeChat(a2aClient, args, cfg)
 }
 
-func executeChat(a2aClient client.A2AClient, args *CLIArgs) error {
+func executeChat(a2aClient client.A2AClient, args *CLIArgs, cfg *config.Config) error {
 	// Display welcome message
-	mode := DetectMode(args)
+	mode := "Client Mode"
+	if cfg != nil {
+		mode = "Local Mode"
+	}
 
 	streamInfo := ""
 	if args.Stream {
@@ -200,12 +171,12 @@ func executeChat(a2aClient client.A2AClient, args *CLIArgs) error {
 	if sessionID == "" {
 		// Generate new session ID if not provided
 		sessionID = fmt.Sprintf("cli-chat-%d", time.Now().Unix())
-		fmt.Printf("\n🤖 Chat with %s (%s)%s\n", args.AgentID, mode.String(), streamInfo)
+		fmt.Printf("\n🤖 Chat with %s (%s)%s\n", args.AgentID, mode, streamInfo)
 		fmt.Printf("💾 Session ID: %s\n", sessionID)
 		fmt.Printf("   Resume later with: --session=%s\n", sessionID)
 		fmt.Println("   Type 'exit' to quit")
 	} else {
-		fmt.Printf("\n🤖 Chat with %s (%s)%s\n", args.AgentID, mode.String(), streamInfo)
+		fmt.Printf("\n🤖 Chat with %s (%s)%s\n", args.AgentID, mode, streamInfo)
 		fmt.Printf("💾 Resuming session: %s\n", sessionID)
 		fmt.Println("   Type 'exit' to quit")
 	}
@@ -282,73 +253,42 @@ func executeChat(a2aClient client.A2AClient, args *CLIArgs) error {
 }
 
 // ============================================================================
-// CLIENT CREATION HELPERS
+// CLIENT CREATION HELPER
 // ============================================================================
 //
-// Two helper functions provide the core initialization logic:
+// createRuntimeClient creates appropriate client based on whether cfg is nil:
+//   - cfg == nil: Client mode → runtime.NewHTTPClient()
+//   - cfg != nil: Local mode → runtime.NewWithConfig(cfg)
 //
-// - loadConfigLightweight(): Config-only read (no agent/component creation)
-//   Used by list/info commands in local modes only
-//
-// - createRuntimeClient(): Creates appropriate client based on mode
-//   Used by ALL commands in client mode
-//   Used by call/chat/task commands in local modes
+// Benefits:
+//   - Single factory for all execution commands
+//   - Config already validated and defaults set
+//   - No duplicate config loading
 //
 // ============================================================================
 
-// loadConfigLightweight loads config without runtime/component initialization
-// Used by list/info commands for fast metadata queries in local modes
-func loadConfigLightweight(args *CLIArgs) (*config.Config, error) {
-	cfg, err := runtime.LoadConfigForValidation(args.ConfigFile, args.ToRuntimeOptions())
-	if err != nil {
-		return nil, fmt.Errorf("failed to load configuration: %w", err)
-	}
-	return cfg, nil
-}
-
-// createRuntimeClient creates appropriate client based on mode
-// Used by ALL commands in client mode (returns HTTP client)
-// Used by call/chat/task in local modes (returns full runtime client)
-func createRuntimeClient(args *CLIArgs) (client.A2AClient, error) {
-	mode := DetectMode(args)
-
-	switch mode {
-	case ModeClient:
+// createRuntimeClient creates appropriate client based on config presence
+// Used by call/chat/task commands for execution
+func createRuntimeClient(args *CLIArgs, cfg *config.Config) (client.A2AClient, error) {
+	if cfg == nil {
 		// Client mode: HTTP client for remote server
 		return runtime.NewHTTPClient(args.ServerURL, args.Token), nil
+	}
 
-	case ModeLocalConfig:
-		// Local config mode: validate agent before expensive initialization
-		cfg, err := loadConfigLightweight(args)
-		if err != nil {
+	// Local mode: create runtime with pre-validated config
+	// Validate agent exists before expensive initialization
+	if args.AgentID != "" {
+		if err := cfg.ValidateAgent(args.AgentID); err != nil {
 			return nil, err
 		}
-
-		// Validate agent exists before expensive initialization
-		if args.AgentID != "" {
-			if err := cfg.ValidateAgent(args.AgentID); err != nil {
-				return nil, err
-			}
-		}
-
-		// Create runtime with validated config
-		rt, err := runtime.NewWithConfig(cfg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize runtime: %w", err)
-		}
-		return rt.Client(), nil
-
-	case ModeLocalZeroConfig:
-		// Local zero-config mode: create runtime with auto-config
-		rt, err := runtime.New(args.ToRuntimeOptions())
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize runtime: %w", err)
-		}
-		return rt.Client(), nil
-
-	default:
-		return nil, fmt.Errorf("unsupported mode: %s", mode.String())
 	}
+
+	// Create runtime with validated config
+	rt, err := runtime.NewWithConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize runtime: %w", err)
+	}
+	return rt.Client(), nil
 }
 
 // ============================================================================

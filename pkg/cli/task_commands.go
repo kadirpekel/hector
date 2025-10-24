@@ -3,11 +3,13 @@ package cli
 import (
 	"context"
 	"fmt"
+
+	"github.com/kadirpekel/hector/pkg/config"
 )
 
 // TaskGetCommand retrieves task details
-func TaskGetCommand(args *CLIArgs) error {
-	a2aClient, err := createRuntimeClient(args)
+func TaskGetCommand(args *CLIArgs, cfg *config.Config) error {
+	a2aClient, err := createRuntimeClient(args, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
@@ -23,8 +25,8 @@ func TaskGetCommand(args *CLIArgs) error {
 }
 
 // TaskCancelCommand cancels a running task
-func TaskCancelCommand(args *CLIArgs) error {
-	a2aClient, err := createRuntimeClient(args)
+func TaskCancelCommand(args *CLIArgs, cfg *config.Config) error {
+	a2aClient, err := createRuntimeClient(args, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
