@@ -128,11 +128,9 @@ func routeCommand(ctx *kong.Context, cfg *config.Config, mode cli.CLIMode) error
 		return cli.ListCommand(&cli.CLI.List, cfg, mode)
 	case "info <agent>":
 		return cli.InfoCommand(&cli.CLI.Info, cfg, mode)
-	case "call <message> <agent>", "call <message>":
-		// Agent is optional in zero-config mode
+	case "call <message>":
 		return cli.CallCommand(&cli.CLI.Call, cfg, mode)
-	case "chat <agent>", "chat":
-		// Agent is optional in zero-config mode
+	case "chat":
 		return cli.ChatCommand(&cli.CLI.Chat, cfg, mode)
 	case "task get <agent> <task-id>":
 		return cli.TaskGetCommand(&cli.CLI.Task.Get, cfg, mode)
@@ -183,7 +181,7 @@ func isClientModeCommand(command string) bool {
 		return cli.CLI.Call.Server != ""
 	case "chat":
 		return cli.CLI.Chat.Server != ""
-	case "task get <task-id>", "task cancel <task-id>":
+	case "task get <agent> <task-id>", "task cancel <agent> <task-id>":
 		return cli.CLI.Task.Server != ""
 	default:
 		return false
