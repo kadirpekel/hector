@@ -24,6 +24,14 @@ require (
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.10
 	gopkg.in/yaml.v3 v3.0.1
+	go.opentelemetry.io/otel v1.28.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.28.0
+	go.opentelemetry.io/otel/sdk/trace v1.28.0
+	go.opentelemetry.io/otel/sdk/metric v1.28.0
+	go.opentelemetry.io/otel/exporter/prometheus v0.50.0
+	go.opentelemetry.io/otel/metric v1.28.0
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.52.0
+	github.com/prometheus/client_golang v1.20.0
 )
 
 require (

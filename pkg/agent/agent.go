@@ -219,6 +219,10 @@ func (a *Agent) execute(
 		startTime := time.Now()
 		cfg := a.services.GetConfig()
 
+		// START OPENTELEMETRY SPAN FOR THIS AGENT EXECUTION
+		spanCtx, span := startAgentSpan(ctx, a.name, a.config.LLM, input)
+		defer span.End()
+
 		// Build state using builder pattern for clean, validated initialization
 		state, err := reasoning.Builder().
 			WithQuery(input).
@@ -228,7 +232,7 @@ func (a *Agent) execute(
 			WithShowThinking(cfg.ShowThinking).
 			WithShowDebugInfo(cfg.ShowDebugInfo).
 			WithServices(a.services).
-			WithContext(ctx).
+			WithContext(spanCtx).
 			Build()
 
 		if err != nil {
@@ -239,7 +243,10 @@ func (a *Agent) execute(
 		// Ensure history is saved even on early return (cancellation, errors)
 		// This captures partial work and maintains conversation continuity
 		defer func() {
-			a.saveToHistory(ctx, input, state, strategy, startTime)
+			a.saveToHistory(spanCtx, input, state, strategy, startTime)
+			// RECORD METRICS FOR THIS AGENT EXECUTION
+			duration := time.Since(startTime)
+			recordAgentMetrics(spanCtx, duration, state.TotalTokens(), nil)
 		}()
 
 		// Restore conversation history from HistoryService (interactive mode)

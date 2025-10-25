@@ -99,6 +99,10 @@ func (g *RESTGateway) Start(ctx context.Context) error {
 func (g *RESTGateway) setupRouting() http.Handler {
 	mainMux := http.NewServeMux()
 
+	// Register metrics endpoint for Prometheus scraping
+	mainMux.Handle("/metrics", MetricsHandler())
+	log.Printf("   → Prometheus metrics: /metrics")
+
 	// Register discovery endpoint if available
 	if g.discovery != nil {
 		mainMux.Handle("/v1/agents", g.discovery)
