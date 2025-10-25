@@ -35,7 +35,7 @@ func main() {
 	// Parse command line with Kong
 	ctx := kong.Parse(&cli.CLI,
 		kong.Name("hector"),
-		kong.Description("AI agent framework with A2A protocol support"),
+		kong.Description("Declarative A2A-Native AI agent framework"),
 		kong.UsageOnError(),
 		kong.ConfigureHelp(kong.HelpOptions{
 			Compact: true,
@@ -54,31 +54,25 @@ func main() {
 	command := ctx.Command()
 	isClientMode := false
 
-	// Check if user specified --server flag (client mode)
-	switch {
-	case cli.CLI.List.Server != "":
-		isClientMode = true
-	case cli.CLI.Info.Server != "":
-		isClientMode = true
-	case cli.CLI.Call.Server != "":
-		isClientMode = true
-	case cli.CLI.Chat.Server != "":
-		isClientMode = true
-	case cli.CLI.Task.Server != "":
-		isClientMode = true
-	}
+	// Determine client mode based on --server flag
+	isClientMode = isClientModeCommand(command)
+
+	// Track whether config was loaded from file (vs created from CLI flags)
+	hasConfigFile := cli.CLI.Config != ""
 
 	// Load config for non-client modes
 	if !isClientMode {
-		if cli.CLI.Config != "" {
+		if hasConfigFile {
 			// Config file specified: load it
 			loadedCfg, err := config.LoadConfig(cli.CLI.Config)
 			if err != nil {
 				cli.Fatalf("Failed to load config: %v", err)
 			}
 			cfg = loadedCfg
+		} else {
+			// No config file: zero-config mode - create config from CLI flags
+			cfg = createZeroConfig(command)
 		}
-		// No config file: zero-config mode (cfg remains nil)
 
 		// Apply defaults and validate once
 		if cfg != nil {
@@ -89,8 +83,8 @@ func main() {
 		}
 	}
 
-	// Determine explicit mode - much better than cfg == nil
-	mode := determineMode(command, isClientMode, cfg != nil)
+	// Determine explicit mode using hasConfigFile instead of cfg != nil
+	mode := determineMode(command, isClientMode, hasConfigFile)
 
 	// Route to appropriate handler with explicit mode
 	if err := routeCommand(ctx, cfg, mode); err != nil {
@@ -175,5 +169,23 @@ func createZeroConfig(command string) *config.Config {
 	default:
 		// Other commands don't support zero-config
 		return nil
+	}
+}
+
+// isClientModeCommand checks if the command is in client mode (--server flag specified)
+func isClientModeCommand(command string) bool {
+	switch command {
+	case "list":
+		return cli.CLI.List.Server != ""
+	case "info <agent>":
+		return cli.CLI.Info.Server != ""
+	case "call <message>":
+		return cli.CLI.Call.Server != ""
+	case "chat":
+		return cli.CLI.Chat.Server != ""
+	case "task get <task-id>", "task cancel <task-id>":
+		return cli.CLI.Task.Server != ""
+	default:
+		return false
 	}
 }

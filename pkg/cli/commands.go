@@ -126,25 +126,23 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 			return fmt.Errorf("agent name is required in client mode (use --agent flag)")
 		}
 		agentID = args.Agent
-	} else {
-		// Local mode: agent is required when config is specified
-		if cfg != nil {
-			if args.Agent == "" {
-				// List available agents
-				agentNames := make([]string, 0, len(cfg.Agents))
-				for name := range cfg.Agents {
-					agentNames = append(agentNames, name)
-				}
-				return fmt.Errorf("agent name is required when using --config flag. Available agents: %v", agentNames)
+	} else if mode == ModeLocalConfig {
+		// Local mode with config file: agent is required
+		if args.Agent == "" {
+			// List available agents
+			agentNames := make([]string, 0, len(cfg.Agents))
+			for name := range cfg.Agents {
+				agentNames = append(agentNames, name)
 			}
-			agentID = args.Agent
-		} else {
-			// Zero-config mode: agent is forbidden
-			if args.Agent != "" {
-				return fmt.Errorf("agent name is not allowed in zero-config mode (remove --agent flag)")
-			}
-			agentID = config.DefaultAgentName
+			return fmt.Errorf("agent name is required when using --config flag. Available agents: %v", agentNames)
 		}
+		agentID = args.Agent
+	} else {
+		// Zero-config mode: agent is forbidden
+		if args.Agent != "" {
+			return fmt.Errorf("agent name is not allowed in zero-config mode (remove --agent flag)")
+		}
+		agentID = config.DefaultAgentName
 	}
 
 	client, err := createClient(args, cfg, mode)
@@ -153,9 +151,18 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 	}
 	defer client.Close()
 
-	// Create message with optional session ID for conversation continuity
+	// Session management - generate session ID if not provided
+	sessionID := args.SessionID
+	if sessionID == "" {
+		sessionID = fmt.Sprintf("cli-call-%d", time.Now().Unix())
+		fmt.Printf("💾 Session ID: %s (resume with --session=%s)\n", sessionID, sessionID)
+	} else {
+		fmt.Printf("💾 Resuming session: %s\n", sessionID)
+	}
+
+	// Create message with session ID for conversation continuity
 	msg := &pb.Message{
-		ContextId: args.SessionID, // If empty, server will generate new one
+		ContextId: sessionID,
 		Role:      pb.Role_ROLE_USER,
 		Content: []*pb.Part{
 			{
@@ -208,25 +215,23 @@ func ChatCommand(args *ChatCmd, cfg *config.Config, mode CLIMode) error {
 			return fmt.Errorf("agent name is required in client mode (use --agent flag)")
 		}
 		agentID = args.Agent
-	} else {
-		// Local mode: agent is required when config is specified
-		if cfg != nil {
-			if args.Agent == "" {
-				// List available agents
-				agentNames := make([]string, 0, len(cfg.Agents))
-				for name := range cfg.Agents {
-					agentNames = append(agentNames, name)
-				}
-				return fmt.Errorf("agent name is required when using --config flag. Available agents: %v", agentNames)
+	} else if mode == ModeLocalConfig {
+		// Local mode with config file: agent is required
+		if args.Agent == "" {
+			// List available agents
+			agentNames := make([]string, 0, len(cfg.Agents))
+			for name := range cfg.Agents {
+				agentNames = append(agentNames, name)
 			}
-			agentID = args.Agent
-		} else {
-			// Zero-config mode: agent is forbidden
-			if args.Agent != "" {
-				return fmt.Errorf("agent name is not allowed in zero-config mode (remove --agent flag)")
-			}
-			agentID = config.DefaultAgentName
+			return fmt.Errorf("agent name is required when using --config flag. Available agents: %v", agentNames)
 		}
+		agentID = args.Agent
+	} else {
+		// Zero-config mode: agent is forbidden
+		if args.Agent != "" {
+			return fmt.Errorf("agent name is not allowed in zero-config mode (remove --agent flag)")
+		}
+		agentID = config.DefaultAgentName
 	}
 
 	client, err := createClient(args, cfg, mode)
