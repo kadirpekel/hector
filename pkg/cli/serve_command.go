@@ -13,6 +13,7 @@ import (
 	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/auth"
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/observability"
 	"github.com/kadirpekel/hector/pkg/runtime"
 	"github.com/kadirpekel/hector/pkg/transport"
 )
@@ -41,6 +42,41 @@ func ServeCommand(args *ServeCmd, cfg *config.Config, mode CLIMode) error {
 		return fmt.Errorf("runtime initialization failed: %w", err)
 	}
 
+	// Initialize observability if enabled
+	var obsMgr *observability.Manager
+	if cfg.Global.Observability.Metrics.Enabled || cfg.Global.Observability.Tracing.Enabled {
+		log.Println("🔭 Initializing observability...")
+
+		// Convert config format
+		obsConfig := observability.Config{
+			Tracing: observability.TracerConfig{
+				Enabled:      cfg.Global.Observability.Tracing.Enabled,
+				ExporterType: cfg.Global.Observability.Tracing.ExporterType,
+				EndpointURL:  cfg.Global.Observability.Tracing.EndpointURL,
+				SamplingRate: cfg.Global.Observability.Tracing.SamplingRate,
+				ServiceName:  cfg.Global.Observability.Tracing.ServiceName,
+			},
+			Metrics: observability.MetricsConfig{
+				Enabled: cfg.Global.Observability.Metrics.Enabled,
+				Port:    cfg.Global.Observability.Metrics.Port,
+			},
+		}
+
+		obsMgr = observability.NewManager(obsConfig)
+		if err := obsMgr.Initialize(context.Background()); err != nil {
+			log.Printf("⚠️  Failed to initialize observability: %v", err)
+			obsMgr = nil
+		} else {
+			if obsConfig.Tracing.Enabled {
+				log.Printf("  ✅ Tracing enabled (endpoint: %s, sampling: %.2f)",
+					obsConfig.Tracing.EndpointURL, obsConfig.Tracing.SamplingRate)
+			}
+			if obsConfig.Metrics.Enabled {
+				log.Printf("  ✅ Metrics enabled")
+			}
+		}
+	}
+
 	// Get registry and create router for transport layer
 	agentRegistry := rt.Registry()
 	agentRouter := agent.NewAgentRouter(agentRegistry)
@@ -50,11 +86,16 @@ func ServeCommand(args *ServeCmd, cfg *config.Config, mode CLIMode) error {
 		entry, _ := agentRegistry.Get(agentID)
 		agentRouter.RegisterAgent(agentID, entry.Agent)
 
-		// Log registration
+		// Log registration with visibility info
+		visibility := entry.Config.Visibility
+		if visibility == "" {
+			visibility = "public"
+		}
+
 		if entry.Config.Type == "a2a" {
-			log.Printf("  ✅ External agent '%s' connected to %s", agentID, entry.Config.URL)
+			log.Printf("  ✅ External agent '%s' connected to %s (visibility: %s)", agentID, entry.Config.URL, visibility)
 		} else {
-			log.Printf("  ✅ Native agent '%s' created", agentID)
+			log.Printf("  ✅ Native agent '%s' created (visibility: %s)", agentID, visibility)
 		}
 	}
 
@@ -259,6 +300,24 @@ func ServeCommand(args *ServeCmd, cfg *config.Config, mode CLIMode) error {
 	}
 	if err := jsonrpcHandler.Stop(shutdownCtx); err != nil {
 		shutdownErrors = append(shutdownErrors, fmt.Errorf("JSON-RPC: %w", err))
+	}
+
+	// Shutdown observability
+	if obsMgr != nil {
+		if err := obsMgr.Shutdown(shutdownCtx); err != nil {
+			log.Printf("⚠️  Observability shutdown error: %v", err)
+			shutdownErrors = append(shutdownErrors, fmt.Errorf("observability: %w", err))
+		} else {
+			log.Println("✅ Observability shutdown")
+		}
+	}
+
+	// Close runtime
+	if err := rt.Close(); err != nil {
+		log.Printf("⚠️  Runtime cleanup error: %v", err)
+		shutdownErrors = append(shutdownErrors, fmt.Errorf("runtime: %w", err))
+	} else {
+		log.Println("✅ Runtime closed")
 	}
 
 	if len(shutdownErrors) > 0 {

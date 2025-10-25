@@ -351,6 +351,9 @@ type GlobalSettings struct {
 
 	// Authentication configuration
 	Auth AuthConfig `yaml:"auth,omitempty"`
+
+	// Observability configuration
+	Observability ObservabilityConfig `yaml:"observability,omitempty"`
 }
 
 // Validate implements Config.Validate for GlobalSettings
@@ -367,6 +370,9 @@ func (c *GlobalSettings) Validate() error {
 	if err := c.Auth.Validate(); err != nil {
 		return fmt.Errorf("auth config validation failed: %w", err)
 	}
+	if err := c.Observability.Validate(); err != nil {
+		return fmt.Errorf("observability config validation failed: %w", err)
+	}
 	return nil
 }
 
@@ -376,6 +382,7 @@ func (c *GlobalSettings) SetDefaults() {
 	c.Performance.SetDefaults()
 	c.A2AServer.SetDefaults()
 	c.Auth.SetDefaults()
+	c.Observability.SetDefaults()
 }
 
 // ============================================================================
@@ -452,6 +459,90 @@ func (c *AuthConfig) Validate() error {
 // SetDefaults sets default values for auth configuration
 func (c *AuthConfig) SetDefaults() {
 	// No defaults - auth is opt-in
+}
+
+// ============================================================================
+// OBSERVABILITY CONFIGURATION
+// ============================================================================
+
+// ObservabilityConfig contains observability configuration
+type ObservabilityConfig struct {
+	Tracing TracingConfig `yaml:"tracing,omitempty"`
+	Metrics MetricsConfig `yaml:"metrics,omitempty"`
+}
+
+// TracingConfig contains tracing configuration
+type TracingConfig struct {
+	Enabled      bool    `yaml:"enabled"`
+	ExporterType string  `yaml:"exporter_type"` // jaeger, datadog, honeycomb, otlp
+	EndpointURL  string  `yaml:"endpoint_url"`
+	SamplingRate float64 `yaml:"sampling_rate"`
+	ServiceName  string  `yaml:"service_name"`
+}
+
+// MetricsConfig contains metrics configuration
+type MetricsConfig struct {
+	Enabled bool `yaml:"enabled"`
+	Port    int  `yaml:"port"`
+}
+
+// Validate validates the observability configuration
+func (c *ObservabilityConfig) Validate() error {
+	if err := c.Tracing.Validate(); err != nil {
+		return fmt.Errorf("tracing config validation failed: %w", err)
+	}
+	if err := c.Metrics.Validate(); err != nil {
+		return fmt.Errorf("metrics config validation failed: %w", err)
+	}
+	return nil
+}
+
+// SetDefaults sets default values for observability configuration
+func (c *ObservabilityConfig) SetDefaults() {
+	c.Tracing.SetDefaults()
+	c.Metrics.SetDefaults()
+}
+
+// Validate validates the tracing configuration
+func (c *TracingConfig) Validate() error {
+	if c.Enabled {
+		if c.EndpointURL == "" {
+			return fmt.Errorf("endpoint_url is required when tracing is enabled")
+		}
+		if c.SamplingRate < 0 || c.SamplingRate > 1 {
+			return fmt.Errorf("sampling_rate must be between 0 and 1")
+		}
+	}
+	return nil
+}
+
+// SetDefaults sets default values for tracing configuration
+func (c *TracingConfig) SetDefaults() {
+	if c.ServiceName == "" {
+		c.ServiceName = "hector"
+	}
+	if c.SamplingRate == 0 && c.Enabled {
+		c.SamplingRate = 1.0
+	}
+	if c.ExporterType == "" && c.Enabled {
+		c.ExporterType = "jaeger"
+	}
+}
+
+// Validate validates the metrics configuration
+func (c *MetricsConfig) Validate() error {
+	if c.Enabled {
+		if c.Port <= 0 || c.Port > 65535 {
+			return fmt.Errorf("invalid metrics port: %d", c.Port)
+		}
+	}
+	return nil
+}
+
+// SetDefaults sets default values for metrics configuration
+func (c *MetricsConfig) SetDefaults() {
+	// No defaults - metrics port should be explicitly configured
+	// or use the same port as the main server
 }
 
 // ============================================================================

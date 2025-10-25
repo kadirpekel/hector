@@ -133,6 +133,7 @@ Hector is **100,000x more memory efficient** than Python-based alternatives:
 - JWT authentication
 - Real-time streaming
 - Plugin system (gRPC)
+- **Observability** - Prometheus & OpenTelemetry
 
 </td>
 </tr>
@@ -148,6 +149,7 @@ Hector is **100,000x more memory efficient** than Python-based alternatives:
 
 - **[Getting Started](https://gohector.dev/getting-started/installation/)** - Install and run in 5 minutes
 - **[Core Concepts](https://gohector.dev/core-concepts/overview/)** - Understanding agents, LLMs, memory, tools
+- **[Observability](https://gohector.dev/core-concepts/observability/)** - Prometheus metrics & OpenTelemetry tracing
 - **[How-To Guides](https://gohector.dev/how-to/build-coding-assistant/)** - Build real-world agents
 - **[CLI Reference](https://gohector.dev/reference/cli/)** - Command-line interface
 - **[Configuration](https://gohector.dev/reference/configuration/)** - Complete YAML reference

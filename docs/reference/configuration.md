@@ -16,6 +16,7 @@ Complete reference for all Hector YAML configuration options.
 global:
   a2a_server:     # A2A server configuration
   auth:           # Global authentication
+  observability:  # Observability (metrics & tracing)
 
 # Providers
 llms:             # LLM providers
@@ -75,6 +76,39 @@ global:
     leeway: 60                   # Clock skew tolerance (seconds)
     cache_duration: "15m"        # JWKS cache duration
 ```
+
+### global.observability
+
+Observability configuration for metrics and distributed tracing:
+
+```yaml
+global:
+  observability:
+    tracing:
+      enabled: true              # Enable distributed tracing
+      exporter_type: "jaeger"    # Exporter type (jaeger, otlp)
+      endpoint_url: "localhost:4317"  # OTLP gRPC endpoint
+      sampling_rate: 1.0         # Sampling rate (0.0-1.0)
+      service_name: "hector"     # Service name in traces
+    
+    metrics:
+      enabled: true              # Enable Prometheus metrics
+      port: 8080                 # Metrics port (exposed on REST API)
+```
+
+**Options:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `tracing.enabled` | boolean | `false` | Enable OpenTelemetry tracing |
+| `tracing.exporter_type` | string | `"jaeger"` | Trace exporter (jaeger, otlp) |
+| `tracing.endpoint_url` | string | `"localhost:4317"` | OTLP gRPC endpoint |
+| `tracing.sampling_rate` | float | `1.0` | Trace sampling rate (0.0-1.0) |
+| `tracing.service_name` | string | `"hector"` | Service name for traces |
+| `metrics.enabled` | boolean | `false` | Enable Prometheus metrics |
+| `metrics.port` | int | `8080` | Metrics port (not used, on REST API) |
+
+See [Observability](../core-concepts/observability.md) for detailed usage.
 
 ---
 

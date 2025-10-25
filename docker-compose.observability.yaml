@@ -12,11 +12,11 @@ services:
       - "4318:4318"    # OTLP HTTP receiver
       - "14250:14250"  # gRPC receiver
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:16686"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:16686"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 5s
+      start_period: 10s
 
   prometheus:
     image: prom/prometheus:latest
@@ -31,11 +31,11 @@ services:
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=30d'
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 5s
+      start_period: 10s
 
   grafana:
     image: grafana/grafana:latest
@@ -43,7 +43,7 @@ services:
     ports:
       - "3000:3000"   # Grafana UI: http://localhost:3000
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=Dev12345
       - GF_SECURITY_ADMIN_USER=admin
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
     volumes:
@@ -54,11 +54,11 @@ services:
       prometheus:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 5s
+      start_period: 10s
 
 volumes:
   prometheus-storage:

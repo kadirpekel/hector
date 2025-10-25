@@ -28,15 +28,7 @@ scrape_configs:
     scrape_timeout: 5s
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['localhost:8080']
+      - targets: ['host.docker.internal:8081']
         labels:
           service: 'hector'
           environment: 'development'
-    relabel_configs:
-      # Add service label based on job name
-      - source_labels: [__scheme__, __address__, __metrics_path__]
-        target_label: __param_target
-      - source_labels: [__param_target]
-        target_label: instance
-      - target_label: __address__
-        replacement: localhost:9090

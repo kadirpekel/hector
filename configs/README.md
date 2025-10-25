@@ -64,6 +64,12 @@ This directory contains curated example configurations for Hector. Each file dem
 - Sentiment analysis, data extraction, classification examples
 - Works with OpenAI, Anthropic, Gemini
 
+**`observability-example.yaml`** - Prometheus metrics & OpenTelemetry tracing
+- Distributed tracing with Jaeger
+- Prometheus metrics collection
+- Grafana dashboard integration
+- Referenced in: [Observability Guide](../docs/core-concepts/observability.md)
+
 **`task-sql-example.yaml`** (849B) - SQL task persistence
 - Task persistence with SQL backend
 - SQLite/PostgreSQL/MySQL support
@@ -92,6 +98,10 @@ Some examples require additional services:
 
 - **MCP tools** (tools-mcp-example.yaml):
   - MCP server running (e.g., Composio)
+
+- **Observability** (observability-example.yaml):
+  - `docker-compose -f docker-compose.observability.yaml up -d`
+  - Starts Jaeger, Prometheus, and Grafana
 
 ## Documentation References
 
