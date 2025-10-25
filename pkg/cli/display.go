@@ -32,7 +32,7 @@ func DisplayAgentList(agents []*pb.AgentCard, mode string) {
 	}
 
 	fmt.Println("💡 Use 'hector info <agent>' for detailed information")
-	fmt.Println("💡 Use 'hector call <agent> \"prompt\"' to interact with an agent")
+	fmt.Println("💡 Use 'hector call \"prompt\" --agent <agent>' to interact with an agent")
 }
 
 // DisplayAgentCard displays a formatted agent card

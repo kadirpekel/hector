@@ -477,6 +477,32 @@ func (cm *ComponentManager) ShutdownPlugins(ctx context.Context) error {
 	return nil
 }
 
+// Close releases all resources held by the component manager
+func (cm *ComponentManager) Close() error {
+	var errors []error
+
+	// Close all SQL database connections
+	for storeName, dbInterface := range cm.sessionStoreDBs {
+		if db, ok := dbInterface.(*sql.DB); ok {
+			if err := db.Close(); err != nil {
+				errors = append(errors, fmt.Errorf("failed to close session store DB '%s': %w", storeName, err))
+			}
+		}
+	}
+
+	// Shutdown plugins
+	ctx := context.Background()
+	if err := cm.ShutdownPlugins(ctx); err != nil {
+		errors = append(errors, fmt.Errorf("plugin shutdown: %w", err))
+	}
+
+	// Return first error if any occurred
+	if len(errors) > 0 {
+		return errors[0]
+	}
+	return nil
+}
+
 // ============================================================================
 // PLUGIN HELPER FUNCTIONS
 // ============================================================================

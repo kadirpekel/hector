@@ -435,7 +435,10 @@ func customErrorHandler(ctx context.Context, mux *runtime.ServeMux, marshaler ru
 // loggingMiddleware logs HTTP requests
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("REST: %s %s", r.Method, r.URL.Path)
+		// Skip logging HTTP/2 connection preface (PRI * HTTP/2.0)
+		if r.Method != "PRI" {
+			log.Printf("REST: %s %s", r.Method, r.URL.Path)
+		}
 		next.ServeHTTP(w, r)
 	})
 }

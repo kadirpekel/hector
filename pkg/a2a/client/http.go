@@ -340,6 +340,8 @@ func (c *HTTPClient) CancelTask(ctx context.Context, agentID string, taskID stri
 
 // Close releases resources (HTTP client doesn't need cleanup)
 func (c *HTTPClient) Close() error {
+	// Close idle connections to prevent connection pool from keeping connections alive
+	c.client.CloseIdleConnections()
 	return nil
 }
 

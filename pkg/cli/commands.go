@@ -73,10 +73,21 @@ func ListCommand(args *ListCmd, cfg *config.Config, mode CLIMode) error {
 		DisplayAgentList(agents, "Client Mode")
 		return nil
 
-	case ModeLocalConfig, ModeLocalZeroConfig:
-		// Local mode: use config directly (no runtime needed)
+	case ModeLocalConfig:
+		// Local mode with config: use config directly (no runtime needed)
 		agents := buildAgentCardsFromConfig(cfg)
 		DisplayAgentList(agents, "Local Mode")
+		return nil
+
+	case ModeLocalZeroConfig:
+		// Zero-config mode: only one agent exists
+		fmt.Println("\n📋 Available Agents (Local Mode)\n")
+		fmt.Printf("Found 1 agent(s):\n\n")
+		fmt.Printf("• Assistant (v1.0.0)\n")
+		fmt.Printf("  Description: Zero-config AI assistant\n")
+		fmt.Printf("  URL: local://assistant\n")
+		fmt.Printf("  Streaming: ✓\n")
+		fmt.Printf("\n💡 Use 'hector call \"message\"' to interact with the agent\n")
 		return nil
 
 	default:
@@ -100,8 +111,8 @@ func InfoCommand(args *InfoCmd, cfg *config.Config, mode CLIMode) error {
 		DisplayAgentCard(args.Agent, card)
 		return nil
 
-	case ModeLocalConfig, ModeLocalZeroConfig:
-		// Local mode: use config directly (no runtime needed)
+	case ModeLocalConfig:
+		// Local mode with config: use config directly (no runtime needed)
 		// Validate agent exists
 		if err := cfg.ValidateAgent(args.Agent); err != nil {
 			return err
@@ -109,6 +120,23 @@ func InfoCommand(args *InfoCmd, cfg *config.Config, mode CLIMode) error {
 
 		card := buildAgentCardFromConfig(cfg, args.Agent)
 		DisplayAgentCard(args.Agent, card)
+		return nil
+
+	case ModeLocalZeroConfig:
+		// Zero-config mode: only "assistant" agent exists
+		if args.Agent != "assistant" && args.Agent != config.DefaultAgentName {
+			return fmt.Errorf("agent '%s' not found. In zero-config mode, only 'assistant' is available", args.Agent)
+		}
+
+		// Display zero-config agent card
+		fmt.Printf("\n📋 Agent Information\n")
+		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+		fmt.Printf("Name:        assistant\n")
+		fmt.Printf("Version:     v1.0.0\n")
+		fmt.Printf("Description: Zero-config AI assistant\n")
+		fmt.Printf("URL:         local://assistant\n")
+		fmt.Printf("Streaming:   ✓\n")
+		fmt.Printf("\n💡 Use 'hector call \"message\"' to interact with this agent\n")
 		return nil
 
 	default:

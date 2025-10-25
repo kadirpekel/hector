@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -82,17 +81,16 @@ func (r *Runtime) Config() *config.Config {
 func (r *Runtime) Close() error {
 	var errors []error
 
-	// Shutdown plugins (they may have external connections)
+	// Close component manager (includes plugins, DB connections, etc.)
 	if r.components != nil {
-		ctx := context.Background()
-		if err := r.components.ShutdownPlugins(ctx); err != nil {
-			errors = append(errors, fmt.Errorf("plugin shutdown: %w", err))
-			log.Printf("⚠️  Warning: Plugin shutdown error: %v", err)
+		if err := r.components.Close(); err != nil {
+			errors = append(errors, fmt.Errorf("component manager cleanup: %w", err))
+			log.Printf("⚠️  Warning: Component manager cleanup error: %v", err)
 		}
 	}
 
-	// Note: Registry and component registries don't need explicit cleanup
-	// They don't hold external resources that require closing
+	// Note: Registry doesn't need explicit cleanup
+	// It doesn't hold external resources that require closing
 
 	// Return first error if any occurred
 	if len(errors) > 0 {
@@ -162,6 +160,13 @@ func NewWithConfig(cfg *config.Config) (*Runtime, error) {
 	var failures []string
 	successCount := 0
 
+	// Ensure cleanup on error
+	var cleanupOnError = func() {
+		if err := componentManager.Close(); err != nil {
+			log.Printf("⚠️  Warning: Failed to cleanup component manager on error: %v", err)
+		}
+	}
+
 	for agentID, agentCfg := range cfg.Agents {
 		agentCfgCopy := agentCfg
 
@@ -200,6 +205,7 @@ func NewWithConfig(cfg *config.Config) (*Runtime, error) {
 
 	// Return error if NO agents were initialized
 	if successCount == 0 {
+		cleanupOnError()
 		if len(failures) > 0 {
 			return nil, fmt.Errorf("failed to initialize any agents (attempted: %d, failures: %v)",
 				len(cfg.Agents), failures)
