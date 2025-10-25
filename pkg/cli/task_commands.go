@@ -8,14 +8,14 @@ import (
 )
 
 // TaskGetCommand retrieves task details
-func TaskGetCommand(args *CLIArgs, cfg *config.Config) error {
-	client, err := createClient(args, cfg)
+func TaskGetCommand(args *TaskGetCmd, cfg *config.Config, mode CLIMode) error {
+	client, err := createClient(args, cfg, mode)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 	defer client.Close()
 
-	task, err := client.GetTask(context.Background(), args.AgentID, args.TaskID)
+	task, err := client.GetTask(context.Background(), args.Agent, args.TaskID)
 	if err != nil {
 		return fmt.Errorf("failed to get task: %w", err)
 	}
@@ -25,14 +25,14 @@ func TaskGetCommand(args *CLIArgs, cfg *config.Config) error {
 }
 
 // TaskCancelCommand cancels a running task
-func TaskCancelCommand(args *CLIArgs, cfg *config.Config) error {
-	client, err := createClient(args, cfg)
+func TaskCancelCommand(args *TaskCancelCmd, cfg *config.Config, mode CLIMode) error {
+	client, err := createClient(args, cfg, mode)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 	defer client.Close()
 
-	task, err := client.CancelTask(context.Background(), args.AgentID, args.TaskID)
+	task, err := client.CancelTask(context.Background(), args.Agent, args.TaskID)
 	if err != nil {
 		return fmt.Errorf("failed to cancel task: %w", err)
 	}

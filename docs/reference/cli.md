@@ -17,7 +17,7 @@ Complete reference for all Hector command-line commands and options.
 | `hector serve` | Start server | `hector serve --config config.yaml` |
 | `hector list` | List agents | `hector list` |
 | `hector info` | Agent details | `hector info assistant` |
-| `hector call` | Single message | `hector call assistant "Hello"` |
+| `hector call` | Single message | `hector call "Hello" assistant` |
 | `hector chat` | Interactive chat | `hector chat assistant` |
 
 ---
@@ -327,11 +327,11 @@ The `--session` flag enables conversation resumption across multiple CLI invocat
 
 ```bash
 # First conversation
-hector call --config config.yaml --session work assistant "Remember: meeting at 3pm"
+hector call --config config.yaml --session work "Remember: meeting at 3pm" assistant
 # Agent: Got it! Meeting at 3pm.
 
 # Later (even after restart)
-hector call --config config.yaml --session work assistant "When is the meeting?"
+hector call --config config.yaml --session work "When is the meeting?" assistant
 # Agent: The meeting is at 3pm.
 ```
 
@@ -371,10 +371,10 @@ Agent: Your name is Alice.
 
 ```bash
 # Store information
-hector call --config config.yaml --session work assistant "Project ALPHA started"
+hector call --config config.yaml --session work "Project ALPHA started" assistant
 
 # Query later
-hector call --config config.yaml --session work assistant "What project did we start?"
+hector call --config config.yaml --session work "What project did we start?" assistant
 # Agent remembers: Project ALPHA
 ```
 
@@ -430,7 +430,7 @@ Run agents in-process without a server.
 
 **Example:**
 ```bash
-hector call assistant "Hello" --config config.yaml
+hector call "Hello" assistant --config config.yaml
 ```
 
 ### Server Mode
@@ -466,7 +466,7 @@ Connect to a remote A2A server.
 
 **Example:**
 ```bash
-hector call assistant "Hello" --server http://remote:8080
+hector call "Hello" assistant --server http://remote:8080
 ```
 
 ---
@@ -554,7 +554,7 @@ export HECTOR_SERVER="https://agents.company.com"
 export HECTOR_TOKEN="eyJ..."
 
 hector list --server $HECTOR_SERVER --token $HECTOR_TOKEN
-hector call assistant "task" --server $HECTOR_SERVER --token $HECTOR_TOKEN
+hector call "task" assistant --server $HECTOR_SERVER --token $HECTOR_TOKEN
 ```
 
 ### Scripting
@@ -571,8 +571,8 @@ SERVER_PID=$!
 sleep 5
 
 # Run tasks
-hector call assistant "Analyze data" > results.txt
-hector call assistant "Generate report" >> results.txt
+hector call "Analyze data" assistant > results.txt
+hector call "Generate report" assistant >> results.txt
 
 # Cleanup
 kill $SERVER_PID
@@ -630,7 +630,7 @@ Available agents in config:
 **Solution:**
 ```bash
 # Use an agent that exists in your config
-hector call --config config.yaml assistant "Hello"
+hector call --config config.yaml "Hello" assistant
 
 # Check available agents
 hector list --config config.yaml

@@ -86,4 +86,7 @@ type CLIArgs struct {
 	EmbedderModel           string
 	VectorDB                string
 	ExplicitZeroConfigFlags bool // Tracks if user explicitly provided zero-config flags
+
+	// Explicit mode detection - much better than cfg == nil
+	Mode CLIMode // Explicit mode: client, local, or server
 }

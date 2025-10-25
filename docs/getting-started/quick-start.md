@@ -122,7 +122,7 @@ Registered agents: assistant (or your configured agent names)
 hector list
 
 # Call an agent
-hector call assistant "Explain recursion"
+hector call "Explain recursion" assistant
 
 # Interactive chat
 hector chat assistant

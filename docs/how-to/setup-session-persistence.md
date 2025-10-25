@@ -340,7 +340,7 @@ SESSION_ID=$(uuidgen)  # Generate unique ID
 **Resume session:**
 
 ```bash
-./hector call --session=$SESSION_ID assistant "Continue"
+./hector call --session=$SESSION_ID "Continue" assistant
 ```
 
 **Check session in database:**

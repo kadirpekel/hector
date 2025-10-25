@@ -18,20 +18,20 @@ import (
 )
 
 // ServeCommand starts the A2A server to host agents
-func ServeCommand(args *CLIArgs, cfg *config.Config) error {
+func ServeCommand(args *ServeCmd, cfg *config.Config, mode CLIMode) error {
 	// Config is already loaded, validated, and defaults set by main.go
 	// Display config mode info
-	if args.ConfigFile == "" {
+	if CLI.Config == "" {
 		// Zero-config mode
-		if args.Debug {
+		if CLI.Debug {
 			fmt.Print(formatZeroConfigDebug(args))
 		}
 		// Show MCP info even without debug flag (like we do for MCP discovery)
-		if args.MCPURL != "" && !args.Debug {
+		if args.MCPURL != "" && !CLI.Debug {
 			fmt.Printf("🔌 MCP server: %s\n", args.MCPURL)
 		}
-	} else if args.Debug {
-		fmt.Printf("🔧 Loaded configuration from: %s\n", args.ConfigFile)
+	} else if CLI.Debug {
+		fmt.Printf("🔧 Loaded configuration from: %s\n", CLI.Config)
 	}
 
 	// Create runtime - this initializes ComponentManager, AgentRegistry, and all agents
@@ -109,7 +109,7 @@ func ServeCommand(args *CLIArgs, cfg *config.Config) error {
 		baseURL = args.A2ABaseURL
 	}
 
-	if args.Debug {
+	if CLI.Debug {
 		if hasA2AConfig {
 			fmt.Printf("🔧 A2A server config loaded:\n")
 			fmt.Printf("   Host: %s\n", serverHost)
@@ -275,7 +275,7 @@ func ServeCommand(args *CLIArgs, cfg *config.Config) error {
 
 // formatZeroConfigDebug returns formatted debug output for zero-config mode
 // Reconstructed from CLI args
-func formatZeroConfigDebug(args *CLIArgs) string {
+func formatZeroConfigDebug(args *ServeCmd) string {
 	output := "🔧 Zero-config mode:\n"
 	output += fmt.Sprintf("  Provider: %s\n", args.Provider)
 	output += fmt.Sprintf("  Model: %s\n", args.Model)

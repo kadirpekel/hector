@@ -77,10 +77,8 @@ func main() {
 				cli.Fatalf("Failed to load config: %v", err)
 			}
 			cfg = loadedCfg
-		} else {
-			// No config file: create zero-config based on command
-			cfg = createZeroConfig(command)
 		}
+		// No config file: zero-config mode (cfg remains nil)
 
 		// Apply defaults and validate once
 		if cfg != nil {
@@ -91,8 +89,11 @@ func main() {
 		}
 	}
 
-	// Route to appropriate handler
-	if err := routeCommand(ctx, cfg); err != nil {
+	// Determine explicit mode - much better than cfg == nil
+	mode := determineMode(command, isClientMode, cfg != nil)
+
+	// Route to appropriate handler with explicit mode
+	if err := routeCommand(ctx, cfg, mode); err != nil {
 		cli.Fatalf("Command failed: %v", err)
 	}
 }
@@ -101,27 +102,48 @@ func main() {
 // ROUTING
 // ============================================================================
 
+// determineMode explicitly determines the CLI mode - much better than cfg == nil
+func determineMode(command string, isClientMode bool, hasConfig bool) cli.CLIMode {
+	if isClientMode {
+		return cli.ModeClient
+	}
+
+	switch command {
+	case "serve", "serve <agent-name>":
+		if hasConfig {
+			return cli.ModeServerConfig
+		}
+		return cli.ModeServerZeroConfig
+	default:
+		if hasConfig {
+			return cli.ModeLocalConfig
+		}
+		return cli.ModeLocalZeroConfig
+	}
+}
+
 // routeCommand routes Kong context to appropriate command handler
-func routeCommand(ctx *kong.Context, cfg *config.Config) error {
+func routeCommand(ctx *kong.Context, cfg *config.Config, mode cli.CLIMode) error {
+	// Use Kong structs directly - no conversion layer!
 	switch ctx.Command() {
 	case "version":
-		return cli.VersionCommand(cli.CLI.Version.ToCLIArgs(), cfg)
+		return cli.VersionCommand(&cli.CLI.Version, cfg, mode)
 	case "serve", "serve <agent-name>":
-		return cli.ServeCommand(cli.CLI.Serve.ToCLIArgs(), cfg)
+		return cli.ServeCommand(&cli.CLI.Serve, cfg, mode)
 	case "list":
-		return cli.ListCommand(cli.CLI.List.ToCLIArgs(), cfg)
+		return cli.ListCommand(&cli.CLI.List, cfg, mode)
 	case "info <agent>":
-		return cli.InfoCommand(cli.CLI.Info.ToCLIArgs(), cfg)
+		return cli.InfoCommand(&cli.CLI.Info, cfg, mode)
 	case "call <message> <agent>", "call <message>":
 		// Agent is optional in zero-config mode
-		return cli.CallCommand(cli.CLI.Call.ToCLIArgs(), cfg)
+		return cli.CallCommand(&cli.CLI.Call, cfg, mode)
 	case "chat <agent>", "chat":
 		// Agent is optional in zero-config mode
-		return cli.ChatCommand(cli.CLI.Chat.ToCLIArgs(), cfg)
+		return cli.ChatCommand(&cli.CLI.Chat, cfg, mode)
 	case "task get <agent> <task-id>":
-		return cli.TaskGetCommand(cli.CLI.Task.Get.ToCLIArgs(), cfg)
+		return cli.TaskGetCommand(&cli.CLI.Task.Get, cfg, mode)
 	case "task cancel <agent> <task-id>":
-		return cli.TaskCancelCommand(cli.CLI.Task.Cancel.ToCLIArgs(), cfg)
+		return cli.TaskCancelCommand(&cli.CLI.Task.Cancel, cfg, mode)
 	default:
 		return nil // Kong handles help automatically
 	}
@@ -133,31 +155,25 @@ func routeCommand(ctx *kong.Context, cfg *config.Config) error {
 
 // createZeroConfig creates config based on command and flags
 func createZeroConfig(command string) *config.Config {
-	var cliArgs *cli.CLIArgs
-
 	switch {
 	case command == "serve" || command == "serve <agent-name>":
-		cliArgs = cli.CLI.Serve.ToCLIArgs()
-	case command == "call <message> <agent>" || command == "call <message>":
-		cliArgs = cli.CLI.Call.ToCLIArgs()
-	case command == "chat <agent>" || command == "chat":
-		cliArgs = cli.CLI.Chat.ToCLIArgs()
+		// Use the agent name from serve command
+		cfg := config.CreateZeroConfigFromCLI(cli.CLI.Serve)
+		if cfg != nil && cli.CLI.Serve.AgentName != "" {
+			// Override the agent name if specified in serve command
+			if agent, exists := cfg.Agents[config.DefaultAgentName]; exists {
+				agent.Name = cli.CLI.Serve.AgentName
+				cfg.Agents[cli.CLI.Serve.AgentName] = agent
+				delete(cfg.Agents, config.DefaultAgentName)
+			}
+		}
+		return cfg
+	case command == "call <message>":
+		return config.CreateZeroConfigFromCLI(cli.CLI.Call)
+	case command == "chat":
+		return config.CreateZeroConfigFromCLI(cli.CLI.Chat)
 	default:
 		// Other commands don't support zero-config
 		return nil
 	}
-
-	// Create ZeroConfigOptions directly from CLIArgs - no ToZeroConfigOptions method needed
-	opts := config.ZeroConfigOptions{
-		Provider:    cliArgs.Provider,
-		APIKey:      cliArgs.APIKey,
-		BaseURL:     cliArgs.BaseURL,
-		Model:       cliArgs.Model,
-		EnableTools: cliArgs.Tools,
-		MCPURL:      cliArgs.MCPURL,
-		DocsFolder:  cliArgs.DocsFolder,
-		AgentName:   cliArgs.AgentID,
-	}
-
-	return config.CreateZeroConfig(opts)
 }

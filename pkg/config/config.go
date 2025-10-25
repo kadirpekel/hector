@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 )
 
@@ -488,19 +489,58 @@ const DefaultAgentName = "assistant"
 
 // ZeroConfigOptions holds configuration options for zero-config mode
 type ZeroConfigOptions struct {
-	Provider    string // LLM provider: "openai", "anthropic", "gemini"
-	APIKey      string // API key for the selected provider
-	BaseURL     string // API base URL
-	Model       string // Model name
-	EnableTools bool   // Enable all local tools
-	MCPURL      string // MCP server URL for tool integration
-	DocsFolder  string // Document store folder path (RAG support)
-	AgentName   string // Agent name/ID (defaults to DefaultAgentName)
+	Provider      string // LLM provider: "openai", "anthropic", "gemini"
+	APIKey        string // API key for the selected provider
+	BaseURL       string // API base URL
+	Model         string // Model name
+	EnableTools   bool   // Enable all local tools
+	MCPURL        string // MCP server URL for tool integration
+	DocsFolder    string // Document store folder path (RAG support)
+	EmbedderModel string // Embedder model for document store
+	VectorDB      string // Vector database connection string
+	AgentName     string // Agent name/ID (defaults to DefaultAgentName)
+}
+
+// CreateZeroConfigFromCLI creates a configuration for zero-config mode directly from CLI structs
+// Supports openai, anthropic, and gemini providers
+func CreateZeroConfigFromCLI(source interface{}) *Config {
+	// Extract fields using reflection
+	provider := extractStringField(source, "Provider")
+	apiKey := extractStringField(source, "APIKey")
+	baseURL := extractStringField(source, "BaseURL")
+	model := extractStringField(source, "Model")
+	enableTools := extractBoolField(source, "Tools")
+	mcpURL := extractStringField(source, "MCPURL")
+	docsFolder := extractStringField(source, "DocsFolder")
+	embedderModel := extractStringField(source, "EmbedderModel")
+	vectorDB := extractStringField(source, "VectorDB")
+	agentName := extractStringField(source, "AgentName")
+
+	// Create ZeroConfigOptions for the existing logic
+	opts := ZeroConfigOptions{
+		Provider:      provider,
+		APIKey:        apiKey,
+		BaseURL:       baseURL,
+		Model:         model,
+		EnableTools:   enableTools,
+		MCPURL:        mcpURL,
+		DocsFolder:    docsFolder,
+		EmbedderModel: embedderModel,
+		VectorDB:      vectorDB,
+		AgentName:     agentName,
+	}
+
+	return createZeroConfigInternal(opts)
 }
 
 // CreateZeroConfig creates a configuration for zero-config mode
 // Supports openai, anthropic, and gemini providers
 func CreateZeroConfig(opts ZeroConfigOptions) *Config {
+	return createZeroConfigInternal(opts)
+}
+
+// createZeroConfigInternal contains the actual zero-config creation logic
+func createZeroConfigInternal(opts ZeroConfigOptions) *Config {
 	// Resolve API key from environment if not provided via flags
 	if opts.APIKey == "" {
 		if opts.Provider != "" {
@@ -673,6 +713,17 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 		agentConfig.Embedder = "default-embedder"
 
 		// Create default database and embedder configurations
+		// Use CLI-provided values or fall back to defaults
+		vectorDBURL := opts.VectorDB
+		if vectorDBURL == "" {
+			vectorDBURL = "http://localhost:6334"
+		}
+
+		embedderModel := opts.EmbedderModel
+		if embedderModel == "" {
+			embedderModel = "nomic-embed-text"
+		}
+
 		cfg.Databases["default-database"] = DatabaseProviderConfig{
 			Type:    "qdrant",
 			Host:    "localhost",
@@ -681,7 +732,7 @@ func CreateZeroConfig(opts ZeroConfigOptions) *Config {
 		}
 		cfg.Embedders["default-embedder"] = EmbedderProviderConfig{
 			Type:      "ollama",
-			Model:     "nomic-embed-text",
+			Model:     embedderModel, // Use CLI-provided value
 			Host:      "http://localhost:11434",
 			Dimension: 768,
 			Timeout:   30,
@@ -800,6 +851,40 @@ func (c *Config) ListDocumentStores() []string {
 		stores = append(stores, name)
 	}
 	return stores
+}
+
+// ============================================================================
+// REFLECTION HELPERS
+// ============================================================================
+
+// extractStringField extracts a string field from a struct using reflection
+func extractStringField(source interface{}, fieldName string) string {
+	v := reflect.ValueOf(source)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	field := v.FieldByName(fieldName)
+	if !field.IsValid() || !field.CanInterface() {
+		return ""
+	}
+
+	return field.String()
+}
+
+// extractBoolField extracts a bool field from a struct using reflection
+func extractBoolField(source interface{}, fieldName string) bool {
+	v := reflect.ValueOf(source)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	field := v.FieldByName(fieldName)
+	if !field.IsValid() || !field.CanInterface() {
+		return false
+	}
+
+	return field.Bool()
 }
 
 // generateStoreNameFromPath creates a unique store name based on the source path

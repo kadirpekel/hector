@@ -17,11 +17,15 @@ import (
 )
 
 // ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+// ============================================================================
 // COMMAND ARCHITECTURE
 // ============================================================================
 
 // VersionCommand shows Hector version information
-func VersionCommand(args *CLIArgs, cfg *config.Config) error {
+func VersionCommand(args *VersionCmd, cfg *config.Config, mode CLIMode) error {
 	// Get version from build info (same as main.go)
 	version := "dev"
 	if info, ok := debug.ReadBuildInfo(); ok {
@@ -54,10 +58,11 @@ func VersionCommand(args *CLIArgs, cfg *config.Config) error {
 // ============================================================================
 
 // ListCommand lists all available agents
-func ListCommand(args *CLIArgs, cfg *config.Config) error {
-	if cfg == nil {
+func ListCommand(args *ListCmd, cfg *config.Config, mode CLIMode) error {
+	switch mode {
+	case ModeClient:
 		// Client mode: use HTTP client
-		httpClient := runtime.NewHTTPClient(args.ServerURL, args.Token)
+		httpClient := runtime.NewHTTPClient(args.Server, args.Token)
 		defer httpClient.Close()
 
 		agents, err := httpClient.ListAgents(context.Background())
@@ -67,60 +72,94 @@ func ListCommand(args *CLIArgs, cfg *config.Config) error {
 
 		DisplayAgentList(agents, "Client Mode")
 		return nil
-	}
 
-	// Local mode: use config directly (no runtime needed)
-	agents := buildAgentCardsFromConfig(cfg)
-	DisplayAgentList(agents, "Local Mode")
-	return nil
+	case ModeLocalConfig, ModeLocalZeroConfig:
+		// Local mode: use config directly (no runtime needed)
+		agents := buildAgentCardsFromConfig(cfg)
+		DisplayAgentList(agents, "Local Mode")
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported mode for list command: %s", mode)
+	}
 }
 
 // InfoCommand displays agent information
-func InfoCommand(args *CLIArgs, cfg *config.Config) error {
-	if cfg == nil {
+func InfoCommand(args *InfoCmd, cfg *config.Config, mode CLIMode) error {
+	switch mode {
+	case ModeClient:
 		// Client mode: use HTTP client
-		httpClient := runtime.NewHTTPClient(args.ServerURL, args.Token)
+		httpClient := runtime.NewHTTPClient(args.Server, args.Token)
 		defer httpClient.Close()
 
-		card, err := httpClient.GetAgentCard(context.Background(), args.AgentID)
+		card, err := httpClient.GetAgentCard(context.Background(), args.Agent)
 		if err != nil {
 			return fmt.Errorf("failed to get agent card: %w", err)
 		}
 
-		DisplayAgentCard(args.AgentID, card)
+		DisplayAgentCard(args.Agent, card)
 		return nil
-	}
 
-	// Local mode: use config directly (no runtime needed)
-	// Validate agent exists
-	if err := cfg.ValidateAgent(args.AgentID); err != nil {
-		return err
-	}
+	case ModeLocalConfig, ModeLocalZeroConfig:
+		// Local mode: use config directly (no runtime needed)
+		// Validate agent exists
+		if err := cfg.ValidateAgent(args.Agent); err != nil {
+			return err
+		}
 
-	card := buildAgentCardFromConfig(cfg, args.AgentID)
-	DisplayAgentCard(args.AgentID, card)
-	return nil
+		card := buildAgentCardFromConfig(cfg, args.Agent)
+		DisplayAgentCard(args.Agent, card)
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported mode for info command: %s", mode)
+	}
 }
 
 // CallCommand sends a single message to an agent
-func CallCommand(args *CLIArgs, cfg *config.Config) error {
-	client, err := createClient(args, cfg)
+func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
+	// Resolve agent ID based on mode
+	var agentID string
+	if mode == ModeClient {
+		// Client mode: agent is required
+		if args.Agent == "" {
+			return fmt.Errorf("agent name is required in client mode (use --agent flag)")
+		}
+		agentID = args.Agent
+	} else {
+		// Local mode: agent is required when config is specified
+		if cfg != nil {
+			if args.Agent == "" {
+				// List available agents
+				agentNames := make([]string, 0, len(cfg.Agents))
+				for name := range cfg.Agents {
+					agentNames = append(agentNames, name)
+				}
+				return fmt.Errorf("agent name is required when using --config flag. Available agents: %v", agentNames)
+			}
+			agentID = args.Agent
+		} else {
+			// Zero-config mode: agent is forbidden
+			if args.Agent != "" {
+				return fmt.Errorf("agent name is not allowed in zero-config mode (remove --agent flag)")
+			}
+			agentID = config.DefaultAgentName
+		}
+	}
+
+	client, err := createClient(args, cfg, mode)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 	defer client.Close()
 
-	return executeCall(client, args)
-}
-
-func executeCall(a2aClient client.A2AClient, args *CLIArgs) error {
 	// Create message with optional session ID for conversation continuity
 	msg := &pb.Message{
 		ContextId: args.SessionID, // If empty, server will generate new one
 		Role:      pb.Role_ROLE_USER,
 		Content: []*pb.Part{
 			{
-				Part: &pb.Part_Text{Text: args.Input},
+				Part: &pb.Part_Text{Text: args.Message},
 			},
 		},
 	}
@@ -129,21 +168,21 @@ func executeCall(a2aClient client.A2AClient, args *CLIArgs) error {
 
 	if args.Stream {
 		// Streaming mode
-		streamChan, err := a2aClient.StreamMessage(ctx, args.AgentID, msg)
+		streamChan, err := client.StreamMessage(ctx, agentID, msg)
 		if err != nil {
 			return fmt.Errorf("failed to start streaming: %w", err)
 		}
 
-		fmt.Print("Agent: ")
 		for chunk := range streamChan {
 			if msgChunk := chunk.GetMsg(); msgChunk != nil {
 				DisplayMessage(msgChunk, "")
 			}
 		}
 		fmt.Println()
+		return nil
 	} else {
 		// Non-streaming mode
-		resp, err := a2aClient.SendMessage(ctx, args.AgentID, msg)
+		resp, err := client.SendMessage(ctx, agentID, msg)
 		if err != nil {
 			return fmt.Errorf("failed to send message: %w", err)
 		}
@@ -154,45 +193,66 @@ func executeCall(a2aClient client.A2AClient, args *CLIArgs) error {
 		} else if task := resp.GetTask(); task != nil {
 			DisplayTask(task)
 		}
+		return nil
 	}
-
-	return nil
 }
 
 // ChatCommand starts an interactive chat session
-func ChatCommand(args *CLIArgs, cfg *config.Config) error {
-	client, err := createClient(args, cfg)
+// ChatCommand starts an interactive chat session with an agent
+func ChatCommand(args *ChatCmd, cfg *config.Config, mode CLIMode) error {
+	// Resolve agent ID based on mode
+	var agentID string
+	if mode == ModeClient {
+		// Client mode: agent is required
+		if args.Agent == "" {
+			return fmt.Errorf("agent name is required in client mode (use --agent flag)")
+		}
+		agentID = args.Agent
+	} else {
+		// Local mode: agent is required when config is specified
+		if cfg != nil {
+			if args.Agent == "" {
+				// List available agents
+				agentNames := make([]string, 0, len(cfg.Agents))
+				for name := range cfg.Agents {
+					agentNames = append(agentNames, name)
+				}
+				return fmt.Errorf("agent name is required when using --config flag. Available agents: %v", agentNames)
+			}
+			agentID = args.Agent
+		} else {
+			// Zero-config mode: agent is forbidden
+			if args.Agent != "" {
+				return fmt.Errorf("agent name is not allowed in zero-config mode (remove --agent flag)")
+			}
+			agentID = config.DefaultAgentName
+		}
+	}
+
+	client, err := createClient(args, cfg, mode)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 	defer client.Close()
 
-	return executeChat(client, args, cfg)
+	return executeChat(client, agentID, args.SessionID, !args.NoStream)
 }
 
-func executeChat(a2aClient client.A2AClient, args *CLIArgs, cfg *config.Config) error {
+func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streaming bool) error {
 	// Display welcome message
 	mode := "Client Mode"
-	if cfg != nil {
-		mode = "Local Mode"
-	}
-
-	streamInfo := ""
-	if args.Stream {
-		streamInfo = " (streaming)"
-	}
+	// Note: We can't determine mode here anymore, but it's not critical for chat
 
 	// Session management
-	sessionID := args.SessionID
 	if sessionID == "" {
 		// Generate new session ID if not provided
 		sessionID = fmt.Sprintf("cli-chat-%d", time.Now().Unix())
-		fmt.Printf("\n🤖 Chat with %s (%s)%s\n", args.AgentID, mode, streamInfo)
+		fmt.Printf("\n🤖 Chat with %s (%s)\n", agentID, mode)
 		fmt.Printf("💾 Session ID: %s\n", sessionID)
 		fmt.Printf("   Resume later with: --session=%s\n", sessionID)
 		fmt.Println("   Type 'exit' to quit")
 	} else {
-		fmt.Printf("\n🤖 Chat with %s (%s)%s\n", args.AgentID, mode, streamInfo)
+		fmt.Printf("\n🤖 Chat with %s (%s)\n", agentID, mode)
 		fmt.Printf("💾 Resuming session: %s\n", sessionID)
 		fmt.Println("   Type 'exit' to quit")
 	}
@@ -232,11 +292,13 @@ func executeChat(a2aClient client.A2AClient, args *CLIArgs, cfg *config.Config) 
 			},
 		}
 
-		DisplayAgentPrompt(args.AgentID)
+		DisplayAgentPrompt(agentID)
 
-		if args.Stream {
+		// Use the streaming preference passed as parameter
+
+		if streaming {
 			// Streaming mode
-			streamChan, err := a2aClient.StreamMessage(ctx, args.AgentID, msg)
+			streamChan, err := a2aClient.StreamMessage(ctx, agentID, msg)
 			if err != nil {
 				fmt.Printf("❌ Error: %v\n\n", err)
 				continue
@@ -250,18 +312,17 @@ func executeChat(a2aClient client.A2AClient, args *CLIArgs, cfg *config.Config) 
 			fmt.Println()
 		} else {
 			// Non-streaming mode
-			resp, err := a2aClient.SendMessage(ctx, args.AgentID, msg)
+			resp, err := a2aClient.SendMessage(ctx, agentID, msg)
 			if err != nil {
 				fmt.Printf("❌ Error: %v\n\n", err)
 				continue
 			}
 
 			if respMsg := resp.GetMsg(); respMsg != nil {
-				DisplayMessage(respMsg, "")
+				DisplayMessageLine(respMsg, "")
 			} else if task := resp.GetTask(); task != nil {
-				fmt.Printf("Task created: %s (status: %s)", task.Id, task.Status)
+				DisplayTask(task)
 			}
-			fmt.Println()
 		}
 	}
 
@@ -278,24 +339,57 @@ func executeChat(a2aClient client.A2AClient, args *CLIArgs, cfg *config.Config) 
 //
 // ============================================================================
 
-// createClient creates appropriate client based on config presence
-// Used by call/chat/task commands for execution
-func createClient(args *CLIArgs, cfg *config.Config) (client.A2AClient, error) {
-	if cfg == nil {
-		// Client mode: HTTP client for remote server
-		return runtime.NewHTTPClient(args.ServerURL, args.Token), nil
-	}
+// ClientArgs interface for commands that need client creation
+type ClientArgs interface {
+	GetServer() string
+	GetToken() string
+	GetAgent() string
+}
 
-	// Local mode: validate agent exists before expensive initialization
-	if args.AgentID != "" {
-		if err := cfg.ValidateAgent(args.AgentID); err != nil {
+// Implement ClientArgs for CallCmd
+func (c *CallCmd) GetServer() string { return c.Server }
+func (c *CallCmd) GetToken() string  { return c.Token }
+func (c *CallCmd) GetAgent() string  { return c.Agent }
+
+// Implement ClientArgs for ChatCmd
+func (c *ChatCmd) GetServer() string { return c.Server }
+func (c *ChatCmd) GetToken() string  { return c.Token }
+func (c *ChatCmd) GetAgent() string  { return c.Agent }
+
+// Implement ClientArgs for TaskGetCmd
+func (t *TaskGetCmd) GetServer() string { return CLI.Task.Server }
+func (t *TaskGetCmd) GetToken() string  { return CLI.Task.Token }
+func (t *TaskGetCmd) GetAgent() string  { return t.Agent }
+
+// Implement ClientArgs for TaskCancelCmd
+func (t *TaskCancelCmd) GetServer() string { return CLI.Task.Server }
+func (t *TaskCancelCmd) GetToken() string  { return CLI.Task.Token }
+func (t *TaskCancelCmd) GetAgent() string  { return t.Agent }
+
+// createClient creates appropriate client based on command args and explicit mode
+// Used by call/chat/task commands for execution
+func createClient[T ClientArgs](args T, cfg *config.Config, mode CLIMode) (client.A2AClient, error) {
+	switch mode {
+	case ModeClient:
+		// Client mode: use server URL and agent name
+		return runtime.NewHTTPClient(args.GetServer(), args.GetToken()), nil
+
+	case ModeLocalConfig:
+		// Local mode with config: create runtime with config
+		// Runtime implements A2AClient interface directly - no wrapper needed!
+		return runtime.NewWithConfig(cfg)
+	case ModeLocalZeroConfig:
+		// Local zero-config mode: create runtime with default options
+		// Runtime implements A2AClient interface directly - no wrapper needed!
+		rt, err := runtime.New(runtime.Options{})
+		if err != nil {
 			return nil, err
 		}
-	}
+		return rt, nil
 
-	// Create runtime with validated config
-	// Runtime implements A2AClient interface directly - no wrapper needed!
-	return runtime.NewWithConfig(cfg)
+	default:
+		return nil, fmt.Errorf("unsupported mode for client creation: %s", mode)
+	}
 }
 
 // ============================================================================

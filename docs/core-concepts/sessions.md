@@ -277,7 +277,7 @@ for {
 
 ```bash
 # Streaming enabled by default in CLI
-hector call assistant "Explain quantum computing"
+hector call "Explain quantum computing" assistant
 # Response streams as it's generated
 ```
 
