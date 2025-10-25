@@ -103,7 +103,7 @@ func TestGlobalMetrics(t *testing.T) {
 	ctx := context.Background()
 
 	// Initially should be nil or empty
-	initialMetrics := GetGlobalMetrics()
+	_ = GetGlobalMetrics()
 
 	// Set noop metrics
 	noopMetrics := &NoopMetrics{}
