@@ -229,10 +229,10 @@ func ServeCommand(args *ServeCmd, cfg *config.Config, mode CLIMode) error {
 	log.Printf("   POST %s/v1/agents/{name}/message:send", endpointBase)
 	log.Printf("   POST %s/v1/agents/{name}/message:stream", endpointBase)
 	log.Printf("\n💡 Test commands:")
-	log.Printf("   hector list")
-	log.Printf("   hector info <agent>")
-	log.Printf("   hector call <agent> \"your prompt\"")
-	log.Printf("   hector chat <agent>")
+	log.Printf("   hector list --server %s", endpointBase)
+	log.Printf("   hector info <agent> --server %s", endpointBase)
+	log.Printf("   hector call \"your prompt\" --agent <agent> --server %s", endpointBase)
+	log.Printf("   hector chat --agent <agent> --server %s", endpointBase)
 	log.Println("\nPress Ctrl+C to stop")
 
 	// Wait for signal or error

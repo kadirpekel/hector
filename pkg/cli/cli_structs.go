@@ -52,7 +52,7 @@ type ZeroConfigFlags struct {
 type ClientModeFlags struct {
 	Server string `help:"A2A server URL (enables client mode)" env:"HECTOR_SERVER" placeholder:"URL"`
 	Token  string `help:"Authentication token for server access" env:"HECTOR_TOKEN"`
-	Agent  string `help:"Full A2A agent URL (e.g., http://localhost:8081/v1/agents/gopher)" placeholder:"AGENT_URL"`
+	Agent  string `help:"Agent name (required when using --server or --config)" placeholder:"AGENT"`
 }
 
 // ============================================================================

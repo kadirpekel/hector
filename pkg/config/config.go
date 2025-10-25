@@ -515,8 +515,7 @@ func CreateZeroConfigFromCLI(source interface{}) *Config {
 	embedderModel := extractStringField(source, "EmbedderModel")
 	vectorDB := extractStringField(source, "VectorDB")
 	agentName := extractStringField(source, "AgentName")
-	
-	
+
 	// Create ZeroConfigOptions for the existing logic
 	opts := ZeroConfigOptions{
 		Provider:      provider,
@@ -530,7 +529,7 @@ func CreateZeroConfigFromCLI(source interface{}) *Config {
 		VectorDB:      vectorDB,
 		AgentName:     agentName,
 	}
-	
+
 	return createZeroConfigInternal(opts)
 }
 
