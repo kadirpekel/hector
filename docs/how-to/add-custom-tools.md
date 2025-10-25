@@ -159,7 +159,7 @@ llms:
 hector serve --config config.yaml
 
 # In another terminal
-hector call --config config.yaml "What's the weather in San Francisco?" weather_assistant
+hector call "What's the weather in San Francisco?" --agent weather_assistant --config config.yaml
 ```
 
 Agent response:

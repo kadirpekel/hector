@@ -17,8 +17,8 @@ Complete reference for all Hector command-line commands and options.
 | `hector serve` | Start server | `hector serve --config config.yaml` |
 | `hector list` | List agents | `hector list` |
 | `hector info` | Agent details | `hector info assistant` |
-| `hector call` | Single message | `hector call "Hello" assistant` |
-| `hector chat` | Interactive chat | `hector chat assistant` |
+| `hector call` | Single message | `hector call "Hello" --agent assistant --config config.yaml` |
+| `hector chat` | Interactive chat | `hector chat --agent assistant --config config.yaml` |
 
 ---
 
@@ -211,7 +211,7 @@ Send a single message to an agent.
 
 **Usage:**
 ```bash
-hector call MESSAGE [AGENT] [flags]
+hector call MESSAGE [flags]
 ```
 
 **Arguments:**
@@ -219,12 +219,12 @@ hector call MESSAGE [AGENT] [flags]
 | Argument | Type | Description | Required |
 |----------|------|-------------|----------|
 | `MESSAGE` | string | Message to send | ✅ Always required |
-| `AGENT` | string | Agent name | ❌ Zero-config / ✅ Config mode / ✅ Client mode |
 
 **Flags:**
 
 | Flag | Type | Description | Default |
 |------|------|-------------|---------|
+| `--agent NAME` | string | Agent name (required with `--config` or `--server`) | - |
 | `--server URL` | string | Connect to remote server | - |
 | `--token TOKEN` | string | Authentication token | - |
 | `--[no-]stream` | bool | Enable/disable streaming | `true` (use `--no-stream` to disable) |
@@ -245,24 +245,24 @@ hector call MESSAGE [AGENT] [flags]
 **Examples:**
 
 ```bash
-# Zero-config mode (NO agent name, message first)
+# Zero-config mode (NO --agent flag needed)
 export OPENAI_API_KEY="sk-..."
 hector call "What is quantum computing?"
 hector call "Write a poem about Go" --tools
 
-# Config mode (agent name REQUIRED and validated immediately)
-hector call "What is the capital of France?" assistant --config config.yaml
-hector call "Fix the bug" coder --config config.yaml --session sess_123
+# Config mode (--agent flag REQUIRED)
+hector call "What is the capital of France?" --agent assistant --config config.yaml
+hector call "Fix the bug" --agent coder --config config.yaml --session sess_123
 
-# Client mode (agent name REQUIRED)
-hector call "Hello" assistant --server http://remote:8080 --token "eyJ..."
+# Client mode (--agent flag REQUIRED)
+hector call "Hello" --agent assistant --server http://remote:8080 --token "eyJ..."
 
 # No streaming
-hector call "Hello" assistant --config config.yaml --no-stream
+hector call "Hello" --agent assistant --config config.yaml --no-stream
 
 # Flags can appear anywhere (Kong flexibility)
-hector call --config config.yaml "What's 2+2?" assistant
-hector call "Help me" --tools --model gpt-4o assistant --config config.yaml
+hector call --config config.yaml --agent assistant "What's 2+2?"
+hector call "Help me" --tools --model gpt-4o
 ```
 
 ---
@@ -273,42 +273,50 @@ Interactive chat with an agent.
 
 **Usage:**
 ```bash
-hector chat [AGENT] [flags]
+hector chat [flags]
 ```
-
-**Arguments:**
-
-| Argument | Type | Description | Required |
-|----------|------|-------------|----------|
-| `AGENT` | string | Agent name | ❌ Zero-config / ✅ Config mode / ✅ Client mode |
 
 **Flags:**
 
 | Flag | Type | Description |
 |------|------|-------------|
+| `--agent NAME` | string | Agent name (required with `--config` or `--server`) |
 | `--server URL` | string | Connect to remote server |
 | `--token TOKEN` | string | Authentication token |
 | `--session ID` | string | Session ID for context |
+| `--[no-]stream` | bool | Enable/disable streaming (default: enabled) |
+
+**Zero-Config Flags (local mode only):**
+
+| Flag | Type | Description | Default |
+|------|------|-------------|---------|
+| `--provider NAME` | string | LLM provider | `openai` |
+| `--model NAME` | string | Model name | - |
+| `--api-key KEY` | string | API key | From env |
+| `--base-url URL` | string | Custom API base URL | - |
+| `--tools` | bool | Enable built-in tools | `false` |
+| `--mcp-url URL` | string | MCP server URL | - |
+| `--docs-folder PATH` | string | Documents folder for RAG | - |
 
 **Examples:**
 
 ```bash
-# Zero-config mode (NO agent name)
+# Zero-config mode (NO --agent flag needed)
 export OPENAI_API_KEY="sk-..."
 hector chat
 hector chat --tools --model gpt-4o
 
-# Config mode (agent name REQUIRED and validated immediately)
-hector chat assistant --config config.yaml
-hector chat coder --config config.yaml --session sess_123
+# Config mode (--agent flag REQUIRED)
+hector chat --agent assistant --config config.yaml
+hector chat --agent coder --config config.yaml --session sess_123
 
-# Client mode (agent name REQUIRED)
-hector chat assistant --server http://remote:8080
-hector chat assistant --server http://remote:8080 --token "eyJ..."
+# Client mode (--agent flag REQUIRED)
+hector chat --agent assistant --server http://remote:8080
+hector chat --agent assistant --server http://remote:8080 --token "eyJ..."
 
 # Flags flexible positioning (Kong feature)
-hector chat --config config.yaml assistant
-hector chat assistant --config config.yaml --no-stream
+hector chat --config config.yaml --agent assistant
+hector chat --agent assistant --config config.yaml --no-stream
 ```
 
 **In Chat:**
@@ -327,11 +335,11 @@ The `--session` flag enables conversation resumption across multiple CLI invocat
 
 ```bash
 # First conversation
-hector call --config config.yaml --session work "Remember: meeting at 3pm" assistant
+hector call "Remember: meeting at 3pm" --agent assistant --config config.yaml --session work
 # Agent: Got it! Meeting at 3pm.
 
 # Later (even after restart)
-hector call --config config.yaml --session work "When is the meeting?" assistant
+hector call "When is the meeting?" --agent assistant --config config.yaml --session work
 # Agent: The meeting is at 3pm.
 ```
 
@@ -356,13 +364,13 @@ hector call --config config.yaml --session work "When is the meeting?" assistant
 
 ```bash
 # First session
-hector chat --config config.yaml --session my-chat assistant
+hector chat --agent assistant --config config.yaml --session my-chat
 You: Remember my name is Alice
 Agent: Got it, Alice!
 You: exit
 
 # Resume later
-hector chat --config config.yaml --session my-chat assistant
+hector chat --agent assistant --config config.yaml --session my-chat
 You: What's my name?
 Agent: Your name is Alice.
 ```
@@ -371,10 +379,10 @@ Agent: Your name is Alice.
 
 ```bash
 # Store information
-hector call --config config.yaml --session work "Project ALPHA started" assistant
+hector call "Project ALPHA started" --agent assistant --config config.yaml --session work
 
 # Query later
-hector call --config config.yaml --session work "What project did we start?" assistant
+hector call "What project did we start?" --agent assistant --config config.yaml --session work
 # Agent remembers: Project ALPHA
 ```
 
@@ -382,7 +390,7 @@ hector call --config config.yaml --session work "What project did we start?" ass
 
 ```bash
 # Chat generates and displays session ID
-hector chat --config config.yaml assistant
+hector chat --agent assistant --config config.yaml
 # Output: 💾 Session ID: cli-chat-1729612345
 #         Resume later with: --session=cli-chat-1729612345
 ```
@@ -430,7 +438,7 @@ Run agents in-process without a server.
 
 **Example:**
 ```bash
-hector call "Hello" assistant --config config.yaml
+hector call "Hello" --agent assistant --config config.yaml
 ```
 
 ### Server Mode
@@ -466,7 +474,7 @@ Connect to a remote A2A server.
 
 **Example:**
 ```bash
-hector call "Hello" assistant --server http://remote:8080
+hector call "Hello" --agent assistant --server http://remote:8080
 ```
 
 ---
@@ -534,7 +542,7 @@ hector call "What is recursion?"
 
 ```bash
 hector serve --config dev-config.yaml &
-hector chat assistant
+hector chat --agent assistant --config dev-config.yaml
 ```
 
 ### Production Deployment
@@ -554,7 +562,7 @@ export HECTOR_SERVER="https://agents.company.com"
 export HECTOR_TOKEN="eyJ..."
 
 hector list --server $HECTOR_SERVER --token $HECTOR_TOKEN
-hector call "task" assistant --server $HECTOR_SERVER --token $HECTOR_TOKEN
+hector call "task" --agent assistant --server $HECTOR_SERVER --token $HECTOR_TOKEN
 ```
 
 ### Scripting
@@ -571,8 +579,8 @@ SERVER_PID=$!
 sleep 5
 
 # Run tasks
-hector call "Analyze data" assistant > results.txt
-hector call "Generate report" assistant >> results.txt
+hector call "Analyze data" --agent assistant --config config.yaml > results.txt
+hector call "Generate report" --agent assistant --config config.yaml >> results.txt
 
 # Cleanup
 kill $SERVER_PID
@@ -630,7 +638,7 @@ Available agents in config:
 **Solution:**
 ```bash
 # Use an agent that exists in your config
-hector call --config config.yaml "Hello" assistant
+hector call "Hello" --agent assistant --config config.yaml
 
 # Check available agents
 hector list --config config.yaml

@@ -336,8 +336,8 @@ agents:
 ```
 
 ```bash
-hector call "Explain recursion" assistant_v1
-hector call "Explain recursion" assistant_v2
+hector call "Explain recursion" --agent assistant_v1 --config config.yaml
+hector call "Explain recursion" --agent assistant_v2 --config config.yaml
 ```
 
 ---

@@ -89,7 +89,7 @@ agents:
 ### 2. Use Your Configured Agent
 
 ```bash
-hector call --config config.yaml coder "How do I read a CSV file in Python?"
+hector call "How do I read a CSV file in Python?" --agent coder --config config.yaml
 ```
 
 ---
@@ -119,13 +119,13 @@ Registered agents: assistant (or your configured agent names)
 
 ```bash
 # List available agents
-hector list
+hector list --server http://localhost:8081
 
 # Call an agent
-hector call "Explain recursion" assistant
+hector call "Explain recursion" --agent assistant --server http://localhost:8081
 
 # Interactive chat
-hector chat assistant
+hector chat --agent assistant --server http://localhost:8081
 ```
 
 ---
@@ -136,10 +136,10 @@ Use Hector as a client to connect to any A2A-compliant server.
 
 ```bash
 # Connect to remote server
-hector call "Hello" assistant --server http://remote:8080
+hector call "Hello" --agent assistant --server http://remote:8080
 
 # With authentication
-hector call "Hello" assistant --server http://remote:8080 --token "your-jwt-token"
+hector call "Hello" --agent assistant --server http://remote:8080 --token "your-jwt-token"
 ```
 
 ---
