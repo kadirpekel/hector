@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +29,7 @@ const (
 
 	DefaultFileWatchTimeout = 10 * time.Second
 
-	MaxConcurrentIndexing = 3
+	MaxConcurrentIndexing = 10 // Increased from 3 to 10 for better throughput
 )
 
 const (
@@ -116,6 +117,15 @@ type DocumentStoreStatus struct {
 	DocumentCount int       `json:"document_count"`
 }
 
+type PatternCache struct {
+	dirExcludes  map[string]bool // Fast directory lookup
+	extExcludes  map[string]bool // Fast extension lookup
+	dirIncludes  map[string]bool
+	extIncludes  map[string]bool
+	globExcludes []string // Patterns requiring glob matching
+	globIncludes []string
+}
+
 type DocumentStore struct {
 	mu     sync.RWMutex
 	name   string
@@ -126,6 +136,7 @@ type DocumentStore struct {
 	sourcePath   string
 
 	nativeParsers *NativeParserRegistry
+	patternCache  *PatternCache
 
 	watcher       *fsnotify.Watcher
 	updateChannel chan DocumentUpdate
@@ -133,6 +144,61 @@ type DocumentStore struct {
 	cancel        context.CancelFunc
 
 	indexingSemaphore chan struct{}
+}
+
+func buildPatternCache(includePatterns, excludePatterns []string) *PatternCache {
+	cache := &PatternCache{
+		dirExcludes: make(map[string]bool),
+		extExcludes: make(map[string]bool),
+		dirIncludes: make(map[string]bool),
+		extIncludes: make(map[string]bool),
+	}
+
+	// Process exclude patterns
+	for _, pattern := range excludePatterns {
+		normalizedPattern := filepath.ToSlash(pattern)
+
+		// Directory patterns: **/dirname/** or dirname
+		if strings.HasPrefix(normalizedPattern, "**/") && strings.HasSuffix(normalizedPattern, "/**") {
+			dirName := strings.Trim(normalizedPattern, "*/")
+			cache.dirExcludes[dirName] = true
+		} else if strings.HasPrefix(normalizedPattern, "*.") {
+			// Extension patterns: *.ext
+			ext := strings.TrimPrefix(normalizedPattern, "*")
+			cache.extExcludes[ext] = true
+		} else if strings.HasPrefix(normalizedPattern, ".") && !strings.Contains(normalizedPattern, "/") {
+			// Extension patterns without star: .ext
+			cache.extExcludes[normalizedPattern] = true
+		} else if !strings.Contains(normalizedPattern, "*") {
+			// Literal substring patterns (directory names)
+			cache.dirExcludes[normalizedPattern] = true
+		} else {
+			// Complex glob patterns
+			cache.globExcludes = append(cache.globExcludes, normalizedPattern)
+		}
+	}
+
+	// Process include patterns
+	for _, pattern := range includePatterns {
+		normalizedPattern := filepath.ToSlash(pattern)
+
+		if strings.HasPrefix(normalizedPattern, "**/") && strings.HasSuffix(normalizedPattern, "/**") {
+			dirName := strings.Trim(normalizedPattern, "*/")
+			cache.dirIncludes[dirName] = true
+		} else if strings.HasPrefix(normalizedPattern, "*.") {
+			ext := strings.TrimPrefix(normalizedPattern, "*")
+			cache.extIncludes[ext] = true
+		} else if strings.HasPrefix(normalizedPattern, ".") && !strings.Contains(normalizedPattern, "/") {
+			// Extension patterns without star: .ext
+			cache.extIncludes[normalizedPattern] = true
+		} else if !strings.Contains(normalizedPattern, "*") {
+			cache.dirIncludes[normalizedPattern] = true
+		} else {
+			cache.globIncludes = append(cache.globIncludes, normalizedPattern)
+		}
+	}
+
+	return cache
 }
 
 func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *SearchEngine) (*DocumentStore, error) {
@@ -159,6 +225,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 		searchEngine:      searchEngine,
 		sourcePath:        storeConfig.Path,
 		nativeParsers:     NewNativeParserRegistry(),
+		patternCache:      buildPatternCache(storeConfig.IncludePatterns, storeConfig.ExcludePatterns),
 		updateChannel:     make(chan DocumentUpdate, DefaultUpdateChannelSize),
 		ctx:               ctx,
 		cancel:            cancel,
@@ -214,13 +281,13 @@ func (ds *DocumentStore) StartIndexing() error {
 func (ds *DocumentStore) indexDirectory() error {
 	ctx := context.Background()
 
-	var existingDocs map[string]int64
+	var existingDocs map[string]FileIndexInfo
 	var err error
 	if ds.config.IncrementalIndexing {
 		existingDocs, err = ds.loadIndexState()
 		if err != nil {
 			log.Printf("Warning: Failed to load index state, performing full reindex: %v", err)
-			existingDocs = make(map[string]int64)
+			existingDocs = make(map[string]FileIndexInfo)
 		}
 
 		if len(existingDocs) > 0 {
@@ -236,8 +303,33 @@ func (ds *DocumentStore) indexDirectory() error {
 	var skippedCount int32
 
 	foundFiles := make(map[string]bool)
-	indexedFiles := make(map[string]int64)
+	indexedFiles := make(map[string]FileIndexInfo)
 	var filesMu sync.Mutex
+
+	// Progress reporting ticker
+	progressTicker := time.NewTicker(2 * time.Second)
+	progressDone := make(chan bool)
+	defer func() {
+		progressTicker.Stop()
+		progressDone <- true
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-progressTicker.C:
+				s := atomic.LoadInt32(&successCount)
+				f := atomic.LoadInt32(&failCount)
+				sk := atomic.LoadInt32(&skippedCount)
+				total := s + f + sk
+				if total > 0 {
+					fmt.Printf("Progress: %d processed (%d indexed, %d skipped, %d errors)\n", total, s, sk, f)
+				}
+			case <-progressDone:
+				return
+			}
+		}
+	}()
 
 	err = filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -247,6 +339,10 @@ func (ds *DocumentStore) indexDirectory() error {
 		}
 
 		if info.IsDir() {
+			// Skip excluded directories early to avoid walking their contents
+			if ds.shouldExclude(path) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
@@ -292,7 +388,11 @@ func (ds *DocumentStore) indexDirectory() error {
 
 				rp, _ := filepath.Rel(ds.sourcePath, p)
 				filesMu.Lock()
-				indexedFiles[rp] = i.ModTime().Unix()
+				indexedFiles[rp] = FileIndexInfo{
+					ModTime: i.ModTime().Unix(),
+					Size:    i.Size(),
+					Hash:    ds.computeFileHash(p),
+				}
 				filesMu.Unlock()
 			}
 		}(path, info)
@@ -317,17 +417,18 @@ func (ds *DocumentStore) indexDirectory() error {
 	ds.mu.Unlock()
 
 	if ds.config.IncrementalIndexing {
+		finalState := make(map[string]FileIndexInfo)
 
-		finalState := make(map[string]int64)
-
-		for path, ts := range existingDocs {
+		// Keep existing files that are still present
+		for path, info := range existingDocs {
 			if foundFiles[path] {
-				finalState[path] = ts
+				finalState[path] = info
 			}
 		}
 
-		for path, ts := range indexedFiles {
-			finalState[path] = ts
+		// Update with newly indexed files
+		for path, info := range indexedFiles {
+			finalState[path] = info
 		}
 
 		if err := ds.saveIndexState(finalState, len(finalState)*3); err != nil {
@@ -395,6 +496,11 @@ func (ds *DocumentStore) isGitRepository(path string) bool {
 func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 	relPath, _ := filepath.Rel(ds.sourcePath, path)
 
+	// Skip binary files that we can't parse
+	if !isBinaryFileType(path) && ds.isBinaryContent(path) {
+		return nil
+	}
+
 	content, err := ds.extractContentWithPlugins(path, info)
 	if err != nil {
 
@@ -422,28 +528,76 @@ func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultIndexingTimeout)
 	defer cancel()
 
-	for i, chunk := range chunks {
+	// Only ingest if search engine is available (skip for tests with nil engine)
+	if ds.searchEngine != nil {
+		for i, chunk := range chunks {
+			chunkKey := fmt.Sprintf("%s:chunk:%d", relPath, i)
+			hash := md5.Sum([]byte(fmt.Sprintf("%s:%s", ds.name, chunkKey)))
+			chunkID := uuid.NewMD5(uuid.Nil, hash[:]).String()
 
-		chunkKey := fmt.Sprintf("%s:chunk:%d", relPath, i)
-		hash := md5.Sum([]byte(fmt.Sprintf("%s:%s", ds.name, chunkKey)))
-		chunkID := uuid.NewMD5(uuid.Nil, hash[:]).String()
+			chunkMetadata := make(map[string]interface{})
+			for k, v := range metadata {
+				chunkMetadata[k] = v
+			}
+			chunkMetadata["chunk_index"] = i
+			chunkMetadata["chunk_total"] = len(chunks)
+			chunkMetadata["start_line"] = chunk.StartLine
+			chunkMetadata["end_line"] = chunk.EndLine
+			chunkMetadata["content"] = chunk.Content
 
-		chunkMetadata := make(map[string]interface{})
-		for k, v := range metadata {
-			chunkMetadata[k] = v
-		}
-		chunkMetadata["chunk_index"] = i
-		chunkMetadata["chunk_total"] = len(chunks)
-		chunkMetadata["start_line"] = chunk.StartLine
-		chunkMetadata["end_line"] = chunk.EndLine
-		chunkMetadata["content"] = chunk.Content
-
-		if err := ds.searchEngine.IngestDocument(ctx, chunkID, chunk.Content, chunkMetadata); err != nil {
-			return NewDocumentStoreError(ds.name, "indexDocument", "failed to ingest chunk", path, err)
+			if err := ds.searchEngine.IngestDocument(ctx, chunkID, chunk.Content, chunkMetadata); err != nil {
+				return NewDocumentStoreError(ds.name, "indexDocument", "failed to ingest chunk", path, err)
+			}
 		}
 	}
 
 	return nil
+}
+
+func (ds *DocumentStore) computeFileHash(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	// Read first 4KB for hashing (quick change detection)
+	buffer := make([]byte, 4096)
+	n, err := f.Read(buffer)
+	if err != nil && n == 0 {
+		return ""
+	}
+
+	hash := md5.Sum(buffer[:n])
+	return fmt.Sprintf("%x", hash)
+}
+
+func (ds *DocumentStore) isBinaryContent(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	// Read first 512 bytes for content detection
+	buffer := make([]byte, 512)
+	n, err := f.Read(buffer)
+	if err != nil || n == 0 {
+		return false
+	}
+
+	// Detect content type
+	mimeType := http.DetectContentType(buffer[:n])
+
+	// Skip non-text files except those we can parse
+	if !strings.HasPrefix(mimeType, "text/") &&
+	   mimeType != "application/json" &&
+	   mimeType != "application/xml" &&
+	   !strings.Contains(mimeType, "javascript") {
+		return true
+	}
+
+	return false
 }
 
 func (ds *DocumentStore) extractContentWithPlugins(path string, info os.FileInfo) (string, error) {
@@ -757,6 +911,9 @@ func (ds *DocumentStore) extractGoImport(line string) string {
 }
 
 func (ds *DocumentStore) Search(ctx context.Context, query string, limit int) ([]databases.SearchResult, error) {
+	if ds.searchEngine == nil {
+		return nil, NewDocumentStoreError(ds.name, "Search", "search engine not available", "", nil)
+	}
 
 	filter := map[string]interface{}{
 		"store_name": ds.name,
@@ -783,7 +940,6 @@ func (ds *DocumentStore) GetDocument(id string) (databases.SearchResult, bool) {
 }
 
 func (ds *DocumentStore) shouldExclude(path string) bool {
-
 	relPath, err := filepath.Rel(ds.sourcePath, path)
 	if err != nil {
 		relPath = path
@@ -791,42 +947,30 @@ func (ds *DocumentStore) shouldExclude(path string) bool {
 
 	normalizedPath := filepath.ToSlash(relPath)
 
-	for _, pattern := range ds.config.ExcludePatterns {
+	// Fast path: Check extension exclusions
+	ext := filepath.Ext(normalizedPath)
+	if ext != "" && ds.patternCache.extExcludes[ext] {
+		return true
+	}
 
-		normalizedPattern := filepath.ToSlash(pattern)
+	// Fast path: Check directory name exclusions
+	pathParts := strings.Split(normalizedPath, "/")
+	for _, part := range pathParts {
+		if ds.patternCache.dirExcludes[part] {
+			return true
+		}
+	}
 
-		if matched, err := filepath.Match(normalizedPattern, normalizedPath); err == nil && matched {
+	// Slow path: Check glob patterns only if necessary
+	for _, pattern := range ds.patternCache.globExcludes {
+		if matched, err := filepath.Match(pattern, normalizedPath); err == nil && matched {
 			return true
 		}
 
-		if strings.HasPrefix(normalizedPattern, "**/") && strings.HasSuffix(normalizedPattern, "/**") {
-			dirName := strings.Trim(normalizedPattern, "*/")
-
-			if strings.Contains("/"+normalizedPath+"/", "/"+dirName+"/") {
-				return true
-			}
-		}
-
-		if strings.HasPrefix(normalizedPattern, "*.") {
-			ext := strings.TrimPrefix(normalizedPattern, "*")
-			if strings.HasSuffix(normalizedPath, ext) {
-				return true
-			}
-		}
-
-		if strings.Contains(normalizedPattern, "**") {
-
-			if strings.HasPrefix(normalizedPattern, "**/") {
-				simplePattern := strings.TrimPrefix(normalizedPattern, "**/")
-				if matched, err := filepath.Match(simplePattern, filepath.Base(normalizedPath)); err == nil && matched {
-					return true
-				}
-			}
-		}
-
-		if !strings.Contains(normalizedPattern, "*") {
-
-			if strings.Contains(normalizedPath, normalizedPattern) {
+		// Check if pattern matches basename for **/ patterns
+		if strings.HasPrefix(pattern, "**/") {
+			simplePattern := strings.TrimPrefix(pattern, "**/")
+			if matched, err := filepath.Match(simplePattern, filepath.Base(normalizedPath)); err == nil && matched {
 				return true
 			}
 		}
@@ -847,50 +991,39 @@ func (ds *DocumentStore) shouldInclude(path string) bool {
 
 	normalizedPath := filepath.ToSlash(relPath)
 
-	for _, pattern := range ds.config.IncludePatterns {
+	// Fast path: Check extension inclusions
+	ext := filepath.Ext(normalizedPath)
+	if ext != "" && ds.patternCache.extIncludes[ext] {
+		return true
+	}
 
-		normalizedPattern := filepath.ToSlash(pattern)
+	// Fast path: Check directory name inclusions
+	pathParts := strings.Split(normalizedPath, "/")
+	for _, part := range pathParts {
+		if ds.patternCache.dirIncludes[part] {
+			return true
+		}
+	}
 
+	// Slow path: Check glob patterns only if necessary
+	for _, pattern := range ds.patternCache.globIncludes {
 		if pattern == "*" {
 			return true
 		}
 
-		if matched, err := filepath.Match(normalizedPattern, normalizedPath); err == nil && matched {
+		if matched, err := filepath.Match(pattern, normalizedPath); err == nil && matched {
 			return true
 		}
 
-		if strings.HasPrefix(normalizedPattern, "**/") && strings.HasSuffix(normalizedPattern, "/**") {
-			dirName := strings.Trim(normalizedPattern, "*/")
-
-			if strings.Contains("/"+normalizedPath+"/", "/"+dirName+"/") {
-				return true
-			}
-		}
-
-		if strings.HasPrefix(normalizedPattern, "*.") {
-			ext := strings.TrimPrefix(normalizedPattern, "*")
-			if strings.HasSuffix(normalizedPath, ext) {
-				return true
-			}
-		}
-
-		if strings.Contains(normalizedPattern, "**") {
-
-			if strings.HasPrefix(normalizedPattern, "**/") {
-				simplePattern := strings.TrimPrefix(normalizedPattern, "**/")
-				if matched, err := filepath.Match(simplePattern, filepath.Base(normalizedPath)); err == nil && matched {
-					return true
-				}
-			}
-		}
-
-		if !strings.Contains(normalizedPattern, "*") {
-
-			if strings.Contains(normalizedPath, normalizedPattern) {
+		// Check if pattern matches basename for **/ patterns
+		if strings.HasPrefix(pattern, "**/") {
+			simplePattern := strings.TrimPrefix(pattern, "**/")
+			if matched, err := filepath.Match(simplePattern, filepath.Base(normalizedPath)); err == nil && matched {
 				return true
 			}
 		}
 	}
+
 	return false
 }
 
@@ -1080,11 +1213,30 @@ func (ds *DocumentStore) processUpdates() {
 		select {
 		case <-ds.ctx.Done():
 			return
-		case _, ok := <-ds.updateChannel:
+		case update, ok := <-ds.updateChannel:
 			if !ok {
 				return
 			}
-
+			// Process file updates from file watcher
+			switch update.Operation {
+			case OperationCreate, OperationModify:
+				// File already re-indexed in handleFileEvent
+				log.Printf("Document updated: %s (operation: %s)", update.FilePath, update.Operation)
+			case OperationDelete:
+				// Clean up deleted file from index
+				if ds.searchEngine != nil {
+					relPath, _ := filepath.Rel(ds.sourcePath, update.FilePath)
+					filter := map[string]interface{}{
+						"store_name": ds.name,
+						"path":       relPath,
+					}
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					if err := ds.searchEngine.DeleteByFilter(ctx, filter); err != nil {
+						log.Printf("Failed to delete document %s from index: %v", relPath, err)
+					}
+					cancel()
+				}
+			}
 		}
 	}
 }
@@ -1106,12 +1258,18 @@ type IndexedFileInfo struct {
 }
 
 type IndexState struct {
-	StoreName   string           `json:"store_name"`
-	SourcePath  string           `json:"source_path"`
-	LastIndexed time.Time        `json:"last_indexed"`
-	Files       map[string]int64 `json:"files"`
-	TotalFiles  int              `json:"total_files"`
-	TotalChunks int              `json:"total_chunks"`
+	StoreName   string                 `json:"store_name"`
+	SourcePath  string                 `json:"source_path"`
+	LastIndexed time.Time              `json:"last_indexed"`
+	Files       map[string]FileIndexInfo `json:"files"`
+	TotalFiles  int                    `json:"total_files"`
+	TotalChunks int                    `json:"total_chunks"`
+}
+
+type FileIndexInfo struct {
+	ModTime int64  `json:"mod_time"`
+	Size    int64  `json:"size"`
+	Hash    string `json:"hash,omitempty"` // MD5 hash of first 4KB for quick change detection
 }
 
 func (ds *DocumentStore) getIndexStatePath() string {
@@ -1121,14 +1279,13 @@ func (ds *DocumentStore) getIndexStatePath() string {
 	return filepath.Join(stateDir, fmt.Sprintf("index_state_%s.json", ds.name))
 }
 
-func (ds *DocumentStore) loadIndexState() (map[string]int64, error) {
+func (ds *DocumentStore) loadIndexState() (map[string]FileIndexInfo, error) {
 	statePath := ds.getIndexStatePath()
 
 	data, err := os.ReadFile(statePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-
-			return make(map[string]int64), nil
+			return make(map[string]FileIndexInfo), nil
 		}
 		return nil, fmt.Errorf("failed to read index state: %w", err)
 	}
@@ -1141,13 +1298,13 @@ func (ds *DocumentStore) loadIndexState() (map[string]int64, error) {
 	if state.StoreName != ds.name || state.SourcePath != ds.sourcePath {
 		log.Printf("Index state mismatch (store: %s vs %s, path: %s vs %s), rebuilding index",
 			state.StoreName, ds.name, state.SourcePath, ds.sourcePath)
-		return make(map[string]int64), nil
+		return make(map[string]FileIndexInfo), nil
 	}
 
 	return state.Files, nil
 }
 
-func (ds *DocumentStore) saveIndexState(files map[string]int64, totalChunks int) error {
+func (ds *DocumentStore) saveIndexState(files map[string]FileIndexInfo, totalChunks int) error {
 	statePath := ds.getIndexStatePath()
 	stateDir := filepath.Dir(statePath)
 
@@ -1182,8 +1339,7 @@ func (ds *DocumentStore) saveIndexState(files map[string]int64, totalChunks int)
 	return nil
 }
 
-func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time, existingDocs map[string]int64) bool {
-
+func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time, existingDocs map[string]FileIndexInfo) bool {
 	if !ds.config.IncrementalIndexing {
 		return true
 	}
@@ -1197,26 +1353,43 @@ func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time
 		return true
 	}
 
-	storedModTime, exists := existingDocs[relPath]
+	storedInfo, exists := existingDocs[relPath]
 	if !exists {
-
+		// New file
 		return true
 	}
 
+	// Check file size first (fastest)
+	info, err := os.Stat(path)
+	if err != nil {
+		return true
+	}
+	if info.Size() != storedInfo.Size {
+		return true
+	}
+
+	// Check modification time
 	currentUnix := currentModTime.Unix()
-	return currentUnix > storedModTime
+	if currentUnix > storedInfo.ModTime {
+		// File modified - verify with hash if available
+		if storedInfo.Hash != "" {
+			currentHash := ds.computeFileHash(path)
+			return currentHash != storedInfo.Hash
+		}
+		return true
+	}
+
+	return false
 }
 
-func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs map[string]int64, foundFiles map[string]bool) error {
-	if !ds.config.IncrementalIndexing || len(existingDocs) == 0 {
-
+func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs map[string]FileIndexInfo, foundFiles map[string]bool) error {
+	if !ds.config.IncrementalIndexing || len(existingDocs) == 0 || ds.searchEngine == nil {
 		return nil
 	}
 
 	deletedCount := 0
 	for path := range existingDocs {
 		if !foundFiles[path] {
-
 			filter := map[string]interface{}{
 				"store_name": ds.name,
 				"path":       path,
