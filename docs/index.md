@@ -40,7 +40,7 @@ agents:
   </div>
 </div>
 
-Hector is an AI agent framework designed for production deployment, built in Go for performance and operational simplicity. Define sophisticated multi-agent systems through declarative YAML configuration without writing code.
+Built in Go, Hector lets you deploy powerful distributed AI agents on top of A2A protocol using straightforward YAML—no custom coding required. Ideal for production environments that demand speed and simplicity.
 
 <script>
 (function() {
@@ -55,7 +55,7 @@ Hector is an AI agent framework designed for production deployment, built in Go 
     AsciinemaPlayer.create('assets/hector-demo.cast', document.getElementById('hector-demo'), {
       theme: 'asciinema',
       cols: 80,
-      rows: 25,
+      rows: 21,
       autoplay: false,
       loop: false,
       speed: 1,
@@ -86,7 +86,7 @@ hector serve --config agents.yaml
 hector call "Explain quantum computing"
 ```
 
-[Get Started Now! →](getting-started/quick-start.md){ .md-button }
+[Get Started Now! →](getting-started/quick-start.md){ .md-button .md-button--primary }
 
 ## Key Features
 
@@ -114,7 +114,7 @@ hector call "Explain quantum computing"
 
 -   :rocket: __Featureful Agent System__
 
-    Multi-agent orchestration, advanced memory (working + vector RAG), rich tool ecosystem (built-in + MCP), reasoning engines (chain-of-thought + supervisor), and session persistence.
+    Multi-agent orchestration, advanced memory, rich tool ecosystem, reasoning engines, builtin rag, session persistence and many more.
 
 </div>
 
