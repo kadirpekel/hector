@@ -14,11 +14,9 @@ hide:
 
 <div class="hero-section">
   <div class="hero-content">
-    <p class="hero-slogan">Declarative A2A-Native AI Agent Platform</p>
+    <p class="hero-slogan">AI Agents with Confidence!</p>
     
-    <p>Production-ready framework for building, deploying, and orchestrating AI agents at scale.</p>
-    
-    <p><strong>Built with Go</strong> for production performance, single-binary deployment, and true portability.</p>
+    <p>Hector is a declarative A2A-Native AI Agent platform for building, deploying, and orchestrating AI agents at scale.</p>
     
     <div class="hero-example">
 ```yaml
@@ -88,36 +86,35 @@ hector serve --config agents.yaml
 hector call "Explain quantum computing"
 ```
 
-[Installation Guide →](getting-started/installation.md){ .md-button .md-button--primary }
-[Quick Start Tutorial →](getting-started/quick-start.md){ .md-button }
+[Get Started Now! →](getting-started/quick-start.md){ .md-button }
 
 ## Key Features
 
 <div class="grid cards" markdown>
 
--   :zap: __Zero-Code Development__
+-   :zap: __Declarative Configuration__
 
-    Define agents through YAML configuration. No programming required.
+    YAML-based agent definition. No programming required for agent creation.
 
 -   :link: __A2A Protocol Native__
 
-    Standards-compliant agent communication and federation.
+    Standards-compliant agent communication and federation for distributed deployments.
 
--   :brain: __Advanced Memory__
+-   :globe_with_meridians: __Distributed Architecture__
 
-    Working memory strategies and vector-based long-term memory with RAG.
-
--   :hammer_and_wrench: __Rich Tool Ecosystem__
-
-    Built-in tools, MCP support, and custom plugin system.
-
--   :thought_balloon: __Reasoning Engines__
-
-    Chain-of-thought and supervisor strategies for single and multi-agent workflows.
+    Support for local, server, and federated deployments with seamless scaling.
 
 -   :shield: __Production Ready__
 
-    Observability, authentication, distributed configuration, and security controls.
+    Built-in observability, authentication, distributed configuration, and security controls.
+
+-   :package: __Single Binary Deployment__
+
+    No runtime dependencies or complex installations. One executable, zero configuration.
+
+-   :rocket: __Featureful Agent System__
+
+    Multi-agent orchestration, advanced memory (working + vector RAG), rich tool ecosystem (built-in + MCP), reasoning engines (chain-of-thought + supervisor), and session persistence.
 
 </div>
 

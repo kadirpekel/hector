@@ -66,11 +66,11 @@ nav:
     - Reasoning: core-concepts/reasoning.md
     - Multi-Agent: core-concepts/multi-agent.md
     - Structured Output: core-concepts/structured-output.md
-    - Sessions & Streaming: core-concepts/sessions.md
+    - Sessions: core-concepts/sessions.md
+    - Streaming: core-concepts/streaming.md
     - Security: core-concepts/security.md
     - Observability: core-concepts/observability.md
-  - Performance:
-    - Overview: performance/index.md
+    - Performance: core-concepts/performance.md
   - How-To Guides:
     - Build Coding Assistant: how-to/build-coding-assistant.md
     - Build Research System: how-to/build-research-system.md
