@@ -92,7 +92,7 @@ func TestNewDocumentStore(t *testing.T) {
 				Path: "",
 			},
 			searchEngine: &SearchEngine{},
-			wantError:    true,
+			wantError:    false, // SetDefaults will set it to "./" which is valid
 		},
 		{
 			name: "nonexistent_source_path",
@@ -417,8 +417,10 @@ func TestDocumentStore_TypeDetection(t *testing.T) {
 
 func TestDocumentStore_ContentChunking(t *testing.T) {
 	storeConfig := &config.DocumentStoreConfig{
-		Name: "test-store",
-		Path: "/tmp",
+		Name:       "test-store",
+		Path:       "/tmp",
+		ChunkSize:  100,
+		ChunkStrategy: "simple",
 	}
 
 	store, err := NewDocumentStore(storeConfig, &SearchEngine{})
@@ -454,21 +456,25 @@ func TestDocumentStore_ContentChunking(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			chunks := store.chunkContent(tt.content, tt.targetSize)
+			// Use the store's chunker directly
+			chunks, err := store.chunker.Chunk(tt.content, nil)
+			if err != nil {
+				t.Fatalf("chunker.Chunk() error = %v", err)
+			}
 
 			if len(chunks) != tt.expectedChunks {
-				t.Errorf("chunkContent() chunks length = %v, want %v", len(chunks), tt.expectedChunks)
+				t.Errorf("chunker.Chunk() chunks length = %v, want %v", len(chunks), tt.expectedChunks)
 			}
 
 			for i, chunk := range chunks {
 				if chunk.StartLine <= 0 {
-					t.Errorf("chunkContent() chunk %d StartLine = %v, want > 0", i, chunk.StartLine)
+					t.Errorf("chunker.Chunk() chunk %d StartLine = %v, want > 0", i, chunk.StartLine)
 				}
 				if chunk.EndLine < chunk.StartLine {
-					t.Errorf("chunkContent() chunk %d EndLine = %v, want >= StartLine", i, chunk.EndLine)
+					t.Errorf("chunker.Chunk() chunk %d EndLine = %v, want >= StartLine", i, chunk.EndLine)
 				}
 				if chunk.Content == "" && tt.content != "" {
-					t.Errorf("chunkContent() chunk %d Content should not be empty", i)
+					t.Errorf("chunker.Chunk() chunk %d Content should not be empty", i)
 				}
 			}
 		})

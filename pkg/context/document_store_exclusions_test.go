@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/context/indexing"
 )
 
 func TestShouldExclude(t *testing.T) {
@@ -119,12 +120,17 @@ func TestShouldExclude(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Create a proper filter and file source
+			filter := indexing.NewPatternFilter("/project", []string{}, tt.excludes)
+			fileSource := indexing.NewDirectorySource("/project", filter, 5*1024*1024)
 
 			ds := &DocumentStore{
 				config: &config.DocumentStoreConfig{
+					Path:            "/project",
 					ExcludePatterns: tt.excludes,
 				},
 				sourcePath: "/project",
+				fileSource: fileSource,
 			}
 
 			result := ds.shouldExclude(tt.path)

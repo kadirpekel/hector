@@ -808,13 +808,25 @@ func (c *ToolConfig) SetDefaults() {
 
 type DocumentStoreConfig struct {
 	Name                string   `yaml:"name"`
-	Source              string   `yaml:"source"`
+	Source              string   `yaml:"source"`  // Only "directory" supported
 	Path                string   `yaml:"path"`
 	IncludePatterns     []string `yaml:"include_patterns"`
 	ExcludePatterns     []string `yaml:"exclude_patterns"`
 	WatchChanges        bool     `yaml:"watch_changes"`
 	MaxFileSize         int64    `yaml:"max_file_size"`
 	IncrementalIndexing bool     `yaml:"incremental_indexing"`
+
+	// Chunking configuration
+	ChunkSize     int    `yaml:"chunk_size"`      // Default: 800 characters
+	ChunkOverlap  int    `yaml:"chunk_overlap"`   // Default: 0 characters
+	ChunkStrategy string `yaml:"chunk_strategy"`  // "simple", "overlapping", "semantic"
+
+	// Metadata extraction
+	ExtractMetadata   bool     `yaml:"extract_metadata"`     // Default: true
+	MetadataLanguages []string `yaml:"metadata_languages"`   // Languages to extract metadata from
+
+	// Performance
+	MaxConcurrentFiles int `yaml:"max_concurrent_files"` // Default: 10
 }
 
 func (c *DocumentStoreConfig) Validate() error {
@@ -892,6 +904,26 @@ func (c *DocumentStoreConfig) SetDefaults() {
 
 	if !c.WatchChanges {
 		c.WatchChanges = true
+	}
+
+	// Chunking defaults
+	if c.ChunkSize == 0 {
+		c.ChunkSize = 800
+	}
+	if c.ChunkStrategy == "" {
+		c.ChunkStrategy = "simple"
+	}
+	// chunk_overlap defaults to 0 (no overlap)
+
+	// Metadata defaults
+	if len(c.MetadataLanguages) == 0 {
+		c.MetadataLanguages = []string{"go"} // Only Go by default
+	}
+	// extract_metadata defaults to false initially
+
+	// Performance defaults
+	if c.MaxConcurrentFiles == 0 {
+		c.MaxConcurrentFiles = 10
 	}
 }
 

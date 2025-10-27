@@ -8,17 +8,19 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-	"unicode/utf8"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/context/chunking"
+	"github.com/kadirpekel/hector/pkg/context/extraction"
+	"github.com/kadirpekel/hector/pkg/context/indexing"
+	"github.com/kadirpekel/hector/pkg/context/metadata"
 	"github.com/kadirpekel/hector/pkg/databases"
 )
 
@@ -117,15 +119,6 @@ type DocumentStoreStatus struct {
 	DocumentCount int       `json:"document_count"`
 }
 
-type PatternCache struct {
-	dirExcludes  map[string]bool // Fast directory lookup
-	extExcludes  map[string]bool // Fast extension lookup
-	dirIncludes  map[string]bool
-	extIncludes  map[string]bool
-	globExcludes []string // Patterns requiring glob matching
-	globIncludes []string
-}
-
 type DocumentStore struct {
 	mu     sync.RWMutex
 	name   string
@@ -135,8 +128,11 @@ type DocumentStore struct {
 	searchEngine *SearchEngine
 	sourcePath   string
 
-	nativeParsers *NativeParserRegistry
-	patternCache  *PatternCache
+	// New component-based architecture
+	fileSource         indexing.FileSource
+	contentExtractors  *extraction.ExtractorRegistry
+	metadataExtractors *metadata.ExtractorRegistry
+	chunker            chunking.Chunker
 
 	watcher       *fsnotify.Watcher
 	updateChannel chan DocumentUpdate
@@ -146,61 +142,6 @@ type DocumentStore struct {
 	indexingSemaphore chan struct{}
 }
 
-func buildPatternCache(includePatterns, excludePatterns []string) *PatternCache {
-	cache := &PatternCache{
-		dirExcludes: make(map[string]bool),
-		extExcludes: make(map[string]bool),
-		dirIncludes: make(map[string]bool),
-		extIncludes: make(map[string]bool),
-	}
-
-	// Process exclude patterns
-	for _, pattern := range excludePatterns {
-		normalizedPattern := filepath.ToSlash(pattern)
-
-		// Directory patterns: **/dirname/** or dirname
-		if strings.HasPrefix(normalizedPattern, "**/") && strings.HasSuffix(normalizedPattern, "/**") {
-			dirName := strings.Trim(normalizedPattern, "*/")
-			cache.dirExcludes[dirName] = true
-		} else if strings.HasPrefix(normalizedPattern, "*.") {
-			// Extension patterns: *.ext
-			ext := strings.TrimPrefix(normalizedPattern, "*")
-			cache.extExcludes[ext] = true
-		} else if strings.HasPrefix(normalizedPattern, ".") && !strings.Contains(normalizedPattern, "/") {
-			// Extension patterns without star: .ext
-			cache.extExcludes[normalizedPattern] = true
-		} else if !strings.Contains(normalizedPattern, "*") {
-			// Literal substring patterns (directory names)
-			cache.dirExcludes[normalizedPattern] = true
-		} else {
-			// Complex glob patterns
-			cache.globExcludes = append(cache.globExcludes, normalizedPattern)
-		}
-	}
-
-	// Process include patterns
-	for _, pattern := range includePatterns {
-		normalizedPattern := filepath.ToSlash(pattern)
-
-		if strings.HasPrefix(normalizedPattern, "**/") && strings.HasSuffix(normalizedPattern, "/**") {
-			dirName := strings.Trim(normalizedPattern, "*/")
-			cache.dirIncludes[dirName] = true
-		} else if strings.HasPrefix(normalizedPattern, "*.") {
-			ext := strings.TrimPrefix(normalizedPattern, "*")
-			cache.extIncludes[ext] = true
-		} else if strings.HasPrefix(normalizedPattern, ".") && !strings.Contains(normalizedPattern, "/") {
-			// Extension patterns without star: .ext
-			cache.extIncludes[normalizedPattern] = true
-		} else if !strings.Contains(normalizedPattern, "*") {
-			cache.dirIncludes[normalizedPattern] = true
-		} else {
-			cache.globIncludes = append(cache.globIncludes, normalizedPattern)
-		}
-	}
-
-	return cache
-}
-
 func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *SearchEngine) (*DocumentStore, error) {
 	if storeConfig == nil {
 		return nil, NewDocumentStoreError("", "NewDocumentStore", "store config is required", "", nil)
@@ -208,6 +149,9 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 	if searchEngine == nil {
 		return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "search engine is required", "", nil)
 	}
+
+	// Set defaults for config
+	storeConfig.SetDefaults()
 
 	if storeConfig.MaxFileSize == 0 {
 		storeConfig.MaxFileSize = DefaultMaxFileSize
@@ -219,17 +163,61 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Initialize file source
+	filter := indexing.NewPatternFilter(storeConfig.Path, storeConfig.IncludePatterns, storeConfig.ExcludePatterns)
+	fileSource := indexing.NewDirectorySource(storeConfig.Path, filter, storeConfig.MaxFileSize)
+
+	// Initialize content extractors
+	contentExtractors := extraction.NewExtractorRegistry()
+	contentExtractors.Register(extraction.NewTextExtractor())
+
+	nativeParsers := NewNativeParserRegistry()
+	nativeParserAdapter := newNativeParserAdapter(nativeParsers)
+	contentExtractors.Register(extraction.NewBinaryExtractor(nativeParserAdapter))
+	// Plugin extractors can be added here if needed
+
+	// Initialize metadata extractors
+	metadataExtractors := metadata.NewExtractorRegistry()
+	if storeConfig.ExtractMetadata {
+		for _, lang := range storeConfig.MetadataLanguages {
+			if lang == "go" {
+				metadataExtractors.Register(metadata.NewGoExtractor())
+			}
+			// More languages can be added via plugins
+		}
+	}
+
+	// Initialize chunker
+	chunkerConfig := chunking.ChunkerConfig{
+		Strategy: storeConfig.ChunkStrategy,
+		Size:     storeConfig.ChunkSize,
+		Overlap:  storeConfig.ChunkOverlap,
+	}
+	chunker, err := chunking.NewChunker(chunkerConfig)
+	if err != nil {
+		cancel()
+		return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "failed to create chunker", "", err)
+	}
+
+	// Determine concurrency limit
+	maxConcurrent := storeConfig.MaxConcurrentFiles
+	if maxConcurrent == 0 {
+		maxConcurrent = 10
+	}
+
 	store := &DocumentStore{
-		name:              storeConfig.Name,
-		config:            storeConfig,
-		searchEngine:      searchEngine,
-		sourcePath:        storeConfig.Path,
-		nativeParsers:     NewNativeParserRegistry(),
-		patternCache:      buildPatternCache(storeConfig.IncludePatterns, storeConfig.ExcludePatterns),
-		updateChannel:     make(chan DocumentUpdate, DefaultUpdateChannelSize),
-		ctx:               ctx,
-		cancel:            cancel,
-		indexingSemaphore: make(chan struct{}, MaxConcurrentIndexing),
+		name:               storeConfig.Name,
+		config:             storeConfig,
+		searchEngine:       searchEngine,
+		sourcePath:         storeConfig.Path,
+		fileSource:         fileSource,
+		contentExtractors:  contentExtractors,
+		metadataExtractors: metadataExtractors,
+		chunker:            chunker,
+		updateChannel:      make(chan DocumentUpdate, DefaultUpdateChannelSize),
+		ctx:                ctx,
+		cancel:             cancel,
+		indexingSemaphore:  make(chan struct{}, maxConcurrent),
 		status: &DocumentStoreStatus{
 			Name:        storeConfig.Name,
 			SourcePath:  storeConfig.Path,
@@ -268,14 +256,12 @@ func (ds *DocumentStore) StartIndexing() error {
 
 	fmt.Printf("Indexing document store '%s' from: %s\n", ds.name, ds.sourcePath)
 
-	switch ds.config.Source {
-	case "directory":
-		return ds.indexDirectory()
-	case "git":
-		return ds.indexGitRepository()
-	default:
-		return NewDocumentStoreError(ds.name, "StartIndexing", "unsupported source type", ds.config.Source, nil)
+	// Only directory source is supported
+	if ds.config.Source != "directory" && ds.config.Source != "" {
+		return NewDocumentStoreError(ds.name, "StartIndexing", "only 'directory' source is supported", ds.config.Source, nil)
 	}
+
+	return ds.indexDirectory()
 }
 
 func (ds *DocumentStore) indexDirectory() error {
@@ -451,99 +437,109 @@ func (ds *DocumentStore) indexDirectory() error {
 	return nil
 }
 
-func (ds *DocumentStore) indexGitRepository() error {
-
-	if !ds.isGitRepository(ds.sourcePath) {
-		return fmt.Errorf("path %s is not a git repository", ds.sourcePath)
-	}
-
-	cmd := exec.Command("git", "ls-files")
-	cmd.Dir = ds.sourcePath
-	output, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf("failed to list git files: %w", err)
-	}
-
-	files := strings.Split(string(output), "\n")
-	for _, file := range files {
-		if file == "" {
-			continue
-		}
-
-		fullPath := filepath.Join(ds.sourcePath, file)
-		info, err := os.Stat(fullPath)
-		if err != nil {
-			continue
-		}
-
-		if !info.IsDir() {
-			if err := ds.indexDocument(fullPath, info); err != nil {
-
-				fmt.Printf("Warning: failed to index file %s: %v\n", fullPath, err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func (ds *DocumentStore) isGitRepository(path string) bool {
-	gitDir := filepath.Join(path, ".git")
-	info, err := os.Stat(gitDir)
-	return err == nil && info.IsDir()
-}
-
 func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 	relPath, _ := filepath.Rel(ds.sourcePath, path)
-
-	// Skip binary files that we can't parse
-	if !isBinaryFileType(path) && ds.isBinaryContent(path) {
-		return nil
-	}
-
-	content, err := ds.extractContentWithPlugins(path, info)
-	if err != nil {
-
-		contentBytes, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return NewDocumentStoreError(ds.name, "indexDocument", "failed to read file", path, readErr)
-		}
-		content = string(contentBytes)
-	}
-
-	content = ds.cleanUTF8Content(content)
-
-	if content == "" {
-		return nil
-	}
-
-	doc := ds.createDocument(relPath, info, content)
-
-	ds.extractMetadata(doc)
-
-	metadata := ds.prepareVectorMetadata(doc)
-
-	chunks := ds.chunkContent(doc.Content, 800)
 
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultIndexingTimeout)
 	defer cancel()
 
-	// Only ingest if search engine is available (skip for tests with nil engine)
+	// Step 1: Extract content using the extractor registry
+	mimeType := ds.detectMIMEType(path)
+	extracted, err := ds.contentExtractors.ExtractContent(ctx, path, mimeType, info.Size())
+	if err != nil {
+		return NewDocumentStoreError(ds.name, "indexDocument", "failed to extract content", path, err)
+	}
+	if extracted == nil || extracted.Content == "" {
+		return nil // Skip empty content
+	}
+
+	// Step 2: Detect type and language
+	docType, language := ds.detectTypeAndLanguage(path)
+
+	// Step 3: Extract metadata using metadata extractors
+	var meta *metadata.Metadata
+	if ds.config.ExtractMetadata {
+		meta, err = ds.metadataExtractors.ExtractMetadata(language, extracted.Content, path)
+		if err != nil {
+			// Non-fatal: continue without metadata
+			meta = &metadata.Metadata{}
+		}
+	} else {
+		meta = &metadata.Metadata{}
+	}
+
+	// Step 4: Chunk content using the chunker
+	chunks, err := ds.chunker.Chunk(extracted.Content, meta)
+	if err != nil {
+		return NewDocumentStoreError(ds.name, "indexDocument", "failed to chunk content", path, err)
+	}
+
+	// Step 5: Prepare base metadata for all chunks
+	baseMetadata := map[string]interface{}{
+		"path":          relPath,
+		"name":          info.Name(),
+		"title":         extracted.Title,
+		"type":          docType,
+		"language":      language,
+		"size":          info.Size(),
+		"last_modified": info.ModTime().Unix(),
+		"store_name":    ds.name,
+		"indexed_at":    time.Now().Unix(),
+	}
+
+	// Add metadata from extraction
+	if extracted.Author != "" {
+		baseMetadata["author"] = extracted.Author
+	}
+	for k, v := range extracted.Metadata {
+		baseMetadata["meta_"+k] = v
+	}
+
+	// Add code metadata if available
+	if meta != nil && len(meta.Functions) > 0 {
+		funcNames := make([]string, 0, len(meta.Functions))
+		for _, f := range meta.Functions {
+			funcNames = append(funcNames, f.Name)
+		}
+		baseMetadata["functions"] = strings.Join(funcNames, ",")
+	}
+	if meta != nil && len(meta.Types) > 0 {
+		typeNames := make([]string, 0, len(meta.Types))
+		for _, t := range meta.Types {
+			typeNames = append(typeNames, t.Name)
+		}
+		baseMetadata["types"] = strings.Join(typeNames, ",")
+	}
+	if meta != nil && len(meta.Imports) > 0 {
+		baseMetadata["imports"] = strings.Join(meta.Imports, ",")
+	}
+
+	// Step 6: Ingest chunks into vector database
 	if ds.searchEngine != nil {
-		for i, chunk := range chunks {
-			chunkKey := fmt.Sprintf("%s:chunk:%d", relPath, i)
+		for _, chunk := range chunks {
+			chunkKey := fmt.Sprintf("%s:chunk:%d", relPath, chunk.Index)
 			hash := md5.Sum([]byte(fmt.Sprintf("%s:%s", ds.name, chunkKey)))
 			chunkID := uuid.NewMD5(uuid.Nil, hash[:]).String()
 
 			chunkMetadata := make(map[string]interface{})
-			for k, v := range metadata {
+			for k, v := range baseMetadata {
 				chunkMetadata[k] = v
 			}
-			chunkMetadata["chunk_index"] = i
-			chunkMetadata["chunk_total"] = len(chunks)
+			chunkMetadata["chunk_index"] = chunk.Index
+			chunkMetadata["chunk_total"] = chunk.Total
 			chunkMetadata["start_line"] = chunk.StartLine
 			chunkMetadata["end_line"] = chunk.EndLine
 			chunkMetadata["content"] = chunk.Content
+
+			// Add chunk context if available
+			if chunk.Context != nil {
+				if chunk.Context.FunctionName != "" {
+					chunkMetadata["function_context"] = chunk.Context.FunctionName
+				}
+				if chunk.Context.TypeName != "" {
+					chunkMetadata["type_context"] = chunk.Context.TypeName
+				}
+			}
 
 			if err := ds.searchEngine.IngestDocument(ctx, chunkID, chunk.Content, chunkMetadata); err != nil {
 				return NewDocumentStoreError(ds.name, "indexDocument", "failed to ingest chunk", path, err)
@@ -552,6 +548,23 @@ func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 	}
 
 	return nil
+}
+
+// detectMIMEType detects the MIME type of a file
+func (ds *DocumentStore) detectMIMEType(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	buffer := make([]byte, 512)
+	n, err := f.Read(buffer)
+	if err != nil || n == 0 {
+		return ""
+	}
+
+	return http.DetectContentType(buffer[:n])
 }
 
 func (ds *DocumentStore) computeFileHash(path string) string {
@@ -572,146 +585,6 @@ func (ds *DocumentStore) computeFileHash(path string) string {
 	return fmt.Sprintf("%x", hash)
 }
 
-func (ds *DocumentStore) isBinaryContent(path string) bool {
-	f, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-
-	// Read first 512 bytes for content detection
-	buffer := make([]byte, 512)
-	n, err := f.Read(buffer)
-	if err != nil || n == 0 {
-		return false
-	}
-
-	// Detect content type
-	mimeType := http.DetectContentType(buffer[:n])
-
-	// Skip non-text files except those we can parse
-	if !strings.HasPrefix(mimeType, "text/") &&
-	   mimeType != "application/json" &&
-	   mimeType != "application/xml" &&
-	   !strings.Contains(mimeType, "javascript") {
-		return true
-	}
-
-	return false
-}
-
-func (ds *DocumentStore) extractContentWithPlugins(path string, info os.FileInfo) (string, error) {
-
-	if isBinaryFileType(path) {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-
-		result, err := ds.nativeParsers.ParseDocument(ctx, path, info.Size())
-		if err != nil {
-			return "", fmt.Errorf("native parser failed: %w", err)
-		}
-
-		if !result.Success {
-			return "", fmt.Errorf("native parser failed: %s", result.Error)
-		}
-
-		if result.ProcessingTimeMs > 0 {
-			log.Printf("Parsed %s with native parser (%dms)", path, result.ProcessingTimeMs)
-		}
-
-		return result.Content, nil
-	}
-
-	return "", fmt.Errorf("no native parser available for text files - use plain text reading")
-}
-
-type ContentChunk struct {
-	Content   string
-	StartLine int
-	EndLine   int
-}
-
-func (ds *DocumentStore) chunkContent(content string, targetSize int) []ContentChunk {
-	lines := strings.Split(content, "\n")
-	totalLines := len(lines)
-
-	if len(content) <= targetSize {
-		return []ContentChunk{{
-			Content:   content,
-			StartLine: 1,
-			EndLine:   totalLines,
-		}}
-	}
-
-	var chunks []ContentChunk
-	var currentChunk strings.Builder
-	chunkStartLine := 1
-	currentLine := 1
-
-	for _, line := range lines {
-
-		if currentChunk.Len() > 0 && currentChunk.Len()+len(line)+1 > targetSize {
-			chunks = append(chunks, ContentChunk{
-				Content:   currentChunk.String(),
-				StartLine: chunkStartLine,
-				EndLine:   currentLine - 1,
-			})
-			currentChunk.Reset()
-			chunkStartLine = currentLine
-		}
-
-		if currentChunk.Len() > 0 {
-			currentChunk.WriteString("\n")
-		}
-		currentChunk.WriteString(line)
-		currentLine++
-	}
-
-	if currentChunk.Len() > 0 {
-		chunks = append(chunks, ContentChunk{
-			Content:   currentChunk.String(),
-			StartLine: chunkStartLine,
-			EndLine:   totalLines,
-		})
-	}
-
-	return chunks
-}
-
-func (ds *DocumentStore) cleanUTF8Content(content string) string {
-
-	if utf8.ValidString(content) {
-		return content
-	}
-
-	cleaned := strings.ToValidUTF8(content, "")
-
-	invalidRatio := float64(len(content)-len(cleaned)) / float64(len(content))
-	if invalidRatio > 0.5 {
-		return ""
-	}
-
-	return cleaned
-}
-
-func (ds *DocumentStore) createDocument(relPath string, info os.FileInfo, content string) *Document {
-	doc := &Document{
-		ID:           ds.generateDocumentID(relPath),
-		Path:         relPath,
-		Name:         info.Name(),
-		Content:      content,
-		Size:         info.Size(),
-		Lines:        strings.Count(content, "\n") + 1,
-		LastModified: info.ModTime(),
-		Metadata:     make(map[string]string),
-	}
-
-	doc.Type, doc.Language = ds.detectTypeAndLanguage(relPath)
-
-	doc.Title = ds.extractTitle(doc)
-
-	return doc
-}
 
 func (ds *DocumentStore) detectTypeAndLanguage(path string) (string, string) {
 	ext := strings.ToLower(filepath.Ext(path))
@@ -779,136 +652,6 @@ func (ds *DocumentStore) detectTypeAndLanguage(path string) (string, string) {
 	return docType, language
 }
 
-func (ds *DocumentStore) extractTitle(doc *Document) string {
-	switch doc.Type {
-	case DocumentTypeMarkdown:
-		return ds.extractMarkdownTitle(doc.Content)
-	case DocumentTypeCode:
-		return doc.Name
-	default:
-		return doc.Name
-	}
-}
-
-func (ds *DocumentStore) extractMarkdownTitle(content string) string {
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "# ") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "#"))
-		}
-	}
-	return ""
-}
-
-func (ds *DocumentStore) extractMetadata(doc *Document) {
-	switch doc.Language {
-	case "go":
-		ds.extractGoMetadata(doc)
-	case "yaml":
-		ds.extractYAMLMetadata(doc)
-	case "markdown":
-		ds.extractMarkdownMetadata(doc)
-	}
-}
-
-func (ds *DocumentStore) extractGoMetadata(doc *Document) {
-	lines := strings.Split(doc.Content, "\n")
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		if strings.HasPrefix(line, "func ") {
-			if funcName := ds.extractGoFunctionName(line); funcName != "" {
-				doc.Functions = append(doc.Functions, funcName)
-			}
-		}
-
-		if strings.HasPrefix(line, "type ") && strings.Contains(line, "struct") {
-			if structName := ds.extractGoStructName(line); structName != "" {
-				doc.Structs = append(doc.Structs, structName)
-			}
-		}
-
-		if strings.HasPrefix(line, "import ") || (strings.Contains(line, `"`) && strings.Contains(line, "/")) {
-			if importPath := ds.extractGoImport(line); importPath != "" {
-				doc.Imports = append(doc.Imports, importPath)
-			}
-		}
-	}
-}
-
-func (ds *DocumentStore) extractYAMLMetadata(doc *Document) {
-	lines := strings.Split(doc.Content, "\n")
-	var keys []string
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.Contains(line, ":") && !strings.HasPrefix(line, "#") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) > 0 {
-				key := strings.TrimSpace(parts[0])
-				if key != "" {
-					keys = append(keys, key)
-				}
-			}
-		}
-	}
-
-	if len(keys) > 0 {
-		doc.Metadata["yaml_keys"] = strings.Join(keys, ",")
-	}
-}
-
-func (ds *DocumentStore) extractMarkdownMetadata(doc *Document) {
-	lines := strings.Split(doc.Content, "\n")
-	var headers []string
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "#") {
-			header := strings.TrimSpace(strings.TrimLeft(line, "#"))
-			if header != "" {
-				headers = append(headers, header)
-			}
-		}
-	}
-
-	if len(headers) > 0 {
-		doc.Metadata["headers"] = strings.Join(headers, ",")
-	}
-}
-
-func (ds *DocumentStore) extractGoFunctionName(line string) string {
-	parts := strings.Fields(line)
-	if len(parts) >= 2 {
-		funcName := parts[1]
-		if parenIdx := strings.Index(funcName, "("); parenIdx > 0 {
-			return funcName[:parenIdx]
-		}
-		return funcName
-	}
-	return ""
-}
-
-func (ds *DocumentStore) extractGoStructName(line string) string {
-	parts := strings.Fields(line)
-	if len(parts) >= 2 {
-		return parts[1]
-	}
-	return ""
-}
-
-func (ds *DocumentStore) extractGoImport(line string) string {
-	if strings.Contains(line, `"`) {
-		start := strings.Index(line, `"`)
-		end := strings.LastIndex(line, `"`)
-		if start != -1 && end != -1 && start < end {
-			return line[start+1 : end]
-		}
-	}
-	return ""
-}
 
 func (ds *DocumentStore) Search(ctx context.Context, query string, limit int) ([]databases.SearchResult, error) {
 	if ds.searchEngine == nil {
@@ -940,91 +683,25 @@ func (ds *DocumentStore) GetDocument(id string) (databases.SearchResult, bool) {
 }
 
 func (ds *DocumentStore) shouldExclude(path string) bool {
-	relPath, err := filepath.Rel(ds.sourcePath, path)
-	if err != nil {
-		relPath = path
-	}
-
-	normalizedPath := filepath.ToSlash(relPath)
-
-	// Fast path: Check extension exclusions
-	ext := filepath.Ext(normalizedPath)
-	if ext != "" && ds.patternCache.extExcludes[ext] {
-		return true
-	}
-
-	// Fast path: Check directory name exclusions
-	pathParts := strings.Split(normalizedPath, "/")
-	for _, part := range pathParts {
-		if ds.patternCache.dirExcludes[part] {
-			return true
+	// Delegate to the file source filter
+	if dirSource, ok := ds.fileSource.(*indexing.DirectorySource); ok {
+		filter := dirSource.GetFilter()
+		if filter != nil {
+			return filter.ShouldExclude(path)
 		}
 	}
-
-	// Slow path: Check glob patterns only if necessary
-	for _, pattern := range ds.patternCache.globExcludes {
-		if matched, err := filepath.Match(pattern, normalizedPath); err == nil && matched {
-			return true
-		}
-
-		// Check if pattern matches basename for **/ patterns
-		if strings.HasPrefix(pattern, "**/") {
-			simplePattern := strings.TrimPrefix(pattern, "**/")
-			if matched, err := filepath.Match(simplePattern, filepath.Base(normalizedPath)); err == nil && matched {
-				return true
-			}
-		}
-	}
-
 	return false
 }
 
 func (ds *DocumentStore) shouldInclude(path string) bool {
-	if len(ds.config.IncludePatterns) == 0 {
-		return true
-	}
-
-	relPath, err := filepath.Rel(ds.sourcePath, path)
-	if err != nil {
-		relPath = path
-	}
-
-	normalizedPath := filepath.ToSlash(relPath)
-
-	// Fast path: Check extension inclusions
-	ext := filepath.Ext(normalizedPath)
-	if ext != "" && ds.patternCache.extIncludes[ext] {
-		return true
-	}
-
-	// Fast path: Check directory name inclusions
-	pathParts := strings.Split(normalizedPath, "/")
-	for _, part := range pathParts {
-		if ds.patternCache.dirIncludes[part] {
-			return true
+	// Delegate to the file source filter
+	if dirSource, ok := ds.fileSource.(*indexing.DirectorySource); ok {
+		filter := dirSource.GetFilter()
+		if filter != nil {
+			return filter.ShouldInclude(path)
 		}
 	}
-
-	// Slow path: Check glob patterns only if necessary
-	for _, pattern := range ds.patternCache.globIncludes {
-		if pattern == "*" {
-			return true
-		}
-
-		if matched, err := filepath.Match(pattern, normalizedPath); err == nil && matched {
-			return true
-		}
-
-		// Check if pattern matches basename for **/ patterns
-		if strings.HasPrefix(pattern, "**/") {
-			simplePattern := strings.TrimPrefix(pattern, "**/")
-			if matched, err := filepath.Match(simplePattern, filepath.Base(normalizedPath)); err == nil && matched {
-				return true
-			}
-		}
-	}
-
-	return false
+	return true // Include by default if no filter
 }
 
 func (ds *DocumentStore) generateDocumentID(path string) string {
@@ -1033,29 +710,6 @@ func (ds *DocumentStore) generateDocumentID(path string) string {
 	return uuid.NewMD5(uuid.Nil, hash[:]).String()
 }
 
-func (ds *DocumentStore) prepareVectorMetadata(doc *Document) map[string]interface{} {
-	metadata := map[string]interface{}{
-		"path":          doc.Path,
-		"name":          doc.Name,
-		"title":         doc.Title,
-		"type":          doc.Type,
-		"language":      doc.Language,
-		"size":          doc.Size,
-		"lines":         doc.Lines,
-		"last_modified": doc.LastModified.Unix(),
-		"functions":     strings.Join(doc.Functions, ","),
-		"structs":       strings.Join(doc.Structs, ","),
-		"imports":       strings.Join(doc.Imports, ","),
-		"store_name":    ds.name,
-		"indexed_at":    time.Now().Unix(),
-	}
-
-	for k, v := range doc.Metadata {
-		metadata[k] = v
-	}
-
-	return metadata
-}
 
 func (ds *DocumentStore) GetStatus() *DocumentStoreStatus {
 	ds.mu.RLock()
