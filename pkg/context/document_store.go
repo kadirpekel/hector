@@ -134,8 +134,8 @@ type DocumentStore struct {
 	chunker            chunking.Chunker
 
 	// Progress tracking and checkpoints
-	progressTracker    *ProgressTracker
-	checkpointManager  *CheckpointManager
+	progressTracker   *ProgressTracker
+	checkpointManager *CheckpointManager
 
 	watcher       *fsnotify.Watcher
 	updateChannel chan DocumentUpdate
@@ -288,7 +288,7 @@ func (ds *DocumentStore) indexDirectory() error {
 		processedCount := len(checkpoint.ProcessedFiles)
 		if processedCount >= checkpoint.TotalFiles && checkpoint.TotalFiles > 0 {
 			// Checkpoint is complete, clear it and start fresh
-			ds.checkpointManager.ClearCheckpoint()
+			_ = ds.checkpointManager.ClearCheckpoint() // Ignore error - not critical
 			checkpoint = nil
 		} else {
 			fmt.Println("🔄 " + ds.checkpointManager.FormatCheckpointInfo(checkpoint))
@@ -322,7 +322,7 @@ func (ds *DocumentStore) indexDirectory() error {
 
 	// First pass: count total files that actually need processing
 	var totalFiles int64
-	filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
@@ -345,14 +345,30 @@ func (ds *DocumentStore) indexDirectory() error {
 		return nil
 	})
 
-	ds.progressTracker.SetTotalFiles(totalFiles)
-	ds.checkpointManager.SetTotalFiles(int(totalFiles))
+	// When resuming from checkpoint, show cumulative progress
+	if checkpoint != nil {
+		checkpointProcessed := int64(len(checkpoint.ProcessedFiles))
+		grandTotal := checkpointProcessed + totalFiles
+
+		// Set grand total for progress tracker
+		ds.progressTracker.SetTotalFiles(grandTotal)
+		ds.checkpointManager.SetTotalFiles(int(grandTotal))
+
+		// Pre-populate progress with checkpointed files
+		// This makes progress bar start from where we left off (e.g., 43/286 = 15%)
+		for i := int64(0); i < checkpointProcessed; i++ {
+			ds.progressTracker.IncrementProcessed()
+		}
+	} else {
+		ds.progressTracker.SetTotalFiles(totalFiles)
+		ds.checkpointManager.SetTotalFiles(int(totalFiles))
+	}
 
 	// Start progress tracker
 	ds.progressTracker.Start()
 	defer func() {
 		ds.progressTracker.Stop()
-		ds.checkpointManager.SaveCheckpoint() // Final save
+		_ = ds.checkpointManager.SaveCheckpoint() // Final save - ignore error
 	}()
 
 	// Second pass: actually index files
@@ -414,7 +430,7 @@ func (ds *DocumentStore) indexDirectory() error {
 
 					rp, _ := filepath.Rel(ds.sourcePath, p)
 					ds.checkpointManager.RecordFile(rp, i.Size(), i.ModTime(), "failed")
-					ds.checkpointManager.SaveCheckpoint()
+					_ = ds.checkpointManager.SaveCheckpoint() // Ignore error in panic recovery
 				}
 				<-ds.indexingSemaphore
 				indexedCount.Done()
@@ -453,7 +469,7 @@ func (ds *DocumentStore) indexDirectory() error {
 			}
 
 			// Periodically save checkpoint
-			ds.checkpointManager.SaveCheckpoint()
+			_ = ds.checkpointManager.SaveCheckpoint() // Ignore error - non-critical
 		}(path, info)
 
 		return nil
@@ -498,7 +514,7 @@ func (ds *DocumentStore) indexDirectory() error {
 	}
 
 	// Clear checkpoint after successful completion
-	ds.checkpointManager.ClearCheckpoint()
+	_ = ds.checkpointManager.ClearCheckpoint() // Ignore error - not critical
 
 	// Print failed files summary if in quiet mode
 	if ds.config.QuietMode != nil && *ds.config.QuietMode && len(failedFiles) > 0 {
@@ -669,7 +685,6 @@ func (ds *DocumentStore) computeFileHash(path string) string {
 	return fmt.Sprintf("%x", hash)
 }
 
-
 func (ds *DocumentStore) detectTypeAndLanguage(path string) (string, string) {
 	ext := strings.ToLower(filepath.Ext(path))
 
@@ -736,7 +751,6 @@ func (ds *DocumentStore) detectTypeAndLanguage(path string) (string, string) {
 	return docType, language
 }
 
-
 func (ds *DocumentStore) Search(ctx context.Context, query string, limit int) ([]databases.SearchResult, error) {
 	if ds.searchEngine == nil {
 		return nil, NewDocumentStoreError(ds.name, "Search", "search engine not available", "", nil)
@@ -787,13 +801,6 @@ func (ds *DocumentStore) shouldInclude(path string) bool {
 	}
 	return true // Include by default if no filter
 }
-
-func (ds *DocumentStore) generateDocumentID(path string) string {
-	fullPath := fmt.Sprintf("%s:%s", ds.name, path)
-	hash := md5.Sum([]byte(fullPath))
-	return uuid.NewMD5(uuid.Nil, hash[:]).String()
-}
-
 
 func (ds *DocumentStore) GetStatus() *DocumentStoreStatus {
 	ds.mu.RLock()
@@ -996,12 +1003,12 @@ type IndexedFileInfo struct {
 }
 
 type IndexState struct {
-	StoreName   string                 `json:"store_name"`
-	SourcePath  string                 `json:"source_path"`
-	LastIndexed time.Time              `json:"last_indexed"`
+	StoreName   string                   `json:"store_name"`
+	SourcePath  string                   `json:"source_path"`
+	LastIndexed time.Time                `json:"last_indexed"`
 	Files       map[string]FileIndexInfo `json:"files"`
-	TotalFiles  int                    `json:"total_files"`
-	TotalChunks int                    `json:"total_chunks"`
+	TotalFiles  int                      `json:"total_files"`
+	TotalChunks int                      `json:"total_chunks"`
 }
 
 type FileIndexInfo struct {

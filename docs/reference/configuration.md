@@ -626,33 +626,109 @@ embedders:
 
 ## Document Stores
 
+Document stores enable RAG (Retrieval-Augmented Generation) by indexing local directories for semantic search.
+
 ```yaml
 document_stores:
-  - name: "codebase"
-    paths:
-      - "./src/"
-      - "./lib/"
-    include_patterns:
+  codebase:
+    # Basic configuration
+    name: "codebase"              # Required: Store identifier
+    source: "directory"           # Required: Source type (only "directory" supported)
+    path: "./src"                 # Required: Directory to index
+
+    # File filtering
+    include_patterns:             # Optional: Only include matching files
       - "*.go"
       - "*.py"
-      - "*.js"
-    exclude_patterns:
-      - "*_test.go"
-      - "node_modules/*"
-      - ".git/*"
-    
-    chunk_size: 512               # Characters per chunk
-    chunk_overlap: 50             # Overlap between chunks
-    
-    collection: "codebase"        # Qdrant collection name
-    batch_size: 100               # Docs per batch
-    
-    parser: "native"              # native|custom|plugin
-    
-    # Search configuration
-    search_config:
-      limit: 5
-      score_threshold: 0.7
+      - "*.md"
+
+    # Smart exclusion system (choose one approach):
+    # Approach 1: Extend defaults (recommended)
+    additional_exclude_patterns:  # Extends comprehensive built-in defaults
+      - "**/my-custom-dir/**"
+      - "**/*.secret"
+
+    # Approach 2: Override defaults (not recommended)
+    # exclude_patterns:           # Replaces all defaults - use with caution
+    #   - "**/.git/**"
+    #   - "**/node_modules/**"
+
+    # Chunking configuration
+    chunk_size: 800               # Default: 800 characters per chunk
+    chunk_overlap: 0              # Default: 0 characters overlap between chunks
+    chunk_strategy: "simple"      # Options: "simple", "overlapping", "semantic"
+
+    # Indexing behavior
+    watch_changes: true           # Default: true - Auto-reindex on file changes
+    incremental_indexing: true    # Default: true - Only reindex changed files
+    max_file_size: 10485760       # Default: 10MB (in bytes)
+    max_concurrent_files: 10      # Default: 10 concurrent file processors
+
+    # Progress tracking
+    show_progress: true           # Default: true - Show animated progress bar
+    verbose_progress: false       # Default: false - Show current file name
+    enable_checkpoints: true      # Default: true - Enable resume on interruption
+    quiet_mode: true              # Default: true - Suppress per-file warnings
+
+    # Metadata extraction (advanced)
+    extract_metadata: false       # Default: false - Extract code metadata
+    metadata_languages:           # Languages for metadata extraction
+      - "go"
+      - "python"
+```
+
+**Default Exclusions:**
+
+By default, Hector excludes 115 patterns covering:
+- **VCS**: `.git`, `.svn`, `.hg`, `.bzr`
+- **Dependencies**: `node_modules`, `venv`, `*-env`, `*_env`, `site-packages`, `dist-packages`, `vendor`
+- **Build artifacts**: `dist`, `build`, `target`, `bin`, `obj`, `.gradle`
+- **IDE files**: `.vscode`, `.idea`, `.DS_Store`
+- **Binary/Media**: `*.exe`, `*.dll`, `*.so`, `*.png`, `*.jpg`, `*.mp4`, `*.mp3`
+- **Archives**: `*.zip`, `*.tar`, `*.gz`
+- **Logs/Temp**: `*.log`, `*.tmp`, `logs/`, `tmp/`
+- **Lock files**: `package-lock.json`, `yarn.lock`, `Cargo.lock`
+
+See [types.go:865-923](https://github.com/kadirpekel/hector/blob/main/pkg/config/types.go#L865-L923) for the complete list.
+
+**Chunk Strategies:**
+
+| Strategy | Description | Use Case |
+|----------|-------------|----------|
+| `simple` | Fixed-size chunks with no overlap | Fast, simple indexing |
+| `overlapping` | Fixed-size chunks with configurable overlap | Better context preservation |
+| `semantic` | Intelligent chunking at logical boundaries | Highest quality (slower) |
+
+**Progress Tracking:**
+
+When indexing large directories, Hector shows:
+- Animated progress bar with percentage
+- Files/second processing rate
+- ETA (estimated time remaining)
+- Failed file count
+
+If interrupted (Ctrl+C), checkpoints enable resuming from where it left off.
+
+**Example - Minimal:**
+```yaml
+document_stores:
+  docs:
+    path: "./documentation"
+```
+
+**Example - Advanced:**
+```yaml
+document_stores:
+  codebase:
+    path: "./src"
+    additional_exclude_patterns:
+      - "**/generated/**"
+      - "**/*.test.js"
+    chunk_strategy: "semantic"
+    chunk_size: 1200
+    chunk_overlap: 200
+    watch_changes: true
+    verbose_progress: true
 ```
 
 ---

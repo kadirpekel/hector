@@ -14,11 +14,11 @@ type MetadataExtractor interface {
 
 // Metadata contains extracted code structure information
 type Metadata struct {
-	Functions []FunctionInfo            `json:"functions,omitempty"`
-	Types     []TypeInfo                `json:"types,omitempty"`
-	Imports   []string                  `json:"imports,omitempty"`
-	Symbols   map[string]interface{}    `json:"symbols,omitempty"`
-	Custom    map[string]interface{}    `json:"custom,omitempty"`
+	Functions []FunctionInfo         `json:"functions,omitempty"`
+	Types     []TypeInfo             `json:"types,omitempty"`
+	Imports   []string               `json:"imports,omitempty"`
+	Symbols   map[string]interface{} `json:"symbols,omitempty"`
+	Custom    map[string]interface{} `json:"custom,omitempty"`
 }
 
 // FunctionInfo contains information about a function
@@ -27,7 +27,7 @@ type FunctionInfo struct {
 	Signature  string `json:"signature,omitempty"`
 	StartLine  int    `json:"start_line"`
 	EndLine    int    `json:"end_line"`
-	Receiver   string `json:"receiver,omitempty"`   // For methods
+	Receiver   string `json:"receiver,omitempty"` // For methods
 	IsExported bool   `json:"is_exported,omitempty"`
 	DocComment string `json:"doc_comment,omitempty"`
 }

@@ -12,43 +12,43 @@ import (
 
 // IndexCheckpoint represents a saved indexing checkpoint
 type IndexCheckpoint struct {
-	Version       string            `json:"version"`
-	StoreName     string            `json:"store_name"`
-	SourcePath    string            `json:"source_path"`
-	StartTime     time.Time         `json:"start_time"`
-	LastUpdate    time.Time         `json:"last_update"`
+	Version        string                    `json:"version"`
+	StoreName      string                    `json:"store_name"`
+	SourcePath     string                    `json:"source_path"`
+	StartTime      time.Time                 `json:"start_time"`
+	LastUpdate     time.Time                 `json:"last_update"`
 	ProcessedFiles map[string]FileCheckpoint `json:"processed_files"`
-	TotalFiles    int               `json:"total_files"`
-	IndexedCount  int               `json:"indexed_count"`
-	SkippedCount  int               `json:"skipped_count"`
-	FailedCount   int               `json:"failed_count"`
+	TotalFiles     int                       `json:"total_files"`
+	IndexedCount   int                       `json:"indexed_count"`
+	SkippedCount   int                       `json:"skipped_count"`
+	FailedCount    int                       `json:"failed_count"`
 }
 
 // FileCheckpoint contains information about a processed file
 type FileCheckpoint struct {
-	Path         string    `json:"path"`
-	Hash         string    `json:"hash"`
-	Size         int64     `json:"size"`
-	ModTime      time.Time `json:"mod_time"`
-	Status       string    `json:"status"` // "indexed", "skipped", "failed"
-	ProcessedAt  time.Time `json:"processed_at"`
+	Path        string    `json:"path"`
+	Hash        string    `json:"hash"`
+	Size        int64     `json:"size"`
+	ModTime     time.Time `json:"mod_time"`
+	Status      string    `json:"status"` // "indexed", "skipped", "failed"
+	ProcessedAt time.Time `json:"processed_at"`
 }
 
 // CheckpointManager manages indexing checkpoints
 type CheckpointManager struct {
-	checkpointDir  string
-	storeName      string
-	checkpoint     *IndexCheckpoint
-	enabled        bool
-	saveInterval   time.Duration
-	lastSaveTime   time.Time
-	mu             sync.RWMutex // Protects checkpoint data
+	checkpointDir string
+	storeName     string
+	checkpoint    *IndexCheckpoint
+	enabled       bool
+	saveInterval  time.Duration
+	lastSaveTime  time.Time
+	mu            sync.RWMutex // Protects checkpoint data
 }
 
 // NewCheckpointManager creates a new checkpoint manager
 func NewCheckpointManager(storeName, sourcePath string, enabled bool) *CheckpointManager {
 	checkpointDir := filepath.Join(os.TempDir(), "hector-checkpoints")
-	os.MkdirAll(checkpointDir, 0755)
+	_ = os.MkdirAll(checkpointDir, 0755) // Ignore error - will fail on first save if needed
 
 	return &CheckpointManager{
 		checkpointDir: checkpointDir,

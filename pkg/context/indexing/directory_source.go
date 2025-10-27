@@ -9,8 +9,8 @@ import (
 
 // DirectorySource implements FileSource for directory-based file discovery
 type DirectorySource struct {
-	basePath  string
-	filter    FileFilter
+	basePath    string
+	filter      FileFilter
 	maxFileSize int64
 }
 
@@ -122,10 +122,10 @@ func (ds *DirectorySource) SupportsIncrementalIndexing() bool {
 
 // DirectorySourceStats contains statistics about file discovery
 type DirectorySourceStats struct {
-	TotalFiles     int64
-	SkippedFiles   int64
-	ExcludedFiles  int64
-	ErrorCount     int64
+	TotalFiles    int64
+	SkippedFiles  int64
+	ExcludedFiles int64
+	ErrorCount    int64
 }
 
 // DiscoverFilesWithStats is like DiscoverFiles but also returns statistics

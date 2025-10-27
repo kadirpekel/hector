@@ -37,9 +37,9 @@ type ChunkContext struct {
 
 // ChunkerConfig contains chunking configuration
 type ChunkerConfig struct {
-	Strategy string `json:"strategy"`  // "simple", "overlapping", "semantic"
-	Size     int    `json:"size"`      // Target size in characters
-	Overlap  int    `json:"overlap"`   // Overlap size in characters
+	Strategy string `json:"strategy"` // "simple", "overlapping", "semantic"
+	Size     int    `json:"size"`     // Target size in characters
+	Overlap  int    `json:"overlap"`  // Overlap size in characters
 }
 
 // DefaultChunkerConfig returns default chunking configuration

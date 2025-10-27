@@ -43,7 +43,7 @@ func (oc *OverlappingChunker) Chunk(content string, meta *metadata.Metadata) ([]
 	chunkStartByte := 0
 	currentLine := 1
 	currentByte := 0
-	overlapStartLine := 1
+	var overlapStartLine int
 
 	for _, line := range lines {
 		lineWithNewline := line + "\n"

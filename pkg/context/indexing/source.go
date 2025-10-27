@@ -19,10 +19,10 @@ type FileSource interface {
 
 // FileInfo contains information about a discovered file
 type FileInfo struct {
-	Path         string      // Absolute path to the file
-	RelPath      string      // Relative path from base
-	Info         os.FileInfo // File metadata
-	ShouldIndex  bool        // Whether this file should be indexed (after filtering)
+	Path        string      // Absolute path to the file
+	RelPath     string      // Relative path from base
+	Info        os.FileInfo // File metadata
+	ShouldIndex bool        // Whether this file should be indexed (after filtering)
 }
 
 // FileFilter determines if a file should be indexed

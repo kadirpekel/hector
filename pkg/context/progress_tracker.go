@@ -9,22 +9,20 @@ import (
 
 // ProgressTracker tracks indexing progress with real-time statistics
 type ProgressTracker struct {
-	mu sync.RWMutex
-
 	// Counters (atomic for thread-safe increments)
-	totalFiles      int64
-	processedFiles  int64
-	indexedFiles    int64
-	skippedFiles    int64
-	failedFiles     int64
+	totalFiles     int64
+	processedFiles int64
+	indexedFiles   int64
+	skippedFiles   int64
+	failedFiles    int64
 
 	// Current state
-	currentFile     string
-	currentFileMu   sync.RWMutex
+	currentFile   string
+	currentFileMu sync.RWMutex
 
 	// Timing
-	startTime       time.Time
-	lastUpdateTime  time.Time
+	startTime      time.Time
+	lastUpdateTime time.Time
 
 	// Display settings
 	enabled         bool
@@ -32,8 +30,8 @@ type ProgressTracker struct {
 	verbose         bool
 
 	// Stop channel
-	stopChan        chan struct{}
-	doneChan        chan struct{}
+	stopChan chan struct{}
+	doneChan chan struct{}
 }
 
 // NewProgressTracker creates a new progress tracker
@@ -67,6 +65,9 @@ func (pt *ProgressTracker) Stop() {
 
 	close(pt.stopChan)
 	<-pt.doneChan // Wait for display loop to finish
+
+	// Print one final progress update to show 100%
+	pt.printProgress()
 
 	// Print final summary
 	pt.printFinalSummary()

@@ -808,32 +808,32 @@ func (c *ToolConfig) SetDefaults() {
 
 type DocumentStoreConfig struct {
 	Name                string   `yaml:"name"`
-	Source              string   `yaml:"source"`  // Only "directory" supported
+	Source              string   `yaml:"source"` // Only "directory" supported
 	Path                string   `yaml:"path"`
 	IncludePatterns     []string `yaml:"include_patterns"`
-	ExcludePatterns     []string `yaml:"exclude_patterns"`              // If set, replaces defaults entirely
-	AdditionalExcludes  []string `yaml:"additional_exclude_patterns"`   // Extends default exclusions
+	ExcludePatterns     []string `yaml:"exclude_patterns"`            // If set, replaces defaults entirely
+	AdditionalExcludes  []string `yaml:"additional_exclude_patterns"` // Extends default exclusions
 	WatchChanges        bool     `yaml:"watch_changes"`
 	MaxFileSize         int64    `yaml:"max_file_size"`
 	IncrementalIndexing bool     `yaml:"incremental_indexing"`
 
 	// Chunking configuration
-	ChunkSize     int    `yaml:"chunk_size"`      // Default: 800 characters
-	ChunkOverlap  int    `yaml:"chunk_overlap"`   // Default: 0 characters
-	ChunkStrategy string `yaml:"chunk_strategy"`  // "simple", "overlapping", "semantic"
+	ChunkSize     int    `yaml:"chunk_size"`     // Default: 800 characters
+	ChunkOverlap  int    `yaml:"chunk_overlap"`  // Default: 0 characters
+	ChunkStrategy string `yaml:"chunk_strategy"` // "simple", "overlapping", "semantic"
 
 	// Metadata extraction
-	ExtractMetadata   bool     `yaml:"extract_metadata"`     // Default: true
-	MetadataLanguages []string `yaml:"metadata_languages"`   // Languages to extract metadata from
+	ExtractMetadata   bool     `yaml:"extract_metadata"`   // Default: true
+	MetadataLanguages []string `yaml:"metadata_languages"` // Languages to extract metadata from
 
 	// Performance
 	MaxConcurrentFiles int `yaml:"max_concurrent_files"` // Default: 10
 
 	// Progress tracking
-	ShowProgress      *bool `yaml:"show_progress"`       // Default: true - show progress bar
-	VerboseProgress   *bool `yaml:"verbose_progress"`    // Default: false - show current file
-	EnableCheckpoints *bool `yaml:"enable_checkpoints"`  // Default: true - enable resume capability
-	QuietMode         *bool `yaml:"quiet_mode"`          // Default: true - suppress per-file warnings
+	ShowProgress      *bool `yaml:"show_progress"`      // Default: true - show progress bar
+	VerboseProgress   *bool `yaml:"verbose_progress"`   // Default: false - show current file
+	EnableCheckpoints *bool `yaml:"enable_checkpoints"` // Default: true - enable resume capability
+	QuietMode         *bool `yaml:"quiet_mode"`         // Default: true - suppress per-file warnings
 }
 
 func (c *DocumentStoreConfig) Validate() error {
@@ -967,7 +967,7 @@ func (c *DocumentStoreConfig) SetDefaults() {
 		c.EnableCheckpoints = &trueVal
 	}
 	if c.QuietMode == nil {
-		trueVal := true  // Default to true - suppress warnings
+		trueVal := true // Default to true - suppress warnings
 		c.QuietMode = &trueVal
 	}
 

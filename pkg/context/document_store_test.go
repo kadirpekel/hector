@@ -417,9 +417,9 @@ func TestDocumentStore_TypeDetection(t *testing.T) {
 
 func TestDocumentStore_ContentChunking(t *testing.T) {
 	storeConfig := &config.DocumentStoreConfig{
-		Name:       "test-store",
-		Path:       "/tmp",
-		ChunkSize:  100,
+		Name:          "test-store",
+		Path:          "/tmp",
+		ChunkSize:     100,
 		ChunkStrategy: "simple",
 	}
 

@@ -116,14 +116,6 @@ document_stores:
     # verbose_progress: false      # Default: false - show current file being indexed
     # enable_checkpoints: true     # Default: true - enable resume on interruption
 
-    # Exclusion patterns - smart extension mode
-    # Defaults cover: VCS, dependencies (site-packages, node_modules, venv, etc.),
-    # build artifacts, IDE files, binaries, media, archives, logs, lock files
-    # To extend defaults, use additional_exclude_patterns:
-    # additional_exclude_patterns:
-    #   - "**/my-custom-dir/**"
-    # To completely override defaults, use exclude_patterns instead
-
     # Performance
     max_concurrent_files: 10
     max_file_size: 5242880        # 5MB

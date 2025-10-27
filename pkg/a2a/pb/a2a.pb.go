@@ -1,5 +1,3 @@
-
-
 package pb
 
 import (
@@ -22,15 +20,15 @@ const (
 type TaskState int32
 
 const (
-	TaskState_TASK_STATE_UNSPECIFIED TaskState = 0
-	TaskState_TASK_STATE_SUBMITTED TaskState = 1
-	TaskState_TASK_STATE_WORKING TaskState = 2
-	TaskState_TASK_STATE_COMPLETED TaskState = 3
-	TaskState_TASK_STATE_FAILED TaskState = 4
-	TaskState_TASK_STATE_CANCELLED TaskState = 5
+	TaskState_TASK_STATE_UNSPECIFIED    TaskState = 0
+	TaskState_TASK_STATE_SUBMITTED      TaskState = 1
+	TaskState_TASK_STATE_WORKING        TaskState = 2
+	TaskState_TASK_STATE_COMPLETED      TaskState = 3
+	TaskState_TASK_STATE_FAILED         TaskState = 4
+	TaskState_TASK_STATE_CANCELLED      TaskState = 5
 	TaskState_TASK_STATE_INPUT_REQUIRED TaskState = 6
-	TaskState_TASK_STATE_REJECTED TaskState = 7
-	TaskState_TASK_STATE_AUTH_REQUIRED TaskState = 8
+	TaskState_TASK_STATE_REJECTED       TaskState = 7
+	TaskState_TASK_STATE_AUTH_REQUIRED  TaskState = 8
 )
 
 var (
@@ -88,8 +86,8 @@ type Role int32
 
 const (
 	Role_ROLE_UNSPECIFIED Role = 0
-	Role_ROLE_USER Role = 1
-	Role_ROLE_AGENT Role = 2
+	Role_ROLE_USER        Role = 1
+	Role_ROLE_AGENT       Role = 2
 )
 
 var (
@@ -132,13 +130,13 @@ func (Role) EnumDescriptor() ([]byte, []int) {
 }
 
 type SendMessageConfiguration struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	AcceptedOutputModes []string `protobuf:"bytes,1,rep,name=accepted_output_modes,json=acceptedOutputModes,proto3" json:"accepted_output_modes,omitempty"`
-	PushNotification *PushNotificationConfig `protobuf:"bytes,2,opt,name=push_notification,json=pushNotification,proto3" json:"push_notification,omitempty"`
-	HistoryLength int32 `protobuf:"varint,3,opt,name=history_length,json=historyLength,proto3" json:"history_length,omitempty"`
-	Blocking      bool `protobuf:"varint,4,opt,name=blocking,proto3" json:"blocking,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState  `protogen:"open.v1"`
+	AcceptedOutputModes []string                `protobuf:"bytes,1,rep,name=accepted_output_modes,json=acceptedOutputModes,proto3" json:"accepted_output_modes,omitempty"`
+	PushNotification    *PushNotificationConfig `protobuf:"bytes,2,opt,name=push_notification,json=pushNotification,proto3" json:"push_notification,omitempty"`
+	HistoryLength       int32                   `protobuf:"varint,3,opt,name=history_length,json=historyLength,proto3" json:"history_length,omitempty"`
+	Blocking            bool                    `protobuf:"varint,4,opt,name=blocking,proto3" json:"blocking,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *SendMessageConfiguration) Reset() {
@@ -199,13 +197,13 @@ func (x *SendMessageConfiguration) GetBlocking() bool {
 }
 
 type Task struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	ContextId string `protobuf:"bytes,2,opt,name=context_id,json=contextId,proto3" json:"context_id,omitempty"`
-	Status *TaskStatus `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
-	Artifacts []*Artifact `protobuf:"bytes,4,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
-	History []*Message `protobuf:"bytes,5,rep,name=history,proto3" json:"history,omitempty"`
-	Metadata      *structpb.Struct `protobuf:"bytes,6,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ContextId     string                 `protobuf:"bytes,2,opt,name=context_id,json=contextId,proto3" json:"context_id,omitempty"`
+	Status        *TaskStatus            `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Artifacts     []*Artifact            `protobuf:"bytes,4,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
+	History       []*Message             `protobuf:"bytes,5,rep,name=history,proto3" json:"history,omitempty"`
+	Metadata      *structpb.Struct       `protobuf:"bytes,6,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -282,9 +280,9 @@ func (x *Task) GetMetadata() *structpb.Struct {
 }
 
 type TaskStatus struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	State TaskState `protobuf:"varint,1,opt,name=state,proto3,enum=a2a.v1.TaskState" json:"state,omitempty"`
-	Update *Message `protobuf:"bytes,2,opt,name=update,json=message,proto3" json:"update,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         TaskState              `protobuf:"varint,1,opt,name=state,proto3,enum=a2a.v1.TaskState" json:"state,omitempty"`
+	Update        *Message               `protobuf:"bytes,2,opt,name=update,json=message,proto3" json:"update,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -341,9 +339,9 @@ func (x *TaskStatus) GetTimestamp() *timestamppb.Timestamp {
 }
 
 type Part struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Part isPart_Part `protobuf_oneof:"part"`
-	Metadata      *structpb.Struct `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Part          isPart_Part            `protobuf_oneof:"part"`
+	Metadata      *structpb.Struct       `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -441,10 +439,10 @@ func (*Part_File) isPart_Part() {}
 func (*Part_Data) isPart_Part() {}
 
 type FilePart struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	File          isFilePart_File `protobuf_oneof:"file"`
-	MimeType      string          `protobuf:"bytes,3,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
-	Name          string          `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	File          isFilePart_File        `protobuf_oneof:"file"`
+	MimeType      string                 `protobuf:"bytes,3,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
+	Name          string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -577,14 +575,14 @@ func (x *DataPart) GetData() *structpb.Struct {
 }
 
 type Message struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	MessageId string `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	ContextId string `protobuf:"bytes,2,opt,name=context_id,json=contextId,proto3" json:"context_id,omitempty"`
-	TaskId string `protobuf:"bytes,3,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
-	Role Role `protobuf:"varint,4,opt,name=role,proto3,enum=a2a.v1.Role" json:"role,omitempty"`
-	Content []*Part `protobuf:"bytes,5,rep,name=content,proto3" json:"content,omitempty"`
-	Metadata *structpb.Struct `protobuf:"bytes,6,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	Extensions    []string `protobuf:"bytes,7,rep,name=extensions,proto3" json:"extensions,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ContextId     string                 `protobuf:"bytes,2,opt,name=context_id,json=contextId,proto3" json:"context_id,omitempty"`
+	TaskId        string                 `protobuf:"bytes,3,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	Role          Role                   `protobuf:"varint,4,opt,name=role,proto3,enum=a2a.v1.Role" json:"role,omitempty"`
+	Content       []*Part                `protobuf:"bytes,5,rep,name=content,proto3" json:"content,omitempty"`
+	Metadata      *structpb.Struct       `protobuf:"bytes,6,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Extensions    []string               `protobuf:"bytes,7,rep,name=extensions,proto3" json:"extensions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -668,13 +666,13 @@ func (x *Message) GetExtensions() []string {
 }
 
 type Artifact struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	ArtifactId string `protobuf:"bytes,1,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
-	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Description string `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
-	Parts []*Part `protobuf:"bytes,5,rep,name=parts,proto3" json:"parts,omitempty"`
-	Metadata *structpb.Struct `protobuf:"bytes,6,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	Extensions    []string `protobuf:"bytes,7,rep,name=extensions,proto3" json:"extensions,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ArtifactId    string                 `protobuf:"bytes,1,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	Parts         []*Part                `protobuf:"bytes,5,rep,name=parts,proto3" json:"parts,omitempty"`
+	Metadata      *structpb.Struct       `protobuf:"bytes,6,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Extensions    []string               `protobuf:"bytes,7,rep,name=extensions,proto3" json:"extensions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -751,12 +749,12 @@ func (x *Artifact) GetExtensions() []string {
 }
 
 type TaskStatusUpdateEvent struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	TaskId string `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
-	ContextId string `protobuf:"bytes,2,opt,name=context_id,json=contextId,proto3" json:"context_id,omitempty"`
-	Status *TaskStatus `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
-	Final bool `protobuf:"varint,4,opt,name=final,proto3" json:"final,omitempty"`
-	Metadata      *structpb.Struct `protobuf:"bytes,5,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	ContextId     string                 `protobuf:"bytes,2,opt,name=context_id,json=contextId,proto3" json:"context_id,omitempty"`
+	Status        *TaskStatus            `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Final         bool                   `protobuf:"varint,4,opt,name=final,proto3" json:"final,omitempty"`
+	Metadata      *structpb.Struct       `protobuf:"bytes,5,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -826,13 +824,13 @@ func (x *TaskStatusUpdateEvent) GetMetadata() *structpb.Struct {
 }
 
 type TaskArtifactUpdateEvent struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	TaskId string `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
-	ContextId string `protobuf:"bytes,2,opt,name=context_id,json=contextId,proto3" json:"context_id,omitempty"`
-	Artifact *Artifact `protobuf:"bytes,3,opt,name=artifact,proto3" json:"artifact,omitempty"`
-	Append bool `protobuf:"varint,4,opt,name=append,proto3" json:"append,omitempty"`
-	LastChunk bool `protobuf:"varint,5,opt,name=last_chunk,json=lastChunk,proto3" json:"last_chunk,omitempty"`
-	Metadata      *structpb.Struct `protobuf:"bytes,6,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	ContextId     string                 `protobuf:"bytes,2,opt,name=context_id,json=contextId,proto3" json:"context_id,omitempty"`
+	Artifact      *Artifact              `protobuf:"bytes,3,opt,name=artifact,proto3" json:"artifact,omitempty"`
+	Append        bool                   `protobuf:"varint,4,opt,name=append,proto3" json:"append,omitempty"`
+	LastChunk     bool                   `protobuf:"varint,5,opt,name=last_chunk,json=lastChunk,proto3" json:"last_chunk,omitempty"`
+	Metadata      *structpb.Struct       `protobuf:"bytes,6,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -909,11 +907,11 @@ func (x *TaskArtifactUpdateEvent) GetMetadata() *structpb.Struct {
 }
 
 type PushNotificationConfig struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Url string `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
-	Token string `protobuf:"bytes,3,opt,name=token,proto3" json:"token,omitempty"`
-	Authentication *AuthenticationInfo `protobuf:"bytes,4,opt,name=authentication,proto3" json:"authentication,omitempty"`
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Url            string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Token          string                 `protobuf:"bytes,3,opt,name=token,proto3" json:"token,omitempty"`
+	Authentication *AuthenticationInfo    `protobuf:"bytes,4,opt,name=authentication,proto3" json:"authentication,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -976,9 +974,9 @@ func (x *PushNotificationConfig) GetAuthentication() *AuthenticationInfo {
 }
 
 type AuthenticationInfo struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Schemes []string `protobuf:"bytes,1,rep,name=schemes,proto3" json:"schemes,omitempty"`
-	Credentials   string `protobuf:"bytes,2,opt,name=credentials,proto3" json:"credentials,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Schemes       []string               `protobuf:"bytes,1,rep,name=schemes,proto3" json:"schemes,omitempty"`
+	Credentials   string                 `protobuf:"bytes,2,opt,name=credentials,proto3" json:"credentials,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1027,9 +1025,9 @@ func (x *AuthenticationInfo) GetCredentials() string {
 }
 
 type AgentInterface struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Url string `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
-	Transport     string `protobuf:"bytes,2,opt,name=transport,proto3" json:"transport,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	Transport     string                 `protobuf:"bytes,2,opt,name=transport,proto3" json:"transport,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1078,27 +1076,27 @@ func (x *AgentInterface) GetTransport() string {
 }
 
 type AgentCard struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	ProtocolVersion string `protobuf:"bytes,16,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
-	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Description string `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
-	Url string `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
-	PreferredTransport string `protobuf:"bytes,14,opt,name=preferred_transport,json=preferredTransport,proto3" json:"preferred_transport,omitempty"`
-	AdditionalInterfaces []*AgentInterface `protobuf:"bytes,15,rep,name=additional_interfaces,json=additionalInterfaces,proto3" json:"additional_interfaces,omitempty"`
-	Provider *AgentProvider `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"`
-	Version string `protobuf:"bytes,5,opt,name=version,proto3" json:"version,omitempty"`
-	DocumentationUrl string `protobuf:"bytes,6,opt,name=documentation_url,json=documentationUrl,proto3" json:"documentation_url,omitempty"`
-	Capabilities *AgentCapabilities `protobuf:"bytes,7,opt,name=capabilities,proto3" json:"capabilities,omitempty"`
-	SecuritySchemes map[string]*SecurityScheme `protobuf:"bytes,8,rep,name=security_schemes,json=securitySchemes,proto3" json:"security_schemes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Security []*Security `protobuf:"bytes,9,rep,name=security,proto3" json:"security,omitempty"`
-	DefaultInputModes []string `protobuf:"bytes,10,rep,name=default_input_modes,json=defaultInputModes,proto3" json:"default_input_modes,omitempty"`
-	DefaultOutputModes []string `protobuf:"bytes,11,rep,name=default_output_modes,json=defaultOutputModes,proto3" json:"default_output_modes,omitempty"`
-	Skills []*AgentSkill `protobuf:"bytes,12,rep,name=skills,proto3" json:"skills,omitempty"`
-	SupportsAuthenticatedExtendedCard bool `protobuf:"varint,13,opt,name=supports_authenticated_extended_card,json=supportsAuthenticatedExtendedCard,proto3" json:"supports_authenticated_extended_card,omitempty"`
-	Signatures []*AgentCardSignature `protobuf:"bytes,17,rep,name=signatures,proto3" json:"signatures,omitempty"`
-	IconUrl       string `protobuf:"bytes,18,opt,name=icon_url,json=iconUrl,proto3" json:"icon_url,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                             protoimpl.MessageState     `protogen:"open.v1"`
+	ProtocolVersion                   string                     `protobuf:"bytes,16,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
+	Name                              string                     `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Description                       string                     `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	Url                               string                     `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
+	PreferredTransport                string                     `protobuf:"bytes,14,opt,name=preferred_transport,json=preferredTransport,proto3" json:"preferred_transport,omitempty"`
+	AdditionalInterfaces              []*AgentInterface          `protobuf:"bytes,15,rep,name=additional_interfaces,json=additionalInterfaces,proto3" json:"additional_interfaces,omitempty"`
+	Provider                          *AgentProvider             `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"`
+	Version                           string                     `protobuf:"bytes,5,opt,name=version,proto3" json:"version,omitempty"`
+	DocumentationUrl                  string                     `protobuf:"bytes,6,opt,name=documentation_url,json=documentationUrl,proto3" json:"documentation_url,omitempty"`
+	Capabilities                      *AgentCapabilities         `protobuf:"bytes,7,opt,name=capabilities,proto3" json:"capabilities,omitempty"`
+	SecuritySchemes                   map[string]*SecurityScheme `protobuf:"bytes,8,rep,name=security_schemes,json=securitySchemes,proto3" json:"security_schemes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Security                          []*Security                `protobuf:"bytes,9,rep,name=security,proto3" json:"security,omitempty"`
+	DefaultInputModes                 []string                   `protobuf:"bytes,10,rep,name=default_input_modes,json=defaultInputModes,proto3" json:"default_input_modes,omitempty"`
+	DefaultOutputModes                []string                   `protobuf:"bytes,11,rep,name=default_output_modes,json=defaultOutputModes,proto3" json:"default_output_modes,omitempty"`
+	Skills                            []*AgentSkill              `protobuf:"bytes,12,rep,name=skills,proto3" json:"skills,omitempty"`
+	SupportsAuthenticatedExtendedCard bool                       `protobuf:"varint,13,opt,name=supports_authenticated_extended_card,json=supportsAuthenticatedExtendedCard,proto3" json:"supports_authenticated_extended_card,omitempty"`
+	Signatures                        []*AgentCardSignature      `protobuf:"bytes,17,rep,name=signatures,proto3" json:"signatures,omitempty"`
+	IconUrl                           string                     `protobuf:"bytes,18,opt,name=icon_url,json=iconUrl,proto3" json:"icon_url,omitempty"`
+	unknownFields                     protoimpl.UnknownFields
+	sizeCache                         protoimpl.SizeCache
 }
 
 func (x *AgentCard) Reset() {
@@ -1257,9 +1255,9 @@ func (x *AgentCard) GetIconUrl() string {
 }
 
 type AgentProvider struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Url string `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
-	Organization  string `protobuf:"bytes,2,opt,name=organization,proto3" json:"organization,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	Organization  string                 `protobuf:"bytes,2,opt,name=organization,proto3" json:"organization,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1308,12 +1306,12 @@ func (x *AgentProvider) GetOrganization() string {
 }
 
 type AgentCapabilities struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Streaming bool `protobuf:"varint,1,opt,name=streaming,proto3" json:"streaming,omitempty"`
-	PushNotifications bool `protobuf:"varint,2,opt,name=push_notifications,json=pushNotifications,proto3" json:"push_notifications,omitempty"`
-	Extensions    []*AgentExtension `protobuf:"bytes,3,rep,name=extensions,proto3" json:"extensions,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Streaming         bool                   `protobuf:"varint,1,opt,name=streaming,proto3" json:"streaming,omitempty"`
+	PushNotifications bool                   `protobuf:"varint,2,opt,name=push_notifications,json=pushNotifications,proto3" json:"push_notifications,omitempty"`
+	Extensions        []*AgentExtension      `protobuf:"bytes,3,rep,name=extensions,proto3" json:"extensions,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *AgentCapabilities) Reset() {
@@ -1367,11 +1365,11 @@ func (x *AgentCapabilities) GetExtensions() []*AgentExtension {
 }
 
 type AgentExtension struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Uri string `protobuf:"bytes,1,opt,name=uri,proto3" json:"uri,omitempty"`
-	Description string `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
-	Required bool `protobuf:"varint,3,opt,name=required,proto3" json:"required,omitempty"`
-	Params        *structpb.Struct `protobuf:"bytes,4,opt,name=params,proto3" json:"params,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Uri           string                 `protobuf:"bytes,1,opt,name=uri,proto3" json:"uri,omitempty"`
+	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	Required      bool                   `protobuf:"varint,3,opt,name=required,proto3" json:"required,omitempty"`
+	Params        *structpb.Struct       `protobuf:"bytes,4,opt,name=params,proto3" json:"params,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1434,15 +1432,15 @@ func (x *AgentExtension) GetParams() *structpb.Struct {
 }
 
 type AgentSkill struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Tags []string `protobuf:"bytes,4,rep,name=tags,proto3" json:"tags,omitempty"`
-	Examples []string `protobuf:"bytes,5,rep,name=examples,proto3" json:"examples,omitempty"`
-	InputModes []string `protobuf:"bytes,6,rep,name=input_modes,json=inputModes,proto3" json:"input_modes,omitempty"`
-	OutputModes []string `protobuf:"bytes,7,rep,name=output_modes,json=outputModes,proto3" json:"output_modes,omitempty"`
-	Security      []*Security `protobuf:"bytes,8,rep,name=security,proto3" json:"security,omitempty"` // protolint:enable REPEATED_FIELD_NAMES_PLURALIZED
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Tags          []string               `protobuf:"bytes,4,rep,name=tags,proto3" json:"tags,omitempty"`
+	Examples      []string               `protobuf:"bytes,5,rep,name=examples,proto3" json:"examples,omitempty"`
+	InputModes    []string               `protobuf:"bytes,6,rep,name=input_modes,json=inputModes,proto3" json:"input_modes,omitempty"`
+	OutputModes   []string               `protobuf:"bytes,7,rep,name=output_modes,json=outputModes,proto3" json:"output_modes,omitempty"`
+	Security      []*Security            `protobuf:"bytes,8,rep,name=security,proto3" json:"security,omitempty"` // protolint:enable REPEATED_FIELD_NAMES_PLURALIZED
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1533,10 +1531,10 @@ func (x *AgentSkill) GetSecurity() []*Security {
 }
 
 type AgentCardSignature struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Protected string `protobuf:"bytes,1,opt,name=protected,proto3" json:"protected,omitempty"`
-	Signature string `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"`
-	Header        *structpb.Struct `protobuf:"bytes,3,opt,name=header,proto3" json:"header,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Protected     string                 `protobuf:"bytes,1,opt,name=protected,proto3" json:"protected,omitempty"`
+	Signature     string                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"`
+	Header        *structpb.Struct       `protobuf:"bytes,3,opt,name=header,proto3" json:"header,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1592,8 +1590,8 @@ func (x *AgentCardSignature) GetHeader() *structpb.Struct {
 }
 
 type TaskPushNotificationConfig struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	state                  protoimpl.MessageState  `protogen:"open.v1"`
+	Name                   string                  `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	PushNotificationConfig *PushNotificationConfig `protobuf:"bytes,2,opt,name=push_notification_config,json=pushNotificationConfig,proto3" json:"push_notification_config,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
@@ -1729,7 +1727,7 @@ func (x *Security) GetSchemes() map[string]*StringList {
 }
 
 type SecurityScheme struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
+	state         protoimpl.MessageState  `protogen:"open.v1"`
 	Scheme        isSecurityScheme_Scheme `protobuf_oneof:"scheme"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1851,10 +1849,10 @@ func (*SecurityScheme_OpenIdConnectSecurityScheme) isSecurityScheme_Scheme() {}
 func (*SecurityScheme_MtlsSecurityScheme) isSecurityScheme_Scheme() {}
 
 type APIKeySecurityScheme struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Description string `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
-	Location string `protobuf:"bytes,2,opt,name=location,proto3" json:"location,omitempty"`
-	Name          string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Description   string                 `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
+	Location      string                 `protobuf:"bytes,2,opt,name=location,proto3" json:"location,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1910,10 +1908,10 @@ func (x *APIKeySecurityScheme) GetName() string {
 }
 
 type HTTPAuthSecurityScheme struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Description string `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
-	Scheme string `protobuf:"bytes,2,opt,name=scheme,proto3" json:"scheme,omitempty"`
-	BearerFormat  string `protobuf:"bytes,3,opt,name=bearer_format,json=bearerFormat,proto3" json:"bearer_format,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Description   string                 `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
+	Scheme        string                 `protobuf:"bytes,2,opt,name=scheme,proto3" json:"scheme,omitempty"`
+	BearerFormat  string                 `protobuf:"bytes,3,opt,name=bearer_format,json=bearerFormat,proto3" json:"bearer_format,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1969,10 +1967,10 @@ func (x *HTTPAuthSecurityScheme) GetBearerFormat() string {
 }
 
 type OAuth2SecurityScheme struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Description string `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
-	Flows *OAuthFlows `protobuf:"bytes,2,opt,name=flows,proto3" json:"flows,omitempty"`
-	Oauth2MetadataUrl string `protobuf:"bytes,3,opt,name=oauth2_metadata_url,json=oauth2MetadataUrl,proto3" json:"oauth2_metadata_url,omitempty"`
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Description       string                 `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
+	Flows             *OAuthFlows            `protobuf:"bytes,2,opt,name=flows,proto3" json:"flows,omitempty"`
+	Oauth2MetadataUrl string                 `protobuf:"bytes,3,opt,name=oauth2_metadata_url,json=oauth2MetadataUrl,proto3" json:"oauth2_metadata_url,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -2028,9 +2026,9 @@ func (x *OAuth2SecurityScheme) GetOauth2MetadataUrl() string {
 }
 
 type OpenIdConnectSecurityScheme struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Description string `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
-	OpenIdConnectUrl string `protobuf:"bytes,2,opt,name=open_id_connect_url,json=openIdConnectUrl,proto3" json:"open_id_connect_url,omitempty"`
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Description      string                 `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
+	OpenIdConnectUrl string                 `protobuf:"bytes,2,opt,name=open_id_connect_url,json=openIdConnectUrl,proto3" json:"open_id_connect_url,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -2079,8 +2077,8 @@ func (x *OpenIdConnectSecurityScheme) GetOpenIdConnectUrl() string {
 }
 
 type MutualTlsSecurityScheme struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Description   string `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Description   string                 `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2122,8 +2120,8 @@ func (x *MutualTlsSecurityScheme) GetDescription() string {
 }
 
 type OAuthFlows struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Flow          isOAuthFlows_Flow `protobuf_oneof:"flow"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Flow          isOAuthFlows_Flow      `protobuf_oneof:"flow"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2229,13 +2227,13 @@ func (*OAuthFlows_Implicit) isOAuthFlows_Flow() {}
 func (*OAuthFlows_Password) isOAuthFlows_Flow() {}
 
 type AuthorizationCodeOAuthFlow struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	AuthorizationUrl string `protobuf:"bytes,1,opt,name=authorization_url,json=authorizationUrl,proto3" json:"authorization_url,omitempty"`
-	TokenUrl string `protobuf:"bytes,2,opt,name=token_url,json=tokenUrl,proto3" json:"token_url,omitempty"`
-	RefreshUrl string `protobuf:"bytes,3,opt,name=refresh_url,json=refreshUrl,proto3" json:"refresh_url,omitempty"`
-	Scopes        map[string]string `protobuf:"bytes,4,rep,name=scopes,proto3" json:"scopes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	AuthorizationUrl string                 `protobuf:"bytes,1,opt,name=authorization_url,json=authorizationUrl,proto3" json:"authorization_url,omitempty"`
+	TokenUrl         string                 `protobuf:"bytes,2,opt,name=token_url,json=tokenUrl,proto3" json:"token_url,omitempty"`
+	RefreshUrl       string                 `protobuf:"bytes,3,opt,name=refresh_url,json=refreshUrl,proto3" json:"refresh_url,omitempty"`
+	Scopes           map[string]string      `protobuf:"bytes,4,rep,name=scopes,proto3" json:"scopes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *AuthorizationCodeOAuthFlow) Reset() {
@@ -2296,10 +2294,10 @@ func (x *AuthorizationCodeOAuthFlow) GetScopes() map[string]string {
 }
 
 type ClientCredentialsOAuthFlow struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	TokenUrl string `protobuf:"bytes,1,opt,name=token_url,json=tokenUrl,proto3" json:"token_url,omitempty"`
-	RefreshUrl string `protobuf:"bytes,2,opt,name=refresh_url,json=refreshUrl,proto3" json:"refresh_url,omitempty"`
-	Scopes        map[string]string `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TokenUrl      string                 `protobuf:"bytes,1,opt,name=token_url,json=tokenUrl,proto3" json:"token_url,omitempty"`
+	RefreshUrl    string                 `protobuf:"bytes,2,opt,name=refresh_url,json=refreshUrl,proto3" json:"refresh_url,omitempty"`
+	Scopes        map[string]string      `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2355,12 +2353,12 @@ func (x *ClientCredentialsOAuthFlow) GetScopes() map[string]string {
 }
 
 type ImplicitOAuthFlow struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	AuthorizationUrl string `protobuf:"bytes,1,opt,name=authorization_url,json=authorizationUrl,proto3" json:"authorization_url,omitempty"`
-	RefreshUrl string `protobuf:"bytes,2,opt,name=refresh_url,json=refreshUrl,proto3" json:"refresh_url,omitempty"`
-	Scopes        map[string]string `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	AuthorizationUrl string                 `protobuf:"bytes,1,opt,name=authorization_url,json=authorizationUrl,proto3" json:"authorization_url,omitempty"`
+	RefreshUrl       string                 `protobuf:"bytes,2,opt,name=refresh_url,json=refreshUrl,proto3" json:"refresh_url,omitempty"`
+	Scopes           map[string]string      `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ImplicitOAuthFlow) Reset() {
@@ -2414,10 +2412,10 @@ func (x *ImplicitOAuthFlow) GetScopes() map[string]string {
 }
 
 type PasswordOAuthFlow struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	TokenUrl string `protobuf:"bytes,1,opt,name=token_url,json=tokenUrl,proto3" json:"token_url,omitempty"`
-	RefreshUrl string `protobuf:"bytes,2,opt,name=refresh_url,json=refreshUrl,proto3" json:"refresh_url,omitempty"`
-	Scopes        map[string]string `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TokenUrl      string                 `protobuf:"bytes,1,opt,name=token_url,json=tokenUrl,proto3" json:"token_url,omitempty"`
+	RefreshUrl    string                 `protobuf:"bytes,2,opt,name=refresh_url,json=refreshUrl,proto3" json:"refresh_url,omitempty"`
+	Scopes        map[string]string      `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2473,10 +2471,10 @@ func (x *PasswordOAuthFlow) GetScopes() map[string]string {
 }
 
 type SendMessageRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Request *Message `protobuf:"bytes,1,opt,name=request,json=message,proto3" json:"request,omitempty"`
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	Request       *Message                  `protobuf:"bytes,1,opt,name=request,json=message,proto3" json:"request,omitempty"`
 	Configuration *SendMessageConfiguration `protobuf:"bytes,2,opt,name=configuration,proto3" json:"configuration,omitempty"`
-	Metadata      *structpb.Struct `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Metadata      *structpb.Struct          `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2532,9 +2530,9 @@ func (x *SendMessageRequest) GetMetadata() *structpb.Struct {
 }
 
 type GetTaskRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	HistoryLength int32 `protobuf:"varint,2,opt,name=history_length,json=historyLength,proto3" json:"history_length,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	HistoryLength int32                  `protobuf:"varint,2,opt,name=history_length,json=historyLength,proto3" json:"history_length,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2583,8 +2581,8 @@ func (x *GetTaskRequest) GetHistoryLength() int32 {
 }
 
 type CancelTaskRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Name          string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2626,8 +2624,8 @@ func (x *CancelTaskRequest) GetName() string {
 }
 
 type GetTaskPushNotificationConfigRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Name          string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2669,8 +2667,8 @@ func (x *GetTaskPushNotificationConfigRequest) GetName() string {
 }
 
 type DeleteTaskPushNotificationConfigRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Name          string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2712,9 +2710,9 @@ func (x *DeleteTaskPushNotificationConfigRequest) GetName() string {
 }
 
 type CreateTaskPushNotificationConfigRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Parent string `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
-	ConfigId string `protobuf:"bytes,2,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
+	state         protoimpl.MessageState      `protogen:"open.v1"`
+	Parent        string                      `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	ConfigId      string                      `protobuf:"bytes,2,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
 	Config        *TaskPushNotificationConfig `protobuf:"bytes,3,opt,name=config,proto3" json:"config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2771,8 +2769,8 @@ func (x *CreateTaskPushNotificationConfigRequest) GetConfig() *TaskPushNotificat
 }
 
 type TaskSubscriptionRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Name          string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2814,10 +2812,10 @@ func (x *TaskSubscriptionRequest) GetName() string {
 }
 
 type ListTaskPushNotificationConfigRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Parent string `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
-	PageSize int32 `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
-	PageToken     string `protobuf:"bytes,3,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Parent        string                 `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageToken     string                 `protobuf:"bytes,3,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2908,7 +2906,7 @@ func (*GetAgentCardRequest) Descriptor() ([]byte, []int) {
 }
 
 type SendMessageResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
+	state         protoimpl.MessageState        `protogen:"open.v1"`
 	Payload       isSendMessageResponse_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2985,7 +2983,7 @@ func (*SendMessageResponse_Task) isSendMessageResponse_Payload() {}
 func (*SendMessageResponse_Msg) isSendMessageResponse_Payload() {}
 
 type StreamResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
+	state         protoimpl.MessageState   `protogen:"open.v1"`
 	Payload       isStreamResponse_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3092,9 +3090,9 @@ func (*StreamResponse_StatusUpdate) isStreamResponse_Payload() {}
 func (*StreamResponse_ArtifactUpdate) isStreamResponse_Payload() {}
 
 type ListTaskPushNotificationConfigResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Configs []*TaskPushNotificationConfig `protobuf:"bytes,1,rep,name=configs,proto3" json:"configs,omitempty"`
-	NextPageToken string `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	state         protoimpl.MessageState        `protogen:"open.v1"`
+	Configs       []*TaskPushNotificationConfig `protobuf:"bytes,1,rep,name=configs,proto3" json:"configs,omitempty"`
+	NextPageToken string                        `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

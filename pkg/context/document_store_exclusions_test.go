@@ -154,7 +154,7 @@ func TestDefaultExcludePatterns(t *testing.T) {
 		"**/.git/**",
 		"**/vendor/**",
 		"**/__pycache__/**",
-		"*.pyc",
+		"**/*.pyc",
 		"*.log",
 		"**/.DS_Store",
 	}

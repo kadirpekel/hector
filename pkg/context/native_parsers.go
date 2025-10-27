@@ -307,13 +307,3 @@ func (p *OfficeParser) parseExcelDocument(filePath string) (string, string, stri
 	content := strings.Join(contentParts, "\n\n")
 	return content, title, "", sheetCount, metadata
 }
-
-func isBinaryFileType(filePath string) bool {
-	ext := strings.ToLower(filepath.Ext(filePath))
-	binaryExtensions := map[string]bool{
-		".pdf":  true,
-		".docx": true,
-		".xlsx": true,
-	}
-	return binaryExtensions[ext]
-}
