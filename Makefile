@@ -1,15 +1,22 @@
 # Hector Makefile
 # Build and release management for the Hector AI agent platform
 
-.PHONY: help build install test clean fmt vet lint release version test-coverage test-coverage-summary test-package test-race test-verbose dev ci install-lint quality pre-commit
+.PHONY: help build build-release install test clean fmt vet lint release version test-coverage test-coverage-summary test-package test-race test-verbose dev ci install-lint quality pre-commit
+
+# Build flags
+BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+LDFLAGS_VERSION := -X 'github.com/kadirpekel/hector.BuildDate=$(BUILD_DATE)' -X 'github.com/kadirpekel/hector.GitCommit=$(GIT_COMMIT)'
+LDFLAGS_RELEASE := -s -w $(LDFLAGS_VERSION)
 
 # Default target
 help:
 	@echo "Hector Build System"
 	@echo ""
 	@echo "Available targets:"
-	@echo "  build     - Build the hector binary"
-	@echo "  install   - Install hector to GOPATH/bin"
+	@echo "  build         - Build the hector binary (development with debug symbols)"
+	@echo "  build-release - Build the hector binary (production, stripped)"
+	@echo "  install       - Install hector to GOPATH/bin"
 	@echo "  test      - Run all tests"
 	@echo "  test-coverage - Run tests with coverage report"
 	@echo "  test-coverage-summary - Run tests with coverage summary"
@@ -25,15 +32,23 @@ help:
 	@echo "  deps      - Download dependencies"
 	@echo "  mod-tidy  - Tidy go.mod"
 
-# Build the binary
+# Build the binary (development with debug symbols)
 build:
-	@echo "Building hector..."
-	go build -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" -o hector ./cmd/hector
+	@echo "Building hector (development)..."
+	go build -ldflags "$(LDFLAGS_VERSION)" -o hector ./cmd/hector
+	@ls -lh hector
 
-# Install to GOPATH/bin
+# Build the binary (production, stripped)
+build-release:
+	@echo "Building hector (production - stripped)..."
+	go build -ldflags "$(LDFLAGS_RELEASE)" -o hector ./cmd/hector
+	@ls -lh hector
+	@echo "Binary size optimized for production (debug symbols stripped)"
+
+# Install to GOPATH/bin (production build)
 install:
-	@echo "Installing hector..."
-	go install -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" ./cmd/hector
+	@echo "Installing hector (production)..."
+	go install -ldflags "$(LDFLAGS_RELEASE)" ./cmd/hector
 
 # Install to system PATH (requires sudo)
 install-system:
@@ -94,21 +109,23 @@ lint:
 
 # Build release binaries for multiple platforms
 release:
-	@echo "Building release binaries..."
+	@echo "Building release binaries (stripped for production)..."
 	@mkdir -p dist
-	
+
 	# Linux
-	GOOS=linux GOARCH=amd64 go build -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" -o dist/hector-linux-amd64 ./cmd/hector
-	GOOS=linux GOARCH=arm64 go build -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" -o dist/hector-linux-arm64 ./cmd/hector
-	
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS_RELEASE)" -o dist/hector-linux-amd64 ./cmd/hector
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS_RELEASE)" -o dist/hector-linux-arm64 ./cmd/hector
+
 	# macOS
-	GOOS=darwin GOARCH=amd64 go build -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" -o dist/hector-darwin-amd64 ./cmd/hector
-	GOOS=darwin GOARCH=arm64 go build -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" -o dist/hector-darwin-arm64 ./cmd/hector
-	
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS_RELEASE)" -o dist/hector-darwin-amd64 ./cmd/hector
+	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS_RELEASE)" -o dist/hector-darwin-arm64 ./cmd/hector
+
 	# Windows
-	GOOS=windows GOARCH=amd64 go build -ldflags "-X 'github.com/kadirpekel/hector.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/kadirpekel/hector.GitCommit=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)'" -o dist/hector-windows-amd64.exe ./cmd/hector
-	
-	@echo "Release binaries built in dist/"
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS_RELEASE)" -o dist/hector-windows-amd64.exe ./cmd/hector
+
+	@echo ""
+	@echo "Release binaries built in dist/ (stripped):"
+	@ls -lh dist/
 
 # Show version information
 version:

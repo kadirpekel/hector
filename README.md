@@ -12,23 +12,24 @@
 [![Documentation](https://img.shields.io/badge/docs-gohector.dev-blue.svg)](https://gohector.dev)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 
-**Declarative A2A-Native AI Agent Platform**
+**Production-Grade A2A-Native Agent Platform**
 
-Production-ready framework for building, deploying, and orchestrating AI agents at scale.
+Deploy observable, secure, and scalable AI agents in production—with zero code.
 
-[Documentation](https://gohector.dev) • [Installation](https://gohector.dev/getting-started/installation/) • [Configuration Guide](https://gohector.dev/reference/configuration/)
+[Documentation](https://gohector.dev) • [Quick Start](https://gohector.dev/getting-started/quick-start/) • [Production Guide](https://gohector.dev/how-to/deploy-production/)
 
 ## Overview
 
-Hector is an AI agent framework designed for production deployment, built in Go for performance and operational simplicity. Define sophisticated multi-agent systems through declarative YAML configuration without writing code.
+Hector is an AI agent platform designed for production deployment, built in Go for performance and operational simplicity. Define sophisticated multi-agent systems through declarative YAML configuration without writing code.
 
 ### Key Characteristics
 
-- **Declarative Configuration**: YAML-based agent definition
-- **A2A Protocol Native**: Standards-compliant agent communication
-- **Distributed Architecture**: Support for local, server, and federated deployments  
-- **Production Ready**: Built-in observability, authentication, and distributed configuration
-- **Single Binary Deployment**: No runtime dependencies or complex installations
+- **Zero-Code Configuration**: Pure YAML agent definition, no Python/Go required
+- **Hot Reload**: Update configurations without downtime or restart
+- **A2A Protocol Native**: Standards-compliant agent communication and federation
+- **Production Observability**: Built-in Prometheus metrics and OpenTelemetry tracing
+- **Security-First**: JWT authentication, visibility controls, and command sandboxing out of the box
+- **Resource Efficient**: Single 30MB binary (stripped), minimal runtime footprint
 
 ## Quick Start
 
@@ -156,6 +157,25 @@ databases:
 ```
 
 [Configuration Reference](https://gohector.dev/reference/configuration/)
+
+## Why Hector?
+
+**For Platform Engineers & SREs:**
+- **Operational Excellence**: Built-in Prometheus metrics and OpenTelemetry tracing
+- **Zero-Downtime Updates**: Hot reload configurations from Consul/Etcd/ZooKeeper
+- **Security Native**: JWT authentication, visibility controls, command sandboxing out of the box
+- **Resource Efficient**: Single 30MB binary, minimal dependencies, runs anywhere
+
+**For AI Product Teams:**
+- **Zero-Code Configuration**: Pure YAML, no Python/Go required
+- **A2A-Native**: Standards-based agent communication and federation
+- **Multi-Agent Ready**: Supervisor reasoning + agent_call tool built-in
+- **Flexible Deployment**: Local dev, server mode, or distributed
+
+**Built in Go for Production:**
+Unlike Python-based frameworks requiring 200-500MB+ runtimes, Hector offers a single 30MB binary with <100ms startup, perfect for Kubernetes, edge devices, or Lambda.
+
+[Learn More: Why Hector?](https://gohector.dev/why-hector/) • [Compare with Alternatives](https://gohector.dev/why-hector/#comparison-hector-vs-traditional-frameworks)
 
 ## Production Features
 
@@ -409,9 +429,9 @@ Hector is optimized for production deployments:
 
 | Metric | Value | Comparison |
 |--------|-------|------------|
-| Memory Footprint | 128MB | 100,000x less than Python frameworks |
-| Binary Size | 10MB | Single executable |
-| Startup Time | <100ms | 10x faster than Python |
+| Binary Size | 30MB (stripped) | Single executable, no runtime dependencies |
+| Startup Time | <100ms | 20-100x faster than Python |
+| Resource Usage | Minimal | 10-20x less than Python frameworks |
 | Concurrent Agents | 100+ | Per instance |
 | Resource Cost | -90% | vs Python alternatives |
 

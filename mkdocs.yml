@@ -1,5 +1,5 @@
 site_name: Hector AI
-site_description: Pure A2A-Native Declarative AI Agent Platform
+site_description: Production-Grade A2A-Native Agent Platform - Deploy observable, secure, and scalable AI agents with zero code
 site_url: https://gohector.dev
 repo_url: https://github.com/kadirpekel/hector
 repo_name: kadirpekel/hector
@@ -53,11 +53,15 @@ theme:
 # Navigation
 nav:
   - Home: index.md
+  - Why Hector?: why-hector.md
   - Getting Started:
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quick-start.md
   - Core Concepts:
     - Overview: core-concepts/overview.md
+    - Observability: core-concepts/observability.md
+    - Security: core-concepts/security.md
+    - A2A Protocol: reference/a2a-protocol.md
     - LLM Providers: core-concepts/llm-providers.md
     - Prompts: core-concepts/prompts.md
     - Memory: core-concepts/memory.md
@@ -68,8 +72,6 @@ nav:
     - Structured Output: core-concepts/structured-output.md
     - Sessions: core-concepts/sessions.md
     - Streaming: core-concepts/streaming.md
-    - Security: core-concepts/security.md
-    - Observability: core-concepts/observability.md
     - Performance: core-concepts/performance.md
   - How-To Guides:
     - Build Coding Assistant: how-to/build-coding-assistant.md
@@ -88,7 +90,6 @@ nav:
       - System Design: reference/architecture.md
       - Session & Memory: reference/architecture/session-memory.md
       - Agent Lifecycle: reference/architecture/agent-lifecycle.md
-    - A2A Protocol: reference/a2a-protocol.md
 
 # Plugins
 plugins:

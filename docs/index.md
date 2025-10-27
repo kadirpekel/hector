@@ -14,33 +14,18 @@ hide:
 
 <div class="hero-section">
   <div class="hero-content">
-    <p class="hero-slogan">AI Agents with Confidence!</p>
-    
-    <p>Hector is a declarative A2A-Native AI Agent platform for building, deploying, and orchestrating AI agents at scale.</p>
-    
-    <div class="hero-example">
-```yaml
-agents:
-  assistant:
-    llm: gpt-4o
-    tools: [search, write_file, search_replace]
-    reasoning:
-      engine: chain-of-thought
-      max_iterations: 100
-    memory:
-      working:
-        strategy: summary_buffer
+    <p class="hero-slogan">Production-Ready AI Agents. Zero Code Required.</p>
 
-```
-    </div>
+    <p>Deploy observable, secure, and scalable AI agent systems with hot reload, distributed configuration, and A2A-native federation—all configured in YAML.</p>
+
+    <p>Built in Go for production environments, Hector delivers a single 30MB binary with &lt;100ms startup, built-in Prometheus metrics, OpenTelemetry tracing, and security controls—perfect for platform teams deploying AI infrastructure at scale.</p>
   </div>
-  
+
   <div class="hero-demo">
     <div id="hector-demo"></div>
   </div>
 </div>
 
-Built in Go, Hector lets you deploy powerful distributed AI agents on top of A2A protocol using straightforward YAML—no custom coding required. Ideal for production environments that demand speed and simplicity.
 
 <script>
 (function() {
@@ -55,12 +40,12 @@ Built in Go, Hector lets you deploy powerful distributed AI agents on top of A2A
     AsciinemaPlayer.create('assets/hector-demo.cast', document.getElementById('hector-demo'), {
       theme: 'asciinema',
       cols: 80,
-      rows: 21,
+      rows: 22,
       autoplay: false,
       loop: false,
       speed: 1,
       startAt: 0,
-      fontSize: 'medium',
+      terminalFontSize: '16px',
       poster: 'npt:0:2',
       pauseOnMarkers: true,
       markers: [[17.0, 'Server & Client Demo']]
@@ -76,14 +61,28 @@ Built in Go, Hector lets you deploy powerful distributed AI agents on top of A2A
 # Install
 go install github.com/kadirpekel/hector/cmd/hector@latest
 
-# Configure
+# Create configuration
+cat > agents.yaml << 'EOF'
+agents:
+  assistant:
+    llm: gpt-4o
+    tools: [search, write_file, search_replace]
+    reasoning:
+      engine: chain-of-thought
+      max_iterations: 100
+    memory:
+      working:
+        strategy: summary_buffer
+EOF
+
+# Configure credentials
 export OPENAI_API_KEY="sk-..."
 
 # Run server
 hector serve --config agents.yaml
 
 # Or use locally
-hector call "Explain quantum computing"
+hector call "Explain quantum computing" --config agents.yaml
 ```
 
 [Get Started Now! →](getting-started/quick-start.md){ .md-button .md-button--primary }
@@ -92,29 +91,29 @@ hector call "Explain quantum computing"
 
 <div class="grid cards" markdown>
 
--   :zap: __Declarative Configuration__
+-   :zap: __Zero-Code Configuration__
 
-    YAML-based agent definition. No programming required for agent creation.
+    Pure YAML agent definition. No Python/Go required—define sophisticated agents declaratively.
+
+-   :chart_with_upwards_trend: __Production Observability__
+
+    Built-in Prometheus metrics and OpenTelemetry tracing. Monitor latency, token usage, costs, and errors.
+
+-   :shield: __Security-First__
+
+    JWT auth, RBAC, and command sandboxing out of the box. Production-grade security controls.
+
+-   :arrows_counterclockwise: __Hot Reload__
+
+    Update configurations without downtime. Reload from Consul/Etcd/ZooKeeper automatically.
 
 -   :link: __A2A Protocol Native__
 
-    Standards-compliant agent communication and federation for distributed deployments.
+    Standards-compliant agent communication and federation for distributed, interoperable deployments.
 
--   :globe_with_meridians: __Distributed Architecture__
+-   :rocket: __Resource Efficient__
 
-    Support for local, server, and federated deployments with seamless scaling.
-
--   :shield: __Production Ready__
-
-    Built-in observability, authentication, distributed configuration, and security controls.
-
--   :package: __Single Binary Deployment__
-
-    No runtime dependencies or complex installations. One executable, zero configuration.
-
--   :rocket: __Featureful Agent System__
-
-    Multi-agent orchestration, advanced memory, rich tool ecosystem, reasoning engines, builtin rag, session persistence and many more.
+    Single 30MB binary, <100ms startup. 10-20x less resource usage than Python frameworks.
 
 </div>
 
