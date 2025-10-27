@@ -811,7 +811,8 @@ type DocumentStoreConfig struct {
 	Source              string   `yaml:"source"`  // Only "directory" supported
 	Path                string   `yaml:"path"`
 	IncludePatterns     []string `yaml:"include_patterns"`
-	ExcludePatterns     []string `yaml:"exclude_patterns"`
+	ExcludePatterns     []string `yaml:"exclude_patterns"`              // If set, replaces defaults entirely
+	AdditionalExcludes  []string `yaml:"additional_exclude_patterns"`   // Extends default exclusions
 	WatchChanges        bool     `yaml:"watch_changes"`
 	MaxFileSize         int64    `yaml:"max_file_size"`
 	IncrementalIndexing bool     `yaml:"incremental_indexing"`
@@ -827,6 +828,12 @@ type DocumentStoreConfig struct {
 
 	// Performance
 	MaxConcurrentFiles int `yaml:"max_concurrent_files"` // Default: 10
+
+	// Progress tracking
+	ShowProgress      *bool `yaml:"show_progress"`       // Default: true - show progress bar
+	VerboseProgress   *bool `yaml:"verbose_progress"`    // Default: false - show current file
+	EnableCheckpoints *bool `yaml:"enable_checkpoints"`  // Default: true - enable resume capability
+	QuietMode         *bool `yaml:"quiet_mode"`          // Default: true - suppress per-file warnings
 }
 
 func (c *DocumentStoreConfig) Validate() error {
@@ -854,48 +861,73 @@ func (c *DocumentStoreConfig) SetDefaults() {
 		c.Path = "./"
 	}
 
+	// Build default exclusion patterns
+	defaultExcludes := []string{
+		// Version control
+		"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**",
+
+		// Python dependencies and caches
+		"**/site-packages/**", "**/dist-packages/**",
+		"**/venv/**", "**/.venv/**", "**/virtualenv/**", "**/env/**",
+		"**/*-env/**", "**/*_env/**", "**/__pycache__/**", "**/*.pyc", "**/*.pyo", "**/*.pyd",
+
+		// Node.js dependencies
+		"**/node_modules/**", "**/.npm/**", "**/.yarn/**", "**/.pnp/**",
+
+		// Other language dependencies
+		"**/vendor/**", "**/.bundle/**", "**/gems/**",
+
+		// Build artifacts
+		"**/dist/**", "**/build/**", "**/out/**", "**/output/**",
+		"**/target/**", "**/.next/**", "**/.nuxt/**", "**/.output/**",
+		"**/bin/**", "**/obj/**", "**/.gradle/**", "**/.m2/**",
+		"**/.cache/**", "**/.parcel-cache/**",
+
+		// IDE files
+		"**/.vscode/**", "**/.idea/**", "**/.eclipse/**",
+		"**/.settings/**", "**/*.swp", "**/*.swo", "**/*~",
+		"**/.DS_Store", "**/Thumbs.db", "**/.directory",
+
+		// Binary files
+		"*.exe", "*.dll", "*.so", "*.dylib", "*.bin", "*.o", "*.a",
+		"*.obj", "*.lib", "*.class",
+
+		// Media files
+		"*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.ico", "*.webp", "*.svg",
+		"*.mp4", "*.avi", "*.mov", "*.mkv", "*.flv", "*.wmv",
+		"*.mp3", "*.wav", "*.flac", "*.aac", "*.ogg", "*.wma",
+
+		// Archives
+		"*.zip", "*.tar", "*.gz", "*.bz2", "*.7z", "*.rar", "*.xz", "*.tgz",
+
+		// Fonts
+		"*.ttf", "*.otf", "*.woff", "*.woff2", "*.eot",
+
+		// Databases
+		"*.db", "*.sqlite", "*.sqlite3", "*.mdb",
+
+		// Logs and temp files
+		"*.log", "*.tmp", "*.temp", "*.bak", "*.cache",
+		"**/logs/**", "**/tmp/**", "**/temp/**",
+
+		// Lock files
+		"**/package-lock.json", "**/yarn.lock", "**/pnpm-lock.yaml",
+		"**/Gemfile.lock", "**/Cargo.lock", "**/poetry.lock",
+
+		// Hector internal
+		"**/.hector/**", "**/index_state_*.json",
+
+		// Test artifacts
+		"**/coverage/**", "**/.nyc_output/**", "**/test-results/**",
+		"**/public/assets/**", "**/static/media/**",
+	}
+
+	// If ExcludePatterns is set, use it exclusively (override mode)
+	// Otherwise use defaults + additional excludes (extend mode)
 	if len(c.ExcludePatterns) == 0 {
-		c.ExcludePatterns = []string{
-
-			"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**",
-
-			"**/node_modules/**", "**/vendor/**", "**/venv/**", "**/.venv/**",
-			"**/virtualenv/**", "**/env/**", "**/__pycache__/**",
-			"**/.npm/**", "**/.yarn/**", "**/.pnp/**",
-			"**/.bundle/**", "**/gems/**",
-
-			"**/dist/**", "**/build/**", "**/out/**", "**/output/**",
-			"**/target/**", "**/.next/**", "**/.nuxt/**", "**/.output/**",
-			"**/bin/**", "**/obj/**", "**/.gradle/**", "**/.m2/**",
-			"**/.cache/**", "**/.parcel-cache/**",
-
-			"**/.vscode/**", "**/.idea/**", "**/.eclipse/**",
-			"**/.settings/**", "**/*.swp", "**/*.swo", "**/*~",
-			"**/.DS_Store", "**/Thumbs.db", "**/.directory",
-
-			"*.exe", "*.dll", "*.so", "*.dylib", "*.bin", "*.o", "*.a",
-			"*.obj", "*.lib", "*.class", "*.pyc", "*.pyo", "*.pyd",
-
-			"*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.ico", "*.webp", "*.svg",
-			"*.mp4", "*.avi", "*.mov", "*.mkv", "*.flv", "*.wmv",
-			"*.mp3", "*.wav", "*.flac", "*.aac", "*.ogg", "*.wma",
-
-			"*.zip", "*.tar", "*.gz", "*.bz2", "*.7z", "*.rar", "*.xz", "*.tgz",
-
-			"*.ttf", "*.otf", "*.woff", "*.woff2", "*.eot",
-
-			"*.db", "*.sqlite", "*.sqlite3", "*.mdb",
-
-			"*.log", "*.tmp", "*.temp", "*.bak", "*.swp", "*.cache",
-			"**/logs/**", "**/tmp/**", "**/temp/**",
-
-			"**/package-lock.json", "**/yarn.lock", "**/pnpm-lock.yaml",
-			"**/Gemfile.lock", "**/Cargo.lock", "**/poetry.lock",
-
-			"**/.hector/**", "**/index_state_*.json",
-
-			"**/coverage/**", "**/.nyc_output/**", "**/test-results/**",
-			"**/public/assets/**", "**/static/media/**",
+		c.ExcludePatterns = defaultExcludes
+		if len(c.AdditionalExcludes) > 0 {
+			c.ExcludePatterns = append(c.ExcludePatterns, c.AdditionalExcludes...)
 		}
 	}
 	if c.MaxFileSize == 0 {
@@ -921,10 +953,33 @@ func (c *DocumentStoreConfig) SetDefaults() {
 	}
 	// extract_metadata defaults to false initially
 
+	// Progress tracking defaults (using pointers for proper default detection)
+	if c.ShowProgress == nil {
+		trueVal := true
+		c.ShowProgress = &trueVal
+	}
+	if c.VerboseProgress == nil {
+		falseVal := false
+		c.VerboseProgress = &falseVal
+	}
+	if c.EnableCheckpoints == nil {
+		trueVal := true
+		c.EnableCheckpoints = &trueVal
+	}
+	if c.QuietMode == nil {
+		trueVal := true  // Default to true - suppress warnings
+		c.QuietMode = &trueVal
+	}
+
 	// Performance defaults
 	if c.MaxConcurrentFiles == 0 {
 		c.MaxConcurrentFiles = 10
 	}
+
+	// Progress tracking defaults (use field presence to determine if unset)
+	// ShowProgress defaults to true (enable by default)
+	// VerboseProgress defaults to false
+	// EnableCheckpoints defaults to true (enable by default)
 }
 
 type TaskConfig struct {

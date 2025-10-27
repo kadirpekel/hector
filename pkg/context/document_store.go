@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -134,6 +133,10 @@ type DocumentStore struct {
 	metadataExtractors *metadata.ExtractorRegistry
 	chunker            chunking.Chunker
 
+	// Progress tracking and checkpoints
+	progressTracker    *ProgressTracker
+	checkpointManager  *CheckpointManager
+
 	watcher       *fsnotify.Watcher
 	updateChannel chan DocumentUpdate
 	ctx           context.Context
@@ -205,6 +208,15 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 		maxConcurrent = 10
 	}
 
+	// Initialize progress tracker using pointer values (defaults already set in SetDefaults)
+	showProgress := storeConfig.ShowProgress != nil && *storeConfig.ShowProgress
+	verboseProgress := storeConfig.VerboseProgress != nil && *storeConfig.VerboseProgress
+	progressTracker := NewProgressTracker(showProgress, verboseProgress)
+
+	// Initialize checkpoint manager using pointer value (defaults already set in SetDefaults)
+	enableCheckpoints := storeConfig.EnableCheckpoints != nil && *storeConfig.EnableCheckpoints
+	checkpointManager := NewCheckpointManager(storeConfig.Name, storeConfig.Path, enableCheckpoints)
+
 	store := &DocumentStore{
 		name:               storeConfig.Name,
 		config:             storeConfig,
@@ -214,6 +226,8 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 		contentExtractors:  contentExtractors,
 		metadataExtractors: metadataExtractors,
 		chunker:            chunker,
+		progressTracker:    progressTracker,
+		checkpointManager:  checkpointManager,
 		updateChannel:      make(chan DocumentUpdate, DefaultUpdateChannelSize),
 		ctx:                ctx,
 		cancel:             cancel,
@@ -267,8 +281,22 @@ func (ds *DocumentStore) StartIndexing() error {
 func (ds *DocumentStore) indexDirectory() error {
 	ctx := context.Background()
 
+	// Try to load checkpoint
+	checkpoint, err := ds.checkpointManager.LoadCheckpoint()
+	if checkpoint != nil && err == nil {
+		// Check if checkpoint is complete (processed == total)
+		processedCount := len(checkpoint.ProcessedFiles)
+		if processedCount >= checkpoint.TotalFiles && checkpoint.TotalFiles > 0 {
+			// Checkpoint is complete, clear it and start fresh
+			ds.checkpointManager.ClearCheckpoint()
+			checkpoint = nil
+		} else {
+			fmt.Println("🔄 " + ds.checkpointManager.FormatCheckpointInfo(checkpoint))
+			fmt.Println("   Resuming from checkpoint...")
+		}
+	}
+
 	var existingDocs map[string]FileIndexInfo
-	var err error
 	if ds.config.IncrementalIndexing {
 		existingDocs, err = ds.loadIndexState()
 		if err != nil {
@@ -284,42 +312,53 @@ func (ds *DocumentStore) indexDirectory() error {
 	}
 
 	var indexedCount sync.WaitGroup
-	var successCount int32
-	var failCount int32
-	var skippedCount int32
-
 	foundFiles := make(map[string]bool)
 	indexedFiles := make(map[string]FileIndexInfo)
 	var filesMu sync.Mutex
 
-	// Progress reporting ticker
-	progressTicker := time.NewTicker(2 * time.Second)
-	progressDone := make(chan bool)
-	defer func() {
-		progressTicker.Stop()
-		progressDone <- true
-	}()
+	// Track failed files for summary
+	failedFiles := make([]string, 0)
+	var failedFilesMu sync.Mutex
 
-	go func() {
-		for {
-			select {
-			case <-progressTicker.C:
-				s := atomic.LoadInt32(&successCount)
-				f := atomic.LoadInt32(&failCount)
-				sk := atomic.LoadInt32(&skippedCount)
-				total := s + f + sk
-				if total > 0 {
-					fmt.Printf("Progress: %d processed (%d indexed, %d skipped, %d errors)\n", total, s, sk, f)
-				}
-			case <-progressDone:
-				return
-			}
+	// First pass: count total files that actually need processing
+	var totalFiles int64
+	filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
 		}
+		if !ds.shouldExclude(path) && ds.shouldInclude(path) && info.Size() > 0 && info.Size() <= ds.config.MaxFileSize {
+			relPath, _ := filepath.Rel(ds.sourcePath, path)
+
+			// Only count files that will actually be processed
+			// Skip files already in checkpoint and haven't changed
+			if checkpoint != nil && !ds.checkpointManager.ShouldProcessFile(relPath, info.Size(), info.ModTime()) {
+				return nil
+			}
+
+			// Skip files for incremental indexing
+			if !ds.shouldReindexFile(path, info.ModTime(), existingDocs) {
+				return nil
+			}
+
+			totalFiles++
+		}
+		return nil
+	})
+
+	ds.progressTracker.SetTotalFiles(totalFiles)
+	ds.checkpointManager.SetTotalFiles(int(totalFiles))
+
+	// Start progress tracker
+	ds.progressTracker.Start()
+	defer func() {
+		ds.progressTracker.Stop()
+		ds.checkpointManager.SaveCheckpoint() // Final save
 	}()
 
+	// Second pass: actually index files
 	err = filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			atomic.AddInt32(&failCount, 1)
+			ds.progressTracker.IncrementFailed()
 			log.Printf("Warning: Failed to access %s: %v", path, err)
 			return nil
 		}
@@ -349,8 +388,18 @@ func (ds *DocumentStore) indexDirectory() error {
 		foundFiles[relPath] = true
 		filesMu.Unlock()
 
+		// Check checkpoint: skip if already processed and hasn't changed
+		if !ds.checkpointManager.ShouldProcessFile(relPath, info.Size(), info.ModTime()) {
+			ds.progressTracker.IncrementSkipped()
+			// Don't increment processed for checkpointed files - they're not part of this run
+			return nil
+		}
+
+		// Check incremental indexing
 		if !ds.shouldReindexFile(path, info.ModTime(), existingDocs) {
-			atomic.AddInt32(&skippedCount, 1)
+			ds.progressTracker.IncrementSkipped()
+			ds.progressTracker.IncrementProcessed()
+			ds.checkpointManager.RecordFile(relPath, info.Size(), info.ModTime(), "skipped")
 			return nil
 		}
 
@@ -360,19 +409,40 @@ func (ds *DocumentStore) indexDirectory() error {
 			defer func() {
 				if r := recover(); r != nil {
 					log.Printf("Panic while indexing %s: %v", p, r)
-					atomic.AddInt32(&failCount, 1)
+					ds.progressTracker.IncrementFailed()
+					ds.progressTracker.IncrementProcessed()
+
+					rp, _ := filepath.Rel(ds.sourcePath, p)
+					ds.checkpointManager.RecordFile(rp, i.Size(), i.ModTime(), "failed")
+					ds.checkpointManager.SaveCheckpoint()
 				}
 				<-ds.indexingSemaphore
 				indexedCount.Done()
 			}()
 
-			if err := ds.indexDocument(p, i); err != nil {
-				atomic.AddInt32(&failCount, 1)
-				log.Printf("Warning: Failed to index %s: %v", p, err)
-			} else {
-				atomic.AddInt32(&successCount, 1)
+			// Update current file in progress tracker
+			rp, _ := filepath.Rel(ds.sourcePath, p)
+			ds.progressTracker.SetCurrentFile(rp)
 
-				rp, _ := filepath.Rel(ds.sourcePath, p)
+			if err := ds.indexDocument(p, i); err != nil {
+				ds.progressTracker.IncrementFailed()
+				ds.progressTracker.IncrementProcessed()
+				ds.checkpointManager.RecordFile(rp, i.Size(), i.ModTime(), "failed")
+
+				// Store failed file for summary
+				failedFilesMu.Lock()
+				failedFiles = append(failedFiles, rp)
+				failedFilesMu.Unlock()
+
+				// Only log if not in quiet mode
+				if ds.config.QuietMode == nil || !*ds.config.QuietMode {
+					log.Printf("Warning: Failed to index %s: %v", p, err)
+				}
+			} else {
+				ds.progressTracker.IncrementIndexed()
+				ds.progressTracker.IncrementProcessed()
+				ds.checkpointManager.RecordFile(rp, i.Size(), i.ModTime(), "indexed")
+
 				filesMu.Lock()
 				indexedFiles[rp] = FileIndexInfo{
 					ModTime: i.ModTime().Unix(),
@@ -381,6 +451,9 @@ func (ds *DocumentStore) indexDirectory() error {
 				}
 				filesMu.Unlock()
 			}
+
+			// Periodically save checkpoint
+			ds.checkpointManager.SaveCheckpoint()
 		}(path, info)
 
 		return nil
@@ -398,8 +471,10 @@ func (ds *DocumentStore) indexDirectory() error {
 		}
 	}
 
+	// Update status with final counts
+	stats := ds.progressTracker.GetStats()
 	ds.mu.Lock()
-	ds.status.DocumentCount = int(successCount)
+	ds.status.DocumentCount = int(stats.IndexedFiles)
 	ds.mu.Unlock()
 
 	if ds.config.IncrementalIndexing {
@@ -422,16 +497,25 @@ func (ds *DocumentStore) indexDirectory() error {
 		}
 	}
 
-	if ds.config.IncrementalIndexing && skippedCount > 0 {
-		fmt.Printf("Document store '%s' indexed: %d new/modified, %d unchanged, %d errors\n",
-			ds.name, successCount, skippedCount, failCount)
-	} else {
-		fmt.Printf("Document store '%s' indexed: %d documents (%d errors)\n",
-			ds.name, successCount, failCount)
+	// Clear checkpoint after successful completion
+	ds.checkpointManager.ClearCheckpoint()
+
+	// Print failed files summary if in quiet mode
+	if ds.config.QuietMode != nil && *ds.config.QuietMode && len(failedFiles) > 0 {
+		fmt.Println("\n⚠️  Failed Files Summary:")
+		maxShow := 10
+		for i, file := range failedFiles {
+			if i >= maxShow {
+				remaining := len(failedFiles) - maxShow
+				fmt.Printf("   ... and %d more files (check logs for details)\n", remaining)
+				break
+			}
+			fmt.Printf("   ❌ %s\n", file)
+		}
 	}
 
 	if ds.config.WatchChanges {
-		fmt.Printf("File watching enabled - changes will be automatically indexed\n")
+		fmt.Printf("\nFile watching enabled - changes will be automatically indexed\n")
 	}
 
 	return nil

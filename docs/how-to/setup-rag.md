@@ -264,13 +264,79 @@ document_stores:
     chunk_size: 256
 ```
 
-### Exclude Files
+### Smart Exclusion Patterns
+
+Hector automatically excludes common files you don't want indexed (dependencies, build artifacts, etc.).
+
+**Default exclusions include:**
+- VCS: `.git`, `.svn`, `.hg`, `.bzr`
+- Python: `site-packages`, `dist-packages`, `venv`, `.venv`, `__pycache__`, `*.pyc`
+- Node.js: `node_modules`, `.npm`, `.yarn`, `.pnp`
+- Build: `dist`, `build`, `out`, `target`, `bin`, `obj`
+- IDE: `.vscode`, `.idea`, `.DS_Store`
+- Binary: `*.exe`, `*.dll`, `*.so`, `*.dylib`, `*.class`
+- Media: `*.png`, `*.jpg`, `*.mp4`, `*.mp3`
+- Archives: `*.zip`, `*.tar`, `*.gz`
+
+**Extend defaults** (recommended - adds to built-in patterns):
 
 ```yaml
 document_stores:
-  clean_code:
-    name: "clean_code"
+  codebase:
+    name: "codebase"
     paths: ["./"]
+    additional_exclude_patterns:
+      - "**/legacy/**"
+      - "**/deprecated/**"
+      - "**/*.test.js"
+```
+
+**Override completely** (replaces all defaults):
+
+```yaml
+document_stores:
+  custom:
+    name: "custom"
+    paths: ["./"]
+    exclude_patterns:
+      - "**/.git/**"
+      - "**/node_modules/**"
+      # Your complete exclusion list
+```
+
+### Progress Tracking
+
+Monitor indexing progress with visual feedback:
+
+```yaml
+document_stores:
+  codebase:
+    name: "codebase"
+    paths: ["./src/"]
+
+    # Progress options (all optional, defaults shown)
+    show_progress: true          # Show progress bar (default: true)
+    verbose_progress: false      # Show current file (default: false)
+    enable_checkpoints: true     # Enable resume on interrupt (default: true)
+    quiet_mode: true             # Suppress per-file warnings (default: true)
+```
+
+**Example output:**
+
+```
+Indexing document store 'codebase' from: ./src/
+📊 [████████████░░░░░░░░░░░░░░░] 42.5% | 156/367 files | 12.3 files/s | ETA: 17s
+```
+
+**Checkpoint recovery:**
+
+If indexing is interrupted (Ctrl+C), Hector automatically saves progress and resumes:
+
+```
+🔄 Found checkpoint: 156/367 files processed (150 indexed, 6 skipped, 0 failed) - 12s elapsed
+   Resuming from checkpoint...
+📊 [████████████░░░░░░░░░░░░░░░] 42.5% | 156/367 files | 12.3 files/s | ETA: 17s
+```
 
 ### Adjust Chunk Sizes
 

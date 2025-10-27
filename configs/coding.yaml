@@ -88,3 +88,51 @@ agents:
       working:
         strategy: "summary_buffer"
         budget: 4000
+
+# Ollama configuration for embeddings
+ollama:
+  url: "http://localhost:11434"
+
+# Embedders configuration
+embedders:
+  mxbai-embed-large:
+    provider: ollama
+    model: mxbai-embed-large
+
+# Vector database configuration
+databases:
+  qdrant_local:
+    provider: qdrant
+    url: "http://localhost:6333"
+
+# Document store configuration for RAG/semantic search
+document_stores:
+  docs_hector:
+    path: .
+
+    # Progress tracking defaults (all are optional, shown here for reference)
+    # quiet_mode: true             # Default: true - suppress per-file warnings
+    # show_progress: true          # Default: true - show progress bar
+    # verbose_progress: false      # Default: false - show current file being indexed
+    # enable_checkpoints: true     # Default: true - enable resume on interruption
+
+    # Exclusion patterns - smart extension mode
+    # Defaults cover: VCS, dependencies (site-packages, node_modules, venv, etc.),
+    # build artifacts, IDE files, binaries, media, archives, logs, lock files
+    # To extend defaults, use additional_exclude_patterns:
+    # additional_exclude_patterns:
+    #   - "**/my-custom-dir/**"
+    # To completely override defaults, use exclude_patterns instead
+
+    # Performance
+    max_concurrent_files: 10
+    max_file_size: 5242880        # 5MB
+
+    # Chunking
+    chunk_size: 800
+    chunk_strategy: simple
+
+    # Metadata extraction
+    extract_metadata: true
+    metadata_languages:
+      - go
