@@ -183,6 +183,8 @@ func (a *Agent) execute(
 			Build()
 
 		if err != nil {
+			span.RecordError(err)
+			recordAgentMetrics(spanCtx, time.Since(startTime), 0, err)
 			outputCh <- fmt.Sprintf("Error: Failed to initialize state: %v\n", err)
 			return
 		}
@@ -286,12 +288,13 @@ func (a *Agent) execute(
 
 				var retryErr *httpclient.RetryableError
 				if !errors.As(err, &retryErr) {
-
+					span.RecordError(err)
 					outputCh <- fmt.Sprintf("Error: Fatal error: %v\n", err)
 					return
 				}
 
 				if attempt >= maxLLMRetries {
+					span.RecordError(err)
 					outputCh <- fmt.Sprintf("Error: Rate limit exceeded after %d retries: %v\n", maxLLMRetries, err)
 					return
 				}

@@ -1,0 +1,398 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Comprehensive Hector LLM and Tool Performance Dashboard",
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "description": "P99, P95, and P50 latency for LLM requests by model",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Duration (seconds)",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never"
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "max"]},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(hector_llm_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "P99 - {{model}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(hector_llm_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "P95 - {{model}}",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.50, rate(hector_llm_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "P50 - {{model}}",
+          "refId": "C"
+        }
+      ],
+      "title": "LLM Request Latency by Model",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "LLM error rate by model over time",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.01},
+              {"color": "red", "value": 0.05}
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(hector_llm_errors_total[5m])) by (model) / sum(rate(hector_llm_request_duration_seconds_count[5m])) by (model)",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ],
+      "title": "LLM Error Rate by Model",
+      "type": "gauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Input and output tokens consumed by model",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Tokens/sec",
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "last"]},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(hector_llm_tokens_input_total[5m])) by (model)",
+          "legendFormat": "Input - {{model}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(hector_llm_tokens_output_total[5m])) by (model)",
+          "legendFormat": "Output - {{model}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Token Usage by Model",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Total tokens consumed (cumulative) for cost estimation",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1000000},
+              {"color": "red", "value": 10000000}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 4,
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "text": {"titleSize": 16, "valueSize": 24}
+      },
+      "targets": [
+        {
+          "expr": "sum(hector_llm_tokens_input_total) + sum(hector_llm_tokens_output_total)",
+          "legendFormat": "Total Tokens",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Tokens Consumed (All Models)",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Tool execution duration percentiles",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Duration (seconds)",
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "id": 5,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "max"]},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(hector_tool_execution_duration_seconds_bucket[5m]))",
+          "legendFormat": "P99 - {{tool}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(hector_tool_execution_duration_seconds_bucket[5m]))",
+          "legendFormat": "P95 - {{tool}}",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.50, rate(hector_tool_execution_duration_seconds_bucket[5m]))",
+          "legendFormat": "P50 - {{tool}}",
+          "refId": "C"
+        }
+      ],
+      "title": "Tool Execution Latency by Tool",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Tool error rate over time",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.05},
+              {"color": "red", "value": 0.10}
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "id": 6,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(hector_tool_errors_total[5m])) / sum(rate(hector_tool_calls_total[5m]))",
+          "legendFormat": "Overall",
+          "refId": "A"
+        }
+      ],
+      "title": "Tool Error Rate",
+      "type": "gauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Tool usage heatmap showing which tools are used most frequently",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Calls/sec",
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "id": 7,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "last"], "sortBy": "Last", "sortDesc": true},
+        "tooltip": {"mode": "single"}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(hector_tool_calls_total[5m])) by (tool)",
+          "legendFormat": "{{tool}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Tool Usage Frequency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Top 10 most frequently called tools",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "id": 8,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "expr": "topk(10, sum(hector_tool_calls_total) by (tool))",
+          "legendFormat": "{{tool}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 10 Tools by Total Calls",
+      "type": "bargauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Agent execution metrics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Duration (seconds)",
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+      "id": 9,
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(hector_agent_call_duration_seconds_bucket[5m]))",
+          "legendFormat": "P99 Agent Duration",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(hector_agent_call_duration_seconds_bucket[5m]))",
+          "legendFormat": "P95 Agent Duration",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.50, rate(hector_agent_call_duration_seconds_bucket[5m]))",
+          "legendFormat": "P50 Agent Duration",
+          "refId": "C"
+        }
+      ],
+      "title": "Agent Execution Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Request rates for agents, tools, and LLMs",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Requests/sec",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 40},
+      "id": 10,
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(hector_agent_calls_total[5m]))",
+          "legendFormat": "Agent Calls",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(hector_tool_calls_total[5m]))",
+          "legendFormat": "Tool Calls",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(hector_llm_request_duration_seconds_count[5m]))",
+          "legendFormat": "LLM Requests",
+          "refId": "C"
+        }
+      ],
+      "title": "Overall Request Rates",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 27,
+  "style": "dark",
+  "tags": ["hector", "llm", "tools", "observability"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Hector LLM & Tools Performance",
+  "uid": "hector-llm-tools",
+  "version": 0
+}

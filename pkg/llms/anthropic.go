@@ -3,6 +3,7 @@ package llms
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,7 +14,11 @@ import (
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
+	"github.com/kadirpekel/hector/pkg/observability"
 	"github.com/kadirpekel/hector/pkg/protocol"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type AnthropicProvider struct {
@@ -142,15 +147,49 @@ func (p *AnthropicProvider) Close() error {
 }
 
 func (p *AnthropicProvider) Generate(messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+	startTime := time.Now()
+
+	// Create span for LLM request
+	tracer := observability.GetTracer("hector.llm")
+	ctx, span := tracer.Start(context.Background(), observability.SpanLLMRequest,
+		trace.WithAttributes(
+			attribute.String(observability.AttrLLMModel, p.config.Model),
+			attribute.String("provider", "anthropic"),
+			attribute.Bool("streaming", false),
+		),
+	)
+	defer span.End()
+
 	request := p.buildRequest(messages, false, tools)
 
 	response, err := p.makeRequest(request)
+	duration := time.Since(startTime)
+
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+
+		// Record metrics for failed request
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
+		}
+
 		return "", nil, 0, err
 	}
 
 	if response.Error != nil {
-		return "", nil, 0, fmt.Errorf("anthropic API error: %s", response.Error.Message)
+		apiErr := fmt.Errorf("anthropic API error: %s", response.Error.Message)
+		span.RecordError(apiErr)
+		span.SetStatus(codes.Error, response.Error.Message)
+
+		// Record metrics for API error
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, apiErr)
+		}
+
+		return "", nil, 0, apiErr
 	}
 
 	tokensUsed := response.Usage.InputTokens + response.Usage.OutputTokens
@@ -173,6 +212,19 @@ func (p *AnthropicProvider) Generate(messages []*pb.Message, tools []ToolDefinit
 				Args: args,
 			})
 		}
+	}
+
+	// Record successful metrics
+	span.SetAttributes(
+		attribute.Int(observability.AttrLLMTokensInput, response.Usage.InputTokens),
+		attribute.Int(observability.AttrLLMTokensOutput, response.Usage.OutputTokens),
+		attribute.Int("llm.tool_calls", len(toolCalls)),
+	)
+	span.SetStatus(codes.Ok, "success")
+
+	metrics := observability.GetGlobalMetrics()
+	if metrics != nil {
+		metrics.RecordLLMCall(ctx, p.config.Model, duration, response.Usage.InputTokens, response.Usage.OutputTokens, nil)
 	}
 
 	return text, toolCalls, tokensUsed, nil
@@ -472,6 +524,19 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 }
 
 func (p *AnthropicProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
+	startTime := time.Now()
+
+	// Create span for structured LLM request
+	tracer := observability.GetTracer("hector.llm")
+	ctx, span := tracer.Start(context.Background(), observability.SpanLLMRequest,
+		trace.WithAttributes(
+			attribute.String(observability.AttrLLMModel, p.config.Model),
+			attribute.String("provider", "anthropic"),
+			attribute.Bool("streaming", false),
+			attribute.Bool("structured", true),
+		),
+	)
+	defer span.End()
 
 	systemPrompt := p.buildSystemPromptWithSchema(structConfig)
 
@@ -496,7 +561,40 @@ func (p *AnthropicProvider) GenerateStructured(messages []*pb.Message, tools []T
 		})
 	}
 
-	return p.makeStructuredRequest(req)
+	text, toolCalls, tokens, err := p.makeStructuredRequest(req)
+	duration := time.Since(startTime)
+
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+
+		// Record metrics for failed request
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
+		}
+
+		return "", nil, 0, err
+	}
+
+	// Calculate input/output tokens from total
+	inputTokens := tokens / 2 // Rough estimate
+	outputTokens := tokens / 2
+
+	// Record successful metrics
+	span.SetAttributes(
+		attribute.Int(observability.AttrLLMTokensInput, inputTokens),
+		attribute.Int(observability.AttrLLMTokensOutput, outputTokens),
+		attribute.Int("llm.tool_calls", len(toolCalls)),
+	)
+	span.SetStatus(codes.Ok, "success")
+
+	metrics := observability.GetGlobalMetrics()
+	if metrics != nil {
+		metrics.RecordLLMCall(ctx, p.config.Model, duration, inputTokens, outputTokens, nil)
+	}
+
+	return text, toolCalls, tokens, nil
 }
 
 func (p *AnthropicProvider) GenerateStructuredStreaming(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {

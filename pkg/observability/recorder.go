@@ -18,6 +18,16 @@ type Metrics interface {
 	RecordAgentCall(ctx context.Context, duration time.Duration, tokens int, err error)
 	RecordToolExecution(ctx context.Context, tool string, duration time.Duration, err error)
 	RecordLLMCall(ctx context.Context, model string, duration time.Duration, inputTokens, outputTokens int, err error)
+
+	// HTTP metrics
+	RecordHTTPRequest(ctx context.Context, method, path string, statusCode int, duration time.Duration, responseSize int)
+
+	// gRPC metrics
+	RecordGRPCCall(ctx context.Context, service, method, statusCode string, duration time.Duration, err error)
+
+	// Business KPI metrics
+	RecordSession(ctx context.Context, agentName string, duration time.Duration, successful bool)
+	RecordConversationTurn(ctx context.Context, agentName string, turnCount int)
 }
 
 type PrometheusMetrics struct {
@@ -34,6 +44,22 @@ type PrometheusMetrics struct {
 	llmInputTokens  metric.Int64Counter
 	llmOutputTokens metric.Int64Counter
 	llmErrorsTotal  metric.Int64Counter
+
+	// HTTP metrics
+	httpRequestsTotal metric.Int64Counter
+	httpDuration      metric.Float64Histogram
+	httpRequestSize   metric.Int64Histogram
+	httpResponseSize  metric.Int64Histogram
+
+	// gRPC metrics
+	grpcCallsTotal  metric.Int64Counter
+	grpcDuration    metric.Float64Histogram
+	grpcErrorsTotal metric.Int64Counter
+
+	// Business KPI metrics
+	sessionDuration   metric.Float64Histogram
+	sessionTotal      metric.Int64Counter
+	conversationTurns metric.Int64Histogram
 }
 
 func NewPrometheusMetrics(
@@ -48,19 +74,39 @@ func NewPrometheusMetrics(
 	llmInputTokens metric.Int64Counter,
 	llmOutputTokens metric.Int64Counter,
 	llmErrorsTotal metric.Int64Counter,
+	httpRequestsTotal metric.Int64Counter,
+	httpDuration metric.Float64Histogram,
+	httpRequestSize metric.Int64Histogram,
+	httpResponseSize metric.Int64Histogram,
+	grpcCallsTotal metric.Int64Counter,
+	grpcDuration metric.Float64Histogram,
+	grpcErrorsTotal metric.Int64Counter,
+	sessionDuration metric.Float64Histogram,
+	sessionTotal metric.Int64Counter,
+	conversationTurns metric.Int64Histogram,
 ) *PrometheusMetrics {
 	return &PrometheusMetrics{
-		agentDuration:    agentDuration,
-		agentCallsTotal:  agentCallsTotal,
-		agentErrorsTotal: agentErrorsTotal,
-		agentTokensTotal: agentTokensTotal,
-		toolDuration:     toolDuration,
-		toolCallsTotal:   toolCallsTotal,
-		toolErrorsTotal:  toolErrorsTotal,
-		llmDuration:      llmDuration,
-		llmInputTokens:   llmInputTokens,
-		llmOutputTokens:  llmOutputTokens,
-		llmErrorsTotal:   llmErrorsTotal,
+		agentDuration:     agentDuration,
+		agentCallsTotal:   agentCallsTotal,
+		agentErrorsTotal:  agentErrorsTotal,
+		agentTokensTotal:  agentTokensTotal,
+		toolDuration:      toolDuration,
+		toolCallsTotal:    toolCallsTotal,
+		toolErrorsTotal:   toolErrorsTotal,
+		llmDuration:       llmDuration,
+		llmInputTokens:    llmInputTokens,
+		llmOutputTokens:   llmOutputTokens,
+		llmErrorsTotal:    llmErrorsTotal,
+		httpRequestsTotal: httpRequestsTotal,
+		httpDuration:      httpDuration,
+		httpRequestSize:   httpRequestSize,
+		httpResponseSize:  httpResponseSize,
+		grpcCallsTotal:    grpcCallsTotal,
+		grpcDuration:      grpcDuration,
+		grpcErrorsTotal:   grpcErrorsTotal,
+		sessionDuration:   sessionDuration,
+		sessionTotal:      sessionTotal,
+		conversationTurns: conversationTurns,
 	}
 }
 
@@ -125,5 +171,76 @@ func SetGlobalMetrics(m Metrics) {
 func GetGlobalMetrics() Metrics {
 	metricsMu.RLock()
 	defer metricsMu.RUnlock()
+	if globalMetrics == nil {
+		return &NoopMetrics{}
+	}
 	return globalMetrics
+}
+
+// RecordHTTPRequest records HTTP request metrics
+func (m *PrometheusMetrics) RecordHTTPRequest(ctx context.Context, method, path string, statusCode int, duration time.Duration, responseSize int) {
+	if m == nil || m.httpRequestsTotal == nil || m.httpDuration == nil {
+		return
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String("method", method),
+		attribute.String("path", path),
+		attribute.Int("status_code", statusCode),
+	}
+
+	m.httpRequestsTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
+	m.httpDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(attrs...))
+
+	if m.httpResponseSize != nil && responseSize > 0 {
+		m.httpResponseSize.Record(ctx, int64(responseSize), metric.WithAttributes(attrs...))
+	}
+}
+
+// RecordGRPCCall records gRPC call metrics
+func (m *PrometheusMetrics) RecordGRPCCall(ctx context.Context, service, method, statusCode string, duration time.Duration, err error) {
+	if m == nil || m.grpcCallsTotal == nil || m.grpcDuration == nil {
+		return
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String("service", service),
+		attribute.String("method", method),
+		attribute.String("status_code", statusCode),
+	}
+
+	m.grpcCallsTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
+	m.grpcDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(attrs...))
+
+	if err != nil && m.grpcErrorsTotal != nil {
+		m.grpcErrorsTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
+	}
+}
+
+// RecordSession records session-level metrics for business KPIs
+func (m *PrometheusMetrics) RecordSession(ctx context.Context, agentName string, duration time.Duration, successful bool) {
+	if m == nil || m.sessionTotal == nil || m.sessionDuration == nil {
+		return
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String("agent", agentName),
+		attribute.Bool("successful", successful),
+	}
+
+	m.sessionTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
+	m.sessionDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(attrs...))
+}
+
+// RecordConversationTurn records conversation turn count for business insights
+func (m *PrometheusMetrics) RecordConversationTurn(ctx context.Context, agentName string, turnCount int) {
+	if m == nil || m.conversationTurns == nil {
+		return
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String("agent", agentName),
+	}
+
+	m.conversationTurns.Record(ctx, int64(turnCount), metric.WithAttributes(attrs...))
 }

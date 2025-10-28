@@ -3,6 +3,7 @@ package llms
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,7 +15,11 @@ import (
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
+	"github.com/kadirpekel/hector/pkg/observability"
 	"github.com/kadirpekel/hector/pkg/protocol"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type GeminiProvider struct {
@@ -88,6 +93,18 @@ func NewGeminiProviderFromConfig(cfg *config.LLMProviderConfig) (*GeminiProvider
 }
 
 func (p *GeminiProvider) Generate(messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+	startTime := time.Now()
+
+	// Create span for LLM request
+	tracer := observability.GetTracer("hector.llm")
+	ctx, span := tracer.Start(context.Background(), observability.SpanLLMRequest,
+		trace.WithAttributes(
+			attribute.String(observability.AttrLLMModel, p.config.Model),
+			attribute.String("provider", "gemini"),
+			attribute.Bool("streaming", false),
+		),
+	)
+	defer span.End()
 
 	req := p.buildRequest(messages, tools, nil)
 
@@ -98,21 +115,80 @@ func (p *GeminiProvider) Generate(messages []*pb.Message, tools []ToolDefinition
 
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(reqBody))
 	if err != nil {
-		return "", nil, 0, fmt.Errorf("failed to create request: %w", err)
+		reqErr := fmt.Errorf("failed to create request: %w", err)
+		span.RecordError(reqErr)
+		span.SetStatus(codes.Error, "failed to create request")
+
+		duration := time.Since(startTime)
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, reqErr)
+		}
+
+		return "", nil, 0, reqErr
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.httpClient.Do(httpReq)
 	_, geminiResp, err := p.handleGeminiResponse(resp, err)
+	duration := time.Since(startTime)
+
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
+		}
+
 		return "", nil, 0, err
 	}
 
 	if len(geminiResp.Candidates) == 0 {
-		return "", nil, 0, fmt.Errorf("no candidates in response")
+		noCandErr := fmt.Errorf("no candidates in response")
+		span.RecordError(noCandErr)
+		span.SetStatus(codes.Error, "no candidates")
+
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, noCandErr)
+		}
+
+		return "", nil, 0, noCandErr
 	}
 
-	return p.parseResponse(geminiResp)
+	text, toolCalls, tokens, parseErr := p.parseResponse(geminiResp)
+	if parseErr != nil {
+		span.RecordError(parseErr)
+		span.SetStatus(codes.Error, "parse error")
+
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, parseErr)
+		}
+
+		return text, toolCalls, tokens, parseErr
+	}
+
+	// Record successful metrics
+	// Gemini doesn't provide separate input/output token counts in all cases
+	inputTokens := tokens / 2 // Rough estimate
+	outputTokens := tokens / 2
+
+	span.SetAttributes(
+		attribute.Int(observability.AttrLLMTokensInput, inputTokens),
+		attribute.Int(observability.AttrLLMTokensOutput, outputTokens),
+		attribute.Int("llm.tool_calls", len(toolCalls)),
+	)
+	span.SetStatus(codes.Ok, "success")
+
+	metrics := observability.GetGlobalMetrics()
+	if metrics != nil {
+		metrics.RecordLLMCall(ctx, p.config.Model, duration, inputTokens, outputTokens, nil)
+	}
+
+	return text, toolCalls, tokens, nil
 }
 
 func (p *GeminiProvider) GenerateStreaming(messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
@@ -158,6 +234,20 @@ func (p *GeminiProvider) GenerateStreaming(messages []*pb.Message, tools []ToolD
 }
 
 func (p *GeminiProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
+	startTime := time.Now()
+
+	// Create span for structured LLM request
+	tracer := observability.GetTracer("hector.llm")
+	ctx, span := tracer.Start(context.Background(), observability.SpanLLMRequest,
+		trace.WithAttributes(
+			attribute.String(observability.AttrLLMModel, p.config.Model),
+			attribute.String("provider", "gemini"),
+			attribute.Bool("streaming", false),
+			attribute.Bool("structured", true),
+		),
+	)
+	defer span.End()
+
 	req := p.buildRequest(messages, tools, structConfig)
 
 	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent?key=%s",
@@ -167,17 +257,66 @@ func (p *GeminiProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(reqBody))
 	if err != nil {
-		return "", nil, 0, fmt.Errorf("failed to create request: %w", err)
+		reqErr := fmt.Errorf("failed to create request: %w", err)
+		span.RecordError(reqErr)
+		span.SetStatus(codes.Error, "failed to create request")
+
+		duration := time.Since(startTime)
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, reqErr)
+		}
+
+		return "", nil, 0, reqErr
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.httpClient.Do(httpReq)
 	_, geminiResp, err := p.handleGeminiResponse(resp, err)
+	duration := time.Since(startTime)
+
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
+		}
+
 		return "", nil, 0, err
 	}
 
-	return p.parseResponse(geminiResp)
+	text, toolCalls, tokens, parseErr := p.parseResponse(geminiResp)
+	if parseErr != nil {
+		span.RecordError(parseErr)
+		span.SetStatus(codes.Error, "parse error")
+
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, parseErr)
+		}
+
+		return text, toolCalls, tokens, parseErr
+	}
+
+	// Record successful metrics
+	inputTokens := tokens / 2 // Rough estimate
+	outputTokens := tokens / 2
+
+	span.SetAttributes(
+		attribute.Int(observability.AttrLLMTokensInput, inputTokens),
+		attribute.Int(observability.AttrLLMTokensOutput, outputTokens),
+		attribute.Int("llm.tool_calls", len(toolCalls)),
+	)
+	span.SetStatus(codes.Ok, "success")
+
+	metrics := observability.GetGlobalMetrics()
+	if metrics != nil {
+		metrics.RecordLLMCall(ctx, p.config.Model, duration, inputTokens, outputTokens, nil)
+	}
+
+	return text, toolCalls, tokens, nil
 }
 
 func (p *GeminiProvider) GenerateStructuredStreaming(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {

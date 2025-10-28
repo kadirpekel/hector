@@ -3,12 +3,17 @@ package memory
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/databases"
 	"github.com/kadirpekel/hector/pkg/embedders"
+	"github.com/kadirpekel/hector/pkg/observability"
 	"github.com/kadirpekel/hector/pkg/protocol"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type VectorMemoryStrategy struct {
@@ -90,21 +95,49 @@ func (v *VectorMemoryStrategy) Store(agentID string, sessionID string, messages 
 }
 
 func (v *VectorMemoryStrategy) Recall(agentID string, sessionID string, query string, limit int) ([]*pb.Message, error) {
+	startTime := time.Now()
+
+	// Create span for memory recall
+	tracer := observability.GetTracer("hector.memory")
+	ctx, span := tracer.Start(context.Background(), observability.SpanMemoryLookup,
+		trace.WithAttributes(
+			attribute.String("agent_id", agentID),
+			attribute.String("session_id", sessionID),
+			attribute.Int("limit", limit),
+			attribute.String("collection", v.collection),
+		),
+	)
+	defer span.End()
+
 	if query == "" {
+		span.SetStatus(codes.Ok, "empty query")
 		return []*pb.Message{}, nil
 	}
 
+	// Track embedding time
+	embedStart := time.Now()
 	queryVector, err := v.embedder.Embed(query)
+	embedDuration := time.Since(embedStart)
+
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to embed query")
 		return nil, fmt.Errorf("failed to embed query: %w", err)
 	}
 
-	ctx := context.Background()
+	span.SetAttributes(attribute.Int64("embedding_duration_ms", embedDuration.Milliseconds()))
+
+	// Track search time
+	searchStart := time.Now()
 	results, err := v.db.SearchWithFilter(ctx, v.collection, queryVector, limit, map[string]interface{}{
 		"agent_id":   agentID,
 		"session_id": sessionID,
 	})
+	searchDuration := time.Since(searchStart)
+
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "vector search failed")
 		return nil, fmt.Errorf("recall failed: %w", err)
 	}
 
@@ -139,6 +172,15 @@ func (v *VectorMemoryStrategy) Recall(agentID string, sessionID string, query st
 		}
 		messages = append(messages, msg)
 	}
+
+	// Record successful metrics
+	totalDuration := time.Since(startTime)
+	span.SetAttributes(
+		attribute.Int("results_count", len(messages)),
+		attribute.Int64("search_duration_ms", searchDuration.Milliseconds()),
+		attribute.Int64("total_duration_ms", totalDuration.Milliseconds()),
+	)
+	span.SetStatus(codes.Ok, "success")
 
 	return messages, nil
 }

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"google.golang.org/grpc"
@@ -87,51 +88,45 @@ func (g *RESTGateway) Start(ctx context.Context) error {
 }
 
 func (g *RESTGateway) setupRouting() http.Handler {
-	mainMux := http.NewServeMux()
+	r := chi.NewRouter()
 
-	mainMux.Handle("/metrics", MetricsHandler())
+	// Apply global middleware
+	// Order: logging -> metrics -> cors -> auth
+	r.Use(loggingMiddleware)
+	r.Use(metricsMiddleware)
+	r.Use(corsMiddleware)
+
+	if g.authConfig != nil && g.authConfig.Enabled {
+		r.Use(func(next http.Handler) http.Handler {
+			return g.applyAuthMiddleware(next)
+		})
+	}
+
+	// Static routes
+	r.Get("/metrics", MetricsHandler().ServeHTTP)
 	log.Printf("   → Prometheus metrics: /metrics")
 
 	if g.discovery != nil {
-		mainMux.Handle("/v1/agents", g.discovery)
+		r.Get("/v1/agents", g.discovery.ServeHTTP)
 		log.Printf("   → Discovery endpoint: /v1/agents")
 	}
 
 	serviceCardHandler := g.createServiceLevelAgentCardHandler()
-	mainMux.Handle("/.well-known/agent-card.json", serviceCardHandler)
+	r.Get("/.well-known/agent-card.json", serviceCardHandler.ServeHTTP)
 	log.Printf("   → Service Card: /.well-known/agent-card.json (multi-agent service)")
 
-	mainMux.Handle("/v1/agents/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Agent-specific routes with URL parameters
+	r.Get("/v1/agents/{agent}/.well-known/agent-card.json", g.handlePerAgentCard)
+	log.Printf("   → Agent Cards: /v1/agents/{agent}/.well-known/agent-card.json (per-agent)")
 
-		if strings.HasSuffix(r.URL.Path, "/.well-known/agent-card.json") {
-			g.handlePerAgentCard(w, r)
-			return
-		}
+	r.Post("/v1/agents/{agent}/message:stream", g.handleStreamingMessageSSE)
+	r.Post("/v1/agents/{agent}/message:send", g.handleSendMessage)
+	log.Printf("   → Agent endpoints: /v1/agents/{agent}/* (A2A spec-compliant)")
 
-		if strings.HasSuffix(r.URL.Path, "/message:stream") {
-			g.handleStreamingMessageSSE(w, r)
-			return
-		}
+	// Mount grpc-gateway mux for other /v1/* routes
+	r.Mount("/v1/", g.createAgentRoutingHandler(g.mux))
 
-		if strings.HasSuffix(r.URL.Path, "/message:send") {
-			g.handleSendMessage(w, r)
-			return
-		}
-
-		g.createAgentRoutingHandler(g.mux).ServeHTTP(w, r)
-	}))
-	log.Printf("   → Agent Cards: /v1/agents/{name}/.well-known/agent-card.json (per-agent)")
-	log.Printf("   → Agent endpoints: /v1/agents/{name}/* (A2A spec-compliant)")
-
-	mainMux.Handle("/v1/", g.mux)
-
-	var handler http.Handler = mainMux
-	if g.authConfig != nil && g.authConfig.Enabled {
-		handler = g.applyAuthMiddleware(handler)
-	}
-	handler = corsMiddleware(loggingMiddleware(handler))
-
-	return handler
+	return r
 }
 
 func (g *RESTGateway) SetDiscovery(discovery *AgentDiscovery) {
@@ -299,20 +294,12 @@ func (g *RESTGateway) applyAuthMiddleware(next http.Handler) http.Handler {
 }
 
 func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	path := r.URL.Path
-	remainder := strings.TrimPrefix(path, "/v1/agents/")
-	parts := strings.Split(remainder, "/")
-	if len(parts) == 0 || parts[0] == "" {
+	// Get agent name from URL parameter (chi router extracts this)
+	agentName := chi.URLParam(r, "agent")
+	if agentName == "" {
 		http.Error(w, "Agent name required", http.StatusBadRequest)
 		return
 	}
-
-	agentName := parts[0]
 
 	client := pb.NewA2AServiceClient(g.conn)
 	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentName)
@@ -402,14 +389,12 @@ func (g *RESTGateway) handleStreamingMessageSSE(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	path := r.URL.Path
-	remainder := strings.TrimPrefix(path, "/v1/agents/")
-	parts := strings.Split(remainder, "/")
-	if len(parts) == 0 || parts[0] == "" {
+	// Get agent name from URL parameter (chi router extracts this)
+	agentName := chi.URLParam(r, "agent")
+	if agentName == "" {
 		g.sendSSEError(w, "Agent name required")
 		return
 	}
-	agentName := parts[0]
 
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -429,7 +414,7 @@ func (g *RESTGateway) handleStreamingMessageSSE(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	log.Printf("REST SSE: agent=%s path=%s", agentName, path)
+	log.Printf("REST SSE: agent=%s", agentName)
 
 	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentName)
 
@@ -481,14 +466,12 @@ func (g *RESTGateway) handleSendMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	path := r.URL.Path
-	remainder := strings.TrimPrefix(path, "/v1/agents/")
-	parts := strings.Split(remainder, "/")
-	if len(parts) == 0 || parts[0] == "" {
+	// Get agent name from URL parameter (chi router extracts this)
+	agentName := chi.URLParam(r, "agent")
+	if agentName == "" {
 		http.Error(w, "Agent name required", http.StatusBadRequest)
 		return
 	}
-	agentName := parts[0]
 
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -508,7 +491,7 @@ func (g *RESTGateway) handleSendMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	log.Printf("REST: agent=%s path=%s", agentName, path)
+	log.Printf("REST: agent=%s", agentName)
 
 	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentName)
 

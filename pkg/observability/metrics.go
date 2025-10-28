@@ -118,6 +118,89 @@ func InitMetrics(ctx context.Context, cfg MetricsConfig) (*PrometheusMetrics, er
 		return nil, fmt.Errorf("failed to create llm errors counter: %w", err)
 	}
 
+	// HTTP metrics
+	httpRequestsTotal, err := meter.Int64Counter(
+		"hector_http_requests_total",
+		metric.WithDescription("Total HTTP requests"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http requests counter: %w", err)
+	}
+
+	httpDuration, err := meter.Float64Histogram(
+		"hector_http_request_duration_seconds",
+		metric.WithDescription("HTTP request duration in seconds"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http duration histogram: %w", err)
+	}
+
+	httpRequestSize, err := meter.Int64Histogram(
+		"hector_http_request_size_bytes",
+		metric.WithDescription("HTTP request size in bytes"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http request size histogram: %w", err)
+	}
+
+	httpResponseSize, err := meter.Int64Histogram(
+		"hector_http_response_size_bytes",
+		metric.WithDescription("HTTP response size in bytes"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http response size histogram: %w", err)
+	}
+
+	// gRPC metrics
+	grpcCallsTotal, err := meter.Int64Counter(
+		"hector_grpc_calls_total",
+		metric.WithDescription("Total gRPC calls"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create grpc calls counter: %w", err)
+	}
+
+	grpcDuration, err := meter.Float64Histogram(
+		"hector_grpc_call_duration_seconds",
+		metric.WithDescription("gRPC call duration in seconds"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create grpc duration histogram: %w", err)
+	}
+
+	grpcErrors, err := meter.Int64Counter(
+		"hector_grpc_errors_total",
+		metric.WithDescription("Total gRPC errors"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create grpc errors counter: %w", err)
+	}
+
+	// Business KPI metrics
+	sessionDuration, err := meter.Float64Histogram(
+		"hector_session_duration_seconds",
+		metric.WithDescription("Session duration in seconds"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session duration histogram: %w", err)
+	}
+
+	sessionTotal, err := meter.Int64Counter(
+		"hector_session_total",
+		metric.WithDescription("Total sessions"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session counter: %w", err)
+	}
+
+	conversationTurns, err := meter.Int64Histogram(
+		"hector_conversation_turns",
+		metric.WithDescription("Number of conversation turns"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create conversation turns histogram: %w", err)
+	}
+
 	return NewPrometheusMetrics(
 		agentDuration,
 		agentCalls,
@@ -130,5 +213,15 @@ func InitMetrics(ctx context.Context, cfg MetricsConfig) (*PrometheusMetrics, er
 		llmInputTokens,
 		llmOutputTokens,
 		llmErrors,
+		httpRequestsTotal,
+		httpDuration,
+		httpRequestSize,
+		httpResponseSize,
+		grpcCallsTotal,
+		grpcDuration,
+		grpcErrors,
+		sessionDuration,
+		sessionTotal,
+		conversationTurns,
 	), nil
 }

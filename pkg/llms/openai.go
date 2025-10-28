@@ -3,6 +3,7 @@ package llms
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,7 +14,11 @@ import (
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
+	"github.com/kadirpekel/hector/pkg/observability"
 	"github.com/kadirpekel/hector/pkg/protocol"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func createHTTPClient(cfg *config.LLMProviderConfig) *httpclient.Client {
@@ -156,19 +161,62 @@ func NewOpenAIProviderFromConfig(cfg *config.LLMProviderConfig) (*OpenAIProvider
 }
 
 func (p *OpenAIProvider) Generate(messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+	startTime := time.Now()
+
+	// Create span for LLM request
+	tracer := observability.GetTracer("hector.llm")
+	ctx, span := tracer.Start(context.Background(), observability.SpanLLMRequest,
+		trace.WithAttributes(
+			attribute.String(observability.AttrLLMModel, p.config.Model),
+			attribute.String("provider", "openai"),
+			attribute.Bool("streaming", false),
+		),
+	)
+	defer span.End()
+
 	request := p.buildRequest(messages, false, tools)
 
 	response, err := p.makeRequest(request)
+	duration := time.Since(startTime)
+
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+
+		// Record metrics for failed request
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
+		}
+
 		return "", nil, 0, err
 	}
 
 	if response.Error != nil {
-		return "", nil, 0, fmt.Errorf("OpenAI API error: %s", response.Error.Message)
+		apiErr := fmt.Errorf("OpenAI API error: %s", response.Error.Message)
+		span.RecordError(apiErr)
+		span.SetStatus(codes.Error, response.Error.Message)
+
+		// Record metrics for API error
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, apiErr)
+		}
+
+		return "", nil, 0, apiErr
 	}
 
 	if len(response.Choices) == 0 {
-		return "", nil, 0, fmt.Errorf("no response choices returned")
+		noChoiceErr := fmt.Errorf("no response choices returned")
+		span.RecordError(noChoiceErr)
+		span.SetStatus(codes.Error, "no choices")
+
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, noChoiceErr)
+		}
+
+		return "", nil, 0, noChoiceErr
 	}
 
 	choice := response.Choices[0]
@@ -183,8 +231,22 @@ func (p *OpenAIProvider) Generate(messages []*pb.Message, tools []ToolDefinition
 	if len(choice.Message.ToolCalls) > 0 {
 		toolCalls, err = parseToolCalls(choice.Message.ToolCalls)
 		if err != nil {
+			span.RecordError(err)
 			return text, nil, tokensUsed, err
 		}
+	}
+
+	// Record successful metrics
+	span.SetAttributes(
+		attribute.Int(observability.AttrLLMTokensInput, response.Usage.PromptTokens),
+		attribute.Int(observability.AttrLLMTokensOutput, response.Usage.CompletionTokens),
+		attribute.Int("llm.tool_calls", len(toolCalls)),
+	)
+	span.SetStatus(codes.Ok, "success")
+
+	metrics := observability.GetGlobalMetrics()
+	if metrics != nil {
+		metrics.RecordLLMCall(ctx, p.config.Model, duration, response.Usage.PromptTokens, response.Usage.CompletionTokens, nil)
 	}
 
 	return text, toolCalls, tokensUsed, nil
@@ -226,6 +288,19 @@ func (p *OpenAIProvider) Close() error {
 }
 
 func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
+	startTime := time.Now()
+
+	// Create span for structured LLM request
+	tracer := observability.GetTracer("hector.llm")
+	ctx, span := tracer.Start(context.Background(), observability.SpanLLMRequest,
+		trace.WithAttributes(
+			attribute.String(observability.AttrLLMModel, p.config.Model),
+			attribute.String("provider", "openai"),
+			attribute.Bool("streaming", false),
+			attribute.Bool("structured", true),
+		),
+	)
+	defer span.End()
 
 	req := p.buildRequest(messages, false, nil)
 
@@ -233,7 +308,10 @@ func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 		if structConfig.Schema != nil {
 			schema, ok := structConfig.Schema.(map[string]interface{})
 			if !ok {
-				return "", nil, 0, fmt.Errorf("schema must be a map")
+				schemaErr := fmt.Errorf("schema must be a map")
+				span.RecordError(schemaErr)
+				span.SetStatus(codes.Error, "invalid schema")
+				return "", nil, 0, schemaErr
 			}
 
 			req.ResponseFormat = &OpenAIResponseFormat{
@@ -253,16 +331,44 @@ func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 	}
 
 	response, err := p.makeRequest(req)
+	duration := time.Since(startTime)
+
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
+		}
+
 		return "", nil, 0, err
 	}
 
 	if response.Error != nil {
-		return "", nil, 0, fmt.Errorf("OpenAI API error: %s", response.Error.Message)
+		apiErr := fmt.Errorf("OpenAI API error: %s", response.Error.Message)
+		span.RecordError(apiErr)
+		span.SetStatus(codes.Error, response.Error.Message)
+
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, apiErr)
+		}
+
+		return "", nil, 0, apiErr
 	}
 
 	if len(response.Choices) == 0 {
-		return "", nil, 0, fmt.Errorf("no response choices returned")
+		noChoiceErr := fmt.Errorf("no response choices returned")
+		span.RecordError(noChoiceErr)
+		span.SetStatus(codes.Error, "no choices")
+
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, noChoiceErr)
+		}
+
+		return "", nil, 0, noChoiceErr
 	}
 
 	choice := response.Choices[0]
@@ -277,8 +383,22 @@ func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 	if len(choice.Message.ToolCalls) > 0 {
 		toolCalls, err = parseToolCalls(choice.Message.ToolCalls)
 		if err != nil {
+			span.RecordError(err)
 			return text, nil, tokensUsed, err
 		}
+	}
+
+	// Record successful metrics
+	span.SetAttributes(
+		attribute.Int(observability.AttrLLMTokensInput, response.Usage.PromptTokens),
+		attribute.Int(observability.AttrLLMTokensOutput, response.Usage.CompletionTokens),
+		attribute.Int("llm.tool_calls", len(toolCalls)),
+	)
+	span.SetStatus(codes.Ok, "success")
+
+	metrics := observability.GetGlobalMetrics()
+	if metrics != nil {
+		metrics.RecordLLMCall(ctx, p.config.Model, duration, response.Usage.PromptTokens, response.Usage.CompletionTokens, nil)
 	}
 
 	return text, toolCalls, tokensUsed, nil

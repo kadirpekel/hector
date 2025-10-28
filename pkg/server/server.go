@@ -15,6 +15,7 @@ import (
 	"github.com/kadirpekel/hector/pkg/observability"
 	"github.com/kadirpekel/hector/pkg/runtime"
 	"github.com/kadirpekel/hector/pkg/transport"
+	"google.golang.org/grpc"
 )
 
 type Server struct {
@@ -196,10 +197,25 @@ func (s *Server) startTransport() error {
 	grpcConfig := transport.Config{
 		Address: addresses.GRPC,
 	}
+
+	// Chain observability and auth interceptors
+	// Observability runs first to capture all requests, then auth
+	var unaryInterceptors []grpc.UnaryServerInterceptor
+	var streamInterceptors []grpc.StreamServerInterceptor
+
+	// Always add observability interceptors
+	unaryInterceptors = append(unaryInterceptors, transport.UnaryServerInterceptor())
+	streamInterceptors = append(streamInterceptors, transport.StreamServerInterceptor())
+
+	// Add auth interceptors if configured
 	if authConfig != nil && authConfig.Validator != nil {
-		grpcConfig.UnaryInterceptor = authConfig.Validator.UnaryServerInterceptor()
-		grpcConfig.StreamInterceptor = authConfig.Validator.StreamServerInterceptor()
+		unaryInterceptors = append(unaryInterceptors, authConfig.Validator.UnaryServerInterceptor())
+		streamInterceptors = append(streamInterceptors, authConfig.Validator.StreamServerInterceptor())
 	}
+
+	// Chain the interceptors
+	grpcConfig.UnaryInterceptor = transport.ChainUnaryInterceptors(unaryInterceptors...)
+	grpcConfig.StreamInterceptor = transport.ChainStreamInterceptors(streamInterceptors...)
 
 	s.grpcServer = transport.NewRegistryServer(agentRegistry, grpcConfig)
 

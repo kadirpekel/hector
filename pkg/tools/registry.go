@@ -4,9 +4,14 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/observability"
 	"github.com/kadirpekel/hector/pkg/registry"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type ToolEntry struct {
@@ -232,8 +237,29 @@ func (r *ToolRegistry) ListToolsBySource() map[string][]ToolInfo {
 }
 
 func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}) (ToolResult, error) {
+	startTime := time.Now()
+
+	// Create span for tool execution
+	tracer := observability.GetTracer("hector.tools")
+	ctx, span := tracer.Start(ctx, observability.SpanToolExecution,
+		trace.WithAttributes(
+			attribute.String(observability.AttrToolName, toolName),
+		),
+	)
+	defer span.End()
+
 	tool, err := r.GetTool(toolName)
 	if err != nil {
+		// Record error in span
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "tool not found")
+
+		// Record metrics
+		metrics := observability.GetGlobalMetrics()
+		if metrics != nil {
+			metrics.RecordToolExecution(ctx, toolName, time.Since(startTime), err)
+		}
+
 		return ToolResult{
 			Success:  false,
 			Error:    err.Error(),
@@ -241,7 +267,36 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		}, err
 	}
 
-	return tool.Execute(ctx, args)
+	result, execErr := tool.Execute(ctx, args)
+	duration := time.Since(startTime)
+
+	// Record metrics and span status based on result
+	metrics := observability.GetGlobalMetrics()
+	if metrics != nil {
+		var recordErr error
+		if execErr != nil {
+			// Execution error
+			recordErr = execErr
+			span.RecordError(execErr)
+			span.SetStatus(codes.Error, execErr.Error())
+		} else if !result.Success {
+			// Tool returned failure
+			recordErr = fmt.Errorf("%s", result.Error)
+			span.RecordError(recordErr)
+			span.SetStatus(codes.Error, result.Error)
+		} else {
+			span.SetStatus(codes.Ok, "success")
+		}
+		metrics.RecordToolExecution(ctx, toolName, duration, recordErr)
+	}
+
+	// Add result metadata to span
+	span.SetAttributes(
+		attribute.Bool("tool.success", result.Success),
+		attribute.Int64("tool.duration_ms", duration.Milliseconds()),
+	)
+
+	return result, execErr
 }
 
 func (r *ToolRegistry) GetToolSource(toolName string) (string, error) {
