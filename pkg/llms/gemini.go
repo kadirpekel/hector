@@ -42,7 +42,7 @@ type GeminiGenerationConfig struct {
 }
 
 type GeminiContent struct {
-	Role  string       `json:"role"`
+	Role  string       `json:"role,omitempty"`
 	Parts []GeminiPart `json:"parts"`
 }
 
