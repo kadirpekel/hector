@@ -166,7 +166,7 @@ func (v *VectorMemoryStrategy) Recall(agentID string, sessionID string, query st
 
 		msg := &pb.Message{
 			Role: pbRole,
-			Content: []*pb.Part{
+			Parts: []*pb.Part{
 				{Part: &pb.Part_Text{Text: contentStr}},
 			},
 		}

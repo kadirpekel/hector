@@ -8,7 +8,7 @@ import (
 func CreateUserMessage(text string) *pb.Message {
 	return &pb.Message{
 		Role: pb.Role_ROLE_USER,
-		Content: []*pb.Part{
+		Parts: []*pb.Part{
 			{
 				Part: &pb.Part_Text{Text: text},
 			},
@@ -19,7 +19,7 @@ func CreateUserMessage(text string) *pb.Message {
 func CreateTextMessage(role pb.Role, text string) *pb.Message {
 	return &pb.Message{
 		Role: role,
-		Content: []*pb.Part{
+		Parts: []*pb.Part{
 			{
 				Part: &pb.Part_Text{Text: text},
 			},
@@ -155,7 +155,7 @@ func GetToolCallsFromMessage(msg *pb.Message) []*ToolCall {
 	}
 
 	var toolCalls []*ToolCall
-	for _, part := range msg.Content {
+	for _, part := range msg.Parts {
 		if tc := ExtractToolCall(part); tc != nil {
 			toolCalls = append(toolCalls, tc)
 		}
@@ -169,7 +169,7 @@ func GetToolResultsFromMessage(msg *pb.Message) []*ToolResult {
 	}
 
 	var results []*ToolResult
-	for _, part := range msg.Content {
+	for _, part := range msg.Parts {
 		if result := ExtractToolResult(part); result != nil {
 			results = append(results, result)
 		}
@@ -178,10 +178,10 @@ func GetToolResultsFromMessage(msg *pb.Message) []*ToolResult {
 }
 
 func ExtractTextFromMessage(msg *pb.Message) string {
-	if msg == nil || len(msg.Content) == 0 {
+	if msg == nil || len(msg.Parts) == 0 {
 		return ""
 	}
-	for _, part := range msg.Content {
+	for _, part := range msg.Parts {
 		if text := part.GetText(); text != "" {
 			return text
 		}
@@ -190,11 +190,11 @@ func ExtractTextFromMessage(msg *pb.Message) string {
 }
 
 func ExtractAllTextFromMessage(msg *pb.Message) string {
-	if msg == nil || len(msg.Content) == 0 {
+	if msg == nil || len(msg.Parts) == 0 {
 		return ""
 	}
 	var result string
-	for _, part := range msg.Content {
+	for _, part := range msg.Parts {
 		if text := part.GetText(); text != "" {
 			result += text
 		}
@@ -218,7 +218,7 @@ func HasToolCalls(msg *pb.Message) bool {
 	if msg == nil {
 		return false
 	}
-	for _, part := range msg.Content {
+	for _, part := range msg.Parts {
 		if IsToolCallPart(part) {
 			return true
 		}
@@ -230,7 +230,7 @@ func HasToolResults(msg *pb.Message) bool {
 	if msg == nil {
 		return false
 	}
-	for _, part := range msg.Content {
+	for _, part := range msg.Parts {
 		if IsToolResultPart(part) {
 			return true
 		}

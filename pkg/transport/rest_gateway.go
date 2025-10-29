@@ -113,11 +113,11 @@ func (g *RESTGateway) setupRouting() http.Handler {
 
 	serviceCardHandler := g.createServiceLevelAgentCardHandler()
 	r.Get("/.well-known/agent-card.json", serviceCardHandler.ServeHTTP)
-	log.Printf("   → Service Card: /.well-known/agent-card.json (multi-agent service)")
+	log.Printf("   → Service Card: /.well-known/agent-card.json (A2A spec: HTTP GET only)")
 
 	// Agent-specific routes with URL parameters
 	r.Get("/v1/agents/{agent}/.well-known/agent-card.json", g.handlePerAgentCard)
-	log.Printf("   → Agent Cards: /v1/agents/{agent}/.well-known/agent-card.json (per-agent)")
+	log.Printf("   → Agent Cards: /v1/agents/{agent}/.well-known/agent-card.json (A2A spec: HTTP GET only)")
 
 	r.Post("/v1/agents/{agent}/message:stream", g.handleStreamingMessageSSE)
 	r.Post("/v1/agents/{agent}/message:send", g.handleSendMessage)
@@ -158,6 +158,7 @@ func (g *RESTGateway) Stop(ctx context.Context) error {
 
 func (g *RESTGateway) createServiceLevelAgentCardHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// A2A spec: agent cards must be retrieved via HTTP GET only
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -294,6 +295,12 @@ func (g *RESTGateway) applyAuthMiddleware(next http.Handler) http.Handler {
 }
 
 func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request) {
+	// A2A spec: agent cards must be retrieved via HTTP GET only
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	// Get agent name from URL parameter (chi router extracts this)
 	agentName := chi.URLParam(r, "agent")
 	if agentName == "" {

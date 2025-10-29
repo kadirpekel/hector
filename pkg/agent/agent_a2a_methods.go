@@ -26,6 +26,7 @@ func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*p
 	}
 
 	userMessage := req.Request
+
 	userText := protocol.ExtractTextFromMessage(userMessage)
 	if userText == "" {
 		return nil, status.Error(codes.InvalidArgument, "message text cannot be empty")
@@ -105,7 +106,7 @@ func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*p
 		MessageId: fmt.Sprintf("msg-%d", time.Now().UnixNano()),
 		ContextId: contextID,
 		Role:      pb.Role_ROLE_AGENT,
-		Content: []*pb.Part{
+		Parts: []*pb.Part{
 			{
 				Part: &pb.Part_Text{
 					Text: responseText,
@@ -196,7 +197,7 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 					ContextId: contextID,
 					TaskId:    task.Id,
 					Role:      pb.Role_ROLE_AGENT,
-					Content: []*pb.Part{
+					Parts: []*pb.Part{
 						{Part: &pb.Part_Text{Text: chunk}},
 					},
 				}
@@ -256,7 +257,7 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 				MessageId: messageID,
 				ContextId: contextID,
 				Role:      pb.Role_ROLE_AGENT,
-				Content: []*pb.Part{
+				Parts: []*pb.Part{
 					{Part: &pb.Part_Text{Text: chunk}},
 				},
 			}
@@ -273,12 +274,25 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 }
 
 func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (*pb.AgentCard, error) {
+	// Build the agent URL - use port 8082 for JSON-RPC by default
+	agentURL := fmt.Sprintf("http://localhost:8082/rpc?agent=%s", a.name)
+
+	// Try to build better URL from config if available
+	if a.config != nil && a.config.A2A != nil {
+		// Future: could get baseURL from server config passed down
+	}
+
 	card := &pb.AgentCard{
-		Name:        a.name,
-		Description: a.description,
-		Version:     a.getVersion(),
+		Name:               a.name,
+		Description:        a.description,
+		Version:            a.getVersion(),
+		ProtocolVersion:    "0.3.0",
+		Url:                agentURL,
+		PreferredTransport: "json-rpc",
 		Capabilities: &pb.AgentCapabilities{
-			Streaming: true,
+			Streaming:              true,
+			PushNotifications:      false,
+			StateTransitionHistory: false, // Not yet implemented
 		},
 
 		DefaultInputModes:  a.getInputModes(),
@@ -388,7 +402,7 @@ func (a *Agent) createResponseMessage(responseText, contextID, taskID string) *p
 		ContextId: contextID,
 		TaskId:    taskID,
 		Role:      pb.Role_ROLE_AGENT,
-		Content: []*pb.Part{
+		Parts: []*pb.Part{
 			{
 				Part: &pb.Part_Text{
 					Text: responseText,
@@ -396,6 +410,29 @@ func (a *Agent) createResponseMessage(responseText, contextID, taskID string) *p
 			},
 		},
 	}
+}
+
+func (a *Agent) ListTasks(ctx context.Context, req *pb.ListTasksRequest) (*pb.ListTasksResponse, error) {
+	if a.services.Task() == nil {
+		return nil, status.Error(codes.Unimplemented, "task tracking not enabled")
+	}
+
+	tasks, nextPageToken, totalSize, err := a.services.Task().ListTasks(
+		ctx,
+		req.ContextId,
+		req.Status,
+		req.PageSize,
+		req.PageToken,
+	)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to list tasks: %v", err)
+	}
+
+	return &pb.ListTasksResponse{
+		Tasks:         tasks,
+		NextPageToken: nextPageToken,
+		TotalSize:     totalSize,
+	}, nil
 }
 
 func (a *Agent) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) (*pb.Task, error) {

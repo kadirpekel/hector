@@ -16,10 +16,10 @@ func applyA2AFieldMapping(data []byte) []byte {
 	}
 
 	if request, ok := bodyMap["request"].(map[string]interface{}); ok {
-
-		if parts, ok := request["parts"]; ok {
-			request["content"] = parts
-			delete(request, "parts")
+		// Convert legacy "content" field to official A2A "parts" field for backward compatibility
+		if content, ok := request["content"]; ok {
+			request["parts"] = content
+			delete(request, "content")
 		}
 
 		if role, ok := request["role"].(string); ok {

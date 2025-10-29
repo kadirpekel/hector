@@ -90,7 +90,7 @@ func AssessTaskCompletion(
 	}
 
 	messages := []*pb.Message{
-		{Role: pb.Role_ROLE_USER, Content: []*pb.Part{{Part: &pb.Part_Text{Text: prompt}}}},
+		{Role: pb.Role_ROLE_USER, Parts: []*pb.Part{{Part: &pb.Part_Text{Text: prompt}}}},
 	}
 
 	text, _, _, err := llmService.GenerateStructured(messages, nil, config)

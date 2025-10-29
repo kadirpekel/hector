@@ -57,7 +57,7 @@ func TestMockClient_SendMessage(t *testing.T) {
 		Payload: &pb.SendMessageResponse_Msg{
 			Msg: &pb.Message{
 				Role: pb.Role_ROLE_AGENT,
-				Content: []*pb.Part{
+				Parts: []*pb.Part{
 					{
 						Part: &pb.Part_Text{Text: "Hello!"},
 					},
@@ -77,7 +77,7 @@ func TestMockClient_SendMessage(t *testing.T) {
 
 	msg := &pb.Message{
 		Role: pb.Role_ROLE_USER,
-		Content: []*pb.Part{
+		Parts: []*pb.Part{
 			{
 				Part: &pb.Part_Text{Text: "Test"},
 			},
@@ -100,7 +100,7 @@ func TestMockClient_StreamMessage(t *testing.T) {
 			ch <- &pb.StreamResponse{
 				Payload: &pb.StreamResponse_Msg{
 					Msg: &pb.Message{
-						Content: []*pb.Part{
+						Parts: []*pb.Part{
 							{
 								Part: &pb.Part_Text{Text: "Stream"},
 							},
@@ -115,7 +115,7 @@ func TestMockClient_StreamMessage(t *testing.T) {
 
 	msg := &pb.Message{
 		Role: pb.Role_ROLE_USER,
-		Content: []*pb.Part{
+		Parts: []*pb.Part{
 			{
 				Part: &pb.Part_Text{Text: "Test"},
 			},

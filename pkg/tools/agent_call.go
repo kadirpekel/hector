@@ -116,7 +116,7 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 		Request: &pb.Message{
 			MessageId: fmt.Sprintf("agent_call_%s_%d", agentName, time.Now().UnixNano()),
 			ContextId: fmt.Sprintf("%s:agent_call_session", agentName),
-			Content: []*pb.Part{
+			Parts: []*pb.Part{
 				{
 					Part: &pb.Part_Text{Text: task},
 				},
@@ -136,9 +136,9 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 	if response.Payload != nil {
 		switch payload := response.Payload.(type) {
 		case *pb.SendMessageResponse_Msg:
-			if payload.Msg != nil && len(payload.Msg.Content) > 0 {
+			if payload.Msg != nil && len(payload.Msg.Parts) > 0 {
 
-				for _, part := range payload.Msg.Content {
+				for _, part := range payload.Msg.Parts {
 					if textPart := part.GetText(); textPart != "" {
 						responseText = textPart
 						break

@@ -98,7 +98,7 @@ func TestDisplayAgentCard(t *testing.T) {
 func TestDisplayMessage(t *testing.T) {
 	msg := &pb.Message{
 		Role: pb.Role_ROLE_AGENT,
-		Content: []*pb.Part{
+		Parts: []*pb.Part{
 			{
 				Part: &pb.Part_Text{Text: "Hello, world!"},
 			},
@@ -129,7 +129,7 @@ func TestDisplayMessage_NilMessage(t *testing.T) {
 
 func TestDisplayMessage_NoPrefix(t *testing.T) {
 	msg := &pb.Message{
-		Content: []*pb.Part{
+		Parts: []*pb.Part{
 			{
 				Part: &pb.Part_Text{Text: "Test"},
 			},
@@ -147,7 +147,7 @@ func TestDisplayMessage_NoPrefix(t *testing.T) {
 
 func TestDisplayMessageLine(t *testing.T) {
 	msg := &pb.Message{
-		Content: []*pb.Part{
+		Parts: []*pb.Part{
 			{
 				Part: &pb.Part_Text{Text: "Test message"},
 			},

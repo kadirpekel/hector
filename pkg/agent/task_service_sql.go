@@ -395,6 +395,101 @@ func (s *SQLTaskService) CancelTask(ctx context.Context, taskID string) (*pb.Tas
 	return s.GetTask(ctx, taskID)
 }
 
+func (s *SQLTaskService) ListTasks(ctx context.Context, contextID string, status pb.TaskState, pageSize int32, pageToken string) ([]*pb.Task, string, int32, error) {
+	// Build query with filters
+	var query string
+	var args []interface{}
+	var conditions []string
+
+	if contextID != "" {
+		if s.dialect == "postgres" {
+			conditions = append(conditions, fmt.Sprintf("context_id = $%d", len(args)+1))
+		} else {
+			conditions = append(conditions, "context_id = ?")
+		}
+		args = append(args, contextID)
+	}
+
+	if status != pb.TaskState_TASK_STATE_UNSPECIFIED {
+		if s.dialect == "postgres" {
+			conditions = append(conditions, fmt.Sprintf("state = $%d", len(args)+1))
+		} else {
+			conditions = append(conditions, "state = ?")
+		}
+		args = append(args, int(status))
+	}
+
+	// Apply pagination
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 50
+	}
+
+	// Count total
+	countQuery := "SELECT COUNT(*) FROM tasks"
+	if len(conditions) > 0 {
+		countQuery += " WHERE " + fmt.Sprintf("%s", conditions[0])
+		for i := 1; i < len(conditions); i++ {
+			countQuery += " AND " + conditions[i]
+		}
+	}
+
+	var totalSize int32
+	err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&totalSize)
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("failed to count tasks: %w", err)
+	}
+
+	// Build main query
+	query = "SELECT id, context_id, state, status_json, artifacts, history, metadata, created_at, updated_at FROM tasks"
+	if len(conditions) > 0 {
+		query += " WHERE " + conditions[0]
+		for i := 1; i < len(conditions); i++ {
+			query += " AND " + conditions[i]
+		}
+	}
+	query += " ORDER BY created_at DESC"
+
+	if s.dialect == "postgres" {
+		query += fmt.Sprintf(" LIMIT $%d", len(args)+1)
+	} else {
+		query += " LIMIT ?"
+	}
+	args = append(args, pageSize)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("failed to query tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*pb.Task
+	for rows.Next() {
+		var row taskRow
+		err := rows.Scan(
+			&row.ID, &row.ContextID, &row.State, &row.StatusJSON,
+			&row.Artifacts, &row.History, &row.Metadata,
+			&row.CreatedAt, &row.UpdatedAt,
+		)
+		if err != nil {
+			return nil, "", 0, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		task, err := s.rowToTask(&row)
+		if err != nil {
+			return nil, "", 0, fmt.Errorf("failed to deserialize task: %w", err)
+		}
+		tasks = append(tasks, task)
+	}
+
+	// Simple pagination token
+	nextPageToken := ""
+	if int32(len(tasks)) >= pageSize && int32(len(tasks)) < totalSize {
+		nextPageToken = fmt.Sprintf("%d", len(tasks))
+	}
+
+	return tasks, nextPageToken, totalSize, nil
+}
+
 func (s *SQLTaskService) ListTasksByContext(ctx context.Context, contextID string) ([]*pb.Task, error) {
 	query := `
 SELECT id, context_id, state, status_json, artifacts, history, metadata, created_at, updated_at

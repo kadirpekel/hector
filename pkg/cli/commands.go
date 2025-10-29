@@ -157,7 +157,7 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 	msg := &pb.Message{
 		ContextId: sessionID,
 		Role:      pb.Role_ROLE_USER,
-		Content: []*pb.Part{
+		Parts: []*pb.Part{
 			{
 				Part: &pb.Part_Text{Text: args.Message},
 			},
@@ -276,7 +276,7 @@ func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streamin
 		msg := &pb.Message{
 			ContextId: sessionID,
 			Role:      pb.Role_ROLE_USER,
-			Content: []*pb.Part{
+			Parts: []*pb.Part{
 				{
 					Part: &pb.Part_Text{Text: input},
 				},

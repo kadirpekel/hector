@@ -232,10 +232,14 @@ func (h *JSONRPCHandler) handleMethod(ctx context.Context, method string, params
 		return nil, fmt.Errorf("use /rpc/stream endpoint for streaming messages")
 	case "tasks/get":
 		return h.handleGetTask(ctx, params)
+	case "tasks/list":
+		return h.handleListTasks(ctx, params)
 	case "tasks/cancel":
 		return h.handleCancelTask(ctx, params)
-	case "card/get":
-		return h.handleGetAgentCard(ctx, params)
+	case "tasks/resubscribe":
+		return nil, fmt.Errorf("tasks/resubscribe is only available via streaming endpoint")
+	case "agent/getAuthenticatedExtendedCard":
+		return h.handleGetAuthenticatedExtendedCard(ctx, params)
 	default:
 		return nil, fmt.Errorf("method not found: %s", method)
 	}
@@ -386,6 +390,32 @@ func (h *JSONRPCHandler) handleGetTask(ctx context.Context, params json.RawMessa
 	return result, nil
 }
 
+func (h *JSONRPCHandler) handleListTasks(ctx context.Context, params json.RawMessage) (interface{}, error) {
+	var req pb.ListTasksRequest
+	if len(params) > 0 && string(params) != "null" {
+		if err := h.unmarshaler.Unmarshal(params, &req); err != nil {
+			return nil, fmt.Errorf("invalid params: %w", err)
+		}
+	}
+
+	resp, err := h.service.ListTasks(ctx, &req)
+	if err != nil {
+		return nil, fmt.Errorf("service error: %w", err)
+	}
+
+	jsonData, err := h.marshaler.Marshal(resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	var result interface{}
+	if err := json.Unmarshal(jsonData, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal to interface: %w", err)
+	}
+
+	return result, nil
+}
+
 func (h *JSONRPCHandler) handleCancelTask(ctx context.Context, params json.RawMessage) (interface{}, error) {
 	var req pb.CancelTaskRequest
 	if err := h.unmarshaler.Unmarshal(params, &req); err != nil {
@@ -410,15 +440,18 @@ func (h *JSONRPCHandler) handleCancelTask(ctx context.Context, params json.RawMe
 	return result, nil
 }
 
-func (h *JSONRPCHandler) handleGetAgentCard(ctx context.Context, params json.RawMessage) (interface{}, error) {
+func (h *JSONRPCHandler) handleGetAuthenticatedExtendedCard(ctx context.Context, params json.RawMessage) (interface{}, error) {
 	var req pb.GetAgentCardRequest
 
-	if len(params) > 0 {
+	// Skip unmarshaling if params is null or empty
+	if len(params) > 0 && string(params) != "null" {
 		if err := h.unmarshaler.Unmarshal(params, &req); err != nil {
 			return nil, fmt.Errorf("invalid params: %w", err)
 		}
 	}
 
+	// Call GetAgentCard which returns the full card
+	// For authenticated users, this can include additional information
 	resp, err := h.service.GetAgentCard(ctx, &req)
 	if err != nil {
 		return nil, fmt.Errorf("service error: %w", err)

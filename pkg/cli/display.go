@@ -57,7 +57,7 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 		fmt.Print(prefix)
 	}
 
-	for _, part := range msg.Content {
+	for _, part := range msg.Parts {
 		if text := part.GetText(); text != "" {
 			fmt.Print(text)
 
@@ -125,8 +125,8 @@ func DisplayTask(task *pb.Task) {
 
 			fmt.Printf("%d. [%s] ", i+1, roleStr)
 
-			if len(msg.Content) > 0 {
-				for _, part := range msg.Content {
+			if len(msg.Parts) > 0 {
+				for _, part := range msg.Parts {
 					if text := part.GetText(); text != "" {
 
 						if len(text) > 200 {

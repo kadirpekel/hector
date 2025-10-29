@@ -92,16 +92,16 @@ func TestReasoningState_Conversation(t *testing.T) {
 	historyMsgs := []*pb.Message{
 		protocol.CreateUserMessage("Previous question"),
 		{
-			Role:    pb.Role_ROLE_AGENT,
-			Content: []*pb.Part{{Part: &pb.Part_Text{Text: "Previous answer"}}},
+			Role:  pb.Role_ROLE_AGENT,
+			Parts: []*pb.Part{{Part: &pb.Part_Text{Text: "Previous answer"}}},
 		},
 	}
 	state.SetHistory(historyMsgs)
 
 	state.AddCurrentTurnMessage(protocol.CreateUserMessage("Hello"))
 	state.AddCurrentTurnMessage(&pb.Message{
-		Role:    pb.Role_ROLE_AGENT,
-		Content: []*pb.Part{{Part: &pb.Part_Text{Text: "Hi there"}}},
+		Role:  pb.Role_ROLE_AGENT,
+		Parts: []*pb.Part{{Part: &pb.Part_Text{Text: "Hi there"}}},
 	})
 
 	history := state.GetHistory()

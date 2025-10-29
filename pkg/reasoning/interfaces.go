@@ -110,6 +110,7 @@ type TaskService interface {
 	AddTaskArtifact(ctx context.Context, taskID string, artifact *pb.Artifact) error
 	AddTaskMessage(ctx context.Context, taskID string, message *pb.Message) error
 	CancelTask(ctx context.Context, taskID string) (*pb.Task, error)
+	ListTasks(ctx context.Context, contextID string, status pb.TaskState, pageSize int32, pageToken string) ([]*pb.Task, string, int32, error)
 	ListTasksByContext(ctx context.Context, contextID string) ([]*pb.Task, error)
 	SubscribeToTask(ctx context.Context, taskID string) (<-chan *pb.StreamResponse, error)
 	Close() error

@@ -337,17 +337,17 @@ func (a *Agent) execute(
 			if len(toolCalls) > 0 {
 
 				assistantMsg := &pb.Message{
-					Role:    pb.Role_ROLE_AGENT,
-					Content: []*pb.Part{},
+					Role:  pb.Role_ROLE_AGENT,
+					Parts: []*pb.Part{},
 				}
 
 				if text != "" {
-					assistantMsg.Content = append(assistantMsg.Content,
+					assistantMsg.Parts = append(assistantMsg.Parts,
 						&pb.Part{Part: &pb.Part_Text{Text: text}})
 				}
 
 				for _, tc := range toolCalls {
-					assistantMsg.Content = append(assistantMsg.Content,
+					assistantMsg.Parts = append(assistantMsg.Parts,
 						protocol.CreateToolCallPart(tc))
 				}
 
@@ -370,7 +370,7 @@ func (a *Agent) execute(
 					}
 					resultMsg := &pb.Message{
 						Role: pb.Role_ROLE_AGENT,
-						Content: []*pb.Part{
+						Parts: []*pb.Part{
 							protocol.CreateToolResultPart(a2aResult),
 						},
 					}

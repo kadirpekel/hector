@@ -155,7 +155,7 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 
 	summaryMsg := &pb.Message{
 		Role: pb.Role_ROLE_UNSPECIFIED,
-		Content: []*pb.Part{
+		Parts: []*pb.Part{
 			{Part: &pb.Part_Text{Text: fmt.Sprintf("Previous conversation summary: %s", summary)}},
 		},
 	}

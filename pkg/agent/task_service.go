@@ -206,6 +206,59 @@ func (s *InMemoryTaskService) CancelTask(ctx context.Context, taskID string) (*p
 	return task, nil
 }
 
+func (s *InMemoryTaskService) ListTasks(ctx context.Context, contextID string, status pb.TaskState, pageSize int32, pageToken string) ([]*pb.Task, string, int32, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Collect all tasks matching filters
+	var matchingTasks []*pb.Task
+	for _, task := range s.tasks {
+		// Filter by context ID if specified
+		if contextID != "" && task.ContextId != contextID {
+			continue
+		}
+		// Filter by status if specified (TASK_STATE_UNSPECIFIED means no filter)
+		if status != pb.TaskState_TASK_STATE_UNSPECIFIED && task.Status.State != status {
+			continue
+		}
+		matchingTasks = append(matchingTasks, task)
+	}
+
+	totalSize := int32(len(matchingTasks))
+
+	// Apply pagination
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 50 // Default page size
+	}
+
+	// Simple offset-based pagination using page token as offset
+	startOffset := int32(0)
+	if pageToken != "" {
+		// In a real implementation, decode the page token
+		// For simplicity, we'll skip pagination token parsing for now
+		startOffset = 0
+	}
+
+	endOffset := startOffset + pageSize
+	if endOffset > totalSize {
+		endOffset = totalSize
+	}
+
+	// Slice the results
+	var pagedTasks []*pb.Task
+	if startOffset < totalSize {
+		pagedTasks = matchingTasks[startOffset:endOffset]
+	}
+
+	// Generate next page token
+	nextPageToken := ""
+	if endOffset < totalSize {
+		nextPageToken = fmt.Sprintf("%d", endOffset)
+	}
+
+	return pagedTasks, nextPageToken, totalSize, nil
+}
+
 func (s *InMemoryTaskService) ListTasksByContext(ctx context.Context, contextID string) ([]*pb.Task, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

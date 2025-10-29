@@ -179,7 +179,7 @@ func TestMemoryService_ConcurrentAddBatch(t *testing.T) {
 				messages := []*pb.Message{
 					{
 						Role: pb.Role_ROLE_USER,
-						Content: []*pb.Part{
+						Parts: []*pb.Part{
 							{Part: &pb.Part_Text{Text: "test message"}},
 						},
 					},
@@ -240,7 +240,7 @@ func TestMemoryService_ConcurrentLongTermBatching(t *testing.T) {
 				messages := []*pb.Message{
 					{
 						Role: pb.Role_ROLE_USER,
-						Content: []*pb.Part{
+						Parts: []*pb.Part{
 							{Part: &pb.Part_Text{Text: "test message"}},
 						},
 					},
@@ -296,7 +296,7 @@ func TestMemoryService_ShutdownWithPendingBatches(t *testing.T) {
 			messages := []*pb.Message{
 				{
 					Role: pb.Role_ROLE_USER,
-					Content: []*pb.Part{
+					Parts: []*pb.Part{
 						{Part: &pb.Part_Text{Text: "test message"}},
 					},
 				},
@@ -351,7 +351,7 @@ func TestMemoryService_ConcurrentShutdown(t *testing.T) {
 		messages := []*pb.Message{
 			{
 				Role: pb.Role_ROLE_USER,
-				Content: []*pb.Part{
+				Parts: []*pb.Part{
 					{Part: &pb.Part_Text{Text: "test message"}},
 				},
 			},
@@ -420,7 +420,7 @@ func TestMemoryService_RaceDetection(t *testing.T) {
 				messages := []*pb.Message{
 					{
 						Role: pb.Role_ROLE_USER,
-						Content: []*pb.Part{
+						Parts: []*pb.Part{
 							{Part: &pb.Part_Text{Text: "test"}},
 						},
 					},
@@ -477,7 +477,7 @@ func BenchmarkMemoryService_ConcurrentWrites(b *testing.B) {
 	message := []*pb.Message{
 		{
 			Role: pb.Role_ROLE_USER,
-			Content: []*pb.Part{
+			Parts: []*pb.Part{
 				{Part: &pb.Part_Text{Text: "test message"}},
 			},
 		},
