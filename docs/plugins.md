@@ -157,7 +157,7 @@ func (s *CustomLLMProvider) StreamText(ctx context.Context, req *pb.StreamTextRe
 }
 
 func main() {
-    lis, err := net.Listen("tcp", ":8081")
+    lis, err := net.Listen("tcp", ":8080")
     if err != nil {
         log.Fatalf("Failed to listen: %v", err)
     }
@@ -167,7 +167,7 @@ func main() {
         apiKey: os.Getenv("CUSTOM_LLM_API_KEY"),
     })
     
-    log.Println("Custom LLM provider starting on :8081")
+    log.Println("Custom LLM provider starting on :8080")
     if err := s.Serve(lis); err != nil {
         log.Fatalf("Failed to serve: %v", err)
     }
@@ -217,7 +217,7 @@ async def serve():
     server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
     add_LLMProviderServicer_to_server(CustomLLMProvider(os.getenv("CUSTOM_LLM_API_KEY")), server)
     
-    listen_addr = '[::]:8081'
+    listen_addr = '[::]:8080'
     server.add_insecure_port(listen_addr)
     
     print(f"Custom LLM provider starting on {listen_addr}")
@@ -239,7 +239,7 @@ plugins:
       
       config:
         api_key: "${CUSTOM_LLM_API_KEY}"
-        endpoint: "http://localhost:8081"
+        endpoint: "http://localhost:8080"
         timeout: "30s"
 
 llms:
@@ -349,7 +349,7 @@ func (s *CustomDatabaseProvider) SearchVectors(ctx context.Context, req *pb.Sear
 }
 
 func main() {
-    lis, err := net.Listen("tcp", ":8082")
+    lis, err := net.Listen("tcp", ":8080")
     if err != nil {
         log.Fatalf("Failed to listen: %v", err)
     }
@@ -359,7 +359,7 @@ func main() {
         client: NewCustomDBClient(os.Getenv("CUSTOM_DB_URL")),
     })
     
-    log.Println("Custom database provider starting on :8082")
+    log.Println("Custom database provider starting on :8080")
     if err := s.Serve(lis); err != nil {
         log.Fatalf("Failed to serve: %v", err)
     }
@@ -823,7 +823,7 @@ func (s *MyPlugin) GenerateText(ctx context.Context, req *pb.GenerateTextRequest
 }
 
 func main() {
-    lis, err := net.Listen("tcp", ":8081")
+    lis, err := net.Listen("tcp", ":8080")
     if err != nil {
         log.Fatalf("Failed to listen: %v", err)
     }
@@ -831,7 +831,7 @@ func main() {
     s := grpc.NewServer()
     pb.RegisterLLMProviderServer(s, &MyPlugin{})
     
-    log.Println("My plugin starting on :8081")
+    log.Println("My plugin starting on :8080")
     if err := s.Serve(lis); err != nil {
         log.Fatalf("Failed to serve: %v", err)
     }

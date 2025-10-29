@@ -186,7 +186,7 @@ Hector's design makes production deployment natural:
 
 ### 1. **Enterprise Agent Infrastructure**
 
-Platform teams deploying multi-agent systems across organizations with security, compliance, and observability requirements.
+Platform teams deploying multi-agent systems across organizations with A2A v0.3.0 compliance, security, and observability requirements.
 
 **Example:** Central platform team provides agent infrastructure via YAML configs to 50+ product teams. JWT auth ensures proper access control, Prometheus metrics track usage across teams, hot reload enables rapid iteration without downtime.
 
@@ -322,7 +322,7 @@ hector call "Test message" --agent analyst --config agents.yaml
 
 # Integration test
 hector serve --config agents.yaml &
-curl -X POST http://localhost:8081/v1/agents/analyst/message:send \
+curl -X POST http://localhost:8080/v1/agents/analyst/message:send \
   -d '{"message": {"parts": [{"text": "Test"}], "role": "user"}}'
 ```
 

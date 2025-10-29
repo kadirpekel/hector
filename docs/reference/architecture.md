@@ -13,7 +13,7 @@ Deep dive into Hector's architecture, components, and design principles.
 
 Hector is a **declarative AI agent platform** built on three core principles:
 
-1. **A2A Protocol Native** - 100% compliant with the A2A Protocol specification
+1. **A2A Protocol Native** - 100% compliant with A2A Protocol v0.3.0 specification (with enhanced dual-path REST support)
 2. **Zero Code Required** - Build agents with YAML configuration
 3. **Production Ready** - Enterprise-grade performance and reliability
 
@@ -58,7 +58,7 @@ Hector is a **declarative AI agent platform** built on three core principles:
 │  │  • Native    │  • Auto-gen      │  • Custom HTTP      │   │
 │  │  • Binary    │  • JSON          │  • Simple RPC       │   │
 │  │  • Streaming │  • SSE           │  • JSON             │   │
-│  │  Port: 8080  │  Port: 8081      │  Port: 8082         │   │
+│  │  Port: 8080  │  Port: 8080      │  Port: 8080         │   │
 │  └──────────────┴──────────────────┴─────────────────────┘   │
 ├──────────────────────────────────────────────────────────────┤
 │                       AGENT LAYER                            │

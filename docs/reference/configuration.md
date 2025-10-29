@@ -53,8 +53,8 @@ global:
   a2a_server:
     host: "0.0.0.0"              # Bind host (default: 0.0.0.0)
     port: 8080                   # gRPC port (default: 8080)
-    rest_gateway_port: 8081      # REST API port (default: 8081)
-    jsonrpc_port: 8082           # JSON-RPC port (default: 8082)
+    rest_gateway_port: 8080      # REST API port (default: 8080)
+    jsonrpc_port: 8080           # JSON-RPC port (default: 8080)
     base_url: "http://localhost:8080"  # External URL
     
     tls:

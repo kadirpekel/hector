@@ -55,7 +55,7 @@ COPY --from=builder /app/hector .
 # Copy config
 COPY config.yaml .
 
-EXPOSE 8080 8081 8082
+EXPOSE 8080 8080 8080
 
 ENTRYPOINT ["./hector"]
 CMD ["serve", "--config", "config.yaml"]
@@ -109,8 +109,8 @@ services:
     build: .
     ports:
       - "8080:8080"
-      - "8081:8081"
-      - "8082:8082"
+      - "8080:8080"
+      - "8080:8080"
     volumes:
       - ./config.yaml:/root/config.yaml:ro
     environment:
@@ -203,9 +203,9 @@ spec:
         ports:
         - containerPort: 8080
           name: grpc
-        - containerPort: 8081
+        - containerPort: 8080
           name: rest
-        - containerPort: 8082
+        - containerPort: 8080
           name: jsonrpc
         env:
         - name: OPENAI_API_KEY
@@ -232,13 +232,13 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 8081
+            port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health
-            port: 8081
+            port: 8080
           initialDelaySeconds: 10
           periodSeconds: 5
       volumes:
@@ -258,11 +258,11 @@ spec:
     port: 8080
     targetPort: 8080
   - name: rest
-    port: 8081
-    targetPort: 8081
+    port: 8080
+    targetPort: 8080
   - name: jsonrpc
-    port: 8082
-    targetPort: 8082
+    port: 8080
+    targetPort: 8080
   type: LoadBalancer
 ---
 apiVersion: v1
@@ -472,7 +472,7 @@ tools:
 
 ```yaml
 # Built-in health endpoint
-http://localhost:8081/health
+http://localhost:8080/health
 ```
 
 #### 2. Logging
@@ -579,14 +579,14 @@ RestartSec=10
 livenessProbe:
   httpGet:
     path: /health
-    port: 8081
+    port: 8080
   initialDelaySeconds: 30
   periodSeconds: 10
 
 readinessProbe:
   httpGet:
     path: /health
-    port: 8081
+    port: 8080
   initialDelaySeconds: 10
   periodSeconds: 5
 ```

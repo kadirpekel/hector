@@ -183,7 +183,7 @@ func (s *AgentRouter) getAgentNameOrError(ctx context.Context, req *pb.SendMessa
 	if agentName == "" {
 		agentNames := s.registry.ListAgents()
 		if len(agentNames) == 1 {
-			log.Printf("AgentRouter: No agent name specified, using single agent: %s", agentNames[0])
+			// Single-agent mode: automatically route to the only available agent
 			return agentNames[0], nil
 		}
 

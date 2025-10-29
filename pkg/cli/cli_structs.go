@@ -39,7 +39,7 @@ type VersionCmd struct {
 }
 
 type ServeCmd struct {
-	Port       int    `default:"8080" help:"gRPC server port (default: ${default})"`
+	Port       int    `default:"8080" help:"HTTP server port (default: ${default})"`
 	Host       string `help:"Server host address (overrides config)" placeholder:"HOST"`
 	A2ABaseURL string `name:"a2a-base-url" help:"A2A base URL for agent discovery" placeholder:"URL"`
 

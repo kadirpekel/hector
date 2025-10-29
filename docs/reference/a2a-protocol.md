@@ -24,15 +24,22 @@ The **Agent-to-Agent (A2A) Protocol** is an open standard for agent communicatio
 
 ## Hector's A2A Compliance
 
+### Specification Version
+
+**Hector is 100% compliant with A2A Protocol v0.3.0**
+
+See [A2A_SPECIFICATION_COMPLIANCE.md](../../A2A_SPECIFICATION_COMPLIANCE.md) for detailed compliance audit.
+
 ### Protocol Native Design
 
 Hector is built **entirely** on A2A protocol types:
 
 ```
 ┌─────────────────────────────────────┐
-│     A2A Protocol (Protobuf)         │
+│   A2A Protocol v0.3.0 (Protobuf)    │
 ├─────────────────────────────────────┤
 │     Hector Implementation           │
+│  • Official proto files (unmodified)│
 │  • Direct protobuf usage            │
 │  • No abstraction layers            │
 │  • Native type system               │
@@ -43,17 +50,34 @@ Hector is built **entirely** on A2A protocol types:
 - Maximum performance (no conversion overhead)
 - 100% spec compliance guaranteed
 - Native protocol evolution support
+- Direct compatibility with A2A ecosystem
 
 ### Compliance Summary
 
 | Feature | Status | Details |
 |---------|--------|---------|
+| **Protocol Version** | ✅ v0.3.0 | Fully compliant with latest spec |
 | **Core Methods** | ✅ 100% | message/send, tasks/get, tasks/cancel |
-| **Streaming** | ✅ 100% | gRPC streams, SSE, WebSocket |
-| **Task Management** | ✅ 100% | Async execution, status tracking |
+| **Optional Methods** | ✅ 100% | Streaming, resubscribe, agent card |
+| **Task Management** | ✅ 100% | All 9 task states, async execution |
 | **Agent Discovery** | ✅ 100% | RFC 8615 .well-known endpoints |
 | **Authentication** | ✅ 100% | JWT, OpenAPI security schemes |
-| **Transport** | ✅ 100% | gRPC, REST, JSON-RPC |
+| **Transport** | ✅ All 3 | gRPC (9090), REST (8080), JSON-RPC (8080) |
+| **REST Paths** | ✅✅ **Enhanced** | Dual path support (spec + proto) |
+
+### Enhanced REST Compliance 🌟
+
+Hector **exceeds** the A2A specification by supporting **both** REST path formats:
+
+1. **Spec-preferred format** (Section 3.5.3):
+   - `/v1/agents/{agent}/message:send`
+   - Agent extracted from URL path
+
+2. **Proto-compatible format**:
+   - `/v1/message:send` with `agent-name: {agent}` header
+   - Agent extracted from HTTP header or query param
+
+This dual-path support ensures **maximum interoperability** with all A2A implementations.
 
 ---
 
@@ -68,7 +92,7 @@ Send a message to an agent.
 {
   "message": {
     "role": "ROLE_USER",
-    "content": [{"text": "Hello"}]
+    "parts": [{"text": "Hello"}]
   }
 }
 ```
@@ -77,8 +101,8 @@ Send a message to an agent.
 ```json
 {
   "response": {
-    "role": "ROLE_ASSISTANT",
-    "content": [{"text": "Hello! How can I help?"}]
+    "role": "ROLE_AGENT",
+    "parts": [{"text": "Hello! How can I help?"}]
   },
   "task_id": "task_abc123"
 }
@@ -92,9 +116,9 @@ Send a message with streaming response.
 
 **Response:** Stream of chunks
 ```json
-{"response": {"content": [{"text": "Hello"}]}}
-{"response": {"content": [{"text": "! How"}]}}
-{"response": {"content": [{"text": " can I help?"}]}}
+{"response": {"parts": [{"text": "Hello"}]}}
+{"response": {"parts": [{"text": "! How"}]}}
+{"response": {"parts": [{"text": " can I help?"}]}}
 ```
 
 ### card/get
@@ -125,8 +149,8 @@ Get task status.
     "id": "task_abc123",
     "status": "completed",
     "result": {
-      "role": "ROLE_ASSISTANT",
-      "content": [{"text": "Task completed"}]
+      "role": "ROLE_AGENT",
+      "parts": [{"text": "Task completed"}]
     }
   }
 }
@@ -154,32 +178,48 @@ Hector implements RFC 8615 `.well-known` endpoints for agent discovery.
 
 ### Service-Level Discovery
 
-**Endpoint:** `GET /.well-known/a2a`
+**Endpoint:** `GET /.well-known/agent-card.json`
 
-Lists all available agents:
+Per A2A spec Section 5.3, the agent card is served at the well-known endpoint:
+
+```json
+{
+  "protocol_version": "0.3.0",
+  "name": "agent-name",
+  "description": "Agent description",
+  "version": "1.0.0",
+  "url": "http://localhost:8080/?agent=agent-name",
+  "preferred_transport": "json-rpc",
+  "capabilities": {
+    "streaming": true,
+    "tools": true,
+    "multimodal": false
+  }
+}
+```
+
+**Multi-Agent Discovery:**
+
+List all agents via the discovery endpoint:
+
+```bash
+curl http://localhost:8080/v1/agents
+```
 
 ```json
 {
   "agents": [
-    {
-      "id": "assistant",
-      "name": "My Assistant",
-      "url": "/v1/agents/assistant"
-    },
-    {
-      "id": "coder",
-      "name": "Coding Assistant",
-      "url": "/v1/agents/coder"
-    }
+    {"name": "assistant", "url": "http://localhost:8080/?agent=assistant"},
+    {"name": "coder", "url": "http://localhost:8080/?agent=coder"}
   ]
 }
 ```
 
 ### Agent-Level Discovery
 
-**Endpoint:** `GET /.well-known/a2a/agents/{agent}`
+**Endpoint:** `GET /v1/agents/{agent}/.well-known/agent-card.json`
 
-Get specific agent card:
+Get specific agent card in multi-agent mode:
 
 ```json
 {
@@ -209,34 +249,41 @@ Get specific agent card:
 
 ```protobuf
 message Message {
-  Role role = 1;  // ROLE_USER | ROLE_ASSISTANT
-  repeated Content content = 2;
+  Role role = 1;           // ROLE_USER | ROLE_AGENT | ROLE_UNSPECIFIED
+  repeated Part parts = 2; // Message parts (text, file, data)
+  string context_id = 3;   // Optional session/context identifier
 }
 
-message Content {
-  oneof content {
-    string text = 1;
-    // Future: image, audio, video, file
+message Part {
+  oneof part {
+    string text = 1;       // TextPart (Section 6.5.1)
+    File file = 2;         // FilePart (Section 6.5.2)
+    google.protobuf.Struct data = 3; // DataPart (Section 6.5.3)
   }
 }
 ```
 
+**Note:** The field is named `parts` (not `content`) per A2A v0.3.0 specification.
+
 ### Roles
+
+Per A2A Specification Section 6.4:
 
 | Role | Value | Description |
 |------|-------|-------------|
-| `ROLE_USER` | 0 | User message |
-| `ROLE_ASSISTANT` | 1 | Agent response |
+| `ROLE_UNSPECIFIED` | 0 | Default/system messages |
+| `ROLE_USER` | 1 | User message |
+| `ROLE_AGENT` | 2 | Agent response |
 
-### Content Types
+### Part Types
 
-| Type | Status | Description |
-|------|--------|-------------|
-| `text` | ✅ Supported | Plain text content |
-| `image` | ⏳ Future | Image content |
-| `audio` | ⏳ Future | Audio content |
-| `video` | ⏳ Future | Video content |
-| `file` | ⏳ Future | File attachments |
+Per A2A Specification Section 6.5:
+
+| Type | Status | Description | Spec Section |
+|------|--------|-------------|--------------|
+| `TextPart` | ✅ Supported | Plain text messages | 6.5.1 |
+| `FilePart` | ✅ Supported | File references with URIs | 6.5.2 |
+| `DataPart` | ✅ Supported | Structured JSON data | 6.5.3 |
 
 ---
 
@@ -244,19 +291,28 @@ message Content {
 
 ### Task States
 
+Per A2A Specification Section 6.3, all 9 task states are supported:
+
 ```
-pending → running → completed
-                 → failed
-                 → cancelled
+SUBMITTED → WORKING → COMPLETED
+                   → FAILED
+                   → CANCELLED
+                   → INPUT_REQUIRED
+                   → REJECTED
+                   → AUTH_REQUIRED
 ```
 
-| State | Description |
-|-------|-------------|
-| `pending` | Task queued, not started |
-| `running` | Task in progress |
-| `completed` | Task finished successfully |
-| `failed` | Task failed with error |
-| `cancelled` | Task cancelled by user |
+| State | Description | Spec Section |
+|-------|-------------|--------------|
+| `TASK_STATE_UNSPECIFIED` | Default/unknown state | 6.3 |
+| `TASK_STATE_SUBMITTED` | Task created and queued | 6.3 |
+| `TASK_STATE_WORKING` | Task actively processing | 6.3 |
+| `TASK_STATE_COMPLETED` | Task finished successfully | 6.3 |
+| `TASK_STATE_FAILED` | Task encountered error | 6.3 |
+| `TASK_STATE_CANCELLED` | Task terminated by client | 6.3 |
+| `TASK_STATE_INPUT_REQUIRED` | Awaiting user input | 6.3 |
+| `TASK_STATE_REJECTED` | Agent refused task | 6.3 |
+| `TASK_STATE_AUTH_REQUIRED` | Needs authentication | 6.3 |
 
 ### Task Management
 
@@ -339,7 +395,7 @@ rpc SendStreamingMessage(SendMessageRequest) returns (stream StreamResponse);
 
 ```bash
 curl -N -H "Accept: text/event-stream" \
-  http://localhost:8081/v1/agents/assistant/message:stream
+  http://localhost:8080/v1/agents/assistant/message:stream
 ```
 
 **Response:**
@@ -352,7 +408,7 @@ data: [DONE]
 ### WebSocket
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8081/v1/agents/assistant/stream');
+const ws = new WebSocket('ws://localhost:8080/v1/agents/assistant/stream');
 
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
@@ -387,7 +443,7 @@ Any A2A client can call Hector agents:
 hector serve --config config.yaml
 
 # Call from any A2A client
-curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
+curl -X POST http://localhost:8080/v1/agents/assistant/message:send \
   -H "Content-Type: application/json" \
   -d '{"message":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}'
 ```
@@ -396,7 +452,15 @@ curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
 
 ## Transport Protocols
 
-### gRPC (Port 8080)
+Hector implements all three A2A transport protocols on conventional ports:
+
+| Transport | Port | Endpoint | Protocol |
+|-----------|------|----------|----------|
+| gRPC | **9090** | `localhost:9090` | HTTP/2 + Protobuf |
+| REST | **8080** | `http://localhost:8080/v1/*` | HTTP/1.1 + JSON |
+| JSON-RPC | **8080** | `http://localhost:8080/` | HTTP/1.1 + JSON-RPC 2.0 |
+
+### gRPC (Port 9090)
 
 **Protocol:** HTTP/2 with Protocol Buffers
 
@@ -404,17 +468,18 @@ curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
 - Binary protocol
 - Bidirectional streaming
 - High performance
+- Native A2A proto support
 
 **Example:**
 ```bash
 grpcurl -plaintext \
   -H 'agent-name: assistant' \
-  -d '{"request":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}' \
-  localhost:8080 \
+  -d '{"request":{"role":"ROLE_USER","parts":[{"text":"Hello"}]}}' \
+  localhost:9090 \
   a2a.v1.A2AService/SendMessage
 ```
 
-### REST (Port 8081)
+### REST (Port 8080)
 
 **Protocol:** HTTP/1.1 with JSON
 
@@ -422,33 +487,61 @@ grpcurl -plaintext \
 - RESTful URLs
 - JSON payload
 - SSE streaming
+- Dual path support (spec + proto formats)
 
-**Example:**
+**Examples:**
+
+**Spec-preferred format** (agent in path):
 ```bash
-curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
+curl -X POST http://localhost:8080/v1/agents/assistant/message:send \
   -H "Content-Type: application/json" \
-  -d '{"message":{"role":"ROLE_USER","content":[{"text":"Hello"}]}}'
+  -d '{"message":{"role":"ROLE_USER","parts":[{"text":"Hello"}]}}'
 ```
 
-### JSON-RPC (Port 8082)
+**Proto-compatible format** (agent in header):
+```bash
+curl -X POST http://localhost:8080/v1/message:send \
+  -H "Content-Type: application/json" \
+  -H "agent-name: assistant" \
+  -d '{"message":{"role":"ROLE_USER","parts":[{"text":"Hello"}]}}'
+```
+
+### JSON-RPC (Port 8080)
 
 **Protocol:** HTTP/1.1 with JSON-RPC 2.0
 
 **Features:**
-- Single endpoint
+- Single endpoint: `POST /` (root path)
+- Streaming endpoint: `POST /stream` (SSE)
 - Method-based routing
 - Simple integration
+- Method names follow A2A spec (e.g., `message/send`, `tasks/get`)
 
-**Example:**
+**Examples:**
+
+**Send message:**
 ```bash
-curl -X POST http://localhost:8082/rpc \
+curl -X POST http://localhost:8080/ \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "method": "message/send",
     "params": {
-      "name": "assistant",
-      "message": {"role":"ROLE_USER","content":[{"text":"Hello"}]}
+      "message": {"role":"ROLE_USER","parts":[{"text":"Hello"}]}
+    },
+    "id": 1
+  }'
+```
+
+**With agent selection** (multi-agent mode):
+```bash
+curl -X POST "http://localhost:8080/?agent=assistant" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "params": {
+      "message": {"role":"ROLE_USER","parts":[{"text":"Hello"}]}
     },
     "id": 1
   }'
@@ -496,8 +589,8 @@ Hector supports protocol extensions while maintaining compatibility:
 ```json
 {
   "response": {
-    "role": "ROLE_ASSISTANT",
-    "content": [{"text": "I'll search for that."}],
+    "role": "ROLE_AGENT",
+    "parts": [{"text": "I'll search for that."}],
     "tool_calls": [
       {
         "id": "call_123",
@@ -517,8 +610,8 @@ Hector supports protocol extensions while maintaining compatibility:
 ```json
 {
   "response": {
-    "role": "ROLE_ASSISTANT",
-    "content": [{"text": "Response"}],
+    "role": "ROLE_AGENT",
+    "parts": [{"text": "Response"}],
     "metadata": {
       "tokens_used": 150,
       "model": "gpt-4o",
@@ -536,16 +629,16 @@ Hector supports protocol extensions while maintaining compatibility:
 
 ```bash
 # Check agent card
-curl http://localhost:8081/.well-known/agent-card.json
+curl http://localhost:8080/.well-known/agent-card.json
 
 # With agent name (multi-agent)
-curl "http://localhost:8081/.well-known/agent-card.json?agent=assistant"
+curl "http://localhost:8080/.well-known/agent-card.json?agent=assistant"
 ```
 
 ### Send Message
 
 ```bash
-curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
+curl -X POST http://localhost:8080/v1/agents/assistant/message:send \
   -H "Content-Type: application/json" \
   -d '{
     "message": {
@@ -559,7 +652,7 @@ curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
 ### Stream Message (SSE)
 
 ```bash
-curl -N -X POST http://localhost:8081/v1/agents/assistant/message:stream \
+curl -N -X POST http://localhost:8080/v1/agents/assistant/message:stream \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{
@@ -574,7 +667,7 @@ curl -N -X POST http://localhost:8081/v1/agents/assistant/message:stream \
 ### JSON-RPC
 
 ```bash
-curl -X POST http://localhost:8082/ \
+curl -X POST http://localhost:8080/ \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -594,10 +687,10 @@ curl -X POST http://localhost:8082/ \
 
 ```bash
 # Get task status
-curl http://localhost:8081/v1/agents/assistant/tasks/task_abc123
+curl http://localhost:8080/v1/agents/assistant/tasks/task_abc123
 
 # Cancel task
-curl -X POST http://localhost:8081/v1/agents/assistant/tasks/task_abc123:cancel
+curl -X POST http://localhost:8080/v1/agents/assistant/tasks/task_abc123:cancel
 ```
 
 ---
@@ -606,18 +699,28 @@ curl -X POST http://localhost:8081/v1/agents/assistant/tasks/task_abc123:cancel
 
 **A2A Protocol Specification:** https://a2a-protocol.org/latest/specification/
 
-**Key Sections:**
-- Section 4: Core Methods
+**Hector Compliance Document:** [A2A_SPECIFICATION_COMPLIANCE.md](../../A2A_SPECIFICATION_COMPLIANCE.md)
+
+**Official Proto Files:** https://github.com/a2aproject/A2A/blob/main/specification/grpc/a2a.proto
+
+**Key Specification Sections:**
+- Section 3: Transport Protocols (gRPC, REST, JSON-RPC)
 - Section 5: Agent Discovery (RFC 8615)
-- Section 6: Authentication
-- Section 7: Transport Protocols
-- Section 8: Task Management
-- Section 9: Streaming
+- Section 6: Message Structure and Task Lifecycle
+- Section 11: Compliance Requirements
+
+**Hector Implementation Details:**
+- All 3 transport protocols ✅
+- All required methods + optional methods ✅
+- Dual REST path support (spec + proto formats) ✅✅
+- All 9 task states ✅
+- All 3 message part types (text, file, data) ✅
 
 ---
 
 ## Next Steps
 
+- **[A2A Compliance](../../A2A_SPECIFICATION_COMPLIANCE.md)** - Detailed compliance audit
 - **[API Reference](api.md)** - Detailed API documentation
 - **[Architecture](architecture.md)** - System architecture
 - **[External Agents](../how-to/integrate-external-agents.md)** - Connect to A2A agents

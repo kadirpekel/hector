@@ -26,9 +26,8 @@ type Server struct {
 	runtime       *runtime.Runtime
 	observability *observability.Manager
 
-	grpcServer    *transport.Server
-	restGateway   *transport.RESTGateway
-	jsonrpcServer *transport.JSONRPCHandler
+	grpcServer  *transport.Server
+	restGateway *transport.RESTGateway
 
 	stopChan   chan struct{}
 	reloadChan chan struct{}
@@ -219,8 +218,9 @@ func (s *Server) startTransport() error {
 
 	s.grpcServer = transport.NewRegistryServer(agentRegistry, grpcConfig)
 
+	// Create HTTP server (REST Gateway with JSON-RPC and Web UI)
 	s.restGateway = transport.NewRESTGateway(transport.RESTGatewayConfig{
-		HTTPAddress: addresses.REST,
+		HTTPAddress: addresses.HTTP,
 		GRPCAddress: addresses.GRPC,
 	})
 	if authConfig != nil {
@@ -229,16 +229,9 @@ func (s *Server) startTransport() error {
 
 	discovery := transport.NewAgentDiscovery(agentRouter, authConfig)
 	s.restGateway.SetDiscovery(discovery)
+	s.restGateway.SetService(agentRouter)
 
-	s.jsonrpcServer = transport.NewJSONRPCHandler(
-		transport.JSONRPCConfig{HTTPAddress: addresses.JSONRPC},
-		agentRouter,
-	)
-	if authConfig != nil {
-		s.jsonrpcServer.SetAuth(authConfig)
-	}
-
-	errChan := make(chan error, 3)
+	errChan := make(chan error, 2)
 
 	go func() {
 		if err := s.grpcServer.Start(); err != nil {
@@ -248,13 +241,7 @@ func (s *Server) startTransport() error {
 
 	go func() {
 		if err := s.restGateway.Start(context.Background()); err != nil {
-			errChan <- fmt.Errorf("REST gateway error: %w", err)
-		}
-	}()
-
-	go func() {
-		if err := s.jsonrpcServer.Start(); err != nil {
-			errChan <- fmt.Errorf("JSON-RPC handler error: %w", err)
+			errChan <- fmt.Errorf("HTTP server error: %w", err)
 		}
 	}()
 
@@ -318,12 +305,7 @@ func (s *Server) cleanup(ctx context.Context) {
 	}
 	if s.restGateway != nil {
 		if err := s.restGateway.Stop(ctx); err != nil {
-			shutdownErrors = append(shutdownErrors, fmt.Errorf("REST: %w", err))
-		}
-	}
-	if s.jsonrpcServer != nil {
-		if err := s.jsonrpcServer.Stop(ctx); err != nil {
-			shutdownErrors = append(shutdownErrors, fmt.Errorf("JSON-RPC: %w", err))
+			shutdownErrors = append(shutdownErrors, fmt.Errorf("HTTP: %w", err))
 		}
 	}
 
@@ -347,13 +329,15 @@ func (s *Server) cleanup(ctx context.Context) {
 }
 
 func (s *Server) resolveAddresses() ServerAddresses {
-	basePort := 8080
+	httpPort := 8080
+	grpcPort := 9090
 	serverHost := "0.0.0.0"
 	baseURL := ""
 
 	if s.config.Global.A2AServer.IsEnabled() {
 		if s.config.Global.A2AServer.Port > 0 {
-			basePort = s.config.Global.A2AServer.Port
+			httpPort = s.config.Global.A2AServer.Port
+			grpcPort = httpPort + 1010 // e.g., 8080 -> 9090
 		}
 		if s.config.Global.A2AServer.Host != "" {
 			serverHost = s.config.Global.A2AServer.Host
@@ -363,8 +347,9 @@ func (s *Server) resolveAddresses() ServerAddresses {
 		}
 	}
 
-	if s.opts.Port != 8080 && s.opts.Port != 0 {
-		basePort = s.opts.Port
+	if s.opts.Port != 0 && s.opts.Port != 8080 {
+		httpPort = s.opts.Port
+		grpcPort = httpPort + 1010
 	}
 	if s.opts.Host != "" {
 		serverHost = s.opts.Host
@@ -374,16 +359,15 @@ func (s *Server) resolveAddresses() ServerAddresses {
 	}
 
 	if baseURL == "" {
-		baseURL = fmt.Sprintf("http://%s:%d", serverHost, basePort+1)
+		baseURL = fmt.Sprintf("http://%s:%d", serverHost, httpPort)
 	}
 
 	return ServerAddresses{
-		GRPC:    fmt.Sprintf("%s:%d", serverHost, basePort),
-		REST:    fmt.Sprintf("%s:%d", serverHost, basePort+1),
-		JSONRPC: fmt.Sprintf("%s:%d", serverHost, basePort+2),
+		HTTP:    fmt.Sprintf("%s:%d", serverHost, httpPort),
+		GRPC:    fmt.Sprintf("%s:%d", serverHost, grpcPort),
 		BaseURL: baseURL,
 		Host:    serverHost,
-		Port:    basePort,
+		Port:    httpPort,
 	}
 }
 
@@ -413,22 +397,22 @@ func (s *Server) logStartup() {
 	addresses := s.resolveAddresses()
 	agentCount := len(s.runtime.Registry().ListAgents())
 
-	log.Printf("Server started with %d agents", agentCount)
-	log.Printf("gRPC: %s", addresses.GRPC)
-	log.Printf("REST: http://%s", addresses.REST)
-	log.Printf("JSON-RPC: http://%s/rpc", addresses.JSONRPC)
+	log.Printf("✅ Server started with %d agents", agentCount)
+	log.Printf("🌐 HTTP: http://%s", addresses.HTTP)
+	log.Printf("📡 gRPC: %s", addresses.GRPC)
 
 	if s.opts.Debug {
-		log.Printf("API endpoints: %s/v1/agents/{name}/message:send", addresses.BaseURL)
+		log.Printf("   → Web UI (GET): http://%s/", addresses.HTTP)
+		log.Printf("   → JSON-RPC (POST): http://%s/", addresses.HTTP)
+		log.Printf("   → REST API: http://%s/v1/", addresses.HTTP)
 	}
 
-	log.Println("Press Ctrl+C to stop")
+	log.Printf("Press Ctrl+C to stop")
 }
 
 type ServerAddresses struct {
+	HTTP    string
 	GRPC    string
-	REST    string
-	JSONRPC string
 	BaseURL string
 	Host    string
 	Port    int

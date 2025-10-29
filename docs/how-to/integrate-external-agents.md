@@ -5,7 +5,7 @@ description: Connect to remote A2A agents in your multi-agent workflows
 
 # How to Integrate External A2A Agents
 
-Connect your Hector agents to external A2A-compliant agents running on other servers or services.
+Connect your Hector agents to external A2A-compliant agents (v0.3.0 or compatible) running on other servers or services.
 
 **Time:** 15 minutes  
 **Difficulty:** Intermediate
@@ -29,8 +29,9 @@ Connect your Hector agents to external A2A-compliant agents running on other ser
 **Use cases:**
 - **Specialized services** - Call domain-specific agents (legal, medical, financial)
 - **Team collaboration** - Connect agents from different teams
-- **Commercial services** - Integrate with A2A-compliant SaaS
+- **Commercial services** - Integrate with A2A v0.3.0 compliant SaaS
 - **Distributed systems** - Build agent networks across infrastructure
+- **Multi-vendor interoperability** - Mix agents from different A2A implementations
 
 ---
 

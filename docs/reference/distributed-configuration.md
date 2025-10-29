@@ -386,7 +386,7 @@ agents:
   
   external-agent:
     type: "a2a"
-    url: "https://another-hector-instance:8081"
+    url: "https://another-hector-instance:8080"
     # Discovered via A2A agent card
 ```
 
@@ -416,7 +416,7 @@ tail -f /var/log/hector/hector.log | grep "Configuration reloaded"
 
 ```bash
 # Verify configuration is loaded
-curl http://localhost:8081/v1/agents | jq '.agents | length'
+curl http://localhost:8080/v1/agents | jq '.agents | length'
 
 # Should return number of configured agents
 ```

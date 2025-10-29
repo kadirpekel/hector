@@ -13,20 +13,27 @@ Hector provides multiple API transports for interacting with agents. All APIs im
 
 | Transport | Port | Use Case | Protocol |
 |-----------|------|----------|----------|
-| **gRPC** | 8080 | High performance | Binary/HTTP2 |
-| **REST** | 8081 | Web/Browser | JSON/HTTP1 |
-| **JSON-RPC** | 8082 | Simple integration | JSON-RPC 2.0 |
-| **WebSocket** | 8081/ws | Real-time streaming | WebSocket |
+| **gRPC** | 9090 | High performance | Binary/HTTP2 |
+| **REST** | 8080 | Web/Browser | JSON/HTTP1 |
+| **JSON-RPC** | 8080 | Simple integration | JSON-RPC 2.0 |
+| **WebSocket** | 8080/ws | Real-time streaming | WebSocket |
+| **Web UI** | 8080 | Interactive browser UI | HTML/JavaScript |
+
+**All HTTP-based APIs consolidated on port 8080 for simplicity.**
 
 ---
 
 ## Base URLs
 
 ```
-gRPC:     localhost:8080
-REST:     http://localhost:8081
-JSON-RPC: http://localhost:8082/rpc
-WebSocket: ws://localhost:8081/v1/agents/{agent}/stream
+HTTP (REST/JSON-RPC/WebSocket/UI): http://localhost:8080
+gRPC:                               localhost:9090
+
+Specific endpoints:
+  REST API:     http://localhost:8080/v1/
+  JSON-RPC:     http://localhost:8080/ (POST)
+  Web UI:       http://localhost:8080/ (GET)
+  WebSocket:    ws://localhost:8080/v1/agents/{agent}/stream
 ```
 
 ---
@@ -91,7 +98,7 @@ Send a single message to an agent.
 
 **Example:**
 ```bash
-curl -X POST http://localhost:8081/v1/agents/assistant/message:send \
+curl -X POST http://localhost:8080/v1/agents/assistant/message:send \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -128,7 +135,7 @@ data: {"statusUpdate":{"taskId":"tasks/123","status":{"state":"completed"},"fina
 
 **Example:**
 ```bash
-curl -N -X POST http://localhost:8081/v1/agents/assistant/message:stream \
+curl -N -X POST http://localhost:8080/v1/agents/assistant/message:stream \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -H "Authorization: Bearer $TOKEN" \
@@ -165,10 +172,10 @@ Get agent metadata and capabilities.
 **Example:**
 ```bash
 # Per-agent endpoint
-curl http://localhost:8081/v1/agents/assistant/.well-known/agent-card.json
+curl http://localhost:8080/v1/agents/assistant/.well-known/agent-card.json
 
 # Query string style
-curl http://localhost:8081/.well-known/agent-card.json?name=assistant
+curl http://localhost:8080/.well-known/agent-card.json?name=assistant
 ```
 
 ### List Agents
@@ -189,7 +196,7 @@ List all available agents.
 
 **Example:**
 ```bash
-curl http://localhost:8081/v1/agents
+curl http://localhost:8080/v1/agents
 ```
 
 ### Get Task Status
@@ -222,10 +229,10 @@ Get status of an async task.
 **Example:**
 ```bash
 # Agent-specific endpoint
-curl http://localhost:8081/v1/agents/assistant/tasks/task_abc123
+curl http://localhost:8080/v1/agents/assistant/tasks/task_abc123
 
 # Generic endpoint (uses context routing)
-curl http://localhost:8081/v1/tasks/task_abc123
+curl http://localhost:8080/v1/tasks/task_abc123
 ```
 
 ### Cancel Task
@@ -253,10 +260,10 @@ Cancel a running task.
 **Example:**
 ```bash
 # Agent-specific endpoint
-curl -X POST http://localhost:8081/v1/agents/assistant/tasks/task_abc123:cancel
+curl -X POST http://localhost:8080/v1/agents/assistant/tasks/task_abc123:cancel
 
 # Generic endpoint (uses context routing)
-curl -X POST http://localhost:8081/v1/tasks/task_abc123:cancel
+curl -X POST http://localhost:8080/v1/tasks/task_abc123:cancel
 ```
 
 **Task States:**
@@ -357,12 +364,12 @@ grpcurl -plaintext \
 
 Real-time bidirectional communication.
 
-**Endpoint:** `ws://localhost:8081/v1/agents/{agent}/stream`
+**Endpoint:** `ws://localhost:8080/v1/agents/{agent}/stream`
 
 ### Connection
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8081/v1/agents/assistant/stream');
+const ws = new WebSocket('ws://localhost:8080/v1/agents/assistant/stream');
 
 ws.onopen = () => {
   console.log('Connected');
@@ -418,7 +425,70 @@ ws.onclose = () => {
 
 Simple JSON-RPC 2.0 interface.
 
-**Endpoint:** `POST /rpc`
+**Endpoint:** `POST /` (root endpoint with method-based routing)
+
+### Agent Selection
+
+JSON-RPC supports multiple ways to specify which agent to use:
+
+#### 1. Query String (Recommended)
+
+Specify the agent using the `?agent=` query parameter:
+
+```bash
+# Single agent setup - query string optional
+POST http://localhost:8080/
+
+# Multi-agent setup - query string required
+POST http://localhost:8080/?agent=orchestrator
+```
+
+#### 2. Context ID Format
+
+Embed agent name in the `contextId` using `agent_name:session_id` format:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "message/send",
+  "params": {
+    "request": {
+      "contextId": "orchestrator:session-123"
+    }
+  }
+}
+```
+
+#### 3. Request Metadata
+
+Include agent name in the request metadata:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "message/send",
+  "params": {
+    "request": {
+      "metadata": {
+        "name": "orchestrator"
+      }
+    }
+  }
+}
+```
+
+### Fallback Behavior
+
+**Single-Agent Mode:**
+- If server has only **one agent** registered, agent specification is optional
+- Requests automatically route to the single agent
+- ✅ Works: `POST /` (no query string needed)
+
+**Multi-Agent Mode:**
+- If server has **multiple agents**, agent must be specified
+- Missing agent specification returns error: `"name not specified"`
+- ✅ Works: `POST /?agent=xyz`
+- ❌ Fails: `POST /` (no agent specified)
 
 ### Send Message
 
@@ -453,18 +523,50 @@ Simple JSON-RPC 2.0 interface.
 }
 ```
 
-**Example:**
+**Examples:**
+
 ```bash
-curl -X POST http://localhost:8082/rpc \
+# Single-agent setup (no query string needed)
+curl -X POST http://localhost:8080/ \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "method": "message/send",
     "params": {
-      "name": "assistant",
-      "message": {
-        "role": "ROLE_USER",
-        "content": [{"text": "Hello"}]
+      "request": {
+        "role": "user",
+        "parts": [{"text": "Hello"}]
+      }
+    },
+    "id": 1
+  }'
+
+# Multi-agent setup (query string required)
+curl -X POST 'http://localhost:8080/?agent=orchestrator' \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "params": {
+      "request": {
+        "role": "user",
+        "parts": [{"text": "Hello"}]
+      }
+    },
+    "id": 1
+  }'
+
+# Alternative: Using contextId
+curl -X POST http://localhost:8080/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "params": {
+      "request": {
+        "contextId": "orchestrator:session-123",
+        "role": "user",
+        "parts": [{"text": "Hello"}]
       }
     },
     "id": 1
@@ -558,7 +660,7 @@ Create and manage conversation sessions.
 ### Example Error Response
 
 ```bash
-curl http://localhost:8081/v1/agents/unknown
+curl http://localhost:8080/v1/agents/unknown
 ```
 
 ```json
@@ -632,7 +734,7 @@ X-RateLimit-Reset: 1640000000
 import { A2AClient } from '@hector/client';
 
 const client = new A2AClient({
-  baseUrl: 'http://localhost:8081',
+  baseUrl: 'http://localhost:8080',
   token: 'your-jwt-token'
 });
 
@@ -659,7 +761,7 @@ for await (const chunk of stream) {
 from hector_client import A2AClient
 
 client = A2AClient(
-    base_url='http://localhost:8081',
+    base_url='http://localhost:8080',
     token='your-jwt-token'
 )
 
@@ -683,7 +785,7 @@ for chunk in client.stream_message('assistant', {
 import "github.com/kadirpekel/hector/pkg/client"
 
 client := client.New(client.Config{
-    BaseURL: "http://localhost:8081",
+    BaseURL: "http://localhost:8080",
     Token:   "your-jwt-token",
 })
 

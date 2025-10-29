@@ -427,7 +427,7 @@ func (s *SQLTaskService) ListTasks(ctx context.Context, contextID string, status
 	// Count total
 	countQuery := "SELECT COUNT(*) FROM tasks"
 	if len(conditions) > 0 {
-		countQuery += " WHERE " + fmt.Sprintf("%s", conditions[0])
+		countQuery += " WHERE " + conditions[0]
 		for i := 1; i < len(conditions); i++ {
 			countQuery += " AND " + conditions[i]
 		}

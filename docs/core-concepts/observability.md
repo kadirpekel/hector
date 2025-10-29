@@ -139,7 +139,7 @@ hector serve --config my-config.yaml
 
 ### 4. Access Dashboards
 
-- **Metrics Endpoint**: http://localhost:8081/metrics
+- **Metrics Endpoint**: http://localhost:8080/metrics
 - **Prometheus**: http://localhost:9090
 - **Jaeger**: http://localhost:16686
 - **Grafana**: http://localhost:3000
@@ -271,7 +271,7 @@ curl http://localhost:9090/api/v1/targets
 
 Verify Hector metrics endpoint:
 ```bash
-curl http://localhost:8081/metrics | grep hector_
+curl http://localhost:8080/metrics | grep hector_
 ```
 
 ### No Traces in Jaeger

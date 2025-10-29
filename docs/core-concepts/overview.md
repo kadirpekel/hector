@@ -27,10 +27,11 @@ That's it. Hector handles the rest.
 
 ### Agent-to-Agent (A2A) Protocol
 
-Every Hector agent implements the [A2A protocol](https://a2a-protocol.org), enabling:
+Every Hector agent implements the [A2A protocol v0.3.0](https://a2a-protocol.org), enabling:
 
 - **Interoperability** - Agents can call other agents across networks
-- **Standards-based** - Compatible with any A2A-compliant service
+- **Standards-based** - 100% compatible with any A2A-compliant service
+- **Enhanced REST** - Dual-path support for maximum compatibility
 - **Distributed systems** - Build agent networks spanning multiple servers
 
 ### Agent Lifecycle

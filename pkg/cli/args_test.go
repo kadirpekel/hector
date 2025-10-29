@@ -7,7 +7,7 @@ func TestCLIArgs_AllFields(t *testing.T) {
 	args := CLIArgs{
 		ConfigFile:    "test.yaml",
 		Debug:         true,
-		ServerURL:     "http://localhost:8081",
+		ServerURL:     "http://localhost:8080",
 		Token:         "token",
 		Port:          8080,
 		Provider:      "openai",

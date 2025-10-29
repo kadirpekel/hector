@@ -30,7 +30,7 @@ func TestDisplayAgentList(t *testing.T) {
 		{
 			Name:        "Test Agent 1",
 			Description: "Test description 1",
-			Url:         "http://localhost:8081",
+			Url:         "http://localhost:8080",
 			Version:     "1.0.0",
 			Capabilities: &pb.AgentCapabilities{
 				Streaming: true,

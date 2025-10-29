@@ -274,13 +274,10 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 }
 
 func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (*pb.AgentCard, error) {
-	// Build the agent URL - use port 8082 for JSON-RPC by default
-	agentURL := fmt.Sprintf("http://localhost:8082/rpc?agent=%s", a.name)
+	// Build the agent URL - use port 8080 for HTTP (JSON-RPC at root) by default
+	agentURL := fmt.Sprintf("http://localhost:8080/?agent=%s", a.name)
 
-	// Try to build better URL from config if available
-	if a.config != nil && a.config.A2A != nil {
-		// Future: could get baseURL from server config passed down
-	}
+	// Future: could get baseURL from server config passed down to build better URL
 
 	card := &pb.AgentCard{
 		Name:               a.name,

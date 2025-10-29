@@ -119,20 +119,20 @@ Registered agents: assistant (or your configured agent names)
 
 ```bash
 # List available agents
-hector list --server http://localhost:8081
+hector list --server http://localhost:8080
 
 # Call an agent
-hector call "Explain recursion" --agent assistant --server http://localhost:8081
+hector call "Explain recursion" --agent assistant --server http://localhost:8080
 
 # Interactive chat
-hector chat --agent assistant --server http://localhost:8081
+hector chat --agent assistant --server http://localhost:8080
 ```
 
 ---
 
 ## Connect to a Remote Server
 
-Use Hector as a client to connect to any A2A-compliant server.
+Use Hector as a client to connect to any A2A-compliant server (v0.3.0 or compatible).
 
 ```bash
 # Connect to remote server

@@ -8,7 +8,7 @@
 ```
 [![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
-[![A2A Protocol](https://img.shields.io/badge/A2A%20Protocol-compliant-brightgreen.svg)](https://gohector.dev/reference/a2a-protocol/)
+[![A2A Protocol](https://img.shields.io/badge/A2A%20v0.3.0-100%25%20compliant-brightgreen.svg)](https://gohector.dev/reference/a2a-protocol/)
 [![Documentation](https://img.shields.io/badge/docs-gohector.dev-blue.svg)](https://gohector.dev)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 
@@ -26,7 +26,7 @@ Hector is an AI agent platform designed for production deployment, built in Go f
 
 - **Zero-Code Configuration**: Pure YAML agent definition, no Python/Go required
 - **Hot Reload**: Update configurations without downtime or restart
-- **A2A Protocol Native**: Standards-compliant agent communication and federation
+- **A2A Protocol v0.3.0 Native**: 100% standards-compliant with enhanced dual-path REST support
 - **Production Observability**: Built-in Prometheus metrics and OpenTelemetry tracing
 - **Security-First**: JWT authentication, visibility controls, and command sandboxing out of the box
 - **Resource Efficient**: Single 30MB binary (stripped), minimal runtime footprint
@@ -65,20 +65,20 @@ hector serve --config agents.yaml
 
 ```bash
 # Send message to agent
-hector call "Analyze system architecture and suggest improvements" --agent analyst --server http://localhost:8081
+hector call "Analyze system architecture and suggest improvements" --agent analyst --server http://localhost:8080
 
 # Interactive chat
-hector chat --agent analyst --server http://localhost:8081
+hector chat --agent analyst --server http://localhost:8080
 
 # List available agents
-hector list --server http://localhost:8081
+hector list --server http://localhost:8080
 ```
 
 **Using REST API (curl):**
 
 ```bash
 # Send message (A2A Protocol compliant)
-curl -X POST http://localhost:8081/v1/agents/analyst/message:send \
+curl -X POST http://localhost:8080/v1/agents/analyst/message:send \
   -H "Content-Type: application/json" \
   -d '{
     "message": {
@@ -88,7 +88,7 @@ curl -X POST http://localhost:8081/v1/agents/analyst/message:send \
   }'
 
 # Stream responses (SSE)
-curl -N http://localhost:8081/v1/agents/analyst/message:stream \
+curl -N http://localhost:8080/v1/agents/analyst/message:stream \
   -H "Content-Type: application/json" \
   -d '{
     "message": {
@@ -98,7 +98,7 @@ curl -N http://localhost:8081/v1/agents/analyst/message:stream \
   }'
 
 # List agents
-curl http://localhost:8081/v1/agents
+curl http://localhost:8080/v1/agents
 ```
 
 ### Local Mode (Development)
@@ -462,7 +462,7 @@ CMD ["serve", "--config", "/config/agents.yaml"]
 Build and run:
 ```bash
 docker build -t hector:latest .
-docker run -p 8080:8080 -p 8081:8081 \
+docker run -p 8080:8080 -p 9090:9090 \
   -v $(pwd)/config:/config \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
   hector:latest
@@ -503,7 +503,7 @@ spec:
         ports:
         - containerPort: 8080
           name: grpc
-        - containerPort: 8081
+        - containerPort: 8080
           name: http
         - containerPort: 9090
           name: metrics
@@ -528,12 +528,12 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 8081
+            port: 8080
           initialDelaySeconds: 10
         readinessProbe:
           httpGet:
             path: /ready
-            port: 8081
+            port: 8080
           initialDelaySeconds: 5
 ---
 apiVersion: v1
@@ -549,8 +549,8 @@ spec:
     port: 8080
     targetPort: 8080
   - name: http
-    port: 8081
-    targetPort: 8081
+    port: 8080
+    targetPort: 8080
   - name: metrics
     port: 9090
     targetPort: 9090
@@ -581,11 +581,13 @@ consul kv put hector/production @production.json
 
 Hector exposes multiple transport protocols for maximum flexibility:
 
-### REST API (Port 8081)
+### HTTP APIs (Port 8080)
+
+All HTTP-based APIs (REST, JSON-RPC, WebSocket, Web UI) are served on port 8080:
 
 ```bash
-# Send message (A2A Protocol compliant)
-curl -X POST http://localhost:8081/v1/agents/analyst/message:send \
+# REST API: Send message (A2A Protocol compliant)
+curl -X POST http://localhost:8080/v1/agents/analyst/message:send \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <token>" \
   -d '{
@@ -595,8 +597,8 @@ curl -X POST http://localhost:8081/v1/agents/analyst/message:send \
     }
   }'
 
-# Stream responses (SSE)
-curl -N http://localhost:8081/v1/agents/analyst/message:stream \
+# REST API: Stream responses (SSE)
+curl -N http://localhost:8080/v1/agents/analyst/message:stream \
   -H "Content-Type: application/json" \
   -d '{
     "message": {
@@ -605,11 +607,24 @@ curl -N http://localhost:8081/v1/agents/analyst/message:stream \
     }
   }'
 
-# List agents
-curl http://localhost:8081/v1/agents
+# REST API: List agents
+curl http://localhost:8080/v1/agents
 
-# Agent discovery
-curl http://localhost:8081/v1/agents/analyst
+# REST API: Agent discovery
+curl http://localhost:8080/v1/agents/analyst
+
+# JSON-RPC: Call agent (single-agent mode)
+curl -X POST http://localhost:8080/ \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"message/send","params":{"request":{"parts":[{"text":"Hello"}],"role":"user"}},"id":"1"}'
+
+# JSON-RPC: Call specific agent (multi-agent mode)
+curl -X POST 'http://localhost:8080/?agent=orchestrator' \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"message/send","params":{"request":{"parts":[{"text":"Hello"}],"role":"user"}},"id":"1"}'
+
+# Web UI: Open in browser
+open http://localhost:8080/
 ```
 
 ### gRPC (Port 8080)
@@ -629,10 +644,10 @@ resp, _ := client.SendMessage(ctx, &pb.MessageRequest{
 })
 ```
 
-### WebSocket (Port 8081)
+### WebSocket (Port 8080)
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8081/v1/agents/analyst/ws');
+const ws = new WebSocket('ws://localhost:8080/v1/agents/analyst/ws');
 
 ws.send(JSON.stringify({
   content: "Real-time analysis"

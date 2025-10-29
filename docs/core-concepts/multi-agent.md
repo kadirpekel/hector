@@ -619,12 +619,79 @@ reasoning:
 
 ---
 
+## API Usage with Multi-Agent
+
+When calling a multi-agent server via API, you **must** specify which agent to use.
+
+### REST API
+
+Agent is part of the URL path:
+
+```bash
+# Explicit agent in path
+POST /v1/agents/orchestrator/message:send
+POST /v1/agents/researcher/message:send
+```
+
+### JSON-RPC API
+
+Use one of three methods:
+
+**1. Query String (Recommended):**
+```bash
+POST /?agent=orchestrator
+POST /?agent=researcher
+```
+
+**2. Context ID Format:**
+```json
+{
+  "params": {
+    "request": {
+      "contextId": "orchestrator:session-123"
+    }
+  }
+}
+```
+
+**3. Request Metadata:**
+```json
+{
+  "params": {
+    "request": {
+      "metadata": {"name": "orchestrator"}
+    }
+  }
+}
+```
+
+### Single vs Multi-Agent Behavior
+
+| Setup | Agent Specification | Behavior |
+|-------|-------------------|----------|
+| **Single Agent** | Optional | Auto-routes to only agent |
+| **Multi-Agent** | **Required** | Must specify agent name |
+
+**Example Error (Multi-Agent without specification):**
+```json
+{
+  "error": {
+    "message": "name not specified"
+  }
+}
+```
+
+See the [API Reference](../reference/api.md#agent-selection) for detailed examples.
+
+---
+
 ## Next Steps
 
 - **[How to Build a Research System](../how-to/build-research-system.md)** - Complete tutorial
 - **[How to Integrate External Agents](../how-to/integrate-external-agents.md)** - A2A integration
 - **[Reasoning Strategies](reasoning.md)** - Supervisor strategy details
 - **[Tools](tools.md)** - agent_call tool
+- **[API Reference](../reference/api.md#agent-selection)** - Agent selection in API calls
 
 ---
 
