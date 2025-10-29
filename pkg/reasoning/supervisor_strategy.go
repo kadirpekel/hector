@@ -226,16 +226,16 @@ SYNTHESIS GUIDELINES:
 		ToolUsage: s.buildToolUsageGuidance(),
 
 		OutputFormat: `Present results in a clear, organized way:
-- Explain your orchestration strategy
-- Show which agents you consulted
-- Synthesize their insights
-- Provide a unified, actionable response`,
+- When delegating to agents, briefly mention it ("Let me consult our analyst...")
+- Balance transparency with conciseness
+- Focus on delivering value to the user
+- Provide unified, actionable responses`,
 
-		CommunicationStyle: `Be clear and systematic:
-- Explain your orchestration approach
-- Show your reasoning about agent selection
-- Acknowledge when building on previous results
-- Present synthesized insights, not just concatenated outputs`,
+		CommunicationStyle: `Be natural and conversational:
+- Briefly mention what you're doing when coordinating agents
+- Keep explanations natural and brief
+- Let the workflow feel smooth and effortless
+- Present synthesized insights clearly`,
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"github.com/kadirpekel/hector/pkg/agent"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -21,6 +22,9 @@ import (
 
 //go:embed static/index.html
 var webUIHTML []byte
+
+//go:embed static/letter-h.png
+var letterHPNG []byte
 
 // JSON-RPC 2.0 types and constants
 type JSONRPCRequest struct {
@@ -202,6 +206,14 @@ func (g *RESTGateway) setupRouting() http.Handler {
 	r.Get("/", g.handleWebUI)
 	r.Post("/", g.handleJSONRPC)
 	log.Printf("   → Root (GET: Web UI, POST: JSON-RPC): /")
+
+	// Static assets
+	r.Get("/letter-h.png", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=31536000")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(letterHPNG)
+	})
 
 	// JSON-RPC streaming endpoint
 	r.Post("/stream", g.handleJSONRPCStream)
@@ -830,6 +842,12 @@ func (g *RESTGateway) handleJSONRPCStream(w http.ResponseWriter, r *http.Request
 	log.Printf("JSON-RPC Stream: method=%s id=%v", rpcReq.Method, rpcReq.ID)
 
 	ctx := r.Context()
+
+	// Set contextId as session ID for memory persistence
+	if req.Request != nil && req.Request.ContextId != "" {
+		ctx = context.WithValue(ctx, agent.SessionIDKey, req.Request.ContextId)
+	}
+
 	var agentName string
 	var md metadata.MD
 
