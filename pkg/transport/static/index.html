@@ -724,6 +724,11 @@
             cursor: not-allowed;
         }
 
+        /* Sidebar toggle - hidden by default on desktop */
+        .sidebar-toggle {
+            display: none;
+        }
+
         /* Footer */
 
         /* Error messages */
@@ -746,6 +751,81 @@
                 height: 100%;
                 z-index: 1000;
                 box-shadow: 4px 0 12px rgba(0, 0, 0, 0.5);
+                width: 56px;
+                transition: width 0.3s ease;
+            }
+
+            .sidebar.expanded {
+                width: 280px;
+            }
+
+            .sidebar-header {
+                justify-content: center;
+                padding: 10px 12px;
+            }
+
+            .new-chat-btn {
+                padding: 11px;
+                justify-content: center;
+            }
+
+            .new-chat-btn span {
+                display: none;
+            }
+
+            .sidebar.expanded .new-chat-btn span {
+                display: inline;
+            }
+
+            .conversation-item {
+                padding: 12px;
+                justify-content: center;
+            }
+
+            .conversation-info {
+                display: none;
+            }
+
+            .sidebar.expanded .conversation-info {
+                display: block;
+            }
+
+            .sidebar.expanded .conversation-item {
+                justify-content: space-between;
+                padding: 12px 16px;
+            }
+
+            .conversation-item::before {
+                content: '💬';
+                font-size: 18px;
+            }
+
+            .sidebar.expanded .conversation-item::before {
+                display: none;
+            }
+
+            .delete-session-btn {
+                display: none;
+            }
+
+            .sidebar.expanded .delete-session-btn {
+                display: block;
+            }
+
+            .conversation-item.active::before {
+                content: '💬';
+            }
+
+            .sidebar-footer {
+                padding: 10px 12px;
+            }
+
+            .main-content {
+                margin-left: 56px;
+            }
+
+            .sidebar.expanded ~ .main-content {
+                margin-left: 280px;
             }
 
             .config-grid {
@@ -763,6 +843,29 @@
             .messages {
                 padding: 15px;
             }
+
+            .sidebar-toggle {
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+                background: rgba(255, 255, 255, 0.1);
+                border: none;
+                color: white;
+                cursor: pointer;
+                padding: 8px;
+                border-radius: 6px;
+                margin-right: 8px;
+                font-size: 18px;
+                transition: all 0.2s;
+            }
+
+            .sidebar-toggle:hover {
+                background: rgba(255, 255, 255, 0.2);
+            }
+
+            .powered-by {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -778,7 +881,7 @@
         <div class="conversations" id="conversations"></div>
 
         <div class="sidebar-footer">
-            <button class="new-chat-btn" onclick="newChat()">New chat</button>
+            <button class="new-chat-btn" onclick="newChat()"><span>New chat</span></button>
         </div>
     </div>
 
@@ -786,6 +889,7 @@
     <div class="main-content">
         <!-- Top bar -->
         <div class="top-bar">
+            <button class="sidebar-toggle" onclick="toggleSidebar()" style="display: none;">☰</button>
             <div class="agent-info">
                 <div class="agent-name" id="agentName">Loading...</div>
                 <div class="agent-description" id="agentDescription"></div>
@@ -913,6 +1017,11 @@
 
             renderConversations();
             scrollToBottom();
+            
+            // Auto-collapse sidebar on mobile after selecting a conversation
+            if (window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('expanded');
+            }
         }
 
         function updateSessionTitle(sessionId, firstMessage) {
@@ -974,6 +1083,10 @@
 
         function toggleConfig() {
             document.getElementById('configPanel').classList.toggle('visible');
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('expanded');
         }
 
         function clearMessages() {
@@ -1399,6 +1512,21 @@
 
         document.getElementById('endpoint').addEventListener('blur', function() {
             fetchAgents();
+        });
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(e) {
+            if (window.innerWidth <= 768) {
+                const sidebar = document.getElementById('sidebar');
+                const toggleBtn = document.querySelector('.sidebar-toggle');
+                
+                // Check if click is outside sidebar and not on the toggle button
+                if (sidebar.classList.contains('expanded') && 
+                    !sidebar.contains(e.target) && 
+                    !toggleBtn.contains(e.target)) {
+                    sidebar.classList.remove('expanded');
+                }
+            }
         });
 
         window.addEventListener('load', init);
