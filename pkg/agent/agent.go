@@ -484,8 +484,11 @@ func (a *Agent) executeTools(
 
 	results := make([]reasoning.ToolResult, 0, len(toolCalls))
 
+	// Add newline before tools if showing them
 	if len(toolCalls) > 0 && cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
-		outputCh <- "\n"
+		if cfg.ToolDisplayMode != "hidden" {
+			outputCh <- "\n"
+		}
 	}
 
 	for _, toolCall := range toolCalls {
@@ -496,22 +499,20 @@ func (a *Agent) executeTools(
 		default:
 		}
 
+		// Show tool execution based on display mode
 		if cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
-			label := formatToolLabel(toolCall.Name, toolCall.Args)
-			outputCh <- fmt.Sprintf("[Tool: %s]", label)
+			displayToolCall(outputCh, toolCall, cfg)
 		}
 
 		result, metadata, err := tools.ExecuteToolCall(ctx, toolCall)
 		resultContent := result
 		if err != nil {
 			resultContent = fmt.Sprintf("Error: %v", err)
-			if cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
-				outputCh <- " [FAILED]\n"
-			}
-		} else {
-			if cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
-				outputCh <- " [SUCCESS]\n"
-			}
+		}
+
+		// Show result based on configuration
+		if cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
+			displayToolResult(outputCh, toolCall, err, resultContent, cfg)
 		}
 
 		results = append(results, reasoning.ToolResult{

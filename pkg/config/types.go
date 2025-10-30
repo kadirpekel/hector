@@ -1470,6 +1470,11 @@ type ReasoningConfig struct {
 	ShowThinking               bool    `yaml:"show_thinking"`
 	EnableStreaming            *bool   `yaml:"enable_streaming"`
 	QualityThreshold           float64 `yaml:"quality_threshold"`
+
+	// Tool display configuration
+	ToolDisplayMode string `yaml:"tool_display_mode"` // inline, detailed, hidden, thinking
+	ShowToolArgs    bool   `yaml:"show_tool_args"`    // Show tool arguments
+	ShowToolResults bool   `yaml:"show_tool_results"` // Show tool results
 }
 
 func (c *ReasoningConfig) Validate() error {
@@ -1509,6 +1514,12 @@ func (c *ReasoningConfig) SetDefaults() {
 		trueVal := true
 		c.EnableStructuredReflection = &trueVal
 	}
+
+	// Set tool display defaults
+	if c.ToolDisplayMode == "" {
+		c.ToolDisplayMode = "inline" // Default to clean inline display
+	}
+	// ShowToolArgs and ShowToolResults default to false for clean output
 }
 
 type SearchConfig struct {
