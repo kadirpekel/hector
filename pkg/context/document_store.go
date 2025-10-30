@@ -167,7 +167,11 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Initialize file source
-	filter := indexing.NewPatternFilter(storeConfig.Path, storeConfig.IncludePatterns, storeConfig.ExcludePatterns)
+	filter, err := indexing.NewPatternFilter(storeConfig.Path, storeConfig.IncludePatterns, storeConfig.ExcludePatterns)
+	if err != nil {
+		cancel()
+		return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "failed to create pattern filter", "", err)
+	}
 	fileSource := indexing.NewDirectorySource(storeConfig.Path, filter, storeConfig.MaxFileSize)
 
 	// Initialize content extractors
@@ -279,7 +283,8 @@ func (ds *DocumentStore) StartIndexing() error {
 }
 
 func (ds *DocumentStore) indexDirectory() error {
-	ctx := context.Background()
+	// Use the document store's context to respect cancellation
+	ctx := ds.ctx
 
 	// Try to load checkpoint
 	checkpoint, err := ds.checkpointManager.LoadCheckpoint()
@@ -320,42 +325,54 @@ func (ds *DocumentStore) indexDirectory() error {
 	failedFiles := make([]string, 0)
 	var failedFilesMu sync.Mutex
 
-	// First pass: count total files that actually need processing
+	// Fast counting pass: stat files to get accurate total (no file reading)
+	// This is much faster than reading files but gives us accurate progress
 	var totalFiles int64
-	_ = filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
+			if info != nil && info.IsDir() && ds.shouldExclude(path) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
-		if !ds.shouldExclude(path) && ds.shouldInclude(path) && info.Size() > 0 && info.Size() <= ds.config.MaxFileSize {
-			relPath, _ := filepath.Rel(ds.sourcePath, path)
 
-			// Only count files that will actually be processed
-			// Skip files already in checkpoint and haven't changed
-			if checkpoint != nil && !ds.checkpointManager.ShouldProcessFile(relPath, info.Size(), info.ModTime()) {
-				return nil
-			}
-
-			// Skip files for incremental indexing
-			if !ds.shouldReindexFile(path, info.ModTime(), existingDocs) {
-				return nil
-			}
-
-			totalFiles++
+		// Apply same filters as processing pass
+		if info.Size() == 0 || info.Size() > ds.config.MaxFileSize {
+			return nil
 		}
+		if ds.shouldExclude(path) || !ds.shouldInclude(path) {
+			return nil
+		}
+
+		relPath, _ := filepath.Rel(ds.sourcePath, path)
+
+		// Skip if already in checkpoint and hasn't changed
+		if checkpoint != nil && !ds.checkpointManager.ShouldProcessFile(relPath, info.Size(), info.ModTime()) {
+			return nil
+		}
+
+		// Skip if incremental indexing says no changes
+		if !ds.shouldReindexFile(path, info.ModTime(), existingDocs) {
+			return nil
+		}
+
+		totalFiles++
 		return nil
 	})
+
+	if err != nil {
+		return NewDocumentStoreError(ds.name, "indexDirectory", "failed to count files", ds.sourcePath, err)
+	}
 
 	// When resuming from checkpoint, show cumulative progress
 	if checkpoint != nil {
 		checkpointProcessed := int64(len(checkpoint.ProcessedFiles))
 		grandTotal := checkpointProcessed + totalFiles
 
-		// Set grand total for progress tracker
 		ds.progressTracker.SetTotalFiles(grandTotal)
 		ds.checkpointManager.SetTotalFiles(int(grandTotal))
 
 		// Pre-populate progress with checkpointed files
-		// This makes progress bar start from where we left off (e.g., 43/286 = 15%)
 		for i := int64(0); i < checkpointProcessed; i++ {
 			ds.progressTracker.IncrementProcessed()
 		}
@@ -371,7 +388,7 @@ func (ds *DocumentStore) indexDirectory() error {
 		_ = ds.checkpointManager.SaveCheckpoint() // Final save - ignore error
 	}()
 
-	// Second pass: actually index files
+	// Processing pass: actually index the files
 	err = filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			ds.progressTracker.IncrementFailed()
@@ -414,7 +431,8 @@ func (ds *DocumentStore) indexDirectory() error {
 		// Check incremental indexing
 		if !ds.shouldReindexFile(path, info.ModTime(), existingDocs) {
 			ds.progressTracker.IncrementSkipped()
-			ds.progressTracker.IncrementProcessed()
+			// Don't increment processed - these files are not part of this indexing run
+			// They were already indexed in a previous run and haven't changed
 			ds.checkpointManager.RecordFile(relPath, info.Size(), info.ModTime(), "skipped")
 			return nil
 		}

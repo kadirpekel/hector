@@ -137,16 +137,17 @@ func (se *SearchEngine) validateQuery(query string) error {
 }
 
 func (se *SearchEngine) processQuery(query string) string {
-
+	// Trim whitespace
 	processed := strings.TrimSpace(query)
 
-	processed = strings.ToLower(processed)
-
-	stopWords := []string{"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"}
-	for _, stopWord := range stopWords {
-		processed = strings.ReplaceAll(processed, " "+stopWord+" ", " ")
+	// Lowercase query only if explicitly disabled (default: preserve for code search)
+	// Preserving case is important for code identifiers like HTTP, API, etc.
+	if !se.config.PreserveCase {
+		processed = strings.ToLower(processed)
 	}
 
+	// Always normalize whitespace for query consistency
+	// This collapses multiple spaces and ensures clean queries
 	processed = strings.Join(strings.Fields(processed), " ")
 
 	return processed

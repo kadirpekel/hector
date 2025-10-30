@@ -1,6 +1,7 @@
 package indexing
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 )
@@ -22,13 +23,45 @@ type PatternCache struct {
 	globIncludes []string
 }
 
-// NewPatternFilter creates a new pattern-based filter
-func NewPatternFilter(sourcePath string, includePatterns, excludePatterns []string) *PatternFilter {
+// NewPatternFilter creates a new pattern-based filter with validation
+func NewPatternFilter(sourcePath string, includePatterns, excludePatterns []string) (*PatternFilter, error) {
+	cache, err := buildPatternCache(includePatterns, excludePatterns)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build pattern cache: %w", err)
+	}
+
 	return &PatternFilter{
 		sourcePath:   sourcePath,
-		cache:        buildPatternCache(includePatterns, excludePatterns),
+		cache:        cache,
 		includeCount: len(includePatterns),
+	}, nil
+}
+
+// validatePattern checks if a glob pattern is valid
+func validatePattern(pattern string) error {
+	// Empty pattern is invalid
+	if pattern == "" {
+		return fmt.Errorf("empty pattern")
 	}
+
+	// Normalize the pattern
+	normalizedPattern := filepath.ToSlash(pattern)
+
+	// Test the pattern with filepath.Match
+	// Use a simple test path to check pattern syntax
+	testPath := "test/path/file.txt"
+	_, err := filepath.Match(normalizedPattern, testPath)
+	if err != nil {
+		return fmt.Errorf("invalid glob pattern '%s': %w", pattern, err)
+	}
+
+	// Check for common mistakes
+	if strings.Contains(pattern, "**") && !strings.HasPrefix(normalizedPattern, "**/") {
+		// ** should only be used at the beginning
+		return fmt.Errorf("pattern '%s': '**' is only supported at the beginning (e.g., '**/dir/**')", pattern)
+	}
+
+	return nil
 }
 
 // ShouldInclude checks if a file matches include patterns
@@ -119,7 +152,7 @@ func (pf *PatternFilter) ShouldExclude(path string) bool {
 	return false
 }
 
-func buildPatternCache(includePatterns, excludePatterns []string) *PatternCache {
+func buildPatternCache(includePatterns, excludePatterns []string) (*PatternCache, error) {
 	cache := &PatternCache{
 		dirExcludes: make(map[string]bool),
 		extExcludes: make(map[string]bool),
@@ -127,8 +160,12 @@ func buildPatternCache(includePatterns, excludePatterns []string) *PatternCache 
 		extIncludes: make(map[string]bool),
 	}
 
-	// Process exclude patterns
+	// Validate and process exclude patterns
 	for _, pattern := range excludePatterns {
+		if err := validatePattern(pattern); err != nil {
+			return nil, fmt.Errorf("invalid exclude pattern: %w", err)
+		}
+
 		normalizedPattern := filepath.ToSlash(pattern)
 
 		if strings.HasPrefix(normalizedPattern, "**/") && strings.HasSuffix(normalizedPattern, "/**") {
@@ -146,8 +183,12 @@ func buildPatternCache(includePatterns, excludePatterns []string) *PatternCache 
 		}
 	}
 
-	// Process include patterns
+	// Validate and process include patterns
 	for _, pattern := range includePatterns {
+		if err := validatePattern(pattern); err != nil {
+			return nil, fmt.Errorf("invalid include pattern: %w", err)
+		}
+
 		normalizedPattern := filepath.ToSlash(pattern)
 
 		if strings.HasPrefix(normalizedPattern, "**/") && strings.HasSuffix(normalizedPattern, "/**") {
@@ -165,5 +206,5 @@ func buildPatternCache(includePatterns, excludePatterns []string) *PatternCache 
 		}
 	}
 
-	return cache
+	return cache, nil
 }

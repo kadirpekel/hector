@@ -39,11 +39,11 @@ func (oc *OverlappingChunker) Chunk(content string, meta *metadata.Metadata) ([]
 	var chunks []Chunk
 	var currentChunk strings.Builder
 	var overlapBuffer strings.Builder
-	chunkStartLine := 1
-	chunkStartByte := 0
-	currentLine := 1
-	currentByte := 0
-	var overlapStartLine int
+	chunkStartLine := 1      // Line number where current chunk starts (1-indexed)
+	chunkStartByte := 0      // Byte offset where current chunk starts
+	currentLine := 1         // Current line being processed (1-indexed)
+	currentByte := 0         // Current byte offset
+	var overlapStartLine int // Line number where overlap region begins
 
 	for _, line := range lines {
 		lineWithNewline := line + "\n"

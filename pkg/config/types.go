@@ -1523,10 +1523,12 @@ func (c *ReasoningConfig) SetDefaults() {
 }
 
 type SearchConfig struct {
-	Models           []SearchModel `yaml:"models"`
-	TopK             int           `yaml:"top_k"`
-	Threshold        float64       `yaml:"threshold"`
-	MaxContextLength int           `yaml:"max_context_length"`
+	Models              []SearchModel `yaml:"models"`
+	TopK                int           `yaml:"top_k"`
+	Threshold           float64       `yaml:"threshold"`
+	MaxContextLength    int           `yaml:"max_context_length"`
+	PreserveCase        bool          `yaml:"preserve_case"`        // Don't lowercase queries (default: true for code search)
+	NormalizeWhitespace bool          `yaml:"normalize_whitespace"` // Normalize whitespace (default: true)
 }
 
 func (c *SearchConfig) Validate() error {
@@ -1571,6 +1573,11 @@ func (c *SearchConfig) SetDefaults() {
 	if c.MaxContextLength == 0 {
 		c.MaxContextLength = 4000
 	}
+
+	// Query processing defaults - optimized for code search
+	// PreserveCase defaults to true (important for code identifiers like HTTP, API, etc.)
+	// NormalizeWhitespace defaults to true (always safe for query consistency)
+
 	for i := range c.Models {
 		c.Models[i].SetDefaults()
 	}

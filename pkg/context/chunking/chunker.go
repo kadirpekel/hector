@@ -85,9 +85,8 @@ func NewChunker(config ChunkerConfig) (Chunker, error) {
 	case "overlapping":
 		return NewOverlappingChunker(config), nil
 	case "semantic":
-		// Semantic chunking would use AST-based splitting
-		// For now, fall back to overlapping
-		return NewOverlappingChunker(config), nil
+		// Semantic chunking uses metadata to preserve function/type boundaries
+		return NewSemanticChunker(config), nil
 	default:
 		return NewSimpleChunker(config), nil
 	}

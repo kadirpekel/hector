@@ -37,6 +37,7 @@ type FileCheckpoint struct {
 // CheckpointManager manages indexing checkpoints
 type CheckpointManager struct {
 	checkpointDir string
+	sourcePath    string // Source path being indexed
 	storeName     string
 	checkpoint    *IndexCheckpoint
 	enabled       bool
@@ -47,11 +48,14 @@ type CheckpointManager struct {
 
 // NewCheckpointManager creates a new checkpoint manager
 func NewCheckpointManager(storeName, sourcePath string, enabled bool) *CheckpointManager {
-	checkpointDir := filepath.Join(os.TempDir(), "hector-checkpoints")
+	// Store checkpoints in .hector/checkpoints/ within the source directory
+	// This keeps checkpoints co-located with the data and allows easy cleanup
+	checkpointDir := filepath.Join(sourcePath, ".hector", "checkpoints")
 	_ = os.MkdirAll(checkpointDir, 0755) // Ignore error - will fail on first save if needed
 
 	return &CheckpointManager{
 		checkpointDir: checkpointDir,
+		sourcePath:    sourcePath,
 		storeName:     storeName,
 		enabled:       enabled,
 		saveInterval:  10 * time.Second, // Save every 10 seconds
@@ -96,18 +100,37 @@ func (cm *CheckpointManager) SaveCheckpoint() error {
 		return nil
 	}
 
-	cm.mu.RLock()
+	cm.mu.Lock()
 	// Throttle saves to avoid excessive I/O
 	if time.Since(cm.lastSaveTime) < cm.saveInterval {
-		cm.mu.RUnlock()
+		cm.mu.Unlock()
 		return nil
 	}
 
-	cm.checkpoint.LastUpdate = time.Now()
+	// Create a snapshot to minimize lock hold time
+	checkpointCopy := IndexCheckpoint{
+		Version:        cm.checkpoint.Version,
+		StoreName:      cm.checkpoint.StoreName,
+		SourcePath:     cm.checkpoint.SourcePath,
+		StartTime:      cm.checkpoint.StartTime,
+		LastUpdate:     time.Now(),
+		TotalFiles:     cm.checkpoint.TotalFiles,
+		IndexedCount:   cm.checkpoint.IndexedCount,
+		SkippedCount:   cm.checkpoint.SkippedCount,
+		FailedCount:    cm.checkpoint.FailedCount,
+		ProcessedFiles: make(map[string]FileCheckpoint, len(cm.checkpoint.ProcessedFiles)),
+	}
 
-	data, err := json.MarshalIndent(cm.checkpoint, "", "  ")
-	cm.mu.RUnlock()
+	// Deep copy the processed files map
+	for k, v := range cm.checkpoint.ProcessedFiles {
+		checkpointCopy.ProcessedFiles[k] = v
+	}
 
+	cm.lastSaveTime = time.Now()
+	cm.mu.Unlock()
+
+	// Marshal without holding lock
+	data, err := json.MarshalIndent(&checkpointCopy, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal checkpoint: %w", err)
 	}
@@ -117,9 +140,6 @@ func (cm *CheckpointManager) SaveCheckpoint() error {
 		return fmt.Errorf("failed to write checkpoint: %w", err)
 	}
 
-	cm.mu.Lock()
-	cm.lastSaveTime = time.Now()
-	cm.mu.Unlock()
 	return nil
 }
 
@@ -213,9 +233,9 @@ func (cm *CheckpointManager) ClearCheckpoint() error {
 
 // getCheckpointPath returns the path to the checkpoint file
 func (cm *CheckpointManager) getCheckpointPath() string {
-	// Create a unique filename based on store name and source path
-	hash := md5.Sum([]byte(cm.storeName + ":" + cm.checkpoint.SourcePath))
-	filename := fmt.Sprintf("checkpoint_%x.json", hash)
+	// Use store name directly for the filename since checkpoints are already
+	// in a directory specific to the source path (.hector/checkpoints/)
+	filename := fmt.Sprintf("checkpoint_%s.json", cm.storeName)
 	return filepath.Join(cm.checkpointDir, filename)
 }
 

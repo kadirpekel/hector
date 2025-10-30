@@ -38,10 +38,10 @@ func (sc *SimpleChunker) Chunk(content string, meta *metadata.Metadata) ([]Chunk
 
 	var chunks []Chunk
 	var currentChunk strings.Builder
-	chunkStartLine := 1
-	chunkStartByte := 0
-	currentLine := 1
-	currentByte := 0
+	chunkStartLine := 1 // Line number where current chunk starts (1-indexed)
+	chunkStartByte := 0 // Byte offset where current chunk starts
+	currentLine := 1    // Current line being processed (1-indexed)
+	currentByte := 0    // Current byte offset
 
 	for _, line := range lines {
 		lineWithNewline := line + "\n"
@@ -52,21 +52,22 @@ func (sc *SimpleChunker) Chunk(content string, meta *metadata.Metadata) ([]Chunk
 			chunks = append(chunks, Chunk{
 				Content:   currentChunk.String(),
 				StartLine: chunkStartLine,
-				EndLine:   currentLine - 1,
+				EndLine:   currentLine - 1, // Exclusive: last line NOT included in this chunk
 				StartByte: chunkStartByte,
-				EndByte:   currentByte,
+				EndByte:   currentByte, // Exclusive: bytes up to but not including current line
 				Index:     len(chunks),
 				Total:     0, // Will be set after all chunks are created
 			})
 
 			currentChunk.Reset()
-			chunkStartLine = currentLine
-			chunkStartByte = currentByte
+			chunkStartLine = currentLine // Next chunk starts at current line
+			chunkStartByte = currentByte // Next chunk starts at current byte offset
 		}
 
+		// Add line to current chunk
 		currentChunk.WriteString(lineWithNewline)
-		currentLine++
-		currentByte += lineLen
+		currentLine++          // Move to next line (this line is now in the chunk)
+		currentByte += lineLen // Advance byte offset
 	}
 
 	// Add the last chunk if there's content

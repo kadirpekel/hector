@@ -121,7 +121,10 @@ func TestShouldExclude(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a proper filter and file source
-			filter := indexing.NewPatternFilter("/project", []string{}, tt.excludes)
+			filter, err := indexing.NewPatternFilter("/project", []string{}, tt.excludes)
+			if err != nil {
+				t.Fatalf("Failed to create pattern filter: %v", err)
+			}
 			fileSource := indexing.NewDirectorySource("/project", filter, 5*1024*1024)
 
 			ds := &DocumentStore{
