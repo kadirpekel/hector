@@ -3,9 +3,15 @@ package reasoning
 import (
 	"fmt"
 
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/tools"
 )
+
+// Helper function to create a text part
+func createTextPart(text string) *pb.Part {
+	return &pb.Part{Part: &pb.Part_Text{Text: text}}
+}
 
 type ChainOfThoughtStrategy struct{}
 
@@ -123,7 +129,7 @@ func (s *ChainOfThoughtStrategy) displayStructuredReflection(
 
 	output += ThinkingBlock(fmt.Sprintf("Confidence: %.0f%% - %s", analysis.Confidence*100, recommendation))
 
-	state.GetOutputChannel() <- output
+	state.GetOutputChannel() <- createTextPart(output)
 }
 
 func (s *ChainOfThoughtStrategy) reflectOnProgress(
@@ -156,7 +162,7 @@ func (s *ChainOfThoughtStrategy) reflectOnProgress(
 			output += ThinkingBlock("[SUCCESS] All tools succeeded - making progress")
 		}
 
-		state.GetOutputChannel() <- output
+		state.GetOutputChannel() <- createTextPart(output)
 	}
 }
 
@@ -229,8 +235,8 @@ func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) stri
 	return tools.FormatTodosForContext(todos)
 }
 
-func (s *ChainOfThoughtStrategy) displayTodos(todos []tools.TodoItem, outputCh chan<- string) {
-	outputCh <- "\n\033[90m**Current Tasks:**\n"
+func (s *ChainOfThoughtStrategy) displayTodos(todos []tools.TodoItem, outputCh chan<- *pb.Part) {
+	outputCh <- createTextPart("\n\033[90m**Current Tasks:**\n")
 	for i, todo := range todos {
 		var status string
 		switch todo.Status {
@@ -245,9 +251,9 @@ func (s *ChainOfThoughtStrategy) displayTodos(todos []tools.TodoItem, outputCh c
 		default:
 			status = "[UNKNOWN]"
 		}
-		outputCh <- fmt.Sprintf("  %d. %s %s\n", i+1, status, todo.Content)
+		outputCh <- createTextPart(fmt.Sprintf("  %d. %s %s\n", i+1, status, todo.Content))
 	}
-	outputCh <- "\033[0m\n"
+	outputCh <- createTextPart("\033[0m\n")
 }
 
 func (s *ChainOfThoughtStrategy) getTodoTool(state *ReasoningState) *tools.TodoTool {

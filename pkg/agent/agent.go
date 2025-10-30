@@ -155,12 +155,17 @@ func (a *Agent) getDocumentationURL() string {
 	return ""
 }
 
+// Helper function to create a text part
+func createTextPart(text string) *pb.Part {
+	return &pb.Part{Part: &pb.Part_Text{Text: text}}
+}
+
 func (a *Agent) execute(
 	ctx context.Context,
 	input string,
 	strategy reasoning.ReasoningStrategy,
-) (<-chan string, error) {
-	outputCh := make(chan string, outputChannelBuffer)
+) (<-chan *pb.Part, error) {
+	outputCh := make(chan *pb.Part, outputChannelBuffer)
 
 	go func() {
 		defer close(outputCh)
@@ -185,7 +190,7 @@ func (a *Agent) execute(
 		if err != nil {
 			span.RecordError(err)
 			recordAgentMetrics(spanCtx, time.Since(startTime), 0, err)
-			outputCh <- fmt.Sprintf("Error: Failed to initialize state: %v\n", err)
+			outputCh <- createTextPart(fmt.Sprintf("Error: Failed to initialize state: %v\n", err))
 			return
 		}
 
@@ -210,14 +215,14 @@ func (a *Agent) execute(
 				notifiable.SetStatusNotifier(func(message string) {
 					if message != "" {
 
-						outputCh <- "\n" + message + "\n"
+						outputCh <- createTextPart("\n" + message + "\n")
 					}
 				})
 			}
 
 			recentHistory, err := historyService.GetRecentHistory(sessionID)
 			if err != nil {
-				outputCh <- fmt.Sprintf("Warning: Failed to load conversation history: %v\n", err)
+				outputCh <- createTextPart(fmt.Sprintf("Warning: Failed to load conversation history: %v\n", err))
 			} else if len(recentHistory) > 0 {
 				state.SetHistory(recentHistory)
 			}
@@ -229,19 +234,19 @@ func (a *Agent) execute(
 		maxIterations := a.getMaxIterations(cfg)
 
 		if cfg.ShowDebugInfo {
-			outputCh <- fmt.Sprintf("\n[Strategy: %s]\n", strategy.GetName())
-			outputCh <- fmt.Sprintf("Max iterations: %d\n\n", maxIterations)
+			outputCh <- createTextPart(fmt.Sprintf("\n[Strategy: %s]\n", strategy.GetName()))
+			outputCh <- createTextPart(fmt.Sprintf("Max iterations: %d\n\n", maxIterations))
 		}
 
 		tools := a.services.Tools()
 		toolDefs := tools.GetAvailableTools()
 
 		if cfg.ShowDebugInfo {
-			outputCh <- fmt.Sprintf("Available tools: %d\n", len(toolDefs))
+			outputCh <- createTextPart(fmt.Sprintf("Available tools: %d\n", len(toolDefs)))
 			for _, tool := range toolDefs {
-				outputCh <- fmt.Sprintf("  - %s: %s\n", tool.Name, tool.Description)
+				outputCh <- createTextPart(fmt.Sprintf("  - %s: %s\n", tool.Name, tool.Description))
 			}
-			outputCh <- "\n"
+			outputCh <- createTextPart("\n")
 		}
 
 		for state.Iteration() < maxIterations {
@@ -250,17 +255,17 @@ func (a *Agent) execute(
 
 			select {
 			case <-ctx.Done():
-				outputCh <- fmt.Sprintf("\nCanceled: %v\n", ctx.Err())
+				outputCh <- createTextPart(fmt.Sprintf("\nCanceled: %v\n", ctx.Err()))
 				return
 			default:
 			}
 
 			if cfg.ShowDebugInfo {
-				outputCh <- fmt.Sprintf("🤔 **Iteration %d/%d**\n", currentIteration, maxIterations)
+				outputCh <- createTextPart(fmt.Sprintf("🤔 **Iteration %d/%d**\n", currentIteration, maxIterations))
 			}
 
 			if err := strategy.PrepareIteration(currentIteration, state); err != nil {
-				outputCh <- fmt.Sprintf("Error preparing iteration: %v\n", err)
+				outputCh <- createTextPart(fmt.Sprintf("Error preparing iteration: %v\n", err))
 				return
 			}
 
@@ -270,7 +275,7 @@ func (a *Agent) execute(
 
 			messages, err := a.services.Prompt().BuildMessages(ctx, input, promptSlots, state.AllMessages(), additionalContext)
 			if err != nil {
-				outputCh <- fmt.Sprintf("Error building messages: %v\n", err)
+				outputCh <- createTextPart(fmt.Sprintf("Error building messages: %v\n", err))
 				return
 			}
 
@@ -289,13 +294,13 @@ func (a *Agent) execute(
 				var retryErr *httpclient.RetryableError
 				if !errors.As(err, &retryErr) {
 					span.RecordError(err)
-					outputCh <- fmt.Sprintf("Error: Fatal error: %v\n", err)
+					outputCh <- createTextPart(fmt.Sprintf("Error: Fatal error: %v\n", err))
 					return
 				}
 
 				if attempt >= maxLLMRetries {
 					span.RecordError(err)
-					outputCh <- fmt.Sprintf("Error: Rate limit exceeded after %d retries: %v\n", maxLLMRetries, err)
+					outputCh <- createTextPart(fmt.Sprintf("Error: Rate limit exceeded after %d retries: %v\n", maxLLMRetries, err))
 					return
 				}
 
@@ -304,18 +309,18 @@ func (a *Agent) execute(
 					waitTime = defaultRetryWaitSeconds * time.Second
 				}
 
-				outputCh <- fmt.Sprintf("⏳ Rate limit exceeded (HTTP %d). Waiting %v before retry %d/%d...\n",
-					retryErr.StatusCode, waitTime.Round(time.Second), attempt+1, maxLLMRetries)
+				outputCh <- createTextPart(fmt.Sprintf("⏳ Rate limit exceeded (HTTP %d). Waiting %v before retry %d/%d...\n",
+					retryErr.StatusCode, waitTime.Round(time.Second), attempt+1, maxLLMRetries))
 
 				time.Sleep(waitTime)
 
-				outputCh <- fmt.Sprintf("🔄 Retrying LLM call (attempt %d/%d)...\n", attempt+1, maxLLMRetries)
+				outputCh <- createTextPart(fmt.Sprintf("🔄 Retrying LLM call (attempt %d/%d)...\n", attempt+1, maxLLMRetries))
 			}
 
 			state.AddTokens(tokens)
 
 			if cfg.ShowDebugInfo {
-				outputCh <- fmt.Sprintf("\033[90m📝 Tokens used: %d (total: %d)\033[0m\n", tokens, state.TotalTokens())
+				outputCh <- createTextPart(fmt.Sprintf("\033[90m📝 Tokens used: %d (total: %d)\033[0m\n", tokens, state.TotalTokens()))
 			}
 
 			if text != "" {
@@ -328,7 +333,7 @@ func (a *Agent) execute(
 				text = "[Internal: Agent returned empty response]"
 				state.AppendResponse(text)
 				if cfg.ShowDebugInfo {
-					outputCh <- "\033[90mWarning: LLM returned empty response\033[0m\n"
+					outputCh <- createTextPart("\033[90mWarning: LLM returned empty response\033[0m\n")
 				}
 
 			}
@@ -379,21 +384,21 @@ func (a *Agent) execute(
 			}
 
 			if err := strategy.AfterIteration(currentIteration, text, toolCalls, results, state); err != nil {
-				outputCh <- fmt.Sprintf("Error in strategy processing: %v\n", err)
+				outputCh <- createTextPart(fmt.Sprintf("Error in strategy processing: %v\n", err))
 				return
 			}
 
 			if strategy.ShouldStop(text, toolCalls, state) {
 				if cfg.ShowDebugInfo {
-					outputCh <- "\033[90m\n\n[Reasoning complete]\033[0m\n"
+					outputCh <- createTextPart("\033[90m\n\n[Reasoning complete]\033[0m\n")
 				}
 				break
 			}
 		}
 
 		if cfg.ShowDebugInfo {
-			outputCh <- fmt.Sprintf("\033[90m\nStats: Total time: %v | Tokens: %d | Iterations: %d\033[0m\n",
-				time.Since(startTime), state.TotalTokens(), state.Iteration())
+			outputCh <- createTextPart(fmt.Sprintf("\033[90m\nStats: Total time: %v | Tokens: %d | Iterations: %d\033[0m\n",
+				time.Since(startTime), state.TotalTokens(), state.Iteration()))
 		}
 	}()
 
@@ -404,7 +409,7 @@ func (a *Agent) callLLM(
 	ctx context.Context,
 	messages []*pb.Message,
 	toolDefs []llms.ToolDefinition,
-	outputCh chan<- string,
+	outputCh chan<- *pb.Part,
 	cfg config.ReasoningConfig,
 ) (string, []*protocol.ToolCall, int, error) {
 	llm := a.services.LLM()
@@ -425,7 +430,7 @@ func (a *Agent) callLLM(
 		}
 
 		if text != "" {
-			outputCh <- text
+			outputCh <- createTextPart(text)
 		}
 
 		return text, toolCalls, tokens, nil
@@ -443,7 +448,7 @@ func (a *Agent) callLLM(
 				streamedText.WriteString(chunk)
 
 				select {
-				case outputCh <- chunk:
+				case outputCh <- createTextPart(chunk):
 				case <-ctx.Done():
 					return
 				}
@@ -468,7 +473,7 @@ func (a *Agent) callLLM(
 	}
 
 	if text != "" {
-		outputCh <- text
+		outputCh <- createTextPart(text)
 	}
 
 	return text, toolCalls, tokens, nil
@@ -477,7 +482,7 @@ func (a *Agent) callLLM(
 func (a *Agent) executeTools(
 	ctx context.Context,
 	toolCalls []*protocol.ToolCall,
-	outputCh chan<- string,
+	outputCh chan<- *pb.Part,
 	cfg config.ReasoningConfig,
 ) []reasoning.ToolResult {
 	tools := a.services.Tools()
@@ -487,7 +492,7 @@ func (a *Agent) executeTools(
 	// Add newline before tools if showing them
 	if len(toolCalls) > 0 && cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
 		if cfg.ToolDisplayMode != "hidden" {
-			outputCh <- "\n"
+			outputCh <- createTextPart("\n")
 		}
 	}
 
@@ -499,10 +504,8 @@ func (a *Agent) executeTools(
 		default:
 		}
 
-		// Show tool execution based on display mode
-		if cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
-			displayToolCall(outputCh, toolCall, cfg)
-		}
+		// EMIT TOOL CALL PART (for web UI animations & CLI can extract from this)
+		outputCh <- protocol.CreateToolCallPart(toolCall)
 
 		result, metadata, err := tools.ExecuteToolCall(ctx, toolCall)
 		resultContent := result
@@ -510,10 +513,17 @@ func (a *Agent) executeTools(
 			resultContent = fmt.Sprintf("Error: %v", err)
 		}
 
-		// Show result based on configuration
-		if cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
-			displayToolResult(outputCh, toolCall, err, resultContent, cfg)
+		// EMIT TOOL RESULT PART (for web UI animations & CLI can extract from this)
+		errorStr := ""
+		if err != nil {
+			errorStr = err.Error()
 		}
+		a2aResult := &protocol.ToolResult{
+			ToolCallID: toolCall.ID,
+			Content:    resultContent,
+			Error:      errorStr,
+		}
+		outputCh <- protocol.CreateToolResultPart(a2aResult)
 
 		results = append(results, reasoning.ToolResult{
 			ToolCall:   toolCall,

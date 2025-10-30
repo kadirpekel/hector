@@ -466,24 +466,24 @@ func (g *RESTGateway) createAgentRoutingHandler(next http.Handler) http.Handler 
 
 		if strings.HasPrefix(path, "/v1/agents/") {
 			// Format: /v1/agents/{agent}/resource
-			remainder := strings.TrimPrefix(path, "/v1/agents/")
-			parts := strings.SplitN(remainder, "/", 2)
+		remainder := strings.TrimPrefix(path, "/v1/agents/")
+		parts := strings.SplitN(remainder, "/", 2)
 
-			if len(parts) == 0 || parts[0] == "" {
-				http.Error(w, "Agent name required", http.StatusBadRequest)
-				return
-			}
+		if len(parts) == 0 || parts[0] == "" {
+			http.Error(w, "Agent name required", http.StatusBadRequest)
+			return
+		}
 
-			agentName := parts[0]
+		agentName := parts[0]
 
 			// Rewrite URL to remove /agents/{agent} prefix
-			if len(parts) == 2 {
-				r.URL.Path = "/v1/" + parts[1]
-			} else {
-				r.URL.Path = "/v1/"
-			}
+		if len(parts) == 2 {
+			r.URL.Path = "/v1/" + parts[1]
+		} else {
+			r.URL.Path = "/v1/"
+		}
 
-			r.Header.Set("grpc-metadata-agent-name", agentName)
+		r.Header.Set("grpc-metadata-agent-name", agentName)
 		} else {
 			// Format: /v1/resource (e.g., /v1/tasks, /v1/card)
 			// Extract agent from header or query parameter

@@ -433,6 +433,25 @@
             color: #e8e8e8;
             margin-bottom: 6px;
         }
+        
+        /* Ensure tool badges appear as block elements (new paragraph) */
+        .message-content .tool-call {
+            display: block;
+            margin: 8px 0;
+            line-height: 1;
+        }
+        
+        /* Tool badges should break text flow and create paragraph-like spacing */
+        .message-content p .tool-call,
+        .message-content li .tool-call,
+        .message-content .tool-call {
+            display: block;
+            margin: 8px 0;
+        }
+
+        .tool-badges-row {
+            display: none; /* Deprecated - keeping for backward compatibility */
+        }
 
         .message-meta {
             display: flex;
@@ -461,47 +480,207 @@
 
         /* Tool call display */
         .tool-call {
+            display: block;
+            margin: 8px 0;
+            position: relative;
+            white-space: nowrap;
+        }
+
+        .tool-call-badge {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
+            gap: 4px;
+            padding: 2px 8px;
             background: rgba(18, 140, 126, 0.1);
-            border-left: 3px solid #128c7e;
-            border-radius: 4px;
-            font-size: 13px;
-            margin: 8px 0;
+            border: 1px solid rgba(18, 140, 126, 0.3);
+            border-radius: 12px;
+            font-size: 11px;
             color: #128c7e;
             font-weight: 500;
+            /* Removed animation from badge container to prevent reset on DOM moves */
+            transition: all 0.3s ease;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+        
+        /* Only animate badge when first created, not on updates */
+        .tool-call-badge:not([data-animated]) {
+            animation: slideInTool 0.3s ease-out;
         }
 
-        .tool-call .tool-icon {
-            font-size: 16px;
+        .tool-call-badge:hover {
+            background: rgba(18, 140, 126, 0.15);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(18, 140, 126, 0.2);
         }
 
-        .tool-call .tool-name {
+        .tool-call-badge .tool-icon {
+            font-size: 13px;
+            transition: transform 0.2s ease;
+        }
+        
+        .tool-call-badge:hover .tool-icon {
+            transform: rotate(15deg) scale(1.1);
+        }
+
+        .tool-call-badge .tool-name {
             font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 11px;
         }
 
-        .tool-call .tool-status {
-            margin-left: 4px;
-            font-size: 14px;
+        .tool-call-badge .tool-status {
+            font-size: 12px;
+            display: inline-block;
+            transition: all 0.3s ease;
         }
 
-        .tool-call .tool-status.success {
+        .tool-call-badge .tool-status.success {
             color: #25d366;
         }
+        
+        /* Only animate success when first set, not on updates */
+        .tool-call-badge .tool-status.success:not([data-animated]) {
+            animation: successBounce 0.5s ease-out;
+        }
 
-        .tool-call .tool-status.failed {
+        .tool-call-badge .tool-status.failed {
             color: #ff4444;
         }
-
-        .tool-call .tool-status.working {
-            animation: pulse 1.5s ease-in-out infinite;
+        
+        /* Only animate failure when first set, not on updates */
+        .tool-call-badge .tool-status.failed:not([data-animated]) {
+            animation: failureShake 0.5s ease-out;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        .tool-call-badge .tool-status.working {
+            animation: toolWorking 1.5s ease-in-out infinite;
+            animation-fill-mode: both;
+        }
+        
+
+        .tool-args-toggle {
+            margin-left: 4px;
+            cursor: pointer;
+            font-size: 9px;
+            opacity: 0.6;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .tool-args-toggle:hover {
+            opacity: 1;
+            transform: scale(1.2);
+        }
+
+        .tool-args {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 4px;
+            padding: 8px 12px;
+            background: #2a2a2a;
+            border: 1px solid rgba(18, 140, 126, 0.3);
+            border-radius: 6px;
+            font-size: 10px;
+            max-height: 200px;
+            min-width: 250px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            animation: expandArgs 0.2s ease-out;
+        }
+
+        .tool-args.collapsed {
+            display: none;
+        }
+
+        .tool-args pre {
+            margin: 0;
+            color: #999;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        @keyframes expandArgs {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Tool animations */
+        @keyframes slideInTool {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes toolWorking {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1) rotate(0deg);
+            }
+            25% { 
+                opacity: 0.7;
+                transform: scale(1.1) rotate(5deg);
+            }
+            50% { 
+                opacity: 0.5;
+                transform: scale(1) rotate(0deg);
+            }
+            75% { 
+                opacity: 0.7;
+                transform: scale(1.1) rotate(-5deg);
+            }
+        }
+
+        @keyframes successBounce {
+            0% {
+                opacity: 0;
+                transform: scale(0);
+            }
+            50% {
+                transform: scale(1.3);
+            }
+            75% {
+                transform: scale(0.9);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes failureShake {
+            0% {
+                opacity: 0;
+                transform: translateX(0);
+            }
+            25% {
+                transform: translateX(-5px);
+            }
+            50% {
+                transform: translateX(5px);
+            }
+            75% {
+                transform: translateX(-3px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
 
         /* Markdown styling - pure browser defaults */
@@ -1118,28 +1297,173 @@
             const bubble = document.createElement('div');
             bubble.className = 'message-bubble';
 
-            // Add tool calls if present
-            if (toolCalls && toolCalls.length > 0) {
-                toolCalls.forEach(tc => {
-                    const toolDiv = createToolCallElement(tc);
-                    bubble.appendChild(toolDiv);
-                });
-            }
-
-            // Add text content if present
+            // Add text content
+            const content = document.createElement('div');
+            content.className = 'message-content';
+            
             if (text) {
-                const content = document.createElement('div');
-                content.className = 'message-content';
-                
-                // Render markdown for both user and agent messages
+                // Render markdown
                 content.innerHTML = marked.parse(text);
+                
                 // Highlight code blocks
                 content.querySelectorAll('pre code').forEach((block) => {
                     hljs.highlightElement(block);
                 });
-                
-                bubble.appendChild(content);
             }
+            
+            // Process tool calls: replace markers in text with badges at their positions
+            if (toolCalls && toolCalls.length > 0) {
+                const toolCallsMap = new Map();
+                toolCalls.forEach(tc => {
+                    toolCallsMap.set(tc.id, tc);
+                });
+                
+                // Find and replace tool call markers with badges at their positions
+                toolCallsMap.forEach((tc, toolId) => {
+                    // Try multiple marker formats to handle different saved formats
+                    // Also try without underscores and with different separators
+                    const markers = [
+                        `\u200D\u200D__TOOL_${toolId}__\u200D\u200D`,  // Standard format with zero-width joiners
+                        `__TOOL_${toolId}__`,  // Without zero-width joiners
+                        `__TOOL_call_${toolId}__`,  // Alternative format
+                        `\u200D\u200D__TOOL_call_${toolId}__\u200D\u200D`,  // With zero-width joiners and "call"
+                        `\u200D\u200D_TOOL_${toolId}_\u200D\u200D`,  // Single underscore variant
+                        `_TOOL_${toolId}_`,  // Single underscore without zero-width joiners
+                        `${toolId}`,  // Just the ID (fallback, but might match incorrectly)
+                    ];
+                    const walker = document.createTreeWalker(
+                        content,
+                        NodeFilter.SHOW_TEXT,
+                        null
+                    );
+                    
+                    let node;
+                    let found = false;
+                    let usedMarker = null;
+                    
+                    // Try to find any marker format in the text
+                    // First, try exact matches, then try case-insensitive, then try partial matches
+                    while (node = walker.nextNode()) {
+                        const textContent = node.textContent;
+                        
+                        // Try each marker format (in order of preference)
+                        for (const marker of markers) {
+                            // Skip the fallback ID-only marker if we have other options
+                            if (marker === toolId && markers.length > 1) continue;
+                            
+                            if (textContent.includes(marker)) {
+                                usedMarker = marker;
+                                
+                                // Debug: log when marker is found
+                                if (marker !== toolId) {
+                                    console.log(`Found marker for tool ${toolId}: ${marker}`);
+                                }
+                                
+                                // Create tool badge
+                                const toolDiv = createToolCallElement(tc);
+                                // Mark as already animated to prevent slide-in on load
+                                const badgeElement = toolDiv.querySelector('.tool-call-badge');
+                                if (badgeElement) {
+                                    badgeElement.setAttribute('data-animated', 'true');
+                                }
+                                
+                                // Split text node and insert badge at marker position
+                                const index = textContent.indexOf(marker);
+                                const beforeText = textContent.substring(0, index);
+                                const afterText = textContent.substring(index + marker.length);
+                                
+                                // Update text node with content before marker
+                                if (beforeText.trim()) {
+                                    node.textContent = beforeText;
+                                } else {
+                                    node.textContent = beforeText || '';
+                                }
+                                
+                                // Insert badge as block element
+                                if (node.parentNode) {
+                                    node.parentNode.insertBefore(toolDiv, node.nextSibling);
+                                    
+                                    // Insert text after badge
+                                    if (afterText.trim()) {
+                                        const afterNode = document.createTextNode(afterText);
+                                        node.parentNode.insertBefore(afterNode, toolDiv.nextSibling);
+                                    }
+                                }
+                                
+                                found = true;
+                                break; // Found marker, exit inner loop
+                            }
+                        }
+                        
+                        if (found) break; // Found marker, exit outer loop
+                    }
+                    
+                    // If marker not found in text nodes, try searching in HTML content
+                    if (!found) {
+                        const htmlContent = content.innerHTML;
+                        for (const marker of markers) {
+                            if (marker === toolId && markers.length > 1) continue; // Skip ID-only fallback
+                            
+                            if (htmlContent.includes(marker)) {
+                                console.log(`Found marker in HTML for tool ${toolId}: ${marker}`);
+                                // Replace marker in HTML directly
+                                const toolDiv = createToolCallElement(tc);
+                                const badgeElement = toolDiv.querySelector('.tool-call-badge');
+                                if (badgeElement) {
+                                    badgeElement.setAttribute('data-animated', 'true');
+                                }
+                                // Replace marker with placeholder, then replace placeholder with badge HTML
+                                const placeholder = `__PLACEHOLDER_TOOL_${toolId}__`;
+                                content.innerHTML = htmlContent.replace(marker, placeholder);
+                                
+                                // Re-apply code highlighting after HTML replacement
+                                content.querySelectorAll('pre code').forEach((block) => {
+                                    hljs.highlightElement(block);
+                                });
+                                
+                                // Now find placeholder and replace with actual badge element
+                                const walker2 = document.createTreeWalker(
+                                    content,
+                                    NodeFilter.SHOW_TEXT,
+                                    null
+                                );
+                                let node2;
+                                while (node2 = walker2.nextNode()) {
+                                    if (node2.textContent.includes(placeholder)) {
+                                        const index = node2.textContent.indexOf(placeholder);
+                                        const beforeText = node2.textContent.substring(0, index);
+                                        const afterText = node2.textContent.substring(index + placeholder.length);
+                                        node2.textContent = beforeText;
+                                        if (node2.parentNode) {
+                                            node2.parentNode.insertBefore(toolDiv, node2.nextSibling);
+                                            if (afterText) {
+                                                const afterNode = document.createTextNode(afterText);
+                                                node2.parentNode.insertBefore(afterNode, toolDiv.nextSibling);
+                                            }
+                                        }
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (found) break;
+                            }
+                        }
+                    }
+                    
+                    // If still not found, append at end (fallback)
+                    if (!found) {
+                        console.log(`Marker not found for tool ${toolId}, appending at end`);
+                        const toolDiv = createToolCallElement(tc);
+                        const badgeElement = toolDiv.querySelector('.tool-call-badge');
+                        if (badgeElement) {
+                            badgeElement.setAttribute('data-animated', 'true');
+                        }
+                        content.appendChild(toolDiv);
+                    }
+                });
+            }
+            
+            bubble.appendChild(content);
 
             const meta = document.createElement('div');
             meta.className = 'message-meta';
@@ -1180,9 +1504,14 @@
         }
 
         function createToolCallElement(toolCall) {
-            const toolDiv = document.createElement('div');
+            // Wrapper for positioning
+            const toolDiv = document.createElement('span');
             toolDiv.className = 'tool-call';
             toolDiv.setAttribute('data-tool-id', toolCall.id);
+            
+            // Badge with tool info
+            const badge = document.createElement('span');
+            badge.className = 'tool-call-badge';
             
             const icon = document.createElement('span');
             icon.className = 'tool-icon';
@@ -1193,12 +1522,51 @@
             name.textContent = toolCall.name || 'unknown';
             
             const status = document.createElement('span');
-            status.className = 'tool-status working';
-            status.textContent = '⏳';
+            // Restore status from saved tool call if available
+            const savedStatus = toolCall.status || toolCall._status || 'working';
+            if (savedStatus === 'success') {
+                status.className = 'tool-status success';
+                status.textContent = '✓';
+            } else if (savedStatus === 'failed') {
+                status.className = 'tool-status failed';
+                status.textContent = '✗';
+            } else {
+                status.className = 'tool-status working';
+                status.textContent = '⏳';
+            }
             
-            toolDiv.appendChild(icon);
-            toolDiv.appendChild(name);
-            toolDiv.appendChild(status);
+            badge.appendChild(icon);
+            badge.appendChild(name);
+            badge.appendChild(status);
+            
+            // Add collapsible args section if args exist
+            if (toolCall.args && Object.keys(toolCall.args).length > 0) {
+                const argsToggle = document.createElement('span');
+                argsToggle.className = 'tool-args-toggle';
+                argsToggle.textContent = '▼';
+                argsToggle.title = 'Show arguments';
+                
+                const argsDiv = document.createElement('div');
+                argsDiv.className = 'tool-args collapsed';
+                
+                const argsPre = document.createElement('pre');
+                argsPre.textContent = JSON.stringify(toolCall.args, null, 2);
+                argsDiv.appendChild(argsPre);
+                
+                badge.onclick = (e) => {
+                    e.stopPropagation();
+                    const isCollapsed = argsDiv.classList.contains('collapsed');
+                    argsDiv.classList.toggle('collapsed');
+                    argsToggle.textContent = isCollapsed ? '▲' : '▼';
+                    argsToggle.title = isCollapsed ? 'Hide arguments' : 'Show arguments';
+                };
+                
+                badge.appendChild(argsToggle);
+                toolDiv.appendChild(badge);
+                toolDiv.appendChild(argsDiv);
+            } else {
+                toolDiv.appendChild(badge);
+            }
             
             return toolDiv;
         }
@@ -1216,19 +1584,196 @@
                         status.classList.add('failed');
                         status.textContent = '✗';
                     }
+                    // Mark status as animated after animation completes (0.5s for success/failed)
+                    // This prevents animation from restarting on subsequent updates
+                    setTimeout(() => {
+                        status.setAttribute('data-animated', 'true');
+                    }, 500);
                 }
             });
         }
 
-        function updateMessage(messageDiv, text) {
+        function updateMessage(messageDiv, text, toolCallsMap = null) {
             const contentDiv = messageDiv.querySelector('.message-content');
             
-            // Render markdown for all messages
+            // Preserve existing badge DOM elements and their positions to avoid flicker
+            const existingBadges = new Map();
+            const badgePositions = [];
+            Array.from(contentDiv.querySelectorAll('.tool-call')).forEach(el => {
+                const toolId = el.getAttribute('data-tool-id');
+                if (toolId) {
+                    existingBadges.set(toolId, el);
+                    // Store the badge's position relative to its parent
+                    const parent = el.parentNode;
+                    if (parent) {
+                        const siblings = Array.from(parent.childNodes);
+                        const index = siblings.indexOf(el);
+                        badgePositions.push({ toolId, el, parent, index });
+                    }
+                }
+            });
+            
+            // Temporarily move badges outside contentDiv to preserve them during innerHTML update
+            // Use a fragment to keep them in memory without detaching from animation timeline
+            const badgeFragment = document.createDocumentFragment();
+            const badgeIdsToPreserve = Array.from(existingBadges.keys());
+            existingBadges.forEach((badge, toolId) => {
+                // Mark badge as already animated to prevent slide-in animation on reinsertion
+                const badgeElement = badge.querySelector('.tool-call-badge');
+                if (badgeElement) {
+                    badgeElement.setAttribute('data-animated', 'true');
+                }
+                // Mark status element as animated to prevent success/failed animations from restarting
+                const statusElement = badge.querySelector('.tool-status');
+                if (statusElement && (statusElement.classList.contains('success') || statusElement.classList.contains('failed'))) {
+                    statusElement.setAttribute('data-animated', 'true');
+                }
+                badgeFragment.appendChild(badge);
+            });
+            const badgeContainer = document.createElement('div');
+            badgeContainer.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;';
+            document.body.appendChild(badgeContainer);
+            badgeContainer.appendChild(badgeFragment);
+            
+            // Get tool calls from the map if provided
+            let toolCallsToRender = new Map();
+            if (toolCallsMap && toolCallsMap.size > 0) {
+                toolCallsToRender = toolCallsMap;
+            } else if (existingBadges.size > 0) {
+                // Fallback: reconstruct from existing badges
+                existingBadges.forEach((el, toolId) => {
+                    const toolName = el.querySelector('.tool-name')?.textContent || 'unknown';
+                    const statusEl = el.querySelector('.tool-status');
+                    const status = statusEl?.classList.contains('success') ? 'success' : 
+                                  statusEl?.classList.contains('failed') ? 'failed' : 'working';
+                    toolCallsToRender.set(toolId, {
+                        id: toolId,
+                        name: toolName,
+                        args: {},
+                        _preserved: true,
+                        _status: status
+                    });
+                });
+            }
+            
+            // Update the markdown content (badges are safely stored outside)
             contentDiv.innerHTML = marked.parse(text);
+            
             // Highlight code blocks
             contentDiv.querySelectorAll('pre code').forEach((block) => {
                 hljs.highlightElement(block);
             });
+            
+            // Find and replace tool call markers with preserved badges at their positions
+            toolCallsToRender.forEach((tc, toolId) => {
+                const marker = `\u200D\u200D__TOOL_${toolId}__\u200D\u200D`;
+                const walker = document.createTreeWalker(
+                    contentDiv,
+                    NodeFilter.SHOW_TEXT,
+                    null
+                );
+                
+                let node;
+                let found = false;
+                while (node = walker.nextNode()) {
+                    const textContent = node.textContent;
+                    if (textContent.includes(marker)) {
+                        // Get preserved badge or create new one
+                        let toolDiv = existingBadges.get(toolId);
+                        if (!toolDiv) {
+                            toolDiv = createToolCallElement(tc);
+                            // Mark new badges as animated after a brief delay
+                            setTimeout(() => {
+                                toolDiv.querySelector('.tool-call-badge')?.setAttribute('data-animated', 'true');
+                            }, 300);
+                            // Restore status if it was preserved
+                            if (tc._preserved && tc._status) {
+                                const status = toolDiv.querySelector('.tool-status');
+                                if (status && tc._status !== 'working') {
+                                    status.classList.remove('working');
+                                    if (tc._status === 'success') {
+                                        status.classList.add('success');
+                                        status.textContent = '✓';
+                                        // Mark status as animated immediately if it's already success/failed (not a new change)
+                                        status.setAttribute('data-animated', 'true');
+                                    } else if (tc._status === 'failed') {
+                                        status.classList.add('failed');
+                                        status.textContent = '✗';
+                                        // Mark status as animated immediately if it's already success/failed (not a new change)
+                                        status.setAttribute('data-animated', 'true');
+                                    }
+                                }
+                            }
+                        } else {
+                            // Badge is preserved - ensure status element is marked as animated if it has success/failed
+                            const statusEl = toolDiv.querySelector('.tool-status');
+                            if (statusEl && (statusEl.classList.contains('success') || statusEl.classList.contains('failed'))) {
+                                if (!statusEl.hasAttribute('data-animated')) {
+                                    statusEl.setAttribute('data-animated', 'true');
+                                }
+                            }
+                        }
+                        // Remove from preserved badges (will be moved back into DOM)
+                        existingBadges.delete(toolId);
+                        
+                        // Split text node and insert badge at marker position
+                        const index = textContent.indexOf(marker);
+                        const beforeText = textContent.substring(0, index);
+                        const afterText = textContent.substring(index + marker.length);
+                        
+                        // Update text node with content before marker
+                        if (beforeText.trim()) {
+                            node.textContent = beforeText;
+                        } else {
+                            node.textContent = beforeText || '';
+                        }
+                        
+                        // Insert preserved badge as block element (will break text flow and create new line)
+                        if (node.parentNode) {
+                            // Insert badge - as block element it will appear on its own line
+                            node.parentNode.insertBefore(toolDiv, node.nextSibling);
+                            
+                            // Insert text after badge - will continue after the badge's block
+                            if (afterText.trim()) {
+                                const afterNode = document.createTextNode(afterText);
+                                node.parentNode.insertBefore(afterNode, toolDiv.nextSibling);
+                            }
+                        }
+                        
+                        found = true;
+                        break; // Only replace first occurrence per tool
+                    }
+                }
+                
+                // If marker not found but badge exists, append at end (fallback)
+                if (!found) {
+                    let toolDiv = existingBadges.get(toolId);
+                    if (!toolDiv) {
+                        toolDiv = createToolCallElement(tc);
+                        if (tc._preserved && tc._status) {
+                            const status = toolDiv.querySelector('.tool-status');
+                            if (status && tc._status !== 'working') {
+                                status.classList.remove('working');
+                                if (tc._status === 'success') {
+                                    status.classList.add('success');
+                                    status.textContent = '✓';
+                                } else if (tc._status === 'failed') {
+                                    status.classList.add('failed');
+                                    status.textContent = '✗';
+                                }
+                            }
+                        }
+                    }
+                    contentDiv.appendChild(toolDiv);
+                    existingBadges.delete(toolId);
+                }
+            });
+            
+            // Clean up: remove any remaining preserved badges from container
+            while (badgeContainer.firstChild) {
+                badgeContainer.removeChild(badgeContainer.firstChild);
+            }
+            document.body.removeChild(badgeContainer);
             
             // DO NOT save here - this could update the wrong message!
             // Saving happens explicitly at the end of streaming
@@ -1269,6 +1814,38 @@
             }).filter(t => t).join('\n');
         }
 
+        // Extract tool calls from A2A parts
+        function extractToolCallsFromParts(parts) {
+            if (!parts || !Array.isArray(parts)) return [];
+            return parts
+                .filter(part => part.metadata && part.metadata.part_type === 'tool_call')
+                .map(part => {
+                    // Tool call data is in part.data, not part.metadata
+                    const data = part.data?.data || {};
+                    return {
+                        id: data.id || Math.random().toString(36).substr(2, 9),
+                        name: data.name || 'unknown',
+                        args: data.arguments || {}
+                    };
+                });
+        }
+
+        // Extract tool results from A2A parts
+        function extractToolResultsFromParts(parts) {
+            if (!parts || !Array.isArray(parts)) return [];
+            return parts
+                .filter(part => part.metadata && part.metadata.part_type === 'tool_result')
+                .map(part => {
+                    // Tool result data is in part.data, not part.metadata
+                    const data = part.data?.data || {};
+                    return {
+                        tool_call_id: data.tool_call_id,
+                        success: !data.error || data.error === '',
+                        content: data.content || ''
+                    };
+                });
+        }
+
         function generateRequestId() {
             return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         }
@@ -1300,6 +1877,7 @@
                 let currentMessageDiv = null;
                 let accumulatedText = '';
                 let lastTaskId = null;
+                let toolCallsMap = new Map(); // Track tool calls by ID
 
                 try {
                     setTyping(true);
@@ -1350,15 +1928,64 @@
                                         (message.role === 'agent' || message.role === 'ROLE_AGENT');
                                     
                                     if (isAgentRole) {
-                                        const text = extractTextFromParts(message.parts);
+                                        // NOTE: Tool call metadata is not currently included in streaming responses
+                                        // The backend only sends text parts to the client, so tool badges won't appear
+                                        // Tool calls are executed internally but not exposed in the A2A stream
+                                        
+                                        // Extract tool calls and add them to map
+                                        const toolCalls = extractToolCallsFromParts(message.parts);
+                                        if (toolCalls.length > 0) {
+                                            console.log('Extracted tool calls from stream:', toolCalls);
+                                        }
+                                        toolCalls.forEach(tc => {
+                                            if (!toolCallsMap.has(tc.id)) {
+                                                toolCallsMap.set(tc.id, tc);
+                                                // Insert a marker in the text at the current position where tool was called
+                                                // Use zero-width joiner that survives markdown parsing
+                                                if (currentMessageDiv && accumulatedText) {
+                                                    // Insert marker at end of current text (where tool was called)
+                                                    accumulatedText += `\u200D\u200D__TOOL_${tc.id}__\u200D\u200D`;
+                                                }
+                                            }
+                                        });
+
+                                        // Extract tool results and update status
+                                        const toolResults = extractToolResultsFromParts(message.parts);
+                                        toolResults.forEach(tr => {
+                                            updateToolCallStatus(tr.tool_call_id, tr.success);
+                                        });
+
+                                        // Extract and accumulate text
+                                        let text = extractTextFromParts(message.parts);
+                                        
+                                        // If we have new tool calls and this is the first chunk, insert markers in text
+                                        if (toolCalls.length > 0 && !currentMessageDiv) {
+                                            toolCalls.forEach(tc => {
+                                                if (toolCallsMap.has(tc.id)) {
+                                                    // Insert marker at end of initial text
+                                                    text += `\u200D\u200D__TOOL_${tc.id}__\u200D\u200D`;
+                                                }
+                                            });
+                                        }
 
                                         if (!currentMessageDiv) {
                                             setTyping(false);
-                                            currentMessageDiv = addMessage('agent', text, { taskId: lastTaskId }, false);
+                                            // Create message with initial tool calls (markers are in text, will be replaced during rendering)
+                                            const initialToolCalls = Array.from(toolCallsMap.values());
+                                            console.log('Creating message with tool calls:', initialToolCalls);
+                                            currentMessageDiv = addMessage('agent', text, { taskId: lastTaskId }, false, []);
+                                            // Store toolCallsMap reference on the message element for updates
+                                            currentMessageDiv._toolCallsMap = toolCallsMap;
+                                            // Now update to render badges at marker positions
+                                            updateMessage(currentMessageDiv, text, toolCallsMap);
                                             accumulatedText = text;
                                         } else {
                                             accumulatedText += text;
-                                            updateMessage(currentMessageDiv, accumulatedText);
+                                            // Pass toolCallsMap to updateMessage so it can re-render badges
+                                            const mapToUse = currentMessageDiv._toolCallsMap || toolCallsMap;
+                                            updateMessage(currentMessageDiv, accumulatedText, mapToUse);
+                                            // Update the stored reference
+                                            currentMessageDiv._toolCallsMap = toolCallsMap;
                                         }
                                     }
                                 } catch (err) {
@@ -1370,13 +1997,31 @@
 
                     setTyping(false);
                     
-                    // Save the complete agent message
+                    // Save the complete agent message with tool calls
                     if (currentMessageDiv && currentSessionId) {
+                        // Capture current status of tool calls from DOM before saving
+                        const toolCallsWithStatus = Array.from(toolCallsMap.values()).map(tc => {
+                            const toolElement = currentMessageDiv.querySelector(`[data-tool-id="${tc.id}"]`);
+                            if (toolElement) {
+                                const statusEl = toolElement.querySelector('.tool-status');
+                                if (statusEl) {
+                                    let status = 'working';
+                                    if (statusEl.classList.contains('success')) {
+                                        status = 'success';
+                                    } else if (statusEl.classList.contains('failed')) {
+                                        status = 'failed';
+                                    }
+                                    return { ...tc, status };
+                                }
+                            }
+                            return tc;
+                        });
+                        
                         sessions[currentSessionId].messages.push({
                             role: 'agent',
                             text: accumulatedText,
                             metadata: { taskId: lastTaskId },
-                            toolCalls: []
+                            toolCalls: toolCallsWithStatus
                         });
                         sessions[currentSessionId].taskId = lastTaskId;
                         saveSessions();

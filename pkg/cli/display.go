@@ -58,10 +58,45 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 	}
 
 	for _, part := range msg.Parts {
+		// Display text parts
 		if text := part.GetText(); text != "" {
 			fmt.Print(text)
-
 			os.Stdout.Sync()
+			continue
+		}
+
+		// Display tool call parts
+		if part.Metadata != nil {
+			if partType, ok := part.Metadata.Fields["part_type"]; ok && partType.GetStringValue() == "tool_call" {
+				// Extract tool call data
+				if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
+					fields := dataPart.Data.Fields
+					if name, ok := fields["name"]; ok {
+						fmt.Printf("🔧 %s ", name.GetStringValue())
+						os.Stdout.Sync()
+					}
+				}
+				continue
+			}
+
+			// Display tool result parts
+			if partType, ok := part.Metadata.Fields["part_type"]; ok && partType.GetStringValue() == "tool_result" {
+				// Extract tool result data
+				if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
+					fields := dataPart.Data.Fields
+					hasError := false
+					if errField, ok := fields["error"]; ok && errField.GetStringValue() != "" {
+						hasError = true
+					}
+					if hasError {
+						fmt.Print("✗\n")
+					} else {
+						fmt.Print("✓\n")
+					}
+					os.Stdout.Sync()
+				}
+				continue
+			}
 		}
 	}
 }

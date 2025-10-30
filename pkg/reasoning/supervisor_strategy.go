@@ -3,6 +3,7 @@ package reasoning
 import (
 	"fmt"
 
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
@@ -37,7 +38,7 @@ func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningSta
 	return s.ChainOfThoughtStrategy.PrepareIteration(iteration, state)
 }
 
-func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecomposition, outputCh chan<- string) {
+func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecomposition, outputCh chan<- *pb.Part) {
 	output := ThinkingBlock(fmt.Sprintf("Task Decomposition: %s", decomposition.MainGoal))
 	output += ThinkingBlock(fmt.Sprintf("Execution Order: %s", decomposition.ExecutionOrder))
 	output += ThinkingBlock(fmt.Sprintf("Required Agents: %v", decomposition.RequiredAgents))
@@ -53,7 +54,7 @@ func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecompo
 		}
 	}
 
-	outputCh <- output
+	outputCh <- createTextPart(output)
 }
 
 func (s *SupervisorStrategy) ShouldStop(text string, toolCalls []*protocol.ToolCall, state *ReasoningState) bool {

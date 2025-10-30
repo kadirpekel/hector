@@ -188,26 +188,26 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 		messageID := fmt.Sprintf("msg-%d", time.Now().UnixNano())
 		var fullResponse strings.Builder
 
-		for chunk := range streamCh {
-			fullResponse.WriteString(chunk)
+		for part := range streamCh {
+			// Extract text for building full response (for task storage)
+			if textPart, ok := part.Part.(*pb.Part_Text); ok {
+				fullResponse.WriteString(textPart.Text)
+			}
 
-			if chunk != "" {
-				chunkMsg := &pb.Message{
-					MessageId: messageID,
-					ContextId: contextID,
-					TaskId:    task.Id,
-					Role:      pb.Role_ROLE_AGENT,
-					Parts: []*pb.Part{
-						{Part: &pb.Part_Text{Text: chunk}},
-					},
-				}
+			// Send each part directly (supports text, tool_call, tool_result)
+			chunkMsg := &pb.Message{
+				MessageId: messageID,
+				ContextId: contextID,
+				TaskId:    task.Id,
+				Role:      pb.Role_ROLE_AGENT,
+				Parts:     []*pb.Part{part},
+			}
 
-				if err := stream.Send(&pb.StreamResponse{
-					Payload: &pb.StreamResponse_Msg{Msg: chunkMsg},
-				}); err != nil {
-					_ = a.services.Task().UpdateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil)
-					return status.Errorf(codes.Internal, "failed to send chunk: %v", err)
-				}
+			if err := stream.Send(&pb.StreamResponse{
+				Payload: &pb.StreamResponse_Msg{Msg: chunkMsg},
+			}); err != nil {
+				_ = a.services.Task().UpdateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil)
+				return status.Errorf(codes.Internal, "failed to send chunk: %v", err)
 			}
 		}
 
@@ -251,22 +251,19 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 
 	messageID := fmt.Sprintf("msg-%d", time.Now().UnixNano())
 
-	for chunk := range streamCh {
-		if chunk != "" {
-			chunkMsg := &pb.Message{
-				MessageId: messageID,
-				ContextId: contextID,
-				Role:      pb.Role_ROLE_AGENT,
-				Parts: []*pb.Part{
-					{Part: &pb.Part_Text{Text: chunk}},
-				},
-			}
+	for part := range streamCh {
+		// Send each part directly (supports text, tool_call, tool_result)
+		chunkMsg := &pb.Message{
+			MessageId: messageID,
+			ContextId: contextID,
+			Role:      pb.Role_ROLE_AGENT,
+			Parts:     []*pb.Part{part},
+		}
 
-			if err := stream.Send(&pb.StreamResponse{
-				Payload: &pb.StreamResponse_Msg{Msg: chunkMsg},
-			}); err != nil {
-				return status.Errorf(codes.Internal, "failed to send chunk: %v", err)
-			}
+		if err := stream.Send(&pb.StreamResponse{
+			Payload: &pb.StreamResponse_Msg{Msg: chunkMsg},
+		}); err != nil {
+			return status.Errorf(codes.Internal, "failed to send chunk: %v", err)
 		}
 	}
 
@@ -539,12 +536,15 @@ func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, con
 		return "", fmt.Errorf("reasoning failed: %w", err)
 	}
 
-	var fullResponse string
-	for chunk := range streamCh {
-		fullResponse += chunk
+	var fullResponse strings.Builder
+	for part := range streamCh {
+		// Extract text from parts for full response
+		if textPart, ok := part.Part.(*pb.Part_Text); ok {
+			fullResponse.WriteString(textPart.Text)
+		}
 	}
 
-	return fullResponse, nil
+	return fullResponse.String(), nil
 }
 
 func generateContextID() string {

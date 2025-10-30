@@ -36,7 +36,7 @@ type ReasoningState struct {
 
 	toolState map[string]interface{}
 
-	outputChannel chan<- string
+	outputChannel chan<- *pb.Part
 
 	services AgentServices
 	context  context.Context
@@ -107,7 +107,7 @@ func (b *StateBuilder) WithHistory(history []*pb.Message) *StateBuilder {
 	return b
 }
 
-func (b *StateBuilder) WithOutputChannel(ch chan<- string) *StateBuilder {
+func (b *StateBuilder) WithOutputChannel(ch chan<- *pb.Part) *StateBuilder {
 	if b.err != nil {
 		return b
 	}
@@ -269,7 +269,7 @@ func (s *ReasoningState) AllMessages() []*pb.Message {
 	return all
 }
 
-func (s *ReasoningState) GetOutputChannel() chan<- string {
+func (s *ReasoningState) GetOutputChannel() chan<- *pb.Part {
 	return s.outputChannel
 }
 
