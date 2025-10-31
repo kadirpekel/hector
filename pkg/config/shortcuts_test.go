@@ -51,7 +51,7 @@ func TestAgentShortcuts_DocsFolder(t *testing.T) {
 		t.Errorf("Embedder should be 'default-embedder', got '%s'", agent.Embedder)
 	}
 
-	searchTool, exists := cfg.Tools.Tools["search"]
+	searchTool, exists := cfg.Tools["search"]
 	if !exists {
 		t.Fatal("Search tool should be auto-created")
 	}
@@ -98,16 +98,16 @@ func TestAgentShortcuts_EnableTools(t *testing.T) {
 		t.Error("Tools should be nil (meaning all tools available)")
 	}
 
-	if _, exists := cfg.Tools.Tools["execute_command"]; !exists {
+	if _, exists := cfg.Tools["execute_command"]; !exists {
 		t.Error("execute_command should be auto-configured")
 	}
-	if _, exists := cfg.Tools.Tools["write_file"]; !exists {
+	if _, exists := cfg.Tools["write_file"]; !exists {
 		t.Error("write_file should be auto-configured")
 	}
-	if _, exists := cfg.Tools.Tools["search_replace"]; !exists {
+	if _, exists := cfg.Tools["search_replace"]; !exists {
 		t.Error("search_replace should be auto-configured")
 	}
-	if _, exists := cfg.Tools.Tools["todo_write"]; !exists {
+	if _, exists := cfg.Tools["todo_write"]; !exists {
 		t.Error("todo_write should be auto-configured")
 	}
 }
@@ -200,17 +200,17 @@ func TestAgentShortcuts_Combined(t *testing.T) {
 		t.Error("Tools should be nil (all tools available)")
 	}
 
-	if _, exists := cfg.Tools.Tools["search"]; !exists {
+	if _, exists := cfg.Tools["search"]; !exists {
 		t.Error("Search tool should be created")
 	}
-	if _, exists := cfg.Tools.Tools["execute_command"]; !exists {
+	if _, exists := cfg.Tools["execute_command"]; !exists {
 		t.Error("execute_command should be created")
 	}
-	if _, exists := cfg.Tools.Tools["write_file"]; !exists {
+	if _, exists := cfg.Tools["write_file"]; !exists {
 		t.Error("write_file should be created")
 	}
 
-	execCmd := cfg.Tools.Tools["execute_command"]
+	execCmd := cfg.Tools["execute_command"]
 	if !execCmd.EnableSandboxing {
 		t.Error("execute_command should have sandboxing enabled")
 	}

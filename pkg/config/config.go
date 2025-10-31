@@ -57,6 +57,9 @@ func (c *Config) initializeMaps() {
 	if c.Agents == nil {
 		c.Agents = make(map[string]*AgentConfig)
 	}
+	if c.Tools == nil {
+		c.Tools = make(map[string]*ToolConfig)
+	}
 	if c.DocumentStores == nil {
 		c.DocumentStores = make(map[string]*DocumentStoreConfig)
 	}
@@ -95,11 +98,11 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 		agent.Embedder = "default-embedder"
 	}
 
-	if c.Tools.Tools == nil {
-		c.Tools.Tools = make(map[string]*ToolConfig)
+	if c.Tools == nil {
+		c.Tools = make(map[string]*ToolConfig)
 	}
-	if _, exists := c.Tools.Tools["search"]; !exists {
-		c.Tools.Tools["search"] = &ToolConfig{
+	if _, exists := c.Tools["search"]; !exists {
+		c.Tools["search"] = &ToolConfig{
 			Type:           "search",
 			DocumentStores: []string{storeName},
 		}
@@ -107,13 +110,13 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 }
 
 func (c *Config) expandEnableTools() {
-	if c.Tools.Tools == nil {
-		c.Tools.Tools = make(map[string]*ToolConfig)
+	if c.Tools == nil {
+		c.Tools = make(map[string]*ToolConfig)
 	}
 
 	for toolName, toolConfig := range GetDefaultToolConfigs() {
-		if _, exists := c.Tools.Tools[toolName]; !exists {
-			c.Tools.Tools[toolName] = toolConfig
+		if _, exists := c.Tools[toolName]; !exists {
+			c.Tools[toolName] = toolConfig
 		}
 	}
 }
@@ -135,6 +138,9 @@ func (c *Config) SetDefaults() {
 	}
 	if c.DocumentStores == nil {
 		c.DocumentStores = make(map[string]*DocumentStoreConfig)
+	}
+	if c.Tools == nil {
+		c.Tools = make(map[string]*ToolConfig)
 	}
 	if c.SessionStores == nil {
 		c.SessionStores = make(map[string]*SessionStoreConfig)
@@ -177,7 +183,15 @@ func (c *Config) SetDefaults() {
 		}
 	}
 
-	c.Tools.SetDefaults()
+	if len(c.Tools) == 0 {
+		c.Tools = GetDefaultToolConfigs()
+	}
+
+	for name := range c.Tools {
+		if c.Tools[name] != nil {
+			c.Tools[name].SetDefaults()
+		}
+	}
 
 	for name := range c.DocumentStores {
 		if c.DocumentStores[name] != nil {
@@ -208,7 +222,7 @@ type Config struct {
 
 	Agents map[string]*AgentConfig `yaml:"agents,omitempty"`
 
-	Tools ToolConfigs `yaml:"tools,omitempty"`
+	Tools map[string]*ToolConfig `yaml:"tools,omitempty"`
 
 	DocumentStores map[string]*DocumentStoreConfig `yaml:"document_stores,omitempty"`
 
@@ -280,8 +294,12 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if err := c.Tools.Validate(); err != nil {
-		return fmt.Errorf("tools validation failed: %w", err)
+	for name, tool := range c.Tools {
+		if tool != nil {
+			if err := tool.Validate(); err != nil {
+				return fmt.Errorf("tool '%s' validation failed: %w", name, err)
+			}
+		}
 	}
 
 	for name, store := range c.DocumentStores {
@@ -357,7 +375,7 @@ func (c *Config) validateReferences() error {
 		}
 	}
 
-	for toolName, tool := range c.Tools.Tools {
+	for toolName, tool := range c.Tools {
 		if tool == nil {
 			continue
 		}
@@ -516,10 +534,10 @@ func CreateZeroConfig(source interface{}) *Config {
 	}
 
 	if mcpURL != "" {
-		if cfg.Tools.Tools == nil {
-			cfg.Tools.Tools = make(map[string]*ToolConfig)
+		if cfg.Tools == nil {
+			cfg.Tools = make(map[string]*ToolConfig)
 		}
-		cfg.Tools.Tools["mcp"] = &ToolConfig{
+		cfg.Tools["mcp"] = &ToolConfig{
 			Type:      "mcp",
 			Enabled:   true,
 			ServerURL: mcpURL,

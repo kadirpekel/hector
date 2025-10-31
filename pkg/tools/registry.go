@@ -54,11 +54,11 @@ func NewToolRegistry() *ToolRegistry {
 	}
 }
 
-func NewToolRegistryWithConfig(toolConfig *config.ToolConfigs) (*ToolRegistry, error) {
+func NewToolRegistryWithConfig(toolConfig map[string]*config.ToolConfig) (*ToolRegistry, error) {
 	return NewToolRegistryWithConfigAndAgentRegistry(toolConfig, nil)
 }
 
-func NewToolRegistryWithConfigAndAgentRegistry(toolConfig *config.ToolConfigs, agentRegistry interface{}) (*ToolRegistry, error) {
+func NewToolRegistryWithConfigAndAgentRegistry(toolConfig map[string]*config.ToolConfig, agentRegistry interface{}) (*ToolRegistry, error) {
 	registry := &ToolRegistry{
 		BaseRegistry: registry.NewBaseRegistry[ToolEntry](),
 	}
@@ -148,12 +148,12 @@ func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 	return nil
 }
 
-func (r *ToolRegistry) initializeFromConfigWithAgentRegistry(toolConfig *config.ToolConfigs, agentRegistry interface{}) error {
+func (r *ToolRegistry) initializeFromConfigWithAgentRegistry(toolConfig map[string]*config.ToolConfig, agentRegistry interface{}) error {
 
 	localTools := make(map[string]*config.ToolConfig)
 	mcpTools := make(map[string]*config.ToolConfig)
 
-	for name, tool := range toolConfig.Tools {
+	for name, tool := range toolConfig {
 		if tool != nil {
 			if tool.Type == "mcp" {
 				mcpTools[name] = tool

@@ -223,16 +223,14 @@ func TestToolRegistry_Clear(t *testing.T) {
 }
 
 func TestNewToolRegistryWithConfig(t *testing.T) {
-	config := &config.ToolConfigs{
-		Tools: map[string]*config.ToolConfig{
-			"test-tool": {
-				Type:    "todo",
-				Enabled: true,
-			},
+	toolConfig := map[string]*config.ToolConfig{
+		"test-tool": {
+			Type:    "todo",
+			Enabled: true,
 		},
 	}
 
-	registry, err := NewToolRegistryWithConfig(config)
+	registry, err := NewToolRegistryWithConfig(toolConfig)
 	if err != nil {
 		t.Fatalf("NewToolRegistryWithConfig() error = %v", err)
 	}

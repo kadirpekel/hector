@@ -651,8 +651,10 @@ func (c *SearchReplaceConfig) SetDefaults() {
 	}
 }
 
+// ToolConfigs is kept for backwards compatibility but is no longer used directly in Config.
+// Config.Tools is now a map[string]*ToolConfig directly.
 type ToolConfigs struct {
-	Tools map[string]*ToolConfig `yaml:",inline"`
+	Tools map[string]*ToolConfig `yaml:"tools,omitempty"`
 }
 
 func GetDefaultToolConfigs() map[string]*ToolConfig {

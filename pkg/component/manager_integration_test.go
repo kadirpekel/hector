@@ -13,7 +13,7 @@ func createMinimalConfig() *config.Config {
 		Databases: make(map[string]*config.DatabaseProviderConfig),
 		Embedders: make(map[string]*config.EmbedderProviderConfig),
 		Agents:    make(map[string]*config.AgentConfig),
-		Tools:     config.ToolConfigs{Tools: make(map[string]*config.ToolConfig)},
+		Tools:     make(map[string]*config.ToolConfig),
 		Plugins: config.PluginConfigs{
 			Discovery:           config.PluginDiscoveryConfig{Enabled: false},
 			LLMProviders:        make(map[string]*config.PluginConfig),
