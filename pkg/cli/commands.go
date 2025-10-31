@@ -118,24 +118,24 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 	if mode == ModeClient {
 
 		if args.Agent == "" {
-			return fmt.Errorf("agent name is required in client mode (use --agent flag)")
+			return fmt.Errorf("agent ID is required in client mode (use --agent flag)")
 		}
 		agentID = args.Agent
 	} else if mode == ModeLocalConfig {
 
 		if args.Agent == "" {
 
-			agentNames := make([]string, 0, len(cfg.Agents))
-			for name := range cfg.Agents {
-				agentNames = append(agentNames, name)
+			agentIDs := make([]string, 0, len(cfg.Agents))
+			for id := range cfg.Agents {
+				agentIDs = append(agentIDs, id)
 			}
-			return fmt.Errorf("agent name is required when using --config flag. Available agents: %v", agentNames)
+			return fmt.Errorf("agent ID is required when using --config flag. Available agents: %v", agentIDs)
 		}
 		agentID = args.Agent
 	} else {
 
 		if args.Agent != "" {
-			return fmt.Errorf("agent name is not allowed in zero-config mode (remove --agent flag)")
+			return fmt.Errorf("agent ID is not allowed in zero-config mode (remove --agent flag)")
 		}
 		agentID = config.DefaultAgentName
 	}
@@ -202,24 +202,24 @@ func ChatCommand(args *ChatCmd, cfg *config.Config, mode CLIMode) error {
 	if mode == ModeClient {
 
 		if args.Agent == "" {
-			return fmt.Errorf("agent name is required in client mode (use --agent flag)")
+			return fmt.Errorf("agent ID is required in client mode (use --agent flag)")
 		}
 		agentID = args.Agent
 	} else if mode == ModeLocalConfig {
 
 		if args.Agent == "" {
 
-			agentNames := make([]string, 0, len(cfg.Agents))
-			for name := range cfg.Agents {
-				agentNames = append(agentNames, name)
+			agentIDs := make([]string, 0, len(cfg.Agents))
+			for id := range cfg.Agents {
+				agentIDs = append(agentIDs, id)
 			}
-			return fmt.Errorf("agent name is required when using --config flag. Available agents: %v", agentNames)
+			return fmt.Errorf("agent ID is required when using --config flag. Available agents: %v", agentIDs)
 		}
 		agentID = args.Agent
 	} else {
 
 		if args.Agent != "" {
-			return fmt.Errorf("agent name is not allowed in zero-config mode (remove --agent flag)")
+			return fmt.Errorf("agent ID is not allowed in zero-config mode (remove --agent flag)")
 		}
 		agentID = config.DefaultAgentName
 	}

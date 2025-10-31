@@ -75,14 +75,14 @@ func (r *Runtime) ListAgents(ctx context.Context) ([]*pb.AgentCard, error) {
 		if err != nil {
 
 			card = &pb.AgentCard{
-				Name:        entry.Name,
+				Name:        entry.ID,
 				Description: entry.Config.Description,
 				Version:     "1.0.0",
 			}
 		}
 
 		if card.Url == "" {
-			card.Url = "local://" + entry.Name
+			card.Url = "local://" + entry.ID
 		}
 
 		agents = append(agents, card)

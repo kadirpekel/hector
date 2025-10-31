@@ -54,12 +54,12 @@ func (d *AgentDiscovery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	isAuthenticated := claims != nil
 
-	agentNames := d.service.ListAgents()
+	agentIDs := d.service.ListAgents()
 
 	agents := []*pb.AgentCard{}
 
-	for _, agentName := range agentNames {
-		card, visibility, err := d.service.GetAgentCardAndVisibility(agentName)
+	for _, agentID := range agentIDs {
+		card, visibility, err := d.service.GetAgentCardAndVisibility(agentID)
 		if err != nil {
 			continue
 		}

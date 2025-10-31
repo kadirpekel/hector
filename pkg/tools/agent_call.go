@@ -59,10 +59,10 @@ func (t *AgentCallTool) GetDescription() string {
 func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
 	start := time.Now()
 
-	agentName, ok := args["agent"].(string)
+	agentID, ok := args["agent"].(string)
 	if !ok {
 
-		if agentName, ok = args["agent_name"].(string); !ok {
+		if agentID, ok = args["agent_name"].(string); !ok {
 			return ToolResult{
 				Success: false,
 				Error:   "Missing or invalid 'agent' parameter",
@@ -81,11 +81,11 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 		}
 	}
 
-	agentName = strings.TrimSpace(agentName)
-	if agentName == "" {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
 		return ToolResult{
 			Success: false,
-			Error:   "agent name cannot be empty",
+			Error:   "agent ID cannot be empty",
 		}, nil
 	}
 
@@ -104,18 +104,18 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 		}, nil
 	}
 
-	targetAgent, err := t.registry.GetAgent(agentName)
+	targetAgent, err := t.registry.GetAgent(agentID)
 	if err != nil {
 		return ToolResult{
 			Success: false,
-			Error:   fmt.Sprintf("Agent '%s' not found: %v", agentName, err),
-		}, fmt.Errorf("agent '%s' not found: %v", agentName, err)
+			Error:   fmt.Sprintf("Agent '%s' not found: %v", agentID, err),
+		}, fmt.Errorf("agent '%s' not found: %v", agentID, err)
 	}
 
 	request := &pb.SendMessageRequest{
 		Request: &pb.Message{
-			MessageId: fmt.Sprintf("agent_call_%s_%d", agentName, time.Now().UnixNano()),
-			ContextId: fmt.Sprintf("%s:agent_call_session", agentName),
+			MessageId: fmt.Sprintf("agent_call_%s_%d", agentID, time.Now().UnixNano()),
+			ContextId: fmt.Sprintf("%s:agent_call_session", agentID),
 			Parts: []*pb.Part{
 				{
 					Part: &pb.Part_Text{Text: task},
@@ -128,8 +128,8 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 	if err != nil {
 		return ToolResult{
 			Success: false,
-			Error:   fmt.Sprintf("Failed to call agent '%s': %v", agentName, err),
-		}, fmt.Errorf("failed to call agent '%s': %v", agentName, err)
+			Error:   fmt.Sprintf("Failed to call agent '%s': %v", agentID, err),
+		}, fmt.Errorf("failed to call agent '%s': %v", agentID, err)
 	}
 
 	var responseText string
@@ -158,9 +158,9 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 
 	return ToolResult{
 		Success: true,
-		Content: fmt.Sprintf("[Delegated to: %s]\n\n%s", agentName, responseText),
+		Content: fmt.Sprintf("[Delegated to: %s]\n\n%s", agentID, responseText),
 		Metadata: map[string]interface{}{
-			"agent_name":        agentName,
+			"agent_id":          agentID,
 			"task":              task,
 			"execution_time_ms": time.Since(start).Milliseconds(),
 		},

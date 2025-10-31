@@ -134,17 +134,17 @@ func (s *RegistryService) DeleteTaskPushNotificationConfig(ctx context.Context, 
 
 func (s *RegistryService) ListAgents() []string {
 	entries := s.registry.List()
-	names := make([]string, len(entries))
+	ids := make([]string, len(entries))
 	for i, entry := range entries {
-		names[i] = entry.Name
+		ids[i] = entry.ID
 	}
-	return names
+	return ids
 }
 
-func (s *RegistryService) GetAgentByName(name string) (pb.A2AServiceServer, error) {
-	agentEntry, ok := s.registry.Get(name)
+func (s *RegistryService) GetAgentByName(agentID string) (pb.A2AServiceServer, error) {
+	agentEntry, ok := s.registry.Get(agentID)
 	if !ok {
-		return nil, fmt.Errorf("agent '%s' not found", name)
+		return nil, fmt.Errorf("agent '%s' not found", agentID)
 	}
 	return agentEntry.Agent, nil
 }

@@ -30,13 +30,13 @@ func (s *AgentRouter) RegisterAgent(agentName string, agentSvc pb.A2AServiceServ
 	log.Printf("  ✅ Registered agent: %s", agentName)
 }
 
-func (s *AgentRouter) GetAgentCardAndVisibility(agentName string) (*pb.AgentCard, string, error) {
-	agentSvc, err := s.registry.GetAgent(agentName)
+func (s *AgentRouter) GetAgentCardAndVisibility(agentID string) (*pb.AgentCard, string, error) {
+	agentSvc, err := s.registry.GetAgent(agentID)
 	if err != nil {
-		return nil, "", fmt.Errorf("agent not found: %s", agentName)
+		return nil, "", fmt.Errorf("agent not found: %s", agentID)
 	}
 
-	agentConfig, err := s.registry.GetAgentConfig(agentName)
+	agentConfig, err := s.registry.GetAgentConfig(agentID)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get agent config: %w", err)
 	}
@@ -58,8 +58,8 @@ func (s *AgentRouter) ListAgents() []string {
 	return s.registry.ListAgents()
 }
 
-func (s *AgentRouter) GetAgent(agentName string) (pb.A2AServiceServer, bool) {
-	agent, err := s.registry.GetAgent(agentName)
+func (s *AgentRouter) GetAgent(agentID string) (pb.A2AServiceServer, bool) {
+	agent, err := s.registry.GetAgent(agentID)
 	if err != nil {
 		return nil, false
 	}
@@ -71,28 +71,28 @@ func (s *AgentRouter) AgentCount() int {
 }
 
 func (s *AgentRouter) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
-	agentName, err := s.getAgentNameOrError(ctx, req)
+	agentID, err := s.getAgentIDOrError(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	agentSvc, err := s.registry.GetAgent(agentName)
+	agentSvc, err := s.registry.GetAgent(agentID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "agent '%s' not found", agentName)
+		return nil, status.Errorf(codes.NotFound, "agent '%s' not found", agentID)
 	}
 
 	return agentSvc.SendMessage(ctx, req)
 }
 
 func (s *AgentRouter) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2AService_SendStreamingMessageServer) error {
-	agentName, err := s.getAgentNameOrError(stream.Context(), req)
+	agentID, err := s.getAgentIDOrError(stream.Context(), req)
 	if err != nil {
 		return err
 	}
 
-	agentSvc, err := s.registry.GetAgent(agentName)
+	agentSvc, err := s.registry.GetAgent(agentID)
 	if err != nil {
-		return status.Errorf(codes.NotFound, "agent '%s' not found", agentName)
+		return status.Errorf(codes.NotFound, "agent '%s' not found", agentID)
 	}
 
 	return agentSvc.SendStreamingMessage(req, stream)
@@ -100,21 +100,21 @@ func (s *AgentRouter) SendStreamingMessage(req *pb.SendMessageRequest, stream pb
 
 func (s *AgentRouter) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (*pb.AgentCard, error) {
 
-	agentName := s.extractAgentNameFromContext(ctx)
+	agentID := s.extractAgentIDFromContext(ctx)
 
-	if agentName == "" {
-		agentNames := s.registry.ListAgents()
-		if len(agentNames) == 1 {
-			agentName = agentNames[0]
+	if agentID == "" {
+		agentIDs := s.registry.ListAgents()
+		if len(agentIDs) == 1 {
+			agentID = agentIDs[0]
 		} else {
 			return nil, status.Error(codes.InvalidArgument,
-				"name required: use ?name=<agent_name> query parameter or specify agent in path")
+				"agent ID required: use ?agent=<agent_id> query parameter or specify agent in path")
 		}
 	}
 
-	agent, err := s.registry.GetAgent(agentName)
+	agent, err := s.registry.GetAgent(agentID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "agent '%s' not found", agentName)
+		return nil, status.Errorf(codes.NotFound, "agent '%s' not found", agentID)
 	}
 
 	return agent.GetAgentCard(ctx, req)
@@ -172,28 +172,28 @@ func (s *AgentRouter) routeToSingleAgent() (pb.A2AServiceServer, error) {
 	return nil, status.Error(codes.Unimplemented, "operation requires agent specification in multi-agent mode")
 }
 
-func (s *AgentRouter) getAgentNameOrError(ctx context.Context, req *pb.SendMessageRequest) (string, error) {
+func (s *AgentRouter) getAgentIDOrError(ctx context.Context, req *pb.SendMessageRequest) (string, error) {
 
-	agentName := s.extractAgentNameFromContext(ctx)
+	agentID := s.extractAgentIDFromContext(ctx)
 
-	if agentName == "" {
-		agentName = s.extractAgentName(req)
+	if agentID == "" {
+		agentID = s.extractAgentID(req)
 	}
 
-	if agentName == "" {
-		agentNames := s.registry.ListAgents()
-		if len(agentNames) == 1 {
+	if agentID == "" {
+		agentIDs := s.registry.ListAgents()
+		if len(agentIDs) == 1 {
 			// Single-agent mode: automatically route to the only available agent
-			return agentNames[0], nil
+			return agentIDs[0], nil
 		}
 
-		return "", status.Error(codes.InvalidArgument, "name not specified (use context_id format: agent_name:session_id or set agent-name in metadata)")
+		return "", status.Error(codes.InvalidArgument, "agent ID not specified (use context_id format: agent_id:session_id or set agent-name in metadata)")
 	}
 
-	return agentName, nil
+	return agentID, nil
 }
 
-func (s *AgentRouter) extractAgentName(req *pb.SendMessageRequest) string {
+func (s *AgentRouter) extractAgentID(req *pb.SendMessageRequest) string {
 	if req.Request == nil {
 		return ""
 	}
@@ -220,16 +220,16 @@ func (s *AgentRouter) extractAgentName(req *pb.SendMessageRequest) string {
 	return ""
 }
 
-func (s *AgentRouter) extractAgentNameFromContext(ctx context.Context) string {
+func (s *AgentRouter) extractAgentIDFromContext(ctx context.Context) string {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return ""
 	}
 
-	agentNames := md.Get("agent-name")
-	if len(agentNames) == 0 {
+	agentIDs := md.Get("agent-name")
+	if len(agentIDs) == 0 {
 		return ""
 	}
 
-	return agentNames[0]
+	return agentIDs[0]
 }

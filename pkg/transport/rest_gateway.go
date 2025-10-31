@@ -263,6 +263,30 @@ func (g *RESTGateway) SetAuth(authConfig *AuthConfig) {
 	g.authConfig = authConfig
 }
 
+// validateAgentID checks if the given agent ID exists in the registry.
+// Returns true if valid, false otherwise. On false, writes an appropriate error response.
+func (g *RESTGateway) validateAgentID(agentID string, w http.ResponseWriter, sendSSE bool) bool {
+	if g.discovery == nil {
+		return true // If discovery is not available, skip validation
+	}
+
+	validAgents := g.discovery.service.ListAgents()
+	for _, validID := range validAgents {
+		if validID == agentID {
+			return true
+		}
+	}
+
+	// Agent not found - send appropriate error
+	errorMsg := fmt.Sprintf("Agent '%s' not found. Available agents: %v", agentID, validAgents)
+	if sendSSE {
+		g.sendSSEError(w, errorMsg)
+	} else {
+		http.Error(w, errorMsg, http.StatusNotFound)
+	}
+	return false
+}
+
 func (g *RESTGateway) SetService(service pb.A2AServiceServer) {
 	g.service = service
 }
@@ -429,15 +453,20 @@ func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Get agent name from URL parameter (chi router extracts this)
-	agentName := chi.URLParam(r, "agent")
-	if agentName == "" {
-		http.Error(w, "Agent name required", http.StatusBadRequest)
+	// Get agent ID from URL parameter (chi router extracts this)
+	agentID := chi.URLParam(r, "agent")
+	if agentID == "" {
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate agent exists before routing (fail fast)
+	if !g.validateAgentID(agentID, w, false) {
 		return
 	}
 
 	client := pb.NewA2AServiceClient(g.conn)
-	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentName)
+	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
 
 	card, err := client.GetAgentCard(ctx, &pb.GetAgentCardRequest{})
 	if err != nil {
@@ -453,7 +482,7 @@ func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request)
 		"description":  card.Description,
 		"version":      card.Version,
 		"capabilities": card.Capabilities,
-		"endpoint":     fmt.Sprintf("/v1/agents/%s", agentName),
+		"endpoint":     fmt.Sprintf("/v1/agents/%s", agentID),
 	}
 
 	if len(card.SecuritySchemes) > 0 {
@@ -540,10 +569,15 @@ func (g *RESTGateway) handleStreamingMessageSSE(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Get agent name from URL parameter (chi router extracts this)
-	agentName := chi.URLParam(r, "agent")
-	if agentName == "" {
-		g.sendSSEError(w, "Agent name required")
+	// Get agent ID from URL parameter (chi router extracts this)
+	agentID := chi.URLParam(r, "agent")
+	if agentID == "" {
+		g.sendSSEError(w, "Agent ID required")
+		return
+	}
+
+	// Validate agent exists before routing (fail fast)
+	if !g.validateAgentID(agentID, w, true) {
 		return
 	}
 
@@ -565,13 +599,16 @@ func (g *RESTGateway) handleStreamingMessageSSE(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	log.Printf("REST SSE: agent=%s", agentName)
+	log.Printf("REST SSE: agent=%s", agentID)
 
-	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentName)
+	// Create incoming metadata for the gRPC service (server-side)
+	md := metadata.Pairs("agent-name", agentID)
+	ctx := metadata.NewIncomingContext(r.Context(), md)
 
 	streamWrapper := &restStreamWrapper{
 		writer:  w,
 		flusher: w.(http.Flusher),
+		context: ctx, // CRITICAL: Pass the context with agent metadata
 	}
 
 	if g.service != nil {
@@ -617,10 +654,15 @@ func (g *RESTGateway) handleSendMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Get agent name from URL parameter (chi router extracts this)
-	agentName := chi.URLParam(r, "agent")
-	if agentName == "" {
-		http.Error(w, "Agent name required", http.StatusBadRequest)
+	// Get agent ID from URL parameter (chi router extracts this)
+	agentID := chi.URLParam(r, "agent")
+	if agentID == "" {
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate agent exists before routing (fail fast)
+	if !g.validateAgentID(agentID, w, false) {
 		return
 	}
 
@@ -642,9 +684,9 @@ func (g *RESTGateway) handleSendMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	log.Printf("REST: agent=%s", agentName)
+	log.Printf("REST: agent=%s", agentID)
 
-	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentName)
+	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
 
 	client := pb.NewA2AServiceClient(g.conn)
 	resp, err := client.SendMessage(ctx, &req)

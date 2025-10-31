@@ -15,7 +15,7 @@ type AgentEntry struct {
 	Config       *config.AgentConfig `json:"config"`
 	Capabilities []string            `json:"capabilities"`
 	AgentType    string              `json:"agent_type"`
-	Name         string              `json:"name"`
+	ID           string              `json:"id"` // Agent ID (config key, URL-safe)
 }
 
 type AgentRegistry struct {
@@ -54,9 +54,9 @@ func NewAgentRegistryError(component, action, message string, err error) *AgentR
 	}
 }
 
-func (r *AgentRegistry) RegisterAgent(name string, agent pb.A2AServiceServer, agentConfig *config.AgentConfig, capabilities []string) error {
-	if name == "" {
-		return NewAgentRegistryError("AgentRegistry", "RegisterAgent", "agent name cannot be empty", nil)
+func (r *AgentRegistry) RegisterAgent(agentID string, agent pb.A2AServiceServer, agentConfig *config.AgentConfig, capabilities []string) error {
+	if agentID == "" {
+		return NewAgentRegistryError("AgentRegistry", "RegisterAgent", "agent ID cannot be empty", nil)
 	}
 	if agent == nil {
 		return NewAgentRegistryError("AgentRegistry", "RegisterAgent", "agent cannot be nil", nil)
@@ -68,19 +68,19 @@ func (r *AgentRegistry) RegisterAgent(name string, agent pb.A2AServiceServer, ag
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	agentType := r.extractAgentType(name)
+	agentType := r.extractAgentType(agentID)
 
 	entry := AgentEntry{
 		Agent:        agent,
 		Config:       agentConfig,
 		Capabilities: capabilities,
 		AgentType:    agentType,
-		Name:         name,
+		ID:           agentID,
 	}
 
-	if err := r.Register(name, entry); err != nil {
+	if err := r.Register(agentID, entry); err != nil {
 		return NewAgentRegistryError("AgentRegistry", "RegisterAgent",
-			fmt.Sprintf("failed to register agent %s", name), err)
+			fmt.Sprintf("failed to register agent %s", agentID), err)
 	}
 
 	if r.instances[agentType] == nil {
@@ -91,24 +91,24 @@ func (r *AgentRegistry) RegisterAgent(name string, agent pb.A2AServiceServer, ag
 	return nil
 }
 
-func (r *AgentRegistry) GetAgent(name string) (pb.A2AServiceServer, error) {
-	entry, exists := r.Get(name)
+func (r *AgentRegistry) GetAgent(agentID string) (pb.A2AServiceServer, error) {
+	entry, exists := r.Get(agentID)
 	if !exists {
 
 		allEntries := r.List()
 		if len(allEntries) == 0 {
 			return nil, NewAgentRegistryError("AgentRegistry", "GetAgent",
-				fmt.Sprintf("agent '%s' not found: no agents defined", name), nil)
+				fmt.Sprintf("agent '%s' not found: no agents defined", agentID), nil)
 		}
 
 		availableAgents := make([]string, 0, len(allEntries))
 		for _, e := range allEntries {
-			availableAgents = append(availableAgents, e.Name)
+			availableAgents = append(availableAgents, e.ID)
 		}
 
 		return nil, NewAgentRegistryError("AgentRegistry", "GetAgent",
 			fmt.Sprintf("agent '%s' not found\n\nAvailable agents:\n  - %s",
-				name, strings.Join(availableAgents, "\n  - ")), nil)
+				agentID, strings.Join(availableAgents, "\n  - ")), nil)
 	}
 	return entry.Agent, nil
 }
@@ -117,16 +117,16 @@ func (r *AgentRegistry) GetAllAgents() map[string]pb.A2AServiceServer {
 	agents := make(map[string]pb.A2AServiceServer)
 
 	for _, entry := range r.List() {
-		agents[entry.Name] = entry.Agent
+		agents[entry.ID] = entry.Agent
 	}
 	return agents
 }
 
-func (r *AgentRegistry) GetAgentConfig(name string) (*config.AgentConfig, error) {
-	entry, exists := r.Get(name)
+func (r *AgentRegistry) GetAgentConfig(agentID string) (*config.AgentConfig, error) {
+	entry, exists := r.Get(agentID)
 	if !exists {
 		return nil, NewAgentRegistryError("AgentRegistry", "GetAgentConfig",
-			fmt.Sprintf("agent config for %s not found", name), nil)
+			fmt.Sprintf("agent config for %s not found", agentID), nil)
 	}
 	return entry.Config, nil
 }
@@ -145,11 +145,11 @@ func (r *AgentRegistry) GetAgentsByType(agentType string) ([]pb.A2AServiceServer
 	return result, nil
 }
 
-func (r *AgentRegistry) GetCapabilities(name string) ([]string, error) {
-	entry, exists := r.Get(name)
+func (r *AgentRegistry) GetCapabilities(agentID string) ([]string, error) {
+	entry, exists := r.Get(agentID)
 	if !exists {
 		return nil, NewAgentRegistryError("AgentRegistry", "GetCapabilities",
-			fmt.Sprintf("capabilities for agent %s not found", name), nil)
+			fmt.Sprintf("capabilities for agent %s not found", agentID), nil)
 	}
 	return entry.Capabilities, nil
 }
@@ -179,17 +179,17 @@ func (r *AgentRegistry) ListAgents() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	names := make([]string, 0, len(r.List()))
+	ids := make([]string, 0, len(r.List()))
 	for _, entry := range r.List() {
-		names = append(names, entry.Name)
+		ids = append(ids, entry.ID)
 	}
 
-	return names
+	return ids
 }
 
-func (r *AgentRegistry) extractAgentType(name string) string {
-	if underscoreIndex := strings.LastIndex(name, "_"); underscoreIndex > 0 {
-		return name[:underscoreIndex]
+func (r *AgentRegistry) extractAgentType(agentID string) string {
+	if underscoreIndex := strings.LastIndex(agentID, "_"); underscoreIndex > 0 {
+		return agentID[:underscoreIndex]
 	}
-	return name
+	return agentID
 }

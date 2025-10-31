@@ -34,11 +34,11 @@ func (s *RegistryService) ListAgents() []reasoning.AgentRegistryEntry {
 			card = agent.GetAgentCardSimple()
 		} else {
 
-			card = &pb.AgentCard{Name: entry.Name}
+			card = &pb.AgentCard{Name: entry.ID}
 		}
 
 		result = append(result, reasoning.AgentRegistryEntry{
-			ID:         entry.Name,
+			ID:         entry.ID,
 			Card:       card,
 			Visibility: entry.Config.Visibility,
 		})
@@ -62,11 +62,11 @@ func (s *RegistryService) GetAgent(id string) (reasoning.AgentRegistryEntry, boo
 		card = agent.GetAgentCardSimple()
 	} else {
 
-		card = &pb.AgentCard{Name: entry.Name}
+		card = &pb.AgentCard{Name: entry.ID}
 	}
 
 	return reasoning.AgentRegistryEntry{
-		ID:         entry.Name,
+		ID:         entry.ID,
 		Card:       card,
 		Visibility: entry.Config.Visibility,
 	}, true

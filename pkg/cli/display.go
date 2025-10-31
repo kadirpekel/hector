@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 )
@@ -12,12 +13,18 @@ func DisplayAgentList(agents []*pb.AgentCard, mode string) {
 	fmt.Printf("Found %d agent(s):\n\n", len(agents))
 
 	for _, card := range agents {
+		// Extract agent ID from URL
+		agentID := extractAgentIDFromURL(card.Url)
+
 		fmt.Printf("• %s", card.Name)
 		if card.Version != "" {
 			fmt.Printf(" (v%s)", card.Version)
 		}
 		fmt.Println()
 
+		if agentID != "" && agentID != card.Name {
+			fmt.Printf("  ID: %s\n", agentID)
+		}
 		if card.Description != "" {
 			fmt.Printf("  Description: %s\n", card.Description)
 		}
@@ -30,8 +37,28 @@ func DisplayAgentList(agents []*pb.AgentCard, mode string) {
 		fmt.Println()
 	}
 
-	fmt.Println("Tip: Use 'hector info <agent>' for detailed information")
-	fmt.Println("Tip: Use 'hector call \"prompt\" --agent <agent>' to interact with an agent")
+	fmt.Println("Tip: Use 'hector info <agent_id>' for detailed information")
+	fmt.Println("Tip: Use 'hector call \"prompt\" --agent <agent_id>' to interact with an agent")
+}
+
+// extractAgentIDFromURL extracts the agent ID from the URL query parameter
+func extractAgentIDFromURL(url string) string {
+	if url == "" {
+		return ""
+	}
+	// Parse URL to extract ?agent=<id>
+	parts := strings.Split(url, "?")
+	if len(parts) < 2 {
+		return ""
+	}
+	params := strings.Split(parts[1], "&")
+	for _, param := range params {
+		kv := strings.Split(param, "=")
+		if len(kv) == 2 && kv[0] == "agent" {
+			return kv[1]
+		}
+	}
+	return ""
 }
 
 func DisplayAgentCard(agentID string, card *pb.AgentCard) {

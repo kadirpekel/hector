@@ -2163,13 +2163,22 @@
             const messageInput = document.getElementById('messageInput');
             const sendBtn = document.getElementById('sendBtn');
             const endpoint = document.getElementById('endpoint').value.trim();
-            const agentName = document.getElementById('agent').value.trim();
+            const agentSelect = document.getElementById('agent');
+            const agentIndex = parseInt(agentSelect.value);
             const messageText = messageInput.value.trim();
 
             if (!messageText) return;
             if (!endpoint) {
                 showError('Please enter an endpoint URL');
                 return;
+            }
+
+            // Extract agent ID from URL
+            const agent = availableAgents[agentIndex];
+            let agentId = '';
+            if (agent && agent.url) {
+                const urlParams = new URLSearchParams(agent.url.split('?')[1]);
+                agentId = urlParams.get('agent') || '';
             }
 
             messageInput.disabled = true;
@@ -2185,7 +2194,7 @@
                 messageInput.value = '';
                 messageInput.style.height = 'auto';
 
-                await sendStreamingMessageJsonRpc(endpoint, agentName, messageText);
+                await sendStreamingMessageJsonRpc(endpoint, agentId, messageText);
 
             } catch (error) {
                 console.error('Error:', error);
@@ -2249,10 +2258,10 @@
                     return;
                 }
 
-                availableAgents.forEach(agent => {
+                availableAgents.forEach((agent, index) => {
                     const option = document.createElement('option');
-                    option.value = agent.name;
-                    option.textContent = agent.name;
+                    option.value = index; // Store index to retrieve full agent object
+                    option.textContent = agent.name; // Display name
                     agentSelect.appendChild(option);
                 });
 
