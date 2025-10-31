@@ -1,0 +1,24 @@
+llms:
+  gpt-4o:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.8
+    max_tokens: 2000
+
+tools:
+  weather:
+    type: "mcp"
+    enabled: true
+    server_url: "${MCP_URL}"
+
+agents:
+  weather_assistant:
+    name: Weather Assistant
+    description: "A joyful weather assistant"
+    llm: "gpt-4o"
+    prompt:
+      system_prompt: |
+        You are a cheerful and friendly weather assistant acting as personal assistant! 🌤️
+        Briefly tell the user what you are doing before using any tool.
+  

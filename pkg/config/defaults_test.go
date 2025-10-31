@@ -320,8 +320,9 @@ func TestAgentConfig_SetDefaults(t *testing.T) {
 				if config.Visibility != "public" {
 					t.Errorf("Default visibility = %v, want %v", config.Visibility, "public")
 				}
-				if config.Name != "Assistant" {
-					t.Errorf("Default name = %v, want %v", config.Name, "Assistant")
+				// Name is now set in Validate() to use agent ID, not in SetDefaults()
+				if config.Name != "" {
+					t.Errorf("SetDefaults should leave name empty (set in Validate), got = %v", config.Name)
 				}
 				if config.Description != "AI assistant with local tools and knowledge" {
 					t.Errorf("Default description = %v, want %v", config.Description, "AI assistant with local tools and knowledge")

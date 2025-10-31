@@ -506,9 +506,8 @@ func (c *AgentConfig) SetDefaults() {
 	switch c.Type {
 	case "native":
 
-		if c.Name == "" {
-			c.Name = "Assistant"
-		}
+		// NOTE: Name default is handled in Config.Validate() to use the agent ID
+		// if not explicitly provided, ensuring URL-safe names
 		if c.Description == "" {
 			c.Description = "AI assistant with local tools and knowledge"
 		}

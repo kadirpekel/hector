@@ -188,8 +188,9 @@ func TestConfig_SetDefaults(t *testing.T) {
 				}
 
 				if agent, exists := config.Agents["default-agent"]; exists {
-					if agent.Name != "Assistant" {
-						t.Errorf("Default agent name = %v, want %v", agent.Name, "Assistant")
+					// Name is now set in Validate() to use agent ID, not in SetDefaults()
+					if agent.Name != "" {
+						t.Errorf("SetDefaults should leave name empty (set in Validate), got = %v", agent.Name)
 					}
 					if agent.LLM != "default-llm" {
 						t.Errorf("Default agent LLM = %v, want %v", agent.LLM, "default-llm")

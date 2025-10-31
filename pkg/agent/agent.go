@@ -27,7 +27,8 @@ const (
 type Agent struct {
 	pb.UnimplementedA2AServiceServer
 
-	name        string
+	id          string // Agent ID (config key, URL-safe)
+	name        string // Display name
 	description string
 	config      *config.AgentConfig
 	services    reasoning.AgentServices
@@ -57,6 +58,7 @@ func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr inte
 	}
 
 	return &Agent{
+		id:          agentID,
 		name:        agentConfig.Name,
 		description: agentConfig.Description,
 		config:      agentConfig,
@@ -710,6 +712,10 @@ func (a *Agent) getMaxIterations(cfg config.ReasoningConfig) int {
 		return cfg.MaxIterations
 	}
 	return 5
+}
+
+func (a *Agent) GetID() string {
+	return a.id
 }
 
 func (a *Agent) GetName() string {

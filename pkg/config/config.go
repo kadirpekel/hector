@@ -286,10 +286,14 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	for name, agent := range c.Agents {
+	for agentID, agent := range c.Agents {
 		if agent != nil {
+			// Set agent name default to agent ID if not specified
+			if agent.Name == "" {
+				agent.Name = agentID
+			}
 			if err := agent.Validate(); err != nil {
-				return fmt.Errorf("agent '%s' validation failed: %w", name, err)
+				return fmt.Errorf("agent '%s' validation failed: %w", agentID, err)
 			}
 		}
 	}
