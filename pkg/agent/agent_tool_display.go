@@ -9,6 +9,8 @@ import (
 )
 
 // displayToolCall shows the tool call based on the configured display mode
+//
+//nolint:unused // Reserved for future tool display feature
 func displayToolCall(outputCh chan<- *pb.Part, toolCall *protocol.ToolCall, cfg config.ReasoningConfig) {
 	switch cfg.ToolDisplayMode {
 	case "inline":
@@ -35,6 +37,8 @@ func displayToolCall(outputCh chan<- *pb.Part, toolCall *protocol.ToolCall, cfg 
 }
 
 // displayToolResult shows the tool execution result based on the configured display mode
+//
+//nolint:unused // Reserved for future tool display feature
 func displayToolResult(outputCh chan<- *pb.Part, toolCall *protocol.ToolCall, err error, result string, cfg config.ReasoningConfig) {
 	switch cfg.ToolDisplayMode {
 	case "inline":

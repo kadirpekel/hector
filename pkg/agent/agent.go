@@ -542,6 +542,7 @@ func (a *Agent) executeTools(
 	return results
 }
 
+//nolint:unused // Reserved for future tool display feature
 func formatToolLabel(toolName string, args map[string]interface{}) string {
 	switch toolName {
 	case "agent_call":
