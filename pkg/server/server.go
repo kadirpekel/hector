@@ -136,7 +136,7 @@ func (s *Server) initialize() error {
 	}
 	s.runtime = rt
 
-	if s.config.Global.Observability.Metrics.Enabled || s.config.Global.Observability.Tracing.Enabled {
+	if s.config.Global.Observability.MetricsEnabled || s.config.Global.Observability.Tracing.Enabled {
 		log.Println("🔭 Initializing observability...")
 
 		obsConfig := observability.Config{
@@ -147,10 +147,7 @@ func (s *Server) initialize() error {
 				SamplingRate: s.config.Global.Observability.Tracing.SamplingRate,
 				ServiceName:  s.config.Global.Observability.Tracing.ServiceName,
 			},
-			Metrics: observability.MetricsConfig{
-				Enabled: s.config.Global.Observability.Metrics.Enabled,
-				Port:    s.config.Global.Observability.Metrics.Port,
-			},
+			MetricsEnabled: s.config.Global.Observability.MetricsEnabled,
 		}
 
 		obsMgr := observability.NewManager(obsConfig)
@@ -162,7 +159,7 @@ func (s *Server) initialize() error {
 				log.Printf("  ✅ Tracing enabled (endpoint: %s, sampling: %.2f)",
 					obsConfig.Tracing.EndpointURL, obsConfig.Tracing.SamplingRate)
 			}
-			if obsConfig.Metrics.Enabled {
+			if obsConfig.MetricsEnabled {
 				log.Printf("  ✅ Metrics enabled")
 			}
 		}

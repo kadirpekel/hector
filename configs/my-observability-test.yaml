@@ -1,25 +1,29 @@
 global:
   observability:
-    metrics_enabled: true
+    metrics:
+      enabled: true
     tracing:
       enabled: true
-      exporter_type: "jaeger"
+      exporter_type: "otlp"
       endpoint_url: "localhost:4317"
       sampling_rate: 1.0
       service_name: "hector"
+
 llms:
   gpt-4o:
     type: "openai"
     model: "gpt-4o-mini"
     api_key: "${OPENAI_API_KEY}"
+
 agents:
-  assistant:
-    name: "AI Assistant with Observability"
+  test-agent:
+    name: "Test Agent"
+    description: "Agent for observability testing"
     llm: "gpt-4o"
-    tools: ["search", "write_file", "execute_command"]
     observability:
       enabled: true
       trace_agent_calls: true
       trace_tool_execution: true
       trace_llm_requests: true
       record_metrics: true
+

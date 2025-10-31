@@ -456,6 +456,7 @@ func CreateZeroConfig(source interface{}) *Config {
 	docsFolder := extractStringField(source, "DocsFolder")
 	embedderModel := extractStringField(source, "EmbedderModel")
 	agentName := extractStringField(source, "AgentName")
+	observe := extractBoolField(source, "Observe")
 
 	if apiKey == "" {
 		if provider != "" {
@@ -508,6 +509,15 @@ func CreateZeroConfig(source interface{}) *Config {
 		Embedders:      make(map[string]*EmbedderProviderConfig),
 		DocumentStores: make(map[string]*DocumentStoreConfig),
 		SessionStores:  make(map[string]*SessionStoreConfig),
+	}
+
+	if observe {
+		cfg.Global.Observability = ObservabilityConfig{
+			MetricsEnabled: true,
+			Tracing: TracingConfig{
+				Enabled: true,
+			},
+		}
 	}
 
 	agentConfig := AgentConfig{
@@ -611,6 +621,24 @@ func extractBoolField(source any, fieldName string) bool {
 	}
 
 	return field.Bool()
+}
+
+func extractIntField(source any, fieldName string) int {
+	v := reflect.ValueOf(source)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	field := v.FieldByName(fieldName)
+	if !field.IsValid() || !field.CanInterface() {
+		return 0
+	}
+
+	if field.Kind() != reflect.Int {
+		return 0
+	}
+
+	return int(field.Int())
 }
 
 func generateStoreNameFromPath(sourcePath string) string {

@@ -9,13 +9,8 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
-type MetricsConfig struct {
-	Enabled bool `yaml:"enabled"`
-	Port    int  `yaml:"port"`
-}
-
-func InitMetrics(ctx context.Context, cfg MetricsConfig) (*PrometheusMetrics, error) {
-	if !cfg.Enabled {
+func InitMetrics(ctx context.Context, enabled bool) (*PrometheusMetrics, error) {
+	if !enabled {
 		return &PrometheusMetrics{}, nil
 	}
 

@@ -3,11 +3,9 @@
 
 global:
   observability:
+    metrics_enabled: true
     tracing:
-      enabled: false  # Disable tracing for faster startup
-    metrics:
-      enabled: true
-      port: 8081  # Expose metrics on the HTTP port
+      enabled: false
 
 llms:
   claude:

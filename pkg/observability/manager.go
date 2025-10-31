@@ -8,8 +8,8 @@ import (
 )
 
 type Config struct {
-	Tracing TracerConfig  `yaml:"tracing"`
-	Metrics MetricsConfig `yaml:"metrics"`
+	Tracing        TracerConfig `yaml:"tracing"`
+	MetricsEnabled bool         `yaml:"metrics_enabled"`
 }
 
 type Manager struct {
@@ -35,7 +35,7 @@ func (m *Manager) Initialize(ctx context.Context) error {
 	}
 	m.tracerProvider = tp
 
-	metrics, err := InitMetrics(ctx, m.config.Metrics)
+	metrics, err := InitMetrics(ctx, m.config.MetricsEnabled)
 	if err != nil {
 		return err
 	}

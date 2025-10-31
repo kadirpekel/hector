@@ -27,6 +27,7 @@ type ZeroConfigFlags struct {
 	DocsFolder    string `name:"docs-folder" help:"Folder containing documents for RAG" type:"path" placeholder:"PATH"`
 	EmbedderModel string `name:"embedder-model" help:"Embedder model for document store" default:"nomic-embed-text"`
 	VectorDB      string `name:"vectordb" help:"Vector database connection string" default:"http://localhost:6334" placeholder:"URL"`
+	Observe       bool   `help:"Enable observability (metrics + tracing to localhost:4317)"`
 }
 
 type ClientModeFlags struct {

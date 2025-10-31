@@ -1740,8 +1740,8 @@ func (c *AuthConfig) SetDefaults() {
 }
 
 type ObservabilityConfig struct {
-	Tracing TracingConfig `yaml:"tracing,omitempty"`
-	Metrics MetricsConfig `yaml:"metrics,omitempty"`
+	Tracing        TracingConfig `yaml:"tracing,omitempty"`
+	MetricsEnabled bool          `yaml:"metrics_enabled,omitempty"`
 }
 
 type TracingConfig struct {
@@ -1752,24 +1752,15 @@ type TracingConfig struct {
 	ServiceName  string  `yaml:"service_name"`
 }
 
-type MetricsConfig struct {
-	Enabled bool `yaml:"enabled"`
-	Port    int  `yaml:"port"`
-}
-
 func (c *ObservabilityConfig) Validate() error {
 	if err := c.Tracing.Validate(); err != nil {
 		return fmt.Errorf("tracing config validation failed: %w", err)
-	}
-	if err := c.Metrics.Validate(); err != nil {
-		return fmt.Errorf("metrics config validation failed: %w", err)
 	}
 	return nil
 }
 
 func (c *ObservabilityConfig) SetDefaults() {
 	c.Tracing.SetDefaults()
-	c.Metrics.SetDefaults()
 }
 
 func (c *TracingConfig) Validate() error {
@@ -1792,20 +1783,11 @@ func (c *TracingConfig) SetDefaults() {
 		c.SamplingRate = 1.0
 	}
 	if c.ExporterType == "" && c.Enabled {
-		c.ExporterType = "jaeger"
+		c.ExporterType = "otlp"
 	}
-}
-
-func (c *MetricsConfig) Validate() error {
-	if c.Enabled {
-		if c.Port <= 0 || c.Port > 65535 {
-			return fmt.Errorf("invalid metrics port: %d", c.Port)
-		}
+	if c.EndpointURL == "" && c.Enabled {
+		c.EndpointURL = "localhost:4317"
 	}
-	return nil
-}
-
-func (c *MetricsConfig) SetDefaults() {
 }
 
 type A2ACardConfig struct {

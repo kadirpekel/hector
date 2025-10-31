@@ -64,12 +64,18 @@ global:
 | `sampling_rate` | float | `1.0` | Sampling rate (0.0-1.0, 1.0 = 100%) |
 | `service_name` | string | `"hector"` | Service name in traces |
 
+**Note:** All tracing defaults are applied automatically via `SetDefaults()`.
+
 #### Metrics
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable Prometheus metrics |
-| `port` | int | `8080` | Port for metrics (not used, metrics on REST port) |
+Metrics can be enabled with a simple boolean flag:
+
+```yaml
+observability:
+  metrics_enabled: true
+```
+
+**Note:** Metrics are served on the HTTP server at `/metrics` endpoint.
 
 ## Metrics Collected
 

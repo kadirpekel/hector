@@ -112,6 +112,9 @@ hector call "Explain distributed systems" --config agents.yaml
 # Zero-config mode (uses default agent)
 export OPENAI_API_KEY="sk-..."
 hector call "Analyze code quality"
+
+# With monitoring enabled
+hector serve --observe --tools
 ```
 
 ## Configuration Example
@@ -249,16 +252,12 @@ Production-grade observability built-in:
 ```yaml
 global:
   observability:
-    metrics:
-      enabled: true
+    metrics_enabled: true
     tracing:
       enabled: true
-      exporter_type: otlp
-      endpoint_url: http://otel-collector:4317
-      sampling_rate: 1.0
 ```
 
-**Note:** Metrics are served on the HTTP server at `/metrics` endpoint (default: `http://localhost:8080/metrics`).
+**Note:** Metrics are served on the HTTP server at `/metrics` endpoint (default: `http://localhost:8080/metrics`). All tracing defaults (endpoint, sampling, etc.) are applied automatically.
 
 **Grafana Integration:**
 Pre-built dashboards included for agent performance monitoring.
