@@ -253,17 +253,20 @@ agents:
     
     # Prompt Configuration
     prompt:
-      # Slot-based (recommended)
-      prompt_slots:
-        system_role: "Core role"
-        reasoning_instructions: "How to think"
-        tool_usage: "Tool guidelines"
-        output_format: "Response format"
-        communication_style: "Tone and style"
-        additional: "Extra context"
+      # Simple approach (recommended)
+      system_prompt: |
+        Define your agent's core role and identity here.
+      instructions: |
+        Additional instructions for behavior and guidelines.
       
-      # OR full override
-      system_prompt: "Complete system prompt..."
+      # Advanced: Slot-based prompts for granular control
+      prompt_slots:
+        system_role: "Core role and identity"
+        reasoning_instructions: "How to think and approach problems"
+        tool_usage: "Guidelines for using tools"
+        output_format: "Response format preferences"
+        communication_style: "Tone and interaction style"
+        additional: "Extra context or instructions"
     
     # Reasoning Configuration
     reasoning:
@@ -850,9 +853,11 @@ agents:
     embedder: "embedder"
     
     prompt:
-      prompt_slots:
-        system_role: "You are an expert programmer."
-        reasoning_instructions: "Think step-by-step."
+      system_prompt: |
+        You are an expert programmer who writes clean,
+        efficient, well-tested code.
+      instructions: |
+        Always think step-by-step and test your code.
     
     reasoning:
       engine: "chain-of-thought"
@@ -865,18 +870,11 @@ agents:
       - "execute_command"
     
     memory:
-      working:
-        strategy: "summary_buffer"
-        budget: 4000
-      longterm:
-        
-        storage_scope: "session"
+      strategy: "summary_buffer"
+      budget: 4000
     
     document_stores:
-      - name: "codebase"
-        paths: ["./src/"]
-        include_patterns: ["*.go", "*.py"]
-        chunk_size: 512
+      - "codebase"
 
 # Tools
 tools:

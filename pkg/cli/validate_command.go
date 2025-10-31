@@ -36,6 +36,7 @@ func ValidateCommand(args *ValidateCmd) error {
 	// Use the same config processing pipeline as the main application
 	// This expands shortcuts (docs_folder, enable_tools), sets defaults, and validates
 	// Note: ProcessConfigPipeline calls cfg.Validate() internally - single source of truth!
+	// The loader now also does strict validation to catch typos and unknown fields
 	cfg, err = config.ProcessConfigPipeline(cfg)
 	if err != nil {
 		return printProcessError(args.Format, args.Config, err)

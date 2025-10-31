@@ -64,18 +64,17 @@ agents:
             - "Extract this logic into a reusable function"
             - "Simplify this complex function"
     prompt:
-      prompt_slots:
-        system_role: |
-          You are an expert AI coding assistant.
-          You operate like a pair programmer in Cursor.
-          Your capabilities:
-          - Semantic code search to understand codebases
-          - File creation and modification
-          - Command execution for testing and validation
-          - Step-by-step reasoning
-        reasoning_instructions: |
-          Always implement changes rather than just suggesting them.
-          Use semantic search to understand patterns before making changes.
+      system_prompt: |
+        You are an expert AI coding assistant.
+        You operate like a pair programmer in Cursor.
+        Your capabilities:
+        - Semantic code search to understand codebases
+        - File creation and modification
+        - Command execution for testing and validation
+        - Step-by-step reasoning
+      instructions: |
+        Always implement changes rather than just suggesting them.
+        Use semantic search to understand patterns before making changes.
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 100
@@ -85,25 +84,22 @@ agents:
       show_tool_execution: true
       show_thinking: true                
     memory:
-      working:
-        strategy: "summary_buffer"
-        budget: 4000
-
-# Ollama configuration for embeddings
-ollama:
-  url: "http://localhost:11434"
+      strategy: "summary_buffer"
+      budget: 4000
 
 # Embedders configuration
 embedders:
   mxbai-embed-large:
-    provider: ollama
+    type: ollama
     model: mxbai-embed-large
+    host: "http://localhost:11434"
 
 # Vector database configuration
 databases:
   qdrant_local:
-    provider: qdrant
-    url: "http://localhost:6333"
+    type: qdrant
+    host: "localhost"
+    port: 6333
 
 # Document store configuration for RAG/semantic search
 document_stores:

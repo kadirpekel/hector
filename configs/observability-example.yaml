@@ -17,9 +17,3 @@ agents:
     name: "AI Assistant with Observability"
     llm: "gpt-4o"
     tools: ["search", "write_file", "execute_command"]
-    observability:
-      enabled: true
-      trace_agent_calls: true
-      trace_tool_execution: true
-      trace_llm_requests: true
-      record_metrics: true

@@ -1,7 +1,6 @@
 global:
-  log_level: "info"
-  server:
-    address: "0.0.0.0"
+  a2a_server:
+    host: "0.0.0.0"
     port: 8080
 llms:
   gpt-4o:
@@ -10,6 +9,16 @@ llms:
     api_key: "${OPENAI_API_KEY}"
     temperature: 0.7
     max_tokens: 4000
+databases:
+  qdrant-db:
+    type: "qdrant"
+    host: "localhost"
+    port: 6333
+embedders:
+  ollama-embedder:
+    type: "ollama"
+    model: "nomic-embed-text"
+    host: "http://localhost:11434"
 tools:
   execute_command:
     type: "command"
@@ -44,19 +53,20 @@ tools:
     description: "Custom business logic and integrations"
 document_stores:
   knowledge_base:
-    type: "qdrant"
-    url: "http://localhost:6333"
-    collection: "company_knowledge"
+    path: "."
+    source: "directory"
 agents:
   file_assistant:
     name: "File Assistant"
     description: "Helps with file operations and searches"
     llm: "gpt-4o"
+    database: "qdrant-db"
+    embedder: "ollama-embedder"
     document_stores: ["knowledge_base"]
     prompt:
-      system_role: |
+      system_prompt: |
         You are a helpful assistant that manages files and searches documentation.
-      tool_usage: |
+      instructions: |
         Available tools:
         - execute_command: Run safe commands (cat, ls, grep, git)
         - write_file: Create or modify files
@@ -67,10 +77,10 @@ agents:
     description: "Connects to external services via MCP"
     llm: "gpt-4o"
     prompt:
-      system_role: |
+      system_prompt: |
         You are an integration specialist who can interact with
         external services like GitHub, Slack, and email.
-      tool_usage: |
+      instructions: |
         Available integrations (via Composio):
         GitHub:
           - github_create_issue: Create issues
@@ -88,10 +98,10 @@ agents:
     description: "Remembers user preferences and context"
     llm: "gpt-4o"
     prompt:
-      system_role: |
+      system_prompt: |
         You are a personal assistant who remembers user preferences,
         past conversations, and important facts.
-      tool_usage: |
+      instructions: |
         Memory tools (via Mem0):
         - mem0_store: Save information
           Example: User prefers Python over JavaScript
@@ -105,12 +115,14 @@ agents:
     name: "Super Agent"
     description: "Orchestrates tasks using all available tools"
     llm: "gpt-4o"
+    database: "qdrant-db"
+    embedder: "ollama-embedder"
     document_stores: ["knowledge_base"]
     reasoning:
       engine: "supervisor"
       max_iterations: 20
     prompt:
-      system_role: |
+      system_prompt: |
         You are a powerful orchestrator with access to:
         - File operations (local system)
         - Documentation search (knowledge base)
@@ -120,7 +132,7 @@ agents:
         1. Breaking down tasks
         2. Using appropriate tools
         3. Integrating results
-      tool_usage: |
+      instructions: |
         Tool selection strategy:
         For file operations:
           → Use built-in tools (execute_command, write_file)

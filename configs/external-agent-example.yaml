@@ -1,9 +1,8 @@
-providers:
-  llms:
-    default-llm:
-      type: "openai"
-      model: "gpt-4o"
-      api_key: "${OPENAI_API_KEY}"
+llms:
+  default-llm:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
 agents:
   orchestrator:
     name: "Orchestrator Agent"
@@ -20,7 +19,7 @@ agents:
     url: "https://specialist-agent.example.com"
     credentials:
       type: "bearer"
-      token: "${EXTERNAL_AGENT_JWT_TOKEN}"
+      token: "${EXTERNAL_AGENT_JWT_TOKEN:-placeholder-token-for-example}"
   api-key-agent:
     type: "a2a"
     name: "API Key Agent"
@@ -28,7 +27,7 @@ agents:
     url: "https://api-agent.example.com"
     credentials:
       type: "api_key"
-      api_key: "${EXTERNAL_API_KEY}"
+      api_key: "${EXTERNAL_API_KEY:-placeholder-api-key}"
       api_key_header: "X-API-Key"  
   basic-auth-agent:
     type: "a2a"
@@ -37,8 +36,5 @@ agents:
     url: "https://basic-agent.example.com"
     credentials:
       type: "basic"
-      username: "${AGENT_USERNAME}"
-      password: "${AGENT_PASSWORD}"
-server:
-  auth:
-    enabled: false  
+      username: "${AGENT_USERNAME:-placeholder-user}"
+      password: "${AGENT_PASSWORD:-placeholder-password}"  

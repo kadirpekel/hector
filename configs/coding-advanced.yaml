@@ -221,8 +221,7 @@ databases:
     type: "qdrant"
     host: "${QDRANT_HOST:-localhost}"
     port: 6334  
-    timeout: 300  
-    collection_name: "codebase"
+    timeout: 300
 embedders:
   embedder:
     type: "ollama"
@@ -235,9 +234,7 @@ document_stores:
     source: "directory"
     max_file_size: 1048576      
     watch_changes: true         
-    incremental_indexing: true   
-    database: "qdrant"
-    embedder: "embedder"
+    incremental_indexing: true
 tools:
   search:
     type: search

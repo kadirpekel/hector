@@ -35,7 +35,7 @@ agents:
         required: ["sentiment", "confidence"]
         additionalProperties: false
     prompt:
-      system_role: |
+      system_prompt: |
         You analyze text sentiment and return structured JSON with this format:
         {
           "sentiment": "positive|negative|neutral",
@@ -61,7 +61,7 @@ agents:
         required: ["name", "email", "company"]
         additionalProperties: false
     prompt:
-      system_role: |
+      system_prompt: |
         You extract structured information from text.
         Return only the information found - use null for missing fields.
   classifier:
@@ -82,7 +82,7 @@ agents:
         required: ["category", "priority"]
         additionalProperties: false
     prompt:
-      system_role: |
+      system_prompt: |
         You classify content into categories.
         Provide clear categorization with appropriate priority levels.
   gemini_sentiment:
@@ -102,7 +102,7 @@ agents:
         required: ["sentiment", "confidence"]
         additionalProperties: false
     prompt:
-      system_role: |
+      system_prompt: |
         You analyze text sentiment and return structured JSON.
         Provide accurate sentiment classification with confidence scores (0.0-1.0).
   anthropic_sentiment:
@@ -123,6 +123,6 @@ agents:
         required: ["sentiment", "confidence"]
         additionalProperties: false
     prompt:
-      system_role: |
+      system_prompt: |
         You analyze text sentiment and return structured JSON.
         Provide accurate sentiment classification with confidence scores (0.0-1.0).

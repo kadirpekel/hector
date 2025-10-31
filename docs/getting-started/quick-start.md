@@ -80,7 +80,7 @@ agents:
     name: "Coding Assistant"
     llm: "gpt-4o"
     prompt:
-      system_role: |
+      system_prompt: |
         You are an expert software engineer. Provide clear,
         concise code examples with explanations.
     tools: ["execute_command", "write_file", "search_replace"]

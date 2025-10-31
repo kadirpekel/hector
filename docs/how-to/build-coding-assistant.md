@@ -228,17 +228,16 @@ agents:
     enable_tools: true
     
     prompt:
-      prompt_slots:
-        system_role: |
-          You are an expert in our tech stack:
-          - Frontend: React + TypeScript
-          - Backend: Python + FastAPI
-          - Database: PostgreSQL
-          
-        reasoning_instructions: |
-          Always implement changes, never just suggest.
-          Write tests for all new features.
-          Use semantic search to understand code first.
+      system_prompt: |
+        You are an expert in our tech stack:
+        - Frontend: React + TypeScript
+        - Backend: Python + FastAPI
+        - Database: PostgreSQL
+      
+      instructions: |
+        Always implement changes, never just suggest.
+        Write tests for all new features.
+        Use semantic search to understand code first.
 ```
 
 ### Option B: Advanced Control
@@ -354,16 +353,14 @@ agents:
     docs_folder: "./frontend"
     enable_tools: true
     prompt:
-      prompt_slots:
-        system_role: "React + TypeScript expert"
+      system_prompt: "You are a React and TypeScript expert"
   
   # Backend specialist
   backend_dev:
     docs_folder: "./backend"
     enable_tools: true
     prompt:
-      prompt_slots:
-        system_role: "Python + FastAPI expert"
+      system_prompt: "You are a Python and FastAPI expert"
   
   # Full-stack architect
   architect:

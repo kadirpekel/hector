@@ -1364,7 +1364,7 @@ func (c *LongTermMemoryConfig) IsEnabled() bool {
 }
 
 type PromptConfig struct {
-	PromptSlots map[string]string `yaml:"prompt_slots"`
+	PromptSlots *PromptSlotsConfig `yaml:"prompt_slots,omitempty"`
 
 	SystemPrompt   string            `yaml:"system_prompt"`
 	Instructions   string            `yaml:"instructions"`
@@ -1381,6 +1381,16 @@ type PromptConfig struct {
 	SummarizeThreshold  float64 `yaml:"summarize_threshold,omitempty"`
 	SmartMemory         bool    `yaml:"smart_memory,omitempty"`
 	MemoryBudget        int     `yaml:"memory_budget,omitempty"`
+}
+
+// PromptSlotsConfig defines typed prompt slots for composable prompt engineering
+type PromptSlotsConfig struct {
+	SystemRole            string `yaml:"system_role,omitempty"`
+	ReasoningInstructions string `yaml:"reasoning_instructions,omitempty"`
+	ToolUsage             string `yaml:"tool_usage,omitempty"`
+	OutputFormat          string `yaml:"output_format,omitempty"`
+	CommunicationStyle    string `yaml:"communication_style,omitempty"`
+	Additional            string `yaml:"additional,omitempty"`
 }
 
 func (c *MemoryConfig) Validate() error {

@@ -10,7 +10,7 @@ agents:
     tools:
       - "agent_call"
     prompt:
-      system_role: |
+      system_prompt: |
         You coordinate research tasks using 3 specialists:
         - researcher: Gathers information from web sources
         - analyst: Analyzes findings and identifies insights  
@@ -28,7 +28,7 @@ agents:
     tools:
       - "execute_command"
     prompt:
-      system_role: |
+      system_prompt: |
         You research topics by searching the web and gathering information.
         Use curl to search and extract key facts from multiple sources.
         Focus on credible, recent information.
@@ -45,7 +45,7 @@ agents:
       max_iterations: 5
       enable_streaming: true
     prompt:
-      system_role: |
+      system_prompt: |
         You analyze research findings to identify:
         - Key themes and patterns
         - Important insights and trends
@@ -63,7 +63,7 @@ agents:
     tools:
       - "write_file"
     prompt:
-      system_role: |
+      system_prompt: |
         You create well-structured reports from research analysis.
         Use clear headings, bullet points, and proper citations.
         Save the final report as a markdown file.

@@ -31,6 +31,9 @@ help:
 	@echo "  version   - Show version information"
 	@echo "  deps      - Download dependencies"
 	@echo "  mod-tidy  - Tidy go.mod"
+	@echo ""
+	@echo "Configuration:"
+	@echo "  validate-configs    - Validate all example configs"
 
 # Build the binary (development with debug symbols)
 build:
@@ -191,6 +194,34 @@ quality: fmt vet lint test
 # Pre-commit checks (what CI runs)
 pre-commit: deps fmt vet lint test build
 	@echo "Pre-commit checks complete - ready to push"
+
+# Validate all example configurations
+.PHONY: validate-configs validate-config-examples
+
+validate-configs:
+	@echo "🔍 Validating all configuration examples..."
+	@FAILED=0; \
+	for config in configs/*.yaml; do \
+		echo "  Checking $$config..."; \
+		if ./hector validate "$$config" --format=compact > /dev/null 2>&1; then \
+			echo "  ✅ $$config is valid"; \
+		else \
+			echo "  ❌ $$config has errors"; \
+			./hector validate "$$config" --format=verbose; \
+			FAILED=$$((FAILED + 1)); \
+		fi; \
+	done; \
+	if [ $$FAILED -gt 0 ]; then \
+		echo ""; \
+		echo "❌ $$FAILED configuration(s) failed validation"; \
+		exit 1; \
+	else \
+		echo ""; \
+		echo "✅ All configurations are valid!"; \
+	fi
+
+# Alias for validate-configs
+validate-config-examples: validate-configs
 
 # A2A Protocol Compliance Verification
 .PHONY: a2a-compliance a2a-tests a2a-validate

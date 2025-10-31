@@ -136,7 +136,7 @@ agents:
     llm: "gpt-4o"
     
     prompt:
-      system_role: |
+      system_prompt: |
         You are a helpful weather assistant.
         Use the weather tools (get_weather, get_forecast)
         to provide accurate weather information.
@@ -284,7 +284,7 @@ agents:
     llm: "gpt-4o"
     
     prompt:
-      system_role: |
+      system_prompt: |
         You are an automation assistant with access to:
         - GitHub (create issues, PRs)
         - Slack (send messages, notifications)

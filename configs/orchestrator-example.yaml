@@ -1,6 +1,5 @@
 global:
   a2a_server:
-    enabled: true
     host: "0.0.0.0"
     port: 8080
 agents:
@@ -14,7 +13,7 @@ agents:
       engine: "chain-of-thought"
       max_iterations: 5
     prompt:
-      system_role: |
+      system_prompt: |
         You are a research specialist. Your job is to:
         1. Gather comprehensive information on topics
         2. Synthesize findings into clear summaries
@@ -28,7 +27,7 @@ agents:
       engine: "chain-of-thought"
       max_iterations: 5
     prompt:
-      system_role: |
+      system_prompt: |
         You are a data analyst. Your job is to:
         1. Examine data and information critically
         2. Identify patterns and trends
@@ -44,7 +43,7 @@ agents:
       engine: "chain-of-thought"
       max_iterations: 5
     prompt:
-      system_role: |
+      system_prompt: |
         You are a professional content writer. Your job is to:
         1. Create clear, engaging content
         2. Structure information logically
@@ -60,13 +59,12 @@ agents:
       engine: "supervisor"  
       max_iterations: 10  
     memory:
-      working:
-        strategy: "summary_buffer"
-        budget: 16000      
-        threshold: 0.85    
-        target: 0.70       
+      strategy: "summary_buffer"
+      budget: 16000      
+      threshold: 0.85    
+      target: 0.70       
     prompt:
-      system_role: |
+      system_prompt: |
         You are an orchestrator agent that coordinates specialized agents 
         to accomplish complex tasks efficiently.
         AVAILABLE AGENTS:
@@ -95,14 +93,10 @@ agents:
         2. Call analyst: "Analyze these frameworks: [research results]"
         3. Call writer: "Write report on: [analysis results]"
         4. Synthesize: Review outputs and present final report
-      tool_usage: |
+      instructions: |
         Use agent_call to delegate subtasks to specialized agents.
         Each delegation should have a clear, specific task.
         Build on previous results by referencing them.
-      communication_style: |
-        Be clear about your orchestration process.
-        Explain which agents you're calling and why.
-        Synthesize their outputs into a unified response.
 llms:
   main-llm:
     type: "openai"

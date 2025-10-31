@@ -1,16 +1,14 @@
-providers:
-  llms:
-    default-llm:
-      type: "openai"
-      model: "gpt-4o"
-      api_key: "${OPENAI_API_KEY}"
+llms:
+  default-llm:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
 agents:
   secure-agent:
     name: "Secure Agent"
     description: "An agent that requires JWT authentication"
     llm: "default-llm"
     security:
-      enabled: true
       schemes:
         BearerAuth:
           type: "http"
@@ -22,9 +20,8 @@ agents:
       jwks_url: "https://your-auth-server.com/.well-known/jwks.json"
       issuer: "https://your-auth-server.com/"
       audience: "your-agent-api"
-server:
+global:
   auth:
-    enabled: true
     jwks_url: "https://your-auth-server.com/.well-known/jwks.json"
     issuer: "https://your-auth-server.com/"
     audience: "your-agent-api"

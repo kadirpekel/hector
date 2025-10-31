@@ -5,7 +5,7 @@ description: Customize agent behavior through prompts and instructions
 
 # Prompts
 
-Prompts define how your agents think, communicate, and behave. Hector offers two approaches: **slot-based prompts** (recommended) for composability, or **full system prompt override** for complete control.
+Prompts define how your agents think, communicate, and behave. Hector offers two approaches: **simple prompts** (recommended for most cases) or **slot-based prompts** for advanced composability.
 
 ## Quick Example
 
@@ -14,16 +14,44 @@ agents:
   assistant:
     llm: "gpt-4o"
     prompt:
-      system_role: |
+      system_prompt: |
         You are a helpful programming assistant.
         Provide clear, concise code examples.
+      instructions: |
+        Always test your code before presenting it.
 ```
 
 ---
 
-## Slot-Based Prompts (Recommended)
+## Simple Prompts (Recommended)
 
-Slot-based prompts let you customize different aspects of agent behavior independently. Hector combines these slots into a cohesive system prompt.
+For most use cases, use `system_prompt` and `instructions`:
+
+```yaml
+agents:
+  my_agent:
+    prompt:
+      system_prompt: |
+        Define your agent's core role, identity, and capabilities here.
+        This is the main system prompt.
+      
+      instructions: |
+        Additional instructions for behavior, guidelines, etc.
+```
+
+**Benefits:**
+- ✅ Simple and straightforward
+- ✅ Works great for most use cases
+- ✅ Easy to understand and maintain
+
+---
+
+## Slot-Based Prompts (Advanced)
+
+Slot-based prompts provide granular control over different aspects of agent behavior. Use these when you need:
+- Fine-grained control over prompt composition
+- To override specific parts of reasoning strategy defaults
+- Complex prompt engineering with multiple concerns
 
 ### Available Slots
 

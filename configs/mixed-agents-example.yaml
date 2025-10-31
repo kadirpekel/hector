@@ -1,6 +1,5 @@
 global:
   a2a_server:
-    enabled: true
     host: "0.0.0.0"
     port: 8080
 agents:
@@ -15,7 +14,7 @@ agents:
       engine: "chain-of-thought"
       max_iterations: 5
     prompt:
-      system_role: |
+      system_prompt: |
         You are a research specialist. Gather comprehensive information
         and provide clear, well-structured summaries.
   local_writer:
@@ -28,7 +27,7 @@ agents:
       engine: "chain-of-thought"
       max_iterations: 5
     prompt:
-      system_role: |
+      system_prompt: |
         You are a professional content writer. Create clear,
         engaging content with proper structure.
   external_specialist:
@@ -52,13 +51,12 @@ agents:
       engine: "supervisor"
       max_iterations: 10  
     memory:
-      working:
-        strategy: "summary_buffer"
-        budget: 16000      
-        threshold: 0.85    
-        target: 0.70       
+      strategy: "summary_buffer"
+      budget: 16000      
+      threshold: 0.85    
+      target: 0.70       
     prompt:
-      system_role: |
+      system_prompt: |
         You orchestrate a team of specialized agents.
         AVAILABLE AGENTS:
         - local_researcher: Local research specialist (native)

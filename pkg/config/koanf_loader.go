@@ -203,6 +203,18 @@ func (l *Loader) watch(provider koanf.Provider) {
 }
 
 func (l *Loader) unmarshalAndProcess() (*Config, error) {
+	// First, perform strict validation to catch typos and unknown fields
+	strictResult, err := ValidateConfigStructure(l.koanf)
+	if err != nil {
+		return nil, fmt.Errorf("strict validation check failed: %w", err)
+	}
+
+	if !strictResult.Valid() {
+		// Return validation errors as a formatted error
+		return nil, fmt.Errorf("configuration has structural errors:\n%s", strictResult.FormatErrors())
+	}
+
+	// Now do the normal unmarshal (we know it will succeed structurally)
 	cfg := &Config{}
 	if err := l.koanf.UnmarshalWithConf("", cfg, koanf.UnmarshalConf{
 		Tag: "yaml",

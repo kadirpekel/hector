@@ -693,14 +693,15 @@ Make your thinking natural, concise, and focused on the current task.
 		}
 	}
 
-	if len(a.config.Prompt.PromptSlots) > 0 {
+	// Use typed config slots if provided
+	if a.config.Prompt.PromptSlots != nil {
 		userSlots := reasoning.PromptSlots{
-			SystemRole:            a.config.Prompt.PromptSlots["system_role"],
-			ReasoningInstructions: a.config.Prompt.PromptSlots["reasoning_instructions"],
-			ToolUsage:             a.config.Prompt.PromptSlots["tool_usage"],
-			OutputFormat:          a.config.Prompt.PromptSlots["output_format"],
-			CommunicationStyle:    a.config.Prompt.PromptSlots["communication_style"],
-			Additional:            a.config.Prompt.PromptSlots["additional"],
+			SystemRole:            a.config.Prompt.PromptSlots.SystemRole,
+			ReasoningInstructions: a.config.Prompt.PromptSlots.ReasoningInstructions,
+			ToolUsage:             a.config.Prompt.PromptSlots.ToolUsage,
+			OutputFormat:          a.config.Prompt.PromptSlots.OutputFormat,
+			CommunicationStyle:    a.config.Prompt.PromptSlots.CommunicationStyle,
+			Additional:            a.config.Prompt.PromptSlots.Additional,
 		}
 		strategySlots = strategySlots.Merge(userSlots)
 	}

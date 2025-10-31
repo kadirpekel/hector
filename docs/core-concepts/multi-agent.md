@@ -44,7 +44,7 @@ agents:
       engine: "supervisor"
     tools: ["agent_call", "todo_write"]
     prompt:
-      system_role: |
+      system_prompt: |
         You coordinate a team of specialists. Break tasks
         into sub-tasks and delegate appropriately.
   
@@ -53,18 +53,18 @@ agents:
     llm: "gpt-4o"
     tools: ["search"]
     prompt:
-      system_role: "You research topics and gather information."
+      system_prompt: "You research topics and gather information."
   
   analyst:
     llm: "claude"
     prompt:
-      system_role: "You analyze data and draw insights."
+      system_prompt: "You analyze data and draw insights."
   
   writer:
     llm: "claude"
     tools: ["write_file"]
     prompt:
-      system_role: "You write clear, engaging content."
+      system_prompt: "You write clear, engaging content."
 ```
 
 **Usage:**
@@ -118,7 +118,7 @@ Focused agents that do the actual work:
 agents:
   specialist:
     prompt:
-      system_role: "Clear, focused role definition"
+      system_prompt: "Clear, focused role definition"
     tools: ["relevant", "tools"]
 ```
 
@@ -181,7 +181,7 @@ agents:
       engine: "supervisor"
     tools: ["agent_call"]
     prompt:
-      system_role: |
+      system_prompt: |
         Process tasks through pipeline:
         1. Data collector gathers data
         2. Processor processes it
@@ -244,7 +244,7 @@ agents:
       engine: "supervisor"
     tools: ["agent_call"]
     prompt:
-      system_role: |
+      system_prompt: |
         You coordinate multiple researchers working in parallel.
   
   researcher:
@@ -317,21 +317,21 @@ See [How to Integrate External Agents](../how-to/integrate-external-agents.md) f
 agents:
   coordinator:
     prompt:
-      system_role: "You coordinate specialists."
+      system_prompt: "You coordinate specialists."
   
   researcher:
     prompt:
-      system_role: "You research topics thoroughly."
+      system_prompt: "You research topics thoroughly."
   
   writer:
     prompt:
-      system_role: "You write engaging articles."
+      system_prompt: "You write engaging articles."
 
 # ❌ Bad: Overlapping responsibilities
 agents:
   agent1:
     prompt:
-      system_role: "You research and write."  # Two jobs
+      system_prompt: "You research and write."  # Two jobs
 ```
 
 ### 2. Supervisor Doesn't Do Work
@@ -342,7 +342,7 @@ agents:
   supervisor:
     tools: ["agent_call", "todo_write"]  # Orchestration tools only
     prompt:
-      system_role: "Delegate to specialists, don't do the work yourself."
+      system_prompt: "Delegate to specialists, don't do the work yourself."
 
 # ❌ Bad: Supervisor has worker tools
 agents:
@@ -375,7 +375,7 @@ agents:
 agents:
   coordinator:
     prompt:
-      system_role: |
+      system_prompt: |
         You coordinate specialists. For each task:
         1. Break it into clear sub-tasks
         2. Identify which specialist is best
@@ -414,7 +414,7 @@ agents:
       enable_goal_extraction: true
     tools: ["agent_call", "todo_write"]
     prompt:
-      system_role: |
+      system_prompt: |
         You coordinate a research team. Break research tasks into:
         1. Information gathering (web_researcher)
         2. Data analysis (analyst)
@@ -426,14 +426,14 @@ agents:
     llm: "gpt-4o"
     tools: ["search"]
     prompt:
-      system_role: |
+      system_prompt: |
         You search for information on topics. Provide comprehensive,
         well-cited findings.
   
   analyst:
     llm: "claude"
     prompt:
-      system_role: |
+      system_prompt: |
         You analyze research findings. Draw insights, identify patterns,
         and provide data-driven conclusions.
   
@@ -441,7 +441,7 @@ agents:
     llm: "claude"
     tools: ["write_file"]
     prompt:
-      system_role: |
+      system_prompt: |
         You write engaging, well-structured content based on research
         and analysis. Your writing is clear, accurate, and compelling.
 ```
@@ -464,7 +464,7 @@ agents:
       engine: "supervisor"
     tools: ["agent_call", "todo_write"]
     prompt:
-      system_role: |
+      system_prompt: |
         You lead a development team. Break tasks into:
         - Architecture (architect)
         - Frontend (frontend_dev)
@@ -474,25 +474,25 @@ agents:
   architect:
     llm: "gpt-4o"
     prompt:
-      system_role: "You design system architecture and make technical decisions."
+      system_prompt: "You design system architecture and make technical decisions."
   
   frontend_dev:
     llm: "gpt-4o"
     tools: ["write_file", "search", "execute_command"]
     prompt:
-      system_role: "You build React frontends with TypeScript."
+      system_prompt: "You build React frontends with TypeScript."
   
   backend_dev:
     llm: "gpt-4o"
     tools: ["write_file", "search", "execute_command"]
     prompt:
-      system_role: "You build Go backends with clean architecture."
+      system_prompt: "You build Go backends with clean architecture."
   
   tester:
     llm: "gpt-4o"
     tools: ["write_file", "execute_command"]
     prompt:
-      system_role: "You write and run comprehensive tests."
+      system_prompt: "You write and run comprehensive tests."
 ```
 
 ### Example 3: Customer Support System
@@ -505,7 +505,7 @@ agents:
       engine: "supervisor"
     tools: ["agent_call"]
     prompt:
-      system_role: |
+      system_prompt: |
         You route support requests to specialists:
         - billing_support: Payment issues
         - tech_support: Technical problems
@@ -514,18 +514,18 @@ agents:
   billing_support:
     llm: "gpt-4o"
     prompt:
-      system_role: "You help with billing and payment issues."
+      system_prompt: "You help with billing and payment issues."
   
   tech_support:
     llm: "gpt-4o"
     tools: ["execute_command"]
     prompt:
-      system_role: "You diagnose and fix technical issues."
+      system_prompt: "You diagnose and fix technical issues."
   
   account_support:
     llm: "gpt-4o"
     prompt:
-      system_role: "You help with account management and settings."
+      system_prompt: "You help with account management and settings."
 ```
 
 ---

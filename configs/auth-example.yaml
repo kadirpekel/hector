@@ -9,14 +9,14 @@ global:
     audience: "hector-api"
 agents:
   public_agent:
-    visibility: public1
+    visibility: public
     name: "Public Agent"
     description: "Accessible without authentication"
     llm: "main-llm"
     reasoning:
       engine: "chain-of-thought"
     prompt:
-      system_role: |
+      system_prompt: |
         You are a helpful assistant accessible to everyone.
   secure_agent:
     visibility: public
@@ -26,7 +26,7 @@ agents:
     reasoning:
       engine: "chain-of-thought"
     prompt:
-      system_role: |
+      system_prompt: |
         You are a secure assistant. Only authenticated users can access you.
   helper_agent:
     visibility: private
@@ -36,7 +36,7 @@ agents:
     reasoning:
       engine: "chain-of-thought"
     prompt:
-      system_role: |
+      system_prompt: |
         You are an internal helper agent.
 llms:
   main-llm:

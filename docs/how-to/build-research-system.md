@@ -109,7 +109,7 @@ agents:
       - "todo_write"
     
     prompt:
-      system_role: |
+      system_prompt: |
         You are a research coordinator managing a team of specialists.
         
         TEAM MEMBERS:
@@ -140,7 +140,7 @@ agents:
       - "write_file"      # Save research notes
     
     prompt:
-      system_role: |
+      system_prompt: |
         You are a thorough research specialist.
         
         Your role:
@@ -160,7 +160,7 @@ agents:
       engine: "chain-of-thought"
     
     prompt:
-      system_role: |
+      system_prompt: |
         You are a data analyst specializing in research insights.
         
         Your role:
@@ -184,7 +184,7 @@ agents:
       - "write_file"  # Save final reports
     
     prompt:
-      system_role: |
+      system_prompt: |
         You are a professional technical writer.
         
         Your role:
@@ -314,7 +314,7 @@ agents:
     name: "Fact Checker"
     llm: "gpt-4o"
     prompt:
-      system_role: |
+      system_prompt: |
         You verify facts and check sources for accuracy.
         Flag any dubious claims or weak sources.
   
@@ -322,7 +322,7 @@ agents:
     name: "Editor"
     llm: "claude"
     prompt:
-      system_role: |
+      system_prompt: |
         You review and improve written content.
         Ensure clarity, grammar, and flow.
 ```
@@ -331,7 +331,7 @@ Update coordinator:
 ```yaml
 research_coordinator:
   prompt:
-    system_role: |
+    system_prompt: |
       TEAM MEMBERS:
       - researcher
       - fact_checker  # NEW
@@ -413,7 +413,7 @@ Coordinator can call multiple researchers simultaneously:
 ```yaml
 research_coordinator:
   prompt:
-    system_role: |
+    system_prompt: |
       You can call multiple researchers in parallel
       for faster information gathering.
       
@@ -432,7 +432,7 @@ agents:
   qa_reviewer:
     llm: "claude"
     prompt:
-      system_role: |
+      system_prompt: |
         Review the final report for:
         - Accuracy
         - Completeness
@@ -527,7 +527,7 @@ agents:
 agents:
   research_coordinator:
     prompt:
-      system_role: |
+      system_prompt: |
         If a specialist fails:
         1. Try the task a different way
         2. Call a backup specialist if available
