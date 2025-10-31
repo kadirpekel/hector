@@ -936,8 +936,8 @@ Example:
 ```bash
 # Config file: port 8080
 # Override with flag:
-hector serve --config config.yaml --port 9090
-# Result: Uses port 9090
+hector serve --config config.yaml --port 9000
+# Result: Uses port 9000
 ```
 
 ---

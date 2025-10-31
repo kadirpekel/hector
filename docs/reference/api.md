@@ -13,7 +13,7 @@ Hector provides multiple API transports for interacting with agents. All APIs im
 
 | Transport | Port | Use Case | Protocol |
 |-----------|------|----------|----------|
-| **gRPC** | 9090 | High performance | Binary/HTTP2 |
+| **gRPC** | 50051 | High performance | Binary/HTTP2 |
 | **REST** | 8080 | Web/Browser | JSON/HTTP1 |
 | **JSON-RPC** | 8080 | Simple integration | JSON-RPC 2.0 |
 | **WebSocket** | 8080/ws | Real-time streaming | WebSocket |
@@ -27,7 +27,7 @@ Hector provides multiple API transports for interacting with agents. All APIs im
 
 ```
 HTTP (REST/JSON-RPC/WebSocket/UI): http://localhost:8080
-gRPC:                               localhost:9090
+gRPC:                               localhost:50051
 
 Specific endpoints:
   REST API:     http://localhost:8080/v1/

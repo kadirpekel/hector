@@ -251,14 +251,14 @@ global:
   observability:
     metrics:
       enabled: true
-      port: 9090
-      path: /metrics
     tracing:
       enabled: true
       exporter_type: otlp
       endpoint_url: http://otel-collector:4317
       sampling_rate: 1.0
 ```
+
+**Note:** Metrics are served on the HTTP server at `/metrics` endpoint (default: `http://localhost:8080/metrics`).
 
 **Grafana Integration:**
 Pre-built dashboards included for agent performance monitoring.
@@ -462,7 +462,7 @@ CMD ["serve", "--config", "/config/agents.yaml"]
 Build and run:
 ```bash
 docker build -t hector:latest .
-docker run -p 8080:8080 -p 9090:9090 \
+docker run -p 8080:8080 -p 50051:50051 \
   -v $(pwd)/config:/config \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
   hector:latest
@@ -501,12 +501,10 @@ spec:
           - etcd-cluster:2379
           - --config-watch
         ports:
-        - containerPort: 8080
+        - containerPort: 50051
           name: grpc
         - containerPort: 8080
           name: http
-        - containerPort: 9090
-          name: metrics
         env:
         - name: OPENAI_API_KEY
           valueFrom:
@@ -546,14 +544,11 @@ spec:
     app: hector
   ports:
   - name: grpc
-    port: 8080
-    targetPort: 8080
+    port: 50051
+    targetPort: 50051
   - name: http
     port: 8080
     targetPort: 8080
-  - name: metrics
-    port: 9090
-    targetPort: 9090
   type: LoadBalancer
 ```
 

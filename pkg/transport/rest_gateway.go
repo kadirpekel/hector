@@ -134,7 +134,7 @@ func NewRESTGateway(config RESTGatewayConfig) *RESTGateway {
 		config.HTTPAddress = ":8080"
 	}
 	if config.GRPCAddress == "" {
-		config.GRPCAddress = "localhost:9090"
+		config.GRPCAddress = "localhost:50051"
 	}
 
 	mux := runtime.NewServeMux(

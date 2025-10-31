@@ -60,7 +60,7 @@ Hector is built **entirely** on A2A protocol types:
 | **Task Management** | ✅ 100% | All 9 task states, async execution |
 | **Agent Discovery** | ✅ 100% | RFC 8615 .well-known endpoints |
 | **Authentication** | ✅ 100% | JWT, OpenAPI security schemes |
-| **Transport** | ✅ All 3 | gRPC (9090), REST (8080), JSON-RPC (8080) |
+| **Transport** | ✅ All 3 | gRPC (50051), REST (8080), JSON-RPC (8080) |
 | **REST Paths** | ✅✅ **Enhanced** | Dual path support (spec + proto) |
 
 ### Enhanced REST Compliance 🌟
@@ -454,11 +454,11 @@ Hector implements all three A2A transport protocols on conventional ports:
 
 | Transport | Port | Endpoint | Protocol |
 |-----------|------|----------|----------|
-| gRPC | **9090** | `localhost:9090` | HTTP/2 + Protobuf |
+| gRPC | **50051** | `localhost:50051` | HTTP/2 + Protobuf |
 | REST | **8080** | `http://localhost:8080/v1/*` | HTTP/1.1 + JSON |
 | JSON-RPC | **8080** | `http://localhost:8080/` | HTTP/1.1 + JSON-RPC 2.0 |
 
-### gRPC (Port 9090)
+### gRPC (Port 50051)
 
 **Protocol:** HTTP/2 with Protocol Buffers
 
@@ -473,7 +473,7 @@ Hector implements all three A2A transport protocols on conventional ports:
 grpcurl -plaintext \
   -H 'agent-name: assistant' \
   -d '{"request":{"role":"ROLE_USER","parts":[{"text":"Hello"}]}}' \
-  localhost:9090 \
+  localhost:50051 \
   a2a.v1.A2AService/SendMessage
 ```
 

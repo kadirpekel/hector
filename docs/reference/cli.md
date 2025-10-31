@@ -283,7 +283,7 @@ hector serve myagent --model gpt-4o --tools
 hector serve coder --model gpt-4o --tools --docs ./knowledge
 
 # Custom port
-hector serve --config config.yaml --port 9090
+hector serve --config config.yaml --port 9000
 
 # With MCP tools
 hector serve --mcp-url http://localhost:3000
@@ -823,8 +823,8 @@ hector list --config config.yaml
 # Check server is running
 curl http://localhost:8080/agents
 
-# Check port
-hector serve --port 9090
+# Check if different port is needed
+hector serve --port 9000
 ```
 
 ---

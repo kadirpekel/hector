@@ -335,14 +335,14 @@ func (s *Server) cleanup(ctx context.Context) {
 
 func (s *Server) resolveAddresses() ServerAddresses {
 	httpPort := 8080
-	grpcPort := 9090
+	grpcPort := 50051
 	serverHost := "0.0.0.0"
 	baseURL := ""
 
 	if s.config.Global.A2AServer.IsEnabled() {
 		if s.config.Global.A2AServer.Port > 0 {
 			httpPort = s.config.Global.A2AServer.Port
-			grpcPort = httpPort + 1010 // e.g., 8080 -> 9090
+			// gRPC port stays at 50051 (canonical gRPC port) regardless of HTTP port
 		}
 		if s.config.Global.A2AServer.Host != "" {
 			serverHost = s.config.Global.A2AServer.Host
@@ -354,7 +354,7 @@ func (s *Server) resolveAddresses() ServerAddresses {
 
 	if s.opts.Port != 0 && s.opts.Port != 8080 {
 		httpPort = s.opts.Port
-		grpcPort = httpPort + 1010
+		// gRPC port stays at 50051 (canonical gRPC port) regardless of HTTP port
 	}
 	if s.opts.Host != "" {
 		serverHost = s.opts.Host
