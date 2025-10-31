@@ -232,7 +232,7 @@ func (m *AgentInstanceManager) GetOrCreateAgent(agentID, sessionID string) (*Age
     }
     
     // Create agent instance for this session
-    agent, err := agent.NewAgent(agentID, sessionID, m.config, m.compMgr)
+    agent, err := agent.NewAgent(agentID, m.config, m.compMgr, m.registry, m.baseURL)
     if err != nil {
         return nil, err
     }

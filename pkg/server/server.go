@@ -126,6 +126,10 @@ func (s *Server) initialize() error {
 		log.Println("Initializing runtime and agents...")
 	}
 
+	// Resolve base URL before creating runtime so agents can use it
+	addresses := s.resolveAddresses()
+	s.config.Global.A2AServer.BaseURL = addresses.BaseURL
+
 	rt, err := runtime.NewWithConfig(s.config)
 	if err != nil {
 		return fmt.Errorf("runtime initialization failed: %w", err)
@@ -222,6 +226,7 @@ func (s *Server) startTransport() error {
 	s.restGateway = transport.NewRESTGateway(transport.RESTGatewayConfig{
 		HTTPAddress: addresses.HTTP,
 		GRPCAddress: addresses.GRPC,
+		BaseURL:     addresses.BaseURL,
 	})
 	if authConfig != nil {
 		s.restGateway.SetAuth(authConfig)

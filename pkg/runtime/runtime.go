@@ -74,6 +74,9 @@ func NewWithConfig(cfg *config.Config) (*Runtime, error) {
 		return nil, fmt.Errorf("failed to initialize components: %w", err)
 	}
 
+	// Resolve the base URL from A2A server configuration
+	baseURL := resolveBaseURL(cfg)
+
 	var failures []string
 	successCount := 0
 
@@ -100,7 +103,7 @@ func NewWithConfig(cfg *config.Config) (*Runtime, error) {
 			agentInstance = externalAgent
 		} else {
 
-			agentInstance, err = agent.NewAgent(agentID, agentCfgCopy, componentManager, agentRegistry)
+			agentInstance, err = agent.NewAgent(agentID, agentCfgCopy, componentManager, agentRegistry, baseURL)
 			if err != nil {
 				failures = append(failures, fmt.Sprintf("%s: %v", agentID, err))
 				log.Printf("  Warning: Failed to create native agent '%s': %v", agentID, err)
@@ -136,4 +139,25 @@ func NewWithConfig(cfg *config.Config) (*Runtime, error) {
 		components: componentManager,
 		registry:   agentRegistry,
 	}, nil
+}
+
+// resolveBaseURL constructs the base URL from the A2A server configuration
+func resolveBaseURL(cfg *config.Config) string {
+	// If base_url is explicitly set, use it
+	if cfg.Global.A2AServer.BaseURL != "" {
+		return cfg.Global.A2AServer.BaseURL
+	}
+
+	// Otherwise construct from host and port
+	host := cfg.Global.A2AServer.Host
+	if host == "" || host == "0.0.0.0" {
+		host = "localhost"
+	}
+
+	port := cfg.Global.A2AServer.Port
+	if port == 0 {
+		port = 8080
+	}
+
+	return fmt.Sprintf("http://%s:%d", host, port)
 }

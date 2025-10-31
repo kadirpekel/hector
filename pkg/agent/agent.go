@@ -32,9 +32,10 @@ type Agent struct {
 	config      *config.AgentConfig
 	services    reasoning.AgentServices
 	taskWorkers chan struct{}
+	baseURL     string // Server base URL for agent card URL construction
 }
 
-func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr interface{}, registry *AgentRegistry) (*Agent, error) {
+func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr interface{}, registry *AgentRegistry, baseURL string) (*Agent, error) {
 	if agentID == "" {
 		return nil, fmt.Errorf("agent ID cannot be empty")
 	}
@@ -61,6 +62,7 @@ func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr inte
 		config:      agentConfig,
 		services:    services,
 		taskWorkers: taskWorkers,
+		baseURL:     baseURL,
 	}, nil
 }
 

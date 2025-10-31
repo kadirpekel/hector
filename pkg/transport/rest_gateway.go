@@ -114,6 +114,7 @@ func (w *jsonrpcStreamWrapper) SetTrailer(metadata.MD) {
 type RESTGatewayConfig struct {
 	HTTPAddress string
 	GRPCAddress string
+	BaseURL     string // Server's base URL for agent card URLs
 }
 
 type RESTGateway struct {
@@ -354,15 +355,24 @@ func (g *RESTGateway) handleAgentCardByName(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	// Use the current host and add agent parameter to root path
-	// JSON-RPC is now served at POST /
-	baseURL := fmt.Sprintf("http://%s/?agent=%s", r.Host, agentName)
+	// Use the card's URL if it's already set correctly
+	// This respects both native agent URLs (from config) and external agent URLs
+	agentURL := card.Url
+	if agentURL == "" {
+		// Fallback: construct from configured base URL
+		baseURL := g.config.BaseURL
+		if baseURL == "" {
+			// Last resort: use request host (could be incorrect behind proxies)
+			baseURL = fmt.Sprintf("http://%s", r.Host)
+		}
+		agentURL = fmt.Sprintf("%s/?agent=%s", baseURL, agentName)
+	}
 
 	response := map[string]interface{}{
 		"name":         card.Name,
 		"description":  card.Description,
 		"version":      card.Version,
-		"url":          baseURL,
+		"url":          agentURL,
 		"capabilities": card.Capabilities,
 
 		"defaultInputModes":  card.DefaultInputModes,
@@ -466,24 +476,24 @@ func (g *RESTGateway) createAgentRoutingHandler(next http.Handler) http.Handler 
 
 		if strings.HasPrefix(path, "/v1/agents/") {
 			// Format: /v1/agents/{agent}/resource
-		remainder := strings.TrimPrefix(path, "/v1/agents/")
-		parts := strings.SplitN(remainder, "/", 2)
+			remainder := strings.TrimPrefix(path, "/v1/agents/")
+			parts := strings.SplitN(remainder, "/", 2)
 
-		if len(parts) == 0 || parts[0] == "" {
-			http.Error(w, "Agent name required", http.StatusBadRequest)
-			return
-		}
+			if len(parts) == 0 || parts[0] == "" {
+				http.Error(w, "Agent name required", http.StatusBadRequest)
+				return
+			}
 
-		agentName := parts[0]
+			agentName := parts[0]
 
 			// Rewrite URL to remove /agents/{agent} prefix
-		if len(parts) == 2 {
-			r.URL.Path = "/v1/" + parts[1]
-		} else {
-			r.URL.Path = "/v1/"
-		}
+			if len(parts) == 2 {
+				r.URL.Path = "/v1/" + parts[1]
+			} else {
+				r.URL.Path = "/v1/"
+			}
 
-		r.Header.Set("grpc-metadata-agent-name", agentName)
+			r.Header.Set("grpc-metadata-agent-name", agentName)
 		} else {
 			// Format: /v1/resource (e.g., /v1/tasks, /v1/card)
 			// Extract agent from header or query parameter
