@@ -10,82 +10,61 @@ hide:
 .md-content h1:first-child {
   display: none;
 }
+.md-content {
+  padding-top: 0.5rem;
+}
 </style>
 
+<p class="hero-slogan">Production-Ready AI Agents. Zero Code Required.</p>
+
 <div class="hero-section">
-  <div class="hero-content">
-    <p class="hero-slogan">Production-Ready AI Agents. Zero Code Required.</p>
-
-    <p>Deploy observable, secure, and scalable AI agent systems with hot reload, distributed configuration, and A2A-native federation—all configured in YAML.</p>
-
-    <p>Built in Go for production environments, Hector delivers a single 30MB binary with &lt;100ms startup, built-in Prometheus metrics, OpenTelemetry tracing, and security controls—perfect for platform teams deploying AI infrastructure at scale.</p>
+  <div class="hero-demo">
+    <video controls autoplay muted loop playsinline class="hector-video">
+      <source src="assets/hector_chat.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
   </div>
 
-  <div class="hero-demo">
-    <div id="hector-demo"></div>
+  <div class="hero-content">
+
+```bash
+export OPENAI_API_KEY="sk-..." MCP_URL="http://localhost:3000"
+
+cat > weather.yaml << 'EOF'
+llms:
+  gpt-4o:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+
+tools:
+  weather:
+    type: "mcp"
+    server_url: "${MCP_URL}"
+
+agents:
+  weather_assistant:
+    name: Weather Assistant
+    llm: "gpt-4o"
+    tools: [weather]
+EOF
+
+hector serve --config weather.yaml
+
+# Open your browser and experience the interactive chat interface
+open http://localhost:8080
+```
+
   </div>
 </div>
 
+<div class="hero-intro">
+  <p>Deploy observable, secure, and scalable AI agent systems with hot reload, distributed configuration, and A2A-native federation. All configured in YAML.</p>
 
-<script>
-(function() {
-  var link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = 'https://unpkg.com/asciinema-player@3.6.3/dist/bundle/asciinema-player.css';
-  document.head.appendChild(link);
-  
-  var script = document.createElement('script');
-  script.src = 'https://unpkg.com/asciinema-player@3.6.3/dist/bundle/asciinema-player.js';
-  script.onload = function() {
-    AsciinemaPlayer.create('assets/hector-demo.cast', document.getElementById('hector-demo'), {
-      theme: 'asciinema',
-      cols: 80,
-      rows: 22,
-      autoplay: false,
-      loop: false,
-      speed: 1,
-      startAt: 0,
-      terminalFontSize: '16px',
-      poster: 'npt:0:2',
-      pauseOnMarkers: true,
-      markers: [[17.0, 'Server & Client Demo']]
-    });
-  };
-  document.head.appendChild(script);
-})();
-</script>
+  <p>Built for real-world complexity: orchestrate multiple specialized agents, equip them with advanced reasoning strategies like chain-of-thought and tree search, give them long-term memory with RAG and vector stores, connect them to any tool or API, and stream responses in real-time. All while maintaining production-grade observability and security.</p>
+</div>
 
-## Quick Start
-
-```bash
-# Install
-go install github.com/kadirpekel/hector/cmd/hector@latest
-
-# Create configuration
-cat > agents.yaml << 'EOF'
-agents:
-  assistant:
-    llm: gpt-4o
-    tools: [search, write_file, search_replace]
-    reasoning:
-      engine: chain-of-thought
-      max_iterations: 100
-    memory:
-      working:
-        strategy: summary_buffer
-EOF
-
-# Configure credentials
-export OPENAI_API_KEY="sk-..."
-
-# Run server
-hector serve --config agents.yaml
-
-# Or use locally
-hector call "Explain quantum computing" --config agents.yaml
-```
-
-[Get Started Now! →](getting-started/quick-start.md){ .md-button .md-button--primary }
+[Get Started →](getting-started/quick-start.md){ .md-button .md-button--primary }
 
 ## Key Features
 

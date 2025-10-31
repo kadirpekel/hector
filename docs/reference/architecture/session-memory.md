@@ -20,8 +20,8 @@
 10. [Configuration Modes](#configuration-modes)
 11. [Database Schema](#database-schema)
 12. [Component Interactions](#component-interactions)
-13. [Concurrency & Thread Safety](#concurrency--thread-safety)
-14. [Error Handling & Recovery](#error-handling--recovery)
+13. [Concurrency & Thread Safety](#concurrency-thread-safety)
+14. [Error Handling & Recovery](#error-handling-recovery)
 15. [Testing Strategy](#testing-strategy)
 16. [Troubleshooting Guide](#troubleshooting-guide)
 

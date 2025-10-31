@@ -5,21 +5,29 @@ description: Understanding when and why to choose Hector for your AI agent deplo
 
 # Why Hector?
 
-## Built for Production, Not Prototyping
+## Built for Production from Day One
 
-Hector is designed for teams who need to **run AI agents in production** with the same operational rigor as their other services.
+Hector is designed for teams who need to **run AI agents in production** with the same operational rigor as their other services. Instead of adding production capabilities as an afterthought, Hector makes them foundational.
 
-### The Production Gap
+### Production-Ready by Design
 
-Most AI agent frameworks optimize for developer experience and rapid prototyping. They're excellent for experimentation but lack production essentials:
+Hector brings production-grade capabilities that enterprise teams expect:
 
-- ❌ No built-in observability
-- ❌ Configuration requires code changes and redeployment
-- ❌ No authentication/authorization primitives
-- ❌ Large resource footprint (Python runtimes)
-- ❌ Custom APIs instead of standards
+- **Built-in Observability**: Prometheus metrics and OpenTelemetry tracing out of the box
+- **Hot Configuration Reload**: Update agents without downtime or redeployment
+- **Security Primitives**: JWT authentication, RBAC, and command sandboxing built in
+- **Resource Efficient**: 30MB binary with <100ms startup for dense deployments
+- **Standards-Based**: Native A2A protocol support for interoperability
 
-Hector fills this gap.
+### Advanced Agent Capabilities
+
+Beyond production features, Hector provides sophisticated agentic capabilities through pure YAML configuration:
+
+- **Multi-Agent Orchestration**: Coordinate specialized agents with A2A-native federation
+- **Advanced Reasoning**: Chain-of-thought, tree search, and self-reflection strategies
+- **Flexible Memory**: Working memory with RAG and vector stores for long-term context
+- **Extensive Tooling**: Built-in tools plus MCP protocol for endless extensibility
+- **Real-Time Streaming**: Server-sent events for responsive user experiences
 
 ## Core Philosophy
 

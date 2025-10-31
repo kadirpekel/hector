@@ -304,5 +304,5 @@ curl http://localhost:4317
 
 - [Configuration Reference](../reference/configuration.md)
 - [Deployment Guide](../how-to/deploy-production.md)
-- [Example Configurations](../../configs/)
+- [Example Configurations](https://github.com/kadirpekel/hector/tree/main/configs)
 

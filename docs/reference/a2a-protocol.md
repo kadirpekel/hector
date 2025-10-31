@@ -28,8 +28,6 @@ The **Agent-to-Agent (A2A) Protocol** is an open standard for agent communicatio
 
 **Hector is 100% compliant with A2A Protocol v0.3.0**
 
-See [A2A_SPECIFICATION_COMPLIANCE.md](../../A2A_SPECIFICATION_COMPLIANCE.md) for detailed compliance audit.
-
 ### Protocol Native Design
 
 Hector is built **entirely** on A2A protocol types:
@@ -699,8 +697,6 @@ curl -X POST http://localhost:8080/v1/agents/assistant/tasks/task_abc123:cancel
 
 **A2A Protocol Specification:** https://a2a-protocol.org/latest/specification/
 
-**Hector Compliance Document:** [A2A_SPECIFICATION_COMPLIANCE.md](../../A2A_SPECIFICATION_COMPLIANCE.md)
-
 **Official Proto Files:** https://github.com/a2aproject/A2A/blob/main/specification/grpc/a2a.proto
 
 **Key Specification Sections:**
@@ -720,7 +716,6 @@ curl -X POST http://localhost:8080/v1/agents/assistant/tasks/task_abc123:cancel
 
 ## Next Steps
 
-- **[A2A Compliance](../../A2A_SPECIFICATION_COMPLIANCE.md)** - Detailed compliance audit
 - **[API Reference](api.md)** - Detailed API documentation
 - **[Architecture](architecture.md)** - System architecture
 - **[External Agents](../how-to/integrate-external-agents.md)** - Connect to A2A agents
