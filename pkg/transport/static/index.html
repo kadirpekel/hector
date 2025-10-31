@@ -38,6 +38,18 @@
             display: flex;
             flex-direction: column;
             border-right: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s ease, width 0.3s ease;
+        }
+        
+        .sidebar.hidden {
+            transform: translateX(-100%);
+            width: 0;
+            border-right: none;
+            overflow: hidden;
+        }
+        
+        .sidebar.hidden ~ .main-content {
+            margin-left: 0;
         }
 
         .sidebar-header {
@@ -88,6 +100,30 @@
         }
 
         .sidebar-settings-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        /* In minimal mode, hide hamburger and show logo link */
+        body:has(.sidebar.hidden) .sidebar-toggle,
+        .sidebar-hidden .sidebar-toggle {
+            display: none !important;
+        }
+        
+        body:has(.sidebar.hidden) .hector-logo-link,
+        .sidebar-hidden .hector-logo-link {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            margin-right: 8px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            transition: all 0.2s;
+        }
+        
+        body:has(.sidebar.hidden) .hector-logo-link:hover,
+        .sidebar-hidden .hector-logo-link:hover {
             background: rgba(255, 255, 255, 0.2);
         }
 
@@ -1034,11 +1070,38 @@
                 padding: 8px;
                 border-radius: 6px;
                 margin-right: 8px;
-                font-size: 18px;
                 transition: all 0.2s;
+                width: 40px;
+                height: 40px;
             }
 
             .sidebar-toggle:hover {
+                background: rgba(255, 255, 255, 0.2);
+            }
+            
+            .sidebar-toggle .hamburger-icon {
+                font-size: 18px;
+                display: block;
+            }
+            
+            /* In minimal mode on mobile, hide hamburger and show logo */
+            .sidebar-hidden .sidebar-toggle {
+                display: none !important;
+            }
+            
+            .sidebar-hidden .hector-logo-link {
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+                width: 40px;
+                height: 40px;
+                margin-right: 8px;
+                border-radius: 6px;
+                background: rgba(255, 255, 255, 0.1);
+                transition: all 0.2s;
+            }
+            
+            .sidebar-hidden .hector-logo-link:hover {
                 background: rgba(255, 255, 255, 0.2);
             }
 
@@ -1068,7 +1131,12 @@
     <div class="main-content">
         <!-- Top bar -->
         <div class="top-bar">
-            <button class="sidebar-toggle" onclick="toggleSidebar()" style="display: none;">☰</button>
+            <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+                <span class="hamburger-icon">☰</span>
+            </button>
+            <a href="https://gohector.dev" target="_blank" class="hector-logo-link" title="Hector - A2A Agent Framework" style="display: none;">
+                <img src="/letter-h.png" alt="Hector" style="width: 24px; height: 24px; object-fit: contain;">
+            </a>
             <div class="agent-info">
                 <div class="agent-name" id="agentName">Loading...</div>
                 <div class="agent-description" id="agentDescription"></div>
@@ -1105,6 +1173,10 @@
             <div class="checkbox-group">
                 <input type="checkbox" id="streaming" checked>
                 <label for="streaming">Enable streaming responses</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="minimalMode">
+                <label for="minimalMode">Minimal mode (hide sidebar)</label>
             </div>
         </div>
 
@@ -1147,6 +1219,8 @@
             
             loadSessions();
             fetchAgents();
+            setupMinimalModeCheckbox();
+            loadSidebarPreference();
             
             if (Object.keys(sessions).length === 0) {
                 newChat();
@@ -1266,6 +1340,55 @@
 
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('expanded');
+        }
+        
+        function toggleSidebarVisibility() {
+            const sidebar = document.getElementById('sidebar');
+            const body = document.body;
+            
+            sidebar.classList.toggle('hidden');
+            
+            // Add class to body for fallback CSS
+            if (sidebar.classList.contains('hidden')) {
+                body.classList.add('sidebar-hidden');
+            } else {
+                body.classList.remove('sidebar-hidden');
+            }
+            
+            // Save preference to localStorage
+            const isHidden = sidebar.classList.contains('hidden');
+            localStorage.setItem('hector_sidebar_hidden', isHidden.toString());
+        }
+        
+        function loadSidebarPreference() {
+            const isHidden = localStorage.getItem('hector_sidebar_hidden') === 'true';
+            const sidebar = document.getElementById('sidebar');
+            const body = document.body;
+            const minimalModeCheckbox = document.getElementById('minimalMode');
+            
+            if (isHidden) {
+                sidebar.classList.add('hidden');
+                body.classList.add('sidebar-hidden');
+                if (minimalModeCheckbox) {
+                    minimalModeCheckbox.checked = true;
+                }
+            } else {
+                sidebar.classList.remove('hidden');
+                body.classList.remove('sidebar-hidden');
+                if (minimalModeCheckbox) {
+                    minimalModeCheckbox.checked = false;
+                }
+            }
+        }
+        
+        // Set up minimal mode checkbox handler
+        function setupMinimalModeCheckbox() {
+            const minimalModeCheckbox = document.getElementById('minimalMode');
+            if (minimalModeCheckbox) {
+                minimalModeCheckbox.addEventListener('change', function() {
+                    toggleSidebarVisibility();
+                });
+            }
         }
 
         function clearMessages() {
