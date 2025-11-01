@@ -11,11 +11,10 @@ import (
 
 func NewQdrantDatabaseProvider() (DatabaseProvider, error) {
 	config := &config.DatabaseProviderConfig{
-		Type:    "qdrant",
-		Host:    "localhost",
-		Port:    6334,
-		Timeout: 30,
-		UseTLS:  false,
+		Type:   "qdrant",
+		Host:   "localhost",
+		Port:   6334,
+		UseTLS: false,
 	}
 
 	return NewQdrantDatabaseProviderFromConfig(config)

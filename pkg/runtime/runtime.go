@@ -77,6 +77,12 @@ func NewWithConfig(cfg *config.Config) (*Runtime, error) {
 	// Resolve the base URL from A2A server configuration
 	baseURL := resolveBaseURL(cfg)
 
+	// Get preferred transport from config (global default)
+	preferredTransport := cfg.Global.A2AServer.PreferredTransport
+	if preferredTransport == "" {
+		preferredTransport = "json-rpc" // Default
+	}
+
 	var failures []string
 	successCount := 0
 
@@ -94,7 +100,7 @@ func NewWithConfig(cfg *config.Config) (*Runtime, error) {
 
 		if agentCfgCopy.Type == "a2a" {
 
-			externalAgent, extErr := agent.NewExternalA2AAgent(agentCfgCopy)
+			externalAgent, extErr := agent.NewExternalA2AAgent(agentID, agentCfgCopy)
 			if extErr != nil {
 				failures = append(failures, fmt.Sprintf("%s: %v", agentID, extErr))
 				log.Printf("  Warning: Failed to create external agent '%s': %v", agentID, extErr)
@@ -103,7 +109,7 @@ func NewWithConfig(cfg *config.Config) (*Runtime, error) {
 			agentInstance = externalAgent
 		} else {
 
-			agentInstance, err = agent.NewAgent(agentID, agentCfgCopy, componentManager, agentRegistry, baseURL)
+			agentInstance, err = agent.NewAgent(agentID, agentCfgCopy, componentManager, agentRegistry, baseURL, preferredTransport)
 			if err != nil {
 				failures = append(failures, fmt.Sprintf("%s: %v", agentID, err))
 				log.Printf("  Warning: Failed to create native agent '%s': %v", agentID, err)

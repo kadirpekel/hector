@@ -27,16 +27,17 @@ const (
 type Agent struct {
 	pb.UnimplementedA2AServiceServer
 
-	id          string // Agent ID (config key, URL-safe)
-	name        string // Display name
-	description string
-	config      *config.AgentConfig
-	services    reasoning.AgentServices
-	taskWorkers chan struct{}
-	baseURL     string // Server base URL for agent card URL construction
+	id                 string // Agent ID (config key, URL-safe)
+	name               string // Display name
+	description        string
+	config             *config.AgentConfig
+	services           reasoning.AgentServices
+	taskWorkers        chan struct{}
+	baseURL            string // Server base URL for agent card URL construction
+	preferredTransport string // Preferred A2A transport (grpc, json-rpc, rest)
 }
 
-func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr interface{}, registry *AgentRegistry, baseURL string) (*Agent, error) {
+func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr interface{}, registry *AgentRegistry, baseURL string, preferredTransport string) (*Agent, error) {
 	if agentID == "" {
 		return nil, fmt.Errorf("agent ID cannot be empty")
 	}
@@ -57,14 +58,24 @@ func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr inte
 		taskWorkers = make(chan struct{}, agentConfig.Task.WorkerPool)
 	}
 
+	// Determine preferred transport: agent-level override > global > default
+	transport := preferredTransport
+	if agentConfig.A2A != nil && agentConfig.A2A.PreferredTransport != "" {
+		transport = agentConfig.A2A.PreferredTransport
+	}
+	if transport == "" {
+		transport = "json-rpc" // Default
+	}
+
 	return &Agent{
-		id:          agentID,
-		name:        agentConfig.Name,
-		description: agentConfig.Description,
-		config:      agentConfig,
-		services:    services,
-		taskWorkers: taskWorkers,
-		baseURL:     baseURL,
+		id:                 agentID,
+		name:               agentConfig.Name,
+		description:        agentConfig.Description,
+		config:             agentConfig,
+		services:           services,
+		taskWorkers:        taskWorkers,
+		baseURL:            baseURL,
+		preferredTransport: transport,
 	}, nil
 }
 
@@ -78,9 +89,10 @@ func (a *Agent) ClearHistory(sessionID string) error {
 
 func (a *Agent) GetAgentCardSimple() *pb.AgentCard {
 	return &pb.AgentCard{
-		Name:        a.name,
-		Description: a.description,
-		Version:     a.getVersion(),
+		Name:               a.name,
+		Description:        a.description,
+		Version:            a.getVersion(),
+		PreferredTransport: a.preferredTransport,
 		Capabilities: &pb.AgentCapabilities{
 			Streaming: true,
 		},

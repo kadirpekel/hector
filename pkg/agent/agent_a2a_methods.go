@@ -280,7 +280,7 @@ func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (
 		Version:            a.getVersion(),
 		ProtocolVersion:    "0.3.0",
 		Url:                agentURL,
-		PreferredTransport: "json-rpc",
+		PreferredTransport: a.preferredTransport, // Use configured transport
 		Capabilities: &pb.AgentCapabilities{
 			Streaming:              true,
 			PushNotifications:      false,

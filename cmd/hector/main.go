@@ -179,15 +179,15 @@ func createZeroConfig(command string) *config.Config {
 func isClientModeCommand(command string) bool {
 	switch command {
 	case "list":
-		return cli.CLI.List.Server != ""
+		return cli.CLI.List.URL != ""
 	case "info <agent>":
-		return cli.CLI.Info.Server != ""
+		return cli.CLI.Info.URL != ""
 	case "call <message>":
-		return cli.CLI.Call.Server != ""
+		return cli.CLI.Call.URL != ""
 	case "chat":
-		return cli.CLI.Chat.Server != ""
+		return cli.CLI.Chat.URL != ""
 	case "task get <agent> <task-id>", "task cancel <agent> <task-id>":
-		return cli.CLI.Task.Server != ""
+		return cli.CLI.Task.URL != ""
 	default:
 		return false
 	}

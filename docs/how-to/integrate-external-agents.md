@@ -89,6 +89,10 @@ agents:
     tools: ["search"]
   
   # External A2A agent
+  # The URL can point to:
+  # 1. Service base URL (e.g., http://service.com) - auto-discovers agents
+  # 2. Agent card URL (e.g., http://service.com/.well-known/agent-card.json)
+  # 3. Agent-specific URL (e.g., http://service.com/v1/agents/specialist)
   external_specialist:
     type: "a2a"
     url: "https://external-agent.example.com"
@@ -101,6 +105,25 @@ llms:
     type: "openai"
     model: "gpt-4o-mini"
     api_key: "${OPENAI_API_KEY}"
+```
+
+**Note:** Hector's `UniversalA2AClient` automatically:
+1. Discovers the agent card from the provided URL
+2. Detects supported transports (gRPC, REST, JSON-RPC)
+3. Selects the optimal transport
+4. Handles authentication across all transports
+
+The config key (`external_specialist`) is used as the remote agent ID by default. If the remote agent has a different ID, use `target_agent_id`:
+
+```yaml
+agents:
+  my_research_service:  # Local name (flexible)
+    type: "a2a"
+    url: "https://external-agent.example.com"
+    target_agent_id: "research_specialist"  # Remote agent's actual ID
+    credentials:
+      type: "bearer"
+      token: "${EXTERNAL_AGENT_TOKEN}"
 ```
 
 ### Step 3: Use External Agent
@@ -213,6 +236,81 @@ agents:
     type: "a2a"
     url: "https://public-agent.example.com"
     # No credentials block
+```
+
+---
+
+## Agent Naming and target_agent_id
+
+### Default Behavior: Config Key as Agent ID
+
+By default, Hector uses the config key as the remote agent ID:
+
+```yaml
+agents:
+  weather_assistant:  # Config key = Remote agent ID
+    type: "a2a"
+    url: "https://weather-service.example.com"
+```
+
+When calling `agent_call("weather_assistant", "...")`, Hector sends a request to the remote service asking for agent `weather_assistant`.
+
+### Explicit target_agent_id
+
+Use `target_agent_id` when you want a different local name than the remote agent ID:
+
+```yaml
+agents:
+  my_weather_service:  # Local name (what you call it)
+    type: "a2a"
+    url: "https://weather-service.example.com"
+    target_agent_id: "weather_assistant"  # Remote agent ID
+```
+
+Now you call `agent_call("my_weather_service", "...")` locally, but Hector routes to the remote agent named `weather_assistant`.
+
+### Use Cases for target_agent_id
+
+**1. Descriptive Local Names:**
+```yaml
+agents:
+  production_legal_service:
+    type: "a2a"
+    url: "https://legal.prod.example.com"
+    target_agent_id: "legal_v2"  # Remote agent's actual ID
+```
+
+**2. Multiple Instances of Same Remote Agent:**
+```yaml
+agents:
+  us_weather:
+    type: "a2a"
+    url: "https://us.weather.example.com"
+    target_agent_id: "weather_assistant"
+  
+  eu_weather:
+    type: "a2a"
+    url: "https://eu.weather.example.com"
+    target_agent_id: "weather_assistant"
+```
+
+**3. Version Migration:**
+```yaml
+agents:
+  research_service:
+    type: "a2a"
+    url: "https://research.example.com"
+    target_agent_id: "researcher_v3"  # Remote upgraded to v3
+    # Local code still calls "research_service"
+```
+
+**4. Decoupling from Remote Naming:**
+```yaml
+agents:
+  my_assistant:  # Your preferred name
+    type: "a2a"
+    url: "https://partner.example.com"
+    target_agent_id: "partner_assistant_1234"  # Their ID
 ```
 
 ---
@@ -642,6 +740,69 @@ agents:
 ```bash
 hector call coordinator \
   "Analyze the legal and financial implications of the proposed merger"
+```
+
+---
+
+## Using CLI Client Mode
+
+Hector's CLI can connect to ANY A2A-compliant service (not just Hector servers) using the `--url` flag:
+
+### Connect to A2A Service
+
+```bash
+# List agents from any A2A service (auto-discovers)
+hector list --url http://remote-service:8080
+
+# Get agent info
+hector info --url http://remote-service:8080 --agent researcher
+
+# Call agent
+hector call "task" --url http://remote-service:8080 --agent researcher
+
+# Interactive chat
+hector chat --url http://remote-service:8080 --agent researcher
+```
+
+### Direct Agent Card URL
+
+If you know the agent card URL, point directly to it:
+
+```bash
+# Service root
+hector list --url http://service/.well-known/agent-card.json
+
+# Agent-specific
+hector call "task" --url http://service/v1/agents/researcher/.well-known/agent-card.json
+
+# With authentication
+hector call "task" --url http://service/v1/agents/researcher/.well-known/agent-card.json --token "eyJ..."
+```
+
+### Multi-Vendor Interoperability
+
+The CLI works with ANY A2A v0.3.0 compliant service:
+
+```bash
+# Connect to Hector service
+hector call "task" --url http://hector-service:8080 --agent assistant
+
+# Connect to other A2A implementation
+hector call "task" --url http://other-vendor:8080 --agent some-agent
+
+# Connect to commercial A2A SaaS
+hector call "analyze contract" --url https://legal-ai.example.com --agent legal_assistant --token "$TOKEN"
+```
+
+### Environment Variables
+
+```bash
+export HECTOR_URL="https://agents.company.com"
+export HECTOR_TOKEN="eyJ..."
+
+# Now --url and --token are optional
+hector list
+hector call "task" --agent researcher
 ```
 
 ---

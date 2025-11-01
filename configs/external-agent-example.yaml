@@ -10,17 +10,28 @@ agents:
     llm: "default-llm"
     sub_agents:
       - external-specialist
-      - api-key-agent
+      - remote_api_agent
       - basic-auth-agent
+      - weather_v2
+  
+  # Example 1: Config key matches remote agent ID (simple case)
+  # UniversalA2AClient automatically:
+  #  1. Discovers agent card from URL
+  #  2. Detects supported transports (gRPC, REST, JSON-RPC)
+  #  3. Selects optimal transport
+  # target_agent_id defaults to "external-specialist" (the config key)
   external-specialist:
     type: "a2a"
     name: "External Specialist"
     description: "External A2A agent that requires JWT authentication"
-    url: "https://specialist-agent.example.com"
+    url: "https://specialist-agent.example.com"  # Can be service base or agent card URL
     credentials:
       type: "bearer"
       token: "${EXTERNAL_AGENT_JWT_TOKEN:-placeholder-token-for-example}"
-  api-key-agent:
+  
+  # Example 2: Config key matches remote agent ID
+  # If remote agent has ID "remote_api_agent", use that as the config key
+  remote_api_agent:
     type: "a2a"
     name: "API Key Agent"
     description: "External agent that uses API key authentication"
@@ -29,6 +40,8 @@ agents:
       type: "api_key"
       api_key: "${EXTERNAL_API_KEY:-placeholder-api-key}"
       api_key_header: "X-API-Key"  
+  
+  # Example 3: HTTP Basic authentication
   basic-auth-agent:
     type: "a2a"
     name: "Basic Auth Agent"
@@ -37,4 +50,14 @@ agents:
     credentials:
       type: "basic"
       username: "${AGENT_USERNAME:-placeholder-user}"
-      password: "${AGENT_PASSWORD:-placeholder-password}"  
+      password: "${AGENT_PASSWORD:-placeholder-password}"
+  
+  # Example 4: Config key matches remote agent's actual ID
+  # The remote service has an agent with ID "weather_v2"
+  weather_v2:
+    type: "a2a"
+    name: "My Custom Weather Service"
+    description: "Weather agent - config key matches remote ID"
+    url: "https://weather.example.com"
+
+

@@ -31,9 +31,10 @@ func TestLLMProviderConfig_SetDefaults(t *testing.T) {
 				if config.MaxTokens != 8000 {
 					t.Errorf("Default max_tokens = %v, want %v", config.MaxTokens, 8000)
 				}
-// 				if config.Timeout != 60 {
-// 					t.Errorf("Default timeout = %v, want %v", config.Timeout, 60)
-				}
+				// Timeout field was removed
+				// if config.Timeout != 60 {
+				// 	t.Errorf("Default timeout = %v, want %v", config.Timeout, 60)
+				// }
 				if config.MaxRetries != 5 {
 					t.Errorf("Default max_retries = %v, want %v", config.MaxRetries, 5)
 				}
@@ -122,9 +123,10 @@ func TestLLMProviderConfig_SetDefaults(t *testing.T) {
 				if config.MaxTokens != 8000 {
 					t.Errorf("Zero max_tokens should be set to default: %v", config.MaxTokens)
 				}
-// 				if config.Timeout != 60 {
-// 					t.Errorf("Zero timeout should be set to default: %v", config.Timeout)
-				}
+				// Timeout field was removed
+				// if config.Timeout != 60 {
+				// 	t.Errorf("Zero timeout should be set to default: %v", config.Timeout)
+				// }
 			},
 		},
 	}
@@ -167,9 +169,10 @@ func TestDatabaseProviderConfig_SetDefaults(t *testing.T) {
 				if config.Port != 6334 {
 					t.Errorf("Default port = %v, want %v", config.Port, 6334)
 				}
-// 				if config.Timeout != 30 {
-// 					t.Errorf("Default timeout = %v, want %v", config.Timeout, 30)
-				}
+				// Timeout field was removed from DatabaseProviderConfig
+				// if config.Timeout != 30 {
+				// 	t.Errorf("Default timeout = %v, want %v", config.Timeout, 30)
+				// }
 			},
 		},
 		{
@@ -188,26 +191,28 @@ func TestDatabaseProviderConfig_SetDefaults(t *testing.T) {
 				if config.Port != 6334 {
 					t.Errorf("Default port = %v, want %v", config.Port, 6334)
 				}
-// 				if config.Timeout != 30 {
-// 					t.Errorf("Default timeout = %v, want %v", config.Timeout, 30)
-				}
+				// Timeout field was removed
+				// if config.Timeout != 30 {
+				// 	t.Errorf("Default timeout = %v, want %v", config.Timeout, 30)
+				// }
 			},
 		},
 		{
 			name: "zero_values_set_defaults",
 			config: DatabaseProviderConfig{
-				Type:    "qdrant",
-				Host:    "localhost",
-				Port:    0,
-				Timeout: 0,
+				Type: "qdrant",
+				Host: "localhost",
+				Port: 0,
+				// Timeout field was removed from DatabaseProviderConfig
 			},
 			validateConfig: func(t *testing.T, config DatabaseProviderConfig) {
 				if config.Port != 6334 {
 					t.Errorf("Zero port should be set to default: %v", config.Port)
 				}
-// 				if config.Timeout != 30 {
-// 					t.Errorf("Zero timeout should be set to default: %v", config.Timeout)
-				}
+				// Timeout field was removed
+				// if config.Timeout != 30 {
+				// 	t.Errorf("Zero timeout should be set to default: %v", config.Timeout)
+				// }
 			},
 		},
 	}
@@ -242,9 +247,10 @@ func TestEmbedderProviderConfig_SetDefaults(t *testing.T) {
 				if config.Dimension != 768 {
 					t.Errorf("Default dimension = %v, want %v", config.Dimension, 768)
 				}
-// 				if config.Timeout != 30 {
-// 					t.Errorf("Default timeout = %v, want %v", config.Timeout, 30)
-				}
+				// Timeout field was removed from EmbedderProviderConfig
+				// if config.Timeout != 30 {
+				// 	t.Errorf("Default timeout = %v, want %v", config.Timeout, 30)
+				// }
 				if config.MaxRetries != 3 {
 					t.Errorf("Default max_retries = %v, want %v", config.MaxRetries, 3)
 				}
@@ -274,20 +280,21 @@ func TestEmbedderProviderConfig_SetDefaults(t *testing.T) {
 		{
 			name: "zero_values_set_defaults",
 			config: EmbedderProviderConfig{
-				Type:       "ollama",
-				Model:      "nomic-embed-text",
-				Host:       "http://localhost:11434",
-				Dimension:  0,
-				Timeout:    0,
+				Type:      "ollama",
+				Model:     "nomic-embed-text",
+				Host:      "http://localhost:11434",
+				Dimension: 0,
+				// Timeout field was removed from EmbedderProviderConfig
 				MaxRetries: 0,
 			},
 			validateConfig: func(t *testing.T, config EmbedderProviderConfig) {
 				if config.Dimension != 768 {
 					t.Errorf("Zero dimension should be set to default: %v", config.Dimension)
 				}
-// 				if config.Timeout != 30 {
-// 					t.Errorf("Zero timeout should be set to default: %v", config.Timeout)
-				}
+				// Timeout field was removed
+				// if config.Timeout != 30 {
+				// 	t.Errorf("Zero timeout should be set to default: %v", config.Timeout)
+				// }
 				if config.MaxRetries != 3 {
 					t.Errorf("Zero max_retries should be set to default: %v", config.MaxRetries)
 				}

@@ -313,20 +313,23 @@ hector list [flags]
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `--server URL` | string | Connect to remote server |
+| `--url URL` | string | Agent card URL or service base URL (enables client mode) |
 | `--token TOKEN` | string | Authentication token |
 
 **Examples:**
 
 ```bash
 # List local agents
-hector list
+hector list --config config.yaml
 
-# List agents on remote server
-hector list --server http://remote:8080
+# List agents from A2A service (discovers agents automatically)
+hector list --url http://remote:8080
+
+# Direct agent card URL
+hector list --url http://remote:8080/.well-known/agent-card.json
 
 # With authentication
-hector list --server http://remote:8080 --token "eyJ..."
+hector list --url http://remote:8080 --token "eyJ..."
 ```
 
 **Output:**
@@ -352,23 +355,26 @@ hector info AGENT [flags]
 
 | Argument | Type | Description | Required |
 |----------|------|-------------|----------|
-| `AGENT` | string | Agent name | Yes |
+| `AGENT` | string | Agent name (optional if URL points to specific agent) | Conditional |
 
 **Flags:**
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `--server URL` | string | Connect to remote server |
+| `--url URL` | string | Agent card URL or service base URL |
 | `--token TOKEN` | string | Authentication token |
 
 **Examples:**
 
 ```bash
 # Get info about local agent
-hector info assistant
+hector info assistant --config config.yaml
 
-# Get info about remote agent
-hector info assistant --server http://remote:8080
+# Get info from A2A service
+hector info assistant --url http://remote:8080
+
+# Direct agent card URL (agent name optional)
+hector info --url http://remote:8080/v1/agents/assistant/.well-known/agent-card.json
 ```
 
 **Output:**
@@ -402,8 +408,8 @@ hector call MESSAGE [flags]
 
 | Flag | Type | Description | Default |
 |------|------|-------------|---------|
-| `--agent NAME` | string | Agent name (required with `--config` or `--server`) | - |
-| `--server URL` | string | Connect to remote server | - |
+| `--agent NAME` | string | Agent name (required with `--config`, optional if `--url` points to specific agent) | - |
+| `--url URL` | string | Agent card URL or service base URL (enables client mode) | - |
 | `--token TOKEN` | string | Authentication token | - |
 | `--[no-]stream` | bool | Enable/disable streaming | `true` (use `--no-stream` to disable) |
 | `--session ID` | string | Session ID for context | - |
@@ -432,8 +438,12 @@ hector call "Write a poem about Go" --tools
 hector call "What is the capital of France?" --agent assistant --config config.yaml
 hector call "Fix the bug" --agent coder --config config.yaml --session sess_123
 
-# Client mode (--agent flag REQUIRED)
-hector call "Hello" --agent assistant --server http://remote:8080 --token "eyJ..."
+# Client mode - service base URL (--agent flag REQUIRED)
+hector call "Hello" --agent assistant --url http://remote:8080 --token "eyJ..."
+
+# Client mode - direct agent card URL (--agent flag OPTIONAL)
+hector call "Hello" --url http://remote:8080/v1/agents/assistant/.well-known/agent-card.json --token "eyJ..."
+hector call "Hello" --url http://remote:8080/.well-known/agent-card.json  # Single-agent service
 
 # No streaming
 hector call "Hello" --agent assistant --config config.yaml --no-stream
@@ -458,8 +468,8 @@ hector chat [flags]
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `--agent NAME` | string | Agent name (required with `--config` or `--server`) |
-| `--server URL` | string | Connect to remote server |
+| `--agent NAME` | string | Agent name (required with `--config`, optional if `--url` points to specific agent) |
+| `--url URL` | string | Agent card URL or service base URL |
 | `--token TOKEN` | string | Authentication token |
 | `--session ID` | string | Session ID for context |
 | `--[no-]stream` | bool | Enable/disable streaming (default: enabled) |
@@ -488,9 +498,12 @@ hector chat --tools --model gpt-4o
 hector chat --agent assistant --config config.yaml
 hector chat --agent coder --config config.yaml --session sess_123
 
-# Client mode (--agent flag REQUIRED)
-hector chat --agent assistant --server http://remote:8080
-hector chat --agent assistant --server http://remote:8080 --token "eyJ..."
+# Client mode - service base URL (--agent flag REQUIRED)
+hector chat --agent assistant --url http://remote:8080
+hector chat --agent assistant --url http://remote:8080 --token "eyJ..."
+
+# Client mode - direct agent card URL (--agent flag OPTIONAL)
+hector chat --url http://remote:8080/v1/agents/assistant/.well-known/agent-card.json
 
 # Flags flexible positioning (Kong feature)
 hector chat --config config.yaml --agent assistant
@@ -637,22 +650,45 @@ hector serve --config config.yaml
 
 ### Client Mode
 
-Connect to a remote A2A server.
+Connect to any A2A-compliant agent service.
 
 **Triggers:**
-- Any command with `--server` flag
+- Any command with `--url` flag
 
 **Supports:**
-- Only client-side flags (`--server`, `--token`, `--stream`)
+- Agent card URL (any A2A service)
+- Service base URL (auto-discovers agents)
+- All A2A transports (gRPC, REST, JSON-RPC)
 
 **Does NOT support:**
-- Configuration files
-- Zero-config flags
-- (Server controls configuration)
+- Configuration files (the service defines its own config)
+- Zero-config flags (the service controls agent behavior)
 
 **Example:**
 ```bash
-hector call "Hello" --agent assistant --server http://remote:8080
+# Service base URL (multi-agent service)
+hector call "Hello" --agent assistant --url http://remote:8080
+
+# Direct agent card URL (single agent)
+hector call "Hello" --url http://remote:8080/.well-known/agent-card.json
+
+# With authentication
+hector call "Hello" --agent assistant --url http://remote:8080 --token "eyJ..."
+```
+
+**A2A Interoperability:**
+
+The `--url` flag makes Hector's CLI work with ANY A2A-compliant service, not just Hector servers:
+
+```bash
+# Connect to Hector service
+hector call "task" --url http://hector-service:8080 --agent assistant
+
+# Connect to ANY other A2A service
+hector call "task" --url http://other-a2a-service:8080 --agent some-agent
+
+# Direct agent card discovery
+hector info --url http://service/.well-known/agent-card.json
 ```
 
 ---
@@ -667,6 +703,8 @@ Hector recognizes these environment variables:
 | `ANTHROPIC_API_KEY` | Anthropic API key | `sk-ant-...` |
 | `GEMINI_API_KEY` | Google Gemini API key | `AI...` |
 | `HECTOR_CONFIG` | Default config file path | `/etc/hector/config.yaml` |
+| `HECTOR_URL` | Default agent card URL or service base URL (client mode) | `http://localhost:8080` |
+| `HECTOR_TOKEN` | Authentication token | `eyJ...` |
 | `QDRANT_HOST` | Qdrant host | `localhost` |
 | `OLLAMA_HOST` | Ollama host | `http://localhost:11434` |
 | `LOG_LEVEL` | Default log level | `info` |
@@ -739,11 +777,14 @@ hector serve \
 ### Remote Agent Access
 
 ```bash
-export HECTOR_SERVER="https://agents.company.com"
+export HECTOR_URL="https://agents.company.com"
 export HECTOR_TOKEN="eyJ..."
 
-hector list --server $HECTOR_SERVER --token $HECTOR_TOKEN
-hector call "task" --agent assistant --server $HECTOR_SERVER --token $HECTOR_TOKEN
+hector list --url $HECTOR_URL --token $HECTOR_TOKEN
+hector call "task" --agent assistant --url $HECTOR_URL --token $HECTOR_TOKEN
+
+# Or direct agent card URL
+hector call "task" --url https://agents.company.com/.well-known/agent-card.json --token $HECTOR_TOKEN
 ```
 
 ### Scripting

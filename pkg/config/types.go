@@ -370,7 +370,8 @@ type AgentConfig struct {
 
 	Visibility string `yaml:"visibility,omitempty"`
 
-	URL         string            `yaml:"url,omitempty"`
+	// External A2A agent configuration
+	URL         string            `yaml:"url,omitempty"` // Agent card URL or service base URL
 	Credentials *AgentCredentials `yaml:"credentials,omitempty"`
 
 	LLM              string                  `yaml:"llm,omitempty"`
@@ -1580,9 +1581,10 @@ func (c *PerformanceConfig) SetDefaults() {
 }
 
 type A2AServerConfig struct {
-	Host    string `yaml:"host"`
-	Port    int    `yaml:"port"`
-	BaseURL string `yaml:"base_url,omitempty"`
+	Host               string `yaml:"host"`
+	Port               int    `yaml:"port"`
+	BaseURL            string `yaml:"base_url,omitempty"`
+	PreferredTransport string `yaml:"preferred_transport,omitempty"` // "grpc", "json-rpc", or "rest" (default: "json-rpc")
 }
 
 func (c *A2AServerConfig) IsEnabled() bool {
@@ -1687,20 +1689,23 @@ func (c *TracingConfig) SetDefaults() {
 }
 
 type A2ACardConfig struct {
-	Version string `yaml:"version"`
-
-	InputModes []string `yaml:"input_modes"`
-
-	OutputModes []string `yaml:"output_modes"`
-
-	Skills []A2ASkillConfig `yaml:"skills"`
-
-	Provider *A2AProviderConfig `yaml:"provider,omitempty"`
+	Version            string             `yaml:"version"`
+	InputModes         []string           `yaml:"input_modes"`
+	OutputModes        []string           `yaml:"output_modes"`
+	Skills             []A2ASkillConfig   `yaml:"skills"`
+	Provider           *A2AProviderConfig `yaml:"provider,omitempty"`
+	PreferredTransport string             `yaml:"preferred_transport,omitempty"` // Override global preferred_transport for this agent
 
 	DocumentationURL string `yaml:"documentation_url,omitempty"`
 }
 
 func (c *A2ACardConfig) Validate() error {
+	// If only preferred_transport is set, it's valid (lightweight config)
+	if c.PreferredTransport != "" && c.Version == "" && len(c.InputModes) == 0 && len(c.OutputModes) == 0 && len(c.Skills) == 0 {
+		return nil
+	}
+
+	// Otherwise, validate full A2A config
 	if c.Version == "" {
 		return fmt.Errorf("a2a.version is required")
 	}

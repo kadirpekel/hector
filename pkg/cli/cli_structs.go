@@ -32,9 +32,9 @@ type ZeroConfigFlags struct {
 }
 
 type ClientModeFlags struct {
-	Server string `help:"A2A server URL (enables client mode)" env:"HECTOR_SERVER" placeholder:"URL"`
-	Token  string `help:"Authentication token for server access" env:"HECTOR_TOKEN"`
-	Agent  string `help:"Agent name (required when using --server or --config)" placeholder:"AGENT"`
+	URL   string `help:"Agent card URL or service base URL (enables client mode)" env:"HECTOR_URL" placeholder:"URL"`
+	Token string `help:"Authentication token for agent access" env:"HECTOR_TOKEN"`
+	Agent string `help:"Agent name (optional if URL points to specific agent)" placeholder:"AGENT"`
 }
 
 type VersionCmd struct {

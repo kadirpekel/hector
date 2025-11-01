@@ -217,8 +217,7 @@ databases:
   qdrant:
     type: "qdrant"
     host: "${QDRANT_HOST:-localhost}"
-    port: 6334  
-    timeout: 300
+    port: 6334
 embedders:
   embedder:
     type: "ollama"

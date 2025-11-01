@@ -32,11 +32,19 @@ func VersionCommand(args *VersionCmd, cfg *config.Config, mode CLIMode) error {
 func ListCommand(args *ListCmd, cfg *config.Config, mode CLIMode) error {
 	switch mode {
 	case ModeClient:
+		// Use UniversalA2AClient to list agents from any A2A service
+		url := args.URL
+		if url == "" {
+			return fmt.Errorf("--url is required in client mode (agent card URL or service base URL)")
+		}
 
-		httpClient := runtime.NewHTTPClient(args.Server, args.Token)
-		defer httpClient.Close()
+		a2aClient, err := client.NewUniversalA2AClient(url, "", args.Token)
+		if err != nil {
+			return fmt.Errorf("failed to create A2A client: %w", err)
+		}
+		defer a2aClient.Close()
 
-		agents, err := httpClient.ListAgents(context.Background())
+		agents, err := a2aClient.ListAgents(context.Background())
 		if err != nil {
 			return fmt.Errorf("failed to list agents: %w", err)
 		}
@@ -45,13 +53,13 @@ func ListCommand(args *ListCmd, cfg *config.Config, mode CLIMode) error {
 		return nil
 
 	case ModeLocalConfig:
-
+		// Local mode - list from config
 		agents := buildAgentCardsFromConfig(cfg)
 		DisplayAgentList(agents, "Local Mode")
 		return nil
 
 	case ModeLocalZeroConfig:
-
+		// Zero-config mode
 		fmt.Println("\n📋 Available Agents (Local Mode)")
 		fmt.Printf("Found 1 agent(s):\n\n")
 		fmt.Printf("• Assistant (v1.0.0)\n")
@@ -69,11 +77,19 @@ func ListCommand(args *ListCmd, cfg *config.Config, mode CLIMode) error {
 func InfoCommand(args *InfoCmd, cfg *config.Config, mode CLIMode) error {
 	switch mode {
 	case ModeClient:
+		// Use UniversalA2AClient to get agent card from any A2A service
+		url := args.URL
+		if url == "" {
+			return fmt.Errorf("--url is required in client mode (agent card URL or service base URL)")
+		}
 
-		httpClient := runtime.NewHTTPClient(args.Server, args.Token)
-		defer httpClient.Close()
+		a2aClient, err := client.NewUniversalA2AClient(url, args.Agent, args.Token)
+		if err != nil {
+			return fmt.Errorf("failed to create A2A client: %w", err)
+		}
+		defer a2aClient.Close()
 
-		card, err := httpClient.GetAgentCard(context.Background(), args.Agent)
+		card, err := a2aClient.GetAgentCard(context.Background(), args.Agent)
 		if err != nil {
 			return fmt.Errorf("failed to get agent card: %w", err)
 		}
@@ -82,7 +98,7 @@ func InfoCommand(args *InfoCmd, cfg *config.Config, mode CLIMode) error {
 		return nil
 
 	case ModeLocalConfig:
-
+		// Local mode - build from config
 		if err := cfg.ValidateAgent(args.Agent); err != nil {
 			return err
 		}
@@ -92,7 +108,7 @@ func InfoCommand(args *InfoCmd, cfg *config.Config, mode CLIMode) error {
 		return nil
 
 	case ModeLocalZeroConfig:
-
+		// Zero-config mode
 		if args.Agent != config.DefaultAgentName {
 			return fmt.Errorf("agent '%s' not found. In zero-config mode, only 'assistant' is available", args.Agent)
 		}
@@ -319,37 +335,54 @@ func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streamin
 }
 
 type ClientArgs interface {
-	GetServer() string
+	GetURL() string
 	GetToken() string
 	GetAgent() string
 }
 
-func (c *CallCmd) GetServer() string { return c.Server }
-func (c *CallCmd) GetToken() string  { return c.Token }
-func (c *CallCmd) GetAgent() string  { return c.Agent }
+func (c *CallCmd) GetURL() string   { return c.URL }
+func (c *CallCmd) GetToken() string { return c.Token }
+func (c *CallCmd) GetAgent() string { return c.Agent }
 
-func (c *ChatCmd) GetServer() string { return c.Server }
-func (c *ChatCmd) GetToken() string  { return c.Token }
-func (c *ChatCmd) GetAgent() string  { return c.Agent }
+func (c *ChatCmd) GetURL() string   { return c.URL }
+func (c *ChatCmd) GetToken() string { return c.Token }
+func (c *ChatCmd) GetAgent() string { return c.Agent }
 
-func (t *TaskGetCmd) GetServer() string { return CLI.Task.Server }
-func (t *TaskGetCmd) GetToken() string  { return CLI.Task.Token }
-func (t *TaskGetCmd) GetAgent() string  { return t.Agent }
+func (t *TaskGetCmd) GetURL() string   { return CLI.Task.URL }
+func (t *TaskGetCmd) GetToken() string { return CLI.Task.Token }
+func (t *TaskGetCmd) GetAgent() string { return t.Agent }
 
-func (t *TaskCancelCmd) GetServer() string { return CLI.Task.Server }
-func (t *TaskCancelCmd) GetToken() string  { return CLI.Task.Token }
-func (t *TaskCancelCmd) GetAgent() string  { return t.Agent }
+func (t *TaskCancelCmd) GetURL() string   { return CLI.Task.URL }
+func (t *TaskCancelCmd) GetToken() string { return CLI.Task.Token }
+func (t *TaskCancelCmd) GetAgent() string { return t.Agent }
 
 func createClient[T ClientArgs](args T, cfg *config.Config, mode CLIMode) (client.A2AClient, error) {
 	switch mode {
 	case ModeClient:
+		// Use UniversalA2AClient for true A2A interoperability
+		// Auto-discovers agent card, chooses transport (gRPC/REST/JSON-RPC)
+		// Works with ANY A2A-compliant service (not just Hector)
+		url := args.GetURL()
+		if url == "" {
+			return nil, fmt.Errorf("--url is required in client mode (provide agent card URL or service base URL)")
+		}
 
-		return runtime.NewHTTPClient(args.GetServer(), args.GetToken()), nil
+		agentID := args.GetAgent()
+		token := args.GetToken()
+
+		// Create universal A2A client (discovers agent and chooses transport)
+		a2aClient, err := client.NewUniversalA2AClient(url, agentID, token)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create A2A client: %w", err)
+		}
+
+		return a2aClient, nil
 
 	case ModeLocalConfig:
-
+		// Local mode with config file
 		return runtime.NewWithConfig(cfg)
 	case ModeLocalZeroConfig:
+		// Zero-config local mode
 		return runtime.NewWithConfig(cfg)
 
 	default:

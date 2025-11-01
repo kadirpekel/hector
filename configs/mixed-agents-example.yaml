@@ -30,16 +30,17 @@ agents:
       system_prompt: |
         You are a professional content writer. Create clear,
         engaging content with proper structure.
+  # External A2A agents - UniversalA2AClient auto-discovers transport and handles auth
   external_specialist:
     type: "a2a"  
     name: "External Specialist"
     description: "External A2A agent with specialized capabilities"
-    url: "localhost:8080"  
+    url: "localhost:8080"  # Service base URL - auto-discovers agent card and transport
   partner_analyst:
     type: "a2a"
     name: "Partner Analysis Agent"
     description: "Third-party A2A agent for data analysis"
-    url: "localhost:8082"  
+    url: "localhost:8082"  # Can be any A2A-compliant service (not just Hector)
   orchestrator:
     type: "native"
     name: "Hybrid Orchestrator"

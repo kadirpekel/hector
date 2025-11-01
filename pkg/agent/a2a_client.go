@@ -4,26 +4,32 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kadirpekel/hector/pkg/a2a/client"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/auth"
 	"github.com/kadirpekel/hector/pkg/config"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// ExternalA2AAgent is a proxy to an external A2A-compliant agent.
+// It auto-discovers the agent's capabilities and uses the appropriate transport.
 type ExternalA2AAgent struct {
 	pb.UnimplementedA2AServiceServer
 
+	agentID     string // Local agent ID (config key)
 	name        string
 	description string
 	url         string
-	client      pb.A2AServiceClient
-	conn        *grpc.ClientConn
+	client      client.A2AClient
 	config      *config.AgentConfig
 }
 
-func NewExternalA2AAgent(agentConfig *config.AgentConfig) (*ExternalA2AAgent, error) {
+// NewExternalA2AAgent creates a proxy to an external A2A agent.
+// The agent is discovered via its agent card, and the appropriate transport is chosen automatically.
+func NewExternalA2AAgent(agentID string, agentConfig *config.AgentConfig) (*ExternalA2AAgent, error) {
+	if agentID == "" {
+		return nil, fmt.Errorf("agent ID cannot be empty")
+	}
 	if agentConfig == nil {
 		return nil, fmt.Errorf("agent config cannot be nil")
 	}
@@ -36,15 +42,9 @@ func NewExternalA2AAgent(agentConfig *config.AgentConfig) (*ExternalA2AAgent, er
 		return nil, fmt.Errorf("URL is required for external A2A agents")
 	}
 
-	var dialOpts []grpc.DialOption
-
-	dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-
-	var conn *grpc.ClientConn
-	var err error
-
+	// Extract token from credentials
+	var token string
 	if agentConfig.Credentials != nil {
-
 		tokenProvider, err := auth.NewTokenProviderFromCredentials(
 			agentConfig.Credentials.Type,
 			agentConfig.Credentials.Token,
@@ -55,116 +55,117 @@ func NewExternalA2AAgent(agentConfig *config.AgentConfig) (*ExternalA2AAgent, er
 		if err != nil {
 			return nil, fmt.Errorf("failed to create token provider: %w", err)
 		}
-
-		conn, err = auth.NewAuthenticatedClientConn(agentConfig.URL, tokenProvider, dialOpts...)
+		// Get token for initial connection
+		token, err = tokenProvider()
 		if err != nil {
-			return nil, fmt.Errorf("failed to connect to external agent at %s: %w", agentConfig.URL, err)
-		}
-	} else {
-
-		conn, err = grpc.NewClient(agentConfig.URL, dialOpts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to external agent at %s: %w", agentConfig.URL, err)
+			return nil, fmt.Errorf("failed to get authentication token: %w", err)
 		}
 	}
 
-	client := pb.NewA2AServiceClient(conn)
+	// Create universal A2A client (auto-discovers agent and chooses transport)
+	a2aClient, err := client.NewUniversalA2AClient(agentConfig.URL, agentID, token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create A2A client for %s: %w", agentConfig.URL, err)
+	}
 
 	return &ExternalA2AAgent{
+		agentID:     agentID,
 		name:        agentConfig.Name,
 		description: agentConfig.Description,
 		url:         agentConfig.URL,
-		client:      client,
-		conn:        conn,
+		client:      a2aClient,
 		config:      agentConfig,
 	}, nil
 }
 
+// Close closes the connection to the external agent
 func (e *ExternalA2AAgent) Close() error {
-	if e.conn != nil {
-		return e.conn.Close()
+	if e.client != nil {
+		return e.client.Close()
 	}
 	return nil
 }
 
+// GetAgentCard returns the agent card (from cache or remote)
 func (e *ExternalA2AAgent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (*pb.AgentCard, error) {
-	return e.client.GetAgentCard(ctx, req)
+	return e.client.GetAgentCard(ctx, e.agentID)
 }
 
+// SendMessage sends a message to the external agent
 func (e *ExternalA2AAgent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
-	return e.client.SendMessage(ctx, req)
+	if req.Request == nil {
+		return nil, fmt.Errorf("request message cannot be nil")
+	}
+	return e.client.SendMessage(ctx, e.agentID, req.Request)
 }
 
+// SendStreamingMessage sends a streaming message to the external agent
 func (e *ExternalA2AAgent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2AService_SendStreamingMessageServer) error {
+	if req.Request == nil {
+		return fmt.Errorf("request message cannot be nil")
+	}
 
-	clientStream, err := e.client.SendStreamingMessage(stream.Context(), req)
+	streamChan, err := e.client.StreamMessage(stream.Context(), e.agentID, req.Request)
 	if err != nil {
 		return err
 	}
 
-	for {
-		resp, err := clientStream.Recv()
-		if err != nil {
-			return err
-		}
-
-		if err := stream.Send(resp); err != nil {
+	for response := range streamChan {
+		if err := stream.Send(response); err != nil {
 			return err
 		}
 	}
+
+	return nil
 }
 
+// GetTask gets task status from the external agent
 func (e *ExternalA2AAgent) GetTask(ctx context.Context, req *pb.GetTaskRequest) (*pb.Task, error) {
-	return e.client.GetTask(ctx, req)
+	// Use extractTaskID from agent_a2a_methods.go
+	taskID := extractTaskID(req.GetName())
+	return e.client.GetTask(ctx, e.agentID, taskID)
 }
 
+// CancelTask cancels a task on the external agent
 func (e *ExternalA2AAgent) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) (*pb.Task, error) {
-	return e.client.CancelTask(ctx, req)
+	// Use extractTaskID from agent_a2a_methods.go
+	taskID := extractTaskID(req.GetName())
+	return e.client.CancelTask(ctx, e.agentID, taskID)
 }
 
+// TaskSubscription subscribes to task updates (not yet implemented for external agents)
 func (e *ExternalA2AAgent) TaskSubscription(req *pb.TaskSubscriptionRequest, stream pb.A2AService_TaskSubscriptionServer) error {
-
-	clientStream, err := e.client.TaskSubscription(stream.Context(), req)
-	if err != nil {
-		return err
-	}
-
-	for {
-		resp, err := clientStream.Recv()
-		if err != nil {
-			return err
-		}
-
-		if err := stream.Send(resp); err != nil {
-			return err
-		}
-	}
+	return fmt.Errorf("task subscription not yet implemented for external agents")
 }
 
+// Push notification methods (not implemented for external agents)
 func (e *ExternalA2AAgent) CreateTaskPushNotificationConfig(ctx context.Context, req *pb.CreateTaskPushNotificationConfigRequest) (*pb.TaskPushNotificationConfig, error) {
-	return e.client.CreateTaskPushNotificationConfig(ctx, req)
+	return nil, fmt.Errorf("push notifications not supported for external agents")
 }
 
 func (e *ExternalA2AAgent) GetTaskPushNotificationConfig(ctx context.Context, req *pb.GetTaskPushNotificationConfigRequest) (*pb.TaskPushNotificationConfig, error) {
-	return e.client.GetTaskPushNotificationConfig(ctx, req)
+	return nil, fmt.Errorf("push notifications not supported for external agents")
 }
 
 func (e *ExternalA2AAgent) ListTaskPushNotificationConfig(ctx context.Context, req *pb.ListTaskPushNotificationConfigRequest) (*pb.ListTaskPushNotificationConfigResponse, error) {
-	return e.client.ListTaskPushNotificationConfig(ctx, req)
+	return nil, fmt.Errorf("push notifications not supported for external agents")
 }
 
 func (e *ExternalA2AAgent) DeleteTaskPushNotificationConfig(ctx context.Context, req *pb.DeleteTaskPushNotificationConfigRequest) (*emptypb.Empty, error) {
-	return e.client.DeleteTaskPushNotificationConfig(ctx, req)
+	return nil, fmt.Errorf("push notifications not supported for external agents")
 }
 
+// GetName returns the agent's display name
 func (e *ExternalA2AAgent) GetName() string {
 	return e.name
 }
 
+// GetDescription returns the agent's description
 func (e *ExternalA2AAgent) GetDescription() string {
 	return e.description
 }
 
+// GetConfig returns the agent's configuration
 func (e *ExternalA2AAgent) GetConfig() *config.AgentConfig {
 	return e.config
 }

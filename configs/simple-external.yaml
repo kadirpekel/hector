@@ -1,0 +1,41 @@
+global:
+  a2a_server:
+    host: "0.0.0.0"
+    port: 8080
+agents:
+  # External A2A Agent Example
+  # The config key (weather_assistant) is used as the remote agent ID by default.
+  # UniversalA2AClient automatically discovers transport and handles communication.
+  weather_assistant:
+    type: "a2a"  
+    name: "Weather Assistant"
+    description: "External A2A agent that provides weather information"
+    url: "http://localhost:9090"  # HTTP service URL - UniversalA2AClient will auto-discover gRPC transport
+    # Optional: target_agent_id: "weather_assistant"  # Defaults to config key if omitted
+  
+  orchestrator:
+    name: "Orchestrator Agent"
+    llm: "main-llm"
+    reasoning:
+      engine: "supervisor"
+    sub_agents:
+      - weather_assistant
+    prompt:
+      system_prompt: |
+        You are an orchestrator agent that coordinates specialized agents to accomplish tasks.
+        
+        AVAILABLE AGENTS:
+        - weather_assistant: Weather assistant that provides weather information and forecasts
+        
+        When you need weather information, use the agent_call tool with:
+        {
+          "agent": "weather_assistant",
+          "task": "your task description here"
+        }
+        
+        Always delegate weather-related queries to the weather_assistant agent. 
+llms:
+  main-llm:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"

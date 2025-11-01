@@ -266,20 +266,32 @@ agents:
       engine: "supervisor"
     tools: ["agent_call"]
   
-  # External A2A agent
+  # External A2A agent - simple case (config key = remote ID)
   external_specialist:
     type: "a2a"
     url: "https://external-agent.example.com"
     credentials:
       type: "bearer"
       token: "${EXTERNAL_TOKEN}"
+  
+  # External A2A agent - with custom local name
+  my_weather_service:
+    type: "a2a"
+    url: "https://weather.example.com"
+    target_agent_id: "weather_assistant"  # Remote agent's actual ID
+    credentials:
+      type: "bearer"
+      token: "${WEATHER_TOKEN}"
 ```
 
 **Usage (same as local agents):**
 
 ```yaml
 coordinator: agent_call("external_specialist", "Analyze this data")
+coordinator: agent_call("my_weather_service", "Get weather for Paris")
 ```
+
+**Note:** By default, the config key is used as the remote agent ID. Use `target_agent_id` when the remote agent has a different ID than your preferred local name.
 
 ### External Agent Authentication
 

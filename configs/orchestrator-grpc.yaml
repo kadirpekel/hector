@@ -1,0 +1,39 @@
+global:
+  a2a_server:
+    host: "0.0.0.0"
+    port: 8081
+agents:
+  # External agent using gRPC transport
+  weather_assistant:
+    type: "a2a"
+    name: "Weather Assistant"
+    description: "External A2A agent that provides weather information"
+    url: "http://localhost:9091"  # Points to gRPC service
+  
+  orchestrator:
+    name: "Orchestrator Agent"
+    llm: "main-llm"
+    reasoning:
+      engine: "supervisor"
+    sub_agents:
+      - weather_assistant
+    prompt:
+      system_prompt: |
+        You are an orchestrator agent that coordinates specialized agents to accomplish tasks.
+        
+        AVAILABLE AGENTS:
+        - weather_assistant: Weather assistant that provides weather information and forecasts
+        
+        When you need weather information, use the agent_call tool with:
+        {
+          "agent": "weather_assistant",
+          "task": "your task description here"
+        }
+        
+        Always delegate weather-related queries to the weather_assistant agent.
+llms:
+  main-llm:
+    type: "openai"
+    model: "gpt-4o"
+    api_key: "${OPENAI_API_KEY}"
+
