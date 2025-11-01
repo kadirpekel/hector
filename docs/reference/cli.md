@@ -279,14 +279,20 @@ hector serve --model gpt-4o --tools
 hector serve --tools gopher
 hector serve myagent --model gpt-4o --tools
 
+# With custom instruction
+hector serve --instruction "Focus on security and best practices"
+
 # With RAG
-hector serve coder --model gpt-4o --tools --docs ./knowledge
+hector serve coder --model gpt-4o --tools --docs-folder ./knowledge
 
 # Custom port
 hector serve --config config.yaml --port 9000
 
 # With MCP tools
 hector serve --mcp-url http://localhost:3000
+
+# With observability
+hector serve --model gpt-4o --tools --observe
 
 # All flags before positional arg (recommended)
 hector serve --tools --model gpt-4o coder
@@ -708,6 +714,9 @@ For quick experimentation without a config file, use zero-config mode (see examp
 ```bash
 export OPENAI_API_KEY="sk-..."
 hector call "What is recursion?"
+
+# With custom behavior
+hector call "analyze this" --instruction "Focus on performance"
 ```
 
 ### Development with Config

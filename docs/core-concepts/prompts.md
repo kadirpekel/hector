@@ -16,33 +16,38 @@ agents:
     prompt:
       system_prompt: |
         You are a helpful programming assistant.
-        Provide clear, concise code examples.
-      instructions: |
-        Always test your code before presenting it.
+        Provide clear, concise code examples with thorough testing.
 ```
 
 ---
 
 ## Simple Prompts (Recommended)
 
-For most use cases, use `system_prompt` and `instructions`:
+For most use cases, just use `system_prompt`:
 
 ```yaml
 agents:
   my_agent:
     prompt:
       system_prompt: |
-        Define your agent's core role, identity, and capabilities here.
-        This is the main system prompt.
-      
-      instructions: |
-        Additional instructions for behavior, guidelines, etc.
+        You are a helpful assistant. Provide clear, accurate responses.
+        
+        Guidelines:
+        - Think step-by-step
+        - Test code before presenting
+        - Ask clarifying questions when needed
 ```
 
 **Benefits:**
 - ✅ Simple and straightforward
 - ✅ Works great for most use cases
 - ✅ Easy to understand and maintain
+- ✅ All instructions in one place
+
+**For zero-config mode**, use the `--instruction` flag:
+```bash
+hector call "analyze code" --instruction "Focus on security vulnerabilities"
+```
 
 ---
 
@@ -52,6 +57,12 @@ Slot-based prompts provide granular control over different aspects of agent beha
 - Fine-grained control over prompt composition
 - To override specific parts of reasoning strategy defaults
 - Complex prompt engineering with multiple concerns
+
+**Why use slots instead of `system_prompt`?**
+- Composability: Mix agent-specific with reasoning strategy defaults
+- Maintainability: Update one aspect without touching others
+- Integration: Reasoning strategies can inject their own defaults
+- Clarity: Separate different concerns explicitly
 
 ### Available Slots
 
@@ -77,7 +88,6 @@ agents:
         
         additional: |
           Any extra context or instructions
-```
 
 ### Complete Example
 
@@ -116,14 +126,16 @@ agents:
 
 - **Composability** - Mix and match different aspects
 - **Maintainability** - Update one aspect without touching others
-- **Strategy Integration** - Reasoning strategies can inject their own slots
+- **Strategy Integration** - Reasoning strategies can inject their own defaults
 - **Clarity** - Clear separation of concerns
+
+**Note:** Either use `prompt_slots` OR `system_prompt`, but not both. If both are provided, `system_prompt` takes precedence and completely overrides all slots.
 
 ---
 
 ## Full System Prompt Override
 
-For complete control, bypass slots and provide the entire system prompt:
+For complete control, use `system_prompt` to provide the entire system prompt:
 
 ```yaml
 agents:
@@ -159,42 +171,56 @@ agents:
 ### When to Use Full Override
 
 - Complete control over prompt structure
-- Complex, domain-specific instructions
+- Complex, domain-specific instructions  
 - Reproducing prompts from other systems
 - When slots feel limiting
+- All instructions can fit naturally in one block
 
 ### Trade-offs
 
 ✅ **Pros:**
-- Total control
+- Total control over exact wording
 - No hidden prompt composition
-- Can optimize exact wording
+- Single source of truth
+- Simpler mental model
 
 ❌ **Cons:**
-- Must handle tool listings manually
+- Must handle tool listings manually (if needed)
 - No automatic strategy integration
-- More brittle (changes require full rewrite)
+- More verbose for complex prompts
 
 ---
 
 ## Simple System Role (Most Common)
 
-For most use cases, just set `system_role`:
+For most use cases, just set `system_role` inside `prompt_slots`:
 
 ```yaml
 agents:
   helper:
     llm: "gpt-4o"
     prompt:
-      system_role: |
-        You are a helpful assistant who provides clear,
-        concise answers to user questions.
+      prompt_slots:
+        system_role: |
+          You are a helpful assistant who provides clear,
+          concise answers to user questions.
 ```
 
 Hector automatically adds:
 - Tool descriptions (if tools enabled)
 - Reasoning strategy instructions
 - Output formatting guidelines
+
+**Or use `system_prompt` for full control:**
+
+```yaml
+agents:
+  helper:
+    llm: "gpt-4o"
+    prompt:
+      system_prompt: |
+        You are a helpful assistant. Be clear and concise.
+```
 
 ---
 

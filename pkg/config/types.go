@@ -1364,23 +1364,14 @@ func (c *LongTermMemoryConfig) IsEnabled() bool {
 }
 
 type PromptConfig struct {
+	// Composable prompt slots for flexible prompt engineering
 	PromptSlots *PromptSlotsConfig `yaml:"prompt_slots,omitempty"`
 
-	SystemPrompt   string            `yaml:"system_prompt"`
-	Instructions   string            `yaml:"instructions"`
-	FullTemplate   string            `yaml:"full_template"`
-	Template       string            `yaml:"template"`
-	Variables      map[string]string `yaml:"variables"`
-	IncludeContext bool              `yaml:"include_context"`
-	IncludeHistory bool              `yaml:"include_history"`
-	IncludeTools   bool              `yaml:"include_tools"`
+	// Simple system prompt override (use this OR prompt_slots, not both)
+	SystemPrompt string `yaml:"system_prompt"`
 
-	MaxHistoryMessages  int     `yaml:"max_history_messages,omitempty"`
-	MaxContextLength    int     `yaml:"max_context_length,omitempty"`
-	EnableSummarization bool    `yaml:"enable_summarization,omitempty"`
-	SummarizeThreshold  float64 `yaml:"summarize_threshold,omitempty"`
-	SmartMemory         bool    `yaml:"smart_memory,omitempty"`
-	MemoryBudget        int     `yaml:"memory_budget,omitempty"`
+	// Enable RAG context injection from document stores
+	IncludeContext bool `yaml:"include_context"`
 }
 
 // PromptSlotsConfig defines typed prompt slots for composable prompt engineering
@@ -1447,27 +1438,12 @@ func (c *MemoryConfig) SetDefaults() {
 }
 
 func (c *PromptConfig) Validate() error {
-	if c.MaxContextLength < 0 {
-		return fmt.Errorf("max_context_length must be non-negative")
-	}
+	// All fields are optional, no validation needed
 	return nil
 }
 
 func (c *PromptConfig) SetDefaults() {
-
-	if c.MaxContextLength == 0 {
-		c.MaxContextLength = 4000
-	}
-
-	if c.MaxHistoryMessages == 0 {
-		c.MaxHistoryMessages = 10
-	}
-	if c.SummarizeThreshold == 0 {
-		c.SummarizeThreshold = 0.8
-	}
-	if c.MemoryBudget == 0 && c.SmartMemory {
-		c.MemoryBudget = 2000
-	}
+	// No defaults needed - all fields are intentionally left empty unless explicitly set
 }
 
 type ReasoningConfig struct {

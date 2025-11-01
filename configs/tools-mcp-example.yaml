@@ -66,7 +66,7 @@ agents:
     prompt:
       system_prompt: |
         You are a helpful assistant that manages files and searches documentation.
-      instructions: |
+        
         Available tools:
         - execute_command: Run safe commands (cat, ls, grep, git)
         - write_file: Create or modify files
@@ -80,7 +80,7 @@ agents:
       system_prompt: |
         You are an integration specialist who can interact with
         external services like GitHub, Slack, and email.
-      instructions: |
+        
         Available integrations (via Composio):
         GitHub:
           - github_create_issue: Create issues
@@ -101,7 +101,7 @@ agents:
       system_prompt: |
         You are a personal assistant who remembers user preferences,
         past conversations, and important facts.
-      instructions: |
+        
         Memory tools (via Mem0):
         - mem0_store: Save information
           Example: User prefers Python over JavaScript
@@ -132,7 +132,7 @@ agents:
         1. Breaking down tasks
         2. Using appropriate tools
         3. Integrating results
-      instructions: |
+        
         Tool selection strategy:
         For file operations:
           → Use built-in tools (execute_command, write_file)

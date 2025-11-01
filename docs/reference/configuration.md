@@ -253,13 +253,17 @@ agents:
     
     # Prompt Configuration
     prompt:
-      # Simple approach (recommended)
+      # Simple approach (recommended): Single system prompt
       system_prompt: |
-        Define your agent's core role and identity here.
-      instructions: |
-        Additional instructions for behavior and guidelines.
+        You are an expert assistant. Provide clear, accurate responses.
+        
+        Guidelines:
+        - Think step-by-step
+        - Use available tools when helpful
+        - Ask clarifying questions
       
       # Advanced: Slot-based prompts for granular control
+      # Note: Use prompt_slots OR system_prompt, not both
       prompt_slots:
         system_role: "Core role and identity"
         reasoning_instructions: "How to think and approach problems"
@@ -267,6 +271,9 @@ agents:
         output_format: "Response format preferences"
         communication_style: "Tone and interaction style"
         additional: "Extra context or instructions"
+      
+      # RAG toggle: Include document context in prompts
+      include_context: true  # Default: false
     
     # Reasoning Configuration
     reasoning:
@@ -799,7 +806,9 @@ llms:
 agents:
   assistant:
     prompt:
-      system_role: "You are ${AGENT_NAME} for ${COMPANY_NAME}"
+      system_prompt: |
+        You are ${AGENT_NAME} for ${COMPANY_NAME}.
+        Provide helpful customer support.
 ```
 
 **Syntax:**
@@ -855,9 +864,8 @@ agents:
     prompt:
       system_prompt: |
         You are an expert programmer who writes clean,
-        efficient, well-tested code.
-      instructions: |
-        Always think step-by-step and test your code.
+        efficient, well-tested code. Think step-by-step
+        and test your code thoroughly.
     
     reasoning:
       engine: "chain-of-thought"

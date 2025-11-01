@@ -11,6 +11,7 @@ var zeroConfigFlagNames = []string{
 	"--model",
 	"--api-key",
 	"--base-url",
+	"--instruction",
 	"--tools",
 	"--mcp-url",
 	"--docs-folder",
@@ -27,17 +28,17 @@ func ValidateConfigMutualExclusivity(args []string) error {
 
 	for i, arg := range args {
 		// Check for --config or -c (both --flag and --flag=value syntax)
-		if arg == "--config" || arg == "-c" || 
-		   strings.HasPrefix(arg, "--config=") || strings.HasPrefix(arg, "-c=") {
+		if arg == "--config" || arg == "-c" ||
+			strings.HasPrefix(arg, "--config=") || strings.HasPrefix(arg, "-c=") {
 			hasConfig = true
 			continue
 		}
-		
+
 		// Check for zero-config flags
 		for _, zcFlag := range zeroConfigFlagNames {
 			var matched bool
 			var value string
-			
+
 			if strings.HasPrefix(arg, zcFlag+"=") {
 				// Handle --flag=value format
 				matched = true
@@ -55,7 +56,7 @@ func ValidateConfigMutualExclusivity(args []string) error {
 					value = args[i+1]
 				}
 			}
-			
+
 			if matched {
 				// Redact sensitive values
 				if zcFlag == "--api-key" && value != "" {

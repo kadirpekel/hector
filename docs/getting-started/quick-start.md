@@ -51,8 +51,14 @@ Type your messages and press Enter. Type `exit` or press Ctrl+C to quit.
 # Use a specific model
 hector call "Write a haiku about coding" --model gpt-4o
 
+# Add custom instructions
+hector call "Write unit tests" --instruction "Use pytest and aim for 90% coverage"
+
 # Enable built-in tools
 hector call "List files in the current directory" --tools
+
+# Combine options
+hector call "analyze code" --tools --instruction "Focus on security"
 
 # Use a different provider
 export ANTHROPIC_API_KEY="sk-ant-..."
@@ -82,7 +88,8 @@ agents:
     prompt:
       system_prompt: |
         You are an expert software engineer. Provide clear,
-        concise code examples with explanations.
+        concise code examples with explanations. Always test
+        your code and consider edge cases.
     tools: ["execute_command", "write_file", "search_replace"]
 ```
 
