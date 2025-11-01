@@ -273,13 +273,14 @@ func (c *LLMProviderConfig) SetDefaults() {
 	}
 }
 
+// DatabaseProviderConfig holds configuration for database connections.
+// Note: For operation timeouts, use database client-specific timeout settings.
 type DatabaseProviderConfig struct {
-	Type    string `yaml:"type"`
-	Host    string `yaml:"host"`
-	Port    int    `yaml:"port"`
-	APIKey  string `yaml:"api_key"`
-	Timeout int    `yaml:"timeout"`
-	UseTLS  bool   `yaml:"use_tls"`
+	Type   string `yaml:"type"`
+	Host   string `yaml:"host"`
+	Port   int    `yaml:"port"`
+	APIKey string `yaml:"api_key"`
+	UseTLS bool   `yaml:"use_tls"`
 }
 
 func (c *DatabaseProviderConfig) Validate() error {
@@ -291,9 +292,6 @@ func (c *DatabaseProviderConfig) Validate() error {
 	}
 	if c.Port <= 0 {
 		return fmt.Errorf("port must be positive")
-	}
-	if c.Timeout < 0 {
-		return fmt.Errorf("timeout must be non-negative")
 	}
 	return nil
 }
@@ -308,9 +306,6 @@ func (c *DatabaseProviderConfig) SetDefaults() {
 	}
 	if c.Port == 0 {
 		c.Port = 6334
-	}
-	if c.Timeout == 0 {
-		c.Timeout = 30
 	}
 }
 
