@@ -199,8 +199,12 @@ func (se *SearchEngine) SearchModels(ctx context.Context, query string, topKPerM
 	}
 	processedQuery := se.processQuery(query)
 
+	// Use config TopK as default if not specified
 	if topKPerModel <= 0 {
-		topKPerModel = DefaultTopK
+		topKPerModel = se.config.TopK
+		if topKPerModel <= 0 {
+			topKPerModel = DefaultTopK
+		}
 	}
 	if topKPerModel > MaxTopK {
 		topKPerModel = MaxTopK
@@ -226,6 +230,18 @@ func (se *SearchEngine) SearchModels(ctx context.Context, query string, topKPerM
 
 			continue
 		}
+
+		// Filter by threshold
+		if se.config.Threshold > 0 {
+			filtered := make([]databases.SearchResult, 0, len(modelResults))
+			for _, result := range modelResults {
+				if result.Score >= se.config.Threshold {
+					filtered = append(filtered, result)
+				}
+			}
+			modelResults = filtered
+		}
+
 		if len(modelResults) > 0 {
 			results[modelName] = modelResults
 		}
@@ -247,8 +263,12 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 	}
 	processedQuery := se.processQuery(query)
 
+	// Use config TopK as default if limit not specified
 	if limit <= 0 {
-		limit = DefaultTopK
+		limit = se.config.TopK
+		if limit <= 0 {
+			limit = DefaultTopK
+		}
 	}
 	if limit > MaxTopK {
 		limit = MaxTopK
@@ -273,6 +293,17 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 	results, err := se.db.SearchWithFilter(embedCtx, collection, vector, limit, filter)
 	if err != nil {
 		return nil, NewSearchError("SearchEngine", "SearchWithFilter", "database search failed", processedQuery, err)
+	}
+
+	// Filter results by similarity threshold from config
+	if se.config.Threshold > 0 {
+		filtered := make([]databases.SearchResult, 0, len(results))
+		for _, result := range results {
+			if result.Score >= se.config.Threshold {
+				filtered = append(filtered, result)
+			}
+		}
+		results = filtered
 	}
 
 	return results, nil

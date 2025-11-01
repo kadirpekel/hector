@@ -406,8 +406,6 @@ func mapKeys[K comparable, V any](m map[K]V) []K {
 }
 
 type GlobalSettings struct {
-	Logging LoggingConfig `yaml:"logging,omitempty"`
-
 	Performance PerformanceConfig `yaml:"performance,omitempty"`
 
 	A2AServer A2AServerConfig `yaml:"a2a_server,omitempty"`
@@ -418,9 +416,6 @@ type GlobalSettings struct {
 }
 
 func (c *GlobalSettings) Validate() error {
-	if err := c.Logging.Validate(); err != nil {
-		return fmt.Errorf("logging config validation failed: %w", err)
-	}
 	if err := c.Performance.Validate(); err != nil {
 		return fmt.Errorf("performance config validation failed: %w", err)
 	}
@@ -437,7 +432,6 @@ func (c *GlobalSettings) Validate() error {
 }
 
 func (c *GlobalSettings) SetDefaults() {
-	c.Logging.SetDefaults()
 	c.Performance.SetDefaults()
 	c.A2AServer.SetDefaults()
 	c.Auth.SetDefaults()

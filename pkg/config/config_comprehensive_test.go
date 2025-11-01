@@ -2,7 +2,6 @@ package config
 
 import (
 	"testing"
-	"time"
 )
 
 func TestConfig_Validate(t *testing.T) {
@@ -49,14 +48,8 @@ func TestConfig_Validate(t *testing.T) {
 					},
 				},
 				Global: GlobalSettings{
-					Logging: LoggingConfig{
-						Level:  "info",
-						Format: "text",
-						Output: "stdout",
-					},
 					Performance: PerformanceConfig{
 						MaxConcurrency: 4,
-						Timeout:        15 * time.Minute,
 					},
 					A2AServer: A2AServerConfig{
 						Host: "0.0.0.0",
@@ -121,10 +114,8 @@ func TestConfig_Validate(t *testing.T) {
 					},
 				},
 				Global: GlobalSettings{
-					Logging: LoggingConfig{
-						Level:  "invalid",
-						Format: "text",
-						Output: "stdout",
+					Performance: PerformanceConfig{
+						MaxConcurrency: -1, // Invalid
 					},
 				},
 			},

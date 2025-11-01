@@ -2,7 +2,6 @@ package config
 
 import (
 	"testing"
-	"time"
 )
 
 func TestLLMProviderConfig_Validate(t *testing.T) {
@@ -20,9 +19,9 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 				Host:        "https://api.openai.com/v1",
 				Temperature: 0.7,
 				MaxTokens:   4000,
-				Timeout:     60,
-				MaxRetries:  5,
-				RetryDelay:  2,
+
+				MaxRetries: 5,
+				RetryDelay: 2,
 			},
 			wantErr: false,
 		},
@@ -35,9 +34,9 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 				Host:        "https://api.anthropic.com",
 				Temperature: 0.8,
 				MaxTokens:   8000,
-				Timeout:     120,
-				MaxRetries:  3,
-				RetryDelay:  1,
+
+				MaxRetries: 3,
+				RetryDelay: 1,
 			},
 			wantErr: false,
 		},
@@ -49,7 +48,6 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 				Host:        "http://localhost:11434",
 				Temperature: 0.5,
 				MaxTokens:   2000,
-				Timeout:     30,
 			},
 			wantErr: false,
 		},
@@ -117,13 +115,6 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "negative_timeout",
-			config: LLMProviderConfig{
-				Type:    "openai",
-				Model:   "gpt-4o",
-				Host:    "https://api.openai.com/v1",
-				Timeout: -1,
-			},
 			wantErr: true,
 		},
 		{
@@ -167,23 +158,23 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 		{
 			name: "valid_qdrant_config",
 			config: DatabaseProviderConfig{
-				Type:    "qdrant",
-				Host:    "localhost",
-				Port:    6334,
-				APIKey:  "test-key",
-				Timeout: 30,
-				UseTLS:  true,
+				Type:   "qdrant",
+				Host:   "localhost",
+				Port:   6334,
+				APIKey: "test-key",
+
+				UseTLS: true,
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid_qdrant_config_without_tls",
 			config: DatabaseProviderConfig{
-				Type:    "qdrant",
-				Host:    "localhost",
-				Port:    6334,
-				Timeout: 30,
-				UseTLS:  false,
+				Type: "qdrant",
+				Host: "localhost",
+				Port: 6334,
+
+				UseTLS: false,
 			},
 			wantErr: false,
 		},
@@ -231,13 +222,6 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "negative_timeout",
-			config: DatabaseProviderConfig{
-				Type:    "qdrant",
-				Host:    "localhost",
-				Port:    6334,
-				Timeout: -1,
-			},
 			wantErr: true,
 		},
 	}
@@ -261,11 +245,11 @@ func TestEmbedderProviderConfig_Validate(t *testing.T) {
 		{
 			name: "valid_ollama_config",
 			config: EmbedderProviderConfig{
-				Type:       "ollama",
-				Model:      "nomic-embed-text",
-				Host:       "http://localhost:11434",
-				Dimension:  768,
-				Timeout:    30,
+				Type:      "ollama",
+				Model:     "nomic-embed-text",
+				Host:      "http://localhost:11434",
+				Dimension: 768,
+
 				MaxRetries: 3,
 			},
 			wantErr: false,
@@ -318,14 +302,6 @@ func TestEmbedderProviderConfig_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "negative_timeout",
-			config: EmbedderProviderConfig{
-				Type:      "ollama",
-				Model:     "nomic-embed-text",
-				Host:      "http://localhost:11434",
-				Dimension: 768,
-				Timeout:   -1,
-			},
 			wantErr: true,
 		},
 		{
@@ -517,14 +493,8 @@ func TestGlobalSettings_Validate(t *testing.T) {
 		{
 			name: "valid_global_settings",
 			config: GlobalSettings{
-				Logging: LoggingConfig{
-					Level:  "info",
-					Format: "text",
-					Output: "stdout",
-				},
 				Performance: PerformanceConfig{
 					MaxConcurrency: 4,
-					Timeout:        15 * time.Minute,
 				},
 				A2AServer: A2AServerConfig{
 					Host: "0.0.0.0",
@@ -541,14 +511,8 @@ func TestGlobalSettings_Validate(t *testing.T) {
 		{
 			name: "valid_global_settings_disabled_auth",
 			config: GlobalSettings{
-				Logging: LoggingConfig{
-					Level:  "info",
-					Format: "text",
-					Output: "stdout",
-				},
 				Performance: PerformanceConfig{
 					MaxConcurrency: 4,
-					Timeout:        15 * time.Minute,
 				},
 				A2AServer: A2AServerConfig{},
 				Auth:      AuthConfig{},
@@ -556,14 +520,8 @@ func TestGlobalSettings_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "invalid_logging_config",
-			config: GlobalSettings{
-				Logging: LoggingConfig{
-					Level:  "invalid",
-					Format: "text",
-					Output: "stdout",
-				},
-			},
+			name:    "invalid_logging_config",
+			config:  GlobalSettings{},
 			wantErr: true,
 		},
 		{
@@ -571,7 +529,6 @@ func TestGlobalSettings_Validate(t *testing.T) {
 			config: GlobalSettings{
 				Performance: PerformanceConfig{
 					MaxConcurrency: 0,
-					Timeout:        15 * time.Minute,
 				},
 			},
 			wantErr: true,
@@ -607,87 +564,6 @@ func TestGlobalSettings_Validate(t *testing.T) {
 	}
 }
 
-func TestLoggingConfig_Validate(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  LoggingConfig
-		wantErr bool
-	}{
-		{
-			name: "valid_logging_config",
-			config: LoggingConfig{
-				Level:  "info",
-				Format: "text",
-				Output: "stdout",
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid_debug_level",
-			config: LoggingConfig{
-				Level:  "debug",
-				Format: "json",
-				Output: "stderr",
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid_warn_level",
-			config: LoggingConfig{
-				Level:  "warn",
-				Format: "text",
-				Output: "file",
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid_error_level",
-			config: LoggingConfig{
-				Level:  "error",
-				Format: "json",
-				Output: "stdout",
-			},
-			wantErr: false,
-		},
-		{
-			name: "invalid_log_level",
-			config: LoggingConfig{
-				Level:  "invalid",
-				Format: "text",
-				Output: "stdout",
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid_log_format",
-			config: LoggingConfig{
-				Level:  "info",
-				Format: "invalid",
-				Output: "stdout",
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid_output_destination",
-			config: LoggingConfig{
-				Level:  "info",
-				Format: "text",
-				Output: "invalid",
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("LoggingConfig.Validate() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestPerformanceConfig_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -698,7 +574,6 @@ func TestPerformanceConfig_Validate(t *testing.T) {
 			name: "valid_performance_config",
 			config: PerformanceConfig{
 				MaxConcurrency: 4,
-				Timeout:        15 * time.Minute,
 			},
 			wantErr: false,
 		},
@@ -706,7 +581,6 @@ func TestPerformanceConfig_Validate(t *testing.T) {
 			name: "valid_high_concurrency",
 			config: PerformanceConfig{
 				MaxConcurrency: 16,
-				Timeout:        30 * time.Minute,
 			},
 			wantErr: false,
 		},
@@ -714,7 +588,6 @@ func TestPerformanceConfig_Validate(t *testing.T) {
 			name: "invalid_zero_concurrency",
 			config: PerformanceConfig{
 				MaxConcurrency: 0,
-				Timeout:        15 * time.Minute,
 			},
 			wantErr: true,
 		},
@@ -722,23 +595,6 @@ func TestPerformanceConfig_Validate(t *testing.T) {
 			name: "invalid_negative_concurrency",
 			config: PerformanceConfig{
 				MaxConcurrency: -1,
-				Timeout:        15 * time.Minute,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid_zero_timeout",
-			config: PerformanceConfig{
-				MaxConcurrency: 4,
-				Timeout:        0,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid_negative_timeout",
-			config: PerformanceConfig{
-				MaxConcurrency: 4,
-				Timeout:        -1 * time.Second,
 			},
 			wantErr: true,
 		},

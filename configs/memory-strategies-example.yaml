@@ -13,7 +13,6 @@ agents:
       engine: chain-of-thought
       enable_streaming: true
     prompt:
-      include_history: true
       system_prompt: |
         You are a helpful assistant with advanced memory management.
   custom-agent:
@@ -27,7 +26,6 @@ agents:
     reasoning:
       engine: chain-of-thought
     prompt:
-      include_history: true
   simple-agent:
     name: simple-agent
     llm: gpt4o
@@ -37,19 +35,16 @@ agents:
     reasoning:
       engine: chain-of-thought
     prompt:
-      include_history: true
   minimal-agent:
     name: minimal-agent
     llm: gpt4o
     memory:
       strategy: "summary_buffer"  
     prompt:
-      include_history: true
   legacy-agent:
     name: legacy-agent
     llm: gpt4o
     memory:
       budget: 2000
-      summarization: true  
+      threshold: 0.8  # Summarization triggers at 80% of budget  
     prompt:
-      include_history: true

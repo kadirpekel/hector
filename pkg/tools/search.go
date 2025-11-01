@@ -87,7 +87,6 @@ func NewSearchToolWithConfig(name string, toolConfig *config.ToolConfig) (*Searc
 		DocumentStores:     toolConfig.DocumentStores,
 		DefaultLimit:       toolConfig.DefaultLimit,
 		MaxLimit:           toolConfig.MaxLimit,
-		MaxResults:         toolConfig.MaxResults,
 		EnabledSearchTypes: toolConfig.EnabledSearchTypes,
 	}
 

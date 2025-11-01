@@ -671,7 +671,6 @@ agents:
 |--------|------|---------|-------------|
 | `engine` | string | `"chain-of-thought"` | Reasoning strategy (`chain-of-thought` \| `supervisor`) |
 | `max_iterations` | int | `100` | Maximum reasoning iterations (safety limit) |
-| `quality_threshold` | float | `0.0` | Quality threshold (0.0-1.0, for future use) |
 
 ### LLM Reasoning Options
 

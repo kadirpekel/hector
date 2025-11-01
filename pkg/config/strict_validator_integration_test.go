@@ -7,10 +7,10 @@ import (
 // TestValidationIntegration tests the full validation pipeline end-to-end
 func TestValidationIntegration(t *testing.T) {
 	tests := []struct {
-		name          string
-		yaml          string
-		expectValid   bool
-		expectErrors  int
+		name           string
+		yaml           string
+		expectValid    bool
+		expectErrors   int
 		expectWarnings int
 	}{
 		{
@@ -23,7 +23,7 @@ agents:
     type: native
     name: Test Agent
 `,
-			expectValid: true,
+			expectValid:  true,
 			expectErrors: 0,
 		},
 		{
@@ -36,7 +36,7 @@ llmms:
 toools:
   test: {}
 `,
-			expectValid: false,
+			expectValid:  false,
 			expectErrors: 3,
 		},
 		{
@@ -48,7 +48,7 @@ agents:
     type: native
 invalid_field: value
 `,
-			expectValid: false,
+			expectValid:  false,
 			expectErrors: 1,
 		},
 	}
@@ -80,18 +80,18 @@ func TestFuzzyMatchingQuality(t *testing.T) {
 	validFields := []string{"agents", "llms", "tools", "databases", "embedders"}
 
 	tests := []struct {
-		typo                string
+		typo                  string
 		expectFirstSuggestion string
 	}{
-		{"agent", "agents"},      // Missing 's'
-		{"ageent", "agents"},     // Typo
-		{"ageents", "agents"},    // Extra letter
-		{"llm", "llms"},          // Missing 's'
-		{"llmm", "llms"},         // Double letter
-		{"llmms", "llms"},        // Double + s
-		{"tool", "tools"},        // Missing 's'
-		{"toools", "tools"},      // Extra letters
-		{"databse", "databases"}, // Typo
+		{"agent", "agents"},       // Missing 's'
+		{"ageent", "agents"},      // Typo
+		{"ageents", "agents"},     // Extra letter
+		{"llm", "llms"},           // Missing 's'
+		{"llmm", "llms"},          // Double letter
+		{"llmms", "llms"},         // Double + s
+		{"tool", "tools"},         // Missing 's'
+		{"toools", "tools"},       // Extra letters
+		{"databse", "databases"},  // Typo
 		{"embedder", "embedders"}, // Missing 's'
 	}
 
@@ -159,4 +159,3 @@ func stringContains(s, substr string) bool {
 	}
 	return false
 }
-

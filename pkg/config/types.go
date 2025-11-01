@@ -274,13 +274,12 @@ func (c *LLMProviderConfig) SetDefaults() {
 }
 
 type DatabaseProviderConfig struct {
-	Type     string `yaml:"type"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	APIKey   string `yaml:"api_key"`
-	Timeout  int    `yaml:"timeout"`
-	UseTLS   bool   `yaml:"use_tls"`
-	Insecure bool   `yaml:"insecure"`
+	Type    string `yaml:"type"`
+	Host    string `yaml:"host"`
+	Port    int    `yaml:"port"`
+	APIKey  string `yaml:"api_key"`
+	Timeout int    `yaml:"timeout"`
+	UseTLS  bool   `yaml:"use_tls"`
 }
 
 func (c *DatabaseProviderConfig) Validate() error {
@@ -573,16 +572,12 @@ type SearchToolConfig struct {
 	DocumentStores     []string `yaml:"document_stores"`
 	DefaultLimit       int      `yaml:"default_limit"`
 	MaxLimit           int      `yaml:"max_limit"`
-	MaxResults         int      `yaml:"max_results"`
 	EnabledSearchTypes []string `yaml:"enabled_search_types"`
 }
 
 func (c *SearchToolConfig) Validate() error {
 	if c.DefaultLimit <= 0 {
 		return fmt.Errorf("default_limit must be positive")
-	}
-	if c.MaxResults <= 0 {
-		return fmt.Errorf("max_results must be positive")
 	}
 	return nil
 }
@@ -593,9 +588,6 @@ func (c *SearchToolConfig) SetDefaults() {
 	}
 	if c.MaxLimit == 0 {
 		c.MaxLimit = 50
-	}
-	if c.MaxResults == 0 {
-		c.MaxResults = 100
 	}
 	if len(c.EnabledSearchTypes) == 0 {
 		c.EnabledSearchTypes = []string{"content", "file", "function", "struct"}
@@ -673,7 +665,6 @@ func GetDefaultToolConfigs() map[string]*ToolConfig {
 			Type:             "search_replace",
 			MaxReplacements:  100,
 			WorkingDirectory: "./",
-			BackupEnabled:    true,
 		},
 		"todo_write": {
 			Type: "todo",
@@ -721,15 +712,12 @@ type ToolConfig struct {
 	MaxFileSize       int64    `yaml:"max_file_size,omitempty"`
 	AllowedExtensions []string `yaml:"allowed_extensions,omitempty"`
 	DeniedExtensions  []string `yaml:"denied_extensions,omitempty"`
-	ForbiddenPaths    []string `yaml:"forbidden_paths,omitempty"`
 
-	MaxReplacements int  `yaml:"max_replacements,omitempty"`
-	BackupEnabled   bool `yaml:"backup_enabled,omitempty"`
+	MaxReplacements int `yaml:"max_replacements,omitempty"`
 
 	DocumentStores     []string `yaml:"document_stores,omitempty"`
 	DefaultLimit       int      `yaml:"default_limit,omitempty"`
 	MaxLimit           int      `yaml:"max_limit,omitempty"`
-	MaxResults         int      `yaml:"max_results,omitempty"`
 	EnabledSearchTypes []string `yaml:"enabled_search_types,omitempty"`
 
 	ServerURL string `yaml:"server_url,omitempty"`
@@ -798,9 +786,6 @@ func (c *ToolConfig) SetDefaults() {
 		}
 		if c.MaxLimit == 0 {
 			c.MaxLimit = 50
-		}
-		if c.MaxResults == 0 {
-			c.MaxResults = 100
 		}
 	case "mcp":
 
@@ -1346,9 +1331,6 @@ type MemoryConfig struct {
 	Target    float64 `yaml:"target,omitempty"`
 
 	LongTerm LongTermMemoryConfig `yaml:"long_term,omitempty"`
-
-	Summarization          bool    `yaml:"summarization,omitempty"`
-	SummarizationThreshold float64 `yaml:"summarization_threshold,omitempty"`
 }
 
 type LongTermMemoryConfig struct {
@@ -1411,13 +1393,6 @@ func (c *MemoryConfig) SetDefaults() {
 		c.Strategy = "summary_buffer"
 	}
 
-	if c.Summarization && c.Strategy == "summary_buffer" {
-
-		if c.SummarizationThreshold > 0 {
-			c.Threshold = c.SummarizationThreshold
-		}
-	}
-
 	switch c.Strategy {
 	case "buffer_window":
 		if c.WindowSize <= 0 {
@@ -1447,16 +1422,15 @@ func (c *PromptConfig) SetDefaults() {
 }
 
 type ReasoningConfig struct {
-	Engine                     string  `yaml:"engine"`
-	MaxIterations              int     `yaml:"max_iterations"`
-	EnableSelfReflection       bool    `yaml:"enable_self_reflection"`
-	EnableStructuredReflection *bool   `yaml:"enable_structured_reflection"`
-	EnableGoalExtraction       bool    `yaml:"enable_goal_extraction"`
-	ShowDebugInfo              bool    `yaml:"show_debug_info"`
-	ShowToolExecution          *bool   `yaml:"show_tool_execution"`
-	ShowThinking               bool    `yaml:"show_thinking"`
-	EnableStreaming            *bool   `yaml:"enable_streaming"`
-	QualityThreshold           float64 `yaml:"quality_threshold"`
+	Engine                     string `yaml:"engine"`
+	MaxIterations              int    `yaml:"max_iterations"`
+	EnableSelfReflection       bool   `yaml:"enable_self_reflection"`
+	EnableStructuredReflection *bool  `yaml:"enable_structured_reflection"`
+	EnableGoalExtraction       bool   `yaml:"enable_goal_extraction"`
+	ShowDebugInfo              bool   `yaml:"show_debug_info"`
+	ShowToolExecution          *bool  `yaml:"show_tool_execution"`
+	ShowThinking               bool   `yaml:"show_thinking"`
+	EnableStreaming            *bool  `yaml:"enable_streaming"`
 
 	// Tool display configuration
 	ToolDisplayMode string `yaml:"tool_display_mode"` // inline, detailed, hidden, thinking
@@ -1471,9 +1445,6 @@ func (c *ReasoningConfig) Validate() error {
 	if c.MaxIterations <= 0 {
 		return fmt.Errorf("max_iterations must be positive")
 	}
-	if c.QualityThreshold < 0 || c.QualityThreshold > 1 {
-		return fmt.Errorf("quality_threshold must be between 0 and 1")
-	}
 	return nil
 }
 
@@ -1484,9 +1455,6 @@ func (c *ReasoningConfig) SetDefaults() {
 	if c.MaxIterations == 0 {
 
 		c.MaxIterations = 100
-	}
-	if c.QualityThreshold == 0 {
-		c.QualityThreshold = 0.7
 	}
 
 	if c.EnableStreaming == nil {
@@ -1510,12 +1478,10 @@ func (c *ReasoningConfig) SetDefaults() {
 }
 
 type SearchConfig struct {
-	Models              []SearchModel `yaml:"models"`
-	TopK                int           `yaml:"top_k"`
-	Threshold           float64       `yaml:"threshold"`
-	MaxContextLength    int           `yaml:"max_context_length"`
-	PreserveCase        bool          `yaml:"preserve_case"`        // Don't lowercase queries (default: true for code search)
-	NormalizeWhitespace bool          `yaml:"normalize_whitespace"` // Normalize whitespace (default: true)
+	Models       []SearchModel `yaml:"models"`
+	TopK         int           `yaml:"top_k"`         // Default number of results to return
+	Threshold    float32       `yaml:"threshold"`     // Minimum similarity score (0.0-1.0)
+	PreserveCase bool          `yaml:"preserve_case"` // Don't lowercase queries (default: true for code search)
 }
 
 func (c *SearchConfig) Validate() error {
@@ -1527,14 +1493,11 @@ func (c *SearchConfig) Validate() error {
 			return fmt.Errorf("search model %d validation failed: %w", i, err)
 		}
 	}
-	if c.TopK <= 0 {
-		return fmt.Errorf("top_k must be positive")
+	if c.TopK < 0 {
+		return fmt.Errorf("top_k must be non-negative")
 	}
 	if c.Threshold < 0 || c.Threshold > 1 {
 		return fmt.Errorf("threshold must be between 0 and 1")
-	}
-	if c.MaxContextLength < 0 {
-		return fmt.Errorf("max_context_length must be non-negative")
 	}
 	return nil
 }
@@ -1555,15 +1518,12 @@ func (c *SearchConfig) SetDefaults() {
 		c.TopK = 5
 	}
 	if c.Threshold == 0 {
-		c.Threshold = 0.7
-	}
-	if c.MaxContextLength == 0 {
-		c.MaxContextLength = 4000
+		c.Threshold = 0.7 // Default 70% similarity threshold
 	}
 
 	// Query processing defaults - optimized for code search
 	// PreserveCase defaults to true (important for code identifiers like HTTP, API, etc.)
-	// NormalizeWhitespace defaults to true (always safe for query consistency)
+	// Whitespace is always normalized for query consistency
 
 	for i := range c.Models {
 		c.Models[i].SetDefaults()
@@ -1605,57 +1565,15 @@ func (c *SearchModel) SetDefaults() {
 	}
 }
 
-type LoggingConfig struct {
-	Level  string `yaml:"level"`
-	Format string `yaml:"format"`
-	Output string `yaml:"output"`
-}
-
-func (c *LoggingConfig) Validate() error {
-	validLevels := map[string]bool{
-		"debug": true, "info": true, "warn": true, "error": true,
-	}
-	if !validLevels[c.Level] {
-		return fmt.Errorf("invalid log level: %s", c.Level)
-	}
-	validFormats := map[string]bool{
-		"text": true, "json": true,
-	}
-	if !validFormats[c.Format] {
-		return fmt.Errorf("invalid log format: %s", c.Format)
-	}
-	validOutputs := map[string]bool{
-		"stdout": true, "stderr": true, "file": true,
-	}
-	if !validOutputs[c.Output] {
-		return fmt.Errorf("invalid output destination: %s", c.Output)
-	}
-	return nil
-}
-
-func (c *LoggingConfig) SetDefaults() {
-	if c.Level == "" {
-		c.Level = "info"
-	}
-	if c.Format == "" {
-		c.Format = "text"
-	}
-	if c.Output == "" {
-		c.Output = "stdout"
-	}
-}
-
+// PerformanceConfig controls performance-related settings.
+// Note: For operation timeouts, use per-tool max_execution_time instead.
 type PerformanceConfig struct {
-	MaxConcurrency int           `yaml:"max_concurrency"`
-	Timeout        time.Duration `yaml:"timeout"`
+	MaxConcurrency int `yaml:"max_concurrency"`
 }
 
 func (c *PerformanceConfig) Validate() error {
 	if c.MaxConcurrency <= 0 {
 		return fmt.Errorf("max_concurrency must be positive")
-	}
-	if c.Timeout <= 0 {
-		return fmt.Errorf("timeout must be positive")
 	}
 	return nil
 }
@@ -1663,9 +1581,6 @@ func (c *PerformanceConfig) Validate() error {
 func (c *PerformanceConfig) SetDefaults() {
 	if c.MaxConcurrency == 0 {
 		c.MaxConcurrency = 4
-	}
-	if c.Timeout == 0 {
-		c.Timeout = 15 * time.Minute
 	}
 }
 
@@ -1840,8 +1755,5 @@ func (c *A2ASkillConfig) Validate() error {
 
 type A2AProviderConfig struct {
 	Name string `yaml:"name,omitempty"`
-
-	URL string `yaml:"url,omitempty"`
-
-	ContactEmail string `yaml:"contact_email,omitempty"`
+	URL  string `yaml:"url,omitempty"`
 }

@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"testing"
-	"time"
 )
 
 func TestLLMProviderConfig_SetDefaults(t *testing.T) {
@@ -399,21 +398,8 @@ func TestGlobalSettings_SetDefaults(t *testing.T) {
 			config: GlobalSettings{},
 			validateConfig: func(t *testing.T, config GlobalSettings) {
 
-				if config.Logging.Level != "info" {
-					t.Errorf("Default log level = %v, want %v", config.Logging.Level, "info")
-				}
-				if config.Logging.Format != "text" {
-					t.Errorf("Default log format = %v, want %v", config.Logging.Format, "text")
-				}
-				if config.Logging.Output != "stdout" {
-					t.Errorf("Default log output = %v, want %v", config.Logging.Output, "stdout")
-				}
-
 				if config.Performance.MaxConcurrency != 4 {
 					t.Errorf("Default max concurrency = %v, want %v", config.Performance.MaxConcurrency, 4)
-				}
-				if config.Performance.Timeout != 15*time.Minute {
-					t.Errorf("Default timeout = %v, want %v", config.Performance.Timeout, 15*time.Minute)
 				}
 
 				if config.A2AServer.Host != "0.0.0.0" {
@@ -427,74 +413,13 @@ func TestGlobalSettings_SetDefaults(t *testing.T) {
 		{
 			name: "partial_config_preserves_values",
 			config: GlobalSettings{
-				Logging: LoggingConfig{
-					Level: "debug",
-				},
 				Performance: PerformanceConfig{
 					MaxConcurrency: 8,
 				},
 			},
 			validateConfig: func(t *testing.T, config GlobalSettings) {
-				if config.Logging.Level != "debug" {
-					t.Errorf("Log level should be preserved: %v", config.Logging.Level)
-				}
-				if config.Logging.Format != "text" {
-					t.Errorf("Default log format = %v, want %v", config.Logging.Format, "text")
-				}
-
 				if config.Performance.MaxConcurrency != 8 {
 					t.Errorf("Max concurrency should be preserved: %v", config.Performance.MaxConcurrency)
-				}
-				if config.Performance.Timeout != 15*time.Minute {
-					t.Errorf("Default timeout = %v, want %v", config.Performance.Timeout, 15*time.Minute)
-				}
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.config.SetDefaults()
-			tt.validateConfig(t, tt.config)
-		})
-	}
-}
-
-func TestLoggingConfig_SetDefaults(t *testing.T) {
-	tests := []struct {
-		name           string
-		config         LoggingConfig
-		validateConfig func(t *testing.T, config LoggingConfig)
-	}{
-		{
-			name:   "empty_config_defaults",
-			config: LoggingConfig{},
-			validateConfig: func(t *testing.T, config LoggingConfig) {
-				if config.Level != "info" {
-					t.Errorf("Default level = %v, want %v", config.Level, "info")
-				}
-				if config.Format != "text" {
-					t.Errorf("Default format = %v, want %v", config.Format, "text")
-				}
-				if config.Output != "stdout" {
-					t.Errorf("Default output = %v, want %v", config.Output, "stdout")
-				}
-			},
-		},
-		{
-			name: "partial_config_preserves_values",
-			config: LoggingConfig{
-				Level: "debug",
-			},
-			validateConfig: func(t *testing.T, config LoggingConfig) {
-				if config.Level != "debug" {
-					t.Errorf("Level should be preserved: %v", config.Level)
-				}
-				if config.Format != "text" {
-					t.Errorf("Default format = %v, want %v", config.Format, "text")
-				}
-				if config.Output != "stdout" {
-					t.Errorf("Default output = %v, want %v", config.Output, "stdout")
 				}
 			},
 		},
@@ -521,9 +446,6 @@ func TestPerformanceConfig_SetDefaults(t *testing.T) {
 				if config.MaxConcurrency != 4 {
 					t.Errorf("Default max concurrency = %v, want %v", config.MaxConcurrency, 4)
 				}
-				if config.Timeout != 15*time.Minute {
-					t.Errorf("Default timeout = %v, want %v", config.Timeout, 15*time.Minute)
-				}
 			},
 		},
 		{
@@ -534,9 +456,6 @@ func TestPerformanceConfig_SetDefaults(t *testing.T) {
 			validateConfig: func(t *testing.T, config PerformanceConfig) {
 				if config.MaxConcurrency != 8 {
 					t.Errorf("Max concurrency should be preserved: %v", config.MaxConcurrency)
-				}
-				if config.Timeout != 15*time.Minute {
-					t.Errorf("Default timeout = %v, want %v", config.Timeout, 15*time.Minute)
 				}
 			},
 		},

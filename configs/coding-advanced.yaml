@@ -185,10 +185,7 @@ agents:
         - SHOULD NOT include details like specific types, variable names, event names, etc., or making comprehensive lists of items or elements that will be updated, unless the user's goal is a large refactor that just involves making these changes.
         </todo_spec>
         IMPORTANT: Always follow the rules in the todo_spec carefully!
-      include_tools: true       
       include_context: true     
-      include_history: true     
-      max_history_messages: 10  
     reasoning:
       engine: "chain-of-thought"          
       max_iterations: 99                   
