@@ -493,13 +493,13 @@ agents:
 
 ### 5. Monitor and Log
 
+Enable observability to track authentication attempts:
+
 ```yaml
-logging:
-  level: "info"
-  format: "json"
-  
-  # Log authentication attempts
-  log_auth: true
+global:
+  observability:
+    enabled: true
+    metrics_endpoint: "localhost:4317"
 ```
 
 ---
@@ -580,10 +580,11 @@ agents:
 
 ### Enable Debug Logging
 
-```yaml
-logging:
-  level: "debug"
-  log_auth: true
+Use standard logging tools or enable observability for auth debugging:
+
+```bash
+# Run with verbose output
+HECTOR_LOG_LEVEL=debug hector serve --config config.yaml
 ```
 
 ### Test Authentication

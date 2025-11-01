@@ -35,10 +35,9 @@ tools:            # Tool configurations
 
 # Document Stores
 document_stores:  # RAG document sources
-
-# Logging
-logging:          # Logging configuration
 ```
+
+**Note:** Hector uses Go's standard `log` package. For production logging, redirect stdout/stderr to your logging infrastructure.
 
 ---
 
@@ -778,22 +777,6 @@ plugins:
 
 ---
 
-## Logging
-
-```yaml
-logging:
-  level: "info"                   # debug|info|warn|error
-  format: "text"                  # text|json
-  output: "stdout"                # stdout|stderr|file
-  file: "/var/log/hector.log"     # If output=file
-  max_size: 100                   # MB
-  max_backups: 3
-  max_age: 28                     # Days
-  compress: true
-```
-
----
-
 ## Environment Variable Substitution
 
 All configuration values support environment variable substitution:
@@ -895,12 +878,9 @@ tools:
     type: write_file
     
     # Permissive defaults
-
-# Logging
-logging:
-  level: "info"
-  format: "json"
 ```
+
+**Note:** For detailed logging, redirect Hector's stdout/stderr to your logging system (e.g., systemd, Docker logs, etc.).
 
 ---
 

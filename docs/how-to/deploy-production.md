@@ -477,12 +477,7 @@ http://localhost:8080/health
 
 #### 2. Logging
 
-```yaml
-logging:
-  level: "info"
-  format: "json"
-  output: "stdout"  # For container logging
-```
+Hector logs to stdout. Configure container logging to aggregate:
 
 **Aggregate logs:**
 

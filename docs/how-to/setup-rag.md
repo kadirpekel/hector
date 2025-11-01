@@ -610,12 +610,9 @@ docker exec qdrant tar xzf /tmp/qdrant-backup.tar.gz -C /
 
 ### Monitoring
 
-```yaml
-# Enable debug logging
-logging:
-  level: "info"
-  format: "json"
+Enable debug output to see search performance:
 
+```yaml
 agents:
   coder:
     reasoning:

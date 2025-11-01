@@ -515,11 +515,9 @@ agents:
 
 ### 5. Monitor External Calls
 
-```yaml
-logging:
-  level: "info"
-  log_external_calls: true
+Monitor external agent interactions through application logs and observability:
 
+```bash
 # Monitor for:
 # - Failed authentication
 # - Timeouts
@@ -581,11 +579,9 @@ agents:
 
 ### Track Performance
 
-```yaml
-logging:
-  level: "info"
-  format: "json"
+Monitor external agent performance through observability:
 
+```yaml
 agents:
   monitored_external:
     type: "a2a"

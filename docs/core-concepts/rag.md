@@ -329,6 +329,8 @@ document_stores:
 
 ### Search Configuration
 
+Configure how documents are searched and ranked:
+
 ```yaml
 agents:
   searcher:
@@ -338,10 +340,15 @@ agents:
       - name: "docs"
         paths: ["./"]
         search_config:
-          limit: 5              # Top 5 results
-          score_threshold: 0.7  # Minimum similarity score
-          filter: {}            # Optional metadata filters
+          top_k: 5              # Return top 5 results (default: 5)
+          threshold: 0.7        # Minimum similarity score 0.0-1.0 (default: none)
+          preserve_case: true   # Don't lowercase queries (default: true)
 ```
+
+**Parameters:**
+- `top_k`: Maximum number of results to return (default: 5)
+- `threshold`: Minimum cosine similarity score (0.0-1.0). Results below this are filtered out.
+- `preserve_case`: Whether to preserve query case (useful for code search)
 
 ### Custom Parsers
 
@@ -384,9 +391,8 @@ agents:
     document_stores:
       - name: "optimized"
         search_config:
-          limit: 3           # Fewer results = faster
-          score_threshold: 0.8  # Higher threshold = fewer candidates
-          use_cache: true    # Cache frequent queries
+          top_k: 3             # Fewer results = faster
+          threshold: 0.8       # Higher threshold = fewer candidates
 ```
 
 ### Resource Management
@@ -542,7 +548,7 @@ curl http://localhost:11434/api/tags
 
 - Check documents are indexed: View Qdrant dashboard
 - Verify file patterns match your files
-- Lower `score_threshold` in search config
+- Lower `threshold` in search config
 - Check chunk sizes aren't too large
 
 ---
