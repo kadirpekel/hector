@@ -26,6 +26,14 @@ func main() {
 		cli.Fatalf("Failed to load environment files: %v", err)
 	}
 
+	// Validate mutual exclusivity EARLY - before Kong processes arguments
+	// This checks raw command-line args, so we don't need to worry about defaults
+	if !cli.ShouldSkipValidation(os.Args) {
+		if err := cli.ValidateConfigMutualExclusivity(os.Args); err != nil {
+			cli.Fatalf("%v", err)
+		}
+	}
+
 	ctx := kong.Parse(&cli.CLI,
 		kong.Name("hector"),
 		kong.Description("Declarative A2A-Native AI agent framework"),

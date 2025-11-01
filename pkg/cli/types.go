@@ -57,16 +57,15 @@ type CLIArgs struct {
 	Host       string
 	A2ABaseURL string
 
-	Provider                string
-	APIKey                  string
-	BaseURL                 string
-	Model                   string
-	Tools                   bool
-	MCPURL                  string
-	DocsFolder              string
-	EmbedderModel           string
-	VectorDB                string
-	ExplicitZeroConfigFlags bool
+	Provider      string
+	APIKey        string
+	BaseURL       string
+	Model         string
+	Tools         bool
+	MCPURL        string
+	DocsFolder    string
+	EmbedderModel string
+	VectorDB      string
 
 	Mode CLIMode
 }
