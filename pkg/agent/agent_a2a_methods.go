@@ -271,8 +271,10 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 }
 
 func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (*pb.AgentCard, error) {
-	// Build the agent URL using the configured base URL and agent ID (URL-safe)
-	agentURL := fmt.Sprintf("%s/?agent=%s", a.baseURL, a.id)
+	// Build the agent URL - all transports now use agent-scoped endpoints
+	// The URL points to the agent's base path: /v1/agents/{agent}
+	// This works for REST, gRPC, and JSON-RPC (all agent-scoped)
+	agentURL := fmt.Sprintf("%s/v1/agents/%s", a.baseURL, a.id)
 
 	card := &pb.AgentCard{
 		Name:               a.name,

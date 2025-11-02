@@ -339,7 +339,9 @@ func (s *Server) resolveAddresses() ServerAddresses {
 	if s.config.Global.A2AServer.IsEnabled() {
 		if s.config.Global.A2AServer.Port > 0 {
 			httpPort = s.config.Global.A2AServer.Port
-			// gRPC port stays at 50051 (canonical gRPC port) regardless of HTTP port
+		}
+		if s.config.Global.A2AServer.GRPCPort > 0 {
+			grpcPort = s.config.Global.A2AServer.GRPCPort
 		}
 		if s.config.Global.A2AServer.Host != "" {
 			serverHost = s.config.Global.A2AServer.Host

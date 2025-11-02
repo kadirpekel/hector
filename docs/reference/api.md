@@ -424,72 +424,30 @@ ws.onclose = () => {
 
 ## JSON-RPC API
 
-Simple JSON-RPC 2.0 interface.
+Simple JSON-RPC 2.0 interface with agent-scoped endpoints.
 
-**Endpoint:** `POST /` (root endpoint with method-based routing)
+**Endpoint Pattern:** `POST /v1/agents/{agent_id}/`
 
-### Agent Selection
+All JSON-RPC requests are agent-scoped - the agent is identified by the URL path, not query parameters.
 
-JSON-RPC supports multiple ways to specify which agent to use:
-
-#### 1. Query String (Recommended)
-
-Specify the agent using the `?agent=` query parameter:
+### Agent-Scoped Endpoints
 
 ```bash
-# Single agent setup - query string optional
-POST http://localhost:8080/
+# Non-streaming JSON-RPC
+POST /v1/agents/{agent_id}/
 
-# Multi-agent setup - query string required
-POST http://localhost:8080/?agent=orchestrator
+# Streaming JSON-RPC (SSE)
+POST /v1/agents/{agent_id}/stream
 ```
 
-#### 2. Context ID Format
+**Examples:**
+```bash
+# Send message to orchestrator agent
+POST http://localhost:8080/v1/agents/orchestrator/
 
-Embed agent name in the `contextId` using `agent_name:session_id` format:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "message/send",
-  "params": {
-    "request": {
-      "contextId": "orchestrator:session-123"
-    }
-  }
-}
+# Streaming to assistant agent
+POST http://localhost:8080/v1/agents/assistant/stream
 ```
-
-#### 3. Request Metadata
-
-Include agent name in the request metadata:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "message/send",
-  "params": {
-    "request": {
-      "metadata": {
-        "name": "orchestrator"
-      }
-    }
-  }
-}
-```
-
-### Fallback Behavior
-
-**Single-Agent Mode:**
-- If server has only **one agent** registered, agent specification is optional
-- Requests automatically route to the single agent
-- ✅ Works: `POST /` (no query string needed)
-
-**Multi-Agent Mode:**
-- If server has **multiple agents**, agent must be specified
-- Missing agent specification returns error: `"name not specified"`
-- ✅ Works: `POST /?agent=xyz`
-- ❌ Fails: `POST /` (no agent specified)
 
 ### Send Message
 
@@ -527,8 +485,8 @@ Include agent name in the request metadata:
 **Examples:**
 
 ```bash
-# Single-agent setup (no query string needed)
-curl -X POST http://localhost:8080/ \
+# Agent-scoped JSON-RPC
+curl -X POST http://localhost:8080/v1/agents/assistant/ \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -542,50 +500,21 @@ curl -X POST http://localhost:8080/ \
     "id": 1
   }'
 
-# Multi-agent setup (query string required)
-curl -X POST 'http://localhost:8080/?agent=orchestrator' \
+# Agent-scoped with session context
+curl -X POST http://localhost:8080/v1/agents/orchestrator/ \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "method": "message/send",
     "params": {
       "request": {
+        "contextId": "session-123",
         "role": "user",
         "parts": [{"text": "Hello"}]
       }
     },
     "id": 1
   }'
-
-# Alternative: Using contextId
-curl -X POST http://localhost:8080/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "message/send",
-    "params": {
-      "request": {
-        "contextId": "orchestrator:session-123",
-        "role": "user",
-        "parts": [{"text": "Hello"}]
-      }
-    },
-    "id": 1
-  }'
-```
-
-### Get Agent Card
-
-**Request:**
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "card/get",
-  "params": {
-    "name": "assistant"
-  },
-  "id": 1
-}
 ```
 
 ---

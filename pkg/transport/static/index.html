@@ -485,10 +485,6 @@
             margin: 8px 0;
         }
 
-        .tool-badges-row {
-            display: none; /* Deprecated - keeping for backward compatibility */
-        }
-
         .message-meta {
             display: flex;
             align-items: center;
@@ -1154,7 +1150,7 @@
             <div class="config-grid">
                 <div class="form-group">
                     <label for="endpoint">Endpoint URL</label>
-                    <input type="text" id="endpoint" placeholder="http://localhost:8080/" value="http://localhost:8080/">
+                    <input type="text" id="endpoint" placeholder="http://localhost:8080/">
                 </div>
                 <div class="form-group">
                     <label for="transport">Protocol</label>
@@ -1216,6 +1212,12 @@
                 headerIds: false,   // Don't add IDs to headers
                 mangle: false       // Don't escape autolinked email addresses
             });
+            
+            // Set endpoint to current origin (where Web UI is served from)
+            const endpointInput = document.getElementById('endpoint');
+            if (!endpointInput.value) {
+                endpointInput.value = window.location.origin;
+            }
             
             loadSessions();
             fetchAgents();
@@ -1403,11 +1405,6 @@
         function scrollToBottom() {
             const chatContainer = document.querySelector('.chat-container');
             chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        function setTyping(isTyping) {
-            document.getElementById('typingIndicator').classList.toggle('active', isTyping);
-            if (isTyping) scrollToBottom();
         }
 
         function addMessage(role, text, metadata = {}, save = true, toolCalls = []) {
@@ -1904,18 +1901,6 @@
             scrollToBottom();
         }
 
-        // Show error
-        function showError(message) {
-            removeEmptyState();
-            
-            const messagesDiv = document.getElementById('messages');
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error-message';
-            errorDiv.textContent = message;
-            messagesDiv.appendChild(errorDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-
         // Show/hide typing indicator
         function setTyping(isTyping) {
             const indicator = document.getElementById('typingIndicator');
@@ -1974,7 +1959,7 @@
         }
 
         // Send streaming message using SSE (JSON-RPC)
-        async function sendStreamingMessageJsonRpc(endpoint, agentName, messageText) {
+        async function sendStreamingMessageJsonRpc(agentUrl, messageText) {
             const session = sessions[currentSessionId];
             const request = {
                 jsonrpc: '2.0',
@@ -1993,8 +1978,8 @@
                 request.params.taskId = session.taskId;
             }
 
-            const baseUrl = endpoint.replace(/\/+$/, '');
-            const url = agentName ? `${baseUrl}/stream?agent=${encodeURIComponent(agentName)}` : `${baseUrl}/stream`;
+            // Use agent's URL from agent card + /stream endpoint
+            const url = `${agentUrl}/stream`;
 
             return new Promise(async (resolve, reject) => {
                 let currentMessageDiv = null;
@@ -2173,12 +2158,11 @@
                 return;
             }
 
-            // Extract agent ID from URL
+            // Get agent from available agents (already has URL from agent card)
             const agent = availableAgents[agentIndex];
-            let agentId = '';
-            if (agent && agent.url) {
-                const urlParams = new URLSearchParams(agent.url.split('?')[1]);
-                agentId = urlParams.get('agent') || '';
+            if (!agent || !agent.url) {
+                showError('No agent selected or agent URL not available');
+                return;
             }
 
             messageInput.disabled = true;
@@ -2194,7 +2178,8 @@
                 messageInput.value = '';
                 messageInput.style.height = 'auto';
 
-                await sendStreamingMessageJsonRpc(endpoint, agentId, messageText);
+                // Use agent's URL directly from agent card
+                await sendStreamingMessageJsonRpc(agent.url, messageText);
 
             } catch (error) {
                 console.error('Error:', error);
@@ -2239,7 +2224,8 @@
                 const url = new URL(endpoint);
                 baseUrl = `${url.protocol}//${url.host}`;
             } catch (e) {
-                baseUrl = 'http://localhost:8080';
+                // Fallback to current origin if endpoint is invalid
+                baseUrl = window.location.origin;
             }
 
             try {

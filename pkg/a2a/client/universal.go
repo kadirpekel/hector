@@ -111,9 +111,27 @@ func (c *UniversalA2AClient) discoverAgent() error {
 		// Convert to AgentCard proto
 		c.agentCard = jsonToAgentCard(cardJSON)
 
-		// If agentID was not provided, extract it from the agent card
-		if c.agentID == "" && c.agentCard.Name != "" {
-			c.agentID = c.agentCard.Name
+		// Extract agent ID from the URL we fetched
+		// With agent-scoped endpoints, the agent ID is always in the URL path
+		// e.g., /v1/agents/weather_assistant/.well-known/agent-card.json -> weather_assistant
+		if c.agentID == "" && strings.Contains(url, "/v1/agents/") {
+			parts := strings.Split(url, "/v1/agents/")
+			if len(parts) > 1 {
+				agentPath := strings.Split(parts[1], "/")[0]
+				if agentPath != "" {
+					c.agentID = agentPath
+				}
+			}
+		}
+
+		// Extract base service URL from the agent card URL
+		// The agent card URL is always /v1/agents/{agent}
+		// e.g., http://host/v1/agents/foo -> http://host
+		if c.agentCard.Url != "" {
+			cardURL := c.agentCard.Url
+			if strings.Contains(cardURL, "/v1/agents/") {
+				c.baseURL = strings.Split(cardURL, "/v1/agents/")[0]
+			}
 		}
 
 		return nil

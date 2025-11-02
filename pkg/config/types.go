@@ -1583,6 +1583,7 @@ func (c *PerformanceConfig) SetDefaults() {
 type A2AServerConfig struct {
 	Host               string `yaml:"host"`
 	Port               int    `yaml:"port"`
+	GRPCPort           int    `yaml:"grpc_port,omitempty"` // Optional separate gRPC port (default: 50051)
 	BaseURL            string `yaml:"base_url,omitempty"`
 	PreferredTransport string `yaml:"preferred_transport,omitempty"` // "grpc", "json-rpc", or "rest" (default: "json-rpc")
 }

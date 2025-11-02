@@ -50,17 +50,18 @@ A2A server settings (when running `hector serve`):
 ```yaml
 global:
   a2a_server:
-    host: "0.0.0.0"              # Bind host (default: 0.0.0.0)
-    port: 8080                   # gRPC port (default: 8080)
-    rest_gateway_port: 8080      # REST API port (default: 8080)
-    jsonrpc_port: 8080           # JSON-RPC port (default: 8080)
-    base_url: "http://localhost:8080"  # External URL
-    
-    tls:
-      enabled: false
-      cert_file: "/path/to/cert.pem"
-      key_file: "/path/to/key.pem"
+    host: "0.0.0.0"                        # Bind host (default: 0.0.0.0)
+    port: 8080                             # HTTP/REST/JSON-RPC port (default: 8080)
+    grpc_port: 50051                       # Internal gRPC port (default: 50051)
+    base_url: "http://localhost:8080"      # External URL for agent cards
+    preferred_transport: "json-rpc"        # Preferred A2A transport: "grpc", "json-rpc", or "rest"
 ```
+
+**Notes:**
+- `port`: The main HTTP port for REST API, JSON-RPC, and Web UI
+- `grpc_port`: Internal gRPC port for service-to-service communication (optional, defaults to 50051)
+- `base_url`: The external URL used in agent cards for client discovery
+- `preferred_transport`: The transport protocol advertised in agent cards
 
 ### global.auth
 

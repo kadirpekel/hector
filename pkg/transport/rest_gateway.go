@@ -55,62 +55,6 @@ const (
 	InternalError  = -32603
 )
 
-type jsonrpcStreamWrapper struct {
-	writer    http.ResponseWriter
-	flusher   http.Flusher
-	marshaler protojson.MarshalOptions
-	id        interface{}
-	context   context.Context
-}
-
-func (w *jsonrpcStreamWrapper) Send(resp *pb.StreamResponse) error {
-	data, err := w.marshaler.Marshal(resp)
-	if err != nil {
-		return fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	jsonrpcResp := JSONRPCResponse{
-		JSONRPC: "2.0",
-		ID:      w.id,
-		Result:  json.RawMessage(data),
-	}
-
-	respData, err := json.Marshal(jsonrpcResp)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintf(w.writer, "data: %s\n\n", respData)
-	if err != nil {
-		return err
-	}
-	w.flusher.Flush()
-	return nil
-}
-
-func (w *jsonrpcStreamWrapper) Context() context.Context {
-	return w.context
-}
-
-func (w *jsonrpcStreamWrapper) SendMsg(m interface{}) error {
-	return nil
-}
-
-func (w *jsonrpcStreamWrapper) RecvMsg(m interface{}) error {
-	return nil
-}
-
-func (w *jsonrpcStreamWrapper) SetHeader(metadata.MD) error {
-	return nil
-}
-
-func (w *jsonrpcStreamWrapper) SendHeader(metadata.MD) error {
-	return nil
-}
-
-func (w *jsonrpcStreamWrapper) SetTrailer(metadata.MD) {
-}
-
 type RESTGatewayConfig struct {
 	HTTPAddress string
 	GRPCAddress string
@@ -203,10 +147,9 @@ func (g *RESTGateway) setupRouting() http.Handler {
 		})
 	}
 
-	// Root path: Web UI (GET) and JSON-RPC (POST)
+	// Root path: Web UI only
 	r.Get("/", g.handleWebUI)
-	r.Post("/", g.handleJSONRPC)
-	log.Printf("   → Root (GET: Web UI, POST: JSON-RPC): /")
+	log.Printf("   → Web UI: /")
 
 	// Static assets
 	r.Get("/letter-h.png", func(w http.ResponseWriter, r *http.Request) {
@@ -239,23 +182,32 @@ func (g *RESTGateway) setupRouting() http.Handler {
 		// Per A2A spec Section 5.3: MUST be at /.well-known/agent-card.json
 		r.Get("/.well-known/agent-card.json", g.handlePerAgentCard)
 
+		// Convenient shortcut: GET /v1/agents/{agent}/ also returns agent card
+		r.Get("/", g.handlePerAgentCard)
+
 		// Messages (A2A core operations)
 		r.Post("/message:send", g.handleSendMessage)
 		r.Post("/message:stream", g.handleStreamingMessageSSE)
 
-		// JSON-RPC streaming (alternative transport)
-		r.Post("/stream", g.handleJSONRPCStream)
+		// JSON-RPC endpoint (agent-scoped)
+		// Handles JSON-RPC 2.0 requests for this specific agent
+		// Note: GET returns agent card, POST handles JSON-RPC
+		r.Post("/", g.handleJSONRPCAgentScoped)
+
+		// JSON-RPC streaming (agent-scoped)
+		r.Post("/stream", g.handleJSONRPCStreamAgentScoped)
 
 		// Mount grpc-gateway mux for tasks and other operations under this agent
 		// This rewrites paths from /v1/agents/{agent}/tasks/* to /v1/tasks/*
 		// and adds agent-name metadata
-		r.Mount("/", g.createAgentRoutingHandler(g.mux))
+		r.Mount("/tasks", g.createAgentRoutingHandler(g.mux))
 	})
 
 	log.Printf("   → Agent-scoped endpoints: /v1/agents/{agent}/*")
+	log.Printf("     • Agent root: / (GET: agent card, POST: JSON-RPC)")
 	log.Printf("     • Agent card: /.well-known/agent-card.json (A2A spec compliant)")
 	log.Printf("     • Messages: /message:send, /message:stream")
-	log.Printf("     • JSON-RPC: /stream")
+	log.Printf("     • JSON-RPC streaming: /stream (POST, agent-scoped)")
 	log.Printf("     • Tasks: /tasks/* (via gRPC gateway)")
 
 	return r
@@ -356,12 +308,20 @@ func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
+	// Build the agent URL - all transports now use agent-scoped pattern
+	// The URL is simply the agent's base path: /v1/agents/{agent}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	agentURL := fmt.Sprintf("%s://%s/v1/agents/%s", scheme, r.Host, agentID)
+
 	response := map[string]interface{}{
 		"name":         card.Name,
 		"description":  card.Description,
 		"version":      card.Version,
+		"url":          agentURL, // Agent-scoped URL (works for all transports)
 		"capabilities": card.Capabilities,
-		"endpoint":     fmt.Sprintf("/v1/agents/%s", agentID),
 	}
 
 	if card.PreferredTransport != "" {
@@ -667,7 +627,22 @@ func (g *RESTGateway) handleWebUI(w http.ResponseWriter, r *http.Request) {
 
 // ===== JSON-RPC Handlers =====
 
-func (g *RESTGateway) handleJSONRPC(w http.ResponseWriter, r *http.Request) {
+// handleJSONRPCAgentScoped handles JSON-RPC requests for a specific agent
+// This is the agent-scoped version at /v1/agents/{agent}/
+func (g *RESTGateway) handleJSONRPCAgentScoped(w http.ResponseWriter, r *http.Request) {
+	// Get agent ID from URL parameter
+	agentID := chi.URLParam(r, "agent")
+	if agentID == "" {
+		g.sendJSONRPCError(w, nil, InvalidRequest, "Agent ID required")
+		return
+	}
+
+	// Validate agent exists
+	if !g.validateAgentID(agentID, w, false) {
+		g.sendJSONRPCError(w, nil, InvalidRequest, fmt.Sprintf("Agent not found: %s", agentID))
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 
 	body, err := io.ReadAll(r.Body)
@@ -688,12 +663,57 @@ func (g *RESTGateway) handleJSONRPC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("JSON-RPC: method=%s id=%v", rpcReq.Method, rpcReq.ID)
+	log.Printf("JSON-RPC (agent-scoped): agent=%s method=%s id=%v", agentID, rpcReq.Method, rpcReq.ID)
 
+	// Create context with agent metadata
+	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
+
+	// Forward Authorization header
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
+	}
+
+	// Handle JSON-RPC methods
 	mappedParams := applyA2AFieldMapping(rpcReq.Params)
-	result, err := g.handleJSONRPCMethod(r.Context(), rpcReq.Method, mappedParams, r)
-	if err != nil {
-		g.sendJSONRPCError(w, rpcReq.ID, InternalError, err.Error())
+
+	var result interface{}
+
+	switch rpcReq.Method {
+	case "message/send":
+		// Non-streaming message send
+		var req pb.SendMessageRequest
+		if err := g.unmarshaler.Unmarshal(mappedParams, &req); err != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InvalidParams, fmt.Sprintf("Invalid params: %v", err))
+			return
+		}
+
+		resp, svcErr := g.service.SendMessage(ctx, &req)
+		if svcErr != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Service error: %v", svcErr))
+			return
+		}
+
+		jsonData, marshalErr := g.marshaler.Marshal(resp)
+		if marshalErr != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Failed to marshal response: %v", marshalErr))
+			return
+		}
+
+		if unmarshalErr := json.Unmarshal(jsonData, &result); unmarshalErr != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Failed to unmarshal response: %v", unmarshalErr))
+			return
+		}
+
+	case "message/stream":
+		g.sendJSONRPCError(w, rpcReq.ID, InvalidRequest, "Use /stream endpoint for streaming messages")
+		return
+
+	case "tasks/resubscribe":
+		g.sendJSONRPCError(w, rpcReq.ID, InvalidRequest, "Use /stream endpoint for task resubscription")
+		return
+
+	default:
+		g.sendJSONRPCError(w, rpcReq.ID, MethodNotFound, fmt.Sprintf("Method not found: %s", rpcReq.Method))
 		return
 	}
 
@@ -708,131 +728,86 @@ func (g *RESTGateway) handleJSONRPC(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func (g *RESTGateway) handleJSONRPCMethod(ctx context.Context, method string, params json.RawMessage, r *http.Request) (interface{}, error) {
-	var md metadata.MD
-	if agentName := r.URL.Query().Get("agent"); agentName != "" {
-		md = metadata.Pairs("agent-name", agentName)
-		ctx = metadata.NewIncomingContext(ctx, md)
+// handleJSONRPCStreamAgentScoped handles streaming JSON-RPC for a specific agent
+func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *http.Request) {
+	// Get agent ID from URL parameter
+	agentID := chi.URLParam(r, "agent")
+	if agentID == "" {
+		g.sendSSEError(w, "Agent ID required")
+		return
 	}
 
-	switch method {
-	case "message/send":
-		return g.handleSendMessageRPC(ctx, params)
-	case "message/stream":
-		return nil, fmt.Errorf("use /rpc/stream endpoint for streaming messages")
-	case "tasks/get":
-		return g.handleGetTask(ctx, params)
-	case "tasks/list":
-		return g.handleListTasks(ctx, params)
-	case "tasks/cancel":
-		return g.handleCancelTask(ctx, params)
-	case "tasks/resubscribe":
-		return nil, fmt.Errorf("tasks/resubscribe is only available via streaming endpoint")
-	case "agent/getAuthenticatedExtendedCard":
-		return g.handleGetAuthenticatedExtendedCard(ctx, params)
-	default:
-		return nil, fmt.Errorf("method not found: %s", method)
+	// Validate agent exists
+	if !g.validateAgentID(agentID, w, true) {
+		return
 	}
-}
 
-func (g *RESTGateway) handleJSONRPCStream(w http.ResponseWriter, r *http.Request) {
+	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		g.sendSSEError(w, "Streaming not supported")
+		return
+	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		g.sendJSONRPCSSEError(w, "Failed to read request body")
+		g.sendSSEError(w, "Failed to read request body")
 		return
 	}
 	defer r.Body.Close()
 
 	var rpcReq JSONRPCRequest
 	if err := json.Unmarshal(body, &rpcReq); err != nil {
-		g.sendJSONRPCSSEError(w, "Invalid JSON")
+		g.sendSSEError(w, "Invalid JSON")
 		return
 	}
 
-	if rpcReq.JSONRPC != "2.0" {
-		g.sendJSONRPCSSEError(w, "Invalid JSON-RPC version")
-		return
-	}
+	log.Printf("JSON-RPC Stream (agent-scoped): agent=%s method=%s", agentID, rpcReq.Method)
 
-	mappedParams := applyA2AFieldMapping(rpcReq.Params)
+	// Create context with agent metadata
+	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
 
-	var req pb.SendMessageRequest
-	if err := g.unmarshaler.Unmarshal(mappedParams, &req); err != nil {
-		g.sendJSONRPCSSEError(w, fmt.Sprintf("Invalid params: %v", err))
-		return
-	}
-
-	log.Printf("JSON-RPC Stream: method=%s id=%v", rpcReq.Method, rpcReq.ID)
-
-	ctx := r.Context()
-
-	// Set contextId as session ID for memory persistence
-	if req.Request != nil && req.Request.ContextId != "" {
-		ctx = context.WithValue(ctx, agent.SessionIDKey, req.Request.ContextId)
-	}
-
-	var agentName string
-	var md metadata.MD
-
-	agentName = r.URL.Query().Get("agent")
-	if agentName != "" {
-		log.Printf("JSON-RPC Stream: routing to agent '%s'", agentName)
-		md = metadata.Pairs("agent-name", agentName)
-	} else if req.Request != nil && req.Request.ContextId != "" {
-		parts := strings.Split(req.Request.ContextId, ":")
-		if len(parts) >= 2 && parts[0] != "" {
-			agentName = parts[0]
-			log.Printf("JSON-RPC Stream: routing to agent '%s' from context_id", agentName)
-			md = metadata.Pairs("agent-name", agentName)
-		}
-	}
-
-	// Forward Authorization header to gRPC metadata (for auth interceptor)
+	// Forward Authorization header
 	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
-		if md != nil {
-			md = metadata.Join(md, metadata.Pairs("authorization", authHeader))
-		} else {
-			md = metadata.Pairs("authorization", authHeader)
+		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
+	}
+
+	// Handle streaming methods
+	if rpcReq.Method == "message/stream" || rpcReq.Method == "tasks/resubscribe" {
+		// Reuse the existing streaming logic with the context that has agent metadata
+		var req pb.SendMessageRequest
+		mappedParams := applyA2AFieldMapping(rpcReq.Params)
+		if err := g.unmarshaler.Unmarshal(mappedParams, &req); err != nil {
+			g.sendSSEError(w, fmt.Sprintf("Invalid params: %v", err))
+			return
 		}
-	}
 
-	if md != nil {
-		ctx = metadata.NewIncomingContext(ctx, md)
-	}
+		// Set contextId as session ID for memory persistence
+		if req.Request != nil && req.Request.ContextId != "" {
+			ctx = context.WithValue(ctx, agent.SessionIDKey, req.Request.ContextId)
+		}
 
-	streamWrapper := &jsonrpcStreamWrapper{
-		writer:    w,
-		flusher:   w.(http.Flusher),
-		marshaler: g.marshaler,
-		id:        rpcReq.ID,
-		context:   ctx,
-	}
+		// Create stream wrapper for SSE
+		streamWrapper := &restStreamWrapper{
+			writer:  w,
+			flusher: flusher,
+			context: ctx,
+		}
 
-	if err := g.service.SendStreamingMessage(&req, streamWrapper); err != nil {
-		g.sendJSONRPCSSEError(w, fmt.Sprintf("Service error: %v", err))
+		// Call the streaming service
+		if err := g.service.SendStreamingMessage(&req, streamWrapper); err != nil {
+			g.sendSSEError(w, fmt.Sprintf("Service error: %v", err))
+			return
+		}
 		return
 	}
-}
 
-func (g *RESTGateway) sendJSONRPCSSEError(w http.ResponseWriter, message string) {
-	sseData := map[string]interface{}{
-		"jsonrpc": "2.0",
-		"error": map[string]interface{}{
-			"code":    InternalError,
-			"message": message,
-		},
-	}
-
-	data, _ := json.Marshal(sseData)
-	fmt.Fprintf(w, "event: error\ndata: %s\n\n", data)
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
+	g.sendSSEError(w, fmt.Sprintf("Method %s does not support streaming", rpcReq.Method))
 }
 
 func (g *RESTGateway) sendJSONRPCError(w http.ResponseWriter, id interface{}, code int, message string) {
@@ -847,132 +822,7 @@ func (g *RESTGateway) sendJSONRPCError(w http.ResponseWriter, id interface{}, co
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// ===== JSON-RPC Method Implementations =====
-
-func (g *RESTGateway) handleSendMessageRPC(ctx context.Context, params json.RawMessage) (interface{}, error) {
-	var req pb.SendMessageRequest
-	if err := g.unmarshaler.Unmarshal(params, &req); err != nil {
-		return nil, fmt.Errorf("invalid params: %w", err)
-	}
-
-	resp, err := g.service.SendMessage(ctx, &req)
-	if err != nil {
-		return nil, fmt.Errorf("service error: %w", err)
-	}
-
-	jsonData, err := g.marshaler.Marshal(resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	var result interface{}
-	if err := json.Unmarshal(jsonData, &result); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal to interface: %w", err)
-	}
-
-	return result, nil
-}
-
-func (g *RESTGateway) handleGetTask(ctx context.Context, params json.RawMessage) (interface{}, error) {
-	var req pb.GetTaskRequest
-	if err := g.unmarshaler.Unmarshal(params, &req); err != nil {
-		return nil, fmt.Errorf("invalid params: %w", err)
-	}
-
-	resp, err := g.service.GetTask(ctx, &req)
-	if err != nil {
-		return nil, fmt.Errorf("service error: %w", err)
-	}
-
-	jsonData, err := g.marshaler.Marshal(resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	var result interface{}
-	if err := json.Unmarshal(jsonData, &result); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal to interface: %w", err)
-	}
-
-	return result, nil
-}
-
-func (g *RESTGateway) handleListTasks(ctx context.Context, params json.RawMessage) (interface{}, error) {
-	var req pb.ListTasksRequest
-	if len(params) > 0 && string(params) != "null" {
-		if err := g.unmarshaler.Unmarshal(params, &req); err != nil {
-			return nil, fmt.Errorf("invalid params: %w", err)
-		}
-	}
-
-	resp, err := g.service.ListTasks(ctx, &req)
-	if err != nil {
-		return nil, fmt.Errorf("service error: %w", err)
-	}
-
-	jsonData, err := g.marshaler.Marshal(resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	var result interface{}
-	if err := json.Unmarshal(jsonData, &result); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal to interface: %w", err)
-	}
-
-	return result, nil
-}
-
-func (g *RESTGateway) handleCancelTask(ctx context.Context, params json.RawMessage) (interface{}, error) {
-	var req pb.CancelTaskRequest
-	if err := g.unmarshaler.Unmarshal(params, &req); err != nil {
-		return nil, fmt.Errorf("invalid params: %w", err)
-	}
-
-	resp, err := g.service.CancelTask(ctx, &req)
-	if err != nil {
-		return nil, fmt.Errorf("service error: %w", err)
-	}
-
-	jsonData, err := g.marshaler.Marshal(resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	var result interface{}
-	if err := json.Unmarshal(jsonData, &result); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal to interface: %w", err)
-	}
-
-	return result, nil
-}
-
-func (g *RESTGateway) handleGetAuthenticatedExtendedCard(ctx context.Context, params json.RawMessage) (interface{}, error) {
-	var req pb.GetAgentCardRequest
-
-	if len(params) > 0 && string(params) != "null" {
-		if err := g.unmarshaler.Unmarshal(params, &req); err != nil {
-			return nil, fmt.Errorf("invalid params: %w", err)
-		}
-	}
-
-	resp, err := g.service.GetAgentCard(ctx, &req)
-	if err != nil {
-		return nil, fmt.Errorf("service error: %w", err)
-	}
-
-	jsonData, err := g.marshaler.Marshal(resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	var result interface{}
-	if err := json.Unmarshal(jsonData, &result); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal to interface: %w", err)
-	}
-
-	return result, nil
-}
+// ===== A2A Field Transformation =====
 
 func (g *RESTGateway) transformResultForA2A(result interface{}) interface{} {
 	jsonData, err := json.Marshal(result)
