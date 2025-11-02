@@ -179,13 +179,13 @@ Hector implements RFC 8615 `.well-known` endpoints for agent discovery.
 **Per A2A Specification Section 5.3**, agent cards **MUST** be located at:
 
 ```
-/.well-known/agent.json
+/.well-known/agent-card.json
 ```
 
 For multi-agent services, each agent has its own dedicated path:
 
 ```
-/v1/agents/{agent}/.well-known/agent.json
+/v1/agents/{agent}/.well-known/agent-card.json
 ```
 
 ### Multi-Agent Discovery
@@ -215,7 +215,7 @@ curl http://localhost:8080/v1/agents
 
 ### Agent Card Structure
 
-**Endpoint:** `GET /v1/agents/{agent}/.well-known/agent.json`
+**Endpoint:** `GET /v1/agents/{agent}/.well-known/agent-card.json`
 
 Get specific agent card:
 
@@ -627,7 +627,7 @@ Hector supports protocol extensions while maintaining compatibility:
 
 ```bash
 # Get agent card (multi-agent service)
-curl http://localhost:8080/v1/agents/assistant/.well-known/agent.json
+curl http://localhost:8080/v1/agents/assistant/.well-known/agent-card.json
 
 # List all agents
 curl http://localhost:8080/v1/agents

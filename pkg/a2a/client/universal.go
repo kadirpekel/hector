@@ -32,7 +32,7 @@ type UniversalA2AClient struct {
 
 // NewUniversalA2AClient creates a client that auto-discovers the agent and chooses transport
 // url can be:
-// - Agent card URL: https://service.com/v1/agents/assistant/.well-known/agent.json
+// - Agent card URL: https://service.com/v1/agents/assistant/.well-known/agent-card.json
 // - Agent-specific base URL: https://service.com/v1/agents/assistant
 // - Service base URL: https://service.com (will discover agents)
 func NewUniversalA2AClient(url, agentID, token string) (*UniversalA2AClient, error) {
@@ -61,12 +61,12 @@ func NewUniversalA2AClient(url, agentID, token string) (*UniversalA2AClient, err
 // discoverAgent fetches the agent card to learn about the agent's capabilities
 func (c *UniversalA2AClient) discoverAgent() error {
 	// Try agent card URL patterns per A2A spec (Section 5.3)
-	// Per A2A spec: agent cards MUST be at /.well-known/agent.json
+	// Per A2A spec: agent cards MUST be at /.well-known/agent-card.json
 	urls := []string{}
 
 	// If agentID is provided, try agent-specific endpoint first
 	if c.agentID != "" {
-		urls = append(urls, fmt.Sprintf("%s/v1/agents/%s/.well-known/agent.json", c.baseURL, c.agentID))
+		urls = append(urls, fmt.Sprintf("%s/v1/agents/%s/.well-known/agent-card.json", c.baseURL, c.agentID))
 	}
 
 	// Try direct URL (might already be the card URL)

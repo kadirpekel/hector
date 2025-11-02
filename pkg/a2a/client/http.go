@@ -206,8 +206,8 @@ func (c *HTTPClient) ListAgents(ctx context.Context) ([]*pb.AgentCard, error) {
 }
 
 func (c *HTTPClient) GetAgentCard(ctx context.Context, agentID string) (*pb.AgentCard, error) {
-	// Per A2A spec Section 5.3: agent cards MUST be at /.well-known/agent.json
-	url := fmt.Sprintf("%s/v1/agents/%s/.well-known/agent.json", c.baseURL, agentID)
+	// Per A2A spec Section 5.3: agent cards MUST be at /.well-known/agent-card.json
+	url := fmt.Sprintf("%s/v1/agents/%s/.well-known/agent-card.json", c.baseURL, agentID)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

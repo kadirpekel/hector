@@ -236,8 +236,8 @@ func (g *RESTGateway) setupRouting() http.Handler {
 	// This follows A2A protocol best practice: each agent gets its own URL space
 	r.Route("/v1/agents/{agent}", func(r chi.Router) {
 		// Agent card (A2A spec required endpoint)
-		// Per A2A spec Section 5.3: MUST be at /.well-known/agent.json
-		r.Get("/.well-known/agent.json", g.handlePerAgentCard)
+		// Per A2A spec Section 5.3: MUST be at /.well-known/agent-card.json
+		r.Get("/.well-known/agent-card.json", g.handlePerAgentCard)
 
 		// Messages (A2A core operations)
 		r.Post("/message:send", g.handleSendMessage)
@@ -253,7 +253,7 @@ func (g *RESTGateway) setupRouting() http.Handler {
 	})
 
 	log.Printf("   → Agent-scoped endpoints: /v1/agents/{agent}/*")
-	log.Printf("     • Agent card: /.well-known/agent.json (A2A spec compliant)")
+	log.Printf("     • Agent card: /.well-known/agent-card.json (A2A spec compliant)")
 	log.Printf("     • Messages: /message:send, /message:stream")
 	log.Printf("     • JSON-RPC: /stream")
 	log.Printf("     • Tasks: /tasks/* (via gRPC gateway)")

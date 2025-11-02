@@ -42,7 +42,7 @@ Connect your Hector agents to external A2A-compliant agents (v0.3.0 or compatibl
 External A2A agents expose an agent card:
 
 ```bash
-curl https://external-agent.example.com/.well-known/agent.json
+curl https://external-agent.example.com/.well-known/agent-card.json
 ```
 
 Response:
@@ -91,7 +91,7 @@ agents:
   # External A2A agent
   # The URL can point to:
   # 1. Service base URL (e.g., http://service.com) - auto-discovers agents
-  # 2. Agent card URL (e.g., http://service.com/.well-known/agent.json)
+  # 2. Agent card URL (e.g., http://service.com/.well-known/agent-card.json)
   # 3. Agent-specific URL (e.g., http://service.com/v1/agents/specialist)
   external_specialist:
     type: "a2a"
@@ -461,11 +461,11 @@ agents:
 
 ```bash
 # Test agent discovery
-curl https://external-agent.example.com/.well-known/agent.json
+curl https://external-agent.example.com/.well-known/agent-card.json
 
 # Test with authentication
 curl -H "Authorization: Bearer $TOKEN" \
-  https://external-agent.example.com/.well-known/agent.json
+  https://external-agent.example.com/.well-known/agent-card.json
   https://external-agent.example.com/health
 ```
 
@@ -631,7 +631,7 @@ Monitor external agent interactions through application logs and observability:
 
 ```bash
 # Check URL is correct
-curl https://external-agent.example.com/.well-known/agent.json
+curl https://external-agent.example.com/.well-known/agent-card.json
 
 # Check network connectivity
 ping external-agent.example.com
@@ -771,13 +771,13 @@ If you know the agent card URL, point directly to it:
 
 ```bash
 # Service root
-hector list --url http://service/.well-known/agent.json
+hector list --url http://service/.well-known/agent-card.json
 
 # Agent-specific
-hector call "task" --url http://service/v1/agents/researcher/.well-known/agent.json
+hector call "task" --url http://service/v1/agents/researcher/.well-known/agent-card.json
 
 # With authentication
-hector call "task" --url http://service/v1/agents/researcher/.well-known/agent.json --token "eyJ..."
+hector call "task" --url http://service/v1/agents/researcher/.well-known/agent-card.json --token "eyJ..."
 ```
 
 ### Multi-Vendor Interoperability

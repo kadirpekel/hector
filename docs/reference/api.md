@@ -152,9 +152,9 @@ curl -N -X POST http://localhost:8080/v1/agents/assistant/message:stream \
 
 Get agent metadata and capabilities.
 
-**Endpoint:** `GET /v1/agents/{agent}/.well-known/agent.json`
+**Endpoint:** `GET /v1/agents/{agent}/.well-known/agent-card.json`
 
-**Per A2A Specification Section 5.3**, agent cards MUST be at `/.well-known/agent.json`
+**Per A2A Specification Section 5.3**, agent cards MUST be at `/.well-known/agent-card.json`
 
 **Response:**
 ```json
@@ -172,11 +172,11 @@ Get agent metadata and capabilities.
 **Example:**
 ```bash
 # Get agent card for specific agent
-curl http://localhost:8080/v1/agents/assistant/.well-known/agent.json
+curl http://localhost:8080/v1/agents/assistant/.well-known/agent-card.json
 
 # With authentication
 curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8080/v1/agents/assistant/.well-known/agent.json
+  http://localhost:8080/v1/agents/assistant/.well-known/agent-card.json
 ```
 
 ### List Agents

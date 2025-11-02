@@ -224,7 +224,7 @@ main() {
     # Hit different agent endpoints
     for agent in "agent1" "agent2" "test-agent" "my_agent" "super-long-agent-name-with-many-chars"; do
         curl -s "http://localhost:${HTTP_PORT}/v1/agents/${agent}/message:send" -X POST -d '{}' > /dev/null 2>&1 || true
-        curl -s "http://localhost:${HTTP_PORT}/v1/agents/${agent}/.well-known/agent.json" > /dev/null 2>&1 || true
+        curl -s "http://localhost:${HTTP_PORT}/v1/agents/${agent}/.well-known/agent-card.json" > /dev/null 2>&1 || true
     done
     
     # Hit static endpoints
