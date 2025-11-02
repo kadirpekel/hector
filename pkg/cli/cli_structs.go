@@ -22,7 +22,8 @@ type ZeroConfigFlags struct {
 	Model         string `help:"LLM model name" env:"HECTOR_MODEL"`
 	APIKey        string `name:"api-key" help:"API key for LLM provider (overrides env vars)"`
 	BaseURL       string `name:"base-url" help:"Custom API base URL" env:"HECTOR_BASE_URL" placeholder:"URL"`
-	Instruction   string `help:"Custom instruction for the AI agent (e.g., 'Focus on security')"`
+	Role          string `help:"Override agent's system role/persona (e.g., 'You are a security expert')"`
+	Instruction   string `help:"Additional guidance appended to system prompt (e.g., 'Focus on performance')"`
 	Tools         bool   `help:"Enable built-in tools"`
 	MCPURL        string `name:"mcp-url" help:"MCP server URL for external tools" env:"MCP_URL" placeholder:"URL"`
 	DocsFolder    string `name:"docs-folder" help:"Folder containing documents for RAG" type:"path" placeholder:"PATH"`

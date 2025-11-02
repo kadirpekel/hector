@@ -11,6 +11,7 @@ var zeroConfigFlagNames = []string{
 	"--model",
 	"--api-key",
 	"--base-url",
+	"--role",
 	"--instruction",
 	"--tools",
 	"--mcp-url",

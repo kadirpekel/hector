@@ -445,6 +445,7 @@ func CreateZeroConfig(source interface{}) *Config {
 	apiKey := extractStringField(source, "APIKey")
 	baseURL := extractStringField(source, "BaseURL")
 	model := extractStringField(source, "Model")
+	role := extractStringField(source, "Role")
 	instruction := extractStringField(source, "Instruction")
 	enableTools := extractBoolField(source, "Tools")
 	mcpURL := extractStringField(source, "MCPURL")
@@ -521,9 +522,10 @@ func CreateZeroConfig(source interface{}) *Config {
 		LLM:  provider,
 	}
 
-	// Add custom instruction if provided
-	if instruction != "" {
+	// Add custom role and/or instruction if provided
+	if role != "" || instruction != "" {
 		agentConfig.Prompt.PromptSlots = &PromptSlotsConfig{
+			SystemRole: role,
 			Additional: instruction,
 		}
 	}
