@@ -65,13 +65,13 @@ hector serve --config agents.yaml
 
 ```bash
 # Send message to agent
-hector call "Analyze system architecture and suggest improvements" --agent analyst --server http://localhost:8080
+hector call "Analyze system architecture and suggest improvements" --agent analyst --url http://localhost:8080
 
 # Interactive chat
-hector chat --agent analyst --server http://localhost:8080
+hector chat --agent analyst --url http://localhost:8080
 
-# List available agents
-hector list --server http://localhost:8080
+# Get agent information
+hector info analyst --url http://localhost:8080
 ```
 
 **Using REST API (curl):**

@@ -135,8 +135,6 @@ func routeCommand(ctx *kong.Context, cfg *config.Config, mode cli.CLIMode) error
 		return cli.VersionCommand(&cli.CLI.Version, cfg, mode)
 	case "serve", "serve <agent-name>":
 		return cli.ServeCommand(&cli.CLI.Serve, cfg, mode)
-	case "list":
-		return cli.ListCommand(&cli.CLI.List, cfg, mode)
 	case "info <agent>":
 		return cli.InfoCommand(&cli.CLI.Info, cfg, mode)
 	case "call <message>":
@@ -178,8 +176,6 @@ func createZeroConfig(command string) *config.Config {
 
 func isClientModeCommand(command string) bool {
 	switch command {
-	case "list":
-		return cli.CLI.List.URL != ""
 	case "info <agent>":
 		return cli.CLI.Info.URL != ""
 	case "call <message>":

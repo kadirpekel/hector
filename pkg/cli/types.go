@@ -5,7 +5,6 @@ type CommandType string
 const (
 	CommandVersion CommandType = "version"
 	CommandServe   CommandType = "serve"
-	CommandList    CommandType = "list"
 	CommandInfo    CommandType = "info"
 	CommandCall    CommandType = "call"
 	CommandChat    CommandType = "chat"

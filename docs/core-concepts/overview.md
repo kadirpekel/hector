@@ -194,7 +194,7 @@ hector serve --config config.yaml
 Connect to a remote Hector server:
 
 ```bash
-hector call "Hello" --agent assistant --server http://remote:8080
+hector call "Hello" --agent assistant --url http://remote:8080
 ```
 
 - **Use when:** Distributed systems, shared agents

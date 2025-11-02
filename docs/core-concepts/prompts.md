@@ -44,10 +44,24 @@ agents:
 - ✅ Easy to understand and maintain
 - ✅ All instructions in one place
 
-**For zero-config mode**, use the `--instruction` flag:
+**For zero-config mode**, use the `--role` and `--instruction` flags:
+
 ```bash
-hector call "analyze code" --instruction "Focus on security vulnerabilities"
+# Override the agent's system role (replaces default)
+hector call "analyze code" --role "You are a security expert focusing on vulnerabilities"
+
+# Add supplementary instructions (appended to prompt)
+hector call "analyze code" --instruction "Focus on performance and memory efficiency"
+
+# Use both for fine-grained control
+hector call "review this PR" --role "You are a code reviewer" --instruction "Be strict about error handling"
 ```
+
+**Difference between `--role` and `--instruction`:**
+- `--role`: Replaces the default `system_role` slot (defines WHO the agent is)
+- `--instruction`: Appended to the `additional` slot (provides extra guidance)
+
+**Example:** With `--role "You are X"`, the agent completely adopts that role. With `--instruction "Focus on Y"`, it keeps its default role but adds that focus.
 
 ---
 
@@ -65,6 +79,29 @@ Slot-based prompts provide granular control over different aspects of agent beha
 - Clarity: Separate different concerns explicitly
 
 ### Available Slots
+
+Each slot serves a specific purpose in the final system prompt:
+
+| Slot | Purpose | When to Override |
+|------|---------|------------------|
+| `system_role` | Core identity and role definition | Want to completely change agent's persona |
+| `reasoning_instructions` | How the agent approaches problems | Need specific problem-solving methodology |
+| `tool_usage` | Guidelines for using tools | Have specific tool usage patterns |
+| `output_format` | How to structure responses | Need specific formatting (e.g., JSON, reports) |
+| `communication_style` | Tone, verbosity, interaction style | Want different communication patterns |
+| `additional` | Any extra context or instructions | Add supplementary guidance |
+
+**How slots are composed:** Slots are merged in this order to create the final system prompt:
+1. `system_role`
+2. `reasoning_instructions`
+3. `tool_usage` (wrapped in `<tool_usage>` tags)
+4. `output_format` (wrapped in `<output_format>` tags)
+5. `communication_style` (wrapped in `<communication>` tags)
+6. `additional` (no wrapper tags)
+
+**Zero-config CLI flags:**
+- `--role TEXT` → Sets `system_role` slot
+- `--instruction TEXT` → Sets `additional` slot
 
 ```yaml
 agents:
@@ -88,6 +125,7 @@ agents:
         
         additional: |
           Any extra context or instructions
+```
 
 ### Complete Example
 

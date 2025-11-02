@@ -538,7 +538,7 @@ hector serve --config config.yaml
 ### Client Mode
 
 ```bash
-hector call "Hello" --agent assistant --server http://remote:8080
+hector call "Hello" --agent assistant --url http://remote:8080
 ```
 
 - Connect to remote servers

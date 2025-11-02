@@ -16,7 +16,6 @@ Complete reference for all Hector command-line commands and options.
 | `hector version` | Show version | `hector version` |
 | `hector validate` | Validate config | `hector validate config.yaml` |
 | `hector serve` | Start server | `hector serve --config config.yaml` |
-| `hector list` | List agents | `hector list` |
 | `hector info` | Agent details | `hector info assistant` |
 | `hector call` | Single message | `hector call "Hello" --agent assistant --config config.yaml` |
 | `hector chat` | Interactive chat | `hector chat --agent assistant --config config.yaml` |
@@ -259,6 +258,8 @@ When using zero-config mode (no `--config` flag), use these to configure quickly
 | `--api-key KEY` | string | LLM API key | From env |
 | `--model NAME` | string | Model name | `gpt-4o-mini` |
 | `--provider NAME` | string | LLM provider (openai/anthropic/gemini) | `openai` |
+| `--role TEXT` | string | Override agent's system role/persona | - |
+| `--instruction TEXT` | string | Additional guidance appended to system prompt | - |
 | `--tools` | bool | Enable all built-in tools | `false` |
 | `--mcp-url URL` | string | MCP server URL | - |
 | `--docs FOLDER` | string | Documents folder for RAG | - |
@@ -279,8 +280,14 @@ hector serve --model gpt-4o --tools
 hector serve --tools gopher
 hector serve myagent --model gpt-4o --tools
 
-# With custom instruction
+# With custom role
+hector serve --role "You are a security expert who focuses on identifying vulnerabilities"
+
+# With additional instruction
 hector serve --instruction "Focus on security and best practices"
+
+# With both for fine-grained control
+hector serve --role "You are a code reviewer" --instruction "Be strict about error handling"
 
 # With RAG
 hector serve coder --model gpt-4o --tools --docs-folder ./knowledge
@@ -296,48 +303,6 @@ hector serve --model gpt-4o --tools --observe
 
 # All flags before positional arg (recommended)
 hector serve --tools --model gpt-4o coder
-```
-
----
-
-### hector list
-
-List all available agents.
-
-**Usage:**
-```bash
-hector list [flags]
-```
-
-**Flags:**
-
-| Flag | Type | Description |
-|------|------|-------------|
-| `--url URL` | string | Agent card URL or service base URL (enables client mode) |
-| `--token TOKEN` | string | Authentication token |
-
-**Examples:**
-
-```bash
-# List local agents
-hector list --config config.yaml
-
-# List agents from A2A service (discovers agents automatically)
-hector list --url http://remote:8080
-
-# Direct agent card URL
-hector list --url http://remote:8080/.well-known/agent-card.json
-
-# With authentication
-hector list --url http://remote:8080 --token "eyJ..."
-```
-
-**Output:**
-```
-Available agents:
-- assistant (My Assistant)
-- coder (Coding Assistant)
-- researcher (Research Specialist)
 ```
 
 ---
@@ -422,6 +387,8 @@ hector call MESSAGE [flags]
 | `--model NAME` | string | Model name | - |
 | `--api-key KEY` | string | API key | From env |
 | `--base-url URL` | string | Custom API base URL | - |
+| `--role TEXT` | string | Override agent's system role/persona | - |
+| `--instruction TEXT` | string | Additional guidance appended to system prompt | - |
 | `--tools` | bool | Enable built-in tools | `false` |
 | `--mcp-url URL` | string | MCP server URL | - |
 | `--docs-folder PATH` | string | Documents folder for RAG | - |
@@ -482,6 +449,8 @@ hector chat [flags]
 | `--model NAME` | string | Model name | - |
 | `--api-key KEY` | string | API key | From env |
 | `--base-url URL` | string | Custom API base URL | - |
+| `--role TEXT` | string | Override agent's system role/persona | - |
+| `--instruction TEXT` | string | Additional guidance appended to system prompt | - |
 | `--tools` | bool | Enable built-in tools | `false` |
 | `--mcp-url URL` | string | MCP server URL | - |
 | `--docs-folder PATH` | string | Documents folder for RAG | - |
@@ -621,7 +590,7 @@ Hector operates in three modes based on command and flags:
 Run agents in-process without a server.
 
 **Triggers:**
-- Any command without `--server` flag
+- Any command without `--url` flag
 
 **Supports:**
 - Configuration files (`--config`)
@@ -754,7 +723,7 @@ export OPENAI_API_KEY="sk-..."
 hector call "What is recursion?"
 
 # With custom behavior
-hector call "analyze this" --instruction "Focus on performance"
+hector call "analyze this" --role "You are a security analyst" --instruction "Focus on vulnerabilities"
 ```
 
 ### Development with Config
@@ -780,7 +749,7 @@ hector serve \
 export HECTOR_URL="https://agents.company.com"
 export HECTOR_TOKEN="eyJ..."
 
-hector list --url $HECTOR_URL --token $HECTOR_TOKEN
+hector info assistant --url $HECTOR_URL --token $HECTOR_TOKEN
 hector call "task" --agent assistant --url $HECTOR_URL --token $HECTOR_TOKEN
 
 # Or direct agent card URL
@@ -862,8 +831,8 @@ Available agents in config:
 # Use an agent that exists in your config
 hector call "Hello" --agent assistant --config config.yaml
 
-# Check available agents
-hector list --config config.yaml
+# Check available agents with info
+hector info assistant --config config.yaml
 ```
 
 ### "connection refused"

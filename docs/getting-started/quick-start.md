@@ -51,14 +51,17 @@ Type your messages and press Enter. Type `exit` or press Ctrl+C to quit.
 # Use a specific model
 hector call "Write a haiku about coding" --model gpt-4o
 
-# Add custom instructions
+# Override the agent's role
+hector call "Analyze this system" --role "You are a senior security auditor"
+
+# Add supplementary instructions
 hector call "Write unit tests" --instruction "Use pytest and aim for 90% coverage"
 
 # Enable built-in tools
 hector call "List files in the current directory" --tools
 
-# Combine options
-hector call "analyze code" --tools --instruction "Focus on security"
+# Combine options for fine-grained control
+hector call "analyze code" --tools --role "You are a code reviewer" --instruction "Focus on performance"
 
 # Use a different provider
 export ANTHROPIC_API_KEY="sk-ant-..."
@@ -125,14 +128,14 @@ Registered agents: assistant (or your configured agent names)
 ### 2. Connect from Another Terminal
 
 ```bash
-# List available agents
-hector list --server http://localhost:8080
+# Get agent information
+hector info assistant --url http://localhost:8080
 
 # Call an agent
-hector call "Explain recursion" --agent assistant --server http://localhost:8080
+hector call "Explain recursion" --agent assistant --url http://localhost:8080
 
 # Interactive chat
-hector chat --agent assistant --server http://localhost:8080
+hector chat --agent assistant --url http://localhost:8080
 ```
 
 ---
@@ -143,10 +146,10 @@ Use Hector as a client to connect to any A2A-compliant server (v0.3.0 or compati
 
 ```bash
 # Connect to remote server
-hector call "Hello" --agent assistant --server http://remote:8080
+hector call "Hello" --agent assistant --url http://remote:8080
 
 # With authentication
-hector call "Hello" --agent assistant --server http://remote:8080 --token "your-jwt-token"
+hector call "Hello" --agent assistant --url http://remote:8080 --token "your-jwt-token"
 ```
 
 ---
@@ -159,7 +162,7 @@ hector call "Hello" --agent assistant --server http://remote:8080 --token "your-
 | `hector call` | Send a single message | `hector call "Hello"` (zero-config) |
 | `hector chat` | Interactive conversation | `hector chat` (zero-config) |
 | `hector serve` | Start server | `hector serve --config config.yaml` |
-| `hector list` | List available agents | `hector list` |
+| `hector info` | Get agent details | `hector info assistant --config config.yaml` |
 
 ---
 

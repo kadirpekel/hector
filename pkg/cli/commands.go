@@ -29,51 +29,6 @@ func VersionCommand(args *VersionCmd, cfg *config.Config, mode CLIMode) error {
 	return nil
 }
 
-func ListCommand(args *ListCmd, cfg *config.Config, mode CLIMode) error {
-	switch mode {
-	case ModeClient:
-		// Use UniversalA2AClient to list agents from any A2A service
-		url := args.URL
-		if url == "" {
-			return fmt.Errorf("--url is required in client mode (agent card URL or service base URL)")
-		}
-
-		a2aClient, err := client.NewUniversalA2AClient(url, "", args.Token)
-		if err != nil {
-			return fmt.Errorf("failed to create A2A client: %w", err)
-		}
-		defer a2aClient.Close()
-
-		agents, err := a2aClient.ListAgents(context.Background())
-		if err != nil {
-			return fmt.Errorf("failed to list agents: %w", err)
-		}
-
-		DisplayAgentList(agents, "Client Mode")
-		return nil
-
-	case ModeLocalConfig:
-		// Local mode - list from config
-		agents := buildAgentCardsFromConfig(cfg)
-		DisplayAgentList(agents, "Local Mode")
-		return nil
-
-	case ModeLocalZeroConfig:
-		// Zero-config mode
-		fmt.Println("\n📋 Available Agents (Local Mode)")
-		fmt.Printf("Found 1 agent(s):\n\n")
-		fmt.Printf("• Assistant (v1.0.0)\n")
-		fmt.Printf("  Description: Zero-config AI assistant\n")
-		fmt.Printf("  URL: local://assistant\n")
-		fmt.Printf("  Streaming: ✓\n")
-		fmt.Printf("\n💡 Use 'hector call \"message\"' to interact with the agent\n")
-		return nil
-
-	default:
-		return fmt.Errorf("unsupported mode for list command: %s", mode)
-	}
-}
-
 func InfoCommand(args *InfoCmd, cfg *config.Config, mode CLIMode) error {
 	switch mode {
 	case ModeClient:

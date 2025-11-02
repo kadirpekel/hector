@@ -752,17 +752,14 @@ Hector's CLI can connect to ANY A2A-compliant service (not just Hector servers) 
 ### Connect to A2A Service
 
 ```bash
-# List agents from any A2A service (auto-discovers)
-hector list --url http://remote-service:8080
-
 # Get agent info
-hector info --url http://remote-service:8080 --agent researcher
+hector info researcher --url http://remote-service:8080
 
 # Call agent
-hector call "task" --url http://remote-service:8080 --agent researcher
+hector call "task" --agent researcher --url http://remote-service:8080
 
 # Interactive chat
-hector chat --url http://remote-service:8080 --agent researcher
+hector chat --agent researcher --url http://remote-service:8080
 ```
 
 ### Direct Agent Card URL
@@ -770,10 +767,10 @@ hector chat --url http://remote-service:8080 --agent researcher
 If you know the agent card URL, point directly to it:
 
 ```bash
-# Service root
-hector list --url http://service/.well-known/agent-card.json
+# Direct agent card URL
+hector info --url http://service/.well-known/agent-card.json
 
-# Agent-specific
+# Agent-specific card
 hector call "task" --url http://service/v1/agents/researcher/.well-known/agent-card.json
 
 # With authentication
@@ -802,7 +799,7 @@ export HECTOR_URL="https://agents.company.com"
 export HECTOR_TOKEN="eyJ..."
 
 # Now --url and --token are optional
-hector list
+hector info researcher
 hector call "task" --agent researcher
 ```
 

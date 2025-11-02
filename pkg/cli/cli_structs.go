@@ -10,7 +10,6 @@ var CLI struct {
 	Version  VersionCmd  `cmd:"" help:"Show Hector version information"`
 	Validate ValidateCmd `cmd:"" help:"Validate configuration file syntax and semantics"`
 	Serve    ServeCmd    `cmd:"" help:"Start the A2A server to host agents"`
-	List     ListCmd     `cmd:"" help:"List all available agents"`
 	Info     InfoCmd     `cmd:"" help:"Display detailed agent information"`
 	Call     CallCmd     `cmd:"" help:"Send a single message to an agent"`
 	Chat     ChatCmd     `cmd:"" help:"Start an interactive chat session with an agent"`
@@ -48,10 +47,6 @@ type ServeCmd struct {
 	ZeroConfigFlags `embed:"" prefix:""`
 
 	AgentName string `arg:"" optional:"" help:"Agent name for zero-config mode (default: assistant)" placeholder:"AGENT"`
-}
-
-type ListCmd struct {
-	ClientModeFlags `embed:"" prefix:""`
 }
 
 type InfoCmd struct {
