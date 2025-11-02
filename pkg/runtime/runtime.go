@@ -42,6 +42,11 @@ func (r *Runtime) Config() *config.Config {
 	return r.config
 }
 
+// GetAgentID returns empty string for Runtime (not applicable for multi-agent local runtime)
+func (r *Runtime) GetAgentID() string {
+	return ""
+}
+
 func (r *Runtime) Close() error {
 	var errors []error
 

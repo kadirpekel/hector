@@ -1,7 +1,12 @@
 global:
+  auth:
+    jwks_url: "https://dev-necoi8pbjgvataq6.us.auth0.com/.well-known/jwks.json"
+    issuer: "https://dev-necoi8pbjgvataq6.us.auth0.com/"
+    audience: "https://github.com/kadirpekel/hector"
   a2a_server:
     host: "0.0.0.0"
     port: 9090
+    preferred_transport: "json-rpc"  # Use JSON-RPC for easy HTTP-based access
 
 llms:
   gpt-4o:
@@ -26,4 +31,3 @@ agents:
       system_prompt: |
         You are a cheerful and friendly weather assistant acting as personal assistant! 🌤️
         Briefly tell the user what you are doing before using any tool.
-  

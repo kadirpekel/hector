@@ -216,41 +216,47 @@ func (g *RESTGateway) setupRouting() http.Handler {
 		_, _ = w.Write(letterHPNG)
 	})
 
-	// JSON-RPC streaming endpoint
-	r.Post("/stream", g.handleJSONRPCStream)
-	log.Printf("   → JSON-RPC Streaming: /stream")
-
-	// Health check
+	// Health check (operational endpoint, not agent-specific)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
-	// Metrics
+	// Metrics (operational endpoint, not agent-specific)
 	r.Get("/metrics", MetricsHandler().ServeHTTP)
 	log.Printf("   → Prometheus metrics: /metrics")
 
-	// REST API: Discovery
+	// REST API: Discovery (the only v1/ root endpoint)
 	if g.discovery != nil {
 		r.Get("/v1/agents", g.discovery.ServeHTTP)
 		log.Printf("   → Discovery endpoint: /v1/agents")
 	}
 
-	// REST API: Service card
-	serviceCardHandler := g.createServiceLevelAgentCardHandler()
-	r.Get("/.well-known/agent-card.json", serviceCardHandler.ServeHTTP)
-	log.Printf("   → Service Card: /.well-known/agent-card.json")
+	// REST API: All agent-specific routes under /v1/agents/{agent}/
+	// This follows A2A protocol best practice: each agent gets its own URL space
+	r.Route("/v1/agents/{agent}", func(r chi.Router) {
+		// Agent card (A2A spec required endpoint)
+		// Per A2A spec Section 5.3: MUST be at /.well-known/agent.json
+		r.Get("/.well-known/agent.json", g.handlePerAgentCard)
 
-	// REST API: Agent-specific routes
-	r.Get("/v1/agents/{agent}/.well-known/agent-card.json", g.handlePerAgentCard)
-	log.Printf("   → Agent Cards: /v1/agents/{agent}/.well-known/agent-card.json")
+		// Messages (A2A core operations)
+		r.Post("/message:send", g.handleSendMessage)
+		r.Post("/message:stream", g.handleStreamingMessageSSE)
 
-	r.Post("/v1/agents/{agent}/message:stream", g.handleStreamingMessageSSE)
-	r.Post("/v1/agents/{agent}/message:send", g.handleSendMessage)
-	log.Printf("   → Agent endpoints: /v1/agents/{agent}/*")
+		// JSON-RPC streaming (alternative transport)
+		r.Post("/stream", g.handleJSONRPCStream)
 
-	// Mount grpc-gateway mux for other /v1/* routes
-	r.Mount("/v1/", g.createAgentRoutingHandler(g.mux))
+		// Mount grpc-gateway mux for tasks and other operations under this agent
+		// This rewrites paths from /v1/agents/{agent}/tasks/* to /v1/tasks/*
+		// and adds agent-name metadata
+		r.Mount("/", g.createAgentRoutingHandler(g.mux))
+	})
+
+	log.Printf("   → Agent-scoped endpoints: /v1/agents/{agent}/*")
+	log.Printf("     • Agent card: /.well-known/agent.json (A2A spec compliant)")
+	log.Printf("     • Messages: /message:send, /message:stream")
+	log.Printf("     • JSON-RPC: /stream")
+	log.Printf("     • Tasks: /tasks/* (via gRPC gateway)")
 
 	return r
 }
@@ -306,138 +312,6 @@ func (g *RESTGateway) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (g *RESTGateway) createServiceLevelAgentCardHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// A2A spec: agent cards must be retrieved via HTTP GET only
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		agentName := r.URL.Query().Get("agent")
-
-		if agentName != "" {
-
-			g.handleAgentCardByName(w, r, agentName)
-			return
-		}
-
-		if g.discovery != nil {
-			agentNames := g.discovery.service.ListAgents()
-			if len(agentNames) > 0 {
-
-				g.handleAgentCardByName(w, r, agentNames[0])
-				return
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-
-		response := map[string]interface{}{
-			"name":               "Hector Multi-Agent Service",
-			"description":        "A2A-compliant multi-agent platform supporting multiple AI agents",
-			"version":            "1.0.0",
-			"type":               "multi-agent-service",
-			"discovery_endpoint": "/v1/agents",
-			"capabilities": map[string]interface{}{
-				"streaming":       true,
-				"tasks":           true,
-				"authentication":  g.authConfig != nil && g.authConfig.Enabled,
-				"multiple_agents": true,
-			},
-		}
-
-		if g.authConfig != nil && g.authConfig.Enabled {
-			response["security_schemes"] = map[string]interface{}{
-				"jwt": map[string]interface{}{
-					"type":          "http",
-					"scheme":        "bearer",
-					"bearer_format": "JWT",
-				},
-			}
-			response["security"] = []map[string]interface{}{
-				{"jwt": []string{}},
-			}
-		}
-
-		_ = json.NewEncoder(w).Encode(response)
-	}
-}
-
-func (g *RESTGateway) handleAgentCardByName(w http.ResponseWriter, r *http.Request, agentName string) {
-
-	client := pb.NewA2AServiceClient(g.conn)
-	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentName)
-
-	card, err := client.GetAgentCard(ctx, &pb.GetAgentCardRequest{})
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get agent card for '%s': %v", agentName, err), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	// Use the card's URL if it's already set correctly
-	// This respects both native agent URLs (from config) and external agent URLs
-	agentURL := card.Url
-	if agentURL == "" {
-		// Fallback: construct from configured base URL
-		baseURL := g.config.BaseURL
-		if baseURL == "" {
-			// Last resort: use request host (could be incorrect behind proxies)
-			baseURL = fmt.Sprintf("http://%s", r.Host)
-		}
-		agentURL = fmt.Sprintf("%s/?agent=%s", baseURL, agentName)
-	}
-
-	response := map[string]interface{}{
-		"name":         card.Name,
-		"description":  card.Description,
-		"version":      card.Version,
-		"url":          agentURL,
-		"capabilities": card.Capabilities,
-
-		"defaultInputModes":  card.DefaultInputModes,
-		"defaultOutputModes": card.DefaultOutputModes,
-		"skills":             card.Skills,
-	}
-
-	if card.ProtocolVersion != "" {
-		response["protocolVersion"] = card.ProtocolVersion
-	}
-	if card.PreferredTransport != "" {
-		response["preferredTransport"] = card.PreferredTransport
-	}
-	if len(card.AdditionalInterfaces) > 0 {
-		response["additionalInterfaces"] = card.AdditionalInterfaces
-	}
-	if card.Provider != nil {
-		response["provider"] = card.Provider
-	}
-	if card.DocumentationUrl != "" {
-		response["documentationUrl"] = card.DocumentationUrl
-	}
-	if len(card.SecuritySchemes) > 0 {
-		response["securitySchemes"] = card.SecuritySchemes
-	}
-	if len(card.Security) > 0 {
-		response["security"] = card.Security
-	}
-	if card.SupportsAuthenticatedExtendedCard {
-		response["supportsAuthenticatedExtendedCard"] = true
-	}
-	if len(card.Signatures) > 0 {
-		response["signatures"] = card.Signatures
-	}
-	if card.IconUrl != "" {
-		response["iconUrl"] = card.IconUrl
-	}
-
-	_ = json.NewEncoder(w).Encode(response)
-}
-
 func (g *RESTGateway) applyAuthMiddleware(next http.Handler) http.Handler {
 	if g.authConfig == nil || g.authConfig.Validator == nil {
 		return next
@@ -468,6 +342,11 @@ func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request)
 	client := pb.NewA2AServiceClient(g.conn)
 	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
 
+	// Forward Authorization header to gRPC metadata (for auth interceptor)
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
+	}
+
 	card, err := client.GetAgentCard(ctx, &pb.GetAgentCardRequest{})
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get agent card: %v", err), http.StatusInternalServerError)
@@ -485,6 +364,9 @@ func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request)
 		"endpoint":     fmt.Sprintf("/v1/agents/%s", agentID),
 	}
 
+	if card.PreferredTransport != "" {
+		response["preferred_transport"] = card.PreferredTransport
+	}
 	if len(card.SecuritySchemes) > 0 {
 		response["security_schemes"] = card.SecuritySchemes
 	}
@@ -497,45 +379,28 @@ func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request)
 
 func (g *RESTGateway) createAgentRoutingHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Support two path formats per A2A spec:
-		// 1. /v1/agents/{agent}/resource (agent in path - Section 3.5.3 preferred)
-		// 2. /v1/resource (agent in header - proto annotations compatibility)
+		// This handler is now mounted under /v1/agents/{agent}/
+		// The chi router extracts the {agent} param, and we receive the remainder
+		// e.g., incoming /v1/agents/my-agent/tasks/123 becomes /tasks/123 here
 
-		path := r.URL.Path
+		// Get agent ID from chi router
+		agentName := chi.URLParam(r, "agent")
 
-		if strings.HasPrefix(path, "/v1/agents/") {
-			// Format: /v1/agents/{agent}/resource
-			remainder := strings.TrimPrefix(path, "/v1/agents/")
-			parts := strings.SplitN(remainder, "/", 2)
+		// Forward Authorization header to gRPC metadata (for auth interceptor)
+		if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+			r.Header.Set("grpc-metadata-authorization", authHeader)
+		}
 
-			if len(parts) == 0 || parts[0] == "" {
-				http.Error(w, "Agent name required", http.StatusBadRequest)
-				return
+		// If we have an agent name from the URL, use it
+		if agentName != "" {
+			// Rewrite path to gRPC gateway format: /v1/{resource}
+			// e.g., /tasks/123 -> /v1/tasks/123
+			if !strings.HasPrefix(r.URL.Path, "/v1/") {
+				r.URL.Path = "/v1" + r.URL.Path
 			}
 
-			agentName := parts[0]
-
-			// Rewrite URL to remove /agents/{agent} prefix
-			if len(parts) == 2 {
-				r.URL.Path = "/v1/" + parts[1]
-			} else {
-				r.URL.Path = "/v1/"
-			}
-
+			// Set agent in gRPC metadata
 			r.Header.Set("grpc-metadata-agent-name", agentName)
-		} else {
-			// Format: /v1/resource (e.g., /v1/tasks, /v1/card)
-			// Extract agent from header or query parameter
-			agentName := r.Header.Get("agent-name")
-			if agentName == "" {
-				agentName = r.URL.Query().Get("agent")
-			}
-
-			// Set agent in gRPC metadata if specified
-			// For single-agent mode, this is optional - AgentRouter handles fallback
-			if agentName != "" {
-				r.Header.Set("grpc-metadata-agent-name", agentName)
-			}
 		}
 
 		next.ServeHTTP(w, r)
@@ -603,6 +468,12 @@ func (g *RESTGateway) handleStreamingMessageSSE(w http.ResponseWriter, r *http.R
 
 	// Create incoming metadata for the gRPC service (server-side)
 	md := metadata.Pairs("agent-name", agentID)
+
+	// Forward Authorization header to gRPC metadata (for auth interceptor)
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		md = metadata.Join(md, metadata.Pairs("authorization", authHeader))
+	}
+
 	ctx := metadata.NewIncomingContext(r.Context(), md)
 
 	streamWrapper := &restStreamWrapper{
@@ -687,6 +558,11 @@ func (g *RESTGateway) handleSendMessage(w http.ResponseWriter, r *http.Request) 
 	log.Printf("REST: agent=%s", agentID)
 
 	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
+
+	// Forward Authorization header to gRPC metadata (for auth interceptor)
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
+	}
 
 	client := pb.NewA2AServiceClient(g.conn)
 	resp, err := client.SendMessage(ctx, &req)
@@ -913,6 +789,15 @@ func (g *RESTGateway) handleJSONRPCStream(w http.ResponseWriter, r *http.Request
 			agentName = parts[0]
 			log.Printf("JSON-RPC Stream: routing to agent '%s' from context_id", agentName)
 			md = metadata.Pairs("agent-name", agentName)
+		}
+	}
+
+	// Forward Authorization header to gRPC metadata (for auth interceptor)
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		if md != nil {
+			md = metadata.Join(md, metadata.Pairs("authorization", authHeader))
+		} else {
+			md = metadata.Pairs("authorization", authHeader)
 		}
 	}
 

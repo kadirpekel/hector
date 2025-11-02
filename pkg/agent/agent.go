@@ -31,6 +31,7 @@ type Agent struct {
 	name               string // Display name
 	description        string
 	config             *config.AgentConfig
+	componentManager   *component.ComponentManager // For accessing global config
 	services           reasoning.AgentServices
 	taskWorkers        chan struct{}
 	baseURL            string // Server base URL for agent card URL construction
@@ -72,6 +73,7 @@ func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr inte
 		name:               agentConfig.Name,
 		description:        agentConfig.Description,
 		config:             agentConfig,
+		componentManager:   compMgr,
 		services:           services,
 		taskWorkers:        taskWorkers,
 		baseURL:            baseURL,

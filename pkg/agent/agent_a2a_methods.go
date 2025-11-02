@@ -294,6 +294,7 @@ func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (
 		DocumentationUrl:   a.getDocumentationURL(),
 	}
 
+	// Add per-agent security configuration if present
 	if a.config != nil && a.config.Security != nil && a.config.Security.IsEnabled() && len(a.config.Security.Schemes) > 0 {
 		card.SecuritySchemes = make(map[string]*pb.SecurityScheme)
 		for name, scheme := range a.config.Security.Schemes {
@@ -313,6 +314,31 @@ func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (
 					pbSec.Schemes[schemeName] = &pb.StringList{List: scopes}
 				}
 				card.Security = append(card.Security, pbSec)
+			}
+		}
+	} else if a.componentManager != nil {
+		// Add global auth configuration if no per-agent security configured
+		// This follows A2A spec Section 5.5 for declaring authentication requirements
+		globalConfig := a.componentManager.GetGlobalConfig()
+		if globalConfig.Global.Auth.IsEnabled() {
+			card.SecuritySchemes = make(map[string]*pb.SecurityScheme)
+			card.SecuritySchemes["BearerAuth"] = &pb.SecurityScheme{
+				Scheme: &pb.SecurityScheme_HttpAuthSecurityScheme{
+					HttpAuthSecurityScheme: &pb.HTTPAuthSecurityScheme{
+						Description:  "JWT Bearer token authentication",
+						Scheme:       "bearer",
+						BearerFormat: "JWT",
+					},
+				},
+			}
+
+			// Require the BearerAuth scheme
+			card.Security = []*pb.Security{
+				{
+					Schemes: map[string]*pb.StringList{
+						"BearerAuth": {List: []string{}}, // No specific scopes required
+					},
+				},
 			}
 		}
 	}

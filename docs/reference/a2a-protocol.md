@@ -174,29 +174,23 @@ Cancel a running task.
 
 Hector implements RFC 8615 `.well-known` endpoints for agent discovery.
 
-### Service-Level Discovery
+### Agent Card Location
 
-**Endpoint:** `GET /.well-known/agent-card.json`
+**Per A2A Specification Section 5.3**, agent cards **MUST** be located at:
 
-Per A2A spec Section 5.3, the agent card is served at the well-known endpoint:
-
-```json
-{
-  "protocol_version": "0.3.0",
-  "name": "agent-name",
-  "description": "Agent description",
-  "version": "1.0.0",
-  "url": "http://localhost:8080/?agent=agent-name",
-  "preferred_transport": "json-rpc",
-  "capabilities": {
-    "streaming": true,
-    "tools": true,
-    "multimodal": false
-  }
-}
+```
+/.well-known/agent.json
 ```
 
-**Multi-Agent Discovery:**
+For multi-agent services, each agent has its own dedicated path:
+
+```
+/v1/agents/{agent}/.well-known/agent.json
+```
+
+### Multi-Agent Discovery
+
+**Endpoint:** `GET /v1/agents`
 
 List all agents via the discovery endpoint:
 
@@ -207,17 +201,23 @@ curl http://localhost:8080/v1/agents
 ```json
 {
   "agents": [
-    {"name": "assistant", "url": "http://localhost:8080/?agent=assistant"},
-    {"name": "coder", "url": "http://localhost:8080/?agent=coder"}
+    {
+      "name": "assistant",
+      "url": "http://localhost:8080/v1/agents/assistant"
+    },
+    {
+      "name": "coder",
+      "url": "http://localhost:8080/v1/agents/coder"
+    }
   ]
 }
 ```
 
-### Agent-Level Discovery
+### Agent Card Structure
 
-**Endpoint:** `GET /v1/agents/{agent}/.well-known/agent-card.json`
+**Endpoint:** `GET /v1/agents/{agent}/.well-known/agent.json`
 
-Get specific agent card in multi-agent mode:
+Get specific agent card:
 
 ```json
 {
@@ -626,11 +626,11 @@ Hector supports protocol extensions while maintaining compatibility:
 ### Agent Discovery
 
 ```bash
-# Check agent card
-curl http://localhost:8080/.well-known/agent-card.json
+# Get agent card (multi-agent service)
+curl http://localhost:8080/v1/agents/assistant/.well-known/agent.json
 
-# With agent name (multi-agent)
-curl "http://localhost:8080/.well-known/agent-card.json?agent=assistant"
+# List all agents
+curl http://localhost:8080/v1/agents
 ```
 
 ### Send Message

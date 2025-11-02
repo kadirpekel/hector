@@ -326,7 +326,7 @@ hector list --config config.yaml
 hector list --url http://remote:8080
 
 # Direct agent card URL
-hector list --url http://remote:8080/.well-known/agent-card.json
+hector list --url http://remote:8080/.well-known/agent.json
 
 # With authentication
 hector list --url http://remote:8080 --token "eyJ..."
@@ -374,7 +374,7 @@ hector info assistant --config config.yaml
 hector info assistant --url http://remote:8080
 
 # Direct agent card URL (agent name optional)
-hector info --url http://remote:8080/v1/agents/assistant/.well-known/agent-card.json
+hector info --url http://remote:8080/v1/agents/assistant/.well-known/agent.json
 ```
 
 **Output:**
@@ -442,8 +442,8 @@ hector call "Fix the bug" --agent coder --config config.yaml --session sess_123
 hector call "Hello" --agent assistant --url http://remote:8080 --token "eyJ..."
 
 # Client mode - direct agent card URL (--agent flag OPTIONAL)
-hector call "Hello" --url http://remote:8080/v1/agents/assistant/.well-known/agent-card.json --token "eyJ..."
-hector call "Hello" --url http://remote:8080/.well-known/agent-card.json  # Single-agent service
+hector call "Hello" --url http://remote:8080/v1/agents/assistant/.well-known/agent.json --token "eyJ..."
+hector call "Hello" --url http://remote:8080/.well-known/agent.json  # Single-agent service
 
 # No streaming
 hector call "Hello" --agent assistant --config config.yaml --no-stream
@@ -503,7 +503,7 @@ hector chat --agent assistant --url http://remote:8080
 hector chat --agent assistant --url http://remote:8080 --token "eyJ..."
 
 # Client mode - direct agent card URL (--agent flag OPTIONAL)
-hector chat --url http://remote:8080/v1/agents/assistant/.well-known/agent-card.json
+hector chat --url http://remote:8080/v1/agents/assistant/.well-known/agent.json
 
 # Flags flexible positioning (Kong feature)
 hector chat --config config.yaml --agent assistant
@@ -670,7 +670,7 @@ Connect to any A2A-compliant agent service.
 hector call "Hello" --agent assistant --url http://remote:8080
 
 # Direct agent card URL (single agent)
-hector call "Hello" --url http://remote:8080/.well-known/agent-card.json
+hector call "Hello" --url http://remote:8080/.well-known/agent.json
 
 # With authentication
 hector call "Hello" --agent assistant --url http://remote:8080 --token "eyJ..."
@@ -688,7 +688,7 @@ hector call "task" --url http://hector-service:8080 --agent assistant
 hector call "task" --url http://other-a2a-service:8080 --agent some-agent
 
 # Direct agent card discovery
-hector info --url http://service/.well-known/agent-card.json
+hector info --url http://service/.well-known/agent.json
 ```
 
 ---
@@ -784,7 +784,7 @@ hector list --url $HECTOR_URL --token $HECTOR_TOKEN
 hector call "task" --agent assistant --url $HECTOR_URL --token $HECTOR_TOKEN
 
 # Or direct agent card URL
-hector call "task" --url https://agents.company.com/.well-known/agent-card.json --token $HECTOR_TOKEN
+hector call "task" --url https://agents.company.com/.well-known/agent.json --token $HECTOR_TOKEN
 ```
 
 ### Scripting

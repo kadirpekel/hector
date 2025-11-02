@@ -3,7 +3,7 @@ global:
     host: "0.0.0.0"
     port: 8080
 agents:
-  # External A2A Agent Example
+  # External A2A Agent Example with Authentication
   # The config key (weather_assistant) is used as the remote agent ID by default.
   # UniversalA2AClient automatically discovers transport and handles communication.
   weather_assistant:
@@ -11,6 +11,9 @@ agents:
     name: "Weather Assistant"
     description: "External A2A agent that provides weather information"
     url: "http://localhost:9090"  # HTTP service URL - UniversalA2AClient will auto-discover gRPC transport
+    credentials:
+      type: "bearer"
+      token: "${WEATHER_AUTH_TOKEN}"  # JWT token for Auth0 authentication
     # Optional: target_agent_id: "weather_assistant"  # Defaults to config key if omitted
   
   orchestrator:

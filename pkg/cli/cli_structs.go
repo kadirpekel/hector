@@ -34,7 +34,6 @@ type ZeroConfigFlags struct {
 type ClientModeFlags struct {
 	URL   string `help:"Agent card URL or service base URL (enables client mode)" env:"HECTOR_URL" placeholder:"URL"`
 	Token string `help:"Authentication token for agent access" env:"HECTOR_TOKEN"`
-	Agent string `help:"Agent name (optional if URL points to specific agent)" placeholder:"AGENT"`
 }
 
 type VersionCmd struct {
@@ -65,6 +64,7 @@ type CallCmd struct {
 
 	Stream    bool   `default:"true" negatable:"" help:"Enable streaming responses (use --no-stream to disable)"`
 	SessionID string `name:"session" help:"Session ID for conversation continuity" env:"HECTOR_SESSION" placeholder:"SESSION_ID"`
+	Agent     string `help:"Agent name (not used in client mode with --url)" placeholder:"AGENT"`
 
 	ZeroConfigFlags `embed:"" prefix:""`
 
@@ -76,6 +76,7 @@ type ChatCmd struct {
 
 	NoStream  bool   `name:"no-stream" help:"Disable streaming responses (streaming enabled by default)"`
 	SessionID string `name:"session" help:"Session ID to resume previous conversation" env:"HECTOR_SESSION" placeholder:"SESSION_ID"`
+	Agent     string `help:"Agent name (not used in client mode with --url)" placeholder:"AGENT"`
 
 	ZeroConfigFlags `embed:"" prefix:""`
 }

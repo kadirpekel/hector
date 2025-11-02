@@ -19,5 +19,8 @@ type A2AClient interface {
 
 	CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error)
 
+	// GetAgentID returns the discovered/configured agent ID (for client mode URL-only discovery)
+	GetAgentID() string
+
 	Close() error
 }

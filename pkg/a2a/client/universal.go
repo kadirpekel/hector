@@ -32,7 +32,7 @@ type UniversalA2AClient struct {
 
 // NewUniversalA2AClient creates a client that auto-discovers the agent and chooses transport
 // url can be:
-// - Agent card URL: https://service.com/v1/agents/assistant/.well-known/agent-card.json
+// - Agent card URL: https://service.com/v1/agents/assistant/.well-known/agent.json
 // - Agent-specific base URL: https://service.com/v1/agents/assistant
 // - Service base URL: https://service.com (will discover agents)
 func NewUniversalA2AClient(url, agentID, token string) (*UniversalA2AClient, error) {
@@ -60,12 +60,17 @@ func NewUniversalA2AClient(url, agentID, token string) (*UniversalA2AClient, err
 
 // discoverAgent fetches the agent card to learn about the agent's capabilities
 func (c *UniversalA2AClient) discoverAgent() error {
-	// Try agent card URL patterns
-	urls := []string{
-		c.baseURL, // Might already be the card URL
-		fmt.Sprintf("%s/.well-known/agent-card.json", c.baseURL),
-		fmt.Sprintf("%s/v1/agents/%s/.well-known/agent-card.json", c.baseURL, c.agentID),
+	// Try agent card URL patterns per A2A spec (Section 5.3)
+	// Per A2A spec: agent cards MUST be at /.well-known/agent.json
+	urls := []string{}
+
+	// If agentID is provided, try agent-specific endpoint first
+	if c.agentID != "" {
+		urls = append(urls, fmt.Sprintf("%s/v1/agents/%s/.well-known/agent.json", c.baseURL, c.agentID))
 	}
+
+	// Try direct URL (might already be the card URL)
+	urls = append(urls, c.baseURL)
 
 	var lastErr error
 	for _, url := range urls {
@@ -105,6 +110,12 @@ func (c *UniversalA2AClient) discoverAgent() error {
 
 		// Convert to AgentCard proto
 		c.agentCard = jsonToAgentCard(cardJSON)
+
+		// If agentID was not provided, extract it from the agent card
+		if c.agentID == "" && c.agentCard.Name != "" {
+			c.agentID = c.agentCard.Name
+		}
+
 		return nil
 	}
 
@@ -114,6 +125,7 @@ func (c *UniversalA2AClient) discoverAgent() error {
 			Name:               "default",
 			PreferredTransport: "grpc",
 		}
+		c.agentID = "default"
 		return nil
 	}
 
@@ -244,6 +256,11 @@ func (c *UniversalA2AClient) GetTask(ctx context.Context, agentID string, taskID
 func (c *UniversalA2AClient) CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
 	httpClient := NewHTTPClient(c.baseURL, c.token)
 	return httpClient.CancelTask(ctx, agentID, taskID)
+}
+
+// GetAgentID returns the agent ID discovered/used by this client
+func (c *UniversalA2AClient) GetAgentID() string {
+	return c.agentID
 }
 
 // Close closes connections

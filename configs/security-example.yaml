@@ -22,6 +22,6 @@ agents:
       audience: "your-agent-api"
 global:
   auth:
-    jwks_url: "https://your-auth-server.com/.well-known/jwks.json"
-    issuer: "https://your-auth-server.com/"
-    audience: "your-agent-api"
+    jwks_url: "https://dev-necoi8pbjgvataq6.us.auth0.com/.well-known/jwks.json"
+    issuer: "https://dev-necoi8pbjgvataq6.us.auth0.com/"
+    audience: "hector-api"

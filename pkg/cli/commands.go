@@ -130,30 +130,15 @@ func InfoCommand(args *InfoCmd, cfg *config.Config, mode CLIMode) error {
 
 func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 
-	var agentID string
-	if mode == ModeClient {
-
-		if args.Agent == "" {
-			return fmt.Errorf("agent ID is required in client mode (use --agent flag)")
+	// Validate agent requirements per mode
+	if mode == ModeLocalConfig && args.Agent == "" {
+		agentIDs := make([]string, 0, len(cfg.Agents))
+		for id := range cfg.Agents {
+			agentIDs = append(agentIDs, id)
 		}
-		agentID = args.Agent
-	} else if mode == ModeLocalConfig {
-
-		if args.Agent == "" {
-
-			agentIDs := make([]string, 0, len(cfg.Agents))
-			for id := range cfg.Agents {
-				agentIDs = append(agentIDs, id)
-			}
-			return fmt.Errorf("agent ID is required when using --config flag. Available agents: %v", agentIDs)
-		}
-		agentID = args.Agent
-	} else {
-
-		if args.Agent != "" {
-			return fmt.Errorf("agent ID is not allowed in zero-config mode (remove --agent flag)")
-		}
-		agentID = config.DefaultAgentName
+		return fmt.Errorf("agent ID is required when using --config flag. Available agents: %v", agentIDs)
+	} else if mode == ModeLocalZeroConfig && args.Agent != "" {
+		return fmt.Errorf("agent ID is not allowed in zero-config mode (remove --agent flag)")
 	}
 
 	client, err := createClient(args, cfg, mode)
@@ -161,6 +146,20 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 	defer client.Close()
+
+	// Determine agent ID
+	var agentID string
+	if mode == ModeLocalZeroConfig {
+		agentID = config.DefaultAgentName
+	} else if args.Agent != "" {
+		agentID = args.Agent
+	} else {
+		// Discover agent ID from client (for client mode with URL-only)
+		agentID = client.GetAgentID()
+		if agentID == "" {
+			return fmt.Errorf("could not determine agent ID")
+		}
+	}
 
 	sessionID := args.SessionID
 	if sessionID == "" {
@@ -214,30 +213,15 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 
 func ChatCommand(args *ChatCmd, cfg *config.Config, mode CLIMode) error {
 
-	var agentID string
-	if mode == ModeClient {
-
-		if args.Agent == "" {
-			return fmt.Errorf("agent ID is required in client mode (use --agent flag)")
+	// Validate agent requirements per mode
+	if mode == ModeLocalConfig && args.Agent == "" {
+		agentIDs := make([]string, 0, len(cfg.Agents))
+		for id := range cfg.Agents {
+			agentIDs = append(agentIDs, id)
 		}
-		agentID = args.Agent
-	} else if mode == ModeLocalConfig {
-
-		if args.Agent == "" {
-
-			agentIDs := make([]string, 0, len(cfg.Agents))
-			for id := range cfg.Agents {
-				agentIDs = append(agentIDs, id)
-			}
-			return fmt.Errorf("agent ID is required when using --config flag. Available agents: %v", agentIDs)
-		}
-		agentID = args.Agent
-	} else {
-
-		if args.Agent != "" {
-			return fmt.Errorf("agent ID is not allowed in zero-config mode (remove --agent flag)")
-		}
-		agentID = config.DefaultAgentName
+		return fmt.Errorf("agent ID is required when using --config flag. Available agents: %v", agentIDs)
+	} else if mode == ModeLocalZeroConfig && args.Agent != "" {
+		return fmt.Errorf("agent ID is not allowed in zero-config mode (remove --agent flag)")
 	}
 
 	client, err := createClient(args, cfg, mode)
@@ -245,6 +229,20 @@ func ChatCommand(args *ChatCmd, cfg *config.Config, mode CLIMode) error {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 	defer client.Close()
+
+	// Determine agent ID
+	var agentID string
+	if mode == ModeLocalZeroConfig {
+		agentID = config.DefaultAgentName
+	} else if args.Agent != "" {
+		agentID = args.Agent
+	} else {
+		// Discover agent ID from client (for client mode with URL-only)
+		agentID = client.GetAgentID()
+		if agentID == "" {
+			return fmt.Errorf("could not determine agent ID")
+		}
+	}
 
 	return executeChat(client, agentID, args.SessionID, !args.NoStream)
 }
