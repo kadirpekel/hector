@@ -26,6 +26,11 @@ var webUIHTML []byte
 //go:embed static/letter-h.png
 var letterHPNG []byte
 
+// Context key type for auth claims
+type contextKey string
+
+const authClaimsKey contextKey = "auth_claims"
+
 // JSON-RPC 2.0 types and constants
 type JSONRPCRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -269,7 +274,57 @@ func (g *RESTGateway) applyAuthMiddleware(next http.Handler) http.Handler {
 		return next
 	}
 
-	return next
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Public endpoints that don't require authentication
+		publicPaths := []string{
+			"/",             // Web UI
+			"/letter-h.png", // Static assets
+			"/health",       // Health checks
+			"/metrics",      // Prometheus metrics
+		}
+
+		// Check if this is a public endpoint
+		for _, path := range publicPaths {
+			if r.URL.Path == path {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// Agent discovery endpoint - handles auth internally for visibility filtering
+		// (public agents visible without auth, internal/private need auth)
+		if r.URL.Path == "/v1/agents" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// All other endpoints require authentication when global auth is enabled
+		// Extract Authorization header
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"error":"Unauthorized","message":"Missing authorization header"}`, http.StatusUnauthorized)
+			return
+		}
+
+		// Extract token (handle both "Bearer token" and "token" formats)
+		tokenString := authHeader
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			tokenString = authHeader[7:]
+		}
+
+		// Validate token using JWT validator
+		claims, err := g.authConfig.Validator.ValidateToken(r.Context(), tokenString)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, fmt.Sprintf(`{"error":"Unauthorized","message":"Invalid token: %s"}`, err.Error()), http.StatusUnauthorized)
+			return
+		}
+
+		// Add claims to context for downstream handlers
+		ctx := context.WithValue(r.Context(), authClaimsKey, claims)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request) {
