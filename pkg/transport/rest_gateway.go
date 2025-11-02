@@ -202,10 +202,11 @@ func (g *RESTGateway) setupRouting() http.Handler {
 		// JSON-RPC streaming (agent-scoped)
 		r.Post("/stream", g.handleJSONRPCStreamAgentScoped)
 
-		// Mount grpc-gateway mux for tasks and other operations under this agent
-		// This rewrites paths from /v1/agents/{agent}/tasks/* to /v1/tasks/*
-		// and adds agent-name metadata
-		r.Mount("/tasks", g.createAgentRoutingHandler(g.mux))
+		// Task operations (A2A spec core methods - HTTP+JSON/REST transport)
+		// Per A2A spec Section 3.5.3 and 7.3-7.5
+		r.Get("/tasks", g.handleListTasks)                  // Optional: tasks/list
+		r.Get("/tasks/{taskID}", g.handleGetTask)            // Core: tasks/get
+		r.Post("/tasks/{taskID}:cancel", g.handleCancelTask) // Core: tasks/cancel
 	})
 
 	log.Printf("   → Agent-scoped endpoints: /v1/agents/{agent}/*")
@@ -213,7 +214,8 @@ func (g *RESTGateway) setupRouting() http.Handler {
 	log.Printf("     • Agent card: /.well-known/agent-card.json (A2A spec compliant)")
 	log.Printf("     • Messages: /message:send, /message:stream")
 	log.Printf("     • JSON-RPC streaming: /stream (POST, agent-scoped)")
-	log.Printf("     • Tasks: /tasks/* (via gRPC gateway)")
+	log.Printf("     • Tasks: /tasks (GET: list), /tasks/{id} (GET: retrieve), /tasks/{id}:cancel (POST: cancel)")
+	log.Printf("   → A2A Protocol Compliance: Core methods (message/send, tasks/get, tasks/cancel) + Optional (tasks/list)")
 
 	return r
 }
@@ -988,4 +990,232 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// ===== A2A Task Handlers (HTTP+JSON/REST Transport) =====
+// These handlers implement the A2A protocol Section 3.5.3 HTTP+JSON/REST transport
+// and Section 7.3-7.5 task methods
+
+// handleGetTask implements GET /v1/agents/{agent}/tasks/{taskID}
+// A2A spec: Section 7.3 - tasks/get (CORE METHOD - MUST implement)
+func (g *RESTGateway) handleGetTask(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Get agent ID from URL parameter
+	agentID := chi.URLParam(r, "agent")
+	if agentID == "" {
+		http.Error(w, `{"error":"Agent ID required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Get task ID from URL parameter
+	taskID := chi.URLParam(r, "taskID")
+	if taskID == "" {
+		http.Error(w, `{"error":"Task ID required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Validate agent exists
+	if !g.validateAgentID(agentID, w, false) {
+		return
+	}
+
+	log.Printf("REST: GET /v1/agents/%s/tasks/%s", agentID, taskID)
+
+	// Create context with agent metadata
+	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
+
+	// Forward Authorization header
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
+	}
+
+	// Parse optional query parameters
+	historyLength := int32(0)
+	if histLenStr := r.URL.Query().Get("history_length"); histLenStr != "" {
+		if histLen, err := fmt.Sscanf(histLenStr, "%d", &historyLength); err == nil && histLen == 1 {
+			// Successfully parsed
+		}
+	}
+
+	// Call gRPC service
+	client := pb.NewA2AServiceClient(g.conn)
+	task, err := client.GetTask(ctx, &pb.GetTaskRequest{
+		Name:          fmt.Sprintf("tasks/%s", taskID),
+		HistoryLength: historyLength,
+	})
+	if err != nil {
+		// Convert gRPC error to appropriate HTTP status
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, fmt.Sprintf(`{"error":"Task not found","task_id":"%s"}`, taskID), http.StatusNotFound)
+		} else {
+			http.Error(w, fmt.Sprintf(`{"error":"Service error: %v"}`, err), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Marshal response using protojson with A2A field mappings
+	data, err := g.marshaler.Marshal(task)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"Failed to marshal response: %v"}`, err), http.StatusInternalServerError)
+		return
+	}
+
+	// Note: We do NOT apply A2A field transformations here because:
+	// 1. The HTTP client (CLI) expects native protobuf JSON format
+	// 2. A2A transformation should only be applied for JSON-RPC and external A2A clients
+	// 3. The REST endpoints serve both internal clients and A2A clients
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+// handleCancelTask implements POST /v1/agents/{agent}/tasks/{taskID}:cancel
+// A2A spec: Section 7.5 - tasks/cancel (CORE METHOD - MUST implement)
+func (g *RESTGateway) handleCancelTask(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get agent ID from URL parameter
+	agentID := chi.URLParam(r, "agent")
+	if agentID == "" {
+		http.Error(w, `{"error":"Agent ID required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Get task ID from URL parameter
+	taskID := chi.URLParam(r, "taskID")
+	if taskID == "" {
+		http.Error(w, `{"error":"Task ID required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Validate agent exists
+	if !g.validateAgentID(agentID, w, false) {
+		return
+	}
+
+	log.Printf("REST: POST /v1/agents/%s/tasks/%s:cancel", agentID, taskID)
+
+	// Create context with agent metadata
+	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
+
+	// Forward Authorization header
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
+	}
+
+	// Call gRPC service
+	client := pb.NewA2AServiceClient(g.conn)
+	task, err := client.CancelTask(ctx, &pb.CancelTaskRequest{
+		Name: fmt.Sprintf("tasks/%s", taskID),
+	})
+	if err != nil {
+		// Convert gRPC error to appropriate HTTP status
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, fmt.Sprintf(`{"error":"Task not found","task_id":"%s"}`, taskID), http.StatusNotFound)
+		} else {
+			http.Error(w, fmt.Sprintf(`{"error":"Service error: %v"}`, err), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Marshal response using protojson with A2A field mappings
+	data, err := g.marshaler.Marshal(task)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"Failed to marshal response: %v"}`, err), http.StatusInternalServerError)
+		return
+	}
+
+	// Note: We do NOT apply A2A field transformations here because:
+	// 1. The HTTP client (CLI) expects native protobuf JSON format
+	// 2. A2A transformation should only be applied for JSON-RPC and external A2A clients
+	// 3. The REST endpoints serve both internal clients and A2A clients
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+// handleListTasks implements GET /v1/agents/{agent}/tasks
+// A2A spec: Section 7.4 - tasks/list (OPTIONAL METHOD - MAY implement)
+func (g *RESTGateway) handleListTasks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Get agent ID from URL parameter
+	agentID := chi.URLParam(r, "agent")
+	if agentID == "" {
+		http.Error(w, `{"error":"Agent ID required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Validate agent exists
+	if !g.validateAgentID(agentID, w, false) {
+		return
+	}
+
+	log.Printf("REST: GET /v1/agents/%s/tasks", agentID)
+
+	// Create context with agent metadata
+	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
+
+	// Forward Authorization header
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
+	}
+
+	// Parse query parameters
+	req := &pb.ListTasksRequest{}
+	
+	if contextID := r.URL.Query().Get("context_id"); contextID != "" {
+		req.ContextId = contextID
+	}
+	
+	if pageSize := r.URL.Query().Get("page_size"); pageSize != "" {
+		var ps int32
+		if _, err := fmt.Sscanf(pageSize, "%d", &ps); err == nil {
+			req.PageSize = ps
+		}
+	}
+	
+	if pageToken := r.URL.Query().Get("page_token"); pageToken != "" {
+		req.PageToken = pageToken
+	}
+	
+	if historyLength := r.URL.Query().Get("history_length"); historyLength != "" {
+		var hl int32
+		if _, err := fmt.Sscanf(historyLength, "%d", &hl); err == nil {
+			req.HistoryLength = hl
+		}
+	}
+	
+	if includeArtifacts := r.URL.Query().Get("include_artifacts"); includeArtifacts == "true" {
+		req.IncludeArtifacts = true
+	}
+
+	// Call gRPC service
+	client := pb.NewA2AServiceClient(g.conn)
+	resp, err := client.ListTasks(ctx, req)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"Service error: %v"}`, err), http.StatusInternalServerError)
+		return
+	}
+
+	// Marshal response using protojson with A2A field mappings
+	data, err := g.marshaler.Marshal(resp)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"Failed to marshal response: %v"}`, err), http.StatusInternalServerError)
+		return
+	}
+
+	// Note: We do NOT apply A2A field transformations here because:
+	// 1. The HTTP client (CLI) expects native protobuf JSON format
+	// 2. A2A transformation should only be applied for JSON-RPC and external A2A clients
+	// 3. The REST endpoints serve both internal clients and A2A clients
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }

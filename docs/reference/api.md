@@ -202,38 +202,104 @@ curl http://localhost:8080/v1/agents
 
 ### Get Task Status
 
-Get status of an async task.
+Get status and results of an async task.
 
 **Endpoint:** `GET /v1/agents/{agent}/tasks/{task_id}`
 
-**Alternative:** `GET /v1/tasks/{task_id}` (agent routing via context)
+**Query Parameters:**
+- `history_length` (optional) - Number of recent messages to include
 
 **Response:**
 ```json
 {
-  "id": "tasks/task_abc123",
-  "contextId": "session-123",
+  "id": "task-abc123",
+  "contextId": "ctx-456",
   "status": {
-    "state": "completed",
-    "message": "Task completed successfully"
+    "state": "TASK_STATE_COMPLETED",
+    "update": {
+      "role": "agent",
+      "parts": [{"text": "Task completed successfully"}]
+    },
+    "timestamp": "2025-11-02T10:00:05Z"
   },
-  "result": {
-    "role": "agent",
-    "parts": [{"text": "Task completed successfully"}],
-    "messageId": "msg_xyz789"
-  },
-  "createdAt": "2025-10-23T10:00:00Z",
-  "updatedAt": "2025-10-23T10:00:05Z"
+  "artifacts": [],
+  "history": [
+    {
+      "messageId": "msg-1",
+      "role": "user",
+      "parts": [{"text": "Request"}]
+    },
+    {
+      "messageId": "msg-2",
+      "role": "agent",
+      "parts": [{"text": "Response"}]
+    }
+  ]
 }
 ```
 
 **Example:**
 ```bash
-# Agent-specific endpoint
-curl http://localhost:8080/v1/agents/assistant/tasks/task_abc123
+# Get task with full history
+curl http://localhost:8080/v1/agents/assistant/tasks/task-abc123
 
-# Generic endpoint (uses context routing)
-curl http://localhost:8080/v1/tasks/task_abc123
+# Get task with limited history
+curl http://localhost:8080/v1/agents/assistant/tasks/task-abc123?history_length=5
+
+# CLI command (client mode)
+hector task get assistant task-abc123 --url http://localhost:8080
+```
+
+**See also:** [Task Management Documentation](../core-concepts/tasks.md)
+
+### List Tasks
+
+List tasks with optional filtering and pagination.
+
+**Endpoint:** `GET /v1/agents/{agent}/tasks`
+
+**Query Parameters:**
+- `context_id` (optional) - Filter by context/session
+- `status` (optional) - Filter by task state
+- `page_size` (optional) - Results per page (default: 50, max: 100)
+- `page_token` (optional) - Pagination token from previous response
+- `history_length` (optional) - Messages to include per task (default: 0)
+- `include_artifacts` (optional) - Include artifacts (default: false)
+
+**Response:**
+```json
+{
+  "tasks": [
+    {
+      "id": "task-1",
+      "contextId": "ctx-456",
+      "status": {
+        "state": "TASK_STATE_COMPLETED"
+      }
+    },
+    {
+      "id": "task-2",
+      "contextId": "ctx-456",
+      "status": {
+        "state": "TASK_STATE_WORKING"
+      }
+    }
+  ],
+  "nextPageToken": "page-2",
+  "totalSize": 42
+}
+```
+
+**Example:**
+```bash
+# List all tasks for agent
+curl http://localhost:8080/v1/agents/assistant/tasks
+
+# List with filtering
+curl http://localhost:8080/v1/agents/assistant/tasks?context_id=ctx-456&page_size=10
+
+# List with pagination
+curl http://localhost:8080/v1/agents/assistant/tasks?page_size=20&page_token=page-2
 ```
 
 ### Cancel Task
@@ -242,41 +308,49 @@ Cancel a running task.
 
 **Endpoint:** `POST /v1/agents/{agent}/tasks/{task_id}:cancel`
 
-**Alternative:** `POST /v1/tasks/{task_id}:cancel` (agent routing via context)
+**Request Body:** `{}` (empty JSON object)
 
 **Response:**
 ```json
 {
-  "id": "tasks/task_abc123",
-  "contextId": "session-123",
+  "id": "task-abc123",
+  "contextId": "ctx-456",
   "status": {
-    "state": "canceled",
-    "message": "Task cancelled by user"
-  },
-  "createdAt": "2025-10-23T10:00:00Z",
-  "updatedAt": "2025-10-23T10:00:10Z"
+    "state": "TASK_STATE_CANCELLED",
+    "update": {
+      "role": "agent",
+      "parts": [{"text": "Task cancelled by user"}]
+    },
+    "timestamp": "2025-11-02T10:00:10Z"
+  }
 }
 ```
 
 **Example:**
 ```bash
-# Agent-specific endpoint
-curl -X POST http://localhost:8080/v1/agents/assistant/tasks/task_abc123:cancel
+# Cancel via REST API
+curl -X POST http://localhost:8080/v1/agents/assistant/tasks/task-abc123:cancel \
+  -H "Content-Type: application/json" \
+  -d '{}'
 
-# Generic endpoint (uses context routing)
-curl -X POST http://localhost:8080/v1/tasks/task_abc123:cancel
+# CLI command (client mode)
+hector task cancel assistant task-abc123 --url http://localhost:8080
 ```
 
-**Task States:**
+**Task States (A2A Spec Section 6.3):**
 
-| State | Description |
-|-------|-------------|
-| `submitted` | Task created and queued |
-| `working` | Task is being processed |
-| `completed` | Task finished successfully |
-| `failed` | Task failed with error |
-| `canceled` | Task was cancelled |
-| `input-required` | Task needs user input |
+| State | Description | Type |
+|-------|-------------|------|
+| `TASK_STATE_SUBMITTED` | Task created and queued | Initial |
+| `TASK_STATE_WORKING` | Task is being processed | Active |
+| `TASK_STATE_COMPLETED` | Task finished successfully | Terminal |
+| `TASK_STATE_FAILED` | Task failed with error | Terminal |
+| `TASK_STATE_CANCELLED` | Task was cancelled | Terminal |
+| `TASK_STATE_INPUT_REQUIRED` | Task needs user input | Interrupted |
+| `TASK_STATE_REJECTED` | Agent rejected task | Terminal |
+| `TASK_STATE_AUTH_REQUIRED` | Authentication required | Special |
+
+**Complete Documentation:** [Tasks - Lifecycle and Management](../core-concepts/tasks.md)
 
 ---
 

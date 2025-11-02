@@ -84,6 +84,14 @@ func (s *RegistryService) GetTask(ctx context.Context, req *pb.GetTaskRequest) (
 	return agent.GetTask(ctx, req)
 }
 
+func (s *RegistryService) ListTasks(ctx context.Context, req *pb.ListTasksRequest) (*pb.ListTasksResponse, error) {
+	agent, err := s.getAgent(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return agent.ListTasks(ctx, req)
+}
+
 func (s *RegistryService) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) (*pb.Task, error) {
 	agent, err := s.getAgent(ctx)
 	if err != nil {

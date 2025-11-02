@@ -54,28 +54,16 @@ Hector is built **entirely** on A2A protocol types:
 
 | Feature | Status | Details |
 |---------|--------|---------|
-| **Protocol Version** | ✅ v0.3.0 | Fully compliant with latest spec |
-| **Core Methods** | ✅ 100% | message/send, tasks/get, tasks/cancel |
-| **Optional Methods** | ✅ 100% | Streaming, resubscribe, agent card |
-| **Task Management** | ✅ 100% | All 9 task states, async execution |
+| **Protocol Version** | ✅ Latest | Fully compliant with A2A specification |
+| **Core Methods** | ✅ 100% | message/send, tasks/get, tasks/cancel, tasks/list |
+| **Optional Methods** | ✅ 100% | message/stream, tasks/resubscribe |
+| **Task Management** | ✅ 100% | All 8 task states, async execution, persistence |
 | **Agent Discovery** | ✅ 100% | RFC 8615 .well-known endpoints |
-| **Authentication** | ✅ 100% | JWT, OpenAPI security schemes |
+| **Authentication** | ✅ 100% | JWT, Bearer tokens, API keys, OAuth2 |
 | **Transport** | ✅ All 3 | gRPC (50051), REST (8080), JSON-RPC (8080) |
-| **REST Paths** | ✅✅ **Enhanced** | Dual path support (spec + proto) |
+| **REST Endpoints** | ✅✅ **Complete** | Agent-scoped URLs for multi-agent support |
 
-### Enhanced REST Compliance 🌟
-
-Hector **exceeds** the A2A specification by supporting **both** REST path formats:
-
-1. **Spec-preferred format** (Section 3.5.3):
-   - `/v1/agents/{agent}/message:send`
-   - Agent extracted from URL path
-
-2. **Proto-compatible format**:
-   - `/v1/message:send` with `agent-name: {agent}` header
-   - Agent extracted from HTTP header or query param
-
-This dual-path support ensures **maximum interoperability** with all A2A implementations.
+**Full Verification:** See [Task Endpoints Summary](/TASK_ENDPOINTS_SUMMARY.md) and [A2A Compliance Report](/FINAL_A2A_COMPLIANCE_VERIFICATION.md)
 
 ---
 
@@ -83,90 +71,136 @@ This dual-path support ensures **maximum interoperability** with all A2A impleme
 
 ### message/send
 
-Send a message to an agent.
+Send a message to an agent (blocking or non-blocking).
+
+**Endpoint:** `POST /v1/agents/{agent}/message:send`
 
 **Request:**
 ```json
 {
   "message": {
-    "role": "ROLE_USER",
+    "messageId": "msg-123",
+    "role": "user",
     "parts": [{"text": "Hello"}]
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "response": {
-    "role": "ROLE_AGENT",
-    "parts": [{"text": "Hello! How can I help?"}]
   },
-  "task_id": "task_abc123"
-}
-```
-
-### message/stream
-
-Send a message with streaming response.
-
-**Request:** Same as message/send
-
-**Response:** Stream of chunks
-```json
-{"response": {"parts": [{"text": "Hello"}]}}
-{"response": {"parts": [{"text": "! How"}]}}
-{"response": {"parts": [{"text": " can I help?"}]}}
-```
-
-### card/get
-
-Get agent metadata.
-
-**Response:**
-```json
-{
-  "agent": {
-    "name": "My Assistant",
-    "description": "A helpful AI assistant",
-    "version": "1.0.0",
-    "capabilities": ["chat", "tools", "streaming"],
-    "supported_content_types": ["text"]
+  "configuration": {
+    "blocking": false
   }
 }
 ```
 
-### tasks/get
-
-Get task status.
-
-**Response:**
+**Response (non-blocking):**
 ```json
 {
   "task": {
-    "id": "task_abc123",
-    "status": "completed",
-    "result": {
-      "role": "ROLE_AGENT",
-      "parts": [{"text": "Task completed"}]
+    "id": "task-abc123",
+    "status": {
+      "state": "TASK_STATE_SUBMITTED"
     }
   }
 }
 ```
 
-### tasks/cancel
+### message/stream
 
-Cancel a running task.
+Send a message with streaming response via Server-Sent Events.
+
+**Endpoint:** `POST /v1/agents/{agent}/message:stream`
+
+**Request:** Same as message/send
+
+**Response:** Stream of events
+```
+event: message
+data: {"task":{"id":"task-123","status":{"state":"TASK_STATE_WORKING"}}}
+
+event: message  
+data: {"msg":{"role":"agent","parts":[{"text":"Hello! How can I help?"}]}}
+
+event: done
+data: {}
+```
+
+### tasks/get
+
+Get task status and results.
+
+**Endpoint:** `GET /v1/agents/{agent}/tasks/{taskID}`
 
 **Response:**
 ```json
 {
-  "task": {
-    "id": "task_abc123",
-    "status": "cancelled"
+  "id": "task-abc123",
+  "contextId": "ctx-456",
+  "status": {
+    "state": "TASK_STATE_COMPLETED",
+    "update": {
+      "role": "agent",
+      "parts": [{"text": "Task completed"}]
+    }
+  },
+  "history": [
+    {"role": "user", "parts": [{"text": "Request"}]},
+    {"role": "agent", "parts": [{"text": "Response"}]}
+  ]
+}
+```
+
+**CLI Usage:**
+```bash
+hector task get <agent> <task-id> --url http://localhost:9876
+```
+
+See [Tasks Documentation](../core-concepts/tasks.md) for detailed usage.
+
+### tasks/cancel
+
+Cancel a running task.
+
+**Endpoint:** `POST /v1/agents/{agent}/tasks/{taskID}:cancel`
+
+**Response:**
+```json
+{
+  "id": "task-abc123",
+  "status": {
+    "state": "TASK_STATE_CANCELLED"
   }
 }
 ```
+
+**CLI Usage:**
+```bash
+hector task cancel <agent> <task-id> --url http://localhost:9876
+```
+
+### tasks/list
+
+List tasks with optional filtering and pagination (optional method).
+
+**Endpoint:** `GET /v1/agents/{agent}/tasks`
+
+**Query Parameters:**
+- `context_id` - Filter by context/session
+- `status` - Filter by task state
+- `page_size` - Number of results (default: 50, max: 100)
+- `page_token` - Pagination token
+- `history_length` - Messages to include per task
+- `include_artifacts` - Include artifacts (default: false)
+
+**Response:**
+```json
+{
+  "tasks": [
+    {"id": "task-1", "status": {"state": "TASK_STATE_COMPLETED"}},
+    {"id": "task-2", "status": {"state": "TASK_STATE_WORKING"}}
+  ],
+  "nextPageToken": "page-2",
+  "totalSize": 42
+}
+```
+
+**See Also:** [Complete Task Management Documentation](../core-concepts/tasks.md)
 
 ---
 
@@ -289,7 +323,7 @@ Per A2A Specification Section 6.5:
 
 ### Task States
 
-Per A2A Specification Section 6.3, all 9 task states are supported:
+Per A2A Specification Section 6.3, all 8 task states are supported:
 
 ```
 SUBMITTED → WORKING → COMPLETED
@@ -305,34 +339,51 @@ SUBMITTED → WORKING → COMPLETED
 | `TASK_STATE_UNSPECIFIED` | Default/unknown state | 6.3 |
 | `TASK_STATE_SUBMITTED` | Task created and queued | 6.3 |
 | `TASK_STATE_WORKING` | Task actively processing | 6.3 |
-| `TASK_STATE_COMPLETED` | Task finished successfully | 6.3 |
-| `TASK_STATE_FAILED` | Task encountered error | 6.3 |
-| `TASK_STATE_CANCELLED` | Task terminated by client | 6.3 |
-| `TASK_STATE_INPUT_REQUIRED` | Awaiting user input | 6.3 |
-| `TASK_STATE_REJECTED` | Agent refused task | 6.3 |
+| `TASK_STATE_COMPLETED` | Task finished successfully (terminal) | 6.3 |
+| `TASK_STATE_FAILED` | Task encountered error (terminal) | 6.3 |
+| `TASK_STATE_CANCELLED` | Task terminated by client (terminal) | 6.3 |
+| `TASK_STATE_INPUT_REQUIRED` | Awaiting user input (interrupted) | 6.3 |
+| `TASK_STATE_REJECTED` | Agent refused task (terminal) | 6.3 |
 | `TASK_STATE_AUTH_REQUIRED` | Needs authentication | 6.3 |
 
-### Task Management
+**For detailed task management, see:** [Tasks Documentation](../core-concepts/tasks.md)
+
+### Task Endpoints
+
+All task operations use agent-scoped URLs:
 
 **Create Task:**
 ```bash
-POST /v1/agents/assistant/message:send
+POST /v1/agents/{agent}/message:send
+Content-Type: application/json
+
+{
+  "message": {"role": "user", "parts": [{"text": "Request"}]},
+  "configuration": {"blocking": false}
+}
 ```
 
-**Get Status:**
+**Get Task Status:**
 ```bash
-GET /v1/agents/assistant/tasks/{task_id}
+GET /v1/agents/{agent}/tasks/{task_id}
+```
+
+**List Tasks:**
+```bash
+GET /v1/agents/{agent}/tasks?page_size=50
 ```
 
 **Cancel Task:**
 ```bash
-POST /v1/agents/assistant/tasks/{task_id}:cancel
+POST /v1/agents/{agent}/tasks/{task_id}:cancel
 ```
 
 **Subscribe to Updates:**
 ```bash
-POST /v1/agents/assistant/tasks/{task_id}:subscribe
+GET /v1/agents/{agent}/tasks/{task_id}:subscribe
 ```
+
+**Full Documentation:** [Task Lifecycle and Management](../core-concepts/tasks.md)
 
 ---
 
@@ -716,6 +767,7 @@ curl -X POST http://localhost:8080/v1/agents/assistant/tasks/task_abc123:cancel
 
 ## Next Steps
 
+- **[Tasks Documentation](../core-concepts/tasks.md)** - Complete task management guide
 - **[API Reference](api.md)** - Detailed API documentation
 - **[Architecture](architecture.md)** - System architecture
 - **[External Agents](../how-to/integrate-external-agents.md)** - Connect to A2A agents
@@ -723,8 +775,17 @@ curl -X POST http://localhost:8080/v1/agents/assistant/tasks/task_abc123:cancel
 
 ---
 
+## A2A Compliance Reports
+
+- **[Final Compliance Verification](/FINAL_A2A_COMPLIANCE_VERIFICATION.md)** - Complete verification with test results
+- **[Task Endpoints Summary](/TASK_ENDPOINTS_SUMMARY.md)** - Quick reference for task endpoints  
+- **[A2A Compliance Report](/A2A_COMPLIANCE_REPORT.md)** - Detailed compliance checklist
+
+---
+
 ## Related Topics
 
+- **[Tasks](../core-concepts/tasks.md)** - Task lifecycle and management
 - **[Security](../core-concepts/security.md)** - Authentication setup
 - **[Sessions](../core-concepts/sessions.md)** - Session management
 - **[Deploy to Production](../how-to/deploy-production.md)** - Production deployment

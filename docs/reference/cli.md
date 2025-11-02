@@ -487,6 +487,122 @@ hector chat --agent assistant --config config.yaml --no-stream
 
 ---
 
+### hector task get
+
+Get details about a specific task.
+
+**Usage:**
+```bash
+hector task get <agent> <task-id> [flags]
+```
+
+**Arguments:**
+
+| Argument | Type | Description | Required |
+|----------|------|-------------|----------|
+| `AGENT` | string | Agent name that owns the task | ✅ Always required |
+| `TASK_ID` | string | Task ID to retrieve | ✅ Always required |
+
+**Flags:**
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--url URL` | string | Agent card URL or service base URL (enables client mode) |
+| `--token TOKEN` | string | Authentication token |
+| `--config FILE` | string | Configuration file (for local mode) |
+
+**Examples:**
+
+```bash
+# Client mode - query task from remote service
+hector task get assistant task-abc123 --url http://localhost:8080
+
+# Local mode - query task from config
+hector task get assistant task-abc123 --config config.yaml
+
+# With authentication
+hector task get assistant task-abc123 --url https://prod:8080 --token "eyJ..."
+
+# Works with ANY A2A service
+hector task get researcher task-xyz789 --url http://other-service:8080
+```
+
+**Output:**
+```
+Task ID: task-abc123
+Status: TASK_STATE_COMPLETED
+Context ID: ctx-xyz
+Created: 2024-01-15 10:30:00
+Updated: 2024-01-15 10:35:00
+
+History:
+  [USER] Analyze the codebase
+  [ASSISTANT] Analysis complete...
+
+Artifacts:
+  - report.pdf (2.5 MB)
+```
+
+**Notes:**
+- Task commands require explicit agent configuration
+- Not available in zero-config mode (use `call` or `chat` instead)
+- Works with any A2A-compliant service
+
+---
+
+### hector task cancel
+
+Cancel a running or pending task.
+
+**Usage:**
+```bash
+hector task cancel <agent> <task-id> [flags]
+```
+
+**Arguments:**
+
+| Argument | Type | Description | Required |
+|----------|------|-------------|----------|
+| `AGENT` | string | Agent name that owns the task | ✅ Always required |
+| `TASK_ID` | string | Task ID to cancel | ✅ Always required |
+
+**Flags:**
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--url URL` | string | Agent card URL or service base URL (enables client mode) |
+| `--token TOKEN` | string | Authentication token |
+| `--config FILE` | string | Configuration file (for local mode) |
+
+**Examples:**
+
+```bash
+# Client mode
+hector task cancel assistant task-abc123 --url http://localhost:8080
+
+# Local mode
+hector task cancel assistant task-abc123 --config config.yaml
+
+# With authentication
+hector task cancel assistant task-abc123 --url https://prod:8080 --token "eyJ..."
+```
+
+**Output:**
+```
+✅ Task cancelled successfully
+
+Task ID: task-abc123
+Status: TASK_STATE_CANCELLED
+Context ID: ctx-xyz
+```
+
+**Notes:**
+- Can only cancel tasks in non-terminal states (SUBMITTED, WORKING)
+- Tasks already COMPLETED, FAILED, or CANCELLED cannot be cancelled again
+- The command will succeed silently if task is already in a terminal state
+
+---
+
 ## Session Support
 
 The `--session` flag enables conversation resumption across multiple CLI invocations. When you provide the same session ID, the agent remembers the previous conversation context.
