@@ -645,6 +645,7 @@ type ToolConfigs struct {
 }
 
 func GetDefaultToolConfigs() map[string]*ToolConfig {
+	trueVal := true
 	return map[string]*ToolConfig{
 		"execute_command": {
 			Type:             "command",
@@ -661,6 +662,16 @@ func GetDefaultToolConfigs() map[string]*ToolConfig {
 			Type:             "search_replace",
 			MaxReplacements:  100,
 			WorkingDirectory: "./",
+		},
+		"web_request": {
+			Type:            "web_request",
+			Timeout:         "30s",
+			MaxRetries:      3,
+			MaxRequestSize:  10485760, // 10MB
+			MaxResponseSize: 52428800, // 50MB
+			AllowRedirects:  &trueVal,
+			MaxRedirects:    10,
+			UserAgent:       "Hector-Agent/1.0",
 		},
 		"todo_write": {
 			Type: "todo",
@@ -716,6 +727,20 @@ type ToolConfig struct {
 	MaxLimit           int      `yaml:"max_limit,omitempty"`
 	EnabledSearchTypes []string `yaml:"enabled_search_types,omitempty"`
 
+	// web_request tool settings
+	Timeout            string   `yaml:"timeout,omitempty"`
+	MaxRetries         int      `yaml:"max_retries,omitempty"`
+	MaxRequestSize     int64    `yaml:"max_request_size,omitempty"`
+	MaxResponseSize    int64    `yaml:"max_response_size,omitempty"`
+	AllowedDomains     []string `yaml:"allowed_domains,omitempty"`
+	DeniedDomains      []string `yaml:"denied_domains,omitempty"`
+	AllowedMethods     []string `yaml:"allowed_methods,omitempty"`
+	AllowRedirects     *bool    `yaml:"allow_redirects,omitempty"`
+	MaxRedirects       int      `yaml:"max_redirects,omitempty"`
+	UserAgent          string   `yaml:"user_agent,omitempty"`
+	FollowMetaRefresh  bool     `yaml:"follow_meta_refresh,omitempty"`
+	JavaScriptRendered bool     `yaml:"javascript_rendered,omitempty"`
+
 	ServerURL string `yaml:"server_url,omitempty"`
 
 	Config map[string]interface{} `yaml:"config,omitempty"`
@@ -742,6 +767,10 @@ func (c *ToolConfig) Validate() error {
 			return fmt.Errorf("document_stores is required for search tool")
 		}
 	case "todo":
+
+	case "web_request":
+		// Liberal defaults - no validation for allowed/denied domains or methods
+		// Users can opt-in to restrictions
 
 	default:
 
@@ -783,6 +812,32 @@ func (c *ToolConfig) SetDefaults() {
 		if c.MaxLimit == 0 {
 			c.MaxLimit = 50
 		}
+	case "web_request":
+		// Liberal defaults - allow everything unless explicitly restricted
+		if c.Timeout == "" {
+			c.Timeout = "30s"
+		}
+		if c.MaxRetries == 0 {
+			c.MaxRetries = 3
+		}
+		if c.MaxRequestSize == 0 {
+			c.MaxRequestSize = 10485760 // 10MB
+		}
+		if c.MaxResponseSize == 0 {
+			c.MaxResponseSize = 52428800 // 50MB
+		}
+		if c.AllowRedirects == nil {
+			trueVal := true
+			c.AllowRedirects = &trueVal
+		}
+		if c.MaxRedirects == 0 {
+			c.MaxRedirects = 10
+		}
+		if c.UserAgent == "" {
+			c.UserAgent = "Hector-Agent/1.0"
+		}
+		// No defaults for AllowedDomains, DeniedDomains, AllowedMethods
+		// Omitted = allow all (liberal default)
 	case "mcp":
 
 	}

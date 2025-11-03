@@ -52,6 +52,8 @@ func NewLocalToolSourceWithConfigAndAgentRegistry(toolConfigs map[string]*config
 			tool, err = NewFileWriterToolWithConfig(toolName, toolConfig)
 		case "search_replace":
 			tool, err = NewSearchReplaceToolWithConfig(toolName, toolConfig)
+		case "web_request":
+			tool, err = NewWebRequestToolWithConfig(toolName, toolConfig)
 		case "todo":
 			tool = NewTodoTool()
 		case "agent_call":
