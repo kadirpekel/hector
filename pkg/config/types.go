@@ -1191,8 +1191,9 @@ func (c *TaskSQLConfig) ConnectionString() string {
 }
 
 type SessionStoreConfig struct {
-	Backend string            `yaml:"backend,omitempty"`
-	SQL     *SessionSQLConfig `yaml:"sql,omitempty"`
+	Backend   string            `yaml:"backend,omitempty"`
+	SQL       *SessionSQLConfig `yaml:"sql,omitempty"`
+	RateLimit *RateLimitConfig  `yaml:"rate_limit,omitempty"`
 }
 
 func (c *SessionStoreConfig) IsEnabled() bool {
@@ -1217,6 +1218,9 @@ func (c *SessionStoreConfig) SetDefaults() {
 	}
 	if c.SQL != nil {
 		c.SQL.SetDefaults()
+	}
+	if c.RateLimit != nil {
+		c.RateLimit.SetDefaults()
 	}
 }
 
@@ -1262,6 +1266,11 @@ func (c *SessionStoreConfig) Validate() error {
 			return fmt.Errorf("sql config validation failed: %w", err)
 		}
 	}
+	if c.RateLimit != nil {
+		if err := c.RateLimit.Validate(); err != nil {
+			return fmt.Errorf("rate limit config validation failed: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -1288,6 +1297,71 @@ func (c *SessionSQLConfig) Validate() error {
 	}
 	if c.MaxIdle < 0 {
 		return fmt.Errorf("max_idle must be non-negative")
+	}
+	return nil
+}
+
+// RateLimitConfig defines rate limiting configuration
+type RateLimitConfig struct {
+	Enabled bool            `yaml:"enabled" json:"enabled"`
+	Scope   string          `yaml:"scope,omitempty" json:"scope,omitempty"`     // "session" or "user"
+	Backend string          `yaml:"backend,omitempty" json:"backend,omitempty"` // "memory" or "sql"
+	Limits  []RateLimitRule `yaml:"limits" json:"limits"`
+}
+
+// RateLimitRule defines a single rate limit rule
+type RateLimitRule struct {
+	Type   string `yaml:"type" json:"type"`     // "token" or "count"
+	Window string `yaml:"window" json:"window"` // "minute", "hour", "day", "week", "month"
+	Limit  int64  `yaml:"limit" json:"limit"`   // Maximum allowed in window
+}
+
+func (c *RateLimitConfig) SetDefaults() {
+	if c.Enabled && len(c.Limits) == 0 {
+		// Default: 100k tokens per day, 60 requests per minute
+		c.Limits = []RateLimitRule{
+			{Type: "token", Window: "day", Limit: 100000},
+			{Type: "count", Window: "minute", Limit: 60},
+		}
+	}
+	if c.Scope == "" {
+		c.Scope = "session" // Default to per-session limiting
+	}
+	if c.Backend == "" {
+		c.Backend = "memory" // Default to memory backend
+	}
+}
+
+func (c *RateLimitConfig) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+	if len(c.Limits) == 0 {
+		return fmt.Errorf("at least one limit must be defined when rate limiting is enabled")
+	}
+	if c.Scope != "" && c.Scope != "session" && c.Scope != "user" {
+		return fmt.Errorf("invalid scope '%s', must be 'session' or 'user'", c.Scope)
+	}
+	if c.Backend != "" && c.Backend != "memory" && c.Backend != "sql" {
+		return fmt.Errorf("invalid backend '%s', must be 'memory' or 'sql'", c.Backend)
+	}
+	for i, limit := range c.Limits {
+		if err := limit.Validate(); err != nil {
+			return fmt.Errorf("limit %d is invalid: %w", i, err)
+		}
+	}
+	return nil
+}
+
+func (r *RateLimitRule) Validate() error {
+	if r.Type != "token" && r.Type != "count" {
+		return fmt.Errorf("invalid type '%s', must be 'token' or 'count'", r.Type)
+	}
+	if r.Window != "minute" && r.Window != "hour" && r.Window != "day" && r.Window != "week" && r.Window != "month" {
+		return fmt.Errorf("invalid window '%s', must be 'minute', 'hour', 'day', 'week', or 'month'", r.Window)
+	}
+	if r.Limit <= 0 {
+		return fmt.Errorf("limit must be positive, got %d", r.Limit)
 	}
 	return nil
 }

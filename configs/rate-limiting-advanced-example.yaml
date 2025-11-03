@@ -1,0 +1,141 @@
+# Advanced Rate Limiting Configuration Example
+# This example demonstrates multi-tier rate limiting with different quotas
+
+# Session stores with tiered rate limiting
+session_stores:
+  # Free tier: Conservative limits
+  free-tier:
+    backend: sql
+    sql:
+      driver: postgres
+      host: localhost
+      port: 5432
+      database: hector_db
+      username: hector
+      password: secret
+    rate_limit:
+      enabled: true
+      scope: user
+      backend: sql
+      limits:
+        # Low limits for free tier
+        - type: token
+          window: day
+          limit: 10000  # 10k tokens per day
+        - type: count
+          window: minute
+          limit: 10  # 10 requests per minute
+        - type: count
+          window: hour
+          limit: 100  # 100 requests per hour
+
+  # Pro tier: Higher limits
+  pro-tier:
+    backend: sql
+    sql:
+      driver: postgres
+      host: localhost
+      port: 5432
+      database: hector_db
+      username: hector
+      password: secret
+    rate_limit:
+      enabled: true
+      scope: user
+      backend: sql
+      limits:
+        # Higher limits for pro tier
+        - type: token
+          window: day
+          limit: 100000  # 100k tokens per day
+        - type: count
+          window: minute
+          limit: 60  # 60 requests per minute
+        - type: count
+          window: hour
+          limit: 1000  # 1k requests per hour
+
+  # Enterprise tier: Very high limits
+  enterprise-tier:
+    backend: sql
+    sql:
+      driver: postgres
+      host: localhost
+      port: 5432
+      database: hector_db
+      username: hector
+      password: secret
+    rate_limit:
+      enabled: true
+      scope: user
+      backend: sql
+      limits:
+        # Very high limits for enterprise
+        - type: token
+          window: day
+          limit: 1000000  # 1M tokens per day
+        - type: token
+          window: week
+          limit: 5000000  # 5M tokens per week
+        - type: count
+          window: minute
+          limit: 1000  # 1k requests per minute
+        - type: count
+          window: hour
+          limit: 10000  # 10k requests per hour
+
+  # Development: No rate limiting
+  development:
+    backend: memory
+    rate_limit:
+      enabled: false  # No rate limiting for development
+
+# Agents can use different session stores based on user tier
+agents:
+  free-assistant:
+    name: "Free Assistant"
+    description: "AI assistant with free tier limits"
+    session_store: free-tier
+    reasoning:
+      provider: openai
+      model: gpt-3.5-turbo
+      temperature: 0.7
+      max_tokens: 1000
+
+  pro-assistant:
+    name: "Pro Assistant"
+    description: "AI assistant with pro tier limits"
+    session_store: pro-tier
+    reasoning:
+      provider: openai
+      model: gpt-4
+      temperature: 0.7
+      max_tokens: 2000
+
+  enterprise-assistant:
+    name: "Enterprise Assistant"
+    description: "AI assistant with enterprise tier limits"
+    session_store: enterprise-tier
+    reasoning:
+      provider: openai
+      model: gpt-4
+      temperature: 0.7
+      max_tokens: 4000
+
+  dev-assistant:
+    name: "Dev Assistant"
+    description: "AI assistant for development (no rate limiting)"
+    session_store: development
+    reasoning:
+      provider: openai
+      model: gpt-4
+      temperature: 0.7
+      max_tokens: 2000
+
+# Transport configuration
+transport:
+  rest:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8080
+
