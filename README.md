@@ -380,7 +380,12 @@ agents:
 - Cross-session memory continuity
 - Conversation history retrieval
 
-[Memory Guide](https://gohector.dev/core-concepts/memory/)
+**Rate Limiting:**
+- Multi-layer time windows (minute/hour/day/week/month)
+- Token usage and request count tracking
+- Per-session or per-user scoping
+
+[Memory Guide](https://gohector.dev/core-concepts/memory/) | [Rate Limiting](https://gohector.dev/core-concepts/rate-limiting/)
 
 ### Tool Ecosystem
 
@@ -696,6 +701,7 @@ Comprehensive documentation available at [gohector.dev](https://gohector.dev):
 **Core Concepts:**
 - [Overview](https://gohector.dev/core-concepts/overview/)
 - [Memory Management](https://gohector.dev/core-concepts/memory/)
+- [Rate Limiting](https://gohector.dev/core-concepts/rate-limiting/)
 - [Tools](https://gohector.dev/core-concepts/tools/)
 - [Reasoning](https://gohector.dev/core-concepts/reasoning/)
 - [Multi-Agent Systems](https://gohector.dev/core-concepts/multi-agent/)

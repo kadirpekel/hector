@@ -573,6 +573,44 @@ agents:
 
 **Multi-Agent Isolation:** Multiple agents can share a session store. Sessions are isolated by `agent_id` + `session_id`.
 
+### Rate Limiting
+
+Control API usage with flexible rate limiting per session or user:
+
+```yaml
+session_stores:
+  default:
+    backend: sql
+    sql:
+      driver: postgres
+      database: hector_db
+    rate_limit:
+      enabled: true
+      scope: user              # "session" or "user"
+      backend: sql             # "memory" or "sql"
+      limits:
+        - type: count          # Request count limit
+          window: minute       # minute|hour|day|week|month
+          limit: 60
+        - type: token          # Token usage limit
+          window: day
+          limit: 100000
+```
+
+**Limit Types:**
+- `count`: Number of requests/messages
+- `token`: LLM token usage (cost control)
+
+**Scopes:**
+- `session`: Each session has independent quota
+- `user`: All sessions for a user share quota
+
+**Backends:**
+- `memory`: Fast, volatile (for development)
+- `sql`: Persistent, production-ready
+
+See [Rate Limiting](../core-concepts/rate-limiting.md) for details.
+
 ### Complete Example
 
 ```yaml

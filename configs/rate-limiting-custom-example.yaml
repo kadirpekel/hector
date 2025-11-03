@@ -1,0 +1,158 @@
+# Custom Rate Limiting Configuration Examples
+# This file shows various rate limiting patterns
+
+session_stores:
+  # Pattern 1: Burst protection with minute-level limits
+  burst-protection:
+    backend: memory
+    rate_limit:
+      enabled: true
+      scope: session
+      backend: memory
+      limits:
+        - type: count
+          window: minute
+          limit: 20  # Max 20 requests per minute
+
+  # Pattern 2: Cost control with token limits
+  cost-control:
+    backend: memory
+    rate_limit:
+      enabled: true
+      scope: user
+      backend: memory
+      limits:
+        - type: token
+          window: day
+          limit: 50000
+        - type: token
+          window: week
+          limit: 250000
+        - type: token
+          window: month
+          limit: 1000000
+
+  # Pattern 3: Mixed limits for comprehensive protection
+  comprehensive:
+    backend: memory
+    rate_limit:
+      enabled: true
+      scope: user
+      backend: memory
+      limits:
+        # Short-term burst protection
+        - type: count
+          window: minute
+          limit: 30
+        # Mid-term request throttling
+        - type: count
+          window: hour
+          limit: 500
+        # Long-term token budget
+        - type: token
+          window: day
+          limit: 100000
+
+  # Pattern 4: API-style rate limiting (similar to Stripe, GitHub)
+  api-style:
+    backend: sql
+    sql:
+      driver: sqlite
+      database: ./api_sessions.db
+    rate_limit:
+      enabled: true
+      scope: user
+      backend: sql
+      limits:
+        # 5000 requests per hour (similar to many public APIs)
+        - type: count
+          window: hour
+          limit: 5000
+        # 100k requests per day
+        - type: count
+          window: day
+          limit: 100000
+
+  # Pattern 5: Generous limits for internal use
+  internal:
+    backend: memory
+    rate_limit:
+      enabled: true
+      scope: session
+      backend: memory
+      limits:
+        - type: count
+          window: minute
+          limit: 1000
+        - type: token
+          window: day
+          limit: 10000000
+
+  # Pattern 6: Very strict limits for public demos
+  public-demo:
+    backend: memory
+    rate_limit:
+      enabled: true
+      scope: session
+      backend: memory
+      limits:
+        # Very conservative for public demos
+        - type: count
+          window: minute
+          limit: 5
+        - type: count
+          window: hour
+          limit: 20
+        - type: token
+          window: day
+          limit: 5000
+
+agents:
+  burst-protected:
+    name: "Burst Protected Agent"
+    session_store: burst-protection
+    reasoning:
+      provider: openai
+      model: gpt-4
+
+  cost-controlled:
+    name: "Cost Controlled Agent"
+    session_store: cost-control
+    reasoning:
+      provider: openai
+      model: gpt-4
+
+  comprehensive:
+    name: "Comprehensively Limited Agent"
+    session_store: comprehensive
+    reasoning:
+      provider: openai
+      model: gpt-4
+
+  api-style:
+    name: "API-Style Limited Agent"
+    session_store: api-style
+    reasoning:
+      provider: openai
+      model: gpt-4
+
+  internal:
+    name: "Internal Use Agent"
+    session_store: internal
+    reasoning:
+      provider: openai
+      model: gpt-4
+
+  public-demo:
+    name: "Public Demo Agent"
+    session_store: public-demo
+    reasoning:
+      provider: openai
+      model: gpt-3.5-turbo
+
+transport:
+  rest:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8080
+

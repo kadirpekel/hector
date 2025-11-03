@@ -1,0 +1,71 @@
+# Basic Rate Limiting Configuration Example
+# This example shows how to configure rate limiting for session stores
+
+# Session stores configuration
+session_stores:
+  # Example 1: In-memory session store with basic rate limiting
+  default:
+    backend: memory
+    rate_limit:
+      enabled: true
+      scope: session  # Rate limit per session (each session has independent quota)
+      backend: memory # Store rate limit data in memory
+      limits:
+        # Daily token limit (e.g., for cost control with LLM APIs)
+        - type: token
+          window: day
+          limit: 50000
+        
+        # Per-minute request limit (e.g., to prevent burst traffic)
+        - type: count
+          window: minute
+          limit: 30
+
+  # Example 2: SQL-backed session store with user-level rate limiting
+  persistent:
+    backend: sql
+    sql:
+      driver: sqlite
+      database: ./sessions.db
+      max_conns: 25
+      max_idle: 5
+    rate_limit:
+      enabled: true
+      scope: user  # Rate limit per user (all sessions for a user share quota)
+      backend: sql # Store rate limit data in SQL database
+      limits:
+        # Multiple time windows for comprehensive protection
+        - type: count
+          window: minute
+          limit: 60
+        - type: token
+          window: hour
+          limit: 10000
+        - type: token
+          window: day
+          limit: 100000
+
+# Agent configuration
+agents:
+  assistant:
+    name: "Assistant"
+    description: "A helpful AI assistant with rate limiting"
+    
+    session_store: default  # Use the 'default' session store with rate limiting
+    
+    reasoning:
+      provider: openai
+      model: gpt-4
+      temperature: 0.7
+      max_tokens: 2000
+
+    system_prompt: |
+      You are a helpful AI assistant. You are polite, concise, and efficient.
+
+# Transport configuration
+transport:
+  rest:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8080
+
