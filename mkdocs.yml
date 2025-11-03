@@ -75,7 +75,6 @@ nav:
     - Structured Output: core-concepts/structured-output.md
     - Sessions: core-concepts/sessions.md
     - Streaming: core-concepts/streaming.md
-    - Performance: core-concepts/performance.md
   - How-To Guides:
     - Build Coding Assistant: how-to/build-coding-assistant.md
     - Build Research System: how-to/build-research-system.md
@@ -95,8 +94,6 @@ nav:
       - System Design: reference/architecture.md
       - Session & Memory: reference/architecture/session-memory.md
       - Agent Lifecycle: reference/architecture/agent-lifecycle.md
-  - Performance:
-    - Overview: performance/index.md
 
 # Plugins
 plugins:
