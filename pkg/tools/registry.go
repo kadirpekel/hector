@@ -175,7 +175,7 @@ func (r *ToolRegistry) initializeFromConfigWithAgentRegistry(toolConfig map[stri
 	}
 
 	for toolName, toolConfig := range mcpTools {
-		if toolConfig == nil || !toolConfig.Enabled {
+		if toolConfig == nil || !config.BoolValue(toolConfig.Enabled, true) {
 			continue
 		}
 

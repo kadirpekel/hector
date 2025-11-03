@@ -38,7 +38,7 @@ func (c *Config) PreProcess() {
 			c.expandDocsFolder(agent)
 		}
 
-		if agent.EnableTools && len(agent.Tools) == 0 {
+		if boolValue(agent.EnableTools, false) && len(agent.Tools) == 0 {
 			c.expandEnableTools()
 		}
 	}
@@ -77,7 +77,7 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 		Path:                agent.DocsFolder,
 		WatchChanges:        true,
 		MaxFileSize:         DefaultMaxDocumentStoreSize,
-		IncrementalIndexing: true,
+		IncrementalIndexing: boolPtr(true),
 	}
 	c.DocumentStores[storeName] = docStoreConfig
 
@@ -509,9 +509,9 @@ func CreateZeroConfig(source interface{}) *Config {
 
 	if observe {
 		cfg.Global.Observability = ObservabilityConfig{
-			MetricsEnabled: true,
+			MetricsEnabled: boolPtr(true),
 			Tracing: TracingConfig{
-				Enabled: true,
+				Enabled: boolPtr(true),
 			},
 		}
 	}
@@ -540,7 +540,7 @@ func CreateZeroConfig(source interface{}) *Config {
 	}
 
 	if enableTools {
-		agentConfig.EnableTools = true
+		agentConfig.EnableTools = boolPtr(true)
 	} else if mcpURL != "" {
 		agentConfig.Tools = nil
 	} else {
@@ -555,11 +555,11 @@ func CreateZeroConfig(source interface{}) *Config {
 		if cfg.Tools == nil {
 			cfg.Tools = make(map[string]*ToolConfig)
 		}
-		cfg.Tools["mcp"] = &ToolConfig{
-			Type:      "mcp",
-			Enabled:   true,
-			ServerURL: mcpURL,
-		}
+	cfg.Tools["mcp"] = &ToolConfig{
+		Type:      "mcp",
+		Enabled:   boolPtr(true),
+		ServerURL: mcpURL,
+	}
 	}
 
 	return cfg

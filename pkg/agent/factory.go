@@ -182,7 +182,7 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 		Enabled:      agentConfig.Memory.LongTerm.IsEnabled(),
 		StorageScope: memory.StorageScope(agentConfig.Memory.LongTerm.StorageScope),
 		BatchSize:    agentConfig.Memory.LongTerm.BatchSize,
-		AutoRecall:   agentConfig.Memory.LongTerm.AutoRecall,
+		AutoRecall:   config.BoolValue(agentConfig.Memory.LongTerm.AutoRecall, true),
 		RecallLimit:  agentConfig.Memory.LongTerm.RecallLimit,
 		Collection:   agentConfig.Memory.LongTerm.Collection,
 	}
@@ -262,7 +262,7 @@ func registerRequiredToolWithAgentRegistry(registry *tools.ToolRegistry, reqTool
 			AllowedCommands:  []string{"ls", "cat", "pwd", "echo"},
 			WorkingDirectory: "./",
 			MaxExecutionTime: "30s",
-			EnableSandboxing: true,
+			EnableSandboxing: config.BoolPtr(true),
 		}
 		cmdTool, err := tools.NewCommandToolWithConfig(reqTool.Name, toolConfig)
 		if err != nil {

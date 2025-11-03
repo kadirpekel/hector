@@ -185,7 +185,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 
 	// Initialize metadata extractors
 	metadataExtractors := metadata.NewExtractorRegistry()
-	if storeConfig.ExtractMetadata {
+	if config.BoolValue(storeConfig.ExtractMetadata, true) {
 		for _, lang := range storeConfig.MetadataLanguages {
 			if lang == "go" {
 				metadataExtractors.Register(metadata.NewGoExtractor())
@@ -302,7 +302,7 @@ func (ds *DocumentStore) indexDirectory() error {
 	}
 
 	var existingDocs map[string]FileIndexInfo
-	if ds.config.IncrementalIndexing {
+	if config.BoolValue(ds.config.IncrementalIndexing, true) {
 		existingDocs, err = ds.loadIndexState()
 		if err != nil {
 			log.Printf("Warning: Failed to load index state, performing full reindex: %v", err)
@@ -499,7 +499,7 @@ func (ds *DocumentStore) indexDirectory() error {
 
 	indexedCount.Wait()
 
-	if ds.config.IncrementalIndexing {
+	if config.BoolValue(ds.config.IncrementalIndexing, true) {
 		if err := ds.cleanupDeletedFiles(ctx, existingDocs, foundFiles); err != nil {
 			log.Printf("Warning: Cleanup of deleted files failed: %v", err)
 		}
@@ -511,7 +511,7 @@ func (ds *DocumentStore) indexDirectory() error {
 	ds.status.DocumentCount = int(stats.IndexedFiles)
 	ds.mu.Unlock()
 
-	if ds.config.IncrementalIndexing {
+	if config.BoolValue(ds.config.IncrementalIndexing, true) {
 		finalState := make(map[string]FileIndexInfo)
 
 		// Keep existing files that are still present
@@ -576,7 +576,7 @@ func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 
 	// Step 3: Extract metadata using metadata extractors
 	var meta *metadata.Metadata
-	if ds.config.ExtractMetadata {
+	if config.BoolValue(ds.config.ExtractMetadata, true) {
 		meta, err = ds.metadataExtractors.ExtractMetadata(language, extracted.Content, path)
 		if err != nil {
 			// Non-fatal: continue without metadata
@@ -1103,7 +1103,7 @@ func (ds *DocumentStore) saveIndexState(files map[string]FileIndexInfo, totalChu
 }
 
 func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time, existingDocs map[string]FileIndexInfo) bool {
-	if !ds.config.IncrementalIndexing {
+	if !config.BoolValue(ds.config.IncrementalIndexing, true) {
 		return true
 	}
 
@@ -1146,7 +1146,7 @@ func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time
 }
 
 func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs map[string]FileIndexInfo, foundFiles map[string]bool) error {
-	if !ds.config.IncrementalIndexing || len(existingDocs) == 0 || ds.searchEngine == nil {
+	if !config.BoolValue(ds.config.IncrementalIndexing, true) || len(existingDocs) == 0 || ds.searchEngine == nil {
 		return nil
 	}
 

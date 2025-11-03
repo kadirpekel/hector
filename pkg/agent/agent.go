@@ -677,7 +677,7 @@ func (a *Agent) buildPromptSlots(strategy reasoning.ReasoningStrategy) reasoning
 
 	strategySlots := strategy.GetPromptSlots()
 
-	if a.config.Reasoning.EnableSelfReflection {
+	if config.BoolValue(a.config.Reasoning.EnableSelfReflection, true) {
 		selfReflectionPrompt := `
 <self_reflection>
 Before taking actions, output your internal reasoning using <thinking> tags:

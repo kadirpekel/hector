@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
@@ -21,7 +22,7 @@ func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningSta
 
 	if iteration == 1 && state.GetServices() != nil {
 		cfg := state.GetServices().GetConfig()
-		if cfg.EnableGoalExtraction {
+		if config.BoolValue(cfg.EnableGoalExtraction, true) {
 
 			decomposition, err := ExtractGoals(state.GetContext(), state.Query(), []string{}, state.GetServices())
 			if err == nil {

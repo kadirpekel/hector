@@ -13,7 +13,7 @@ func NewCommandToolForTesting() *CommandTool {
 	return NewCommandTool(&config.CommandToolsConfig{
 		AllowedCommands:  []string{"echo", "pwd", "ls", "cat", "head", "tail"},
 		MaxExecutionTime: 1 * time.Second,
-		EnableSandboxing: false,
+		EnableSandboxing: config.BoolPtr(false),
 		WorkingDirectory: "./",
 	})
 }
@@ -22,7 +22,7 @@ func NewCommandToolForTestingWithCommands(allowedCommands []string) *CommandTool
 	return NewCommandTool(&config.CommandToolsConfig{
 		AllowedCommands:  allowedCommands,
 		MaxExecutionTime: 1 * time.Second,
-		EnableSandboxing: true,
+		EnableSandboxing: config.BoolPtr(true),
 		WorkingDirectory: "./",
 	})
 }
@@ -35,7 +35,7 @@ func NewFileWriterToolForTesting() *FileWriterTool {
 	return NewFileWriterTool(&config.FileWriterConfig{
 		MaxFileSize:       1024,
 		AllowedExtensions: []string{".txt", ".md", ".go", ".json"},
-		BackupOnOverwrite: false,
+		BackupOnOverwrite: config.BoolPtr(false),
 		WorkingDirectory:  "./test-temp",
 	})
 }
@@ -43,8 +43,8 @@ func NewFileWriterToolForTesting() *FileWriterTool {
 func NewSearchReplaceToolForTesting() *SearchReplaceTool {
 	return NewSearchReplaceTool(&config.SearchReplaceConfig{
 		MaxReplacements:  10,
-		ShowDiff:         true,
-		CreateBackup:     false,
+		ShowDiff:         config.BoolPtr(true),
+		CreateBackup:     config.BoolPtr(false),
 		WorkingDirectory: "./test-temp",
 	})
 }

@@ -17,12 +17,12 @@ type SearchReplaceTool struct {
 
 func NewSearchReplaceTool(cfg *config.SearchReplaceConfig) *SearchReplaceTool {
 	if cfg == nil {
-		cfg = &config.SearchReplaceConfig{
-			MaxReplacements:  100,
-			ShowDiff:         true,
-			CreateBackup:     true,
-			WorkingDirectory: "./",
-		}
+	cfg = &config.SearchReplaceConfig{
+		MaxReplacements:  100,
+		ShowDiff:         config.BoolPtr(true),
+		CreateBackup:     config.BoolPtr(true),
+		WorkingDirectory: "./",
+	}
 	}
 
 	if cfg.MaxReplacements == 0 {
@@ -162,7 +162,7 @@ func (t *SearchReplaceTool) Execute(ctx context.Context, args map[string]interfa
 		replacementCount = 1
 	}
 
-	if t.config.CreateBackup {
+	if config.BoolValue(t.config.CreateBackup, true) {
 		backupPath := fullPath + ".bak"
 		if err := os.WriteFile(backupPath, content, 0644); err != nil {
 
@@ -177,12 +177,12 @@ func (t *SearchReplaceTool) Execute(ctx context.Context, args map[string]interfa
 	var response strings.Builder
 	response.WriteString(fmt.Sprintf("✅ Replaced %d occurrence(s) in %s\n", replacementCount, path))
 
-	if t.config.ShowDiff {
+	if config.BoolValue(t.config.ShowDiff, true) {
 		diff := t.generateDiff(oldString, newString)
 		response.WriteString(fmt.Sprintf("\n%s\n", diff))
 	}
 
-	if t.config.CreateBackup {
+	if config.BoolValue(t.config.CreateBackup, true) {
 		response.WriteString(fmt.Sprintf("\n💾 Backup created: %s.bak", path))
 	}
 

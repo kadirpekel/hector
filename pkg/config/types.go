@@ -11,17 +11,41 @@ const (
 	DefaultGeminiModel    = "gemini-2.0-flash-exp"
 )
 
+// Helper functions for bool pointer handling
+
+// BoolValue safely dereferences a bool pointer, returning defaultVal if nil
+func BoolValue(b *bool, defaultVal bool) bool {
+	if b == nil {
+		return defaultVal
+	}
+	return *b
+}
+
+// BoolPtr creates a pointer to a bool value (useful for tests and inline defaults)
+func BoolPtr(b bool) *bool {
+	return &b
+}
+
+// Lowercase aliases for internal use within this package
+var (
+	boolValue = BoolValue
+	boolPtr   = BoolPtr
+)
+
 type PluginDiscoveryConfig struct {
-	Enabled            bool     `yaml:"enabled" json:"enabled"`
+	Enabled            *bool    `yaml:"enabled" json:"enabled"`
 	Paths              []string `yaml:"paths" json:"paths"`
 	ScanSubdirectories bool     `yaml:"scan_subdirectories" json:"scan_subdirectories"`
 }
 
 func (c *PluginDiscoveryConfig) SetDefaults() {
+	if c.Enabled == nil {
+		// Default to disabled unless paths are configured
+		c.Enabled = boolPtr(len(c.Paths) > 0)
+	}
 	if len(c.Paths) == 0 {
 		c.Paths = []string{"./plugins", "~/.hector/plugins"}
 	}
-
 }
 
 func (c *PluginDiscoveryConfig) Validate() error {
@@ -32,11 +56,14 @@ type PluginConfig struct {
 	Name    string                 `yaml:"name" json:"name"`
 	Type    string                 `yaml:"type" json:"type"`
 	Path    string                 `yaml:"path" json:"path"`
-	Enabled bool                   `yaml:"enabled" json:"enabled"`
+	Enabled *bool                  `yaml:"enabled" json:"enabled"`
 	Config  map[string]interface{} `yaml:"config" json:"config"`
 }
 
 func (c *PluginConfig) SetDefaults() {
+	if c.Enabled == nil {
+		c.Enabled = boolPtr(true) // Plugins default to enabled when configured
+	}
 	if c.Type == "" {
 		c.Type = "grpc"
 	}
@@ -280,7 +307,7 @@ type DatabaseProviderConfig struct {
 	Host   string `yaml:"host"`
 	Port   int    `yaml:"port"`
 	APIKey string `yaml:"api_key"`
-	UseTLS bool   `yaml:"use_tls"`
+	UseTLS *bool  `yaml:"use_tls"`
 }
 
 func (c *DatabaseProviderConfig) Validate() error {
@@ -297,7 +324,9 @@ func (c *DatabaseProviderConfig) Validate() error {
 }
 
 func (c *DatabaseProviderConfig) SetDefaults() {
-
+	if c.UseTLS == nil {
+		c.UseTLS = boolPtr(true) // Default to TLS for security
+	}
 	if c.Type == "" {
 		c.Type = "qdrant"
 	}
@@ -390,7 +419,7 @@ type AgentConfig struct {
 	StructuredOutput *StructuredOutputConfig `yaml:"structured_output,omitempty"`
 
 	DocsFolder  string `yaml:"docs_folder,omitempty"`
-	EnableTools bool   `yaml:"enable_tools,omitempty"`
+	EnableTools *bool  `yaml:"enable_tools,omitempty"`
 
 	A2A *A2ACardConfig `yaml:"a2a,omitempty"`
 }
@@ -447,7 +476,7 @@ func (c *AgentConfig) Validate() error {
 		if c.DocsFolder != "" && len(c.DocumentStores) > 0 {
 			return fmt.Errorf("docs_folder shortcut and document_stores are mutually exclusive (use one or the other)")
 		}
-		if c.EnableTools && len(c.Tools) > 0 {
+		if boolValue(c.EnableTools, false) && len(c.Tools) > 0 {
 			return fmt.Errorf("enable_tools shortcut and explicit tools list are mutually exclusive (use one or the other)")
 		}
 
@@ -489,6 +518,9 @@ func (c *AgentConfig) Validate() error {
 }
 
 func (c *AgentConfig) SetDefaults() {
+	if c.EnableTools == nil {
+		c.EnableTools = boolPtr(true) // Default to tools enabled
+	}
 
 	if c.Type == "" {
 		c.Type = "native"
@@ -541,12 +573,12 @@ type CommandToolsConfig struct {
 	AllowedCommands  []string      `yaml:"allowed_commands"`
 	WorkingDirectory string        `yaml:"working_directory"`
 	MaxExecutionTime time.Duration `yaml:"max_execution_time"`
-	EnableSandboxing bool          `yaml:"enable_sandboxing"`
+	EnableSandboxing *bool         `yaml:"enable_sandboxing"`
 }
 
 func (c *CommandToolsConfig) Validate() error {
 
-	if !c.EnableSandboxing && len(c.AllowedCommands) == 0 {
+	if !boolValue(c.EnableSandboxing, true) && len(c.AllowedCommands) == 0 {
 		return fmt.Errorf("allowed_commands is required when enable_sandboxing is false (security requirement)")
 	}
 
@@ -554,14 +586,15 @@ func (c *CommandToolsConfig) Validate() error {
 }
 
 func (c *CommandToolsConfig) SetDefaults() {
-
+	if c.EnableSandboxing == nil {
+		c.EnableSandboxing = boolPtr(true) // Default to sandboxing enabled for security
+	}
 	if c.WorkingDirectory == "" {
 		c.WorkingDirectory = "./"
 	}
 	if c.MaxExecutionTime == 0 {
 		c.MaxExecutionTime = 30 * time.Second
 	}
-
 }
 
 type SearchToolConfig struct {
@@ -594,7 +627,7 @@ type FileWriterConfig struct {
 	MaxFileSize       int      `yaml:"max_file_size"`
 	AllowedExtensions []string `yaml:"allowed_extensions"`
 	DeniedExtensions  []string `yaml:"denied_extensions"`
-	BackupOnOverwrite bool     `yaml:"backup_on_overwrite"`
+	BackupOnOverwrite *bool    `yaml:"backup_on_overwrite"`
 	WorkingDirectory  string   `yaml:"working_directory"`
 }
 
@@ -606,10 +639,12 @@ func (c *FileWriterConfig) Validate() error {
 }
 
 func (c *FileWriterConfig) SetDefaults() {
+	if c.BackupOnOverwrite == nil {
+		c.BackupOnOverwrite = boolPtr(true) // Default to backup for safety
+	}
 	if c.MaxFileSize == 0 {
 		c.MaxFileSize = 1048576
 	}
-
 	if c.WorkingDirectory == "" {
 		c.WorkingDirectory = "./"
 	}
@@ -617,8 +652,8 @@ func (c *FileWriterConfig) SetDefaults() {
 
 type SearchReplaceConfig struct {
 	MaxReplacements  int    `yaml:"max_replacements"`
-	ShowDiff         bool   `yaml:"show_diff"`
-	CreateBackup     bool   `yaml:"create_backup"`
+	ShowDiff         *bool  `yaml:"show_diff"`
+	CreateBackup     *bool  `yaml:"create_backup"`
 	WorkingDirectory string `yaml:"working_directory"`
 }
 
@@ -651,7 +686,7 @@ func GetDefaultToolConfigs() map[string]*ToolConfig {
 			Type:             "command",
 			WorkingDirectory: "./",
 			MaxExecutionTime: "30s",
-			EnableSandboxing: true,
+			EnableSandboxing: boolPtr(true),
 		},
 		"write_file": {
 			Type:             "write_file",
@@ -708,13 +743,13 @@ func (c *ToolConfigs) SetDefaults() {
 
 type ToolConfig struct {
 	Type        string `yaml:"type"`
-	Enabled     bool   `yaml:"enabled,omitempty"`
+	Enabled     *bool  `yaml:"enabled,omitempty"`
 	Description string `yaml:"description,omitempty"`
 
 	AllowedCommands  []string `yaml:"allowed_commands,omitempty"`
 	WorkingDirectory string   `yaml:"working_directory,omitempty"`
 	MaxExecutionTime string   `yaml:"max_execution_time,omitempty"`
-	EnableSandboxing bool     `yaml:"enable_sandboxing,omitempty"`
+	EnableSandboxing *bool    `yaml:"enable_sandboxing,omitempty"`
 
 	MaxFileSize       int64    `yaml:"max_file_size,omitempty"`
 	AllowedExtensions []string `yaml:"allowed_extensions,omitempty"`
@@ -754,7 +789,7 @@ func (c *ToolConfig) Validate() error {
 	switch c.Type {
 	case "command":
 
-		if !c.EnableSandboxing && len(c.AllowedCommands) == 0 {
+		if !boolValue(c.EnableSandboxing, true) && len(c.AllowedCommands) == 0 {
 			return fmt.Errorf("allowed_commands is required when enable_sandboxing is false (security requirement)")
 		}
 
@@ -780,14 +815,15 @@ func (c *ToolConfig) Validate() error {
 }
 
 func (c *ToolConfig) SetDefaults() {
-
-	c.Enabled = true
+	if c.Enabled == nil {
+		c.Enabled = boolPtr(true) // Tools default to enabled when configured
+	}
+	if c.EnableSandboxing == nil {
+		c.EnableSandboxing = boolPtr(true) // Default to sandboxing for security
+	}
 
 	switch c.Type {
 	case "command":
-		if !c.EnableSandboxing {
-			c.EnableSandboxing = true
-		}
 		if c.WorkingDirectory == "" {
 			c.WorkingDirectory = "./"
 		}
@@ -852,7 +888,7 @@ type DocumentStoreConfig struct {
 	AdditionalExcludes  []string `yaml:"additional_exclude_patterns"` // Extends default exclusions
 	WatchChanges        bool     `yaml:"watch_changes"`
 	MaxFileSize         int64    `yaml:"max_file_size"`
-	IncrementalIndexing bool     `yaml:"incremental_indexing"`
+	IncrementalIndexing *bool    `yaml:"incremental_indexing"`
 
 	// Chunking configuration
 	ChunkSize     int    `yaml:"chunk_size"`     // Default: 800 characters
@@ -860,7 +896,7 @@ type DocumentStoreConfig struct {
 	ChunkStrategy string `yaml:"chunk_strategy"` // "simple", "overlapping", "semantic"
 
 	// Metadata extraction
-	ExtractMetadata   bool     `yaml:"extract_metadata"`   // Default: true
+	ExtractMetadata   *bool    `yaml:"extract_metadata"`   // Default: true
 	MetadataLanguages []string `yaml:"metadata_languages"` // Languages to extract metadata from
 
 	// Performance
@@ -1274,7 +1310,8 @@ func (c *SessionStoreConfig) SetDefaults() {
 	if c.SQL != nil {
 		c.SQL.SetDefaults()
 	}
-	if c.RateLimit != nil {
+	// Only set rate limit defaults if explicitly configured
+	if c.RateLimit != nil && boolValue(c.RateLimit.Enabled, false) {
 		c.RateLimit.SetDefaults()
 	}
 }
@@ -1321,7 +1358,8 @@ func (c *SessionStoreConfig) Validate() error {
 			return fmt.Errorf("sql config validation failed: %w", err)
 		}
 	}
-	if c.RateLimit != nil {
+	// Only validate rate limit if it's explicitly configured and enabled
+	if c.RateLimit != nil && boolValue(c.RateLimit.Enabled, false) {
 		if err := c.RateLimit.Validate(); err != nil {
 			return fmt.Errorf("rate limit config validation failed: %w", err)
 		}
@@ -1358,7 +1396,7 @@ func (c *SessionSQLConfig) Validate() error {
 
 // RateLimitConfig defines rate limiting configuration
 type RateLimitConfig struct {
-	Enabled bool            `yaml:"enabled" json:"enabled"`
+	Enabled *bool           `yaml:"enabled" json:"enabled"`
 	Scope   string          `yaml:"scope,omitempty" json:"scope,omitempty"`     // "session" or "user"
 	Backend string          `yaml:"backend,omitempty" json:"backend,omitempty"` // "memory" or "sql"
 	Limits  []RateLimitRule `yaml:"limits" json:"limits"`
@@ -1372,7 +1410,14 @@ type RateLimitRule struct {
 }
 
 func (c *RateLimitConfig) SetDefaults() {
-	if c.Enabled && len(c.Limits) == 0 {
+	if c.Enabled == nil {
+		c.Enabled = boolPtr(false) // Default to disabled (opt-in)
+	}
+	if !boolValue(c.Enabled, false) {
+		return // Don't set other defaults if rate limiting is disabled
+	}
+
+	if len(c.Limits) == 0 {
 		// Default: 100k tokens per day, 60 requests per minute
 		c.Limits = []RateLimitRule{
 			{Type: "token", Window: "day", Limit: 100000},
@@ -1388,7 +1433,7 @@ func (c *RateLimitConfig) SetDefaults() {
 }
 
 func (c *RateLimitConfig) Validate() error {
-	if !c.Enabled {
+	if !boolValue(c.Enabled, false) {
 		return nil
 	}
 	if len(c.Limits) == 0 {
@@ -1461,7 +1506,7 @@ type MemoryConfig struct {
 type LongTermMemoryConfig struct {
 	StorageScope string `yaml:"storage_scope,omitempty"`
 	BatchSize    int    `yaml:"batch_size,omitempty"`
-	AutoRecall   bool   `yaml:"auto_recall,omitempty"`
+	AutoRecall   *bool  `yaml:"auto_recall,omitempty"`
 	RecallLimit  int    `yaml:"recall_limit,omitempty"`
 	Collection   string `yaml:"collection,omitempty"`
 }
@@ -1478,7 +1523,7 @@ type PromptConfig struct {
 	SystemPrompt string `yaml:"system_prompt"`
 
 	// Enable RAG context injection from document stores
-	IncludeContext bool `yaml:"include_context"`
+	IncludeContext *bool `yaml:"include_context"`
 }
 
 // PromptSlotsConfig defines typed prompt slots for composable prompt engineering
@@ -1540,15 +1585,17 @@ func (c *PromptConfig) Validate() error {
 }
 
 func (c *PromptConfig) SetDefaults() {
-	// No defaults needed - all fields are intentionally left empty unless explicitly set
+	if c.IncludeContext == nil {
+		c.IncludeContext = boolPtr(true) // Default to including RAG context
+	}
 }
 
 type ReasoningConfig struct {
 	Engine                     string `yaml:"engine"`
 	MaxIterations              int    `yaml:"max_iterations"`
-	EnableSelfReflection       bool   `yaml:"enable_self_reflection"`
+	EnableSelfReflection       *bool  `yaml:"enable_self_reflection"`
 	EnableStructuredReflection *bool  `yaml:"enable_structured_reflection"`
-	EnableGoalExtraction       bool   `yaml:"enable_goal_extraction"`
+	EnableGoalExtraction       *bool  `yaml:"enable_goal_extraction"`
 	ShowDebugInfo              bool   `yaml:"show_debug_info"`
 	ShowToolExecution          *bool  `yaml:"show_tool_execution"`
 	ShowThinking               bool   `yaml:"show_thinking"`
@@ -1603,7 +1650,7 @@ type SearchConfig struct {
 	Models       []SearchModel `yaml:"models"`
 	TopK         int           `yaml:"top_k"`         // Default number of results to return
 	Threshold    float32       `yaml:"threshold"`     // Minimum similarity score (0.0-1.0)
-	PreserveCase bool          `yaml:"preserve_case"` // Don't lowercase queries (default: true for code search)
+	PreserveCase *bool         `yaml:"preserve_case"` // Don't lowercase queries (default: true for code search)
 }
 
 func (c *SearchConfig) Validate() error {
@@ -1766,11 +1813,11 @@ func (c *AuthConfig) SetDefaults() {
 
 type ObservabilityConfig struct {
 	Tracing        TracingConfig `yaml:"tracing,omitempty"`
-	MetricsEnabled bool          `yaml:"metrics_enabled,omitempty"`
+	MetricsEnabled *bool         `yaml:"metrics_enabled,omitempty"`
 }
 
 type TracingConfig struct {
-	Enabled      bool    `yaml:"enabled"`
+	Enabled      *bool   `yaml:"enabled"`
 	ExporterType string  `yaml:"exporter_type"`
 	EndpointURL  string  `yaml:"endpoint_url"`
 	SamplingRate float64 `yaml:"sampling_rate"`
@@ -1785,11 +1832,14 @@ func (c *ObservabilityConfig) Validate() error {
 }
 
 func (c *ObservabilityConfig) SetDefaults() {
+	if c.MetricsEnabled == nil {
+		c.MetricsEnabled = boolPtr(true) // Default to metrics enabled
+	}
 	c.Tracing.SetDefaults()
 }
 
 func (c *TracingConfig) Validate() error {
-	if c.Enabled {
+	if boolValue(c.Enabled, false) {
 		if c.EndpointURL == "" {
 			return fmt.Errorf("endpoint_url is required when tracing is enabled")
 		}
@@ -1804,13 +1854,13 @@ func (c *TracingConfig) SetDefaults() {
 	if c.ServiceName == "" {
 		c.ServiceName = "hector"
 	}
-	if c.SamplingRate == 0 && c.Enabled {
+	if c.SamplingRate == 0 && boolValue(c.Enabled, false) {
 		c.SamplingRate = 1.0
 	}
-	if c.ExporterType == "" && c.Enabled {
+	if c.ExporterType == "" && boolValue(c.Enabled, false) {
 		c.ExporterType = "otlp"
 	}
-	if c.EndpointURL == "" && c.Enabled {
+	if c.EndpointURL == "" && boolValue(c.Enabled, false) {
 		c.EndpointURL = "localhost:4317"
 	}
 }
