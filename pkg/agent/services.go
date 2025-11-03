@@ -162,31 +162,15 @@ func (s *DefaultPromptService) composeSystemPromptFromSlots(slots reasoning.Prom
 		prompt.WriteString("\n\n")
 	}
 
-	if slots.ReasoningInstructions != "" {
-		prompt.WriteString(slots.ReasoningInstructions)
+	if slots.Instructions != "" {
+		prompt.WriteString(slots.Instructions)
 		prompt.WriteString("\n\n")
 	}
 
-	if slots.ToolUsage != "" {
-		prompt.WriteString("<tool_usage>\n")
-		prompt.WriteString(slots.ToolUsage)
-		prompt.WriteString("\n</tool_usage>\n\n")
-	}
-
-	if slots.OutputFormat != "" {
-		prompt.WriteString("<output_format>\n")
-		prompt.WriteString(slots.OutputFormat)
-		prompt.WriteString("\n</output_format>\n\n")
-	}
-
-	if slots.CommunicationStyle != "" {
-		prompt.WriteString("<communication>\n")
-		prompt.WriteString(slots.CommunicationStyle)
-		prompt.WriteString("\n</communication>\n\n")
-	}
-
-	if slots.Additional != "" {
-		prompt.WriteString(slots.Additional)
+	if slots.UserGuidance != "" {
+		prompt.WriteString("<user_guidance>\n")
+		prompt.WriteString(slots.UserGuidance)
+		prompt.WriteString("\n</user_guidance>")
 	}
 
 	return strings.TrimSpace(prompt.String())

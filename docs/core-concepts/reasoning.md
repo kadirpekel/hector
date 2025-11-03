@@ -634,7 +634,7 @@ agents:
       engine: "chain-of-thought"
     prompt:
       prompt_slots:
-        reasoning_instructions: |
+        user_guidance: |
           Think step-by-step:
           1. Analyze the problem
           2. Plan your approach

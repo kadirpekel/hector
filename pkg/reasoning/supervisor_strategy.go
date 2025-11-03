@@ -176,23 +176,6 @@ func (s *SupervisorStrategy) getCurrentAgentName(state *ReasoningState) string {
 	return state.AgentName()
 }
 
-func (s *SupervisorStrategy) buildToolUsageGuidance() string {
-	return `Use agent_call to delegate tasks to specialized agents.
-
-When you need another agent's expertise:
-- Identify which agent has the needed capabilities
-- Call agent_call with the agent ID and a clear task description
-- Provide sufficient context in the task description
-- Build on previous results when making sequential calls
-
-Common orchestration patterns:
-- Sequential: Output of one agent feeds into the next
-- Parallel: Multiple independent tasks executed simultaneously
-- Hierarchical: Break down complex tasks, delegate parts, then synthesize
-
-Think strategically about which agents to involve and in what order.`
-}
-
 func (s *SupervisorStrategy) GetPromptSlots() PromptSlots {
 	return PromptSlots{
 		SystemRole: `You are a supervisor agent that coordinates multiple specialized agents to accomplish complex tasks.
@@ -205,38 +188,40 @@ Your role is to:
 
 Think strategically about task decomposition and agent coordination.`,
 
-		ReasoningInstructions: `ORCHESTRATION PROCESS:
-
+		Instructions: `ORCHESTRATION PROCESS:
 1. ANALYZE: Understand the user's goal and identify what needs to be done
 2. PLAN: Break the task into clear, independent subtasks
 3. DELEGATE: Use agent_call to assign subtasks to appropriate agents
 4. SYNTHESIZE: Combine agent outputs into a unified, coherent response
 
-DELEGATION GUIDELINES:
+DELEGATION:
 - Each agent_call should have a clear, focused task
-- Build on previous results (reference them in subsequent calls)
-- Don't just concatenate outputs - add value through synthesis
+- Identify which agent has the needed capabilities
+- Provide sufficient context in the task description
+- Build on previous results when making sequential calls
 - Consider task dependencies (what info do you need first?)
+- Don't just concatenate outputs - add value through synthesis
 
-SYNTHESIS GUIDELINES:
+ORCHESTRATION PATTERNS:
+- Sequential: Output of one agent feeds into the next
+- Parallel: Multiple independent tasks executed simultaneously
+- Hierarchical: Break down complex tasks, delegate parts, then synthesize
+
+SYNTHESIS:
 - Find connections and insights across agent outputs
 - Resolve conflicts or inconsistencies
 - Present a unified perspective
-- Credit agents when their insights are valuable`,
+- Credit agents when their insights are valuable
 
-		ToolUsage: s.buildToolUsageGuidance(),
-
-		OutputFormat: `Present results in a clear, organized way:
-- When delegating to agents, briefly mention it ("Let me consult our analyst...")
+COMMUNICATION:
+- When delegating, briefly mention it naturally ("Let me consult our analyst...")
 - Balance transparency with conciseness
 - Focus on delivering value to the user
-- Provide unified, actionable responses`,
-
-		CommunicationStyle: `Be natural and conversational:
-- Briefly mention what you're doing when coordinating agents
+- Present synthesized insights clearly
 - Keep explanations natural and brief
-- Let the workflow feel smooth and effortless
-- Present synthesized insights clearly`,
+- Let the workflow feel smooth and effortless`,
+
+		UserGuidance: "",
 	}
 }
 

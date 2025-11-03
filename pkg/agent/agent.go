@@ -700,22 +700,19 @@ Make your thinking natural, concise, and focused on the current task.
 </self_reflection>
 `
 
-		if strategySlots.ReasoningInstructions != "" {
-			strategySlots.ReasoningInstructions += "\n\n" + selfReflectionPrompt
+		if strategySlots.Instructions != "" {
+			strategySlots.Instructions += "\n\n" + selfReflectionPrompt
 		} else {
-			strategySlots.ReasoningInstructions = selfReflectionPrompt
+			strategySlots.Instructions = selfReflectionPrompt
 		}
 	}
 
 	// Use typed config slots if provided
 	if a.config.Prompt.PromptSlots != nil {
 		userSlots := reasoning.PromptSlots{
-			SystemRole:            a.config.Prompt.PromptSlots.SystemRole,
-			ReasoningInstructions: a.config.Prompt.PromptSlots.ReasoningInstructions,
-			ToolUsage:             a.config.Prompt.PromptSlots.ToolUsage,
-			OutputFormat:          a.config.Prompt.PromptSlots.OutputFormat,
-			CommunicationStyle:    a.config.Prompt.PromptSlots.CommunicationStyle,
-			Additional:            a.config.Prompt.PromptSlots.Additional,
+			SystemRole:   a.config.Prompt.PromptSlots.SystemRole,
+			Instructions: a.config.Prompt.PromptSlots.Instructions,
+			UserGuidance: a.config.Prompt.PromptSlots.UserGuidance,
 		}
 		strategySlots = strategySlots.Merge(userSlots)
 	}

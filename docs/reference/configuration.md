@@ -251,9 +251,11 @@ agents:
     database: "qdrant"           # For RAG & long-term memory
     embedder: "embedder"         # For RAG & long-term memory
     
-    # Prompt Configuration
+    # Prompt Configuration (choose ONE approach)
     prompt:
-      # Simple approach (recommended): Single system prompt
+      # OPTION 1: Complete Override (Full Control)
+      # Use this when you want complete control over the prompt
+      # WARNING: Disables ALL strategy behavior (tool patterns, workflows, etc.)
       system_prompt: |
         You are an expert assistant. Provide clear, accurate responses.
         
@@ -262,15 +264,27 @@ agents:
         - Use available tools when helpful
         - Ask clarifying questions
       
-      # Advanced: Slot-based prompts for granular control
+      # OPTION 2: Slot-Based Prompts (Recommended - Merges with Strategy)
+      # Use this to customize while preserving strategy optimizations
       # Note: Use prompt_slots OR system_prompt, not both
       prompt_slots:
-        system_role: "Core role and identity"
-        reasoning_instructions: "How to think and approach problems"
-        tool_usage: "Guidelines for using tools"
-        output_format: "Response format preferences"
-        communication_style: "Tone and interaction style"
-        additional: "Extra context or instructions"
+        system_role: |
+          WHO you are: Your identity and purpose.
+          Example: "You are a Python expert specializing in FastAPI"
+        
+        instructions: |
+          HOW you behave: Behavioral guidance, tool usage patterns, workflow.
+          Example: "Always write tests. Prefer async/await over callbacks."
+          
+          NOTE: Replaces strategy's instructions. Use carefully.
+          Most users should use user_guidance instead.
+        
+        user_guidance: |
+          WHAT the user wants: Task-specific guidance (HIGHEST PRIORITY).
+          Example: "Focus on performance. Use type hints everywhere."
+          
+          This is applied LAST and doesn't break strategy behavior.
+          RECOMMENDED for most customizations.
       
       # RAG toggle: Include document context in prompts
       include_context: true  # Default: false
@@ -928,9 +942,62 @@ hector serve --config config.yaml --port 9000
 
 ---
 
+## Prompt Configuration Details
+
+For detailed information about prompts, see [Prompts Guide](../core-concepts/prompts.md).
+
+### Quick Summary
+
+**Priority Hierarchy (highest to lowest):**
+1. **system_prompt** - Complete override, disables ALL strategy behavior
+2. **prompt_slots** - Merges with strategy, preserves behavior patterns
+3. **strategy defaults** - Optimized prompts for each reasoning engine
+
+**Prompt Slots Explained:**
+
+| Slot | Purpose | Use When | Priority |
+|------|---------|----------|----------|
+| `system_role` | WHO the agent is | Want custom identity | Replaces strategy's role |
+| `instructions` | HOW the agent behaves | Need different workflows | Replaces strategy's instructions |
+| `user_guidance` | WHAT the user wants | Task-specific needs | Highest (applied last) |
+
+**Recommendations:**
+- ✅ **Most users**: Use `user_guidance` only - preserves strategy optimizations
+- ⚠️ **Advanced users**: Use `system_role` to change identity, keep `instructions` empty
+- 🚫 **Rarely needed**: Use `instructions` only if strategy patterns don't fit
+- 🚫 **Special cases**: Use `system_prompt` only for complete custom behavior
+
+**Examples:**
+
+```yaml
+# RECOMMENDED: Add user guidance (preserves strategy)
+agents:
+  assistant:
+    prompt:
+      prompt_slots:
+        user_guidance: "Focus on security. Always validate input."
+
+# ADVANCED: Custom identity + guidance
+agents:
+  assistant:
+    prompt:
+      prompt_slots:
+        system_role: "You are a Python expert"
+        user_guidance: "Use type hints. Prefer async/await."
+
+# SPECIAL: Complete override (loses strategy optimizations)
+agents:
+  simple_bot:
+    prompt:
+      system_prompt: "You are a calculator. Only output numbers."
+```
+
+---
+
 ## Next Steps
 
-- **[CLI Reference](cli.md)** - Command-line options
+- **[Prompts Guide](../core-concepts/prompts.md)** - Complete prompt documentation
+- **[CLI Reference](cli.md)** - Command-line options (--role, --instruction flags)
 - **[API Reference](api.md)** - HTTP/gRPC APIs
 - **[Core Concepts](../core-concepts/overview.md)** - Understanding configuration
 - **[Examples](https://github.com/kadirpekel/hector/tree/main/configs)** - Example configurations

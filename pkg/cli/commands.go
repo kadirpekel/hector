@@ -343,6 +343,7 @@ func createClient[T ClientArgs](args T, cfg *config.Config, mode CLIMode) (clien
 	}
 }
 
+//nolint:unused // Reserved for future multi-agent card support
 func buildAgentCardsFromConfig(cfg *config.Config) []*pb.AgentCard {
 	cards := make([]*pb.AgentCard, 0, len(cfg.Agents))
 

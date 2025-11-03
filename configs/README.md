@@ -2,6 +2,15 @@
 
 This directory contains curated example configurations for Hector. Each file demonstrates a specific feature or use case.
 
+## Prompt Configuration
+
+**`prompt-examples.yaml`** - Comprehensive prompt configuration examples
+- 10 different prompt configuration patterns
+- Pure strategy defaults, role customization, user guidance
+- Full prompt_slots customization vs system_prompt override
+- RAG integration, multi-agent orchestration, self-reflection
+- Referenced in: [Prompts Guide](../docs/core-concepts/prompts.md)
+
 ## Essential Examples (11 files)
 
 ### Single Agent Examples

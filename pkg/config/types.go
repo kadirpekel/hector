@@ -1354,12 +1354,9 @@ type PromptConfig struct {
 
 // PromptSlotsConfig defines typed prompt slots for composable prompt engineering
 type PromptSlotsConfig struct {
-	SystemRole            string `yaml:"system_role,omitempty"`
-	ReasoningInstructions string `yaml:"reasoning_instructions,omitempty"`
-	ToolUsage             string `yaml:"tool_usage,omitempty"`
-	OutputFormat          string `yaml:"output_format,omitempty"`
-	CommunicationStyle    string `yaml:"communication_style,omitempty"`
-	Additional            string `yaml:"additional,omitempty"`
+	SystemRole   string `yaml:"system_role,omitempty"`
+	Instructions string `yaml:"instructions,omitempty"`
+	UserGuidance string `yaml:"user_guidance,omitempty"`
 }
 
 func (c *MemoryConfig) Validate() error {

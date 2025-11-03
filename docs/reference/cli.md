@@ -258,8 +258,8 @@ When using zero-config mode (no `--config` flag), use these to configure quickly
 | `--api-key KEY` | string | LLM API key | From env |
 | `--model NAME` | string | Model name | `gpt-4o-mini` |
 | `--provider NAME` | string | LLM provider (openai/anthropic/gemini) | `openai` |
-| `--role TEXT` | string | Override agent's system role/persona | - |
-| `--instruction TEXT` | string | Additional guidance appended to system prompt | - |
+| `--role TEXT` | string | Set agent identity (WHO, merges with strategy) | - |
+| `--instruction TEXT` | string | Add user guidance (WHAT, highest priority) | - |
 | `--tools` | bool | Enable all built-in tools | `false` |
 | `--mcp-url URL` | string | MCP server URL | - |
 | `--docs FOLDER` | string | Documents folder for RAG | - |
@@ -280,13 +280,13 @@ hector serve --model gpt-4o --tools
 hector serve --tools gopher
 hector serve myagent --model gpt-4o --tools
 
-# With custom role
+# With custom role (replaces strategy's system role)
 hector serve --role "You are a security expert who focuses on identifying vulnerabilities"
 
-# With additional instruction
+# With additional instruction (adds user guidance, highest priority)
 hector serve --instruction "Focus on security and best practices"
 
-# With both for fine-grained control
+# With both for fine-grained control (role + guidance)
 hector serve --role "You are a code reviewer" --instruction "Be strict about error handling"
 
 # With RAG
@@ -387,8 +387,8 @@ hector call MESSAGE [flags]
 | `--model NAME` | string | Model name | - |
 | `--api-key KEY` | string | API key | From env |
 | `--base-url URL` | string | Custom API base URL | - |
-| `--role TEXT` | string | Override agent's system role/persona | - |
-| `--instruction TEXT` | string | Additional guidance appended to system prompt | - |
+| `--role TEXT` | string | Set agent identity (WHO, merges with strategy) | - |
+| `--instruction TEXT` | string | Add user guidance (WHAT, highest priority) | - |
 | `--tools` | bool | Enable built-in tools | `false` |
 | `--mcp-url URL` | string | MCP server URL | - |
 | `--docs-folder PATH` | string | Documents folder for RAG | - |
@@ -449,8 +449,8 @@ hector chat [flags]
 | `--model NAME` | string | Model name | - |
 | `--api-key KEY` | string | API key | From env |
 | `--base-url URL` | string | Custom API base URL | - |
-| `--role TEXT` | string | Override agent's system role/persona | - |
-| `--instruction TEXT` | string | Additional guidance appended to system prompt | - |
+| `--role TEXT` | string | Set agent identity (WHO, merges with strategy) | - |
+| `--instruction TEXT` | string | Add user guidance (WHAT, highest priority) | - |
 | `--tools` | bool | Enable built-in tools | `false` |
 | `--mcp-url URL` | string | MCP server URL | - |
 | `--docs-folder PATH` | string | Documents folder for RAG | - |
@@ -836,10 +836,18 @@ For quick experimentation without a config file, use zero-config mode (see examp
 
 ```bash
 export OPENAI_API_KEY="sk-..."
+
+# Pure strategy defaults (no customization)
 hector call "What is recursion?"
 
-# With custom behavior
-hector call "analyze this" --role "You are a security analyst" --instruction "Focus on vulnerabilities"
+# With custom role (WHO - merges with strategy)
+hector call "analyze this" --role "You are a security analyst"
+
+# With custom guidance (WHAT - highest priority)
+hector call "analyze this" --instruction "Focus on vulnerabilities and rate severity"
+
+# With both (complete customization)
+hector call "review code" --role "You are a senior code reviewer" --instruction "Be strict about error handling"
 ```
 
 ### Development with Config
@@ -964,9 +972,38 @@ hector serve --port 9000
 
 ---
 
+## Prompt Customization
+
+The `--role` and `--instruction` flags provide flexible prompt customization in zero-config mode:
+
+**How it works:**
+- **Strategy Defaults (BASE)**: Each reasoning strategy has optimized prompts for tool execution, workflow patterns, etc.
+- **--role (MERGE)**: Sets the agent's identity (WHO) - replaces strategy's system role, keeps behavior patterns
+- **--instruction (HIGHEST)**: Adds your specific guidance (WHAT) - applied last, highest priority
+
+**Examples:**
+```bash
+# Pure strategy (optimized defaults)
+hector call "task"
+
+# Custom role (WHO you are)
+hector call "task" --role "You are a Python expert"
+
+# Custom guidance (WHAT you want)
+hector call "task" --instruction "Focus on performance, use type hints"
+
+# Both (complete customization)
+hector call "task" --role "You are a security analyst" --instruction "Prioritize OWASP Top 10"
+```
+
+**See Also:** [Prompts Guide](../core-concepts/prompts.md) for complete documentation on prompt configuration.
+
+---
+
 ## Next Steps
 
 - **[Configuration Reference](configuration.md)** - Complete YAML reference
+- **[Prompts Guide](../core-concepts/prompts.md)** - Prompt configuration in depth
 - **[API Reference](api.md)** - HTTP/gRPC API details
 - **[Getting Started](../getting-started/installation.md)** - Installation guide
 - **[Quick Start](../getting-started/quick-start.md)** - Get started in 5 minutes

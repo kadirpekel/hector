@@ -493,7 +493,7 @@ agents:
     tools: ["write_file", "execute_command"]
     prompt:
       prompt_slots:
-        tool_usage: |
+        user_guidance: |
           Use tools proactively:
           - write_file: Create and modify files
           - execute_command: Run tests and checks

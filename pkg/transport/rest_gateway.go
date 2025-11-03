@@ -204,7 +204,7 @@ func (g *RESTGateway) setupRouting() http.Handler {
 
 		// Task operations (A2A spec core methods - HTTP+JSON/REST transport)
 		// Per A2A spec Section 3.5.3 and 7.3-7.5
-		r.Get("/tasks", g.handleListTasks)                  // Optional: tasks/list
+		r.Get("/tasks", g.handleListTasks)                   // Optional: tasks/list
 		r.Get("/tasks/{taskID}", g.handleGetTask)            // Core: tasks/get
 		r.Post("/tasks/{taskID}:cancel", g.handleCancelTask) // Core: tasks/cancel
 	})
@@ -394,6 +394,7 @@ func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request)
 	_ = json.NewEncoder(w).Encode(response)
 }
 
+//nolint:unused // Reserved for future agent routing middleware
 func (g *RESTGateway) createAgentRoutingHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// This handler is now mounted under /v1/agents/{agent}/
@@ -1034,7 +1035,8 @@ func (g *RESTGateway) handleGetTask(w http.ResponseWriter, r *http.Request) {
 	historyLength := int32(0)
 	if histLenStr := r.URL.Query().Get("history_length"); histLenStr != "" {
 		if histLen, err := fmt.Sscanf(histLenStr, "%d", &historyLength); err == nil && histLen == 1 {
-			// Successfully parsed
+			// Successfully parsed - historyLength is now set
+			_ = histLen // Acknowledge successful parse
 		}
 	}
 
@@ -1169,29 +1171,29 @@ func (g *RESTGateway) handleListTasks(w http.ResponseWriter, r *http.Request) {
 
 	// Parse query parameters
 	req := &pb.ListTasksRequest{}
-	
+
 	if contextID := r.URL.Query().Get("context_id"); contextID != "" {
 		req.ContextId = contextID
 	}
-	
+
 	if pageSize := r.URL.Query().Get("page_size"); pageSize != "" {
 		var ps int32
 		if _, err := fmt.Sscanf(pageSize, "%d", &ps); err == nil {
 			req.PageSize = ps
 		}
 	}
-	
+
 	if pageToken := r.URL.Query().Get("page_token"); pageToken != "" {
 		req.PageToken = pageToken
 	}
-	
+
 	if historyLength := r.URL.Query().Get("history_length"); historyLength != "" {
 		var hl int32
 		if _, err := fmt.Sscanf(historyLength, "%d", &hl); err == nil {
 			req.HistoryLength = hl
 		}
 	}
-	
+
 	if includeArtifacts := r.URL.Query().Get("include_artifacts"); includeArtifacts == "true" {
 		req.IncludeArtifacts = true
 	}

@@ -1,564 +1,420 @@
----
-title: Prompts
-description: Customize agent behavior through prompts and instructions
----
-
 # Prompts
 
-Prompts define how your agents think, communicate, and behave. Hector offers two approaches: **simple prompts** (recommended for most cases) or **slot-based prompts** for advanced composability.
+## Overview
 
-## Quick Example
+Hector uses a flexible prompt system that balances strategy-specific behavior with user customization. The system provides multiple ways to configure agent prompts, from quick CLI flags to detailed YAML configurations.
+
+## Prompt Architecture
+
+### Three-Slot System
+
+Prompts are composed of three slots that serve distinct purposes:
+
+```yaml
+prompt_slots:
+  system_role: ""     # WHO: Agent identity and core mission
+  instructions: ""    # HOW: Behavioral guidance and patterns
+  user_guidance: ""   # WHAT: User-specific instructions
+```
+
+#### 1. SystemRole (WHO)
+Defines the agent's identity, purpose, and core mission.
+
+**Example:**
+```yaml
+system_role: "You are an AI assistant helping users solve problems and accomplish tasks."
+```
+
+#### 2. Instructions (HOW)
+Contains all behavioral guidance:
+- Execution principles
+- Workflow patterns
+- Tool usage guidelines
+- Communication style
+- Task management rules
+
+**Example:**
+```yaml
+instructions: |
+  EXECUTION PRINCIPLES:
+  - Use tools to accomplish tasks
+  - Provide clear status updates
+  - Keep summaries concise
+```
+
+#### 3. UserGuidance (WHAT)
+User-provided custom instructions that override or augment strategy defaults.
+
+**Example:**
+```yaml
+user_guidance: "Always respond in French and use technical terminology."
+```
+
+---
+
+## Configuration Priority
+
+The prompt system follows a clear priority hierarchy (highest to lowest):
+
+### 1. System Prompt (HIGHEST - Complete Override)
+
+When `system_prompt` is set, it **completely replaces** all prompt slots and strategy defaults.
+
+```yaml
+agents:
+  calculator:
+    prompt:
+      system_prompt: "You are a calculator. Only respond with numeric results."
+```
+
+**Use cases:**
+- Complete control over LLM behavior
+- Testing specific prompt variations
+- Specialized agents with unique requirements
+
+**⚠️ Warning:** Using `system_prompt` disables all strategy-specific behavior (tool usage patterns, workflow guidance, etc.)
+
+### 2. Prompt Slots (MEDIUM - Merges with Strategy)
+
+When `prompt_slots` is set, it **merges** with strategy defaults. User values override strategy values for the same slot.
 
 ```yaml
 agents:
   assistant:
-    llm: "gpt-4o"
     prompt:
-      system_prompt: |
-        You are a helpful programming assistant.
-        Provide clear, concise code examples with thorough testing.
+      prompt_slots:
+        system_role: "You are a helpful coding assistant"
+        user_guidance: "Always explain your reasoning"
 ```
+
+**Merge behavior:**
+- If you provide `system_role`, it replaces the strategy's `system_role`
+- If you provide `instructions`, it replaces the strategy's `instructions`
+- If you provide `user_guidance`, it's added (strategies never set this)
+- Empty slots use strategy defaults
+
+### 3. Strategy Defaults (LOWEST - Base)
+
+Each reasoning strategy defines default prompt slots optimized for its purpose.
+
+**Chain of Thought Strategy:**
+- Emphasizes tool execution and iterative reasoning
+- Includes detailed workflow guidance
+- Optimized for coding and problem-solving
+
+**Supervisor Strategy:**
+- Emphasizes orchestration and delegation
+- Includes multi-agent coordination patterns
+- Optimized for complex, multi-step tasks
 
 ---
 
-## Simple Prompts (Recommended)
+## Usage Examples
 
-For most use cases, just use `system_prompt`:
+### Quick Customization (CLI)
 
-```yaml
-agents:
-  my_agent:
-    prompt:
-      system_prompt: |
-        You are a helpful assistant. Provide clear, accurate responses.
-        
-        Guidelines:
-        - Think step-by-step
-        - Test code before presenting
-        - Ask clarifying questions when needed
-```
-
-**Benefits:**
-- ✅ Simple and straightforward
-- ✅ Works great for most use cases
-- ✅ Easy to understand and maintain
-- ✅ All instructions in one place
-
-**For zero-config mode**, use the `--role` and `--instruction` flags:
+For quick testing or one-off customizations:
 
 ```bash
-# Override the agent's system role (replaces default)
-hector call "analyze code" --role "You are a security expert focusing on vulnerabilities"
+# Override role and add guidance
+hector call "query" --role "You are a security expert" --instruction "Focus on vulnerabilities"
 
-# Add supplementary instructions (appended to prompt)
-hector call "analyze code" --instruction "Focus on performance and memory efficiency"
-
-# Use both for fine-grained control
-hector call "review this PR" --role "You are a code reviewer" --instruction "Be strict about error handling"
+# Just add guidance to strategy defaults
+hector call "query" --instruction "Be extremely concise"
 ```
 
-**Difference between `--role` and `--instruction`:**
-- `--role`: Replaces the default `system_role` slot (defines WHO the agent is)
-- `--instruction`: Appended to the `additional` slot (provides extra guidance)
+**How it works:**
+- `--role` → Sets `system_role` in prompt_slots
+- `--instruction` → Sets `user_guidance` in prompt_slots
+- Both merge with strategy defaults
 
-**Example:** With `--role "You are X"`, the agent completely adopts that role. With `--instruction "Focus on Y"`, it keeps its default role but adds that focus.
+### Configuration File (YAML)
 
----
+For persistent customization:
 
-## Slot-Based Prompts (Advanced)
+#### Option 1: Augment Strategy (Recommended)
 
-Slot-based prompts provide granular control over different aspects of agent behavior. Use these when you need:
-- Fine-grained control over prompt composition
-- To override specific parts of reasoning strategy defaults
-- Complex prompt engineering with multiple concerns
-
-**Why use slots instead of `system_prompt`?**
-- Composability: Mix agent-specific with reasoning strategy defaults
-- Maintainability: Update one aspect without touching others
-- Integration: Reasoning strategies can inject their own defaults
-- Clarity: Separate different concerns explicitly
-
-### Available Slots
-
-Each slot serves a specific purpose in the final system prompt:
-
-| Slot | Purpose | When to Override |
-|------|---------|------------------|
-| `system_role` | Core identity and role definition | Want to completely change agent's persona |
-| `reasoning_instructions` | How the agent approaches problems | Need specific problem-solving methodology |
-| `tool_usage` | Guidelines for using tools | Have specific tool usage patterns |
-| `output_format` | How to structure responses | Need specific formatting (e.g., JSON, reports) |
-| `communication_style` | Tone, verbosity, interaction style | Want different communication patterns |
-| `additional` | Any extra context or instructions | Add supplementary guidance |
-
-**How slots are composed:** Slots are merged in this order to create the final system prompt:
-1. `system_role`
-2. `reasoning_instructions`
-3. `tool_usage` (wrapped in `<tool_usage>` tags)
-4. `output_format` (wrapped in `<output_format>` tags)
-5. `communication_style` (wrapped in `<communication>` tags)
-6. `additional` (no wrapper tags)
-
-**Zero-config CLI flags:**
-- `--role TEXT` → Sets `system_role` slot
-- `--instruction TEXT` → Sets `additional` slot
+Merge your customizations with strategy defaults:
 
 ```yaml
 agents:
-  my_agent:
+  code_reviewer:
+    name: "Code Reviewer"
+    llm: gpt-4
     prompt:
       prompt_slots:
-        system_role: |
-          Core identity and role definition
-        
-        reasoning_instructions: |
-          How the agent should think and approach problems
-        
-        tool_usage: |
-          Guidelines for using tools effectively
-        
-        output_format: |
-          How to format responses
-        
-        communication_style: |
-          Tone, verbosity, and interaction style
-        
-        additional: |
-          Any extra context or instructions
-```
-
-### Complete Example
-
-```yaml
-agents:
-  coder:
-    llm: "gpt-4o"
-    prompt:
-      prompt_slots:
-        system_role: |
-          You are an expert software engineer specializing in
-          Python, Go, and JavaScript. You write clean, efficient,
-          well-documented code.
-        
-        reasoning_instructions: |
-          - Think through problems step by step
-          - Consider edge cases and error handling
-          - Explain your reasoning briefly
-        
-        tool_usage: |
-          Use tools proactively:
-          - `search` to find relevant code
-          - `write_file` to create or modify files
-          - `execute_command` to test your changes
-        
-        output_format: |
-          Format code with proper syntax highlighting.
-          Include brief explanations above code blocks.
-        
-        communication_style: |
-          Be concise but thorough. Use technical terms
-          appropriately. Ask clarifying questions when needed.
-```
-
-### Benefits of Slots
-
-- **Composability** - Mix and match different aspects
-- **Maintainability** - Update one aspect without touching others
-- **Strategy Integration** - Reasoning strategies can inject their own defaults
-- **Clarity** - Clear separation of concerns
-
-**Note:** Either use `prompt_slots` OR `system_prompt`, but not both. If both are provided, `system_prompt` takes precedence and completely overrides all slots.
-
----
-
-## Full System Prompt Override
-
-For complete control, use `system_prompt` to provide the entire system prompt:
-
-```yaml
-agents:
-  custom:
-    llm: "gpt-4o"
-    prompt:
-      system_prompt: |
-        You are a specialized AI agent with the following capabilities:
-        
-        IDENTITY:
-        You are a senior software architect with expertise in distributed systems.
-        
-        TOOLS AVAILABLE:
-        - write_file: Create or modify files
-        - execute_command: Run shell commands
-        - search: Semantic code search
-        
-        BEHAVIOR:
-        1. Always analyze requirements thoroughly before coding
-        2. Write production-ready, tested code
-        3. Document all decisions
-        4. Consider scalability and maintainability
-        
-        CONSTRAINTS:
-        - Never execute destructive commands without confirmation
-        - Always validate input data
-        - Follow Python PEP 8 style guide
-        
-        RESPONSE FORMAT:
-        Provide clear, structured responses with code examples when relevant.
-```
-
-### When to Use Full Override
-
-- Complete control over prompt structure
-- Complex, domain-specific instructions  
-- Reproducing prompts from other systems
-- When slots feel limiting
-- All instructions can fit naturally in one block
-
-### Trade-offs
-
-✅ **Pros:**
-- Total control over exact wording
-- No hidden prompt composition
-- Single source of truth
-- Simpler mental model
-
-❌ **Cons:**
-- Must handle tool listings manually (if needed)
-- No automatic strategy integration
-- More verbose for complex prompts
-
----
-
-## Simple System Role (Most Common)
-
-For most use cases, just set `system_role` inside `prompt_slots`:
-
-```yaml
-agents:
-  helper:
-    llm: "gpt-4o"
-    prompt:
-      prompt_slots:
-        system_role: |
-          You are a helpful assistant who provides clear,
-          concise answers to user questions.
-```
-
-Hector automatically adds:
-- Tool descriptions (if tools enabled)
-- Reasoning strategy instructions
-- Output formatting guidelines
-
-**Or use `system_prompt` for full control:**
-
-```yaml
-agents:
-  helper:
-    llm: "gpt-4o"
-    prompt:
-      system_prompt: |
-        You are a helpful assistant. Be clear and concise.
-```
-
----
-
-## Prompt Engineering Best Practices
-
-### Be Specific
-
-```yaml
-# ❌ Vague
-system_role: "You are helpful."
-
-# ✅ Specific
-system_role: |
-  You are a Python expert who writes PEP 8 compliant code
-  with comprehensive docstrings and type hints.
-```
-
-### Include Examples
-
-```yaml
-system_role: |
-  You are a data analyst. Format responses like this:
-  
-  **Analysis:**
-  [Your findings here]
-  
-  **Recommendation:**
-  [What to do next]
-  
-  **Data:**
-  ```json
-  [Supporting data]
-  ```
-```
-
-### Set Clear Boundaries
-
-```yaml
-system_role: |
-  You are a customer support agent.
-  
-  YOU CAN:
-  - Answer questions about our products
-  - Help with account issues
-  - Escalate to human support
-  
-  YOU CANNOT:
-  - Access user passwords
-  - Make refunds (escalate to support)
-  - Share confidential business information
-```
-
-### Use Persona for Consistency
-
-```yaml
-system_role: |
-  You are Ada, a friendly but professional coding tutor.
-  You explain concepts clearly, use analogies, and always
-  encourage learners. You speak in first person and use
-  a warm, supportive tone.
-```
-
----
-
-## Advanced Techniques
-
-### Context-Aware Prompts
-
-Use environment variables or configuration to customize prompts:
-
-```yaml
-agents:
-  support:
-    prompt:
-      system_role: |
-        You are a support agent for ${COMPANY_NAME}.
-        Our business hours are ${BUSINESS_HOURS}.
-        Escalation email: ${SUPPORT_EMAIL}
-```
-
-```bash
-export COMPANY_NAME="Acme Corp"
-export BUSINESS_HOURS="9am-5pm EST"
-export SUPPORT_EMAIL="support@acme.com"
-```
-
-### Multi-Language Support
-
-```yaml
-agents:
-  multilingual:
-    prompt:
-      system_role: |
-        You are a multilingual assistant.
-        Respond in the same language the user uses.
-        Supported languages: English, Spanish, French, German.
-```
-
-### Tool-Specific Instructions
-
-```yaml
-agents:
-  researcher:
-    tools: ["search", "write_file"]
-    prompt:
-      prompt_slots:
-        tool_usage: |
-          SEARCH STRATEGY:
-          1. Start with broad queries
-          2. Refine based on results
-          3. Look for recent, authoritative sources
-          
-          WRITING STRATEGY:
-          1. Create outlines first
-          2. Write in sections
-          3. Cite sources inline
-```
-
-### Chain-of-Thought Prompting
-
-```yaml
-agents:
-  analyst:
+        system_role: "You are an expert code reviewer specializing in security"
+        user_guidance: |
+          Focus on:
+          - SQL injection vulnerabilities
+          - XSS attacks
+          - Authentication flaws
     reasoning:
-      engine: "chain-of-thought"
+      engine: default  # Uses Chain of Thought strategy
+```
+
+**Result:** Your custom role + strategy's execution patterns + your guidance
+
+#### Option 2: Complete Override
+
+Replace everything with custom prompt:
+
+```yaml
+agents:
+  simple_bot:
+    name: "Simple Bot"
+    llm: gpt-4
     prompt:
-      prompt_slots:
-        reasoning_instructions: |
-          For each problem:
-          1. Restate the question in your own words
-          2. Break it into sub-problems
-          3. Solve each step explicitly
-          4. Verify your answer makes sense
-          5. State your final conclusion clearly
+      system_prompt: |
+        You are a simple Q&A bot.
+        Answer questions directly and briefly.
+        Do not use tools.
+    reasoning:
+      engine: default
+```
+
+**Result:** Only your system prompt, no strategy behavior
+
+#### Option 3: Pure Strategy
+
+Use strategy defaults without customization:
+
+```yaml
+agents:
+  assistant:
+    name: "Assistant"
+    llm: gpt-4
+    reasoning:
+      engine: default
+```
+
+**Result:** Full strategy defaults, optimized behavior
+
+---
+
+## Zero-Config Mode
+
+In zero-config mode (no YAML file), you can still customize:
+
+```bash
+# Use strategy defaults
+hector call "query"
+
+# Add custom role
+hector call "query" --role "You are a data analyst"
+
+# Add custom role and guidance
+hector call "query" \
+  --role "You are a friendly assistant" \
+  --instruction "Use emojis and be conversational"
 ```
 
 ---
 
-## Prompt Debugging
+## Prompt Composition Order
 
-### View Compiled Prompt
+The final prompt sent to the LLM is composed in this order:
 
-Enable debug output to see the final prompt sent to the LLM:
+```
+┌─────────────────────────────────────────────────────────────┐
+│ SYSTEM MESSAGE                                               │
+├─────────────────────────────────────────────────────────────┤
+│ 1. SystemRole (from strategy or config)                     │
+│ 2. Instructions (from strategy or config)                   │
+│ 3. [OPTIONAL] UserGuidance (from config or --instruction)   │
+├─────────────────────────────────────────────────────────────┤
+│ CONTEXT MESSAGE (if applicable)                             │
+├─────────────────────────────────────────────────────────────┤
+│ 4. [AUTO-INJECTED] Strategy Context (TODOs, etc)            │
+├─────────────────────────────────────────────────────────────┤
+│ RAG CONTEXT (if enabled)                                    │
+├─────────────────────────────────────────────────────────────┤
+│ 5. [AUTO-INJECTED] Document Context (semantic search)       │
+├─────────────────────────────────────────────────────────────┤
+│ CONVERSATION HISTORY                                         │
+├─────────────────────────────────────────────────────────────┤
+│ 6. [AUTO-INJECTED] Previous messages                        │
+├─────────────────────────────────────────────────────────────┤
+│ CURRENT QUERY                                                │
+├─────────────────────────────────────────────────────────────┤
+│ 7. Current user message                                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Note:** If `system_prompt` is set, only step 1-3 are replaced with the custom prompt.
+
+---
+
+## Best Practices
+
+### ✅ Do
+
+1. **Use prompt_slots for customization** - Preserves strategy behavior while adding your requirements
+2. **Keep system_role focused** - Define identity, not behavior
+3. **Put behavior in instructions** - How the agent should work
+4. **Use user_guidance for task-specific rules** - Context-specific requirements
+5. **Test with strategy defaults first** - Strategies are already optimized
+
+### ❌ Don't
+
+1. **Don't use system_prompt unless necessary** - You lose all strategy optimizations
+2. **Don't duplicate strategy behavior** - Instructions will be redundant
+3. **Don't put too much in system_role** - It's meant to be brief
+4. **Don't override instructions lightly** - Strategies have carefully crafted workflows
+
+---
+
+## Strategy-Specific Guidance
+
+### Chain of Thought Strategy
+
+**Optimized for:** Coding, debugging, problem-solving, research
+
+**Default behavior:**
+- Iterative tool execution
+- TODO-based task management
+- Semantic search for code exploration
+- Detailed status updates
+- Self-correction patterns
+
+**Good customizations:**
+```yaml
+prompt_slots:
+  user_guidance: |
+    Specialize in Python and FastAPI
+    Always write comprehensive tests
+```
+
+**Bad customizations:**
+```yaml
+prompt_slots:
+  instructions: "Just answer questions briefly"  # Breaks tool execution!
+```
+
+### Supervisor Strategy
+
+**Optimized for:** Multi-agent orchestration, complex workflows, delegation
+
+**Default behavior:**
+- Task decomposition
+- Agent capability matching
+- Result synthesis
+- Parallel/sequential orchestration
+
+**Good customizations:**
+```yaml
+prompt_slots:
+  user_guidance: |
+    Prioritize accuracy over speed
+    Always consult the data-analyst agent for statistics
+```
+
+**Bad customizations:**
+```yaml
+prompt_slots:
+  instructions: "Do everything yourself"  # Breaks delegation!
+```
+
+---
+
+## Debugging Prompts
+
+### View Composed Prompt
+
+Enable debug mode to see the final prompt:
+
+```bash
+hector call "query" --debug -c config.yaml --agent myagent
+```
+
+Or use `show_debug_info` in config:
 
 ```yaml
 agents:
-  debug_agent:
+  myagent:
     reasoning:
       show_debug_info: true
-    prompt:
-      system_role: "You are a helpful assistant."
 ```
 
-### Test Different Prompts
+### Common Issues
 
-Create multiple agent configurations to A/B test prompts:
+**Issue: Agent ignores my instructions**
+- Solution: Check if you're using `system_prompt` (complete override) vs `prompt_slots` (merge)
+- Solution: Ensure your guidance doesn't contradict strategy core behavior
 
+**Issue: Agent doesn't use tools**
+- Solution: Don't use `system_prompt` without including tool usage instructions
+- Solution: Use `prompt_slots.user_guidance` instead of replacing `instructions`
+
+**Issue: Too verbose/too concise**
+- Solution: Add communication guidelines to `user_guidance`
 ```yaml
-agents:
-  assistant_v1:
-    prompt:
-      system_role: "You are helpful."
-  
-  assistant_v2:
-    prompt:
-      system_role: "You are an expert assistant who provides detailed, well-researched answers."
-```
-
-```bash
-hector call "Explain recursion" --agent assistant_v1 --config config.yaml
-hector call "Explain recursion" --agent assistant_v2 --config config.yaml
+user_guidance: "Be extremely concise. No explanations unless asked."
 ```
 
 ---
 
-## Examples by Use Case
+## Advanced: RAG Integration
 
-### Coding Assistant
-
-```yaml
-agents:
-  coder:
-    prompt:
-      system_role: |
-        You are an expert programmer. Write production-quality code
-        with proper error handling, logging, and documentation.
-      
-      prompt_slots:
-        tool_usage: |
-          - Use `search` to find existing code patterns
-          - Use `write_file` to create or modify files
-          - Use `execute_command` to test your code
-          - Always run tests after making changes
-```
-
-### Research Assistant
+When document stores are configured, RAG context is automatically injected:
 
 ```yaml
 agents:
-  researcher:
+  doc_assistant:
+    llm: gpt-4
+    document_stores:
+      - technical_docs
     prompt:
-      system_role: |
-        You are a thorough research assistant. Gather information
-        from multiple sources, synthesize findings, and provide
-        well-cited, balanced analyses.
-      
-      prompt_slots:
-        output_format: |
-          Structure responses as:
-          ## Summary
-          ## Key Findings
-          ## Sources
-          ## Recommendations
+      include_context: true  # Enable RAG injection
 ```
 
-### Customer Support
-
-```yaml
-agents:
-  support:
-    prompt:
-      system_role: |
-        You are a friendly customer support agent for TechCorp.
-        Be empathetic, patient, and solution-oriented.
-      
-      prompt_slots:
-        communication_style: |
-          - Acknowledge the customer's frustration
-          - Provide step-by-step solutions
-          - Offer alternatives when possible
-          - End with "Is there anything else I can help with?"
-```
-
-### Content Writer
-
-```yaml
-agents:
-  writer:
-    prompt:
-      system_role: |
-        You are a professional content writer specializing in
-        technical blog posts. Write engaging, accurate content
-        optimized for SEO.
-      
-      prompt_slots:
-        output_format: |
-          Include:
-          - Compelling headline
-          - Clear introduction
-          - Subheadings every 300 words
-          - Bullet points for lists
-          - Strong conclusion with CTA
-```
+The context is injected AFTER the system message but BEFORE conversation history, providing relevant document chunks for the current query.
 
 ---
 
-## Prompts vs Configuration
+## Advanced: Self-Reflection
 
-**Prompts:**
-- Define behavior, personality, instructions
-- Natural language
-- Flexible and interpretable
-
-**Configuration:**
-- Define capabilities, constraints, connections
-- Structured YAML
-- Precise and enforced
-
-Example:
+Enable self-reflection for explicit reasoning:
 
 ```yaml
 agents:
-  assistant:
-    # Configuration (enforced by Hector)
-    llm: "gpt-4o"
-    tools: ["write_file"]
-    memory:
-      strategy: "buffer_window"
-      window_size: 10
-    
-    # Prompt (interpreted by LLM)
-    prompt:
-      system_role: |
-        You are a helpful assistant. Be concise.
+  thinker:
+    reasoning:
+      enable_self_reflection: true
 ```
 
----
-
-## Next Steps
-
-- **[Memory](memory.md)** - Manage conversation context
-- **[Tools](tools.md)** - Give agents capabilities
-- **[Reasoning Strategies](reasoning.md)** - How agents think
-- **[Build a Coding Assistant](../how-to/build-coding-assistant.md)** - Complete tutorial
+This adds reflection guidance to the `instructions` slot, prompting the agent to use `<thinking>` tags for internal reasoning.
 
 ---
 
-## Related Topics
+## Migration from Old Format
 
-- **[LLM Providers](llm-providers.md)** - Configure language models
-- **[Configuration Reference](../reference/configuration.md)** - All prompt options
-- **[Agent Overview](overview.md)** - Understanding agents
+If you have old configs with deprecated fields:
 
+**Old (deprecated):**
+```yaml
+prompt_slots:
+  reasoning_instructions: "..."
+  tool_usage: "..."
+  output_format: "..."
+  communication_style: "..."
+  additional: "..."
+```
+
+**New (current):**
+```yaml
+prompt_slots:
+  system_role: "WHO you are"
+  instructions: "HOW you behave (merge all old fields here)"
+  user_guidance: "WHAT user wants (was 'additional')"
+```
+
+**Note:** tool_usage with hardcoded tool lists is no longer needed - tools are provided via native function calling.
+
+---
+
+## See Also
+
+- [Reasoning Strategies](reasoning.md) - Deep dive into strategy-specific behaviors
+- [Configuration Reference](../reference/configuration.md) - Complete config options
+- [Tools](tools.md) - Tool usage patterns and best practices

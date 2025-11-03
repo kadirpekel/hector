@@ -525,8 +525,8 @@ func CreateZeroConfig(source interface{}) *Config {
 	// Add custom role and/or instruction if provided
 	if role != "" || instruction != "" {
 		agentConfig.Prompt.PromptSlots = &PromptSlotsConfig{
-			SystemRole: role,
-			Additional: instruction,
+			SystemRole:   role,
+			UserGuidance: instruction,
 		}
 	}
 
