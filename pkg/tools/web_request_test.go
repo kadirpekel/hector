@@ -261,4 +261,3 @@ func TestWebRequestTool_WildcardDomain(t *testing.T) {
 		})
 	}
 }
-

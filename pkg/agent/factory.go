@@ -174,7 +174,7 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 		fmt.Printf("✅ Long-term memory enabled (collection: %s, batch_size: %d, auto_recall: %t, recall_limit: %d)\n",
 			agentConfig.Memory.LongTerm.Collection,
 			agentConfig.Memory.LongTerm.BatchSize,
-			agentConfig.Memory.LongTerm.AutoRecall,
+			config.BoolValue(agentConfig.Memory.LongTerm.AutoRecall, true),
 			agentConfig.Memory.LongTerm.RecallLimit)
 	}
 

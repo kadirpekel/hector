@@ -100,16 +100,6 @@ vet:
 	@echo "Running go vet..."
 	go vet ./...
 
-# Run linter (if available)
-lint:
-	@echo "Running linter..."
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run; \
-	else \
-		echo "golangci-lint not installed, skipping..."; \
-		echo "Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
-	fi
-
 # Build release binaries for multiple platforms
 release:
 	@echo "Building release binaries (stripped for production)..."

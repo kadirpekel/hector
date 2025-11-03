@@ -555,11 +555,11 @@ func CreateZeroConfig(source interface{}) *Config {
 		if cfg.Tools == nil {
 			cfg.Tools = make(map[string]*ToolConfig)
 		}
-	cfg.Tools["mcp"] = &ToolConfig{
-		Type:      "mcp",
-		Enabled:   boolPtr(true),
-		ServerURL: mcpURL,
-	}
+		cfg.Tools["mcp"] = &ToolConfig{
+			Type:      "mcp",
+			Enabled:   boolPtr(true),
+			ServerURL: mcpURL,
+		}
 	}
 
 	return cfg

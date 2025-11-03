@@ -382,8 +382,8 @@ func TestSearchReplaceTool_WithTempFile(t *testing.T) {
 
 	tool := NewSearchReplaceTool(&config.SearchReplaceConfig{
 		MaxReplacements:  10,
-		ShowDiff:         true,
-		CreateBackup:     false,
+		ShowDiff:         config.BoolPtr(true),
+		CreateBackup:     config.BoolPtr(false),
 		WorkingDirectory: tempDir,
 	})
 

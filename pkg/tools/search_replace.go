@@ -17,12 +17,12 @@ type SearchReplaceTool struct {
 
 func NewSearchReplaceTool(cfg *config.SearchReplaceConfig) *SearchReplaceTool {
 	if cfg == nil {
-	cfg = &config.SearchReplaceConfig{
-		MaxReplacements:  100,
-		ShowDiff:         config.BoolPtr(true),
-		CreateBackup:     config.BoolPtr(true),
-		WorkingDirectory: "./",
-	}
+		cfg = &config.SearchReplaceConfig{
+			MaxReplacements:  100,
+			ShowDiff:         config.BoolPtr(true),
+			CreateBackup:     config.BoolPtr(true),
+			WorkingDirectory: "./",
+		}
 	}
 
 	if cfg.MaxReplacements == 0 {
