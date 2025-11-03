@@ -323,3 +323,100 @@ var _ = (*ReasoningState).legacyCurrentTurnAccess
 func (s *ReasoningState) legacyCurrentTurnAccess() []*pb.Message {
 	return s.currentTurn
 }
+
+// Content Block Emission Methods
+// These methods allow reasoning strategies to emit thinking/reasoning blocks
+// that align with industry standards (Anthropic Claude, Vercel AI SDK, LangChain)
+
+// EmitThinkingBlock emits a thinking content block to the output channel
+func (s *ReasoningState) EmitThinkingBlock(content string, metadata *pb.ThinkingMetadata) {
+	if s.outputChannel == nil {
+		return
+	}
+
+	part, err := protocol.CreateThinkingBlock(content, metadata)
+	if err != nil {
+		// Log error but don't fail - thinking is optional
+		return
+	}
+
+	select {
+	case s.outputChannel <- part:
+	case <-s.context.Done():
+	}
+}
+
+// EmitReflection emits a reflection thinking block (analysis of progress)
+func (s *ReasoningState) EmitReflection(content, title string) {
+	part, err := protocol.CreateReflectionBlock(content, title)
+	if err != nil {
+		return
+	}
+
+	if s.outputChannel != nil {
+		select {
+		case s.outputChannel <- part:
+		case <-s.context.Done():
+		}
+	}
+}
+
+// EmitPlanning emits a planning thinking block (todos, goals, task decomposition)
+func (s *ReasoningState) EmitPlanning(content, title string) {
+	part, err := protocol.CreatePlanningBlock(content, title)
+	if err != nil {
+		return
+	}
+
+	if s.outputChannel != nil {
+		select {
+		case s.outputChannel <- part:
+		case <-s.context.Done():
+		}
+	}
+}
+
+// EmitProgress emits a progress update thinking block
+func (s *ReasoningState) EmitProgress(content string) {
+	part, err := protocol.CreateProgressBlock(content)
+	if err != nil {
+		return
+	}
+
+	if s.outputChannel != nil {
+		select {
+		case s.outputChannel <- part:
+		case <-s.context.Done():
+		}
+	}
+}
+
+// EmitDebug emits a debug information thinking block
+func (s *ReasoningState) EmitDebug(content, title string) {
+	part, err := protocol.CreateDebugBlock(content, title)
+	if err != nil {
+		return
+	}
+
+	if s.outputChannel != nil {
+		select {
+		case s.outputChannel <- part:
+		case <-s.context.Done():
+		}
+	}
+}
+
+// EmitAnalysis emits an analysis thinking block
+func (s *ReasoningState) EmitAnalysis(content, title string) {
+	part, err := protocol.CreateAnalysisBlock(content, title)
+	if err != nil {
+		return
+	}
+
+	if s.outputChannel != nil {
+		select {
+		case s.outputChannel <- part:
+		case <-s.context.Done():
+		}
+	}
+}

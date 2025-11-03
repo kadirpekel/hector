@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"github.com/kadirpekel/hector/pkg/display"
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 func DisplayAgentList(agents []*pb.AgentCard, mode string) {
@@ -84,7 +86,19 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 		fmt.Print(prefix)
 	}
 
+	// Use the new renderer for content blocks
+	renderer := display.NewCLIRenderer(true, false) // showThinking=true, verbose=false
+
 	for _, part := range msg.Parts {
+		// Check if it's a content block (new format)
+		if protocol.IsContentBlock(part) {
+			block, err := protocol.ExtractContentBlock(part)
+			if err == nil {
+				renderer.RenderContentBlock(block)
+				continue
+			}
+		}
+
 		// Display text parts
 		if text := part.GetText(); text != "" {
 			fmt.Print(text)
@@ -92,7 +106,7 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 			continue
 		}
 
-		// Display tool call parts
+		// Legacy: Display tool call parts (old format)
 		if part.Metadata != nil {
 			if partType, ok := part.Metadata.Fields["part_type"]; ok && partType.GetStringValue() == "tool_call" {
 				// Extract tool call data
@@ -106,7 +120,7 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 				continue
 			}
 
-			// Display tool result parts
+			// Legacy: Display tool result parts (old format)
 			if partType, ok := part.Metadata.Fields["part_type"]; ok && partType.GetStringValue() == "tool_result" {
 				// Extract tool result data
 				if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
@@ -126,6 +140,8 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 			}
 		}
 	}
+
+	renderer.Flush()
 }
 
 func DisplayMessageLine(msg *pb.Message, prefix string) {

@@ -235,6 +235,12 @@ message FilePart {
 
 // --8<-- [start:DataPart]
 // DataPart represents a structured blob. This is most commonly a JSON payload.
+//
+// For content blocks extension support, DataPart can contain serialized
+// ContentBlock messages from content_blocks.proto. The Part.metadata field
+// should include "content_block": "true" to indicate this usage.
+// This is backward compatible - clients that don't support content blocks
+// will see the data as regular JSON.
 message DataPart {
   google.protobuf.Struct data = 1;
 }

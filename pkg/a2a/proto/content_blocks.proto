@@ -1,0 +1,251 @@
+// Content Blocks Extension for A2A Protocol
+// This is an OPTIONAL extension that provides structured content blocks
+// for representing thinking/reasoning, planning, and other internal agent states.
+//
+// This extension is backward compatible with the core A2A protocol and does not
+// modify existing message structures. Clients that don't understand content blocks
+// can safely ignore them.
+
+syntax = "proto3";
+package a2a.v1.extensions;
+
+import "google/protobuf/struct.proto";
+import "a2a.proto";
+
+option csharp_namespace = "A2a.V1.Extensions";
+option go_package = "github.com/kadirpekel/hector/pkg/a2a/pb;pb";
+option java_multiple_files = true;
+option java_outer_classname = "ContentBlocks";
+option java_package = "com.google.a2a.v1.extensions";
+
+// ContentBlockType defines the type of content block.
+// This aligns with industry standards from Anthropic Claude, Vercel AI SDK,
+// and LangChain content block patterns.
+enum ContentBlockType {
+  CONTENT_BLOCK_TYPE_UNSPECIFIED = 0;
+  // Regular text content
+  CONTENT_BLOCK_TYPE_TEXT = 1;
+  // Internal reasoning/thinking (Anthropic-style)
+  CONTENT_BLOCK_TYPE_THINKING = 2;
+  // Reasoning blocks (Vercel AI SDK style, alias for thinking)
+  CONTENT_BLOCK_TYPE_REASONING = 3;
+  // Tool/function call
+  CONTENT_BLOCK_TYPE_TOOL_CALL = 4;
+  // Tool/function result
+  CONTENT_BLOCK_TYPE_TOOL_RESULT = 5;
+  // Self-reflection on progress
+  CONTENT_BLOCK_TYPE_REFLECTION = 6;
+  // Task planning and todos
+  CONTENT_BLOCK_TYPE_PLANNING = 7;
+  // Progress updates
+  CONTENT_BLOCK_TYPE_PROGRESS = 8;
+  // Debug information
+  CONTENT_BLOCK_TYPE_DEBUG = 9;
+  // Analysis of results
+  CONTENT_BLOCK_TYPE_ANALYSIS = 10;
+}
+
+// ContentBlock represents a structured unit of content with lifecycle management.
+// This follows the Anthropic Claude content block pattern which is becoming
+// an industry standard.
+message ContentBlock {
+  // Unique identifier for this content block within the message
+  string id = 1;
+
+  // Type of the content block
+  ContentBlockType type = 2;
+
+  // The actual block content
+  oneof block {
+    TextBlock text_block = 10;
+    ThinkingBlock thinking_block = 11;
+    ToolCallBlock tool_call_block = 12;
+    ToolResultBlock tool_result_block = 13;
+    ReasoningBlock reasoning_block = 14;
+  }
+
+  // Optional metadata for extensibility
+  map<string, string> metadata = 20;
+}
+
+// TextBlock contains plain text content
+message TextBlock {
+  string text = 1;
+}
+
+// ThinkingBlock contains internal reasoning/thinking content.
+// This follows Anthropic Claude's extended thinking pattern.
+message ThinkingBlock {
+  // The thinking/reasoning content
+  string thinking = 1;
+
+  // Optional signature for integrity verification (Anthropic-style)
+  string signature = 2;
+
+  // Display metadata for UI rendering hints
+  ThinkingMetadata metadata = 3;
+}
+
+// ThinkingMetadata provides UI rendering hints without enforcing specific display logic.
+// This allows different media (CLI, Web, Mobile) to interpret hints appropriately.
+message ThinkingMetadata {
+  // Optional title for the thinking block
+  string title = 1;
+
+  // Whether the content can be collapsed in UI (default: false)
+  bool collapsible = 2;
+
+  // Priority level for display decisions (0=low, 1=medium, 2=high)
+  int32 priority = 3;
+
+  // Whether this content is ephemeral and can be hidden after completion
+  bool ephemeral = 4;
+
+  // Tags for categorization and filtering
+  repeated string tags = 5;
+
+  // Content format hint: "markdown", "json", "plain"
+  string format = 6;
+
+  // Custom attributes for domain-specific needs
+  map<string, string> attributes = 7;
+}
+
+// ReasoningBlock is an alias for ThinkingBlock to match Vercel AI SDK terminology
+message ReasoningBlock {
+  string reasoning = 1;
+  string signature = 2;
+  ThinkingMetadata metadata = 3;
+}
+
+// ToolCallBlock represents a tool/function invocation
+message ToolCallBlock {
+  // Unique identifier for this tool call
+  string id = 1;
+
+  // Name of the tool being called
+  string name = 2;
+
+  // Tool input as JSON string
+  string input = 3;
+}
+
+// ToolResultBlock contains the result of a tool execution
+message ToolResultBlock {
+  // ID of the tool call this result corresponds to
+  string tool_call_id = 1;
+
+  // Result content
+  string content = 2;
+
+  // Whether this result represents an error
+  bool is_error = 3;
+}
+
+// StreamEventType defines lifecycle events for streaming content blocks.
+// This follows the Anthropic streaming pattern: start → delta → stop
+enum StreamEventType {
+  STREAM_EVENT_TYPE_UNSPECIFIED = 0;
+  STREAM_EVENT_TYPE_MESSAGE_START = 1;
+  STREAM_EVENT_TYPE_CONTENT_BLOCK_START = 2;
+  STREAM_EVENT_TYPE_CONTENT_BLOCK_DELTA = 3;
+  STREAM_EVENT_TYPE_CONTENT_BLOCK_STOP = 4;
+  STREAM_EVENT_TYPE_MESSAGE_DELTA = 5;
+  STREAM_EVENT_TYPE_MESSAGE_STOP = 6;
+  STREAM_EVENT_TYPE_PING = 7;
+}
+
+// StreamEvent represents a streaming lifecycle event for content blocks
+message StreamEvent {
+  // Event type
+  StreamEventType type = 1;
+
+  // Event payload
+  oneof event {
+    MessageStartEvent message_start = 10;
+    ContentBlockStartEvent content_block_start = 11;
+    ContentBlockDeltaEvent content_block_delta = 12;
+    ContentBlockStopEvent content_block_stop = 13;
+    MessageDeltaEvent message_delta = 14;
+    MessageStopEvent message_stop = 15;
+    PingEvent ping = 16;
+  }
+}
+
+// MessageStartEvent signals the beginning of a message stream
+message MessageStartEvent {
+  string message_id = 1;
+  a2a.v1.Role role = 2;
+}
+
+// ContentBlockStartEvent signals the start of a content block
+message ContentBlockStartEvent {
+  // Index of this block in the message's content block array
+  int32 index = 1;
+
+  // The content block (with empty/initial content)
+  ContentBlock content_block = 2;
+}
+
+// ContentBlockDeltaEvent provides incremental updates to a content block
+message ContentBlockDeltaEvent {
+  // Index of the block being updated
+  int32 index = 1;
+
+  // The delta content
+  oneof delta {
+    TextDelta text_delta = 10;
+    ThinkingDelta thinking_delta = 11;
+    InputJsonDelta input_json_delta = 12;
+    SignatureDelta signature_delta = 13;
+  }
+}
+
+// TextDelta provides incremental text content
+message TextDelta {
+  string text = 1;
+}
+
+// ThinkingDelta provides incremental thinking content
+message ThinkingDelta {
+  string thinking = 1;
+}
+
+// InputJsonDelta provides incremental tool input (as partial JSON)
+message InputJsonDelta {
+  string partial_json = 1;
+}
+
+// SignatureDelta provides signature content (sent before block stop)
+message SignatureDelta {
+  string signature = 1;
+}
+
+// ContentBlockStopEvent signals the completion of a content block
+message ContentBlockStopEvent {
+  // Index of the completed block
+  int32 index = 1;
+}
+
+// MessageDeltaEvent provides message-level updates (e.g., token counts)
+message MessageDeltaEvent {
+  // Cumulative token usage
+  TokenUsage usage = 1;
+}
+
+// TokenUsage tracks token consumption
+message TokenUsage {
+  int32 input_tokens = 1;
+  int32 output_tokens = 2;
+  int32 total_tokens = 3;
+}
+
+// MessageStopEvent signals the end of a message stream
+message MessageStopEvent {
+  string message_id = 1;
+}
+
+// PingEvent for keepalive during streaming
+message PingEvent {
+  int64 timestamp = 1;
+}

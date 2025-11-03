@@ -10,6 +10,9 @@
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css">
     <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+
+    <!-- Content Blocks Display System -->
+    <script src="/content-blocks.js"></script>
     
     <style>
         /* Box-sizing for all elements */
@@ -715,6 +718,57 @@
             }
         }
 
+        /* Content Block Animations */
+        @keyframes slideInBlock {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Content Block Styles */
+        .content-block {
+            animation: slideInBlock 0.3s ease-out;
+        }
+
+        .thinking-block pre {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 8px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        .thinking-block code {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .thinking-block ul, .thinking-block ol {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .thinking-block li {
+            margin: 4px 0;
+        }
+
+        .progress-block {
+            opacity: 0.8;
+        }
+
         /* Markdown styling - pure browser defaults */
         .message-content h1,
         .message-content h2,
@@ -1417,17 +1471,30 @@
             const bubble = document.createElement('div');
             bubble.className = 'message-bubble';
 
-            // Add text content
+            // Add text content and content blocks
             const content = document.createElement('div');
             content.className = 'message-content';
-            
+
             if (text) {
                 // Render markdown
                 content.innerHTML = marked.parse(text);
-                
+
                 // Highlight code blocks
                 content.querySelectorAll('pre code').forEach((block) => {
                     hljs.highlightElement(block);
+                });
+            }
+
+            // Handle content blocks (new format)
+            if (metadata.parts && Array.isArray(metadata.parts)) {
+                metadata.parts.forEach(part => {
+                    if (window.ContentBlocks && window.ContentBlocks.isContentBlock(part)) {
+                        const block = window.ContentBlocks.extractContentBlock(part);
+                        const blockElement = window.ContentBlocks.renderContentBlock(block);
+                        if (blockElement) {
+                            content.appendChild(blockElement);
+                        }
+                    }
                 });
             }
             

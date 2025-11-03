@@ -102,13 +102,15 @@ func (s *ChainOfThoughtStrategy) displayStructuredReflection(
 		return
 	}
 
-	output := ThinkingBlock(fmt.Sprintf("Iteration %d: Analyzing results", iteration))
+	// Build markdown-formatted reflection content
+	var content string
+	content += fmt.Sprintf("**Analyzing Tool Results**\n\n")
 
 	if len(analysis.SuccessfulTools) > 0 {
-		output += ThinkingBlock(fmt.Sprintf("[SUCCESS] Tools: %s", formatStringList(analysis.SuccessfulTools)))
+		content += fmt.Sprintf("✓ **Successful**: %s\n", formatStringList(analysis.SuccessfulTools))
 	}
 	if len(analysis.FailedTools) > 0 {
-		output += ThinkingBlock(fmt.Sprintf("[FAILED] Tools: %s", formatStringList(analysis.FailedTools)))
+		content += fmt.Sprintf("✗ **Failed**: %s\n", formatStringList(analysis.FailedTools))
 	}
 
 	var recommendation string
@@ -127,9 +129,11 @@ func (s *ChainOfThoughtStrategy) displayStructuredReflection(
 		}
 	}
 
-	output += ThinkingBlock(fmt.Sprintf("Confidence: %.0f%% - %s", analysis.Confidence*100, recommendation))
+	content += fmt.Sprintf("\n**Confidence**: %.0f%%\n", analysis.Confidence*100)
+	content += fmt.Sprintf("**Recommendation**: %s\n", recommendation)
 
-	state.GetOutputChannel() <- createTextPart(output)
+	// Emit as a reflection content block
+	state.EmitReflection(content, fmt.Sprintf("Iteration %d Analysis", iteration))
 }
 
 func (s *ChainOfThoughtStrategy) reflectOnProgress(
@@ -152,17 +156,19 @@ func (s *ChainOfThoughtStrategy) reflectOnProgress(
 	}
 
 	if len(toolCalls) > 0 {
-		output := ThinkingBlock(fmt.Sprintf("Iteration %d: Evaluating progress", iteration))
-		output += ThinkingBlock(fmt.Sprintf("Tools executed: %s", formatToolList(toolCalls)))
-		output += ThinkingBlock(fmt.Sprintf("Success/Fail: %s", formatSuccessRatio(successCount, failCount)))
+		// Build markdown-formatted reflection content
+		var content string
+		content += fmt.Sprintf("**Tools Executed**: %s\n", formatToolList(toolCalls))
+		content += fmt.Sprintf("**Results**: %s\n\n", formatSuccessRatio(successCount, failCount))
 
 		if failCount > 0 {
-			output += ThinkingBlock("Warning: Some tools failed - may need to pivot approach")
+			content += "⚠️ Some tools failed - may need to pivot approach\n"
 		} else if successCount > 0 {
-			output += ThinkingBlock("[SUCCESS] All tools succeeded - making progress")
+			content += "✓ All tools succeeded - making progress\n"
 		}
 
-		state.GetOutputChannel() <- createTextPart(output)
+		// Emit as a reflection content block
+		state.EmitReflection(content, fmt.Sprintf("Iteration %d Progress", iteration))
 	}
 }
 

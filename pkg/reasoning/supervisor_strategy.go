@@ -40,22 +40,34 @@ func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningSta
 }
 
 func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecomposition, outputCh chan<- *pb.Part) {
-	output := ThinkingBlock(fmt.Sprintf("Task Decomposition: %s", decomposition.MainGoal))
-	output += ThinkingBlock(fmt.Sprintf("Execution Order: %s", decomposition.ExecutionOrder))
-	output += ThinkingBlock(fmt.Sprintf("Required Agents: %v", decomposition.RequiredAgents))
-	output += ThinkingBlock(fmt.Sprintf("Strategy: %s", decomposition.Strategy))
+	// Build markdown-formatted planning content
+	var content string
+	content += fmt.Sprintf("**Main Goal**: %s\n\n", decomposition.MainGoal)
+	content += fmt.Sprintf("**Execution Order**: %s\n", decomposition.ExecutionOrder)
+	content += fmt.Sprintf("**Required Agents**: %v\n", decomposition.RequiredAgents)
+	content += fmt.Sprintf("**Strategy**: %s\n\n", decomposition.Strategy)
 
 	if len(decomposition.Subtasks) > 0 {
+		content += "**Subtasks**:\n"
 		for i, task := range decomposition.Subtasks {
 			deps := "none"
 			if len(task.DependsOn) > 0 {
 				deps = fmt.Sprintf("%v", task.DependsOn)
 			}
-			output += ThinkingBlock(fmt.Sprintf("Subtask %d: [P%d] %s (agent: %s, depends: %s)", i+1, task.Priority, task.Description, task.AgentType, deps))
+			content += fmt.Sprintf("%d. [P%d] %s\n", i+1, task.Priority, task.Description)
+			content += fmt.Sprintf("   - Agent: %s\n", task.AgentType)
+			content += fmt.Sprintf("   - Depends on: %s\n", deps)
 		}
 	}
 
-	outputCh <- createTextPart(output)
+	// Create planning content block
+	part, err := protocol.CreatePlanningBlock(content, "Task Decomposition")
+	if err != nil {
+		// Fallback to old method if content block creation fails
+		return
+	}
+
+	outputCh <- part
 }
 
 func (s *SupervisorStrategy) ShouldStop(text string, toolCalls []*protocol.ToolCall, state *ReasoningState) bool {
