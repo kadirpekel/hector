@@ -31,10 +31,10 @@ func CreateTextPartWithAGUI(text string, blockID string, blockIndex int) *pb.Par
 	}
 
 	metadata, _ := structpb.NewStruct(map[string]interface{}{
-		"agui_event_type": AGUIEventTypeContentBlock,
-		"agui_block_type": AGUIBlockTypeText,
-		"agui_block_id":   blockID,
-		"agui_block_index": blockIndex,
+		"event_type":  AGUIEventTypeContentBlock,
+		"block_type":  AGUIBlockTypeText,
+		"block_id":    blockID,
+		"block_index": blockIndex,
 	})
 
 	return &pb.Part{
@@ -50,10 +50,10 @@ func CreateThinkingPart(text string, blockID string, blockIndex int) *pb.Part {
 	}
 
 	metadata, _ := structpb.NewStruct(map[string]interface{}{
-		"agui_event_type":  AGUIEventTypeThinking,
-		"agui_block_type":  AGUIBlockTypeThinking,
-		"agui_block_id":    blockID,
-		"agui_block_index": blockIndex,
+		"event_type":  AGUIEventTypeThinking,
+		"block_type":  AGUIBlockTypeThinking,
+		"block_id":    blockID,
+		"block_index": blockIndex,
 	})
 
 	return &pb.Part{
@@ -71,9 +71,9 @@ func CreateToolCallPartWithAGUI(toolCall *ToolCall) *pb.Part {
 	})
 
 	metadata, _ := structpb.NewStruct(map[string]interface{}{
-		"agui_event_type":   AGUIEventTypeToolCall,
-		"agui_tool_call_id": toolCall.ID,
-		"agui_tool_name":    toolCall.Name,
+		"event_type":   AGUIEventTypeToolCall,
+		"tool_call_id": toolCall.ID,
+		"tool_name":    toolCall.Name,
 	})
 
 	return &pb.Part{
@@ -94,9 +94,9 @@ func CreateToolResultPartWithAGUI(result *ToolResult) *pb.Part {
 
 	isError := result.Error != ""
 	metadata, _ := structpb.NewStruct(map[string]interface{}{
-		"agui_event_type":   AGUIEventTypeToolCall,
-		"agui_tool_call_id": result.ToolCallID,
-		"agui_is_error":     isError,
+		"event_type":   AGUIEventTypeToolCall,
+		"tool_call_id": result.ToolCallID,
+		"is_error":     isError,
 	})
 
 	return &pb.Part{
@@ -110,8 +110,8 @@ func CreateToolResultPartWithAGUI(result *ToolResult) *pb.Part {
 // CreateErrorPart creates an error part with AG-UI metadata
 func CreateErrorPart(errorText string, errorCode string) *pb.Part {
 	metadata, _ := structpb.NewStruct(map[string]interface{}{
-		"agui_event_type": AGUIEventTypeError,
-		"agui_error_code": errorCode,
+		"event_type": AGUIEventTypeError,
+		"error_code": errorCode,
 	})
 
 	return &pb.Part{
@@ -127,7 +127,7 @@ func IsThinkingPart(part *pb.Part) bool {
 	}
 	
 	// Check AG-UI metadata
-	if eventType, ok := part.Metadata.Fields["agui_event_type"]; ok {
+	if eventType, ok := part.Metadata.Fields["event_type"]; ok {
 		return eventType.GetStringValue() == AGUIEventTypeThinking
 	}
 	
@@ -140,7 +140,7 @@ func GetAGUIEventType(part *pb.Part) string {
 		return ""
 	}
 	
-	if eventType, ok := part.Metadata.Fields["agui_event_type"]; ok {
+	if eventType, ok := part.Metadata.Fields["event_type"]; ok {
 		return eventType.GetStringValue()
 	}
 	
@@ -153,7 +153,7 @@ func GetAGUIBlockID(part *pb.Part) string {
 		return ""
 	}
 	
-	if blockID, ok := part.Metadata.Fields["agui_block_id"]; ok {
+	if blockID, ok := part.Metadata.Fields["block_id"]; ok {
 		return blockID.GetStringValue()
 	}
 	
@@ -166,7 +166,7 @@ func GetAGUIBlockType(part *pb.Part) string {
 		return ""
 	}
 	
-	if blockType, ok := part.Metadata.Fields["agui_block_type"]; ok {
+	if blockType, ok := part.Metadata.Fields["block_type"]; ok {
 		return blockType.GetStringValue()
 	}
 	

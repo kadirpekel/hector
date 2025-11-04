@@ -92,37 +92,43 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 			continue
 		}
 
-		// Display tool call parts
+		// Display tool call parts (AGUI format)
 		if part.Metadata != nil {
-			if partType, ok := part.Metadata.Fields["part_type"]; ok && partType.GetStringValue() == "tool_call" {
-				// Extract tool call data
-				if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
-					fields := dataPart.Data.Fields
-					if name, ok := fields["name"]; ok {
-						fmt.Printf("🔧 %s ", name.GetStringValue())
+			// Check for AGUI tool call (event_type = "tool_call" without is_error)
+			if eventType, ok := part.Metadata.Fields["event_type"]; ok && eventType.GetStringValue() == "tool_call" {
+				// Check if it's a tool call (no is_error) or tool result (has is_error)
+				_, hasIsError := part.Metadata.Fields["is_error"]
+				
+				if !hasIsError {
+					// This is a tool call
+					// Extract tool name from AGUI metadata or data
+					toolName := ""
+					if name, ok := part.Metadata.Fields["tool_name"]; ok {
+						toolName = name.GetStringValue()
+					} else if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
+						if name, ok := dataPart.Data.Fields["name"]; ok {
+							toolName = name.GetStringValue()
+						}
+					}
+					if toolName != "" {
+						fmt.Printf("🔧 %s ", toolName)
 						os.Stdout.Sync()
 					}
-				}
-				continue
-			}
-
-			// Display tool result parts
-			if partType, ok := part.Metadata.Fields["part_type"]; ok && partType.GetStringValue() == "tool_result" {
-				// Extract tool result data
-				if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
-					fields := dataPart.Data.Fields
-					hasError := false
-					if errField, ok := fields["error"]; ok && errField.GetStringValue() != "" {
-						hasError = true
+					continue
+				} else {
+					// This is a tool result
+					isError := false
+					if isErrorField, ok := part.Metadata.Fields["is_error"]; ok {
+						isError = isErrorField.GetBoolValue()
 					}
-					if hasError {
+					if isError {
 						fmt.Print("✗\n")
 					} else {
 						fmt.Print("✓\n")
 					}
 					os.Stdout.Sync()
+					continue
 				}
-				continue
 			}
 		}
 	}

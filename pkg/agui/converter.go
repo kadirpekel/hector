@@ -40,15 +40,15 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 	
 	if part.Metadata != nil {
 		// Check for AG-UI event type first
-		if et, ok := part.Metadata.Fields["agui_event_type"]; ok {
+		if et, ok := part.Metadata.Fields["event_type"]; ok {
 			aguiEventType = et.GetStringValue()
 		}
 		// Check for AG-UI block type
-		if bt, ok := part.Metadata.Fields["agui_block_type"]; ok {
+		if bt, ok := part.Metadata.Fields["block_type"]; ok {
 			aguiBlockType = bt.GetStringValue()
 		}
 		// Check for AG-UI block ID
-		if bid, ok := part.Metadata.Fields["agui_block_id"]; ok {
+		if bid, ok := part.Metadata.Fields["block_id"]; ok {
 			aguiBlockID = bid.GetStringValue()
 		}
 	}
@@ -98,9 +98,9 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 
 	// Handle tool calls and tool results (AG-UI metadata only)
 	if aguiEventType == "tool_call" {
-		// Tool calls have agui_is_error field to distinguish call from result
+		// Tool calls have is_error field to distinguish call from result
 		if part.Metadata != nil {
-			_, hasIsError := part.Metadata.Fields["agui_is_error"]
+			_, hasIsError := part.Metadata.Fields["is_error"]
 			
 			if hasIsError {
 				// This is a tool result
@@ -143,10 +143,10 @@ func (c *Converter) extractToolCallInfo(part *a2apb.Part) (string, string, map[s
 
 	// Read AG-UI metadata
 	if part.Metadata != nil {
-		if id, ok := part.Metadata.Fields["agui_tool_call_id"]; ok {
+		if id, ok := part.Metadata.Fields["tool_call_id"]; ok {
 			toolCallID = id.GetStringValue()
 		}
-		if name, ok := part.Metadata.Fields["agui_tool_name"]; ok {
+		if name, ok := part.Metadata.Fields["tool_name"]; ok {
 			toolName = name.GetStringValue()
 		}
 	}
@@ -198,10 +198,10 @@ func (c *Converter) extractToolResultInfo(part *a2apb.Part) (string, string, str
 
 	// Read AG-UI metadata
 	if part.Metadata != nil {
-		if id, ok := part.Metadata.Fields["agui_tool_call_id"]; ok {
+		if id, ok := part.Metadata.Fields["tool_call_id"]; ok {
 			toolCallID = id.GetStringValue()
 		}
-		if isErr, ok := part.Metadata.Fields["agui_is_error"]; ok {
+		if isErr, ok := part.Metadata.Fields["is_error"]; ok {
 			isError = isErr.GetBoolValue()
 		}
 	}

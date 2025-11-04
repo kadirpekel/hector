@@ -52,8 +52,12 @@ func IsToolCallPart(part *pb.Part) bool {
 	if part == nil || part.Metadata == nil {
 		return false
 	}
-	if partType, ok := part.Metadata.Fields["part_type"]; ok {
-		return partType.GetStringValue() == "tool_call"
+	// Check AGUI format: tool_call without is_error field
+	if eventType, ok := part.Metadata.Fields["event_type"]; ok {
+		if eventType.GetStringValue() == "tool_call" {
+			_, hasIsError := part.Metadata.Fields["is_error"]
+			return !hasIsError
+		}
 	}
 	return false
 }
@@ -62,8 +66,12 @@ func IsToolResultPart(part *pb.Part) bool {
 	if part == nil || part.Metadata == nil {
 		return false
 	}
-	if partType, ok := part.Metadata.Fields["part_type"]; ok {
-		return partType.GetStringValue() == "tool_result"
+	// Check AGUI format: tool_call WITH is_error field
+	if eventType, ok := part.Metadata.Fields["event_type"]; ok {
+		if eventType.GetStringValue() == "tool_call" {
+			_, hasIsError := part.Metadata.Fields["is_error"]
+			return hasIsError
+		}
 	}
 	return false
 }

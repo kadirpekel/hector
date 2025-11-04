@@ -2080,8 +2080,8 @@
         function isThinkingPart(part) {
             if (!part || !part.metadata) return false;
             // Check AG-UI metadata
-            return part.metadata.agui_event_type === 'thinking' || 
-                   part.metadata.agui_block_type === 'thinking';
+            return part.metadata.event_type === 'thinking' || 
+                   part.metadata.block_type === 'thinking';
         }
 
         // Extract text from A2A parts (AG-UI metadata aware)
@@ -2104,9 +2104,9 @@
             return parts
                 .filter(isThinkingPart)
                 .map((part, index) => ({
-                    id: part.metadata?.agui_block_id || `thinking-${index}`,
+                    id: part.metadata?.block_id || `thinking-${index}`,
                     content: part.text || '',
-                    index: part.metadata?.agui_block_index || index
+                    index: part.metadata?.block_index || index
                 }))
                 .filter(t => t.content);
         }
@@ -2118,15 +2118,15 @@
                 .filter(part => {
                     if (!part.metadata) return false;
                     // Check AG-UI metadata and ensure it's NOT a tool result
-                    return part.metadata.agui_event_type === 'tool_call' && 
-                           !part.metadata.hasOwnProperty('agui_is_error');
+                    return part.metadata.event_type === 'tool_call' && 
+                           !part.metadata.hasOwnProperty('is_error');
                 })
                 .map(part => {
                     const data = part.data?.data || {};
                     const metadata = part.metadata || {};
                     return {
-                        id: metadata.agui_tool_call_id || data.id || Math.random().toString(36).substr(2, 9),
-                        name: metadata.agui_tool_name || data.name || 'unknown',
+                        id: metadata.tool_call_id || data.id || Math.random().toString(36).substr(2, 9),
+                        name: metadata.tool_name || data.name || 'unknown',
                         args: data.arguments || {}
                     };
                 });
@@ -2138,16 +2138,16 @@
             return parts
                 .filter(part => {
                     if (!part.metadata) return false;
-                    // Tool results have agui_is_error field
-                    return part.metadata.agui_event_type === 'tool_call' && 
-                           part.metadata.hasOwnProperty('agui_is_error');
+                    // Tool results have is_error field
+                    return part.metadata.event_type === 'tool_call' && 
+                           part.metadata.hasOwnProperty('is_error');
                 })
                 .map(part => {
                     const data = part.data?.data || {};
                     const metadata = part.metadata || {};
                     return {
-                        tool_call_id: metadata.agui_tool_call_id || data.tool_call_id,
-                        success: !metadata.agui_is_error && (!data.error || data.error === ''),
+                        tool_call_id: metadata.tool_call_id || data.tool_call_id,
+                        success: !metadata.is_error && (!data.error || data.error === ''),
                         content: data.content || ''
                     };
                 });
@@ -2235,10 +2235,6 @@
                                         (message.role === 'agent' || message.role === 'ROLE_AGENT');
                                     
                                     if (isAgentRole) {
-                                        // NOTE: Tool call metadata is not currently included in streaming responses
-                                        // The backend only sends text parts to the client, so tool badges won't appear
-                                        // Tool calls are executed internally but not exposed in the A2A stream
-                                        
                                         // Extract tool calls and add them to map
                                         const toolCalls = extractToolCallsFromParts(message.parts);
                                         if (toolCalls.length > 0) {
@@ -2283,7 +2279,7 @@
                                             const initialToolCalls = Array.from(toolCallsMap.values());
                                             console.log('Creating message with tool calls:', initialToolCalls);
                                             console.log('Creating message with thinking blocks:', thinkingBlocks);
-                                            currentMessageDiv = addMessage('agent', text, { taskId: lastTaskId }, false, [], thinkingBlocks);
+                                            currentMessageDiv = addMessage('agent', text, { taskId: lastTaskId }, false, initialToolCalls, thinkingBlocks);
                                             // Store toolCallsMap reference on the message element for updates
                                             currentMessageDiv._toolCallsMap = toolCallsMap;
                                             // Now update to render badges at marker positions
