@@ -287,6 +287,13 @@ func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (
 			Streaming:              true,
 			PushNotifications:      false,
 			StateTransitionHistory: false, // Not yet implemented
+			Extensions: []*pb.AgentExtension{
+				{
+					Uri:         "https://ag-ui.org/protocol/v1",
+					Description: "AG-UI (Agent User Interaction) Protocol - Standardized streaming event format for agent UIs. Clients can opt-in via Accept header 'application/x-agui-events' or query parameter 'format=agui'.",
+					Required:    false,
+				},
+			},
 		},
 
 		DefaultInputModes:  a.getInputModes(),

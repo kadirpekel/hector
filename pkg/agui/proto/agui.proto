@@ -1,0 +1,207 @@
+// AG-UI Protocol Definition
+// Implements the Agent User Interaction Protocol (AG-UI)
+// https://docs.ag-ui.com/
+
+syntax = "proto3";
+package agui.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/kadirpekel/hector/pkg/agui/pb;pb";
+
+// AGUIEventType defines the 16 standardized AG-UI event types
+enum AGUIEventType {
+  AGUI_EVENT_TYPE_UNSPECIFIED = 0;
+  
+  // Message Events (3)
+  AGUI_EVENT_TYPE_MESSAGE_START = 1;
+  AGUI_EVENT_TYPE_MESSAGE_DELTA = 2;
+  AGUI_EVENT_TYPE_MESSAGE_STOP = 3;
+  
+  // Content Block Events (3)
+  AGUI_EVENT_TYPE_CONTENT_BLOCK_START = 4;
+  AGUI_EVENT_TYPE_CONTENT_BLOCK_DELTA = 5;
+  AGUI_EVENT_TYPE_CONTENT_BLOCK_STOP = 6;
+  
+  // Tool Call Events (3)
+  AGUI_EVENT_TYPE_TOOL_CALL_START = 7;
+  AGUI_EVENT_TYPE_TOOL_CALL_DELTA = 8;
+  AGUI_EVENT_TYPE_TOOL_CALL_STOP = 9;
+  
+  // Thinking Events (3)
+  AGUI_EVENT_TYPE_THINKING_START = 10;
+  AGUI_EVENT_TYPE_THINKING_DELTA = 11;
+  AGUI_EVENT_TYPE_THINKING_STOP = 12;
+  
+  // Task Events (4)
+  AGUI_EVENT_TYPE_TASK_START = 13;
+  AGUI_EVENT_TYPE_TASK_UPDATE = 14;
+  AGUI_EVENT_TYPE_TASK_COMPLETE = 15;
+  AGUI_EVENT_TYPE_TASK_ERROR = 16;
+}
+
+// AGUIEvent is the root event structure for AG-UI protocol
+message AGUIEvent {
+  // Unique event identifier
+  string event_id = 1;
+  
+  // Event type
+  AGUIEventType type = 2;
+  
+  // Timestamp when event was created
+  google.protobuf.Timestamp timestamp = 3;
+  
+  // Event payload (one of the specific event types)
+  oneof payload {
+    MessageStartPayload message_start = 10;
+    MessageDeltaPayload message_delta = 11;
+    MessageStopPayload message_stop = 12;
+    
+    ContentBlockStartPayload content_block_start = 20;
+    ContentBlockDeltaPayload content_block_delta = 21;
+    ContentBlockStopPayload content_block_stop = 22;
+    
+    ToolCallStartPayload tool_call_start = 30;
+    ToolCallDeltaPayload tool_call_delta = 31;
+    ToolCallStopPayload tool_call_stop = 32;
+    
+    ThinkingStartPayload thinking_start = 40;
+    ThinkingDeltaPayload thinking_delta = 41;
+    ThinkingStopPayload thinking_stop = 42;
+    
+    TaskStartPayload task_start = 50;
+    TaskUpdatePayload task_update = 51;
+    TaskCompletePayload task_complete = 52;
+    TaskErrorPayload task_error = 53;
+  }
+  
+  // Optional metadata for extensibility
+  google.protobuf.Struct metadata = 100;
+}
+
+// ============================================================================
+// Message Events
+// ============================================================================
+
+// MessageStartPayload signals the beginning of a message
+message MessageStartPayload {
+  string message_id = 1;
+  string context_id = 2;
+  string task_id = 3;
+  string role = 4; // "user" | "agent" | "system"
+}
+
+// MessageDeltaPayload provides incremental message content
+message MessageDeltaPayload {
+  string message_id = 1;
+  string delta = 2; // Incremental text content
+}
+
+// MessageStopPayload signals the end of a message
+message MessageStopPayload {
+  string message_id = 1;
+}
+
+// ============================================================================
+// Content Block Events
+// ============================================================================
+
+// ContentBlockStartPayload signals the start of a content block
+message ContentBlockStartPayload {
+  string block_id = 1;
+  string block_type = 2; // "text" | "image" | "code" | "data"
+  int32 index = 3;       // Index in message
+}
+
+// ContentBlockDeltaPayload provides incremental content updates
+message ContentBlockDeltaPayload {
+  string block_id = 1;
+  string delta = 2; // Incremental content
+}
+
+// ContentBlockStopPayload signals the end of a content block
+message ContentBlockStopPayload {
+  string block_id = 1;
+}
+
+// ============================================================================
+// Tool Call Events
+// ============================================================================
+
+// ToolCallStartPayload signals the start of a tool invocation
+message ToolCallStartPayload {
+  string tool_call_id = 1;
+  string tool_name = 2;
+  google.protobuf.Struct input = 3; // Tool input parameters
+}
+
+// ToolCallDeltaPayload provides incremental tool call updates (e.g., partial JSON)
+message ToolCallDeltaPayload {
+  string tool_call_id = 1;
+  string partial_input = 2; // Partial JSON input (streaming)
+}
+
+// ToolCallStopPayload signals the end of a tool call
+message ToolCallStopPayload {
+  string tool_call_id = 1;
+  google.protobuf.Struct final_input = 2; // Complete tool input
+  string result = 3;                       // Tool execution result
+  string error = 4;                        // Error message if failed
+  bool is_error = 5;                       // Whether execution failed
+}
+
+// ============================================================================
+// Thinking Events
+// ============================================================================
+
+// ThinkingStartPayload signals the start of agent reasoning
+message ThinkingStartPayload {
+  string thinking_id = 1;
+  string title = 2; // Optional title/description
+}
+
+// ThinkingDeltaPayload provides incremental thinking/reasoning content
+message ThinkingDeltaPayload {
+  string thinking_id = 1;
+  string delta = 2; // Incremental reasoning text
+}
+
+// ThinkingStopPayload signals the end of thinking
+message ThinkingStopPayload {
+  string thinking_id = 1;
+  string signature = 2; // Optional integrity signature (Anthropic-style)
+}
+
+// ============================================================================
+// Task Events
+// ============================================================================
+
+// TaskStartPayload signals the creation/start of a task
+message TaskStartPayload {
+  string task_id = 1;
+  string context_id = 2;
+  string description = 3; // Task description
+}
+
+// TaskUpdatePayload provides task status updates
+message TaskUpdatePayload {
+  string task_id = 1;
+  string status = 2; // "submitted" | "working" | "input_required" | etc.
+  google.protobuf.Struct metadata = 3;
+}
+
+// TaskCompletePayload signals task completion
+message TaskCompletePayload {
+  string task_id = 1;
+  google.protobuf.Struct result = 2; // Task result/artifacts
+}
+
+// TaskErrorPayload signals task failure
+message TaskErrorPayload {
+  string task_id = 1;
+  string error_message = 2;
+  string error_code = 3;
+  google.protobuf.Struct details = 4;
+}
+

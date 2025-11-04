@@ -127,7 +127,8 @@ func (a *Agent) getOutputModes() []string {
 		return a.config.A2A.OutputModes
 	}
 
-	return []string{"text/plain", "application/json"}
+	// Default output modes including AG-UI support
+	return []string{"text/plain", "application/json", "application/x-agui-events"}
 }
 
 func (a *Agent) getSkills() []*pb.AgentSkill {

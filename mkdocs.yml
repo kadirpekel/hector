@@ -62,6 +62,7 @@ nav:
     - Observability: core-concepts/observability.md
     - Security: core-concepts/security.md
     - A2A Protocol: reference/a2a-protocol.md
+    - AG-UI Protocol: core-concepts/ag-ui-protocol.md
     - LLM Providers: core-concepts/llm-providers.md
     - Prompts: core-concepts/prompts.md
     - Memory: core-concepts/memory.md

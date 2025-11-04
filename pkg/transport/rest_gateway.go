@@ -9,11 +9,14 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/agent"
+	"github.com/kadirpekel/hector/pkg/agui"
+	aguipb "github.com/kadirpekel/hector/pkg/agui/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -494,10 +497,32 @@ func (g *RESTGateway) handleStreamingMessageSSE(w http.ResponseWriter, r *http.R
 
 	ctx := metadata.NewIncomingContext(r.Context(), md)
 
+	// Detect AG-UI format preference
+	// Check Accept header for "application/x-agui-events" or query parameter "format=agui"
+	useAGUI := false
+	acceptHeader := r.Header.Get("Accept")
+	if strings.Contains(acceptHeader, "application/x-agui-events") ||
+		strings.Contains(acceptHeader, "application/agui+json") {
+		useAGUI = true
+	}
+
+	// Also check query parameter
+	if r.URL.Query().Get("format") == "agui" {
+		useAGUI = true
+	}
+
+	// Generate a message ID for AG-UI events
+	messageID := ""
+	if useAGUI {
+		messageID = fmt.Sprintf("msg-%d", time.Now().UnixNano())
+	}
+
 	streamWrapper := &restStreamWrapper{
-		writer:  w,
-		flusher: w.(http.Flusher),
-		context: ctx, // CRITICAL: Pass the context with agent metadata
+		writer:    w,
+		flusher:   w.(http.Flusher),
+		context:   ctx,
+		useAGUI:   useAGUI,
+		messageID: messageID,
 	}
 
 	if g.service != nil {
@@ -618,13 +643,24 @@ func (g *RESTGateway) sendSSEError(w http.ResponseWriter, message string) {
 }
 
 type restStreamWrapper struct {
-	writer  http.ResponseWriter
-	flusher http.Flusher
-	context context.Context
+	writer    http.ResponseWriter
+	flusher   http.Flusher
+	context   context.Context
+	useAGUI   bool
+	converter *agui.Converter
+	messageID string
+	contextID string
+	taskID    string
+	inMessage bool
 }
 
 func (w *restStreamWrapper) Send(resp *pb.StreamResponse) error {
+	// If AG-UI mode is enabled, convert A2A to AG-UI events
+	if w.useAGUI {
+		return w.sendAsAGUI(resp)
+	}
 
+	// A2A native format (default)
 	marshaler := protojson.MarshalOptions{
 		UseProtoNames:   false,
 		EmitUnpopulated: false,
@@ -641,6 +677,196 @@ func (w *restStreamWrapper) Send(resp *pb.StreamResponse) error {
 
 	w.flusher.Flush()
 	return nil
+}
+
+// sendAsAGUI converts A2A StreamResponse to AG-UI events and sends them
+func (w *restStreamWrapper) sendAsAGUI(resp *pb.StreamResponse) error {
+	events := w.convertToAGUIEvents(resp)
+
+	marshaler := protojson.MarshalOptions{
+		UseProtoNames:   false,
+		EmitUnpopulated: false,
+	}
+
+	for _, event := range events {
+		data, err := marshaler.Marshal(event)
+		if err != nil {
+			return fmt.Errorf("failed to marshal AG-UI event: %w", err)
+		}
+
+		// Determine SSE event type
+		eventType := w.getAGUIEventType(event.Type)
+
+		_, err = fmt.Fprintf(w.writer, "event: %s\ndata: %s\n\n", eventType, string(data))
+		if err != nil {
+			return err
+		}
+
+		w.flusher.Flush()
+	}
+
+	return nil
+}
+
+// convertToAGUIEvents converts an A2A StreamResponse to AG-UI events
+func (w *restStreamWrapper) convertToAGUIEvents(resp *pb.StreamResponse) []*aguipb.AGUIEvent {
+	var events []*aguipb.AGUIEvent
+
+	switch payload := resp.Payload.(type) {
+	case *pb.StreamResponse_Task:
+		task := payload.Task
+		w.taskID = task.Id
+		w.contextID = task.ContextId
+
+		if task.Status != nil {
+			switch task.Status.State {
+			case pb.TaskState_TASK_STATE_SUBMITTED:
+				events = append(events, agui.NewTaskStartEvent(task.Id, task.ContextId, ""))
+				events = append(events, agui.NewMessageStartEvent(w.messageID, w.contextID, w.taskID, "agent"))
+				w.inMessage = true
+				w.converter = agui.NewConverter(w.messageID, w.contextID, w.taskID)
+
+			case pb.TaskState_TASK_STATE_WORKING:
+				if !w.inMessage {
+					events = append(events, agui.NewMessageStartEvent(w.messageID, w.contextID, w.taskID, "agent"))
+					w.inMessage = true
+					w.converter = agui.NewConverter(w.messageID, w.contextID, w.taskID)
+				}
+				events = append(events, agui.NewTaskUpdateEvent(task.Id, "working", nil))
+
+			case pb.TaskState_TASK_STATE_COMPLETED:
+				if w.converter != nil {
+					closeEvents := w.converter.CloseCurrentBlock()
+					events = append(events, closeEvents...)
+				}
+				if w.inMessage {
+					events = append(events, agui.NewMessageStopEvent(w.messageID))
+					w.inMessage = false
+				}
+				events = append(events, agui.NewTaskCompleteEvent(task.Id, nil))
+
+			case pb.TaskState_TASK_STATE_FAILED:
+				if w.converter != nil {
+					closeEvents := w.converter.CloseCurrentBlock()
+					events = append(events, closeEvents...)
+				}
+				if w.inMessage {
+					events = append(events, agui.NewMessageStopEvent(w.messageID))
+					w.inMessage = false
+				}
+				errorMsg := "Task failed"
+				if task.Status.Update != nil && len(task.Status.Update.Parts) > 0 {
+					if text := task.Status.Update.Parts[0].GetText(); text != "" {
+						errorMsg = text
+					}
+				}
+				events = append(events, agui.NewTaskErrorEvent(task.Id, errorMsg, "TASK_FAILED", nil))
+			}
+		}
+
+	case *pb.StreamResponse_Msg:
+		msg := payload.Msg
+
+		if msg.ContextId != "" {
+			w.contextID = msg.ContextId
+		}
+		if msg.TaskId != "" {
+			w.taskID = msg.TaskId
+		}
+
+		if !w.inMessage {
+			role := "agent"
+			if msg.Role == pb.Role_ROLE_USER {
+				role = "user"
+			}
+			events = append(events, agui.NewMessageStartEvent(w.messageID, w.contextID, w.taskID, role))
+			w.inMessage = true
+			w.converter = agui.NewConverter(w.messageID, w.contextID, w.taskID)
+		}
+
+		for _, part := range msg.Parts {
+			partEvents := w.converter.ConvertPart(part)
+			events = append(events, partEvents...)
+		}
+
+	case *pb.StreamResponse_StatusUpdate:
+		update := payload.StatusUpdate
+		w.taskID = update.TaskId
+		w.contextID = update.ContextId
+
+		status := strings.ToLower(update.Status.State.String())
+		status = strings.TrimPrefix(status, "task_state_")
+
+		if update.Final {
+			if w.converter != nil {
+				closeEvents := w.converter.CloseCurrentBlock()
+				events = append(events, closeEvents...)
+			}
+			if w.inMessage {
+				events = append(events, agui.NewMessageStopEvent(w.messageID))
+				w.inMessage = false
+			}
+		}
+
+		events = append(events, agui.NewTaskUpdateEvent(update.TaskId, status, nil))
+
+	case *pb.StreamResponse_ArtifactUpdate:
+		artifact := payload.ArtifactUpdate.Artifact
+		if artifact != nil {
+			if !w.inMessage {
+				events = append(events, agui.NewMessageStartEvent(w.messageID, w.contextID, w.taskID, "agent"))
+				w.inMessage = true
+				w.converter = agui.NewConverter(w.messageID, w.contextID, w.taskID)
+			}
+
+			for _, part := range artifact.Parts {
+				partEvents := w.converter.ConvertPart(part)
+				events = append(events, partEvents...)
+			}
+		}
+	}
+
+	return events
+}
+
+// getAGUIEventType returns the SSE event type name for an AG-UI event
+func (w *restStreamWrapper) getAGUIEventType(eventType aguipb.AGUIEventType) string {
+	switch eventType {
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_MESSAGE_START:
+		return "message_start"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_MESSAGE_DELTA:
+		return "message_delta"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_MESSAGE_STOP:
+		return "message_stop"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_CONTENT_BLOCK_START:
+		return "content_block_start"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_CONTENT_BLOCK_DELTA:
+		return "content_block_delta"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_CONTENT_BLOCK_STOP:
+		return "content_block_stop"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TOOL_CALL_START:
+		return "tool_call_start"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TOOL_CALL_DELTA:
+		return "tool_call_delta"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TOOL_CALL_STOP:
+		return "tool_call_stop"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_THINKING_START:
+		return "thinking_start"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_THINKING_DELTA:
+		return "thinking_delta"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_THINKING_STOP:
+		return "thinking_stop"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TASK_START:
+		return "task_start"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TASK_UPDATE:
+		return "task_update"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TASK_COMPLETE:
+		return "task_complete"
+	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TASK_ERROR:
+		return "task_error"
+	default:
+		return "agui_event"
+	}
 }
 
 func (w *restStreamWrapper) sendCompletionEvent() {
@@ -850,11 +1076,32 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 			ctx = context.WithValue(ctx, agent.SessionIDKey, req.Request.ContextId)
 		}
 
+		// Detect AG-UI format preference
+		useAGUI := false
+		acceptHeader := r.Header.Get("Accept")
+		if strings.Contains(acceptHeader, "application/x-agui-events") ||
+			strings.Contains(acceptHeader, "application/agui+json") {
+			useAGUI = true
+		}
+
+		// Also check query parameter
+		if r.URL.Query().Get("format") == "agui" {
+			useAGUI = true
+		}
+
+		// Generate a message ID for AG-UI events
+		messageID := ""
+		if useAGUI {
+			messageID = fmt.Sprintf("msg-%d", time.Now().UnixNano())
+		}
+
 		// Create stream wrapper for SSE
 		streamWrapper := &restStreamWrapper{
-			writer:  w,
-			flusher: flusher,
-			context: ctx,
+			writer:    w,
+			flusher:   flusher,
+			context:   ctx,
+			useAGUI:   useAGUI,
+			messageID: messageID,
 		}
 
 		// Call the streaming service
