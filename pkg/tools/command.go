@@ -20,7 +20,7 @@ func NewCommandTool(commandConfig *config.CommandToolsConfig) *CommandTool {
 			AllowedCommands:  nil,
 			WorkingDirectory: "./",
 			MaxExecutionTime: 30 * time.Second,
-			EnableSandboxing: true,
+			EnableSandboxing: config.BoolPtr(true),
 		}
 	}
 
@@ -86,7 +86,7 @@ func (t *CommandTool) Execute(ctx context.Context, args map[string]interface{}) 
 
 func (t *CommandTool) validateCommand(command string) error {
 
-	if t.config.EnableSandboxing && len(t.config.AllowedCommands) == 0 {
+	if t.config.EnableSandboxing != nil && *t.config.EnableSandboxing && len(t.config.AllowedCommands) == 0 {
 		return nil
 	}
 

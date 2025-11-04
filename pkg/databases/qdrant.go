@@ -14,19 +14,23 @@ func NewQdrantDatabaseProvider() (DatabaseProvider, error) {
 		Type:   "qdrant",
 		Host:   "localhost",
 		Port:   6334,
-		UseTLS: false,
+		UseTLS: config.BoolPtr(false),
 	}
 
 	return NewQdrantDatabaseProviderFromConfig(config)
 }
 
 func NewQdrantDatabaseProviderFromConfig(config *config.DatabaseProviderConfig) (DatabaseProvider, error) {
+	useTLS := false
+	if config.UseTLS != nil {
+		useTLS = *config.UseTLS
+	}
 
 	client, err := qdrant.NewClient(&qdrant.Config{
 		Host:   config.Host,
 		Port:   config.Port,
 		APIKey: config.APIKey,
-		UseTLS: config.UseTLS,
+		UseTLS: useTLS,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Qdrant client: %w", err)

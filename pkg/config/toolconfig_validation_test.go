@@ -15,7 +15,7 @@ func TestToolConfig_CommandValidation(t *testing.T) {
 			name: "command tool with sandboxing enabled + no allowed_commands = valid (permissive default)",
 			tool: ToolConfig{
 				Type:             "command",
-				EnableSandboxing: true,
+				EnableSandboxing: BoolPtr(true),
 				AllowedCommands:  []string{},
 			},
 			expectError: false,
@@ -24,7 +24,7 @@ func TestToolConfig_CommandValidation(t *testing.T) {
 			name: "command tool with sandboxing enabled + nil allowed_commands = valid (permissive default)",
 			tool: ToolConfig{
 				Type:             "command",
-				EnableSandboxing: true,
+				EnableSandboxing: BoolPtr(true),
 				AllowedCommands:  nil,
 			},
 			expectError: false,
@@ -33,7 +33,7 @@ func TestToolConfig_CommandValidation(t *testing.T) {
 			name: "command tool with sandboxing enabled + explicit allowed_commands = valid",
 			tool: ToolConfig{
 				Type:             "command",
-				EnableSandboxing: true,
+				EnableSandboxing: BoolPtr(true),
 				AllowedCommands:  []string{"ls", "cat"},
 			},
 			expectError: false,
@@ -42,7 +42,7 @@ func TestToolConfig_CommandValidation(t *testing.T) {
 			name: "command tool with sandboxing disabled + no allowed_commands = INVALID (security)",
 			tool: ToolConfig{
 				Type:             "command",
-				EnableSandboxing: false,
+				EnableSandboxing: BoolPtr(false),
 				AllowedCommands:  []string{},
 			},
 			expectError:   true,
@@ -52,7 +52,7 @@ func TestToolConfig_CommandValidation(t *testing.T) {
 			name: "command tool with sandboxing disabled + nil allowed_commands = INVALID (security)",
 			tool: ToolConfig{
 				Type:             "command",
-				EnableSandboxing: false,
+				EnableSandboxing: BoolPtr(false),
 				AllowedCommands:  nil,
 			},
 			expectError:   true,
@@ -62,7 +62,7 @@ func TestToolConfig_CommandValidation(t *testing.T) {
 			name: "command tool with sandboxing disabled + explicit allowed_commands = valid",
 			tool: ToolConfig{
 				Type:             "command",
-				EnableSandboxing: false,
+				EnableSandboxing: BoolPtr(false),
 				AllowedCommands:  []string{"ls"},
 			},
 			expectError: false,

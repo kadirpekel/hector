@@ -174,7 +174,7 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 		fmt.Printf("✅ Long-term memory enabled (collection: %s, batch_size: %d, auto_recall: %t, recall_limit: %d)\n",
 			agentConfig.Memory.LongTerm.Collection,
 			agentConfig.Memory.LongTerm.BatchSize,
-			agentConfig.Memory.LongTerm.AutoRecall,
+			config.BoolValue(agentConfig.Memory.LongTerm.AutoRecall, false),
 			agentConfig.Memory.LongTerm.RecallLimit)
 	}
 
@@ -182,7 +182,7 @@ func newAgentServicesInternal(agentID string, agentConfig *config.AgentConfig, c
 		Enabled:      agentConfig.Memory.LongTerm.IsEnabled(),
 		StorageScope: memory.StorageScope(agentConfig.Memory.LongTerm.StorageScope),
 		BatchSize:    agentConfig.Memory.LongTerm.BatchSize,
-		AutoRecall:   agentConfig.Memory.LongTerm.AutoRecall,
+		AutoRecall:   config.BoolValue(agentConfig.Memory.LongTerm.AutoRecall, false),
 		RecallLimit:  agentConfig.Memory.LongTerm.RecallLimit,
 		Collection:   agentConfig.Memory.LongTerm.Collection,
 	}
@@ -262,7 +262,7 @@ func registerRequiredToolWithAgentRegistry(registry *tools.ToolRegistry, reqTool
 			AllowedCommands:  []string{"ls", "cat", "pwd", "echo"},
 			WorkingDirectory: "./",
 			MaxExecutionTime: "30s",
-			EnableSandboxing: true,
+			EnableSandboxing: config.BoolPtr(true),
 		}
 		cmdTool, err := tools.NewCommandToolWithConfig(reqTool.Name, toolConfig)
 		if err != nil {

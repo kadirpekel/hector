@@ -14,7 +14,7 @@ func TestCommandToolsConfig_ValidationWithSandboxing(t *testing.T) {
 		{
 			name: "sandboxing enabled + empty allowed_commands = valid (allow all)",
 			config: CommandToolsConfig{
-				EnableSandboxing: true,
+				EnableSandboxing: BoolPtr(true),
 				AllowedCommands:  []string{},
 			},
 			expectError: false,
@@ -22,7 +22,7 @@ func TestCommandToolsConfig_ValidationWithSandboxing(t *testing.T) {
 		{
 			name: "sandboxing enabled + nil allowed_commands = valid (allow all)",
 			config: CommandToolsConfig{
-				EnableSandboxing: true,
+				EnableSandboxing: BoolPtr(true),
 				AllowedCommands:  nil,
 			},
 			expectError: false,
@@ -30,7 +30,7 @@ func TestCommandToolsConfig_ValidationWithSandboxing(t *testing.T) {
 		{
 			name: "sandboxing enabled + explicit allowed_commands = valid",
 			config: CommandToolsConfig{
-				EnableSandboxing: true,
+				EnableSandboxing: BoolPtr(true),
 				AllowedCommands:  []string{"ls", "cat"},
 			},
 			expectError: false,
@@ -38,7 +38,7 @@ func TestCommandToolsConfig_ValidationWithSandboxing(t *testing.T) {
 		{
 			name: "sandboxing disabled + empty allowed_commands = INVALID",
 			config: CommandToolsConfig{
-				EnableSandboxing: false,
+				EnableSandboxing: BoolPtr(false),
 				AllowedCommands:  []string{},
 			},
 			expectError:   true,
@@ -47,7 +47,7 @@ func TestCommandToolsConfig_ValidationWithSandboxing(t *testing.T) {
 		{
 			name: "sandboxing disabled + nil allowed_commands = INVALID",
 			config: CommandToolsConfig{
-				EnableSandboxing: false,
+				EnableSandboxing: BoolPtr(false),
 				AllowedCommands:  nil,
 			},
 			expectError:   true,
@@ -56,7 +56,7 @@ func TestCommandToolsConfig_ValidationWithSandboxing(t *testing.T) {
 		{
 			name: "sandboxing disabled + explicit allowed_commands = valid",
 			config: CommandToolsConfig{
-				EnableSandboxing: false,
+				EnableSandboxing: BoolPtr(false),
 				AllowedCommands:  []string{"ls", "cat", "grep"},
 			},
 			expectError: false,

@@ -136,18 +136,18 @@ func (s *Server) initialize() error {
 	}
 	s.runtime = rt
 
-	if s.config.Global.Observability.MetricsEnabled || s.config.Global.Observability.Tracing.Enabled {
+	if config.BoolValue(s.config.Global.Observability.MetricsEnabled, false) || config.BoolValue(s.config.Global.Observability.Tracing.Enabled, false) {
 		log.Println("🔭 Initializing observability...")
 
 		obsConfig := observability.Config{
 			Tracing: observability.TracerConfig{
-				Enabled:      s.config.Global.Observability.Tracing.Enabled,
+				Enabled:      config.BoolValue(s.config.Global.Observability.Tracing.Enabled, false),
 				ExporterType: s.config.Global.Observability.Tracing.ExporterType,
 				EndpointURL:  s.config.Global.Observability.Tracing.EndpointURL,
 				SamplingRate: s.config.Global.Observability.Tracing.SamplingRate,
 				ServiceName:  s.config.Global.Observability.Tracing.ServiceName,
 			},
-			MetricsEnabled: s.config.Global.Observability.MetricsEnabled,
+			MetricsEnabled: config.BoolValue(s.config.Global.Observability.MetricsEnabled, false),
 		}
 
 		obsMgr := observability.NewManager(obsConfig)

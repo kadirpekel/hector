@@ -15,7 +15,7 @@ func createMinimalConfig() *config.Config {
 		Agents:    make(map[string]*config.AgentConfig),
 		Tools:     make(map[string]*config.ToolConfig),
 		Plugins: config.PluginConfigs{
-			Discovery:           config.PluginDiscoveryConfig{Enabled: false},
+			Discovery:           config.PluginDiscoveryConfig{Enabled: config.BoolPtr(false)},
 			LLMProviders:        make(map[string]*config.PluginConfig),
 			DatabaseProviders:   make(map[string]*config.PluginConfig),
 			EmbedderProviders:   make(map[string]*config.PluginConfig),
@@ -137,19 +137,19 @@ func TestComponentManager_ShutdownPlugins(t *testing.T) {
 func TestIsPluginConfigured_Integration(t *testing.T) {
 	cfg := createMinimalConfig()
 	cfg.Plugins.LLMProviders = map[string]*config.PluginConfig{
-		"llm-plugin": {Name: "llm-plugin", Enabled: true},
+		"llm-plugin": {Name: "llm-plugin", Enabled: config.BoolPtr(true)},
 	}
 	cfg.Plugins.DatabaseProviders = map[string]*config.PluginConfig{
-		"db-plugin": {Name: "db-plugin", Enabled: true},
+		"db-plugin": {Name: "db-plugin", Enabled: config.BoolPtr(true)},
 	}
 	cfg.Plugins.EmbedderProviders = map[string]*config.PluginConfig{
-		"embedder-plugin": {Name: "embedder-plugin", Enabled: true},
+		"embedder-plugin": {Name: "embedder-plugin", Enabled: config.BoolPtr(true)},
 	}
 	cfg.Plugins.ToolProviders = map[string]*config.PluginConfig{
-		"tool-plugin": {Name: "tool-plugin", Enabled: true},
+		"tool-plugin": {Name: "tool-plugin", Enabled: config.BoolPtr(true)},
 	}
 	cfg.Plugins.ReasoningStrategies = map[string]*config.PluginConfig{
-		"reasoning-plugin": {Name: "reasoning-plugin", Enabled: true},
+		"reasoning-plugin": {Name: "reasoning-plugin", Enabled: config.BoolPtr(true)},
 	}
 
 	cm, err := NewComponentManager(cfg)

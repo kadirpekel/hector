@@ -220,9 +220,9 @@ func (cm *ComponentManager) loadPlugins(ctx context.Context) error {
 	pluginConfig := &cm.globalConfig.Plugins
 
 	discoveryConfig := &plugins.DiscoveryConfig{
-		Enabled:            pluginConfig.Discovery.Enabled,
+		Enabled:            config.BoolValue(pluginConfig.Discovery.Enabled, false),
 		Paths:              pluginConfig.Discovery.Paths,
-		ScanSubdirectories: pluginConfig.Discovery.ScanSubdirectories,
+		ScanSubdirectories: config.BoolValue(pluginConfig.Discovery.ScanSubdirectories, false),
 	}
 
 	discovery := plugins.NewPluginDiscovery(discoveryConfig)
@@ -245,7 +245,7 @@ func (cm *ComponentManager) loadPlugins(ctx context.Context) error {
 func (cm *ComponentManager) loadConfiguredPlugins(ctx context.Context, pluginConfig *config.PluginConfigs) error {
 
 	for name, cfg := range pluginConfig.LLMProviders {
-		if cfg != nil && !cfg.Enabled {
+		if cfg != nil && cfg.Enabled != nil && !*cfg.Enabled {
 			continue
 		}
 		if cfg != nil {
@@ -256,7 +256,7 @@ func (cm *ComponentManager) loadConfiguredPlugins(ctx context.Context, pluginCon
 	}
 
 	for name, cfg := range pluginConfig.DatabaseProviders {
-		if cfg != nil && !cfg.Enabled {
+		if cfg != nil && cfg.Enabled != nil && !*cfg.Enabled {
 			continue
 		}
 		if cfg != nil {
@@ -267,7 +267,7 @@ func (cm *ComponentManager) loadConfiguredPlugins(ctx context.Context, pluginCon
 	}
 
 	for name, cfg := range pluginConfig.EmbedderProviders {
-		if cfg != nil && !cfg.Enabled {
+		if cfg != nil && cfg.Enabled != nil && !*cfg.Enabled {
 			continue
 		}
 		if cfg != nil {
@@ -292,7 +292,7 @@ func (cm *ComponentManager) loadDiscoveredPlugins(ctx context.Context, discovere
 			Name:    dp.Name,
 			Type:    string(dp.Manifest.Protocol),
 			Path:    dp.Path,
-			Enabled: true,
+			Enabled: config.BoolPtr(true),
 			Config:  make(map[string]interface{}),
 		}
 
@@ -335,7 +335,7 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 		Name:     name,
 		Type:     plugins.PluginProtocol(cfg.Type),
 		Path:     cfg.Path,
-		Enabled:  cfg.Enabled,
+		Enabled:  config.BoolValue(cfg.Enabled, true),
 		Config:   cfg.Config,
 		Manifest: manifest,
 	}

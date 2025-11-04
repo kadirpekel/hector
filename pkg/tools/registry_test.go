@@ -226,7 +226,7 @@ func TestNewToolRegistryWithConfig(t *testing.T) {
 	toolConfig := map[string]*config.ToolConfig{
 		"test-tool": {
 			Type:    "todo",
-			Enabled: true,
+			Enabled: config.BoolPtr(true),
 		},
 	}
 

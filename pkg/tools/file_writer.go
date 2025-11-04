@@ -20,7 +20,7 @@ func NewFileWriterTool(cfg *config.FileWriterConfig) *FileWriterTool {
 		cfg = &config.FileWriterConfig{
 			MaxFileSize:       1048576,
 			AllowedExtensions: nil,
-			BackupOnOverwrite: true,
+			BackupOnOverwrite: config.BoolPtr(true),
 			WorkingDirectory:  "./",
 		}
 	}
@@ -124,7 +124,7 @@ func (t *FileWriterTool) Execute(ctx context.Context, args map[string]interface{
 	fullPath := filepath.Join(t.config.WorkingDirectory, path)
 
 	fileExisted := false
-	if backup && t.config.BackupOnOverwrite {
+	if backup && t.config.BackupOnOverwrite != nil && *t.config.BackupOnOverwrite {
 		if _, err := os.Stat(fullPath); err == nil {
 			fileExisted = true
 			backupPath := fullPath + ".bak"

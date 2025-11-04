@@ -21,7 +21,7 @@ func TestFileWriterTool_BlacklistDenied(t *testing.T) {
 	tool := NewFileWriterTool(&config.FileWriterConfig{
 		MaxFileSize:       1024,
 		DeniedExtensions:  []string{".exe", ".bat", ".sh"},
-		BackupOnOverwrite: false,
+		BackupOnOverwrite: config.BoolPtr(false),
 		WorkingDirectory:  tempDir,
 	})
 
@@ -115,7 +115,7 @@ func TestFileWriterTool_WhitelistAndBlacklist(t *testing.T) {
 		MaxFileSize:       1024,
 		AllowedExtensions: []string{".py", ".go", ".sh"},
 		DeniedExtensions:  []string{".sh"},
-		BackupOnOverwrite: false,
+		BackupOnOverwrite: config.BoolPtr(false),
 		WorkingDirectory:  tempDir,
 	})
 

@@ -34,7 +34,7 @@ func NewRateLimiter(cfg *config.RateLimitConfig, store Store) (*DefaultRateLimit
 
 // Check verifies if the operation is allowed without recording usage
 func (rl *DefaultRateLimiter) Check(ctx context.Context, scope Scope, identifier string) (*CheckResult, error) {
-	if !rl.config.Enabled {
+	if rl.config.Enabled == nil || !*rl.config.Enabled {
 		return &CheckResult{Allowed: true}, nil
 	}
 
@@ -111,7 +111,7 @@ func (rl *DefaultRateLimiter) Check(ctx context.Context, scope Scope, identifier
 
 // Record records actual usage (tokens and/or count)
 func (rl *DefaultRateLimiter) Record(ctx context.Context, scope Scope, identifier string, tokenCount int64, requestCount int64) error {
-	if !rl.config.Enabled {
+	if rl.config.Enabled == nil || !*rl.config.Enabled {
 		return nil
 	}
 
@@ -169,7 +169,7 @@ func (rl *DefaultRateLimiter) Record(ctx context.Context, scope Scope, identifie
 
 // CheckAndRecord checks limits and records usage in a single operation (atomic)
 func (rl *DefaultRateLimiter) CheckAndRecord(ctx context.Context, scope Scope, identifier string, tokenCount int64, requestCount int64) (*CheckResult, error) {
-	if !rl.config.Enabled {
+	if rl.config.Enabled == nil || !*rl.config.Enabled {
 		return &CheckResult{Allowed: true}, nil
 	}
 
@@ -204,7 +204,7 @@ func (rl *DefaultRateLimiter) CheckAndRecord(ctx context.Context, scope Scope, i
 
 // GetUsage returns current usage statistics for an identifier
 func (rl *DefaultRateLimiter) GetUsage(ctx context.Context, scope Scope, identifier string) ([]Usage, error) {
-	if !rl.config.Enabled {
+	if rl.config.Enabled == nil || !*rl.config.Enabled {
 		return []Usage{}, nil
 	}
 

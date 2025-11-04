@@ -114,7 +114,7 @@ func (s *DefaultPromptService) BuildMessages(
 		messages = append(messages, protocol.CreateTextMessage(pb.Role_ROLE_UNSPECIFIED, additionalContext))
 	}
 
-	if s.promptConfig.IncludeContext && s.contextService != nil {
+	if s.promptConfig.IncludeContext != nil && *s.promptConfig.IncludeContext && s.contextService != nil {
 		contextResults, err := s.contextService.SearchContext(ctx, query)
 		if err == nil && len(contextResults) > 0 {
 			var contextText strings.Builder

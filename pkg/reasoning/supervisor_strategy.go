@@ -21,7 +21,7 @@ func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningSta
 
 	if iteration == 1 && state.GetServices() != nil {
 		cfg := state.GetServices().GetConfig()
-		if cfg.EnableGoalExtraction {
+		if cfg.EnableGoalExtraction != nil && *cfg.EnableGoalExtraction {
 
 			decomposition, err := ExtractGoals(state.GetContext(), state.Query(), []string{}, state.GetServices())
 			if err == nil {

@@ -142,7 +142,7 @@ func (se *SearchEngine) processQuery(query string) string {
 
 	// Lowercase query only if explicitly disabled (default: preserve for code search)
 	// Preserving case is important for code identifiers like HTTP, API, etc.
-	if !se.config.PreserveCase {
+	if se.config.PreserveCase == nil || !*se.config.PreserveCase {
 		processed = strings.ToLower(processed)
 	}
 

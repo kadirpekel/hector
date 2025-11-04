@@ -103,11 +103,11 @@ func TestLocalToolSource_RegisterTool_WithConfig(t *testing.T) {
 	toolConfigs := map[string]*config.ToolConfig{
 		"todo_write": {
 			Type:    "todo",
-			Enabled: true,
+			Enabled: config.BoolPtr(true),
 		},
 		"execute_command": {
 			Type:    "command",
-			Enabled: true,
+			Enabled: config.BoolPtr(true),
 		},
 	}
 
@@ -294,11 +294,11 @@ func TestLocalToolSource_WithDisabledTools(t *testing.T) {
 	toolConfigs := map[string]*config.ToolConfig{
 		"todo_write": {
 			Type:    "todo",
-			Enabled: false,
+			Enabled: config.BoolPtr(false),
 		},
 		"execute_command": {
 			Type:    "command",
-			Enabled: true,
+			Enabled: config.BoolPtr(true),
 		},
 	}
 

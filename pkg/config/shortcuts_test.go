@@ -82,7 +82,7 @@ func TestAgentShortcuts_EnableTools(t *testing.T) {
 			"test-agent": {
 				Name:        "Test Agent",
 				LLM:         "test-llm",
-				EnableTools: true,
+				EnableTools: BoolPtr(true),
 			},
 		},
 	}
@@ -151,7 +151,7 @@ func TestAgentShortcuts_MutuallyExclusive_EnableTools(t *testing.T) {
 			"test-agent": {
 				Name:        "Test Agent",
 				LLM:         "test-llm",
-				EnableTools: true,
+				EnableTools: BoolPtr(true),
 				Tools:       []string{"write_file"},
 			},
 		},
@@ -180,7 +180,7 @@ func TestAgentShortcuts_Combined(t *testing.T) {
 				Name:        "Test Agent",
 				LLM:         "test-llm",
 				DocsFolder:  "./test-folder",
-				EnableTools: true,
+				EnableTools: BoolPtr(true),
 			},
 		},
 	}
@@ -211,7 +211,7 @@ func TestAgentShortcuts_Combined(t *testing.T) {
 	}
 
 	execCmd := cfg.Tools["execute_command"]
-	if !execCmd.EnableSandboxing {
+	if execCmd.EnableSandboxing == nil || !*execCmd.EnableSandboxing {
 		t.Error("execute_command should have sandboxing enabled")
 	}
 

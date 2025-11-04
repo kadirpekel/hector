@@ -185,7 +185,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 
 	// Initialize metadata extractors
 	metadataExtractors := metadata.NewExtractorRegistry()
-	if storeConfig.ExtractMetadata {
+	if storeConfig.ExtractMetadata != nil && *storeConfig.ExtractMetadata {
 		for _, lang := range storeConfig.MetadataLanguages {
 			if lang == "go" {
 				metadataExtractors.Register(metadata.NewGoExtractor())
@@ -246,7 +246,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 		},
 	}
 
-	if storeConfig.WatchChanges {
+	if storeConfig.WatchChanges != nil && *storeConfig.WatchChanges {
 		if err := store.initializeWatcher(); err != nil {
 			cancel()
 			return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "failed to initialize watcher", "", err)
@@ -302,7 +302,7 @@ func (ds *DocumentStore) indexDirectory() error {
 	}
 
 	var existingDocs map[string]FileIndexInfo
-	if ds.config.IncrementalIndexing {
+	if ds.config.IncrementalIndexing != nil && *ds.config.IncrementalIndexing {
 		existingDocs, err = ds.loadIndexState()
 		if err != nil {
 			log.Printf("Warning: Failed to load index state, performing full reindex: %v", err)
@@ -499,7 +499,7 @@ func (ds *DocumentStore) indexDirectory() error {
 
 	indexedCount.Wait()
 
-	if ds.config.IncrementalIndexing {
+	if ds.config.IncrementalIndexing != nil && *ds.config.IncrementalIndexing {
 		if err := ds.cleanupDeletedFiles(ctx, existingDocs, foundFiles); err != nil {
 			log.Printf("Warning: Cleanup of deleted files failed: %v", err)
 		}
@@ -511,7 +511,7 @@ func (ds *DocumentStore) indexDirectory() error {
 	ds.status.DocumentCount = int(stats.IndexedFiles)
 	ds.mu.Unlock()
 
-	if ds.config.IncrementalIndexing {
+	if ds.config.IncrementalIndexing != nil && *ds.config.IncrementalIndexing {
 		finalState := make(map[string]FileIndexInfo)
 
 		// Keep existing files that are still present
@@ -548,7 +548,7 @@ func (ds *DocumentStore) indexDirectory() error {
 		}
 	}
 
-	if ds.config.WatchChanges {
+	if ds.config.WatchChanges != nil && *ds.config.WatchChanges {
 		fmt.Printf("\nFile watching enabled - changes will be automatically indexed\n")
 	}
 
@@ -576,7 +576,7 @@ func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 
 	// Step 3: Extract metadata using metadata extractors
 	var meta *metadata.Metadata
-	if ds.config.ExtractMetadata {
+	if ds.config.ExtractMetadata != nil && *ds.config.ExtractMetadata {
 		meta, err = ds.metadataExtractors.ExtractMetadata(language, extracted.Content, path)
 		if err != nil {
 			// Non-fatal: continue without metadata
@@ -838,7 +838,7 @@ func (ds *DocumentStore) initializeWatcher() error {
 }
 
 func (ds *DocumentStore) StartWatching() error {
-	if !ds.config.WatchChanges || ds.watcher == nil {
+	if ds.config.WatchChanges == nil || !*ds.config.WatchChanges || ds.watcher == nil {
 		return NewDocumentStoreError(ds.name, "StartWatching", "file watching not enabled", "", nil)
 	}
 
@@ -1103,7 +1103,7 @@ func (ds *DocumentStore) saveIndexState(files map[string]FileIndexInfo, totalChu
 }
 
 func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time, existingDocs map[string]FileIndexInfo) bool {
-	if !ds.config.IncrementalIndexing {
+	if ds.config.IncrementalIndexing == nil || !*ds.config.IncrementalIndexing {
 		return true
 	}
 
@@ -1146,7 +1146,7 @@ func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time
 }
 
 func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs map[string]FileIndexInfo, foundFiles map[string]bool) error {
-	if !ds.config.IncrementalIndexing || len(existingDocs) == 0 || ds.searchEngine == nil {
+	if ds.config.IncrementalIndexing == nil || !*ds.config.IncrementalIndexing || len(existingDocs) == 0 || ds.searchEngine == nil {
 		return nil
 	}
 
@@ -1274,7 +1274,7 @@ func InitializeDocumentStoresFromConfig(configs []*config.DocumentStoreConfig, s
 			continue
 		}
 
-		if store.config.WatchChanges {
+		if store.config.WatchChanges != nil && *store.config.WatchChanges {
 			go func(s *DocumentStore, name string) {
 				if err := s.StartWatching(); err != nil {
 					fmt.Printf("Warning: Failed to start file watching for %s: %v\n", name, err)

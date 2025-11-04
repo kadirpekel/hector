@@ -36,7 +36,7 @@ func NewLocalToolSourceWithConfigAndAgentRegistry(toolConfigs map[string]*config
 	}
 
 	for toolName, toolConfig := range toolConfigs {
-		if toolConfig == nil || !toolConfig.Enabled {
+		if toolConfig == nil || toolConfig.Enabled == nil || !*toolConfig.Enabled {
 			continue
 		}
 

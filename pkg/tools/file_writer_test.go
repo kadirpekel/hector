@@ -273,7 +273,7 @@ func TestFileWriterTool_DefaultAllowAll(t *testing.T) {
 	tool := NewFileWriterTool(&config.FileWriterConfig{
 		MaxFileSize:       1024,
 		AllowedExtensions: nil,
-		BackupOnOverwrite: false,
+		BackupOnOverwrite: config.BoolPtr(false),
 		WorkingDirectory:  tempDir,
 	})
 
@@ -383,7 +383,7 @@ func TestFileWriterTool_WhitelistRestrictions(t *testing.T) {
 	tool := NewFileWriterTool(&config.FileWriterConfig{
 		MaxFileSize:       1024,
 		AllowedExtensions: []string{".txt", ".md", ""},
-		BackupOnOverwrite: false,
+		BackupOnOverwrite: config.BoolPtr(false),
 		WorkingDirectory:  tempDir,
 	})
 
@@ -465,7 +465,7 @@ func TestFileWriterTool_WithTempDir(t *testing.T) {
 	tool := NewFileWriterTool(&config.FileWriterConfig{
 		MaxFileSize:       1024,
 		AllowedExtensions: []string{".txt", ".md"},
-		BackupOnOverwrite: false,
+		BackupOnOverwrite: config.BoolPtr(false),
 		WorkingDirectory:  tempDir,
 	})
 

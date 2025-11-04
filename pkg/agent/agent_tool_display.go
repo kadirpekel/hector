@@ -19,7 +19,7 @@ func displayToolCall(outputCh chan<- *pb.Part, toolCall *protocol.ToolCall, cfg 
 	case "detailed":
 		// Detailed display with arguments
 		label := formatToolLabel(toolCall.Name, toolCall.Args)
-		if cfg.ShowToolArgs {
+		if cfg.ShowToolArgs != nil && *cfg.ShowToolArgs {
 			outputCh <- createTextPart(fmt.Sprintf("[Tool: %s]", label))
 		} else {
 			outputCh <- createTextPart(fmt.Sprintf("[Tool: %s]", toolCall.Name))
@@ -52,12 +52,12 @@ func displayToolResult(outputCh chan<- *pb.Part, toolCall *protocol.ToolCall, er
 		// Show detailed result
 		if err != nil {
 			outputCh <- createTextPart(" [FAILED]\n")
-			if cfg.ShowToolResults {
+			if cfg.ShowToolResults != nil && *cfg.ShowToolResults {
 				outputCh <- createTextPart(fmt.Sprintf("  Error: %v\n", err))
 			}
 		} else {
 			outputCh <- createTextPart(" [SUCCESS]\n")
-			if cfg.ShowToolResults {
+			if cfg.ShowToolResults != nil && *cfg.ShowToolResults {
 				// Truncate long results
 				if len(result) > 200 {
 					outputCh <- createTextPart(fmt.Sprintf("  Result: %s...\n", result[:197]))

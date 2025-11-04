@@ -28,7 +28,7 @@ func TestIsPluginConfigured(t *testing.T) {
 			pluginName: "custom-llm",
 			pluginConfig: &config.PluginConfigs{
 				LLMProviders: map[string]*config.PluginConfig{
-					"custom-llm": {Enabled: true},
+					"custom-llm": {Enabled: config.BoolPtr(true)},
 				},
 			},
 			want: true,
@@ -38,7 +38,7 @@ func TestIsPluginConfigured(t *testing.T) {
 			pluginName: "custom-db",
 			pluginConfig: &config.PluginConfigs{
 				DatabaseProviders: map[string]*config.PluginConfig{
-					"custom-db": {Enabled: true},
+					"custom-db": {Enabled: config.BoolPtr(true)},
 				},
 			},
 			want: true,
@@ -48,7 +48,7 @@ func TestIsPluginConfigured(t *testing.T) {
 			pluginName: "custom-embedder",
 			pluginConfig: &config.PluginConfigs{
 				EmbedderProviders: map[string]*config.PluginConfig{
-					"custom-embedder": {Enabled: true},
+					"custom-embedder": {Enabled: config.BoolPtr(true)},
 				},
 			},
 			want: true,
@@ -58,7 +58,7 @@ func TestIsPluginConfigured(t *testing.T) {
 			pluginName: "custom-tool",
 			pluginConfig: &config.PluginConfigs{
 				ToolProviders: map[string]*config.PluginConfig{
-					"custom-tool": {Enabled: true},
+					"custom-tool": {Enabled: config.BoolPtr(true)},
 				},
 			},
 			want: true,
@@ -68,7 +68,7 @@ func TestIsPluginConfigured(t *testing.T) {
 			pluginName: "custom-strategy",
 			pluginConfig: &config.PluginConfigs{
 				ReasoningStrategies: map[string]*config.PluginConfig{
-					"custom-strategy": {Enabled: true},
+					"custom-strategy": {Enabled: config.BoolPtr(true)},
 				},
 			},
 			want: true,
@@ -84,10 +84,10 @@ func TestIsPluginConfigured(t *testing.T) {
 			pluginName: "multi-plugin",
 			pluginConfig: &config.PluginConfigs{
 				LLMProviders: map[string]*config.PluginConfig{
-					"multi-plugin": {Enabled: true},
+					"multi-plugin": {Enabled: config.BoolPtr(true)},
 				},
 				DatabaseProviders: map[string]*config.PluginConfig{
-					"multi-plugin": {Enabled: true},
+					"multi-plugin": {Enabled: config.BoolPtr(true)},
 				},
 			},
 			want: true,
@@ -247,7 +247,7 @@ func TestIsPluginConfigured_EdgeCases(t *testing.T) {
 			pluginName: "disabled-plugin",
 			pluginConfig: &config.PluginConfigs{
 				LLMProviders: map[string]*config.PluginConfig{
-					"disabled-plugin": {Enabled: false},
+					"disabled-plugin": {Enabled: config.BoolPtr(false)},
 				},
 			},
 			want: true,

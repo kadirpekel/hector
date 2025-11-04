@@ -163,7 +163,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 				Port:   6334,
 				APIKey: "test-key",
 
-				UseTLS: true,
+				UseTLS: BoolPtr(true),
 			},
 			wantErr: false,
 		},
@@ -174,7 +174,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 				Host: "localhost",
 				Port: 6334,
 
-				UseTLS: false,
+				UseTLS: BoolPtr(false),
 			},
 			wantErr: false,
 		},
