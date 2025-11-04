@@ -29,8 +29,7 @@ type ReasoningState struct {
 	agentName string
 	subAgents []string
 
-	showThinking  bool
-	showDebugInfo bool
+	showThinking bool
 
 	customState map[string]interface{}
 
@@ -120,14 +119,6 @@ func (b *StateBuilder) WithShowThinking(show bool) *StateBuilder {
 		return b
 	}
 	b.state.showThinking = show
-	return b
-}
-
-func (b *StateBuilder) WithShowDebugInfo(show bool) *StateBuilder {
-	if b.err != nil {
-		return b
-	}
-	b.state.showDebugInfo = show
 	return b
 }
 
@@ -256,10 +247,6 @@ func (s *ReasoningState) SubAgents() []string {
 
 func (s *ReasoningState) ShowThinking() bool {
 	return s.showThinking
-}
-
-func (s *ReasoningState) ShowDebugInfo() bool {
-	return s.showDebugInfo
 }
 
 func (s *ReasoningState) AllMessages() []*pb.Message {

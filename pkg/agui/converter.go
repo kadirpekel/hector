@@ -37,7 +37,7 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 	aguiEventType := ""
 	aguiBlockType := ""
 	aguiBlockID := ""
-	
+
 	if part.Metadata != nil {
 		// Check for AG-UI event type first
 		if et, ok := part.Metadata.Fields["event_type"]; ok {
@@ -60,14 +60,14 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 		if aguiBlockType != "" {
 			blockType = aguiBlockType
 		}
-		
+
 		// Check if this is a thinking block
 		if aguiEventType == "thinking" || blockType == "thinking" {
 			// Close any open content block
 			if c.currentBlockID != "" {
 				events = append(events, NewContentBlockStopEvent(c.currentBlockID))
 			}
-			
+
 			// Create new thinking block
 			thinkingBlockID := aguiBlockID
 			if thinkingBlockID == "" {
@@ -80,7 +80,7 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 			c.blockIndex++
 			return events
 		}
-		
+
 		// Regular content block
 		if c.currentBlockID == "" {
 			c.currentBlockID = aguiBlockID
@@ -101,7 +101,7 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 		// Tool calls have is_error field to distinguish call from result
 		if part.Metadata != nil {
 			_, hasIsError := part.Metadata.Fields["is_error"]
-			
+
 			if hasIsError {
 				// This is a tool result
 				toolCallID, result, errorMsg, isError := c.extractToolResultInfo(part)
@@ -114,7 +114,7 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 					events = append(events, NewContentBlockStopEvent(c.currentBlockID))
 					c.currentBlockID = ""
 				}
-				
+
 				toolCallID, toolName, input := c.extractToolCallInfo(part)
 				events = append(events, NewToolCallStartEvent(toolCallID, toolName, input))
 			}
@@ -171,7 +171,7 @@ func (c *Converter) extractToolCallInfo(part *a2apb.Part) (string, string, map[s
 				}
 			}
 		}
-		
+
 		// Check for 'arguments' field (standard A2A format)
 		if argsField, ok := dataPart.Data.Fields["arguments"]; ok {
 			if argsStruct := argsField.GetStructValue(); argsStruct != nil {
@@ -211,7 +211,7 @@ func (c *Converter) extractToolResultInfo(part *a2apb.Part) (string, string, str
 		if tcID, ok := dataPart.Data.Fields["tool_call_id"]; ok && toolCallID == "" {
 			toolCallID = tcID.GetStringValue()
 		}
-		
+
 		if content, ok := dataPart.Data.Fields["content"]; ok {
 			result = content.GetStringValue()
 		}

@@ -629,8 +629,8 @@ type FileWriterConfig struct {
 	MaxFileSize       int      `yaml:"max_file_size"`
 	AllowedExtensions []string `yaml:"allowed_extensions"`
 	DeniedExtensions  []string `yaml:"denied_extensions"`
-	BackupOnOverwrite *bool   `yaml:"backup_on_overwrite"`
-	WorkingDirectory  string  `yaml:"working_directory"`
+	BackupOnOverwrite *bool    `yaml:"backup_on_overwrite"`
+	WorkingDirectory  string   `yaml:"working_directory"`
 }
 
 func (c *FileWriterConfig) Validate() error {
@@ -778,11 +778,11 @@ type ToolConfig struct {
 	AllowedDomains     []string `yaml:"allowed_domains,omitempty"`
 	DeniedDomains      []string `yaml:"denied_domains,omitempty"`
 	AllowedMethods     []string `yaml:"allowed_methods,omitempty"`
-	AllowRedirects     *bool `yaml:"allow_redirects,omitempty"`
-	MaxRedirects       int   `yaml:"max_redirects,omitempty"`
-	UserAgent          string `yaml:"user_agent,omitempty"`
-	FollowMetaRefresh  *bool  `yaml:"follow_meta_refresh,omitempty"`
-	JavaScriptRendered *bool  `yaml:"javascript_rendered,omitempty"`
+	AllowRedirects     *bool    `yaml:"allow_redirects,omitempty"`
+	MaxRedirects       int      `yaml:"max_redirects,omitempty"`
+	UserAgent          string   `yaml:"user_agent,omitempty"`
+	FollowMetaRefresh  *bool    `yaml:"follow_meta_refresh,omitempty"`
+	JavaScriptRendered *bool    `yaml:"javascript_rendered,omitempty"`
 
 	ServerURL string `yaml:"server_url,omitempty"`
 
@@ -1411,9 +1411,9 @@ func (c *SessionSQLConfig) Validate() error {
 
 // RateLimitConfig defines rate limiting configuration
 type RateLimitConfig struct {
-	Enabled *bool          `yaml:"enabled" json:"enabled"`
-	Scope   string        `yaml:"scope,omitempty" json:"scope,omitempty"`     // "session" or "user"
-	Backend string        `yaml:"backend,omitempty" json:"backend,omitempty"` // "memory" or "sql"
+	Enabled *bool           `yaml:"enabled" json:"enabled"`
+	Scope   string          `yaml:"scope,omitempty" json:"scope,omitempty"`     // "session" or "user"
+	Backend string          `yaml:"backend,omitempty" json:"backend,omitempty"` // "memory" or "sql"
 	Limits  []RateLimitRule `yaml:"limits" json:"limits"`
 }
 
@@ -1608,20 +1608,13 @@ func (c *PromptConfig) SetDefaults() {
 }
 
 type ReasoningConfig struct {
-	Engine                     string `yaml:"engine"`
-	MaxIterations              int    `yaml:"max_iterations"`
-	EnableSelfReflection       *bool  `yaml:"enable_self_reflection"`
-	EnableStructuredReflection *bool  `yaml:"enable_structured_reflection"`
-	EnableGoalExtraction       *bool  `yaml:"enable_goal_extraction"`
-	ShowDebugInfo              *bool  `yaml:"show_debug_info"`
-	ShowToolExecution          *bool  `yaml:"show_tool_execution"`
-	ShowThinking               *bool  `yaml:"show_thinking"`
-	EnableStreaming            *bool  `yaml:"enable_streaming"`
+	Engine          string `yaml:"engine"`
+	MaxIterations   int    `yaml:"max_iterations"`
+	EnableStreaming *bool  `yaml:"enable_streaming"`
 
-	// Tool display configuration
-	ToolDisplayMode string `yaml:"tool_display_mode"` // inline, detailed, hidden, thinking
-	ShowToolArgs    *bool  `yaml:"show_tool_args"`    // Show tool arguments
-	ShowToolResults *bool  `yaml:"show_tool_results"` // Show tool results
+	// Display flags (enabled by default)
+	ShowTools    *bool `yaml:"show_tools"`    // Show all tool-related events (calls, results, execution)
+	ShowThinking *bool `yaml:"show_thinking"` // Show all thinking-related content (reflections, todos, goals)
 }
 
 func (c *ReasoningConfig) Validate() error {
@@ -1639,41 +1632,19 @@ func (c *ReasoningConfig) SetDefaults() {
 		c.Engine = "default"
 	}
 	if c.MaxIterations == 0 {
-
 		c.MaxIterations = 100
 	}
 
 	if c.EnableStreaming == nil {
 		c.EnableStreaming = BoolPtr(true)
 	}
-	if c.ShowToolExecution == nil {
-		c.ShowToolExecution = BoolPtr(true)
-	}
-	if c.EnableStructuredReflection == nil {
-		c.EnableStructuredReflection = BoolPtr(true)
-	}
-	if c.EnableSelfReflection == nil {
-		c.EnableSelfReflection = BoolPtr(false)
-	}
-	if c.EnableGoalExtraction == nil {
-		c.EnableGoalExtraction = BoolPtr(false)
-	}
-	if c.ShowDebugInfo == nil {
-		c.ShowDebugInfo = BoolPtr(false)
+
+	// Both flags enabled by default
+	if c.ShowTools == nil {
+		c.ShowTools = BoolPtr(true)
 	}
 	if c.ShowThinking == nil {
-		c.ShowThinking = BoolPtr(false)
-	}
-	if c.ShowToolArgs == nil {
-		c.ShowToolArgs = BoolPtr(false)
-	}
-	if c.ShowToolResults == nil {
-		c.ShowToolResults = BoolPtr(false)
-	}
-
-	// Set tool display defaults
-	if c.ToolDisplayMode == "" {
-		c.ToolDisplayMode = "inline" // Default to clean inline display
+		c.ShowThinking = BoolPtr(true)
 	}
 }
 

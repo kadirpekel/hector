@@ -98,7 +98,7 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 			if eventType, ok := part.Metadata.Fields["event_type"]; ok && eventType.GetStringValue() == "tool_call" {
 				// Check if it's a tool call (no is_error) or tool result (has is_error)
 				_, hasIsError := part.Metadata.Fields["is_error"]
-				
+
 				if !hasIsError {
 					// This is a tool call
 					// Extract tool name from AGUI metadata or data

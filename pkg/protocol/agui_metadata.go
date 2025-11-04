@@ -38,7 +38,7 @@ func CreateTextPartWithAGUI(text string, blockID string, blockIndex int) *pb.Par
 	})
 
 	return &pb.Part{
-		Part: &pb.Part_Text{Text: text},
+		Part:     &pb.Part_Text{Text: text},
 		Metadata: metadata,
 	}
 }
@@ -115,7 +115,7 @@ func CreateErrorPart(errorText string, errorCode string) *pb.Part {
 	})
 
 	return &pb.Part{
-		Part: &pb.Part_Text{Text: errorText},
+		Part:     &pb.Part_Text{Text: errorText},
 		Metadata: metadata,
 	}
 }
@@ -125,12 +125,12 @@ func IsThinkingPart(part *pb.Part) bool {
 	if part == nil || part.Metadata == nil {
 		return false
 	}
-	
+
 	// Check AG-UI metadata
 	if eventType, ok := part.Metadata.Fields["event_type"]; ok {
 		return eventType.GetStringValue() == AGUIEventTypeThinking
 	}
-	
+
 	return false
 }
 
@@ -139,11 +139,11 @@ func GetAGUIEventType(part *pb.Part) string {
 	if part == nil || part.Metadata == nil {
 		return ""
 	}
-	
+
 	if eventType, ok := part.Metadata.Fields["event_type"]; ok {
 		return eventType.GetStringValue()
 	}
-	
+
 	return ""
 }
 
@@ -152,11 +152,11 @@ func GetAGUIBlockID(part *pb.Part) string {
 	if part == nil || part.Metadata == nil {
 		return ""
 	}
-	
+
 	if blockID, ok := part.Metadata.Fields["block_id"]; ok {
 		return blockID.GetStringValue()
 	}
-	
+
 	return ""
 }
 
@@ -165,11 +165,10 @@ func GetAGUIBlockType(part *pb.Part) string {
 	if part == nil || part.Metadata == nil {
 		return ""
 	}
-	
+
 	if blockType, ok := part.Metadata.Fields["block_type"]; ok {
 		return blockType.GetStringValue()
 	}
-	
+
 	return ""
 }
-

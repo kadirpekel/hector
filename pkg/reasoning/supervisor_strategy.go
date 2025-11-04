@@ -19,18 +19,13 @@ func NewSupervisorStrategy() *SupervisorStrategy {
 
 func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningState) error {
 
-	if iteration == 1 && state.GetServices() != nil {
-		cfg := state.GetServices().GetConfig()
-		if cfg.EnableGoalExtraction != nil && *cfg.EnableGoalExtraction {
+	if iteration == 1 && state.GetServices() != nil && state.ShowThinking() {
+		decomposition, err := ExtractGoals(state.GetContext(), state.Query(), []string{}, state.GetServices())
+		if err == nil {
+			state.GetCustomState()["task_decomposition"] = decomposition
 
-			decomposition, err := ExtractGoals(state.GetContext(), state.Query(), []string{}, state.GetServices())
-			if err == nil {
-
-				state.GetCustomState()["task_decomposition"] = decomposition
-
-				if state.ShowThinking() && state.GetOutputChannel() != nil {
-					s.displayTaskDecomposition(decomposition, state.GetOutputChannel())
-				}
+			if state.GetOutputChannel() != nil {
+				s.displayTaskDecomposition(decomposition, state.GetOutputChannel())
 			}
 		}
 	}

@@ -37,8 +37,7 @@ func AnalyzeToolResults(
 		}, nil
 	}
 
-	cfg := services.GetConfig()
-	useStructuredOutput := cfg.EnableStructuredReflection != nil && *cfg.EnableStructuredReflection
+	useStructuredOutput := true
 
 	schema := map[string]interface{}{
 		"type": "object",

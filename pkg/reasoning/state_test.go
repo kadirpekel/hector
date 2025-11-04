@@ -276,32 +276,6 @@ func TestReasoningState_Flags(t *testing.T) {
 	if !state2.ShowThinking() {
 		t.Error("ShowThinking should be true")
 	}
-
-	state3, err := Builder().
-		WithQuery("test query").
-		WithShowDebugInfo(false).
-		Build()
-
-	if err != nil {
-		t.Fatalf("Failed to build state: %v", err)
-	}
-
-	if state3.ShowDebugInfo() {
-		t.Error("ShowDebugInfo should be false")
-	}
-
-	state4, err := Builder().
-		WithQuery("test query").
-		WithShowDebugInfo(true).
-		Build()
-
-	if err != nil {
-		t.Fatalf("Failed to build state: %v", err)
-	}
-
-	if !state4.ShowDebugInfo() {
-		t.Error("ShowDebugInfo should be true")
-	}
 }
 
 func TestReasoningState_Query(t *testing.T) {

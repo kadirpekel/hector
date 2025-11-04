@@ -73,13 +73,7 @@ func (s *ChainOfThoughtStrategy) AfterIteration(
 
 	if state.ShowThinking() && state.GetOutputChannel() != nil {
 
-		useStructuredReflection := false
-		if state.GetServices() != nil {
-			cfg := state.GetServices().GetConfig()
-			useStructuredReflection = cfg.EnableStructuredReflection != nil && *cfg.EnableStructuredReflection
-		}
-
-		if useStructuredReflection && state.GetServices() != nil && state.GetContext() != nil {
+		if state.GetServices() != nil && state.GetContext() != nil {
 			analysis, err := AnalyzeToolResults(state.GetContext(), toolCalls, results, state.GetServices())
 			if err == nil {
 				s.displayStructuredReflection(iteration, analysis, state)

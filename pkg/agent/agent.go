@@ -200,8 +200,7 @@ func (a *Agent) execute(
 			WithAgentName(a.name).
 			WithSubAgents(a.config.SubAgents).
 			WithOutputChannel(outputCh).
-			WithShowThinking(config.BoolValue(cfg.ShowThinking, false)).
-			WithShowDebugInfo(config.BoolValue(cfg.ShowDebugInfo, false)).
+			WithShowThinking(config.BoolValue(cfg.ShowThinking, true)).
 			WithServices(a.services).
 			WithContext(spanCtx).
 			Build()
@@ -252,21 +251,8 @@ func (a *Agent) execute(
 
 		maxIterations := a.getMaxIterations(cfg)
 
-		if cfg.ShowDebugInfo != nil && *cfg.ShowDebugInfo {
-			outputCh <- createTextPart(fmt.Sprintf("\n[Strategy: %s]\n", strategy.GetName()))
-			outputCh <- createTextPart(fmt.Sprintf("Max iterations: %d\n\n", maxIterations))
-		}
-
 		tools := a.services.Tools()
 		toolDefs := tools.GetAvailableTools()
-
-		if cfg.ShowDebugInfo != nil && *cfg.ShowDebugInfo {
-			outputCh <- createTextPart(fmt.Sprintf("Available tools: %d\n", len(toolDefs)))
-			for _, tool := range toolDefs {
-				outputCh <- createTextPart(fmt.Sprintf("  - %s: %s\n", tool.Name, tool.Description))
-			}
-			outputCh <- createTextPart("\n")
-		}
 
 		for state.Iteration() < maxIterations {
 
@@ -277,10 +263,6 @@ func (a *Agent) execute(
 				outputCh <- createTextPart(fmt.Sprintf("\nCanceled: %v\n", ctx.Err()))
 				return
 			default:
-			}
-
-			if cfg.ShowDebugInfo != nil && *cfg.ShowDebugInfo {
-				outputCh <- createTextPart(fmt.Sprintf("🤔 **Iteration %d/%d**\n", currentIteration, maxIterations))
 			}
 
 			if err := strategy.PrepareIteration(currentIteration, state); err != nil {
@@ -338,10 +320,6 @@ func (a *Agent) execute(
 
 			state.AddTokens(tokens)
 
-			if cfg.ShowDebugInfo != nil && *cfg.ShowDebugInfo {
-				outputCh <- createTextPart(fmt.Sprintf("\033[90m📝 Tokens used: %d (total: %d)\033[0m\n", tokens, state.TotalTokens()))
-			}
-
 			if text != "" {
 				state.AppendResponse(text)
 			}
@@ -351,10 +329,6 @@ func (a *Agent) execute(
 			if text == "" && len(toolCalls) == 0 {
 				text = "[Internal: Agent returned empty response]"
 				state.AppendResponse(text)
-				if cfg.ShowDebugInfo != nil && *cfg.ShowDebugInfo {
-					outputCh <- createTextPart("\033[90mWarning: LLM returned empty response\033[0m\n")
-				}
-
 			}
 
 			var results []reasoning.ToolResult
@@ -408,16 +382,8 @@ func (a *Agent) execute(
 			}
 
 			if strategy.ShouldStop(text, toolCalls, state) {
-				if cfg.ShowDebugInfo != nil && *cfg.ShowDebugInfo {
-					outputCh <- createTextPart("\033[90m\n\n[Reasoning complete]\033[0m\n")
-				}
 				break
 			}
-		}
-
-		if cfg.ShowDebugInfo != nil && *cfg.ShowDebugInfo {
-			outputCh <- createTextPart(fmt.Sprintf("\033[90m\nStats: Total time: %v | Tokens: %d | Iterations: %d\033[0m\n",
-				time.Since(startTime), state.TotalTokens(), state.Iteration()))
 		}
 	}()
 
@@ -509,10 +475,8 @@ func (a *Agent) executeTools(
 	results := make([]reasoning.ToolResult, 0, len(toolCalls))
 
 	// Add newline before tools if showing them
-	if len(toolCalls) > 0 && cfg.ShowToolExecution != nil && *cfg.ShowToolExecution {
-		if cfg.ToolDisplayMode != "hidden" {
-			outputCh <- createTextPart("\n")
-		}
+	if len(toolCalls) > 0 && config.BoolValue(cfg.ShowTools, true) {
+		outputCh <- createTextPart("\n")
 	}
 
 	for _, toolCall := range toolCalls {
@@ -607,11 +571,6 @@ func (a *Agent) truncateToolResults(results []reasoning.ToolResult, cfg config.R
 			suffix := fmt.Sprintf("\n\n[Warning: Output truncated: showing %d of %d bytes. Use more specific queries or filters to see full content.]",
 				maxToolResultSize, originalSize)
 			truncated[i].Content += suffix
-
-			if cfg.ShowDebugInfo != nil && *cfg.ShowDebugInfo {
-				log.Printf("Warning: Tool result truncated: %s (%d → %d bytes)",
-					truncated[i].ToolName, originalSize, maxToolResultSize)
-			}
 		}
 	}
 
@@ -677,36 +636,6 @@ func (a *Agent) buildPromptSlots(strategy reasoning.ReasoningStrategy) reasoning
 	}
 
 	strategySlots := strategy.GetPromptSlots()
-
-	if a.config.Reasoning.EnableSelfReflection != nil && *a.config.Reasoning.EnableSelfReflection {
-		selfReflectionPrompt := `
-<self_reflection>
-Before taking actions, output your internal reasoning using <thinking> tags:
-<thinking>
-- Analyze the user's request and break it down
-- Consider what information you need
-- Plan your approach step by step
-- Reason about potential challenges
-</thinking>
-
-After tool execution, reflect on results:
-<thinking>
-- Evaluate what worked and what didn't
-- Assess progress toward the goal
-- Decide next steps based on outcomes
-</thinking>
-
-Your thinking will be displayed to help users understand your reasoning process.
-Make your thinking natural, concise, and focused on the current task.
-</self_reflection>
-`
-
-		if strategySlots.Instructions != "" {
-			strategySlots.Instructions += "\n\n" + selfReflectionPrompt
-		} else {
-			strategySlots.Instructions = selfReflectionPrompt
-		}
-	}
 
 	// Use typed config slots if provided
 	if a.config.Prompt.PromptSlots != nil {
