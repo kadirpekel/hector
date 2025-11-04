@@ -1,6 +1,16 @@
 # Custom Rate Limiting Configuration Examples
 # This file shows various rate limiting patterns
 
+llms:
+  gpt-4-llm:
+    type: "openai"
+    model: "gpt-4"
+    api_key: "${OPENAI_API_KEY}"
+  gpt-3.5-turbo-llm:
+    type: "openai"
+    model: "gpt-3.5-turbo"
+    api_key: "${OPENAI_API_KEY}"
+
 session_stores:
   # Pattern 1: Burst protection with minute-level limits
   burst-protection:
@@ -110,49 +120,49 @@ session_stores:
 agents:
   burst-protected:
     name: "Burst Protected Agent"
+    llm: "gpt-4-llm"
     session_store: burst-protection
     reasoning:
-      provider: openai
-      model: gpt-4
+      engine: "default"
+      max_iterations: 10
 
   cost-controlled:
     name: "Cost Controlled Agent"
+    llm: "gpt-4-llm"
     session_store: cost-control
     reasoning:
-      provider: openai
-      model: gpt-4
+      engine: "default"
+      max_iterations: 10
 
   comprehensive:
     name: "Comprehensively Limited Agent"
+    llm: "gpt-4-llm"
     session_store: comprehensive
     reasoning:
-      provider: openai
-      model: gpt-4
+      engine: "default"
+      max_iterations: 10
 
   api-style:
     name: "API-Style Limited Agent"
+    llm: "gpt-4-llm"
     session_store: api-style
     reasoning:
-      provider: openai
-      model: gpt-4
+      engine: "default"
+      max_iterations: 10
 
   internal:
     name: "Internal Use Agent"
+    llm: "gpt-4-llm"
     session_store: internal
     reasoning:
-      provider: openai
-      model: gpt-4
+      engine: "default"
+      max_iterations: 10
 
   public-demo:
     name: "Public Demo Agent"
+    llm: "gpt-3.5-turbo-llm"
     session_store: public-demo
     reasoning:
-      provider: openai
-      model: gpt-3.5-turbo
-
-transport:
-  rest:
-    enabled: true
-    host: "0.0.0.0"
-    port: 8080
+      engine: "default"
+      max_iterations: 10
 

@@ -1,6 +1,20 @@
 # Advanced Rate Limiting Configuration Example
 # This example demonstrates multi-tier rate limiting with different quotas
 
+llms:
+  gpt-3.5-turbo-llm:
+    type: "openai"
+    model: "gpt-3.5-turbo"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 1000
+  gpt-4-llm:
+    type: "openai"
+    model: "gpt-4"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 2000
+
 # Session stores with tiered rate limiting
 session_stores:
   # Free tier: Conservative limits
@@ -95,47 +109,36 @@ agents:
   free-assistant:
     name: "Free Assistant"
     description: "AI assistant with free tier limits"
+    llm: "gpt-3.5-turbo-llm"
     session_store: free-tier
     reasoning:
-      provider: openai
-      model: gpt-3.5-turbo
-      temperature: 0.7
-      max_tokens: 1000
+      engine: "default"
+      max_iterations: 10
 
   pro-assistant:
     name: "Pro Assistant"
     description: "AI assistant with pro tier limits"
+    llm: "gpt-4-llm"
     session_store: pro-tier
     reasoning:
-      provider: openai
-      model: gpt-4
-      temperature: 0.7
-      max_tokens: 2000
+      engine: "default"
+      max_iterations: 10
 
   enterprise-assistant:
     name: "Enterprise Assistant"
     description: "AI assistant with enterprise tier limits"
+    llm: "gpt-4-llm"
     session_store: enterprise-tier
     reasoning:
-      provider: openai
-      model: gpt-4
-      temperature: 0.7
-      max_tokens: 4000
+      engine: "default"
+      max_iterations: 10
 
   dev-assistant:
     name: "Dev Assistant"
     description: "AI assistant for development (no rate limiting)"
+    llm: "gpt-4-llm"
     session_store: development
     reasoning:
-      provider: openai
-      model: gpt-4
-      temperature: 0.7
-      max_tokens: 2000
-
-# Transport configuration
-transport:
-  rest:
-    enabled: true
-    host: "0.0.0.0"
-    port: 8080
+      engine: "default"
+      max_iterations: 10
 
