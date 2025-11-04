@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	pb "github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/google/uuid"
+	pb "github.com/kadirpekel/hector/pkg/a2a/pb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 

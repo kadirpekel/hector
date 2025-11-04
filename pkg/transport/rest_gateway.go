@@ -289,11 +289,11 @@ func (g *RESTGateway) applyAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Public endpoints that don't require authentication
 		publicPaths := []string{
-			"/",                   // Web UI
-			"/letter-h.png",       // Static assets
-			"/content-blocks.js",  // Static assets
-			"/health",             // Health checks
-			"/metrics",            // Prometheus metrics
+			"/",                  // Web UI
+			"/letter-h.png",      // Static assets
+			"/content-blocks.js", // Static assets
+			"/health",            // Health checks
+			"/metrics",           // Prometheus metrics
 		}
 
 		// Check if this is a public endpoint

@@ -35,13 +35,16 @@ var (
 type PluginDiscoveryConfig struct {
 	Enabled            *bool    `yaml:"enabled" json:"enabled"`
 	Paths              []string `yaml:"paths" json:"paths"`
-	ScanSubdirectories bool     `yaml:"scan_subdirectories" json:"scan_subdirectories"`
+	ScanSubdirectories *bool    `yaml:"scan_subdirectories" json:"scan_subdirectories"`
 }
 
 func (c *PluginDiscoveryConfig) SetDefaults() {
 	if c.Enabled == nil {
 		// Default to disabled unless paths are configured
 		c.Enabled = boolPtr(len(c.Paths) > 0)
+	}
+	if c.ScanSubdirectories == nil {
+		c.ScanSubdirectories = boolPtr(false) // Default to false
 	}
 	if len(c.Paths) == 0 {
 		c.Paths = []string{"./plugins", "~/.hector/plugins"}
@@ -773,8 +776,8 @@ type ToolConfig struct {
 	AllowRedirects     *bool    `yaml:"allow_redirects,omitempty"`
 	MaxRedirects       int      `yaml:"max_redirects,omitempty"`
 	UserAgent          string   `yaml:"user_agent,omitempty"`
-	FollowMetaRefresh  bool     `yaml:"follow_meta_refresh,omitempty"`
-	JavaScriptRendered bool     `yaml:"javascript_rendered,omitempty"`
+	FollowMetaRefresh  *bool    `yaml:"follow_meta_refresh,omitempty"`
+	JavaScriptRendered *bool    `yaml:"javascript_rendered,omitempty"`
 
 	ServerURL string `yaml:"server_url,omitempty"`
 
@@ -872,6 +875,12 @@ func (c *ToolConfig) SetDefaults() {
 		if c.UserAgent == "" {
 			c.UserAgent = "Hector-Agent/1.0"
 		}
+		if c.FollowMetaRefresh == nil {
+			c.FollowMetaRefresh = boolPtr(false) // Default to false
+		}
+		if c.JavaScriptRendered == nil {
+			c.JavaScriptRendered = boolPtr(false) // Default to false
+		}
 		// No defaults for AllowedDomains, DeniedDomains, AllowedMethods
 		// Omitted = allow all (liberal default)
 	case "mcp":
@@ -886,7 +895,7 @@ type DocumentStoreConfig struct {
 	IncludePatterns     []string `yaml:"include_patterns"`
 	ExcludePatterns     []string `yaml:"exclude_patterns"`            // If set, replaces defaults entirely
 	AdditionalExcludes  []string `yaml:"additional_exclude_patterns"` // Extends default exclusions
-	WatchChanges        bool     `yaml:"watch_changes"`
+	WatchChanges        *bool    `yaml:"watch_changes"`
 	MaxFileSize         int64    `yaml:"max_file_size"`
 	IncrementalIndexing *bool    `yaml:"incremental_indexing"`
 
@@ -1007,8 +1016,8 @@ func (c *DocumentStoreConfig) SetDefaults() {
 		c.MaxFileSize = 10 * 1024 * 1024
 	}
 
-	if !c.WatchChanges {
-		c.WatchChanges = true
+	if c.WatchChanges == nil {
+		c.WatchChanges = boolPtr(true) // Default to true
 	}
 
 	// Chunking defaults
@@ -1596,15 +1605,15 @@ type ReasoningConfig struct {
 	EnableSelfReflection       *bool  `yaml:"enable_self_reflection"`
 	EnableStructuredReflection *bool  `yaml:"enable_structured_reflection"`
 	EnableGoalExtraction       *bool  `yaml:"enable_goal_extraction"`
-	ShowDebugInfo              bool   `yaml:"show_debug_info"`
+	ShowDebugInfo              *bool  `yaml:"show_debug_info"`
 	ShowToolExecution          *bool  `yaml:"show_tool_execution"`
-	ShowThinking               bool   `yaml:"show_thinking"`
+	ShowThinking               *bool  `yaml:"show_thinking"`
 	EnableStreaming            *bool  `yaml:"enable_streaming"`
 
 	// Tool display configuration
 	ToolDisplayMode string `yaml:"tool_display_mode"` // inline, detailed, hidden, thinking
-	ShowToolArgs    bool   `yaml:"show_tool_args"`    // Show tool arguments
-	ShowToolResults bool   `yaml:"show_tool_results"` // Show tool results
+	ShowToolArgs    *bool  `yaml:"show_tool_args"`    // Show tool arguments
+	ShowToolResults *bool  `yaml:"show_tool_results"` // Show tool results
 }
 
 func (c *ReasoningConfig) Validate() error {
@@ -1638,12 +1647,23 @@ func (c *ReasoningConfig) SetDefaults() {
 		trueVal := true
 		c.EnableStructuredReflection = &trueVal
 	}
+	if c.ShowDebugInfo == nil {
+		c.ShowDebugInfo = boolPtr(false) // Default to false
+	}
+	if c.ShowThinking == nil {
+		c.ShowThinking = boolPtr(false) // Default to false
+	}
 
 	// Set tool display defaults
 	if c.ToolDisplayMode == "" {
 		c.ToolDisplayMode = "inline" // Default to clean inline display
 	}
-	// ShowToolArgs and ShowToolResults default to false for clean output
+	if c.ShowToolArgs == nil {
+		c.ShowToolArgs = boolPtr(false) // Default to false for clean output
+	}
+	if c.ShowToolResults == nil {
+		c.ShowToolResults = boolPtr(false) // Default to false for clean output
+	}
 }
 
 type SearchConfig struct {

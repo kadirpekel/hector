@@ -75,7 +75,7 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 		Name:                storeName,
 		Source:              "directory",
 		Path:                agent.DocsFolder,
-		WatchChanges:        true,
+		WatchChanges:        BoolPtr(true),
 		MaxFileSize:         DefaultMaxDocumentStoreSize,
 		IncrementalIndexing: boolPtr(true),
 	}

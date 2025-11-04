@@ -199,8 +199,8 @@ func (a *Agent) execute(
 			WithAgentName(a.name).
 			WithSubAgents(a.config.SubAgents).
 			WithOutputChannel(outputCh).
-			WithShowThinking(cfg.ShowThinking).
-			WithShowDebugInfo(cfg.ShowDebugInfo).
+			WithShowThinking(config.BoolValue(cfg.ShowThinking, false)).
+			WithShowDebugInfo(config.BoolValue(cfg.ShowDebugInfo, false)).
 			WithServices(a.services).
 			WithContext(spanCtx).
 			Build()
@@ -251,7 +251,7 @@ func (a *Agent) execute(
 
 		maxIterations := a.getMaxIterations(cfg)
 
-		if cfg.ShowDebugInfo {
+		if config.BoolValue(cfg.ShowDebugInfo, false) {
 			outputCh <- createTextPart(fmt.Sprintf("\n[Strategy: %s]\n", strategy.GetName()))
 			outputCh <- createTextPart(fmt.Sprintf("Max iterations: %d\n\n", maxIterations))
 		}
@@ -259,7 +259,7 @@ func (a *Agent) execute(
 		tools := a.services.Tools()
 		toolDefs := tools.GetAvailableTools()
 
-		if cfg.ShowDebugInfo {
+		if config.BoolValue(cfg.ShowDebugInfo, false) {
 			outputCh <- createTextPart(fmt.Sprintf("Available tools: %d\n", len(toolDefs)))
 			for _, tool := range toolDefs {
 				outputCh <- createTextPart(fmt.Sprintf("  - %s: %s\n", tool.Name, tool.Description))
@@ -278,7 +278,7 @@ func (a *Agent) execute(
 			default:
 			}
 
-			if cfg.ShowDebugInfo {
+			if config.BoolValue(cfg.ShowDebugInfo, false) {
 				outputCh <- createTextPart(fmt.Sprintf("🤔 **Iteration %d/%d**\n", currentIteration, maxIterations))
 			}
 
@@ -337,7 +337,7 @@ func (a *Agent) execute(
 
 			state.AddTokens(tokens)
 
-			if cfg.ShowDebugInfo {
+			if config.BoolValue(cfg.ShowDebugInfo, false) {
 				outputCh <- createTextPart(fmt.Sprintf("\033[90m📝 Tokens used: %d (total: %d)\033[0m\n", tokens, state.TotalTokens()))
 			}
 
@@ -350,7 +350,7 @@ func (a *Agent) execute(
 			if text == "" && len(toolCalls) == 0 {
 				text = "[Internal: Agent returned empty response]"
 				state.AppendResponse(text)
-				if cfg.ShowDebugInfo {
+				if config.BoolValue(cfg.ShowDebugInfo, false) {
 					outputCh <- createTextPart("\033[90mWarning: LLM returned empty response\033[0m\n")
 				}
 
@@ -407,14 +407,14 @@ func (a *Agent) execute(
 			}
 
 			if strategy.ShouldStop(text, toolCalls, state) {
-				if cfg.ShowDebugInfo {
+				if config.BoolValue(cfg.ShowDebugInfo, false) {
 					outputCh <- createTextPart("\033[90m\n\n[Reasoning complete]\033[0m\n")
 				}
 				break
 			}
 		}
 
-		if cfg.ShowDebugInfo {
+		if config.BoolValue(cfg.ShowDebugInfo, false) {
 			outputCh <- createTextPart(fmt.Sprintf("\033[90m\nStats: Total time: %v | Tokens: %d | Iterations: %d\033[0m\n",
 				time.Since(startTime), state.TotalTokens(), state.Iteration()))
 		}
@@ -607,7 +607,7 @@ func (a *Agent) truncateToolResults(results []reasoning.ToolResult, cfg config.R
 				maxToolResultSize, originalSize)
 			truncated[i].Content += suffix
 
-			if cfg.ShowDebugInfo {
+			if config.BoolValue(cfg.ShowDebugInfo, false) {
 				log.Printf("Warning: Tool result truncated: %s (%d → %d bytes)",
 					truncated[i].ToolName, originalSize, maxToolResultSize)
 			}

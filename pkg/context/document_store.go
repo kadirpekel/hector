@@ -246,7 +246,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 		},
 	}
 
-	if storeConfig.WatchChanges {
+	if config.BoolValue(storeConfig.WatchChanges, true) {
 		if err := store.initializeWatcher(); err != nil {
 			cancel()
 			return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "failed to initialize watcher", "", err)
@@ -548,7 +548,7 @@ func (ds *DocumentStore) indexDirectory() error {
 		}
 	}
 
-	if ds.config.WatchChanges {
+	if config.BoolValue(ds.config.WatchChanges, true) {
 		fmt.Printf("\nFile watching enabled - changes will be automatically indexed\n")
 	}
 
@@ -838,7 +838,7 @@ func (ds *DocumentStore) initializeWatcher() error {
 }
 
 func (ds *DocumentStore) StartWatching() error {
-	if !ds.config.WatchChanges || ds.watcher == nil {
+	if !config.BoolValue(ds.config.WatchChanges, true) || ds.watcher == nil {
 		return NewDocumentStoreError(ds.name, "StartWatching", "file watching not enabled", "", nil)
 	}
 
@@ -1260,26 +1260,26 @@ func InitializeDocumentStoresFromConfig(configs []*config.DocumentStoreConfig, s
 		return nil
 	}
 
-	for _, config := range configs {
-		store, err := NewDocumentStore(config, searchEngine)
+	for _, storeConfig := range configs {
+		store, err := NewDocumentStore(storeConfig, searchEngine)
 		if err != nil {
-			fmt.Printf("Warning: Failed to create document store %s: %v\n", config.Name, err)
+			fmt.Printf("Warning: Failed to create document store %s: %v\n", storeConfig.Name, err)
 			continue
 		}
 
 		RegisterDocumentStore(store)
 
 		if err := store.StartIndexing(); err != nil {
-			fmt.Printf("Warning: Failed to index document store %s: %v\n", config.Name, err)
+			fmt.Printf("Warning: Failed to index document store %s: %v\n", storeConfig.Name, err)
 			continue
 		}
 
-		if store.config.WatchChanges {
+		if config.BoolValue(store.config.WatchChanges, true) {
 			go func(s *DocumentStore, name string) {
 				if err := s.StartWatching(); err != nil {
 					fmt.Printf("Warning: Failed to start file watching for %s: %v\n", name, err)
 				}
-			}(store, config.Name)
+			}(store, storeConfig.Name)
 		}
 	}
 

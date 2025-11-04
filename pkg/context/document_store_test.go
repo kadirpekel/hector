@@ -56,7 +56,7 @@ func TestNewDocumentStore(t *testing.T) {
 				MaxFileSize:     1024 * 1024,
 				IncludePatterns: []string{"*.txt", "*.md"},
 				ExcludePatterns: []string{"*.tmp"},
-				WatchChanges:    false,
+				WatchChanges:    config.BoolPtr(false),
 			},
 			searchEngine: &SearchEngine{},
 			wantError:    false,
@@ -168,7 +168,7 @@ func TestDocumentStore_StartIndexing(t *testing.T) {
 		MaxFileSize:     1024 * 1024,
 		IncludePatterns: []string{"*"},
 		ExcludePatterns: []string{},
-		WatchChanges:    false,
+		WatchChanges:    config.BoolPtr(false),
 	}
 
 	store, err := NewDocumentStore(storeConfig, &SearchEngine{})

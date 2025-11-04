@@ -222,7 +222,7 @@ func (cm *ComponentManager) loadPlugins(ctx context.Context) error {
 	discoveryConfig := &plugins.DiscoveryConfig{
 		Enabled:            config.BoolValue(pluginConfig.Discovery.Enabled, false),
 		Paths:              pluginConfig.Discovery.Paths,
-		ScanSubdirectories: pluginConfig.Discovery.ScanSubdirectories,
+		ScanSubdirectories: config.BoolValue(pluginConfig.Discovery.ScanSubdirectories, false),
 	}
 
 	discovery := plugins.NewPluginDiscovery(discoveryConfig)
