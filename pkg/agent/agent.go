@@ -15,6 +15,7 @@ import (
 	"github.com/kadirpekel/hector/pkg/llms"
 	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/reasoning"
+	"github.com/kadirpekel/hector/pkg/tools"
 )
 
 const (
@@ -508,6 +509,11 @@ func (a *Agent) executeTools(
 		}
 		outputCh <- protocol.CreateToolResultPart(a2aResult)
 
+		// Special handling: if todo_write was called, emit display part immediately
+		if toolCall.Name == "todo_write" && config.BoolValue(cfg.ShowThinking, true) {
+			a.emitTodoDisplay(ctx, outputCh)
+		}
+
 		results = append(results, reasoning.ToolResult{
 			ToolCall:   toolCall,
 			Content:    resultContent,
@@ -519,6 +525,70 @@ func (a *Agent) executeTools(
 	}
 
 	return results
+}
+
+// emitTodoDisplay retrieves current todos and emits a display part
+func (a *Agent) emitTodoDisplay(ctx context.Context, outputCh chan<- *pb.Part) {
+	// Get todo tool from registry
+	tool, err := a.services.Tools().GetTool("todo_write")
+	if err != nil {
+		return
+	}
+
+	todoTool, ok := tool.(*tools.TodoTool)
+	if !ok {
+		return
+	}
+
+	// Extract session ID from context
+	sessionID := "default"
+	if sid, ok := ctx.Value(SessionIDKey).(string); ok {
+		sessionID = sid
+	}
+
+	// Get todos for this session
+	todos := todoTool.GetTodos(sessionID)
+	if len(todos) == 0 {
+		return
+	}
+
+	// Build text fallback
+	var textBuilder strings.Builder
+	textBuilder.WriteString("📋 Current Tasks:\n")
+	for i, todo := range todos {
+		var checkbox string
+		switch todo.Status {
+		case "completed":
+			checkbox = "☑"
+		case "in_progress":
+			checkbox = "⧗"
+		case "pending":
+			checkbox = "☐"
+		case "canceled":
+			checkbox = "☒"
+		default:
+			checkbox = "☐"
+		}
+		textBuilder.WriteString(fmt.Sprintf("  %s %d. %s\n", checkbox, i+1, todo.Content))
+	}
+
+	// Build structured data for rich clients
+	todoData := make([]map[string]interface{}, len(todos))
+	for i, todo := range todos {
+		todoData[i] = map[string]interface{}{
+			"id":      todo.ID,
+			"content": todo.Content,
+			"status":  todo.Status,
+		}
+	}
+
+	data := map[string]interface{}{
+		"todos": todoData,
+	}
+
+	// Emit as AG-UI thinking part
+	part := protocol.CreateThinkingPartWithData(textBuilder.String(), "todo", data)
+	outputCh <- part
 }
 
 //nolint:unused // Reserved for future tool display feature

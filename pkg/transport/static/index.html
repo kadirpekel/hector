@@ -589,11 +589,12 @@
             animation-fill-mode: both;
         }
         
-        /* Thinking block display (AG-UI contextual type) - Badge style */
+        /* Thinking block display (AG-UI contextual type) - Inline like tools */
         .thinking-block {
             display: block;
             margin: 8px 0;
             position: relative;
+            white-space: nowrap;
         }
 
         .thinking-badge {
@@ -610,6 +611,11 @@
             transition: all 0.3s ease;
             cursor: pointer;
             vertical-align: middle;
+        }
+        
+        /* Animate thinking badge on first creation */
+        .thinking-badge:not([data-animated]) {
+            animation: slideInTool 0.3s ease-out;
         }
 
         .thinking-badge:hover {
@@ -1950,6 +1956,7 @@
         function createTodoListElement(thinkingBlock) {
             const todoDiv = document.createElement('div');
             todoDiv.className = 'thinking-block todo-list-block';
+            todoDiv.setAttribute('data-thinking-id', thinkingBlock.id); // For preservation
             
             const badge = document.createElement('div');
             badge.className = 'thinking-badge todo-badge';
@@ -2000,6 +2007,7 @@
         function createGoalDecompositionElement(thinkingBlock) {
             const goalDiv = document.createElement('div');
             goalDiv.className = 'thinking-block goal-block';
+            goalDiv.setAttribute('data-thinking-id', thinkingBlock.id); // For preservation
             
             const badge = document.createElement('div');
             badge.className = 'thinking-badge goal-badge';
@@ -2132,10 +2140,10 @@
             });
         }
 
-        function updateMessage(messageDiv, text, toolCallsMap = null) {
+        function updateMessage(messageDiv, text, toolCallsMap = null, thinkingBlocksMap = null) {
             const contentDiv = messageDiv.querySelector('.message-content');
             
-            // Preserve existing badge DOM elements and their positions to avoid flicker
+            // Preserve existing tool badge DOM elements and their positions to avoid flicker
             const existingBadges = new Map();
             const badgePositions = [];
             Array.from(contentDiv.querySelectorAll('.tool-call')).forEach(el => {
@@ -2152,7 +2160,16 @@
                 }
             });
             
-            // Temporarily move badges outside contentDiv to preserve them during innerHTML update
+            // Preserve existing thinking block DOM elements to avoid flicker
+            const existingThinkingBlocks = new Map();
+            Array.from(contentDiv.querySelectorAll('.thinking-block')).forEach(el => {
+                const thinkingId = el.getAttribute('data-thinking-id');
+                if (thinkingId) {
+                    existingThinkingBlocks.set(thinkingId, el);
+                }
+            });
+            
+            // Temporarily move badges and thinking blocks outside contentDiv to preserve them during innerHTML update
             // Use a fragment to keep them in memory without detaching from animation timeline
             const badgeFragment = document.createDocumentFragment();
             const badgeIdsToPreserve = Array.from(existingBadges.keys());
@@ -2169,6 +2186,17 @@
                 }
                 badgeFragment.appendChild(badge);
             });
+            
+            // Also preserve thinking blocks
+            existingThinkingBlocks.forEach((thinkingBlock, thinkingId) => {
+                // Mark thinking badge as already animated
+                const thinkingBadge = thinkingBlock.querySelector('.thinking-badge');
+                if (thinkingBadge) {
+                    thinkingBadge.setAttribute('data-animated', 'true');
+                }
+                badgeFragment.appendChild(thinkingBlock);
+            });
+            
             const badgeContainer = document.createElement('div');
             badgeContainer.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;';
             document.body.appendChild(badgeContainer);
@@ -2308,6 +2336,72 @@
                 }
             });
             
+            // Find and replace thinking block markers with badges (same pattern as tools)
+            if (thinkingBlocksMap && thinkingBlocksMap.size > 0) {
+                console.log('[THINKING] Attempting to replace', thinkingBlocksMap.size, 'thinking block markers');
+                thinkingBlocksMap.forEach((thinkingBlock, thinkingId) => {
+                    const marker = `\u200D\u200D__THINKING_${thinkingId}__\u200D\u200D`;
+                    console.log('[THINKING] Looking for marker:', marker, 'for block:', thinkingBlock);
+                    const walker = document.createTreeWalker(
+                        contentDiv,
+                        NodeFilter.SHOW_TEXT,
+                        null
+                    );
+                    
+                    let node;
+                    let foundMarker = false;
+                    while (node = walker.nextNode()) {
+                        const textContent = node.textContent;
+                        if (textContent.includes(marker)) {
+                            console.log('[THINKING] Found marker in text node!');
+                            foundMarker = true;
+                            // Get preserved thinking block or create new one
+                            let thinkingDiv = existingThinkingBlocks.get(thinkingId);
+                            if (!thinkingDiv) {
+                                // Create new thinking badge element
+                                thinkingDiv = createThinkingBlockElement(thinkingBlock);
+                            } else {
+                                // Remove from preserved map (will be reinserted)
+                                existingThinkingBlocks.delete(thinkingId);
+                            }
+                            
+                            // Mark badge as animated after creation
+                            setTimeout(() => {
+                                const badge = thinkingDiv.querySelector('.thinking-badge');
+                                if (badge) {
+                                    badge.setAttribute('data-animated', 'true');
+                                }
+                            }, 300);
+                            
+                            // Split text node and insert badge at marker position
+                            const index = textContent.indexOf(marker);
+                            const beforeText = textContent.substring(0, index);
+                            const afterText = textContent.substring(index + marker.length);
+                            
+                            // Update text node with content before marker
+                            node.textContent = beforeText || '';
+                            
+                            // Insert thinking badge as block element
+                            if (node.parentNode) {
+                                node.parentNode.insertBefore(thinkingDiv, node.nextSibling);
+                                
+                                // Insert text after badge
+                                if (afterText.trim()) {
+                                    const afterNode = document.createTextNode(afterText);
+                                    node.parentNode.insertBefore(afterNode, thinkingDiv.nextSibling);
+                                }
+                            }
+                            
+                            break; // Only replace first occurrence
+                        }
+                    }
+                    if (!foundMarker) {
+                        console.log('[THINKING] Marker NOT found in DOM for block:', thinkingId);
+                        console.log('[THINKING] Content HTML:', contentDiv.innerHTML.substring(0, 500));
+                    }
+                });
+            }
+            
             // Clean up: remove any remaining preserved badges from container
             while (badgeContainer.firstChild) {
                 badgeContainer.removeChild(badgeContainer.firstChild);
@@ -2334,8 +2428,9 @@
         function isThinkingPart(part) {
             if (!part || !part.metadata) return false;
             // Check AG-UI metadata
-            return part.metadata.event_type === 'thinking' || 
-                   part.metadata.block_type === 'thinking';
+            const isThinking = part.metadata.event_type === 'thinking' || 
+                               part.metadata.block_type === 'thinking';
+            return isThinking;
         }
 
         // Extract text from A2A parts (AG-UI metadata aware)
@@ -2355,8 +2450,10 @@
         // Extract thinking blocks from A2A parts (AG-UI compliant)
         function extractThinkingFromParts(parts) {
             if (!parts || !Array.isArray(parts)) return [];
-            return parts
-                .filter(isThinkingPart)
+            
+            const thinkingParts = parts.filter(isThinkingPart);
+            
+            return thinkingParts
                 .map((part, index) => {
                     // Get content from text field or from data.text
                     let content = part.text || '';
@@ -2449,13 +2546,17 @@
                 let accumulatedText = '';
                 let lastTaskId = null;
                 let toolCallsMap = new Map(); // Track tool calls by ID
+                const thinkingBlocksMap = new Map(); // Track thinking blocks by ID
 
                 try {
                     setTyping(true);
                     
                     const response = await fetch(url, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 
+                            'Content-Type': 'application/json'
+                            // A2A native - parts already contain AG-UI metadata for lifecycle
+                        },
                         body: JSON.stringify(request)
                     });
 
@@ -2522,40 +2623,64 @@
                                             updateToolCallStatus(tr.tool_call_id, tr.success);
                                         });
 
+                                        // Extract thinking blocks and add them to map
+                                        const newThinkingBlocks = extractThinkingFromParts(message.parts);
+                                        newThinkingBlocks.forEach(thinkingBlock => {
+                                            if (!thinkingBlocksMap.has(thinkingBlock.id)) {
+                                                thinkingBlocksMap.set(thinkingBlock.id, thinkingBlock);
+                                            }
+                                        });
+
                                         // Extract and accumulate text
                                         let text = extractTextFromParts(message.parts);
                                         
-                                        // If we have new tool calls and this is the first chunk, insert markers in text
-                                        if (toolCalls.length > 0 && !currentMessageDiv) {
+                                        // If this is the first chunk, insert markers for both tools and thinking blocks
+                                        if (!currentMessageDiv) {
+                                            // Insert tool markers
                                             toolCalls.forEach(tc => {
                                                 if (toolCallsMap.has(tc.id)) {
-                                                    // Insert marker at end of initial text
                                                     text += `\u200D\u200D__TOOL_${tc.id}__\u200D\u200D`;
+                                                }
+                                            });
+                                            // Insert thinking markers
+                                            console.log('[THINKING] Inserting markers for', newThinkingBlocks.length, 'thinking blocks on first chunk');
+                                            newThinkingBlocks.forEach(thinkingBlock => {
+                                                const marker = `\u200D\u200D__THINKING_${thinkingBlock.id}__\u200D\u200D`;
+                                                text += marker;
+                                                console.log('[THINKING] Inserted marker:', marker, 'text length now:', text.length);
+                                            });
+                                        } else {
+                                            // For subsequent chunks, insert markers into accumulated text
+                                            newThinkingBlocks.forEach(thinkingBlock => {
+                                                if (thinkingBlock.id && !accumulatedText.includes(`__THINKING_${thinkingBlock.id}__`)) {
+                                                    const marker = `\u200D\u200D__THINKING_${thinkingBlock.id}__\u200D\u200D`;
+                                                    text += marker;
+                                                    console.log('[THINKING] Inserted marker on subsequent chunk:', marker);
                                                 }
                                             });
                                         }
 
                                         if (!currentMessageDiv) {
                                             setTyping(false);
-                                            // Extract text, tool calls, and thinking blocks from message parts
-                                            const thinkingBlocks = extractThinkingFromParts(message.parts);
-                                            // Create message with initial tool calls and thinking blocks
+                                            // Create message with initial tool calls (no thinking blocks initially)
                                             const initialToolCalls = Array.from(toolCallsMap.values());
                                             console.log('Creating message with tool calls:', initialToolCalls);
-                                            console.log('Creating message with thinking blocks:', thinkingBlocks);
-                                            currentMessageDiv = addMessage('agent', text, { taskId: lastTaskId }, false, initialToolCalls, thinkingBlocks);
-                                            // Store toolCallsMap reference on the message element for updates
+                                            currentMessageDiv = addMessage('agent', text, { taskId: lastTaskId }, false, initialToolCalls, []);
+                                            // Store maps reference on the message element for updates
                                             currentMessageDiv._toolCallsMap = toolCallsMap;
+                                            currentMessageDiv._thinkingBlocksMap = thinkingBlocksMap;
                                             // Now update to render badges at marker positions
-                                            updateMessage(currentMessageDiv, text, toolCallsMap);
+                                            updateMessage(currentMessageDiv, text, toolCallsMap, thinkingBlocksMap);
                                             accumulatedText = text;
                                         } else {
                                             accumulatedText += text;
-                                            // Pass toolCallsMap to updateMessage so it can re-render badges
-                                            const mapToUse = currentMessageDiv._toolCallsMap || toolCallsMap;
-                                            updateMessage(currentMessageDiv, accumulatedText, mapToUse);
-                                            // Update the stored reference
+                                            // Pass both maps to updateMessage so it can render all badges
+                                            const toolsToUse = currentMessageDiv._toolCallsMap || toolCallsMap;
+                                            const thinkingToUse = currentMessageDiv._thinkingBlocksMap || thinkingBlocksMap;
+                                            updateMessage(currentMessageDiv, accumulatedText, toolsToUse, thinkingToUse);
+                                            // Update the stored references
                                             currentMessageDiv._toolCallsMap = toolCallsMap;
+                                            currentMessageDiv._thinkingBlocksMap = thinkingBlocksMap;
                                         }
                                     }
                                 } catch (err) {

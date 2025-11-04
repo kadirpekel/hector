@@ -1,13 +1,31 @@
 package reasoning
 
 import (
+	"context"
 	"fmt"
-	"strings"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/tools"
 )
+
+// contextKey for session ID (matches agent package)
+type contextKey string
+
+const sessionIDKey contextKey = "sessionID"
+
+// extractSessionID gets the session ID from context, returns "default" if not found
+func extractSessionID(ctx context.Context) string {
+	if ctx == nil {
+		return "default"
+	}
+	if sessionIDValue := ctx.Value(sessionIDKey); sessionIDValue != nil {
+		if sid, ok := sessionIDValue.(string); ok {
+			return sid
+		}
+	}
+	return "default"
+}
 
 // Helper function to create a thinking part with AG-UI metadata
 func createThinkingPart(text string) *pb.Part {
@@ -168,63 +186,16 @@ func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) stri
 		return ""
 	}
 
-	sessionID := "default"
+	sessionID := extractSessionID(state.GetContext())
 	todos := todoTool.GetTodos(sessionID)
 
 	if len(todos) == 0 {
 		return ""
 	}
 
-	if state.ShowThinking() && state.GetOutputChannel() != nil {
-		s.displayTodos(todos, state.GetOutputChannel())
-	}
-
+	// Only inject context for LLM, don't display
+	// (display is handled by the tool itself when executed)
 	return tools.FormatTodosForContext(todos)
-}
-
-func (s *ChainOfThoughtStrategy) displayTodos(todos []tools.TodoItem, outputCh chan<- *pb.Part) {
-	if len(todos) == 0 {
-		return
-	}
-
-	// Build text fallback for simple clients
-	var textBuilder strings.Builder
-	textBuilder.WriteString("📋 Current Tasks:\n")
-	for i, todo := range todos {
-		var checkbox string
-		switch todo.Status {
-		case "completed":
-			checkbox = "☑"
-		case "in_progress":
-			checkbox = "⧗"
-		case "pending":
-			checkbox = "☐"
-		case "canceled":
-			checkbox = "☒"
-		default:
-			checkbox = "☐"
-		}
-		textBuilder.WriteString(fmt.Sprintf("  %s %d. %s\n", checkbox, i+1, todo.Content))
-	}
-
-	// Build structured data for rich clients
-	// Backend provides structure, client decides rendering
-	todoData := make([]map[string]interface{}, len(todos))
-	for i, todo := range todos {
-		todoData[i] = map[string]interface{}{
-			"id":      todo.ID,
-			"content": todo.Content,
-			"status":  todo.Status,
-		}
-	}
-
-	data := map[string]interface{}{
-		"todos": todoData,
-	}
-
-	// Emit as AG-UI thinking part with structured data
-	// thinking_type is a hint for client rendering
-	outputCh <- protocol.CreateThinkingPartWithData(textBuilder.String(), "todo", data)
 }
 
 func (s *ChainOfThoughtStrategy) getTodoTool(state *ReasoningState) *tools.TodoTool {

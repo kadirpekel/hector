@@ -123,8 +123,11 @@ func (t *TodoTool) Execute(ctx context.Context, args map[string]interface{}) (To
 		})
 	}
 
+	// Extract session ID from context
+	// Using plain string key to match agent package
+	const sessionIDKey = "hector:sessionID"
 	sessionID := "default"
-	if sid, ok := ctx.Value("session_id").(string); ok {
+	if sid, ok := ctx.Value(sessionIDKey).(string); ok {
 		sessionID = sid
 	}
 

@@ -53,32 +53,46 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 		}
 	}
 
-	// Handle text parts with AG-UI metadata
+	// Check if this is a thinking block (can be Text or Data part)
+	if aguiEventType == "thinking" || aguiBlockType == "thinking" {
+		// Close any open content block
+		if c.currentBlockID != "" {
+			events = append(events, NewContentBlockStopEvent(c.currentBlockID))
+		}
+
+		// Create new thinking block
+		thinkingBlockID := aguiBlockID
+		if thinkingBlockID == "" {
+			thinkingBlockID = uuid.New().String()
+		}
+
+		// Get text content (from Text part or Data part fallback)
+		text := part.GetText()
+		if text == "" {
+			// Try to get text from data part
+			if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
+				if textField, ok := dataPart.Data.Fields["text"]; ok {
+					text = textField.GetStringValue()
+				}
+			}
+		}
+
+		events = append(events, NewThinkingStartEvent(thinkingBlockID, "")) // empty title
+		if text != "" {
+			events = append(events, NewThinkingDeltaEvent(thinkingBlockID, text))
+		}
+		events = append(events, NewThinkingStopEvent(thinkingBlockID, "")) // empty signature
+		c.currentBlockID = ""
+		c.blockIndex++
+		return events
+	}
+
+	// Handle regular text parts with AG-UI metadata
 	if text := part.GetText(); text != "" {
 		// Determine block type from AG-UI metadata
 		blockType := "text"
 		if aguiBlockType != "" {
 			blockType = aguiBlockType
-		}
-
-		// Check if this is a thinking block
-		if aguiEventType == "thinking" || blockType == "thinking" {
-			// Close any open content block
-			if c.currentBlockID != "" {
-				events = append(events, NewContentBlockStopEvent(c.currentBlockID))
-			}
-
-			// Create new thinking block
-			thinkingBlockID := aguiBlockID
-			if thinkingBlockID == "" {
-				thinkingBlockID = uuid.New().String()
-			}
-			events = append(events, NewThinkingStartEvent(thinkingBlockID, "")) // empty title
-			events = append(events, NewThinkingDeltaEvent(thinkingBlockID, text))
-			events = append(events, NewThinkingStopEvent(thinkingBlockID, "")) // empty signature
-			c.currentBlockID = ""
-			c.blockIndex++
-			return events
 		}
 
 		// Regular content block

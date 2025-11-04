@@ -16,9 +16,9 @@ import (
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
 
-type contextKey string
-
-const SessionIDKey contextKey = "sessionID"
+// SessionIDKey is the context key for storing session IDs
+// Using string type directly to allow cross-package access
+const SessionIDKey = "hector:sessionID"
 
 func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
 	if req.Request == nil {

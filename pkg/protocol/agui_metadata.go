@@ -87,7 +87,14 @@ func CreateThinkingPartWithData(text string, thinkingType string, data map[strin
 	if len(data) > 0 {
 		// Ensure text is in data for clients that prefer it
 		data["text"] = text
-		dataStruct, _ := structpb.NewStruct(data)
+		dataStruct, err := structpb.NewStruct(data)
+		if err != nil {
+			// If we can't serialize data, fall back to text-only
+			return &pb.Part{
+				Part:     &pb.Part_Text{Text: text},
+				Metadata: metadataStruct,
+			}
+		}
 
 		return &pb.Part{
 			Part: &pb.Part_Data{
