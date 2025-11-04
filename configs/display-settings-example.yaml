@@ -1,0 +1,123 @@
+# Example configuration demonstrating consolidated display settings for content blocks
+# This shows how to control the visual appearance and behavior of all content block types
+
+llms:
+  demo-llm:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+
+agents:
+  display-demo:
+    name: "Display Settings Demo"
+    description: "Demonstrates consolidated display configuration options"
+    llm: "demo-llm"
+
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 5
+
+      # Legacy settings (still supported for backward compatibility)
+      show_thinking: true
+      enable_structured_reflection: true
+      show_debug_info: false
+
+      # NEW: Consolidated Display Configuration
+      # This provides fine-grained control over all content block types
+      display:
+        # Block Visibility Settings
+        # Control which content block types are shown to users
+        show_thinking_blocks: true    # Show internal thinking/reasoning (default: true)
+        show_reflection_blocks: true  # Show self-reflection analysis (default: true)
+        show_planning_blocks: true    # Show task planning/checklists (default: true)
+        show_progress_blocks: true    # Show progress indicators (default: true)
+        show_analysis_blocks: true    # Show analysis/metrics blocks (default: true)
+        show_debug_blocks: false      # Show debug information (default: false)
+
+        # Block Behavior Settings
+        # Control how blocks behave in the UI
+        thinking_collapsed: true      # Start thinking blocks collapsed (default: true)
+        show_ephemeral: false         # Show ephemeral/transient blocks (default: false)
+        verbose_mode: false           # Show all blocks including low-priority (default: false)
+
+        # UI Appearance Settings
+        # Control visual styling (primarily affects CLI)
+        use_colors: true              # Use ANSI colors in CLI output (default: true)
+        use_icons: true               # Use emoji icons in output (default: true)
+        compact: false                # Use compact display mode (default: false)
+
+    prompt:
+      system_prompt: |
+        You are a helpful assistant demonstrating display configuration.
+        Use various content block types to show how they appear with different settings.
+
+---
+
+# Common Configuration Patterns
+
+## Minimal Display (Hide Internal Thinking)
+# Good for production chatbots where users don't need to see reasoning
+# reasoning:
+#   display:
+#     show_thinking_blocks: false
+#     show_reflection_blocks: false
+#     show_progress_blocks: false
+#     show_debug_blocks: false
+#     show_planning_blocks: true      # Keep planning visible
+#     show_analysis_blocks: true      # Keep analysis visible
+
+## Verbose Development Mode
+# Show everything for debugging and development
+# reasoning:
+#   display:
+#     show_thinking_blocks: true
+#     show_reflection_blocks: true
+#     show_planning_blocks: true
+#     show_progress_blocks: true
+#     show_analysis_blocks: true
+#     show_debug_blocks: true         # Enable debug output
+#     thinking_collapsed: false       # Start expanded
+#     show_ephemeral: true            # Show transient blocks
+#     verbose_mode: true              # Show all priority levels
+
+## Clean CLI Output (No Colors/Icons)
+# For piping output or terminals without emoji support
+# reasoning:
+#   display:
+#     use_colors: false
+#     use_icons: false
+#     compact: true
+
+## Educational/Tutorial Mode
+# Show reasoning process for learning
+# reasoning:
+#   display:
+#     show_thinking_blocks: true
+#     show_reflection_blocks: true
+#     show_planning_blocks: true
+#     show_progress_blocks: true
+#     show_analysis_blocks: true
+#     thinking_collapsed: false       # Start expanded for learning
+
+---
+
+# Migration Guide from Legacy Settings
+
+# OLD WAY (still supported):
+# reasoning:
+#   show_thinking: true
+#   enable_structured_reflection: true
+#   show_debug_info: false
+
+# NEW WAY (recommended):
+# reasoning:
+#   display:
+#     show_thinking_blocks: true
+#     show_reflection_blocks: true
+#     show_debug_blocks: false
+
+# Notes:
+# 1. Legacy settings (show_thinking, show_debug_info) still work
+# 2. New display config provides more granular control
+# 3. Can use both together (new settings take precedence)
+# 4. Default values match legacy behavior for backward compatibility

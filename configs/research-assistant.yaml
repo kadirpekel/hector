@@ -7,6 +7,7 @@ agents:
       engine: "supervisor"  
       max_iterations: 10
       enable_streaming: true
+    enable_tools: false
     tools:
       - "agent_call"
     prompt:
@@ -25,6 +26,7 @@ agents:
       engine: "chain-of-thought"
       max_iterations: 5
       enable_streaming: true
+    enable_tools: false
     tools:
       - "execute_command"
     prompt:
@@ -60,6 +62,7 @@ agents:
       engine: "chain-of-thought"
       max_iterations: 5
       enable_streaming: true
+    enable_tools: false
     tools:
       - "write_file"
     prompt:

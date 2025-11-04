@@ -7,6 +7,7 @@ agents:
     name: "Research Agent"
     description: "Gathers and synthesizes information from various sources"
     llm: "main-llm"
+    enable_tools: false
     tools:
       - execute_command
     reasoning:
@@ -37,6 +38,7 @@ agents:
     name: "Content Writer"
     description: "Creates well-structured written content"
     llm: "main-llm"
+    enable_tools: false
     tools:
       - write_file
     reasoning:
@@ -53,6 +55,7 @@ agents:
     name: "Task Orchestrator"
     description: "Coordinates multiple agents to solve complex tasks"
     llm: "main-llm"
+    enable_tools: false
     tools:
       - agent_call  
     reasoning:

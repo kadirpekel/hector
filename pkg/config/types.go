@@ -1614,6 +1614,70 @@ type ReasoningConfig struct {
 	ToolDisplayMode string `yaml:"tool_display_mode"` // inline, detailed, hidden, thinking
 	ShowToolArgs    *bool  `yaml:"show_tool_args"`    // Show tool arguments
 	ShowToolResults *bool  `yaml:"show_tool_results"` // Show tool results
+
+	// Content Blocks Display Configuration (consolidated)
+	Display *DisplayConfig `yaml:"display"` // Unified display settings for content blocks
+}
+
+// DisplayConfig consolidates all display-related settings for content blocks
+type DisplayConfig struct {
+	// Block Visibility Settings
+	ShowThinkingBlocks   *bool `yaml:"show_thinking_blocks"`   // Show thinking/reasoning blocks (default: true)
+	ShowReflectionBlocks *bool `yaml:"show_reflection_blocks"` // Show reflection blocks (default: true)
+	ShowPlanningBlocks   *bool `yaml:"show_planning_blocks"`   // Show planning blocks (default: true)
+	ShowProgressBlocks   *bool `yaml:"show_progress_blocks"`   // Show progress blocks (default: true)
+	ShowAnalysisBlocks   *bool `yaml:"show_analysis_blocks"`   // Show analysis blocks (default: true)
+	ShowDebugBlocks      *bool `yaml:"show_debug_blocks"`      // Show debug blocks (default: false)
+
+	// Block Behavior Settings
+	ThinkingCollapsed *bool `yaml:"thinking_collapsed"` // Start thinking blocks collapsed (default: true)
+	ShowEphemeral     *bool `yaml:"show_ephemeral"`     // Show ephemeral blocks (default: false)
+	VerboseMode       *bool `yaml:"verbose_mode"`       // Show all blocks including low-priority (default: false)
+
+	// UI Appearance Settings
+	UseColors *bool `yaml:"use_colors"` // Use colors in CLI (default: true)
+	UseIcons  *bool `yaml:"use_icons"`  // Use icons/emojis (default: true)
+	Compact   *bool `yaml:"compact"`    // Use compact display mode (default: false)
+}
+
+// SetDefaults sets default values for display configuration
+func (d *DisplayConfig) SetDefaults() {
+	if d.ShowThinkingBlocks == nil {
+		d.ShowThinkingBlocks = boolPtr(true)
+	}
+	if d.ShowReflectionBlocks == nil {
+		d.ShowReflectionBlocks = boolPtr(true)
+	}
+	if d.ShowPlanningBlocks == nil {
+		d.ShowPlanningBlocks = boolPtr(true)
+	}
+	if d.ShowProgressBlocks == nil {
+		d.ShowProgressBlocks = boolPtr(true)
+	}
+	if d.ShowAnalysisBlocks == nil {
+		d.ShowAnalysisBlocks = boolPtr(true)
+	}
+	if d.ShowDebugBlocks == nil {
+		d.ShowDebugBlocks = boolPtr(false) // Debug off by default
+	}
+	if d.ThinkingCollapsed == nil {
+		d.ThinkingCollapsed = boolPtr(true) // Start collapsed
+	}
+	if d.ShowEphemeral == nil {
+		d.ShowEphemeral = boolPtr(false)
+	}
+	if d.VerboseMode == nil {
+		d.VerboseMode = boolPtr(false)
+	}
+	if d.UseColors == nil {
+		d.UseColors = boolPtr(true)
+	}
+	if d.UseIcons == nil {
+		d.UseIcons = boolPtr(true)
+	}
+	if d.Compact == nil {
+		d.Compact = boolPtr(false)
+	}
 }
 
 func (c *ReasoningConfig) Validate() error {
@@ -1670,6 +1734,12 @@ func (c *ReasoningConfig) SetDefaults() {
 	if c.ShowToolResults == nil {
 		c.ShowToolResults = boolPtr(true) // Default to true
 	}
+
+	// Initialize and set defaults for unified display config
+	if c.Display == nil {
+		c.Display = &DisplayConfig{}
+	}
+	c.Display.SetDefaults()
 }
 
 type SearchConfig struct {

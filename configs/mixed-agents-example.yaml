@@ -8,6 +8,7 @@ agents:
     name: "Local Research Agent"
     description: "Native agent that gathers information"
     llm: "main-llm"
+    enable_tools: false
     tools:
       - execute_command
     reasoning:
@@ -21,6 +22,7 @@ agents:
     name: "Local Content Writer"
     description: "Native agent that creates written content"
     llm: "main-llm"
+    enable_tools: false
     tools:
       - write_file
     reasoning:
@@ -46,6 +48,7 @@ agents:
     name: "Hybrid Orchestrator"
     description: "Orchestrates both local and external agents"
     llm: "main-llm"
+    enable_tools: false
     tools:
       - agent_call  
     reasoning:

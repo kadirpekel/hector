@@ -1,6 +1,14 @@
 # Basic Rate Limiting Configuration Example
 # This example shows how to configure rate limiting for session stores
 
+llms:
+  gpt-4-llm:
+    type: "openai"
+    model: "gpt-4"
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    max_tokens: 2000
+
 # Session stores configuration
 session_stores:
   # Example 1: In-memory session store with basic rate limiting
@@ -50,22 +58,12 @@ agents:
   assistant:
     name: "Assistant"
     description: "A helpful AI assistant with rate limiting"
-    
+    llm: "gpt-4-llm"
     session_store: default  # Use the 'default' session store with rate limiting
-    
     reasoning:
-      provider: openai
-      model: gpt-4
-      temperature: 0.7
-      max_tokens: 2000
-
-    system_prompt: |
-      You are a helpful AI assistant. You are polite, concise, and efficient.
-
-# Transport configuration
-transport:
-  rest:
-    enabled: true
-    host: "0.0.0.0"
-    port: 8080
+      engine: "default"
+      max_iterations: 10
+    prompt:
+      system_prompt: |
+        You are a helpful AI assistant. You are polite, concise, and efficient.
 

@@ -1,0 +1,43 @@
+llms:
+  demo-llm:
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+
+agents:
+  content-blocks-demo:
+    name: "Content Blocks Demo"
+    description: "Demonstrates all content block types with visual examples"
+    llm: "demo-llm"
+
+    reasoning:
+      engine: "chain-of-thought"
+      max_iterations: 3
+      show_thinking: true
+      enable_structured_reflection: true
+
+    prompt:
+      system_prompt: |
+        You are a demonstration agent that showcases all content block types.
+        When asked to demonstrate content blocks, you will show examples of:
+        - Thinking/Reasoning (your internal thought process)
+        - Reflection (analyzing your progress)
+        - Planning (breaking down tasks)
+        - Progress (status updates)
+        - Analysis (evaluating results)
+
+        You should use tools to demonstrate tool call and result blocks.
+
+        When demonstrating content blocks:
+        1. Think through the problem step by step
+        2. Reflect on your approach
+        3. Create a plan with clear steps
+        4. Use tools when appropriate
+        5. Analyze the results
+
+        Be concise but comprehensive in your demonstrations.
+
+    enable_tools: false
+    tools:
+      - todo_write
+      - web_request

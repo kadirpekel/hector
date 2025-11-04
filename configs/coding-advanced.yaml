@@ -199,6 +199,7 @@ agents:
       - "codebase"
     database: "qdrant"
     embedder: "embedder"
+    enable_tools: false
     tools:
       - "search"           
       - "write_file"       

@@ -131,6 +131,456 @@ function renderContentBlock(block) {
  * Render a thinking/reasoning/reflection/planning/analysis block
  */
 function renderThinkingBlock(block, style) {
+    const type = parseInt(block.type);
+
+    // Route to specialized renderers based on type
+    switch(type) {
+        case ContentBlockType.THINKING:
+        case ContentBlockType.REASONING:
+            return renderThinkingSpecial(block, style);
+        case ContentBlockType.PLANNING:
+            return renderPlanningSpecial(block, style);
+        case ContentBlockType.REFLECTION:
+            return renderReflectionSpecial(block, style);
+        case ContentBlockType.ANALYSIS:
+            return renderAnalysisSpecial(block, style);
+        case ContentBlockType.DEBUG:
+            return renderDebugSpecial(block, style);
+        default:
+            return renderGenericThinkingBlock(block, style);
+    }
+}
+
+/**
+ * Render thinking blocks with grayed out, dimmed styling
+ */
+function renderThinkingSpecial(block, style) {
+    const container = document.createElement('div');
+    container.className = 'content-block thinking-block-special';
+    container.style.cssText = `
+        margin: 8px 0;
+        padding: 8px 12px;
+        background: rgba(149, 165, 166, 0.05);
+        border-left: 2px solid rgba(149, 165, 166, 0.2);
+        border-radius: 4px;
+        opacity: 0.7;
+        font-size: 12px;
+        color: #95a5a6;
+        font-style: italic;
+        animation: fadeIn 0.5s ease-out;
+    `;
+
+    const thinkingBlock = block.block?.thinkingBlock;
+    if (!thinkingBlock) return null;
+
+    const metadata = thinkingBlock.metadata || {};
+    const content = thinkingBlock.thinking || '';
+
+    // Collapsible by default for thinking
+    const isCollapsible = metadata.collapsible !== false;
+
+    if (metadata.title || isCollapsible) {
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            color: #95a5a6;
+        `;
+
+        const titleText = metadata.title || 'Thinking...';
+        header.innerHTML = `
+            <span style="font-size: 14px;">💭</span>
+            <span>${titleText}</span>
+        `;
+
+        if (isCollapsible) {
+            header.style.cursor = 'pointer';
+            const indicator = document.createElement('span');
+            indicator.textContent = '▼';
+            indicator.style.cssText = 'font-size: 9px; margin-left: auto; transition: transform 0.2s; opacity: 0.6;';
+            header.appendChild(indicator);
+
+            const contentDiv = createContentDiv(content, {color: '#95a5a6', ...style});
+            contentDiv.style.marginTop = '6px';
+            contentDiv.style.display = 'none'; // Start collapsed
+
+            header.onclick = () => {
+                const isCollapsed = contentDiv.style.display === 'none';
+                contentDiv.style.display = isCollapsed ? 'block' : 'none';
+                indicator.style.transform = isCollapsed ? 'rotate(0deg)' : 'rotate(-90deg)';
+            };
+
+            container.appendChild(header);
+            container.appendChild(contentDiv);
+        } else {
+            container.appendChild(header);
+            container.appendChild(createContentDiv(content, {color: '#95a5a6', ...style}));
+        }
+    } else {
+        container.appendChild(createContentDiv(content, {color: '#95a5a6', ...style}));
+    }
+
+    return container;
+}
+
+/**
+ * Render planning blocks with checkbox list styling
+ */
+function renderPlanningSpecial(block, style) {
+    const container = document.createElement('div');
+    container.className = 'content-block planning-block-special';
+    container.style.cssText = `
+        margin: 12px 0;
+        padding: 14px 18px;
+        background: ${style.bgColor};
+        border-left: 4px solid ${style.borderColor};
+        border-radius: 8px;
+        animation: slideInBlock 0.3s ease-out;
+    `;
+
+    const thinkingBlock = block.block?.thinkingBlock;
+    if (!thinkingBlock) return null;
+
+    const metadata = thinkingBlock.metadata || {};
+    const content = thinkingBlock.thinking || '';
+
+    // Header
+    if (metadata.title) {
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            color: ${style.color};
+            font-weight: 700;
+            font-size: 14px;
+        `;
+        header.innerHTML = `
+            <span style="font-size: 18px;">${style.icon}</span>
+            <span>${metadata.title}</span>
+        `;
+        container.appendChild(header);
+    }
+
+    // Parse content for checklist items
+    const contentDiv = createChecklistDiv(content, style);
+    container.appendChild(contentDiv);
+
+    return container;
+}
+
+/**
+ * Create a checklist div from markdown list content
+ */
+function createChecklistDiv(content, style) {
+    const div = document.createElement('div');
+    div.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    `;
+
+    const lines = content.split('\n');
+    let inList = false;
+
+    lines.forEach(line => {
+        const trimmed = line.trim();
+
+        // Check if line is a list item
+        const listMatch = trimmed.match(/^[-*•+]\s+(.+)/) || trimmed.match(/^\d+\.\s+(.+)/);
+
+        if (listMatch) {
+            inList = true;
+            const itemText = listMatch[1];
+
+            const item = document.createElement('div');
+            item.style.cssText = `
+                display: flex;
+                align-items: flex-start;
+                gap: 10px;
+                padding: 6px 10px;
+                background: rgba(255, 255, 255, 0.3);
+                border-radius: 4px;
+                transition: background 0.2s;
+            `;
+
+            item.innerHTML = `
+                <span style="font-size: 16px; color: ${style.color}; flex-shrink: 0;">☐</span>
+                <span style="color: ${style.color}; font-size: 13px; line-height: 1.5;">${itemText}</span>
+            `;
+
+            div.appendChild(item);
+        } else if (trimmed && !inList) {
+            // Regular text between lists
+            const p = document.createElement('p');
+            p.style.cssText = `
+                margin: 4px 0;
+                color: ${style.color};
+                font-size: 13px;
+                line-height: 1.6;
+            `;
+            p.textContent = trimmed;
+            div.appendChild(p);
+        } else if (trimmed) {
+            // Text after list started
+            const p = document.createElement('p');
+            p.style.cssText = `
+                margin: 8px 0 4px 0;
+                color: ${style.color};
+                font-size: 13px;
+                line-height: 1.6;
+            `;
+            p.textContent = trimmed;
+            div.appendChild(p);
+            inList = false;
+        }
+    });
+
+    return div;
+}
+
+/**
+ * Render reflection blocks with emphasized box styling
+ */
+function renderReflectionSpecial(block, style) {
+    const container = document.createElement('div');
+    container.className = 'content-block reflection-block-special';
+    container.style.cssText = `
+        margin: 16px 0;
+        padding: 16px 20px;
+        background: ${style.bgColor};
+        border: 2px solid ${style.borderColor};
+        border-radius: 10px;
+        box-shadow: 0 2px 8px ${style.borderColor};
+        animation: slideInBlock 0.4s ease-out;
+    `;
+
+    const thinkingBlock = block.block?.thinkingBlock;
+    if (!thinkingBlock) return null;
+
+    const metadata = thinkingBlock.metadata || {};
+    const content = thinkingBlock.thinking || '';
+
+    // Header with prominent styling
+    if (metadata.title) {
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid ${style.borderColor};
+            color: ${style.color};
+            font-weight: 700;
+            font-size: 15px;
+        `;
+        header.innerHTML = `
+            <span style="font-size: 20px;">${style.icon}</span>
+            <span>${metadata.title}</span>
+        `;
+        container.appendChild(header);
+    }
+
+    // Content with emphasis
+    const contentDiv = createContentDiv(content, style);
+    contentDiv.style.fontSize = '14px';
+    contentDiv.style.lineHeight = '1.7';
+    container.appendChild(contentDiv);
+
+    return container;
+}
+
+/**
+ * Render analysis blocks with structured data layout
+ */
+function renderAnalysisSpecial(block, style) {
+    const container = document.createElement('div');
+    container.className = 'content-block analysis-block-special';
+    container.style.cssText = `
+        margin: 12px 0;
+        padding: 14px 18px;
+        background: ${style.bgColor};
+        border-left: 3px solid ${style.borderColor};
+        border-radius: 6px;
+        animation: slideInBlock 0.3s ease-out;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+    `;
+
+    const thinkingBlock = block.block?.thinkingBlock;
+    if (!thinkingBlock) return null;
+
+    const metadata = thinkingBlock.metadata || {};
+    const content = thinkingBlock.thinking || '';
+
+    // Header
+    if (metadata.title) {
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            color: ${style.color};
+            font-weight: 600;
+            font-size: 14px;
+        `;
+        header.innerHTML = `
+            <span style="font-size: 18px;">${style.icon}</span>
+            <span>${metadata.title}</span>
+        `;
+        container.appendChild(header);
+    }
+
+    // Parse content for key-value pairs and structure
+    const contentDiv = createStructuredContentDiv(content, style);
+    container.appendChild(contentDiv);
+
+    return container;
+}
+
+/**
+ * Create structured content div highlighting key-value pairs
+ */
+function createStructuredContentDiv(content, style) {
+    const div = document.createElement('div');
+    div.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    `;
+
+    const lines = content.split('\n');
+    lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        // Check for key-value pairs
+        const kvMatch = trimmed.match(/^([^:=]+)[:=]\s*(.+)$/);
+
+        if (kvMatch) {
+            const [, key, value] = kvMatch;
+            const row = document.createElement('div');
+            row.style.cssText = `
+                display: flex;
+                gap: 8px;
+                padding: 4px 0;
+                font-size: 13px;
+            `;
+            row.innerHTML = `
+                <span style="color: ${style.color}; font-weight: 500;">${key.trim()}:</span>
+                <span style="color: ${style.color}; font-weight: 700; opacity: 1;">${value.trim()}</span>
+            `;
+            div.appendChild(row);
+        } else {
+            const p = document.createElement('p');
+            p.style.cssText = `
+                margin: 4px 0;
+                color: ${style.color};
+                font-size: 13px;
+                line-height: 1.6;
+            `;
+            p.textContent = trimmed;
+            div.appendChild(p);
+        }
+    });
+
+    return div;
+}
+
+/**
+ * Render debug blocks with technical/monospace styling
+ */
+function renderDebugSpecial(block, style) {
+    const container = document.createElement('div');
+    container.className = 'content-block debug-block-special';
+    container.style.cssText = `
+        margin: 8px 0;
+        padding: 10px 14px;
+        background: rgba(149, 165, 166, 0.05);
+        border: 1px dashed rgba(149, 165, 166, 0.3);
+        border-radius: 4px;
+        font-family: 'Monaco', 'Courier New', monospace;
+        font-size: 11px;
+        color: #7f8c8d;
+        animation: fadeIn 0.3s ease-out;
+    `;
+
+    const thinkingBlock = block.block?.thinkingBlock;
+    if (!thinkingBlock) return null;
+
+    const metadata = thinkingBlock.metadata || {};
+    const content = thinkingBlock.thinking || '';
+
+    // Debug header
+    if (metadata.title) {
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px dotted rgba(149, 165, 166, 0.2);
+            color: #7f8c8d;
+            font-weight: 600;
+            font-size: 11px;
+        `;
+        header.innerHTML = `
+            <span style="font-size: 14px;">🐛</span>
+            <span>[DEBUG]</span>
+            <span>${metadata.title}</span>
+        `;
+        container.appendChild(header);
+    }
+
+    // Content with line numbers
+    const contentDiv = createDebugContentDiv(content);
+    container.appendChild(contentDiv);
+
+    return container;
+}
+
+/**
+ * Create debug content div with line numbers
+ */
+function createDebugContentDiv(content) {
+    const div = document.createElement('div');
+    div.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    `;
+
+    const lines = content.split('\n');
+    lines.forEach((line, i) => {
+        const row = document.createElement('div');
+        row.style.cssText = `
+            display: flex;
+            gap: 10px;
+            font-size: 11px;
+            line-height: 1.5;
+        `;
+        row.innerHTML = `
+            <span style="color: #95a5a6; opacity: 0.6; user-select: none; min-width: 30px; text-align: right;">${String(i + 1).padStart(3, ' ')}</span>
+            <span style="color: #7f8c8d;">│</span>
+            <span style="color: #7f8c8d; flex: 1;">${line || ' '}</span>
+        `;
+        div.appendChild(row);
+    });
+
+    return div;
+}
+
+/**
+ * Generic thinking block renderer (fallback)
+ */
+function renderGenericThinkingBlock(block, style) {
     const container = document.createElement('div');
     container.className = 'content-block thinking-block';
     container.style.cssText = `
@@ -278,7 +728,7 @@ function renderToolResultBlock(block, style) {
 }
 
 /**
- * Render a progress block (ephemeral style)
+ * Render a progress block with animated indicator
  */
 function renderProgressBlock(block, style) {
     const thinkingBlock = block.block?.thinkingBlock;
@@ -289,21 +739,58 @@ function renderProgressBlock(block, style) {
     container.style.cssText = `
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 4px 10px;
+        gap: 8px;
+        padding: 6px 12px;
         background: ${style.bgColor};
         border: 1px solid ${style.borderColor};
-        border-radius: 16px;
-        font-size: 11px;
+        border-radius: 20px;
+        font-size: 12px;
         color: ${style.color};
-        margin: 4px 0;
-        animation: fadeIn 0.3s ease-out;
+        margin: 6px 0;
+        animation: fadeIn 0.3s ease-out, pulse 2s ease-in-out infinite;
     `;
 
-    container.innerHTML = `
-        <span style="font-size: 14px;">${style.icon}</span>
-        <span>${thinkingBlock.thinking}</span>
+    // Create animated spinner
+    const spinner = document.createElement('span');
+    spinner.innerHTML = style.icon;
+    spinner.style.cssText = `
+        font-size: 14px;
+        animation: spin 2s linear infinite;
     `;
+
+    const text = document.createElement('span');
+    text.textContent = thinkingBlock.thinking;
+    text.style.cssText = `
+        font-weight: 500;
+    `;
+
+    container.appendChild(spinner);
+    container.appendChild(text);
+
+    // Add progress bar if content suggests progress
+    const progressMatch = thinkingBlock.thinking.match(/(\d+)%/);
+    if (progressMatch) {
+        const percentage = parseInt(progressMatch[1]);
+        const progressBar = document.createElement('div');
+        progressBar.style.cssText = `
+            width: 60px;
+            height: 4px;
+            background: rgba(26, 188, 156, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+        `;
+
+        const progressFill = document.createElement('div');
+        progressFill.style.cssText = `
+            width: ${percentage}%;
+            height: 100%;
+            background: ${style.color};
+            transition: width 0.5s ease-out;
+        `;
+
+        progressBar.appendChild(progressFill);
+        container.appendChild(progressBar);
+    }
 
     return container;
 }

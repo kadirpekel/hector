@@ -16,4 +16,5 @@ agents:
   assistant:
     name: "AI Assistant with Observability"
     llm: "gpt-4o"
+    enable_tools: false
     tools: ["search", "write_file", "execute_command"]
