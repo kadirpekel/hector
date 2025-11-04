@@ -355,7 +355,7 @@ func (r *CLIRenderer) renderPlanningSpecial(block *pb.ThinkingBlock, metadata *p
 		checkbox := "☐"
 
 		if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") ||
-		   strings.HasPrefix(trimmed, "• ") || strings.HasPrefix(trimmed, "+ ") {
+			strings.HasPrefix(trimmed, "• ") || strings.HasPrefix(trimmed, "+ ") {
 			isListItem = true
 			trimmed = strings.TrimPrefix(trimmed, "- ")
 			trimmed = strings.TrimPrefix(trimmed, "* ")
