@@ -33,12 +33,61 @@ func NewConverter(messageID, contextID, taskID string) *Converter {
 func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 	var events []*aguipb.AGUIEvent
 
-	// Handle text parts
+	// Read AG-UI metadata hints if present
+	aguiEventType := ""
+	aguiBlockType := ""
+	aguiBlockID := ""
+	
+	if part.Metadata != nil {
+		// Check for AG-UI event type first
+		if et, ok := part.Metadata.Fields["agui_event_type"]; ok {
+			aguiEventType = et.GetStringValue()
+		}
+		// Check for AG-UI block type
+		if bt, ok := part.Metadata.Fields["agui_block_type"]; ok {
+			aguiBlockType = bt.GetStringValue()
+		}
+		// Check for AG-UI block ID
+		if bid, ok := part.Metadata.Fields["agui_block_id"]; ok {
+			aguiBlockID = bid.GetStringValue()
+		}
+	}
+
+	// Handle text parts with AG-UI metadata
 	if text := part.GetText(); text != "" {
-		// If no current block, start a new content block
+		// Determine block type from AG-UI metadata
+		blockType := "text"
+		if aguiBlockType != "" {
+			blockType = aguiBlockType
+		}
+		
+		// Check if this is a thinking block
+		if aguiEventType == "thinking" || blockType == "thinking" {
+			// Close any open content block
+			if c.currentBlockID != "" {
+				events = append(events, NewContentBlockStopEvent(c.currentBlockID))
+			}
+			
+			// Create new thinking block
+			thinkingBlockID := aguiBlockID
+			if thinkingBlockID == "" {
+				thinkingBlockID = uuid.New().String()
+			}
+			events = append(events, NewThinkingStartEvent(thinkingBlockID, "")) // empty title
+			events = append(events, NewThinkingDeltaEvent(thinkingBlockID, text))
+			events = append(events, NewThinkingStopEvent(thinkingBlockID, "")) // empty signature
+			c.currentBlockID = ""
+			c.blockIndex++
+			return events
+		}
+		
+		// Regular content block
 		if c.currentBlockID == "" {
-			c.currentBlockID = uuid.New().String()
-			events = append(events, NewContentBlockStartEvent(c.currentBlockID, "text", c.blockIndex))
+			c.currentBlockID = aguiBlockID
+			if c.currentBlockID == "" {
+				c.currentBlockID = uuid.New().String()
+			}
+			events = append(events, NewContentBlockStartEvent(c.currentBlockID, blockType, c.blockIndex))
 			c.blockIndex++
 		}
 
@@ -47,30 +96,28 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 		return events
 	}
 
-	// Check if it's a tool call or tool result (from Part metadata)
-	if part.Metadata != nil {
-		partType := ""
-		if pt, ok := part.Metadata.Fields["part_type"]; ok {
-			partType = pt.GetStringValue()
-		}
-
-		switch partType {
-		case "tool_call":
-			// Close any open content block
-			if c.currentBlockID != "" {
-				events = append(events, NewContentBlockStopEvent(c.currentBlockID))
-				c.currentBlockID = ""
+	// Handle tool calls and tool results (AG-UI metadata only)
+	if aguiEventType == "tool_call" {
+		// Tool calls have agui_is_error field to distinguish call from result
+		if part.Metadata != nil {
+			_, hasIsError := part.Metadata.Fields["agui_is_error"]
+			
+			if hasIsError {
+				// This is a tool result
+				toolCallID, result, errorMsg, isError := c.extractToolResultInfo(part)
+				finalInput := make(map[string]interface{})
+				events = append(events, NewToolCallStopEvent(toolCallID, finalInput, result, errorMsg, isError))
+			} else {
+				// This is a tool call
+				// Close any open content block
+				if c.currentBlockID != "" {
+					events = append(events, NewContentBlockStopEvent(c.currentBlockID))
+					c.currentBlockID = ""
+				}
+				
+				toolCallID, toolName, input := c.extractToolCallInfo(part)
+				events = append(events, NewToolCallStartEvent(toolCallID, toolName, input))
 			}
-
-			// Extract tool call info
-			toolCallID, toolName, input := c.extractToolCallInfo(part)
-			events = append(events, NewToolCallStartEvent(toolCallID, toolName, input))
-
-		case "tool_result":
-			// Extract tool result info
-			toolCallID, result, errorMsg, isError := c.extractToolResultInfo(part)
-			finalInput := make(map[string]interface{}) // Tool result doesn't have input
-			events = append(events, NewToolCallStopEvent(toolCallID, finalInput, result, errorMsg, isError))
 		}
 	}
 
@@ -94,16 +141,23 @@ func (c *Converter) extractToolCallInfo(part *a2apb.Part) (string, string, map[s
 	toolName := ""
 	input := make(map[string]interface{})
 
+	// Read AG-UI metadata
 	if part.Metadata != nil {
-		if id, ok := part.Metadata.Fields["tool_call_id"]; ok {
+		if id, ok := part.Metadata.Fields["agui_tool_call_id"]; ok {
 			toolCallID = id.GetStringValue()
+		}
+		if name, ok := part.Metadata.Fields["agui_tool_name"]; ok {
+			toolName = name.GetStringValue()
 		}
 	}
 
 	// Extract from DataPart
 	if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
-		if name, ok := dataPart.Data.Fields["name"]; ok {
+		if name, ok := dataPart.Data.Fields["name"]; ok && toolName == "" {
 			toolName = name.GetStringValue()
+		}
+		if id, ok := dataPart.Data.Fields["id"]; ok && toolCallID == "" {
+			toolCallID = id.GetStringValue()
 		}
 
 		if inputField, ok := dataPart.Data.Fields["input"]; ok {
@@ -113,6 +167,15 @@ func (c *Converter) extractToolCallInfo(part *a2apb.Part) (string, string, map[s
 			} else if inputStruct := inputField.GetStructValue(); inputStruct != nil {
 				// Convert protobuf Struct to map
 				for k, v := range inputStruct.Fields {
+					input[k] = convertProtoValue(v)
+				}
+			}
+		}
+		
+		// Check for 'arguments' field (standard A2A format)
+		if argsField, ok := dataPart.Data.Fields["arguments"]; ok {
+			if argsStruct := argsField.GetStructValue(); argsStruct != nil {
+				for k, v := range argsStruct.Fields {
 					input[k] = convertProtoValue(v)
 				}
 			}
@@ -133,21 +196,31 @@ func (c *Converter) extractToolResultInfo(part *a2apb.Part) (string, string, str
 	errorMsg := ""
 	isError := false
 
+	// Read AG-UI metadata
 	if part.Metadata != nil {
-		if id, ok := part.Metadata.Fields["tool_call_id"]; ok {
+		if id, ok := part.Metadata.Fields["agui_tool_call_id"]; ok {
 			toolCallID = id.GetStringValue()
+		}
+		if isErr, ok := part.Metadata.Fields["agui_is_error"]; ok {
+			isError = isErr.GetBoolValue()
 		}
 	}
 
 	// Extract from DataPart
 	if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
+		if tcID, ok := dataPart.Data.Fields["tool_call_id"]; ok && toolCallID == "" {
+			toolCallID = tcID.GetStringValue()
+		}
+		
 		if content, ok := dataPart.Data.Fields["content"]; ok {
 			result = content.GetStringValue()
 		}
 
 		if err, ok := dataPart.Data.Fields["error"]; ok {
 			errorMsg = err.GetStringValue()
-			isError = errorMsg != ""
+			if errorMsg != "" {
+				isError = true
+			}
 		}
 	}
 

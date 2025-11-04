@@ -5,6 +5,8 @@ description: AG-UI streaming event format for standardized agent UIs
 
 # AG-UI Protocol Support
 
+> **💡 See Also:** [AG-UI Metadata Schema](agui-metadata-schema.md) for detailed information about how Hector enriches A2A parts with AG-UI metadata.
+
 Hector implements **AG-UI streaming events** as an optional output format alongside the native A2A protocol. This enables compatibility with modern agentic UIs that have adopted this standardized streaming format.
 
 !!! info "Implementation Scope"

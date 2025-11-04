@@ -8,6 +8,11 @@ import (
 	"github.com/kadirpekel/hector/pkg/tools"
 )
 
+// Helper function to create a thinking part with AG-UI metadata
+func createThinkingPart(text string) *pb.Part {
+	return protocol.CreateThinkingPart(text, "", 0)
+}
+
 // Helper function to create a text part
 func createTextPart(text string) *pb.Part {
 	return &pb.Part{Part: &pb.Part_Text{Text: text}}
@@ -129,7 +134,7 @@ func (s *ChainOfThoughtStrategy) displayStructuredReflection(
 
 	output += ThinkingBlock(fmt.Sprintf("Confidence: %.0f%% - %s", analysis.Confidence*100, recommendation))
 
-	state.GetOutputChannel() <- createTextPart(output)
+	state.GetOutputChannel() <- createThinkingPart(output)
 }
 
 func (s *ChainOfThoughtStrategy) reflectOnProgress(
@@ -162,7 +167,7 @@ func (s *ChainOfThoughtStrategy) reflectOnProgress(
 			output += ThinkingBlock("[SUCCESS] All tools succeeded - making progress")
 		}
 
-		state.GetOutputChannel() <- createTextPart(output)
+		state.GetOutputChannel() <- createThinkingPart(output)
 	}
 }
 

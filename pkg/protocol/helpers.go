@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func CreateUserMessage(text string) *pb.Message {
@@ -40,41 +39,13 @@ type ToolResult struct {
 }
 
 func CreateToolCallPart(toolCall *ToolCall) *pb.Part {
-	data, _ := structpb.NewStruct(map[string]interface{}{
-		"id":        toolCall.ID,
-		"name":      toolCall.Name,
-		"arguments": toolCall.Args,
-	})
-
-	metadata, _ := structpb.NewStruct(map[string]interface{}{
-		"part_type": "tool_call",
-	})
-
-	return &pb.Part{
-		Part: &pb.Part_Data{
-			Data: &pb.DataPart{Data: data},
-		},
-		Metadata: metadata,
-	}
+	// Use AG-UI enriched version by default
+	return CreateToolCallPartWithAGUI(toolCall)
 }
 
 func CreateToolResultPart(result *ToolResult) *pb.Part {
-	data, _ := structpb.NewStruct(map[string]interface{}{
-		"tool_call_id": result.ToolCallID,
-		"content":      result.Content,
-		"error":        result.Error,
-	})
-
-	metadata, _ := structpb.NewStruct(map[string]interface{}{
-		"part_type": "tool_result",
-	})
-
-	return &pb.Part{
-		Part: &pb.Part_Data{
-			Data: &pb.DataPart{Data: data},
-		},
-		Metadata: metadata,
-	}
+	// Use AG-UI enriched version by default
+	return CreateToolResultPartWithAGUI(result)
 }
 
 func IsToolCallPart(part *pb.Part) bool {

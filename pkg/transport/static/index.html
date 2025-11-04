@@ -589,6 +589,119 @@
             animation-fill-mode: both;
         }
         
+        /* Thinking block display (AG-UI contextual type) - Badge style */
+        .thinking-block {
+            display: block;
+            margin: 8px 0;
+            position: relative;
+        }
+
+        .thinking-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            background: rgba(138, 43, 226, 0.08);
+            border: 1px solid rgba(138, 43, 226, 0.25);
+            border-radius: 12px;
+            font-size: 11px;
+            color: #9370db;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+
+        .thinking-badge:hover {
+            background: rgba(138, 43, 226, 0.12);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(138, 43, 226, 0.2);
+        }
+
+        .thinking-badge .thinking-icon {
+            font-size: 13px;
+            animation: thinkingPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes thinkingPulse {
+            0%, 100% { opacity: 0.7; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+
+        .thinking-badge .thinking-label {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 11px;
+        }
+
+        .thinking-toggle {
+            margin-left: 4px;
+            cursor: pointer;
+            font-size: 9px;
+            opacity: 0.6;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .thinking-toggle:hover {
+            opacity: 1;
+            transform: scale(1.2);
+        }
+
+        .thinking-content {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 4px;
+            padding: 10px 12px;
+            background: rgba(30, 30, 30, 0.98);
+            border: 1px solid rgba(138, 43, 226, 0.3);
+            border-radius: 6px;
+            font-size: 10px;
+            max-height: 300px;
+            min-width: 350px;
+            max-width: 600px;
+            overflow-y: auto;
+            color: rgba(255, 255, 255, 0.8);
+            font-family: 'Monaco', 'Courier New', monospace;
+            white-space: pre-wrap;
+            line-height: 1.4;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            display: none;
+        }
+
+        .thinking-content.visible {
+            display: block;
+            animation: slideDown 0.2s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .thinking-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .thinking-content::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .thinking-content::-webkit-scrollbar-thumb {
+            background: rgba(138, 43, 226, 0.5);
+            border-radius: 3px;
+        }
+
+        .thinking-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(138, 43, 226, 0.7);
+        }
 
         .tool-args-toggle {
             margin-left: 4px;
@@ -1267,7 +1380,7 @@
             clearMessages();
             
             session.messages.forEach(msg => {
-                addMessage(msg.role, msg.text, msg.metadata || {}, false, msg.toolCalls || []);
+                addMessage(msg.role, msg.text, msg.metadata || {}, false, msg.toolCalls || [], msg.thinkingBlocks || []);
             });
 
             renderConversations();
@@ -1407,7 +1520,7 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        function addMessage(role, text, metadata = {}, save = true, toolCalls = []) {
+        function addMessage(role, text, metadata = {}, save = true, toolCalls = [], thinkingBlocks = []) {
             hideEmptyState();
             
             const messagesDiv = document.getElementById('messages');
@@ -1416,6 +1529,14 @@
 
             const bubble = document.createElement('div');
             bubble.className = 'message-bubble';
+
+            // Add thinking blocks first (before main content)
+            if (thinkingBlocks && thinkingBlocks.length > 0) {
+                thinkingBlocks.forEach(thinkingBlock => {
+                    const thinkingElement = createThinkingBlockElement(thinkingBlock);
+                    bubble.appendChild(thinkingElement);
+                });
+            }
 
             // Add text content
             const content = document.createElement('div');
@@ -1615,12 +1736,56 @@
                     role: role,  // Explicitly preserve role
                     text: text, 
                     metadata: metadata,
-                    toolCalls: toolCalls || []
+                    toolCalls: toolCalls || [],
+                    thinkingBlocks: thinkingBlocks || []
                 });
                 saveSessions();
             }
 
             return messageDiv;
+        }
+
+        function createThinkingBlockElement(thinkingBlock) {
+            // Wrapper for positioning
+            const thinkingDiv = document.createElement('span');
+            thinkingDiv.className = 'thinking-block';
+            thinkingDiv.setAttribute('data-thinking-id', thinkingBlock.id);
+            
+            // Badge with thinking info
+            const badge = document.createElement('span');
+            badge.className = 'thinking-badge';
+            
+            const icon = document.createElement('span');
+            icon.className = 'thinking-icon';
+            icon.textContent = '💭';
+            
+            const label = document.createElement('span');
+            label.className = 'thinking-label';
+            label.textContent = 'Thinking...';
+            
+            const toggle = document.createElement('span');
+            toggle.className = 'thinking-toggle';
+            toggle.textContent = '▼';
+            
+            badge.appendChild(icon);
+            badge.appendChild(label);
+            badge.appendChild(toggle);
+            
+            // Add collapsible content section
+            const content = document.createElement('div');
+            content.className = 'thinking-content';
+            content.textContent = thinkingBlock.content;
+            
+            // Toggle visibility
+            badge.addEventListener('click', () => {
+                const isVisible = content.classList.toggle('visible');
+                toggle.textContent = isVisible ? '▲' : '▼';
+            });
+            
+            thinkingDiv.appendChild(badge);
+            thinkingDiv.appendChild(content);
+            
+            return thinkingDiv;
         }
 
         function createToolCallElement(toolCall) {
@@ -1911,10 +2076,21 @@
             }
         }
 
-        // Extract text from A2A parts
+        // Check if part is a thinking block (AG-UI metadata only)
+        function isThinkingPart(part) {
+            if (!part || !part.metadata) return false;
+            // Check AG-UI metadata
+            return part.metadata.agui_event_type === 'thinking' || 
+                   part.metadata.agui_block_type === 'thinking';
+        }
+
+        // Extract text from A2A parts (AG-UI metadata aware)
         function extractTextFromParts(parts) {
             if (!parts || !Array.isArray(parts)) return '';
             return parts.map(part => {
+                // Skip thinking parts from main text
+                if (isThinkingPart(part)) return '';
+                
                 if (part.text) return part.text;
                 if (part.type === 'text' && part.text) return part.text;
                 if (typeof part === 'string') return part;
@@ -1922,33 +2098,56 @@
             }).filter(t => t).join('\n');
         }
 
-        // Extract tool calls from A2A parts
+        // Extract thinking blocks from A2A parts
+        function extractThinkingFromParts(parts) {
+            if (!parts || !Array.isArray(parts)) return [];
+            return parts
+                .filter(isThinkingPart)
+                .map((part, index) => ({
+                    id: part.metadata?.agui_block_id || `thinking-${index}`,
+                    content: part.text || '',
+                    index: part.metadata?.agui_block_index || index
+                }))
+                .filter(t => t.content);
+        }
+
+        // Extract tool calls from A2A parts (AG-UI metadata only)
         function extractToolCallsFromParts(parts) {
             if (!parts || !Array.isArray(parts)) return [];
             return parts
-                .filter(part => part.metadata && part.metadata.part_type === 'tool_call')
+                .filter(part => {
+                    if (!part.metadata) return false;
+                    // Check AG-UI metadata and ensure it's NOT a tool result
+                    return part.metadata.agui_event_type === 'tool_call' && 
+                           !part.metadata.hasOwnProperty('agui_is_error');
+                })
                 .map(part => {
-                    // Tool call data is in part.data, not part.metadata
                     const data = part.data?.data || {};
+                    const metadata = part.metadata || {};
                     return {
-                        id: data.id || Math.random().toString(36).substr(2, 9),
-                        name: data.name || 'unknown',
+                        id: metadata.agui_tool_call_id || data.id || Math.random().toString(36).substr(2, 9),
+                        name: metadata.agui_tool_name || data.name || 'unknown',
                         args: data.arguments || {}
                     };
                 });
         }
 
-        // Extract tool results from A2A parts
+        // Extract tool results from A2A parts (AG-UI metadata only)
         function extractToolResultsFromParts(parts) {
             if (!parts || !Array.isArray(parts)) return [];
             return parts
-                .filter(part => part.metadata && part.metadata.part_type === 'tool_result')
+                .filter(part => {
+                    if (!part.metadata) return false;
+                    // Tool results have agui_is_error field
+                    return part.metadata.agui_event_type === 'tool_call' && 
+                           part.metadata.hasOwnProperty('agui_is_error');
+                })
                 .map(part => {
-                    // Tool result data is in part.data, not part.metadata
                     const data = part.data?.data || {};
+                    const metadata = part.metadata || {};
                     return {
-                        tool_call_id: data.tool_call_id,
-                        success: !data.error || data.error === '',
+                        tool_call_id: metadata.agui_tool_call_id || data.tool_call_id,
+                        success: !metadata.agui_is_error && (!data.error || data.error === ''),
                         content: data.content || ''
                     };
                 });
@@ -2078,10 +2277,13 @@
 
                                         if (!currentMessageDiv) {
                                             setTyping(false);
-                                            // Create message with initial tool calls (markers are in text, will be replaced during rendering)
+                                            // Extract text, tool calls, and thinking blocks from message parts
+                                            const thinkingBlocks = extractThinkingFromParts(message.parts);
+                                            // Create message with initial tool calls and thinking blocks
                                             const initialToolCalls = Array.from(toolCallsMap.values());
                                             console.log('Creating message with tool calls:', initialToolCalls);
-                                            currentMessageDiv = addMessage('agent', text, { taskId: lastTaskId }, false, []);
+                                            console.log('Creating message with thinking blocks:', thinkingBlocks);
+                                            currentMessageDiv = addMessage('agent', text, { taskId: lastTaskId }, false, [], thinkingBlocks);
                                             // Store toolCallsMap reference on the message element for updates
                                             currentMessageDiv._toolCallsMap = toolCallsMap;
                                             // Now update to render badges at marker positions

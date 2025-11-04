@@ -54,7 +54,7 @@ func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecompo
 		}
 	}
 
-	outputCh <- createTextPart(output)
+	outputCh <- createThinkingPart(output)
 }
 
 func (s *SupervisorStrategy) ShouldStop(text string, toolCalls []*protocol.ToolCall, state *ReasoningState) bool {
