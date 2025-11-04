@@ -869,11 +869,12 @@
             overflow-y: auto;
             z-index: 1000;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            animation: expandArgs 0.2s ease-out;
+            display: none; /* Hidden by default */
         }
 
-        .tool-args.collapsed {
-            display: none;
+        .tool-args.visible {
+            display: block;
+            animation: expandArgs 0.2s ease-out;
         }
 
         .tool-args pre {
@@ -1667,13 +1668,8 @@
             const bubble = document.createElement('div');
             bubble.className = 'message-bubble';
 
-            // Add thinking blocks first (before main content)
-            if (thinkingBlocks && thinkingBlocks.length > 0) {
-                thinkingBlocks.forEach(thinkingBlock => {
-                    const thinkingElement = createThinkingBlockElement(thinkingBlock);
-                    bubble.appendChild(thinkingElement);
-                });
-            }
+            // Thinking blocks are now handled via markers in text (unified system)
+            // Remove old block insertion - they'll be inserted at marker positions
 
             // Add text content
             const content = document.createElement('div');
@@ -1689,160 +1685,33 @@
                 });
             }
             
-            // Process tool calls: replace markers in text with badges at their positions
+            // UNIFIED SYSTEM: Process tool calls using unified widget system
             if (toolCalls && toolCalls.length > 0) {
                 const toolCallsMap = new Map();
                 toolCalls.forEach(tc => {
                     toolCallsMap.set(tc.id, tc);
                 });
                 
-                // Find and replace tool call markers with badges at their positions
-                toolCallsMap.forEach((tc, toolId) => {
-                    // Try multiple marker formats to handle different saved formats
-                    // Also try without underscores and with different separators
-                    const markers = [
-                        `\u200D\u200D__TOOL_${toolId}__\u200D\u200D`,  // Standard format with zero-width joiners
-                        `__TOOL_${toolId}__`,  // Without zero-width joiners
-                        `__TOOL_call_${toolId}__`,  // Alternative format
-                        `\u200D\u200D__TOOL_call_${toolId}__\u200D\u200D`,  // With zero-width joiners and "call"
-                        `\u200D\u200D_TOOL_${toolId}_\u200D\u200D`,  // Single underscore variant
-                        `_TOOL_${toolId}_`,  // Single underscore without zero-width joiners
-                        `${toolId}`,  // Just the ID (fallback, but might match incorrectly)
-                    ];
-                    const walker = document.createTreeWalker(
-                        content,
-                        NodeFilter.SHOW_TEXT,
-                        null
-                    );
-                    
-                    let node;
-                    let found = false;
-                    let usedMarker = null;
-                    
-                    // Try to find any marker format in the text
-                    // First, try exact matches, then try case-insensitive, then try partial matches
-                    while (node = walker.nextNode()) {
-                        const textContent = node.textContent;
-                        
-                        // Try each marker format (in order of preference)
-                        for (const marker of markers) {
-                            // Skip the fallback ID-only marker if we have other options
-                            if (marker === toolId && markers.length > 1) continue;
-                            
-                            if (textContent.includes(marker)) {
-                                usedMarker = marker;
-                                
-                                // Debug: log when marker is found
-                                if (marker !== toolId) {
-                                    console.log(`Found marker for tool ${toolId}: ${marker}`);
-                                }
-                                
-                                // Create tool badge
-                                const toolDiv = createToolCallElement(tc);
-                                // Mark as already animated to prevent slide-in on load
-                                const badgeElement = toolDiv.querySelector('.tool-call-badge');
-                                if (badgeElement) {
-                                    badgeElement.setAttribute('data-animated', 'true');
-                                }
-                                
-                                // Split text node and insert badge at marker position
-                                const index = textContent.indexOf(marker);
-                                const beforeText = textContent.substring(0, index);
-                                const afterText = textContent.substring(index + marker.length);
-                                
-                                // Update text node with content before marker
-                                if (beforeText.trim()) {
-                                    node.textContent = beforeText;
-                                } else {
-                                    node.textContent = beforeText || '';
-                                }
-                                
-                                // Insert badge as block element
-                                if (node.parentNode) {
-                                    node.parentNode.insertBefore(toolDiv, node.nextSibling);
-                                    
-                                    // Insert text after badge
-                                    if (afterText.trim()) {
-                                        const afterNode = document.createTextNode(afterText);
-                                        node.parentNode.insertBefore(afterNode, toolDiv.nextSibling);
-                                    }
-                                }
-                                
-                                found = true;
-                                break; // Found marker, exit inner loop
-                            }
-                        }
-                        
-                        if (found) break; // Found marker, exit outer loop
-                    }
-                    
-                    // If marker not found in text nodes, try searching in HTML content
-                    if (!found) {
-                        const htmlContent = content.innerHTML;
-                        for (const marker of markers) {
-                            if (marker === toolId && markers.length > 1) continue; // Skip ID-only fallback
-                            
-                            if (htmlContent.includes(marker)) {
-                                console.log(`Found marker in HTML for tool ${toolId}: ${marker}`);
-                                // Replace marker in HTML directly
-                                const toolDiv = createToolCallElement(tc);
-                                const badgeElement = toolDiv.querySelector('.tool-call-badge');
-                                if (badgeElement) {
-                                    badgeElement.setAttribute('data-animated', 'true');
-                                }
-                                // Replace marker with placeholder, then replace placeholder with badge HTML
-                                const placeholder = `__PLACEHOLDER_TOOL_${toolId}__`;
-                                content.innerHTML = htmlContent.replace(marker, placeholder);
-                                
-                                // Re-apply code highlighting after HTML replacement
-                                content.querySelectorAll('pre code').forEach((block) => {
-                                    hljs.highlightElement(block);
-                                });
-                                
-                                // Now find placeholder and replace with actual badge element
-                                const walker2 = document.createTreeWalker(
-                                    content,
-                                    NodeFilter.SHOW_TEXT,
-                                    null
-                                );
-                                let node2;
-                                while (node2 = walker2.nextNode()) {
-                                    if (node2.textContent.includes(placeholder)) {
-                                        const index = node2.textContent.indexOf(placeholder);
-                                        const beforeText = node2.textContent.substring(0, index);
-                                        const afterText = node2.textContent.substring(index + placeholder.length);
-                                        node2.textContent = beforeText;
-                                        if (node2.parentNode) {
-                                            node2.parentNode.insertBefore(toolDiv, node2.nextSibling);
-                                            if (afterText) {
-                                                const afterNode = document.createTextNode(afterText);
-                                                node2.parentNode.insertBefore(afterNode, toolDiv.nextSibling);
-                                            }
-                                        }
-                                        found = true;
-                                        break;
-                                    }
-                                }
-                                if (found) break;
-                            }
-                        }
-                    }
-                    
-                    // If still not found, append at end (fallback)
-                    if (!found) {
-                        console.log(`Marker not found for tool ${toolId}, appending at end`);
-                        const toolDiv = createToolCallElement(tc);
-                        const badgeElement = toolDiv.querySelector('.tool-call-badge');
-                        if (badgeElement) {
-                            badgeElement.setAttribute('data-animated', 'true');
-                        }
-                        content.appendChild(toolDiv);
-                    }
+                // Use unified widget system to replace tool markers
+                const existingWidgets = extractExistingWidgets(content);
+                replaceWidgetMarkers(content, toolCallsMap, 'tool', existingWidgets);
+            }
+            
+            
+            // UNIFIED SYSTEM: Process thinking blocks using unified system
+            if (thinkingBlocks && thinkingBlocks.length > 0) {
+                const thinkingBlocksMap = new Map();
+                thinkingBlocks.forEach(tb => {
+                    thinkingBlocksMap.set(tb.id, tb);
                 });
+                
+                // Use unified widget system to replace thinking markers
+                const existingWidgets = extractExistingWidgets(content);
+                replaceWidgetMarkers(content, thinkingBlocksMap, 'thinking', existingWidgets);
             }
             
             bubble.appendChild(content);
-
+            
             const meta = document.createElement('div');
             meta.className = 'message-meta';
             
@@ -1895,11 +1764,11 @@
             }
             
             // Default thinking badge for reflections/progress
-            const thinkingDiv = document.createElement('span');
+            const thinkingDiv = document.createElement('div');  // Changed from span to div
             thinkingDiv.className = 'thinking-block';
             thinkingDiv.setAttribute('data-thinking-id', thinkingBlock.id);
             
-            const badge = document.createElement('span');
+            const badge = document.createElement('div');  // Changed from span to div
             badge.className = 'thinking-badge';
             
             const icon = document.createElement('span');
@@ -1922,10 +1791,8 @@
             content.className = 'thinking-content';
             content.textContent = thinkingBlock.content;
             
-            badge.addEventListener('click', () => {
-                const isVisible = content.classList.toggle('visible');
-                toggle.textContent = isVisible ? '▲' : '▼';
-            });
+            // DON'T add click handler here - let unified system handle it
+            // (setupCollapsibleWidget will add the proper handler)
             
             thinkingDiv.appendChild(badge);
             thinkingDiv.appendChild(content);
@@ -1993,10 +1860,7 @@
             
             content.appendChild(ul);
             
-            badge.querySelector('.thinking-toggle').addEventListener('click', () => {
-                const isVisible = content.classList.toggle('visible');
-                badge.querySelector('.thinking-toggle').textContent = isVisible ? '▲' : '▼';
-            });
+            // DON'T add click handler here - let unified system handle it
             
             todoDiv.appendChild(badge);
             todoDiv.appendChild(content);
@@ -2039,10 +1903,7 @@
                 content.appendChild(subtasksList);
             }
             
-            badge.querySelector('.thinking-toggle').addEventListener('click', () => {
-                const isVisible = content.classList.toggle('visible');
-                badge.querySelector('.thinking-toggle').textContent = isVisible ? '▲' : '▼';
-            });
+            // DON'T add click handler here - let unified system handle it
             
             goalDiv.appendChild(badge);
             goalDiv.appendChild(content);
@@ -2094,19 +1955,13 @@
                 argsToggle.title = 'Show arguments';
                 
                 const argsDiv = document.createElement('div');
-                argsDiv.className = 'tool-args collapsed';
+                argsDiv.className = 'tool-args'; // Not collapsed by default, unified system handles this
                 
                 const argsPre = document.createElement('pre');
                 argsPre.textContent = JSON.stringify(toolCall.args, null, 2);
                 argsDiv.appendChild(argsPre);
                 
-                badge.onclick = (e) => {
-                    e.stopPropagation();
-                    const isCollapsed = argsDiv.classList.contains('collapsed');
-                    argsDiv.classList.toggle('collapsed');
-                    argsToggle.textContent = isCollapsed ? '▲' : '▼';
-                    argsToggle.title = isCollapsed ? 'Hide arguments' : 'Show arguments';
-                };
+                // Click handler will be set up by setupCollapsibleWidget() in the unified system
                 
                 badge.appendChild(argsToggle);
                 toolDiv.appendChild(badge);
@@ -2140,100 +1995,88 @@
             });
         }
 
-        function updateMessage(messageDiv, text, toolCallsMap = null, thinkingBlocksMap = null) {
-            const contentDiv = messageDiv.querySelector('.message-content');
+        // ============================================================================
+        // UNIFIED WIDGET ARCHITECTURE
+        // ============================================================================
+        
+        // Widget type configurations - tools, thinking blocks, and any future inline widgets
+        const WIDGET_TYPES = {
+            tool: {
+                selector: '.tool-call',
+                idAttribute: 'data-tool-id',
+                markerPrefix: '__TOOL_',
+                badgeSelector: '.tool-call-badge',
+                statusSelector: '.tool-status',
+                toggleSelector: '.tool-args-toggle',
+                expandableSelector: '.tool-args',
+                creator: (data) => createToolCallElement(data)
+            },
+            thinking: {
+                selector: '.thinking-block',
+                idAttribute: 'data-thinking-id',
+                markerPrefix: '__THINKING_',
+                badgeSelector: '.thinking-badge',
+                statusSelector: null,
+                expandableSelector: '.thinking-content',
+                creator: (data) => createThinkingBlockElement(data)
+            }
+        };
+
+        // Global state for collapsible widgets - store ID, not DOM reference
+        let currentlyExpandedWidgetId = null;
+
+        // Extract existing widgets of all types from contentDiv
+        function extractExistingWidgets(contentDiv) {
+            const allWidgets = new Map();
             
-            // Preserve existing tool badge DOM elements and their positions to avoid flicker
-            const existingBadges = new Map();
-            const badgePositions = [];
-            Array.from(contentDiv.querySelectorAll('.tool-call')).forEach(el => {
-                const toolId = el.getAttribute('data-tool-id');
-                if (toolId) {
-                    existingBadges.set(toolId, el);
-                    // Store the badge's position relative to its parent
-                    const parent = el.parentNode;
-                    if (parent) {
-                        const siblings = Array.from(parent.childNodes);
-                        const index = siblings.indexOf(el);
-                        badgePositions.push({ toolId, el, parent, index });
+            Object.entries(WIDGET_TYPES).forEach(([type, config]) => {
+                Array.from(contentDiv.querySelectorAll(config.selector)).forEach(el => {
+                    const id = el.getAttribute(config.idAttribute);
+                    if (id) {
+                        allWidgets.set(id, { element: el, type, config });
+                    }
+                });
+            });
+            
+            return allWidgets;
+        }
+
+        // Preserve widgets by moving to temp container and marking as animated
+        function preserveWidgets(widgetsMap) {
+            const fragment = document.createDocumentFragment();
+            
+            widgetsMap.forEach(({ element, config }) => {
+                // Mark badge as already animated
+                const badge = element.querySelector(config.badgeSelector);
+                if (badge) {
+                    badge.setAttribute('data-animated', 'true');
+                }
+                
+                // Mark status element as animated (for tools)
+                if (config.statusSelector) {
+                    const status = element.querySelector(config.statusSelector);
+                    if (status && (status.classList.contains('success') || status.classList.contains('failed'))) {
+                        status.setAttribute('data-animated', 'true');
                     }
                 }
+                
+                fragment.appendChild(element);
             });
             
-            // Preserve existing thinking block DOM elements to avoid flicker
-            const existingThinkingBlocks = new Map();
-            Array.from(contentDiv.querySelectorAll('.thinking-block')).forEach(el => {
-                const thinkingId = el.getAttribute('data-thinking-id');
-                if (thinkingId) {
-                    existingThinkingBlocks.set(thinkingId, el);
-                }
-            });
+            const container = document.createElement('div');
+            container.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;';
+            document.body.appendChild(container);
+            container.appendChild(fragment);
             
-            // Temporarily move badges and thinking blocks outside contentDiv to preserve them during innerHTML update
-            // Use a fragment to keep them in memory without detaching from animation timeline
-            const badgeFragment = document.createDocumentFragment();
-            const badgeIdsToPreserve = Array.from(existingBadges.keys());
-            existingBadges.forEach((badge, toolId) => {
-                // Mark badge as already animated to prevent slide-in animation on reinsertion
-                const badgeElement = badge.querySelector('.tool-call-badge');
-                if (badgeElement) {
-                    badgeElement.setAttribute('data-animated', 'true');
-                }
-                // Mark status element as animated to prevent success/failed animations from restarting
-                const statusElement = badge.querySelector('.tool-status');
-                if (statusElement && (statusElement.classList.contains('success') || statusElement.classList.contains('failed'))) {
-                    statusElement.setAttribute('data-animated', 'true');
-                }
-                badgeFragment.appendChild(badge);
-            });
+            return container;
+        }
+
+        // Replace markers with widgets using unified tree walking logic
+        function replaceWidgetMarkers(contentDiv, widgetsDataMap, widgetType, existingWidgetsMap) {
+            const config = WIDGET_TYPES[widgetType];
             
-            // Also preserve thinking blocks
-            existingThinkingBlocks.forEach((thinkingBlock, thinkingId) => {
-                // Mark thinking badge as already animated
-                const thinkingBadge = thinkingBlock.querySelector('.thinking-badge');
-                if (thinkingBadge) {
-                    thinkingBadge.setAttribute('data-animated', 'true');
-                }
-                badgeFragment.appendChild(thinkingBlock);
-            });
-            
-            const badgeContainer = document.createElement('div');
-            badgeContainer.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;';
-            document.body.appendChild(badgeContainer);
-            badgeContainer.appendChild(badgeFragment);
-            
-            // Get tool calls from the map if provided
-            let toolCallsToRender = new Map();
-            if (toolCallsMap && toolCallsMap.size > 0) {
-                toolCallsToRender = toolCallsMap;
-            } else if (existingBadges.size > 0) {
-                // Fallback: reconstruct from existing badges
-                existingBadges.forEach((el, toolId) => {
-                    const toolName = el.querySelector('.tool-name')?.textContent || 'unknown';
-                    const statusEl = el.querySelector('.tool-status');
-                    const status = statusEl?.classList.contains('success') ? 'success' : 
-                                  statusEl?.classList.contains('failed') ? 'failed' : 'working';
-                    toolCallsToRender.set(toolId, {
-                        id: toolId,
-                        name: toolName,
-                        args: {},
-                        _preserved: true,
-                        _status: status
-                    });
-                });
-            }
-            
-            // Update the markdown content (badges are safely stored outside)
-            contentDiv.innerHTML = marked.parse(text);
-            
-            // Highlight code blocks
-            contentDiv.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightElement(block);
-            });
-            
-            // Find and replace tool call markers with preserved badges at their positions
-            toolCallsToRender.forEach((tc, toolId) => {
-                const marker = `\u200D\u200D__TOOL_${toolId}__\u200D\u200D`;
+            widgetsDataMap.forEach((data, id) => {
+                const marker = `\u200D\u200D${config.markerPrefix}${id}__\u200D\u200D`;
                 const walker = document.createTreeWalker(
                     contentDiv,
                     NodeFilter.SHOW_TEXT,
@@ -2241,175 +2084,192 @@
                 );
                 
                 let node;
-                let found = false;
                 while (node = walker.nextNode()) {
                     const textContent = node.textContent;
                     if (textContent.includes(marker)) {
-                        // Get preserved badge or create new one
-                        let toolDiv = existingBadges.get(toolId);
-                        if (!toolDiv) {
-                            toolDiv = createToolCallElement(tc);
-                            // Mark new badges as animated after a brief delay
-                            setTimeout(() => {
-                                toolDiv.querySelector('.tool-call-badge')?.setAttribute('data-animated', 'true');
-                            }, 300);
-                            // Restore status if it was preserved
-                            if (tc._preserved && tc._status) {
-                                const status = toolDiv.querySelector('.tool-status');
-                                if (status && tc._status !== 'working') {
-                                    status.classList.remove('working');
-                                    if (tc._status === 'success') {
-                                        status.classList.add('success');
-                                        status.textContent = '✓';
-                                        // Mark status as animated immediately if it's already success/failed (not a new change)
-                                        status.setAttribute('data-animated', 'true');
-                                    } else if (tc._status === 'failed') {
-                                        status.classList.add('failed');
-                                        status.textContent = '✗';
-                                        // Mark status as animated immediately if it's already success/failed (not a new change)
-                                        status.setAttribute('data-animated', 'true');
-                                    }
-                                }
-                            }
+                        // Get preserved widget or create new one
+                        let widgetElement = existingWidgetsMap.get(id)?.element;
+                        if (widgetElement) {
+                            existingWidgetsMap.delete(id);
+                            // CRITICAL: Re-setup collapsible behavior for preserved widgets
+                            // (handlers may have been lost during innerHTML replacement)
+                            setupCollapsibleWidget(widgetElement, config);
                         } else {
-                            // Badge is preserved - ensure status element is marked as animated if it has success/failed
-                            const statusEl = toolDiv.querySelector('.tool-status');
-                            if (statusEl && (statusEl.classList.contains('success') || statusEl.classList.contains('failed'))) {
-                                if (!statusEl.hasAttribute('data-animated')) {
-                                    statusEl.setAttribute('data-animated', 'true');
-                                }
-                            }
+                            // Create new widget
+                            widgetElement = config.creator(data);
+                            // Setup collapsible behavior for new widgets
+                            setupCollapsibleWidget(widgetElement, config);
                         }
-                        // Remove from preserved badges (will be moved back into DOM)
-                        existingBadges.delete(toolId);
                         
-                        // Split text node and insert badge at marker position
+                        // Split text node and insert widget at marker position
                         const index = textContent.indexOf(marker);
                         const beforeText = textContent.substring(0, index);
                         const afterText = textContent.substring(index + marker.length);
                         
-                        // Update text node with content before marker
-                        if (beforeText.trim()) {
-                            node.textContent = beforeText;
-                        } else {
-                            node.textContent = beforeText || '';
-                        }
+                        node.textContent = beforeText || '';
                         
-                        // Insert preserved badge as block element (will break text flow and create new line)
                         if (node.parentNode) {
-                            // Insert badge - as block element it will appear on its own line
-                            node.parentNode.insertBefore(toolDiv, node.nextSibling);
-                            
-                            // Insert text after badge - will continue after the badge's block
+                            node.parentNode.insertBefore(widgetElement, node.nextSibling);
                             if (afterText.trim()) {
                                 const afterNode = document.createTextNode(afterText);
-                                node.parentNode.insertBefore(afterNode, toolDiv.nextSibling);
+                                node.parentNode.insertBefore(afterNode, widgetElement.nextSibling);
                             }
                         }
                         
-                        found = true;
-                        break; // Only replace first occurrence per tool
+                        break;
                     }
-                }
-                
-                // If marker not found but badge exists, append at end (fallback)
-                if (!found) {
-                    let toolDiv = existingBadges.get(toolId);
-                    if (!toolDiv) {
-                        toolDiv = createToolCallElement(tc);
-                        if (tc._preserved && tc._status) {
-                            const status = toolDiv.querySelector('.tool-status');
-                            if (status && tc._status !== 'working') {
-                                status.classList.remove('working');
-                                if (tc._status === 'success') {
-                                    status.classList.add('success');
-                                    status.textContent = '✓';
-                                } else if (tc._status === 'failed') {
-                                    status.classList.add('failed');
-                                    status.textContent = '✗';
-                                }
-                            }
-                        }
-                    }
-                    contentDiv.appendChild(toolDiv);
-                    existingBadges.delete(toolId);
                 }
             });
+        }
+
+        // Setup collapsible behavior for a widget
+        function setupCollapsibleWidget(widgetElement, config) {
+            console.log('[COLLAPSIBLE] Setup called for widget:', widgetElement.className, 'config:', config);
             
-            // Find and replace thinking block markers with badges (same pattern as tools)
-            if (thinkingBlocksMap && thinkingBlocksMap.size > 0) {
-                console.log('[THINKING] Attempting to replace', thinkingBlocksMap.size, 'thinking block markers');
-                thinkingBlocksMap.forEach((thinkingBlock, thinkingId) => {
-                    const marker = `\u200D\u200D__THINKING_${thinkingId}__\u200D\u200D`;
-                    console.log('[THINKING] Looking for marker:', marker, 'for block:', thinkingBlock);
-                    const walker = document.createTreeWalker(
-                        contentDiv,
-                        NodeFilter.SHOW_TEXT,
-                        null
-                    );
-                    
-                    let node;
-                    let foundMarker = false;
-                    while (node = walker.nextNode()) {
-                        const textContent = node.textContent;
-                        if (textContent.includes(marker)) {
-                            console.log('[THINKING] Found marker in text node!');
-                            foundMarker = true;
-                            // Get preserved thinking block or create new one
-                            let thinkingDiv = existingThinkingBlocks.get(thinkingId);
-                            if (!thinkingDiv) {
-                                // Create new thinking badge element
-                                thinkingDiv = createThinkingBlockElement(thinkingBlock);
-                            } else {
-                                // Remove from preserved map (will be reinserted)
-                                existingThinkingBlocks.delete(thinkingId);
-                            }
-                            
-                            // Mark badge as animated after creation
-                            setTimeout(() => {
-                                const badge = thinkingDiv.querySelector('.thinking-badge');
-                                if (badge) {
-                                    badge.setAttribute('data-animated', 'true');
-                                }
-                            }, 300);
-                            
-                            // Split text node and insert badge at marker position
-                            const index = textContent.indexOf(marker);
-                            const beforeText = textContent.substring(0, index);
-                            const afterText = textContent.substring(index + marker.length);
-                            
-                            // Update text node with content before marker
-                            node.textContent = beforeText || '';
-                            
-                            // Insert thinking badge as block element
-                            if (node.parentNode) {
-                                node.parentNode.insertBefore(thinkingDiv, node.nextSibling);
-                                
-                                // Insert text after badge
-                                if (afterText.trim()) {
-                                    const afterNode = document.createTextNode(afterText);
-                                    node.parentNode.insertBefore(afterNode, thinkingDiv.nextSibling);
-                                }
-                            }
-                            
-                            break; // Only replace first occurrence
+            if (!config.expandableSelector) {
+                console.log('[COLLAPSIBLE] No expandable selector, skipping');
+                return;
+            }
+            
+            const badge = widgetElement.querySelector(config.badgeSelector);
+            const content = widgetElement.querySelector(config.expandableSelector);
+            const toggle = badge?.querySelector('.tool-toggle, .thinking-toggle');
+            
+            console.log('[COLLAPSIBLE] Found elements - badge:', !!badge, 'content:', !!content, 'toggle:', !!toggle);
+            
+            if (!badge || !content) {
+                console.log('[COLLAPSIBLE] Missing badge or content, skipping');
+                return;
+            }
+            
+            // Check if already setup to avoid duplicate listeners
+            if (badge.dataset.collapsibleSetup === 'true') {
+                console.log('[COLLAPSIBLE] Already setup, skipping');
+                return;
+            }
+            
+            // Make badge clickable to toggle
+            badge.style.cursor = 'pointer';
+            
+            // Create bound handler function and store reference
+            const clickHandler = (e) => {
+                console.log('[COLLAPSIBLE] Badge clicked!', widgetElement.className);
+                e.stopPropagation();
+                toggleWidget(widgetElement, content, toggle);
+            };
+            
+            badge.addEventListener('click', clickHandler);
+            badge.dataset.collapsibleSetup = 'true';
+            console.log('[COLLAPSIBLE] Setup complete, handler attached');
+        }
+
+        // Toggle widget expansion (mutually exclusive)
+        function toggleWidget(widgetElement, content, toggle) {
+            const currentId = widgetElement.getAttribute('data-thinking-id') || widgetElement.getAttribute('data-tool-id');
+            console.log('[TOGGLE] Called for widget ID:', currentId);
+            const isCurrentlyExpanded = content.classList.contains('visible');
+            console.log('[TOGGLE] Currently expanded:', isCurrentlyExpanded);
+            console.log('[TOGGLE] Global expanded ID:', currentlyExpandedWidgetId);
+            
+            // Close previously expanded widget (by ID)
+            if (currentlyExpandedWidgetId && currentlyExpandedWidgetId !== currentId) {
+                console.log('[TOGGLE] Closing previous widget ID:', currentlyExpandedWidgetId);
+                // Look up the previous widget fresh by ID
+                const prevWidget = document.querySelector(`[data-thinking-id="${currentlyExpandedWidgetId}"], [data-tool-id="${currentlyExpandedWidgetId}"]`);
+                if (prevWidget) {
+                    const prevContent = prevWidget.querySelector('.tool-args, .thinking-content');
+                    const prevToggle = prevWidget.querySelector('.tool-args-toggle, .thinking-toggle');
+                    if (prevContent) {
+                        prevContent.classList.remove('visible');
+                        console.log('[TOGGLE] Previous content closed');
+                    }
+                    if (prevToggle) {
+                        prevToggle.textContent = '▼';
+                    }
+                }
+            }
+            
+            // Toggle current widget
+            if (isCurrentlyExpanded) {
+                console.log('[TOGGLE] Closing current widget');
+                content.classList.remove('visible');
+                if (toggle) toggle.textContent = '▼';
+                currentlyExpandedWidgetId = null;
+            } else {
+                console.log('[TOGGLE] Opening current widget');
+                content.classList.add('visible');
+                if (toggle) toggle.textContent = '▲';
+                currentlyExpandedWidgetId = currentId;
+            }
+            console.log('[TOGGLE] New global expanded ID:', currentlyExpandedWidgetId);
+        }
+
+        // Close expanded widget when clicking outside
+        document.addEventListener('click', (e) => {
+            console.log('[OUTSIDE-CLICK] Document clicked, target:', e.target.className, 'tagName:', e.target.tagName);
+            if (currentlyExpandedWidgetId) {
+                console.log('[OUTSIDE-CLICK] Widget ID expanded:', currentlyExpandedWidgetId);
+                // Look up the expanded widget fresh by ID
+                const expandedWidget = document.querySelector(`[data-thinking-id="${currentlyExpandedWidgetId}"], [data-tool-id="${currentlyExpandedWidgetId}"]`);
+                if (expandedWidget) {
+                    const contains = expandedWidget.contains(e.target);
+                    console.log('[OUTSIDE-CLICK] Contains check:', contains, 'target:', e.target.className || e.target.tagName);
+                    // Check if click is outside the expanded widget
+                    if (!contains) {
+                        console.log('[OUTSIDE-CLICK] Click is OUTSIDE, closing widget');
+                        const content = expandedWidget.querySelector('.tool-args, .thinking-content');
+                        const toggle = expandedWidget.querySelector('.tool-args-toggle, .thinking-toggle');
+                        if (content) {
+                            content.classList.remove('visible');
+                            console.log('[OUTSIDE-CLICK] Content hidden, visible class:', content.classList.contains('visible'));
                         }
+                        if (toggle) {
+                            toggle.textContent = '▼';
+                        }
+                        currentlyExpandedWidgetId = null;
+                    } else {
+                        console.log('[OUTSIDE-CLICK] Click is INSIDE widget, ignoring');
                     }
-                    if (!foundMarker) {
-                        console.log('[THINKING] Marker NOT found in DOM for block:', thinkingId);
-                        console.log('[THINKING] Content HTML:', contentDiv.innerHTML.substring(0, 500));
-                    }
-                });
+                } else {
+                    console.log('[OUTSIDE-CLICK] Widget not found in DOM, clearing state');
+                    currentlyExpandedWidgetId = null;
+                }
+            } else {
+                console.log('[OUTSIDE-CLICK] No widget expanded');
+            }
+        });
+
+        function updateMessage(messageDiv, text, toolCallsMap = null, thinkingBlocksMap = null) {
+            const contentDiv = messageDiv.querySelector('.message-content');
+            
+            // UNIFIED: Extract all existing widgets (tools + thinking + any future types)
+            const existingWidgets = extractExistingWidgets(contentDiv);
+            
+            // UNIFIED: Preserve widgets during innerHTML update
+            const preservationContainer = preserveWidgets(existingWidgets);
+            
+            // Update the markdown content (widgets are safely stored outside)
+            contentDiv.innerHTML = marked.parse(text);
+            
+            // Highlight code blocks
+            contentDiv.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+            
+            // UNIFIED: Replace widget markers for tools
+            if (toolCallsMap && toolCallsMap.size > 0) {
+                replaceWidgetMarkers(contentDiv, toolCallsMap, 'tool', existingWidgets);
             }
             
-            // Clean up: remove any remaining preserved badges from container
-            while (badgeContainer.firstChild) {
-                badgeContainer.removeChild(badgeContainer.firstChild);
+            // UNIFIED: Replace widget markers for thinking blocks
+            if (thinkingBlocksMap && thinkingBlocksMap.size > 0) {
+                replaceWidgetMarkers(contentDiv, thinkingBlocksMap, 'thinking', existingWidgets);
             }
-            document.body.removeChild(badgeContainer);
             
-            // DO NOT save here - this could update the wrong message!
-            // Saving happens explicitly at the end of streaming
+            // Clean up: remove preservation container
+            if (preservationContainer && preservationContainer.parentNode) {
+                preservationContainer.parentNode.removeChild(preservationContainer);
+            }
             
             scrollToBottom();
         }
@@ -2642,20 +2502,17 @@
                                                     text += `\u200D\u200D__TOOL_${tc.id}__\u200D\u200D`;
                                                 }
                                             });
-                                            // Insert thinking markers
-                                            console.log('[THINKING] Inserting markers for', newThinkingBlocks.length, 'thinking blocks on first chunk');
-                                            newThinkingBlocks.forEach(thinkingBlock => {
-                                                const marker = `\u200D\u200D__THINKING_${thinkingBlock.id}__\u200D\u200D`;
-                                                text += marker;
-                                                console.log('[THINKING] Inserted marker:', marker, 'text length now:', text.length);
-                                            });
+                                        // Insert thinking markers
+                                        newThinkingBlocks.forEach(thinkingBlock => {
+                                            const marker = `\u200D\u200D__THINKING_${thinkingBlock.id}__\u200D\u200D`;
+                                            text += marker;
+                                        });
                                         } else {
                                             // For subsequent chunks, insert markers into accumulated text
                                             newThinkingBlocks.forEach(thinkingBlock => {
                                                 if (thinkingBlock.id && !accumulatedText.includes(`__THINKING_${thinkingBlock.id}__`)) {
                                                     const marker = `\u200D\u200D__THINKING_${thinkingBlock.id}__\u200D\u200D`;
                                                     text += marker;
-                                                    console.log('[THINKING] Inserted marker on subsequent chunk:', marker);
                                                 }
                                             });
                                         }
@@ -2712,11 +2569,15 @@
                             return tc;
                         });
                         
+                        // Convert thinking blocks map to array for storage
+                        const thinkingBlocksArray = Array.from(thinkingBlocksMap.values());
+                        
                         sessions[currentSessionId].messages.push({
                             role: 'agent',
                             text: accumulatedText,
                             metadata: { taskId: lastTaskId },
-                            toolCalls: toolCallsWithStatus
+                            toolCalls: toolCallsWithStatus,
+                            thinkingBlocks: thinkingBlocksArray  // Save thinking blocks for restoration
                         });
                         sessions[currentSessionId].taskId = lastTaskId;
                         saveSessions();
