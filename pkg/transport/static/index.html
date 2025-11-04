@@ -699,6 +699,137 @@
             border-radius: 3px;
         }
 
+        /* Todo list styling (AG-UI structured data) */
+        .todo-list-block .thinking-badge {
+            background: rgba(59, 130, 246, 0.08);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .todo-list {
+            list-style: none;
+            padding: 0;
+            margin: 8px 0;
+        }
+
+        .todo-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .todo-item:last-child {
+            border-bottom: none;
+        }
+
+        .todo-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: not-allowed;
+            accent-color: #3b82f6;
+        }
+
+        .todo-text {
+            flex: 1;
+            font-size: 13px;
+        }
+
+        .todo-item.todo-completed .todo-text {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+
+        .todo-status-badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .status-pending {
+            background: rgba(156, 163, 175, 0.2);
+            color: #9ca3af;
+        }
+
+        .status-in_progress, .status-in-progress {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+        }
+
+        .status-completed {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .status-canceled, .status-cancelled {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        /* Goal/Task decomposition styling (AG-UI structured data) */
+        .goal-block .thinking-badge {
+            background: rgba(168, 85, 247, 0.08);
+            border-color: rgba(168, 85, 247, 0.3);
+        }
+
+        .main-goal {
+            padding: 8px 0;
+            font-size: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 8px;
+        }
+
+        .main-goal strong {
+            color: #a855f7;
+            margin-right: 8px;
+        }
+
+        .subtasks-list {
+            list-style: none;
+            padding: 0;
+            counter-reset: subtask-counter;
+        }
+
+        .subtask-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            counter-increment: subtask-counter;
+        }
+
+        .subtask-item::before {
+            content: counter(subtask-counter) ".";
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.5);
+            min-width: 20px;
+        }
+
+        .priority-badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .subtask-desc {
+            flex: 1;
+            font-size: 13px;
+        }
+
+        .agent-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+            font-family: 'Monaco', monospace;
+        }
+
         .thinking-content::-webkit-scrollbar-thumb:hover {
             background: rgba(138, 43, 226, 0.7);
         }
@@ -1746,22 +1877,32 @@
         }
 
         function createThinkingBlockElement(thinkingBlock) {
-            // Wrapper for positioning
+            const thinkingType = thinkingBlock.type || 'default';
+            
+            // Client decides rendering based on structured data (AG-UI principle)
+            if (thinkingType === 'todo' && thinkingBlock.data?.todos) {
+                return createTodoListElement(thinkingBlock);
+            }
+            
+            if (thinkingType === 'goal' && thinkingBlock.data?.subtasks) {
+                return createGoalDecompositionElement(thinkingBlock);
+            }
+            
+            // Default thinking badge for reflections/progress
             const thinkingDiv = document.createElement('span');
             thinkingDiv.className = 'thinking-block';
             thinkingDiv.setAttribute('data-thinking-id', thinkingBlock.id);
             
-            // Badge with thinking info
             const badge = document.createElement('span');
             badge.className = 'thinking-badge';
             
             const icon = document.createElement('span');
             icon.className = 'thinking-icon';
-            icon.textContent = '💭';
+            icon.textContent = getThinkingIcon(thinkingType);
             
             const label = document.createElement('span');
             label.className = 'thinking-label';
-            label.textContent = 'Thinking...';
+            label.textContent = getThinkingLabel(thinkingType);
             
             const toggle = document.createElement('span');
             toggle.className = 'thinking-toggle';
@@ -1771,12 +1912,10 @@
             badge.appendChild(label);
             badge.appendChild(toggle);
             
-            // Add collapsible content section
             const content = document.createElement('div');
             content.className = 'thinking-content';
             content.textContent = thinkingBlock.content;
             
-            // Toggle visibility
             badge.addEventListener('click', () => {
                 const isVisible = content.classList.toggle('visible');
                 toggle.textContent = isVisible ? '▲' : '▼';
@@ -1786,6 +1925,121 @@
             thinkingDiv.appendChild(content);
             
             return thinkingDiv;
+        }
+        
+        function getThinkingIcon(type) {
+            switch (type) {
+                case 'todo': return '📋';
+                case 'goal': return '🎯';
+                case 'reflection': return '💭';
+                case 'progress': return '⚡';
+                default: return '💭';
+            }
+        }
+        
+        function getThinkingLabel(type) {
+            switch (type) {
+                case 'todo': return 'Tasks';
+                case 'goal': return 'Goal';
+                case 'reflection': return 'Thinking';
+                case 'progress': return 'Progress';
+                default: return 'Thinking...';
+            }
+        }
+        
+        function createTodoListElement(thinkingBlock) {
+            const todoDiv = document.createElement('div');
+            todoDiv.className = 'thinking-block todo-list-block';
+            
+            const badge = document.createElement('div');
+            badge.className = 'thinking-badge todo-badge';
+            badge.innerHTML = '<span class="thinking-icon">📋</span><span class="thinking-label">Tasks</span><span class="thinking-toggle">▼</span>';
+            
+            const content = document.createElement('div');
+            content.className = 'thinking-content todo-content';
+            
+            const ul = document.createElement('ul');
+            ul.className = 'todo-list';
+            
+            thinkingBlock.data.todos.forEach(todo => {
+                const li = document.createElement('li');
+                li.className = `todo-item todo-${todo.status}`;
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = todo.status === 'completed';
+                checkbox.disabled = true; // Read-only
+                
+                const label = document.createElement('span');
+                label.className = 'todo-text';
+                label.textContent = todo.content;
+                
+                const statusBadge = document.createElement('span');
+                statusBadge.className = `todo-status-badge status-${todo.status}`;
+                statusBadge.textContent = todo.status.replace('_', ' ');
+                
+                li.appendChild(checkbox);
+                li.appendChild(label);
+                li.appendChild(statusBadge);
+                ul.appendChild(li);
+            });
+            
+            content.appendChild(ul);
+            
+            badge.querySelector('.thinking-toggle').addEventListener('click', () => {
+                const isVisible = content.classList.toggle('visible');
+                badge.querySelector('.thinking-toggle').textContent = isVisible ? '▲' : '▼';
+            });
+            
+            todoDiv.appendChild(badge);
+            todoDiv.appendChild(content);
+            
+            return todoDiv;
+        }
+        
+        function createGoalDecompositionElement(thinkingBlock) {
+            const goalDiv = document.createElement('div');
+            goalDiv.className = 'thinking-block goal-block';
+            
+            const badge = document.createElement('div');
+            badge.className = 'thinking-badge goal-badge';
+            badge.innerHTML = '<span class="thinking-icon">🎯</span><span class="thinking-label">Task Breakdown</span><span class="thinking-toggle">▼</span>';
+            
+            const content = document.createElement('div');
+            content.className = 'thinking-content goal-content';
+            
+            const mainGoal = document.createElement('div');
+            mainGoal.className = 'main-goal';
+            mainGoal.innerHTML = `<strong>Goal:</strong> ${thinkingBlock.data.main_goal}`;
+            content.appendChild(mainGoal);
+            
+            if (thinkingBlock.data.subtasks && thinkingBlock.data.subtasks.length > 0) {
+                const subtasksList = document.createElement('ol');
+                subtasksList.className = 'subtasks-list';
+                
+                thinkingBlock.data.subtasks.forEach(subtask => {
+                    const li = document.createElement('li');
+                    li.className = 'subtask-item';
+                    li.innerHTML = `
+                        <span class="priority-badge">P${subtask.priority}</span>
+                        <span class="subtask-desc">${subtask.description}</span>
+                        <span class="agent-badge">${subtask.agent_type}</span>
+                    `;
+                    subtasksList.appendChild(li);
+                });
+                
+                content.appendChild(subtasksList);
+            }
+            
+            badge.querySelector('.thinking-toggle').addEventListener('click', () => {
+                const isVisible = content.classList.toggle('visible');
+                badge.querySelector('.thinking-toggle').textContent = isVisible ? '▲' : '▼';
+            });
+            
+            goalDiv.appendChild(badge);
+            goalDiv.appendChild(content);
+            
+            return goalDiv;
         }
 
         function createToolCallElement(toolCall) {
@@ -2098,17 +2352,27 @@
             }).filter(t => t).join('\n');
         }
 
-        // Extract thinking blocks from A2A parts
+        // Extract thinking blocks from A2A parts (AG-UI compliant)
         function extractThinkingFromParts(parts) {
             if (!parts || !Array.isArray(parts)) return [];
             return parts
                 .filter(isThinkingPart)
-                .map((part, index) => ({
-                    id: part.metadata?.block_id || `thinking-${index}`,
-                    content: part.text || '',
-                    index: part.metadata?.block_index || index
-                }))
-                .filter(t => t.content);
+                .map((part, index) => {
+                    // Get content from text field or from data.text
+                    let content = part.text || '';
+                    if (!content && part.data?.data?.text) {
+                        content = part.data.data.text;
+                    }
+                    
+                    return {
+                        id: part.metadata?.block_id || `thinking-${index}`,
+                        content: content,
+                        type: part.metadata?.thinking_type || 'default',
+                        data: part.data?.data || null,
+                        index: part.metadata?.block_index || index
+                    };
+                })
+                .filter(t => t.content || t.data);
         }
 
         // Extract tool calls from A2A parts (AG-UI metadata only)

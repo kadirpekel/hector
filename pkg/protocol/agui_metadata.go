@@ -62,6 +62,50 @@ func CreateThinkingPart(text string, blockID string, blockIndex int) *pb.Part {
 	}
 }
 
+// CreateThinkingPartWithData creates a thinking part with structured data
+// Backend emits structured data, client decides how to render
+func CreateThinkingPartWithData(text string, thinkingType string, data map[string]interface{}) *pb.Part {
+	blockID := uuid.New().String()
+
+	// Metadata: AG-UI event type + optional client rendering hints
+	metadata := map[string]interface{}{
+		"event_type":  AGUIEventTypeThinking,
+		"block_type":  AGUIBlockTypeThinking,
+		"block_id":    blockID,
+		"block_index": 0,
+	}
+
+	// Add thinking_type as rendering hint for client
+	if thinkingType != "" {
+		metadata["thinking_type"] = thinkingType
+	}
+
+	metadataStruct, _ := structpb.NewStruct(metadata)
+
+	// If structured data provided, emit as Data part
+	// Text serves as fallback for simple clients
+	if len(data) > 0 {
+		// Ensure text is in data for clients that prefer it
+		data["text"] = text
+		dataStruct, _ := structpb.NewStruct(data)
+
+		return &pb.Part{
+			Part: &pb.Part_Data{
+				Data: &pb.DataPart{
+					Data: dataStruct,
+				},
+			},
+			Metadata: metadataStruct,
+		}
+	}
+
+	// Fallback to text-only part
+	return &pb.Part{
+		Part:     &pb.Part_Text{Text: text},
+		Metadata: metadataStruct,
+	}
+}
+
 // CreateToolCallPartWithAGUI creates an enhanced tool call part with AG-UI metadata
 func CreateToolCallPartWithAGUI(toolCall *ToolCall) *pb.Part {
 	data, _ := structpb.NewStruct(map[string]interface{}{

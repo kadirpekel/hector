@@ -2,6 +2,7 @@ package reasoning
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/protocol"
@@ -34,22 +35,46 @@ func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningSta
 }
 
 func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecomposition, outputCh chan<- *pb.Part) {
-	output := ThinkingBlock(fmt.Sprintf("Task Decomposition: %s", decomposition.MainGoal))
-	output += ThinkingBlock(fmt.Sprintf("Execution Order: %s", decomposition.ExecutionOrder))
-	output += ThinkingBlock(fmt.Sprintf("Required Agents: %v", decomposition.RequiredAgents))
-	output += ThinkingBlock(fmt.Sprintf("Strategy: %s", decomposition.Strategy))
+	// Build text fallback for simple clients
+	var textBuilder strings.Builder
+	textBuilder.WriteString(fmt.Sprintf("🎯 Goal: %s\n", decomposition.MainGoal))
+	textBuilder.WriteString(fmt.Sprintf("📋 Strategy: %s\n", decomposition.Strategy))
+	textBuilder.WriteString(fmt.Sprintf("🔄 Execution: %s\n", decomposition.ExecutionOrder))
 
 	if len(decomposition.Subtasks) > 0 {
+		textBuilder.WriteString("📝 Subtasks:\n")
 		for i, task := range decomposition.Subtasks {
 			deps := "none"
 			if len(task.DependsOn) > 0 {
 				deps = fmt.Sprintf("%v", task.DependsOn)
 			}
-			output += ThinkingBlock(fmt.Sprintf("Subtask %d: [P%d] %s (agent: %s, depends: %s)", i+1, task.Priority, task.Description, task.AgentType, deps))
+			textBuilder.WriteString(fmt.Sprintf("  %d. [P%d] %s → %s (deps: %s)\n",
+				i+1, task.Priority, task.Description, task.AgentType, deps))
 		}
 	}
 
-	outputCh <- createThinkingPart(output)
+	// Build structured data for rich clients
+	subtasksData := make([]map[string]interface{}, len(decomposition.Subtasks))
+	for i, task := range decomposition.Subtasks {
+		subtasksData[i] = map[string]interface{}{
+			"description": task.Description,
+			"priority":    task.Priority,
+			"agent_type":  task.AgentType,
+			"depends_on":  task.DependsOn,
+		}
+	}
+
+	data := map[string]interface{}{
+		"main_goal":      decomposition.MainGoal,
+		"strategy":       decomposition.Strategy,
+		"execution_order": decomposition.ExecutionOrder,
+		"required_agents": decomposition.RequiredAgents,
+		"subtasks":       subtasksData,
+	}
+
+	// Emit as AG-UI thinking part with structured data
+	// thinking_type is a hint for client rendering
+	outputCh <- protocol.CreateThinkingPartWithData(textBuilder.String(), "goal", data)
 }
 
 func (s *SupervisorStrategy) ShouldStop(text string, toolCalls []*protocol.ToolCall, state *ReasoningState) bool {

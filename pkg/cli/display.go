@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func DisplayAgentList(agents []*pb.AgentCard, mode string) {
@@ -92,10 +93,21 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 			continue
 		}
 
-		// Display tool call parts (AGUI format)
+		// Handle parts with metadata
 		if part.Metadata != nil {
-			// Check for AGUI tool call (event_type = "tool_call" without is_error)
-			if eventType, ok := part.Metadata.Fields["event_type"]; ok && eventType.GetStringValue() == "tool_call" {
+			eventType := ""
+			if et, ok := part.Metadata.Fields["event_type"]; ok {
+				eventType = et.GetStringValue()
+			}
+
+			// Display thinking parts (AG-UI compliant)
+			if eventType == "thinking" {
+				displayThinkingPart(part)
+				continue
+			}
+
+			// Display tool call parts (AG-UI format)
+			if eventType == "tool_call" {
 				// Check if it's a tool call (no is_error) or tool result (has is_error)
 				_, hasIsError := part.Metadata.Fields["is_error"]
 
@@ -132,6 +144,154 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 			}
 		}
 	}
+}
+
+// displayThinkingPart renders thinking parts based on structured data
+// Client decides rendering based on backend's structured data (AG-UI principle)
+func displayThinkingPart(part *pb.Part) {
+	// Get thinking type hint from metadata
+	thinkingType := ""
+	if tt, ok := part.Metadata.Fields["thinking_type"]; ok {
+		thinkingType = tt.GetStringValue()
+	}
+
+	// Check for structured data
+	dataPart := part.GetData()
+	if dataPart != nil && dataPart.Data != nil {
+		// Rich client: render structured data
+		switch thinkingType {
+		case "todo":
+			displayTodosCLI(dataPart.Data)
+			return
+		case "goal":
+			displayGoalCLI(dataPart.Data)
+			return
+		}
+	}
+
+	// Fallback: display text (for simple thinking parts or backwards compatibility)
+	// Try to get text from data first, then from text field
+	text := ""
+	if dataPart != nil && dataPart.Data != nil {
+		if textField, ok := dataPart.Data.Fields["text"]; ok {
+			text = textField.GetStringValue()
+		}
+	}
+	if text == "" {
+		text = part.GetText()
+	}
+
+	if text != "" {
+		// Display with dimmed styling
+		fmt.Print("\033[90m\033[2m")
+		fmt.Print(text)
+		fmt.Print("\033[0m")
+		os.Stdout.Sync()
+	}
+}
+
+// displayTodosCLI renders todo list from structured data
+func displayTodosCLI(data *structpb.Struct) {
+	todosField, ok := data.Fields["todos"]
+	if !ok {
+		return
+	}
+
+	todosList := todosField.GetListValue()
+	if todosList == nil {
+		return
+	}
+
+	fmt.Print("\033[90m\033[2m")
+	fmt.Println("📋 Current Tasks:")
+
+	for i, todoValue := range todosList.Values {
+		todoStruct := todoValue.GetStructValue()
+		if todoStruct == nil {
+			continue
+		}
+
+		content := ""
+		if c, ok := todoStruct.Fields["content"]; ok {
+			content = c.GetStringValue()
+		}
+
+		status := ""
+		if s, ok := todoStruct.Fields["status"]; ok {
+			status = s.GetStringValue()
+		}
+
+		var checkbox, color string
+		switch status {
+		case "completed":
+			checkbox = "☑"
+			color = "\033[32m" // green
+		case "in_progress":
+			checkbox = "⧗"
+			color = "\033[33m" // yellow
+		case "pending":
+			checkbox = "☐"
+			color = "\033[37m" // white
+		case "canceled":
+			checkbox = "☒"
+			color = "\033[31m" // red
+		default:
+			checkbox = "☐"
+			color = "\033[37m"
+		}
+
+		fmt.Printf("  %s%s%d. %s\033[0m\033[90m\033[2m\n", color, checkbox, i+1, content)
+	}
+	fmt.Print("\033[0m")
+}
+
+// displayGoalCLI renders goal decomposition from structured data
+func displayGoalCLI(data *structpb.Struct) {
+	fmt.Print("\033[90m\033[2m")
+
+	// Display main goal
+	if mainGoal, ok := data.Fields["main_goal"]; ok {
+		fmt.Printf("🎯 Goal: %s\n", mainGoal.GetStringValue())
+	}
+
+	// Display strategy
+	if strategy, ok := data.Fields["strategy"]; ok {
+		fmt.Printf("📋 Strategy: %s\n", strategy.GetStringValue())
+	}
+
+	// Display subtasks if present
+	if subtasksField, ok := data.Fields["subtasks"]; ok {
+		subtasksList := subtasksField.GetListValue()
+		if subtasksList != nil && len(subtasksList.Values) > 0 {
+			fmt.Println("📝 Subtasks:")
+
+			for i, subtaskValue := range subtasksList.Values {
+				subtaskStruct := subtaskValue.GetStructValue()
+				if subtaskStruct == nil {
+					continue
+				}
+
+				desc := ""
+				if d, ok := subtaskStruct.Fields["description"]; ok {
+					desc = d.GetStringValue()
+				}
+
+				priority := int64(0)
+				if p, ok := subtaskStruct.Fields["priority"]; ok {
+					priority = int64(p.GetNumberValue())
+				}
+
+				agentType := ""
+				if a, ok := subtaskStruct.Fields["agent_type"]; ok {
+					agentType = a.GetStringValue()
+				}
+
+				fmt.Printf("  %d. [P%d] %s → %s\n", i+1, priority, desc, agentType)
+			}
+		}
+	}
+
+	fmt.Print("\033[0m")
 }
 
 func DisplayMessageLine(msg *pb.Message, prefix string) {

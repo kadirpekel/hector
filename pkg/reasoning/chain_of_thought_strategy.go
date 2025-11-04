@@ -2,6 +2,7 @@ package reasoning
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/protocol"
@@ -182,24 +183,48 @@ func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) stri
 }
 
 func (s *ChainOfThoughtStrategy) displayTodos(todos []tools.TodoItem, outputCh chan<- *pb.Part) {
-	outputCh <- createTextPart("\n\033[90m**Current Tasks:**\n")
-	for i, todo := range todos {
-		var status string
-		switch todo.Status {
-		case "pending":
-			status = "[PENDING]"
-		case "in_progress":
-			status = "[IN PROGRESS]"
-		case "completed":
-			status = "[DONE]"
-		case "canceled":
-			status = "[CANCELLED]"
-		default:
-			status = "[UNKNOWN]"
-		}
-		outputCh <- createTextPart(fmt.Sprintf("  %d. %s %s\n", i+1, status, todo.Content))
+	if len(todos) == 0 {
+		return
 	}
-	outputCh <- createTextPart("\033[0m\n")
+
+	// Build text fallback for simple clients
+	var textBuilder strings.Builder
+	textBuilder.WriteString("📋 Current Tasks:\n")
+	for i, todo := range todos {
+		var checkbox string
+		switch todo.Status {
+		case "completed":
+			checkbox = "☑"
+		case "in_progress":
+			checkbox = "⧗"
+		case "pending":
+			checkbox = "☐"
+		case "canceled":
+			checkbox = "☒"
+		default:
+			checkbox = "☐"
+		}
+		textBuilder.WriteString(fmt.Sprintf("  %s %d. %s\n", checkbox, i+1, todo.Content))
+	}
+
+	// Build structured data for rich clients
+	// Backend provides structure, client decides rendering
+	todoData := make([]map[string]interface{}, len(todos))
+	for i, todo := range todos {
+		todoData[i] = map[string]interface{}{
+			"id":      todo.ID,
+			"content": todo.Content,
+			"status":  todo.Status,
+		}
+	}
+
+	data := map[string]interface{}{
+		"todos": todoData,
+	}
+
+	// Emit as AG-UI thinking part with structured data
+	// thinking_type is a hint for client rendering
+	outputCh <- protocol.CreateThinkingPartWithData(textBuilder.String(), "todo", data)
 }
 
 func (s *ChainOfThoughtStrategy) getTodoTool(state *ReasoningState) *tools.TodoTool {
