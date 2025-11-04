@@ -31,7 +31,6 @@ agents:
       
       # Improve LLM reasoning
       enable_self_reflection: true        # LLM outputs <thinking> tags
-      enable_structured_reflection: true  # Analyze tool execution
       
       # Display options
       show_thinking: true                 # Show meta-reflection
@@ -65,29 +64,6 @@ I'll implement the authentication system...
 **Trade-offs:**
 - ⚠️ Uses more tokens (costs more)
 - ⚠️ Slightly slower (more text to generate)
-
-### Structured Reflection (Tool Analysis)
-
-When `enable_structured_reflection: true` (default), Hector makes a **separate LLM call** after tool execution to analyze results using structured output (JSON schema).
-
-**Example:**
-```
-[Thinking: Iteration 1: Analyzing results]
-[Thinking: ✅ Succeeded: search, write_file]
-[Thinking: Confidence: 80% - Continue]
-```
-
-**Benefits:**
-- ✅ Reliable tool execution analysis
-- ✅ Consistent confidence scores
-- ✅ Deterministic JSON parsing
-- ✅ Great for debugging
-
-**How It Works:**
-1. Agent calls tools
-2. Separate LLM call analyzes results with JSON schema
-3. Returns: successful_tools, failed_tools, confidence, recommendation
-4. Displayed as `[Thinking: ...]` blocks if `show_thinking: true`
 
 ### How It Works
 
@@ -171,20 +147,6 @@ Output:
 [Tool calls: 1]
 [Strategy: chain-of-thought]
 ```
-
-#### Structured Reflection
-
-Agent evaluates its own progress:
-
-```yaml
-reasoning:
-  enable_structured_reflection: true
-```
-
-The agent periodically reflects:
-- Am I making progress?
-- Is my approach working?
-- Should I try something different?
 
 #### Max Iterations
 
@@ -400,7 +362,6 @@ agents:
       
       # Reflection
       enable_self_reflection: true           # LLM outputs <thinking> tags
-      enable_structured_reflection: true     # Analyze tool results
 ```
 
 ### Supervisor Options
@@ -677,7 +638,6 @@ agents:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `enable_self_reflection` | bool | `false` | LLM outputs `<thinking>` tags (Chain of Thought prompting) |
-| `enable_structured_reflection` | bool | `true` | LLM-based tool analysis with JSON schema |
 | `enable_goal_extraction` | bool | `false` | Extract goals/subtasks (supervisor strategy only) |
 
 ### Display Options
@@ -696,8 +656,7 @@ reasoning:
   engine: "chain-of-thought"
   max_iterations: 100
   enable_self_reflection: true        # LLM shows planning
-  enable_structured_reflection: true  # Show tool analysis
-  show_thinking: true                 # Display both types
+  show_thinking: true                 # Display reflection
   show_tool_execution: true
   show_debug_info: true
   enable_streaming: true

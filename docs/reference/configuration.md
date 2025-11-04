@@ -296,7 +296,6 @@ agents:
       
       # LLM Reasoning (improve quality)
       enable_self_reflection: false       # LLM outputs <thinking> tags (Chain of Thought)
-      enable_structured_reflection: true  # LLM-based tool analysis (default: true)
       enable_goal_extraction: false       # For supervisor strategy only
       
       # Display Options

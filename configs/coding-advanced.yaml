@@ -190,7 +190,6 @@ agents:
       engine: "chain-of-thought"          
       max_iterations: 99                   
       enable_self_reflection: true         
-      enable_structured_reflection: true   
       show_thinking: true                  
       show_debug_info: true                
       enable_streaming: true               

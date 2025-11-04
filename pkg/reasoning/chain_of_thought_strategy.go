@@ -72,63 +72,10 @@ func (s *ChainOfThoughtStrategy) AfterIteration(
 ) error {
 
 	if state.ShowThinking() && state.GetOutputChannel() != nil {
-
-		if state.GetServices() != nil && state.GetContext() != nil {
-			analysis, err := AnalyzeToolResults(state.GetContext(), toolCalls, results, state.GetServices())
-			if err == nil {
-				s.displayStructuredReflection(iteration, analysis, state)
-
-				state.GetCustomState()["reflection_analysis"] = analysis
-			} else {
-
-				s.reflectOnProgress(iteration, text, toolCalls, results, state)
-			}
-		} else {
-
-			s.reflectOnProgress(iteration, text, toolCalls, results, state)
-		}
+		s.reflectOnProgress(iteration, text, toolCalls, results, state)
 	}
 
 	return nil
-}
-
-func (s *ChainOfThoughtStrategy) displayStructuredReflection(
-	iteration int,
-	analysis *ReflectionAnalysis,
-	state *ReasoningState,
-) {
-	if len(analysis.SuccessfulTools) == 0 && len(analysis.FailedTools) == 0 {
-		return
-	}
-
-	output := ThinkingBlock(fmt.Sprintf("Iteration %d: Analyzing results", iteration))
-
-	if len(analysis.SuccessfulTools) > 0 {
-		output += ThinkingBlock(fmt.Sprintf("[SUCCESS] Tools: %s", formatStringList(analysis.SuccessfulTools)))
-	}
-	if len(analysis.FailedTools) > 0 {
-		output += ThinkingBlock(fmt.Sprintf("[FAILED] Tools: %s", formatStringList(analysis.FailedTools)))
-	}
-
-	var recommendation string
-	if analysis.ShouldPivot {
-		recommendation = "Pivot approach"
-	} else {
-		switch analysis.Recommendation {
-		case "retry_failed":
-			recommendation = "Retry failed tools"
-		case "pivot_approach":
-			recommendation = "Change approach"
-		case "stop":
-			recommendation = "Stop (task may be infeasible)"
-		default:
-			recommendation = "Continue"
-		}
-	}
-
-	output += ThinkingBlock(fmt.Sprintf("Confidence: %.0f%% - %s", analysis.Confidence*100, recommendation))
-
-	state.GetOutputChannel() <- createThinkingPart(output)
 }
 
 func (s *ChainOfThoughtStrategy) reflectOnProgress(

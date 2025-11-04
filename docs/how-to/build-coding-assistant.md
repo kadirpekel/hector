@@ -132,7 +132,6 @@ agents:
       engine: "chain-of-thought"
       max_iterations: 100
       enable_self_reflection: true        # LLM outputs <thinking> tags
-      enable_structured_reflection: true  # Analyze tool execution
       show_thinking: true                 # Display reasoning blocks
       enable_streaming: true
       show_tool_execution: true
@@ -318,7 +317,6 @@ agents:
       engine: "chain-of-thought"
       max_iterations: 100
       enable_self_reflection: true
-      enable_structured_reflection: true
       show_thinking: true
       enable_streaming: true
       show_tool_execution: true
