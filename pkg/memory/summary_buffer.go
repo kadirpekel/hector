@@ -13,6 +13,16 @@ import (
 	"github.com/kadirpekel/hector/pkg/utils"
 )
 
+// Default summarization settings
+const (
+	defaultBudget                   = 8000 // Token budget before triggering summarization
+	defaultThreshold                = 0.85 // Percentage of budget that triggers summarization
+	defaultTarget                   = 0.7  // Target percentage of budget after summarization
+	defaultMinMessagesBeforeSummary = 20   // Minimum messages before allowing summarization
+	defaultMinMessagesToKeep        = 10   // Minimum recent messages to keep (5 turns)
+	defaultRecentMessageBudget      = 0.8  // Percentage of target budget for recent messages
+)
+
 type SummarizationService interface {
 	SummarizeConversation(ctx context.Context, messages []*pb.Message) (string, error)
 }
@@ -34,37 +44,37 @@ type SummaryBufferConfig struct {
 	Summarizer SummarizationService
 }
 
-func NewSummaryBufferStrategy(config SummaryBufferConfig) (*SummaryBufferStrategy, error) {
+func NewSummaryBufferStrategy(cfg SummaryBufferConfig) (*SummaryBufferStrategy, error) {
 
-	if config.Budget <= 0 {
-		config.Budget = 2000
+	if cfg.Budget <= 0 {
+		cfg.Budget = defaultBudget
 	}
-	if config.Threshold <= 0 || config.Threshold > 1 {
-		config.Threshold = 0.8
+	if cfg.Threshold <= 0 || cfg.Threshold > 1 {
+		cfg.Threshold = defaultThreshold
 	}
-	if config.Target <= 0 || config.Target > 1 {
-		config.Target = 0.6
+	if cfg.Target <= 0 || cfg.Target > 1 {
+		cfg.Target = defaultTarget
 	}
 
-	if config.Model == "" {
+	if cfg.Model == "" {
 		return nil, fmt.Errorf("model is required for token counting")
 	}
 
-	tokenCounter, err := utils.NewTokenCounter(config.Model)
+	tokenCounter, err := utils.NewTokenCounter(cfg.Model)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token counter: %w", err)
 	}
 
-	if config.Summarizer == nil {
+	if cfg.Summarizer == nil {
 		return nil, fmt.Errorf("summarization service is required")
 	}
 
 	return &SummaryBufferStrategy{
-		tokenBudget:  config.Budget,
-		threshold:    config.Threshold,
-		target:       config.Target,
+		tokenBudget:  cfg.Budget,
+		threshold:    cfg.Threshold,
+		target:       cfg.Target,
 		tokenCounter: tokenCounter,
-		summarizer:   config.Summarizer,
+		summarizer:   cfg.Summarizer,
 	}, nil
 }
 
@@ -99,8 +109,7 @@ func (s *SummaryBufferStrategy) GetMessages(session *hectorcontext.ConversationH
 
 func (s *SummaryBufferStrategy) shouldSummarize(session *hectorcontext.ConversationHistory) bool {
 	allMessages := session.GetAllMessages()
-	if len(allMessages) < 10 {
-
+	if len(allMessages) < defaultMinMessagesBeforeSummary {
 		return false
 	}
 
@@ -179,12 +188,12 @@ func (s *SummaryBufferStrategy) selectRecentMessagesWithMinimum(messages []*pb.M
 		return []*pb.Message{}
 	}
 
-	minMessages := 3
+	minMessages := defaultMinMessagesToKeep
 	if len(messages) < minMessages {
 		return messages
 	}
 
-	recentTokenBudget := int(float64(targetTokens) * 0.6)
+	recentTokenBudget := int(float64(targetTokens) * defaultRecentMessageBudget)
 
 	recentMessages := s.selectRecentMessages(messages, recentTokenBudget)
 

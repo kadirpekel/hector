@@ -1523,13 +1523,13 @@ func (c *MemoryConfig) SetDefaults() {
 
 	case "summary_buffer":
 		if c.Budget <= 0 {
-			c.Budget = 2000
+			c.Budget = 8000
 		}
 		if c.Threshold <= 0 {
-			c.Threshold = 0.8
+			c.Threshold = 0.85
 		}
 		if c.Target <= 0 {
-			c.Target = 0.6
+			c.Target = 0.7
 		}
 	}
 }
