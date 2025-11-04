@@ -1647,11 +1647,17 @@ func (c *ReasoningConfig) SetDefaults() {
 		trueVal := true
 		c.EnableStructuredReflection = &trueVal
 	}
+	if c.EnableSelfReflection == nil {
+		c.EnableSelfReflection = boolPtr(true) // Default to true
+	}
+	if c.EnableGoalExtraction == nil {
+		c.EnableGoalExtraction = boolPtr(true) // Default to true
+	}
 	if c.ShowDebugInfo == nil {
 		c.ShowDebugInfo = boolPtr(false) // Default to false
 	}
 	if c.ShowThinking == nil {
-		c.ShowThinking = boolPtr(false) // Default to false
+		c.ShowThinking = boolPtr(true) // Default to true
 	}
 
 	// Set tool display defaults
@@ -1659,10 +1665,10 @@ func (c *ReasoningConfig) SetDefaults() {
 		c.ToolDisplayMode = "inline" // Default to clean inline display
 	}
 	if c.ShowToolArgs == nil {
-		c.ShowToolArgs = boolPtr(false) // Default to false for clean output
+		c.ShowToolArgs = boolPtr(true) // Default to true
 	}
 	if c.ShowToolResults == nil {
-		c.ShowToolResults = boolPtr(false) // Default to false for clean output
+		c.ShowToolResults = boolPtr(true) // Default to true
 	}
 }
 
