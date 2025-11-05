@@ -115,6 +115,11 @@ func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message 
 		defer resp.Body.Close()
 
 		scanner := bufio.NewScanner(resp.Body)
+		// Increase buffer size to 1MB to handle large tool results (images, etc.)
+		const maxScannerBuffer = 1024 * 1024 // 1MB
+		buf := make([]byte, maxScannerBuffer)
+		scanner.Buffer(buf, maxScannerBuffer)
+		
 		var currentEvent string
 		var currentData string
 
