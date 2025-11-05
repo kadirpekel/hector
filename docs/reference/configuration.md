@@ -295,13 +295,10 @@ agents:
       max_iterations: 100                 # Safety limit
       
       # LLM Reasoning (improve quality)
-      enable_self_reflection: false       # LLM outputs <thinking> tags (Chain of Thought)
       enable_goal_extraction: false       # For supervisor strategy only
       
       # Display Options
       show_thinking: false                # Show [Thinking: ...] meta-reflection blocks
-      show_tool_execution: true           # Show tool execution labels
-      show_debug_info: false              # Show iteration counts, tokens
       enable_streaming: true              # Real-time output (default: true)
     
     # Tools

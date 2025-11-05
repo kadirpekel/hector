@@ -497,7 +497,6 @@ curl http://localhost:6334/collections/codebase
 agents:
   debug:
     reasoning:
-      show_debug_info: true
     document_stores:
       - name: "test"
         paths: ["./"]

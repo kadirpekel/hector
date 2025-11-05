@@ -65,11 +65,11 @@ func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecompo
 	}
 
 	data := map[string]interface{}{
-		"main_goal":      decomposition.MainGoal,
-		"strategy":       decomposition.Strategy,
+		"main_goal":       decomposition.MainGoal,
+		"strategy":        decomposition.Strategy,
 		"execution_order": decomposition.ExecutionOrder,
 		"required_agents": decomposition.RequiredAgents,
-		"subtasks":       subtasksData,
+		"subtasks":        subtasksData,
 	}
 
 	// Emit as AG-UI thinking part with structured data

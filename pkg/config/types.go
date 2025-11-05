@@ -1614,7 +1614,7 @@ type ReasoningConfig struct {
 
 	// Display flags (enabled by default)
 	ShowTools    *bool `yaml:"show_tools"`    // Show all tool-related events (calls, results, execution)
-	ShowThinking *bool `yaml:"show_thinking"` // Show all thinking-related content (reflections, todos, goals)
+	ShowThinking *bool `yaml:"show_thinking"` // Show all thinking-related content (todos, goals, internal reasoning)
 }
 
 func (c *ReasoningConfig) Validate() error {

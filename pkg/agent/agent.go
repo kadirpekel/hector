@@ -590,40 +590,6 @@ func (a *Agent) emitTodoDisplay(ctx context.Context, outputCh chan<- *pb.Part) {
 	part := protocol.CreateThinkingPartWithData(textBuilder.String(), "todo", data)
 	outputCh <- part
 }
-
-//nolint:unused // Reserved for future tool display feature
-func formatToolLabel(toolName string, args map[string]interface{}) string {
-	switch toolName {
-	case "agent_call":
-		if agentName, ok := args["agent"].(string); ok {
-			return fmt.Sprintf("%s → %s", toolName, agentName)
-		}
-	case "execute_command":
-		if cmd, ok := args["command"].(string); ok {
-			if len(cmd) > 60 {
-				return fmt.Sprintf("%s: %s...", toolName, cmd[:57])
-			}
-			return fmt.Sprintf("%s: %s", toolName, cmd)
-		}
-	case "write_file", "search_replace":
-		if path, ok := args["path"].(string); ok {
-			return fmt.Sprintf("%s: %s", toolName, path)
-		}
-	case "search":
-		if query, ok := args["query"].(string); ok {
-			if len(query) > 40 {
-				return fmt.Sprintf("%s: %s...", toolName, query[:37])
-			}
-			return fmt.Sprintf("%s: %s", toolName, query)
-		}
-	case "todo_write":
-		if todos, ok := args["todos"].([]interface{}); ok {
-			return fmt.Sprintf("%s: %d tasks", toolName, len(todos))
-		}
-	}
-	return toolName
-}
-
 func (a *Agent) truncateToolResults(results []reasoning.ToolResult, cfg config.ReasoningConfig) []reasoning.ToolResult {
 
 	const maxToolResultSize = 50000

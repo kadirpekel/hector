@@ -249,7 +249,6 @@ Enable debug logging:
 agents:
   debug:
     reasoning:
-      show_debug_info: true
 ```
 
 Output shows:

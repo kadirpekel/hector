@@ -8,7 +8,7 @@ This directory contains curated example configurations for Hector. Each file dem
 - 10 different prompt configuration patterns
 - Pure strategy defaults, role customization, user guidance
 - Full prompt_slots customization vs system_prompt override
-- RAG integration, multi-agent orchestration, self-reflection
+- RAG integration, multi-agent orchestration
 - Referenced in: [Prompts Guide](../docs/core-concepts/prompts.md)
 
 ## Essential Examples (11 files)

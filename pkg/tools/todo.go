@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 type TodoTool struct {
@@ -124,10 +126,8 @@ func (t *TodoTool) Execute(ctx context.Context, args map[string]interface{}) (To
 	}
 
 	// Extract session ID from context
-	// Using plain string key to match agent package
-	const sessionIDKey = "hector:sessionID"
 	sessionID := "default"
-	if sid, ok := ctx.Value(sessionIDKey).(string); ok {
+	if sid, ok := ctx.Value(protocol.SessionIDKey).(string); ok {
 		sessionID = sid
 	}
 

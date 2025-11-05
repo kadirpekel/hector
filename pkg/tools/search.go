@@ -484,9 +484,8 @@ func (t *SearchTool) Execute(ctx context.Context, args map[string]interface{}) (
 		ToolName:      "search",
 		ExecutionTime: time.Since(start),
 		Metadata: map[string]interface{}{
-			"source":                  "local",
-			"tool_type":               "search",
-			"reflection_context_size": 2000,
+			"source":    "local",
+			"tool_type": "search",
 		},
 	}, nil
 }

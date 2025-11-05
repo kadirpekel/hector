@@ -327,13 +327,11 @@ Enable debug mode to see the final prompt:
 hector call "query" --debug -c config.yaml --agent myagent
 ```
 
-Or use `show_debug_info` in config:
 
 ```yaml
 agents:
   myagent:
     reasoning:
-      show_debug_info: true
 ```
 
 ### Common Issues
@@ -369,21 +367,6 @@ agents:
 ```
 
 The context is injected AFTER the system message but BEFORE conversation history, providing relevant document chunks for the current query.
-
----
-
-## Advanced: Self-Reflection
-
-Enable self-reflection for explicit reasoning:
-
-```yaml
-agents:
-  thinker:
-    reasoning:
-      enable_self_reflection: true
-```
-
-This adds reflection guidance to the `instructions` slot, prompting the agent to use `<thinking>` tags for internal reasoning.
 
 ---
 

@@ -511,8 +511,6 @@ agents:
 agents:
   debug:
     reasoning:
-      show_tool_execution: true
-      show_debug_info: true
     tools: ["write_file"]
 ```
 

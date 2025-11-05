@@ -616,7 +616,6 @@ Enable debug output to see search performance:
 agents:
   coder:
     reasoning:
-      show_debug_info: true  # See search performance
 ```
 
 ---

@@ -1,6 +1,6 @@
 ---
 title: Build a Cursor-like AI Coding Assistant
-description: Create a production-ready coding assistant with semantic search, self-reflection, and tool execution in 30 minutes—using only YAML
+description: Create a production-ready coding assistant with semantic search and tool execution in 30 minutes—using only YAML
 ---
 
 # Build a Cursor-like AI Coding Assistant
@@ -131,10 +131,8 @@ agents:
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 100
-      enable_self_reflection: true        # LLM outputs <thinking> tags
       show_thinking: true                 # Display reasoning blocks
       enable_streaming: true
-      show_tool_execution: true
     
     # 💾 Conversation Memory
     memory:
@@ -316,10 +314,8 @@ agents:
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 100
-      enable_self_reflection: true
       show_thinking: true
       enable_streaming: true
-      show_tool_execution: true
     
     memory:
       working:
@@ -373,15 +369,10 @@ agents:
 ```yaml
 reasoning:
   # Development mode (see everything)
-  enable_self_reflection: true   # See LLM's <thinking>
   show_thinking: true            # See meta-analysis
-  show_tool_execution: true      # See tool calls
-  show_debug_info: true          # See iterations/tokens
   
   # Production mode (quieter)
-  # enable_self_reflection: false
   # show_thinking: false
-  # show_debug_info: false
 ```
 
 ### Security & Safety
@@ -488,7 +479,7 @@ Ready to level up? Check out these guides:
 
 - [Tools](../core-concepts/tools.md) - Understanding the tool system
 - [RAG & Semantic Search](../core-concepts/rag.md) - How semantic search works
-- [Reasoning Strategies](../core-concepts/reasoning.md) - Chain-of-thought & self-reflection
+- [Reasoning Strategies](../core-concepts/reasoning.md) - Chain-of-thought reasoning
 - [Memory](../core-concepts/memory.md) - Context management
 - [Prompts](../core-concepts/prompts.md) - Prompt engineering
 

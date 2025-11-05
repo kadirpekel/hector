@@ -550,8 +550,6 @@ agents:
 agents:
   coordinator:
     reasoning:
-      show_tool_execution: true
-      show_debug_info: true
 ```
 
 **Output shows:**
@@ -587,7 +585,6 @@ Check how many calls are made:
 ```yaml
 reasoning:
   max_iterations: 20  # Coordinator should finish in fewer iterations
-  show_debug_info: true
 ```
 
 ---

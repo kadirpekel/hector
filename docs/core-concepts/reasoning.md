@@ -30,40 +30,11 @@ agents:
       max_iterations: 100                 # Safety limit
       
       # Improve LLM reasoning
-      enable_self_reflection: true        # LLM outputs <thinking> tags
       
       # Display options
       show_thinking: true                 # Show meta-reflection
-      show_tool_execution: true
       enable_streaming: true
 ```
-
-### Self-Reflection (Chain of Thought Prompting)
-
-When `enable_self_reflection: true`, the LLM outputs its internal reasoning using `<thinking>` tags **before** taking actions. This is based on research showing that Chain of Thought prompting improves accuracy on complex tasks.
-
-**Example:**
-```
-<thinking>
-I need to implement authentication.
-First, I should search for existing patterns.
-Then implement JWT validation with proper error handling.
-</thinking>
-
-I'll implement the authentication system...
-🔧 search: authentication patterns ✅
-🔧 write_file: auth.py ✅
-```
-
-**Benefits:**
-- ✅ Improves reasoning quality (research-backed)
-- ✅ Better at complex multi-step problems
-- ✅ Helps LLM catch logical errors
-- ✅ Makes planning visible to users
-
-**Trade-offs:**
-- ⚠️ Uses more tokens (costs more)
-- ⚠️ Slightly slower (more text to generate)
 
 ### How It Works
 
@@ -105,7 +76,6 @@ Show tool calls to the user:
 
 ```yaml
 reasoning:
-  show_tool_execution: true
 ```
 
 Output:
@@ -137,7 +107,6 @@ Show detailed execution info:
 
 ```yaml
 reasoning:
-  show_debug_info: true
 ```
 
 Output:
@@ -356,12 +325,9 @@ agents:
       
       # Display
       enable_streaming: true           # Stream responses
-      show_tool_execution: true        # Show tool calls
       show_thinking: false             # Show internal reasoning
-      show_debug_info: false           # Show debug details
       
       # Reflection
-      enable_self_reflection: true           # LLM outputs <thinking> tags
 ```
 
 ### Supervisor Options
@@ -382,7 +348,6 @@ agents:
       
       # Display (inherited from chain-of-thought)
       enable_streaming: true
-      show_tool_execution: true
 ```
 
 ---
@@ -460,7 +425,6 @@ agents:
     reasoning:
       engine: "chain-of-thought"
       max_iterations: 100
-      show_tool_execution: true
     tools: ["write_file", "search_replace", "execute_command"]
     
     prompt:
@@ -511,8 +475,6 @@ agents:
 agents:
   debug:
     reasoning:
-      show_debug_info: true
-      show_tool_execution: true
       show_thinking: true
 ```
 
@@ -533,7 +495,6 @@ Monitor if agents are using too many iterations:
 ```yaml
 reasoning:
   max_iterations: 50  # Lower limit to catch issues sooner
-  show_debug_info: true
 ```
 
 If hitting the limit frequently:
@@ -637,7 +598,6 @@ agents:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `enable_self_reflection` | bool | `false` | LLM outputs `<thinking>` tags (Chain of Thought prompting) |
 | `enable_goal_extraction` | bool | `false` | Extract goals/subtasks (supervisor strategy only) |
 
 ### Display Options
@@ -645,8 +605,6 @@ agents:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `show_thinking` | bool | `false` | Show `[Thinking: ...]` meta-reflection blocks |
-| `show_tool_execution` | bool | `true` | Show tool execution labels |
-| `show_debug_info` | bool | `false` | Show iteration counts, tokens, timing |
 | `enable_streaming` | bool | `true` | Real-time token-by-token output |
 
 ### Example: Maximum Visibility
@@ -655,10 +613,7 @@ agents:
 reasoning:
   engine: "chain-of-thought"
   max_iterations: 100
-  enable_self_reflection: true        # LLM shows planning
   show_thinking: true                 # Display reflection
-  show_tool_execution: true
-  show_debug_info: true
   enable_streaming: true
 ```
 

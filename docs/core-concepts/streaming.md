@@ -120,7 +120,6 @@ agents:
   coder:
     reasoning:
       enable_streaming: true
-      show_tool_execution: true
     tools: ["write_file", "execute_command"]
 ```
 
@@ -181,9 +180,7 @@ agents:
   assistant:
     reasoning:
       enable_streaming: true
-      show_tool_execution: true  # Show tool calls in stream
       show_thinking: false       # Show internal reasoning
-      show_debug_info: false     # Show debug details
 ```
 
 ### Streaming Customization
@@ -234,7 +231,6 @@ agents:
   support:
     reasoning:
       enable_streaming: true
-      show_tool_execution: true
     tools: ["search", "agent_call"]
 ```
 
@@ -245,7 +241,6 @@ agents:
   coder:
     reasoning:
       enable_streaming: true
-      show_tool_execution: true
       show_thinking: true  # Show reasoning process
     tools: ["write_file", "execute_command", "search"]
 ```

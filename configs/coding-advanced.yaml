@@ -189,11 +189,8 @@ agents:
     reasoning:
       engine: "chain-of-thought"          
       max_iterations: 99                   
-      enable_self_reflection: true         
       show_thinking: true                  
-      show_debug_info: true                
-      enable_streaming: true               
-      show_tool_execution: true            
+      enable_streaming: true            
     document_stores:
       - "codebase"
     database: "qdrant"

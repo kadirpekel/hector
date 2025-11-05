@@ -2,39 +2,23 @@ package reasoning
 
 import (
 	"context"
-	"fmt"
+	"log"
 
-	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/tools"
 )
-
-// contextKey for session ID (matches agent package)
-type contextKey string
-
-const sessionIDKey contextKey = "sessionID"
 
 // extractSessionID gets the session ID from context, returns "default" if not found
 func extractSessionID(ctx context.Context) string {
 	if ctx == nil {
 		return "default"
 	}
-	if sessionIDValue := ctx.Value(sessionIDKey); sessionIDValue != nil {
+	if sessionIDValue := ctx.Value(protocol.SessionIDKey); sessionIDValue != nil {
 		if sid, ok := sessionIDValue.(string); ok {
 			return sid
 		}
 	}
 	return "default"
-}
-
-// Helper function to create a thinking part with AG-UI metadata
-func createThinkingPart(text string) *pb.Part {
-	return protocol.CreateThinkingPart(text, "", 0)
-}
-
-// Helper function to create a text part
-func createTextPart(text string) *pb.Part {
-	return &pb.Part{Part: &pb.Part_Text{Text: text}}
 }
 
 type ChainOfThoughtStrategy struct{}
@@ -89,90 +73,29 @@ func (s *ChainOfThoughtStrategy) AfterIteration(
 	results []ToolResult,
 	state *ReasoningState,
 ) error {
+	// Log iteration progress for operators/deployers
+	if len(toolCalls) > 0 {
+		successCount := 0
+		failCount := 0
 
-	if state.ShowThinking() && state.GetOutputChannel() != nil {
-		s.reflectOnProgress(iteration, text, toolCalls, results, state)
+		for _, result := range results {
+			if result.Error != nil {
+				failCount++
+			} else {
+				successCount++
+			}
+		}
+
+		toolNames := make([]string, len(toolCalls))
+		for i, tc := range toolCalls {
+			toolNames[i] = tc.Name
+		}
+
+		log.Printf("[ChainOfThought] Iteration %d: executed %d tool(s) %v (success: %d, failed: %d)",
+			iteration, len(toolCalls), toolNames, successCount, failCount)
 	}
 
 	return nil
-}
-
-func (s *ChainOfThoughtStrategy) reflectOnProgress(
-	iteration int,
-	text string,
-	toolCalls []*protocol.ToolCall,
-	results []ToolResult,
-	state *ReasoningState,
-) {
-
-	successCount := len(results)
-	failCount := 0
-
-	for _, result := range results {
-
-		if len(result.Content) > 0 && (contains(result.Content, "Error:") || contains(result.Content, "failed")) {
-			failCount++
-			successCount--
-		}
-	}
-
-	if len(toolCalls) > 0 {
-		output := ThinkingBlock(fmt.Sprintf("Iteration %d: Evaluating progress", iteration))
-		output += ThinkingBlock(fmt.Sprintf("Tools executed: %s", formatToolList(toolCalls)))
-		output += ThinkingBlock(fmt.Sprintf("Success/Fail: %s", formatSuccessRatio(successCount, failCount)))
-
-		if failCount > 0 {
-			output += ThinkingBlock("Warning: Some tools failed - may need to pivot approach")
-		} else if successCount > 0 {
-			output += ThinkingBlock("[SUCCESS] All tools succeeded - making progress")
-		}
-
-		state.GetOutputChannel() <- createThinkingPart(output)
-	}
-}
-
-func formatStringList(items []string) string {
-	if len(items) == 0 {
-		return "none"
-	}
-	if len(items) == 1 {
-		return items[0]
-	}
-	if len(items) <= 3 {
-		return fmt.Sprintf("%s", items)
-	}
-	return fmt.Sprintf("%d items", len(items))
-}
-
-func formatToolList(toolCalls []*protocol.ToolCall) string {
-	if len(toolCalls) == 0 {
-		return "none"
-	}
-	if len(toolCalls) == 1 {
-		return toolCalls[0].Name
-	}
-	return fmt.Sprintf("%d tools", len(toolCalls))
-}
-
-func formatSuccessRatio(success, fail int) string {
-	total := success + fail
-	if total == 0 {
-		return "0/0"
-	}
-	return fmt.Sprintf("%d/%d", success, total)
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || indexOf(s, substr) >= 0)
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }
 
 func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) string {

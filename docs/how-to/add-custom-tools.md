@@ -496,8 +496,6 @@ curl -X POST http://localhost:3000/call \
 agents:
   debug_agent:
     reasoning:
-      show_tool_execution: true
-      show_debug_info: true
 ```
 
 ### Check MCP Server Logs

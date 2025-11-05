@@ -101,7 +101,6 @@ agents:
       engine: "supervisor"
       max_iterations: 20
       enable_goal_extraction: true
-      show_tool_execution: true
     
     # Orchestration tools only
     tools:
@@ -133,7 +132,6 @@ agents:
     
     reasoning:
       engine: "chain-of-thought"
-      show_tool_execution: true
     
     tools:
       - "search"          # If RAG enabled
@@ -452,8 +450,6 @@ agents:
 agents:
   research_coordinator:
     reasoning:
-      show_tool_execution: true
-      show_debug_info: true
 ```
 
 Output shows:

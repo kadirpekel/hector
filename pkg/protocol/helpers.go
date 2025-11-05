@@ -4,6 +4,12 @@ import (
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 )
 
+// SessionIDKeyType is a custom type for context keys to avoid collisions
+type SessionIDKeyType string
+
+// SessionIDKey is the context key for storing session IDs across the application
+const SessionIDKey SessionIDKeyType = "hector:sessionID"
+
 func CreateUserMessage(text string) *pb.Message {
 	return &pb.Message{
 		Role: pb.Role_ROLE_USER,

@@ -167,62 +167,6 @@ func (s *authenticatedStream) Context() context.Context {
 	return s.ctx
 }
 
-func GetClaimsFromContext(ctx context.Context) *Claims {
-	if claims, ok := ctx.Value(claimsContextKey).(*Claims); ok {
-		return claims
-	}
-	return nil
-}
-
-type ClientAuthInterceptor struct {
-	tokenProvider func() (string, error)
-}
-
-func NewClientAuthInterceptor(tokenProvider func() (string, error)) *ClientAuthInterceptor {
-	return &ClientAuthInterceptor{
-		tokenProvider: tokenProvider,
-	}
-}
-
-func (c *ClientAuthInterceptor) UnaryClientInterceptor() grpc.UnaryClientInterceptor {
-	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-
-		token, err := c.tokenProvider()
-		if err != nil {
-			return status.Errorf(codes.Unauthenticated, "failed to get auth token: %v", err)
-		}
-
-		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)
-
-		return invoker(ctx, method, req, reply, cc, opts...)
-	}
-}
-
-func (c *ClientAuthInterceptor) StreamClientInterceptor() grpc.StreamClientInterceptor {
-	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-
-		token, err := c.tokenProvider()
-		if err != nil {
-			return nil, status.Errorf(codes.Unauthenticated, "failed to get auth token: %v", err)
-		}
-
-		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)
-
-		return streamer(ctx, desc, cc, method, opts...)
-	}
-}
-
-func NewAuthenticatedClientConn(target string, tokenProvider func() (string, error), opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	interceptor := NewClientAuthInterceptor(tokenProvider)
-
-	opts = append(opts,
-		grpc.WithUnaryInterceptor(interceptor.UnaryClientInterceptor()),
-		grpc.WithStreamInterceptor(interceptor.StreamClientInterceptor()),
-	)
-
-	return grpc.NewClient(target, opts...)
-}
-
 func NewTokenProviderFromCredentials(credType, token, apiKey, username, password string) (func() (string, error), error) {
 	switch credType {
 	case "bearer":

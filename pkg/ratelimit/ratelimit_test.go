@@ -9,8 +9,9 @@ import (
 )
 
 func TestRateLimiter_BasicTokenLimit(t *testing.T) {
+	enabled := true
 	config := config.RateLimitConfig{
-		Enabled: true,
+		Enabled: &enabled,
 		Limits: []config.RateLimitRule{
 			{Type: "token", Window: "minute", Limit: 100},
 		},
@@ -74,7 +75,7 @@ func TestRateLimiter_BasicTokenLimit(t *testing.T) {
 
 func TestRateLimiter_BasicCountLimit(t *testing.T) {
 	config := config.RateLimitConfig{
-		Enabled: true,
+		Enabled: &[]bool{true}[0],
 		Limits: []config.RateLimitRule{
 			{Type: "count", Window: "minute", Limit: 5},
 		},
@@ -116,7 +117,7 @@ func TestRateLimiter_BasicCountLimit(t *testing.T) {
 
 func TestRateLimiter_MultiLayerLimits(t *testing.T) {
 	config := config.RateLimitConfig{
-		Enabled: true,
+		Enabled: &[]bool{true}[0],
 		Limits: []config.RateLimitRule{
 			{Type: "token", Window: "minute", Limit: 100},
 			{Type: "token", Window: "day", Limit: 1000},
@@ -164,7 +165,7 @@ func TestRateLimiter_MultiLayerLimits(t *testing.T) {
 
 func TestRateLimiter_SeparateSessions(t *testing.T) {
 	config := config.RateLimitConfig{
-		Enabled: true,
+		Enabled: &[]bool{true}[0],
 		Limits: []config.RateLimitRule{
 			{Type: "count", Window: "minute", Limit: 5},
 		},
@@ -207,7 +208,7 @@ func TestRateLimiter_SeparateSessions(t *testing.T) {
 
 func TestRateLimiter_UserScope(t *testing.T) {
 	config := config.RateLimitConfig{
-		Enabled: true,
+		Enabled: &[]bool{true}[0],
 		Limits: []config.RateLimitRule{
 			{Type: "count", Window: "minute", Limit: 10},
 		},
@@ -250,7 +251,7 @@ func TestRateLimiter_UserScope(t *testing.T) {
 
 func TestRateLimiter_Reset(t *testing.T) {
 	config := config.RateLimitConfig{
-		Enabled: true,
+		Enabled: &[]bool{true}[0],
 		Limits: []config.RateLimitRule{
 			{Type: "count", Window: "minute", Limit: 5},
 		},
@@ -299,7 +300,7 @@ func TestRateLimiter_Reset(t *testing.T) {
 
 func TestRateLimiter_DisabledConfig(t *testing.T) {
 	config := config.RateLimitConfig{
-		Enabled: false,
+		Enabled: &[]bool{false}[0],
 		Limits:  []config.RateLimitRule{}, // No limits when disabled
 	}
 
@@ -368,7 +369,7 @@ func TestRateLimitConfig_Validation(t *testing.T) {
 		{
 			name: "valid config",
 			config: config.RateLimitConfig{
-				Enabled: true,
+				Enabled: &[]bool{true}[0],
 				Limits: []config.RateLimitRule{
 					{Type: "token", Window: "day", Limit: 1000},
 				},
@@ -378,7 +379,7 @@ func TestRateLimitConfig_Validation(t *testing.T) {
 		{
 			name: "disabled config",
 			config: config.RateLimitConfig{
-				Enabled: false,
+				Enabled: &[]bool{false}[0],
 				Limits:  []config.RateLimitRule{},
 			},
 			wantErr: false,
@@ -386,7 +387,7 @@ func TestRateLimitConfig_Validation(t *testing.T) {
 		{
 			name: "enabled but no limits",
 			config: config.RateLimitConfig{
-				Enabled: true,
+				Enabled: &[]bool{true}[0],
 				Limits:  []config.RateLimitRule{},
 			},
 			wantErr: true,
@@ -394,7 +395,7 @@ func TestRateLimitConfig_Validation(t *testing.T) {
 		{
 			name: "invalid limit type",
 			config: config.RateLimitConfig{
-				Enabled: true,
+				Enabled: &[]bool{true}[0],
 				Limits: []config.RateLimitRule{
 					{Type: "invalid", Window: "day", Limit: 1000},
 				},
@@ -404,7 +405,7 @@ func TestRateLimitConfig_Validation(t *testing.T) {
 		{
 			name: "invalid window",
 			config: config.RateLimitConfig{
-				Enabled: true,
+				Enabled: &[]bool{true}[0],
 				Limits: []config.RateLimitRule{
 					{Type: "token", Window: "invalid", Limit: 1000},
 				},
@@ -414,7 +415,7 @@ func TestRateLimitConfig_Validation(t *testing.T) {
 		{
 			name: "zero limit",
 			config: config.RateLimitConfig{
-				Enabled: true,
+				Enabled: &[]bool{true}[0],
 				Limits: []config.RateLimitRule{
 					{Type: "token", Window: "day", Limit: 0},
 				},

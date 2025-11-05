@@ -177,7 +177,7 @@ func (c *Converter) extractToolCallInfo(part *a2apb.Part) (string, string, map[s
 		if inputField, ok := dataPart.Data.Fields["input"]; ok {
 			// Try to parse input as JSON
 			if inputStr := inputField.GetStringValue(); inputStr != "" {
-				json.Unmarshal([]byte(inputStr), &input)
+				_ = json.Unmarshal([]byte(inputStr), &input) // Ignore error, fall back to empty input
 			} else if inputStruct := inputField.GetStructValue(); inputStruct != nil {
 				// Convert protobuf Struct to map
 				for k, v := range inputStruct.Fields {
@@ -279,72 +279,4 @@ func convertProtoValue(v *structpb.Value) interface{} {
 	default:
 		return fmt.Sprintf("%v", v)
 	}
-}
-
-// ConvertStreamResponse converts an A2A StreamResponse to AG-UI events
-func ConvertStreamResponse(resp *a2apb.StreamResponse, messageID, contextID, taskID string) []*aguipb.AGUIEvent {
-	converter := NewConverter(messageID, contextID, taskID)
-	var events []*aguipb.AGUIEvent
-
-	switch payload := resp.Payload.(type) {
-	case *a2apb.StreamResponse_Task:
-		// Task events
-		task := payload.Task
-		if task.Status != nil {
-			status := task.Status.State.String()
-			if len(status) > 11 && status[:11] == "TASK_STATE_" {
-				status = status[11:] // Remove prefix
-			}
-
-			switch task.Status.State {
-			case a2apb.TaskState_TASK_STATE_SUBMITTED:
-				events = append(events, NewTaskStartEvent(task.Id, task.ContextId, ""))
-			case a2apb.TaskState_TASK_STATE_WORKING:
-				events = append(events, NewTaskUpdateEvent(task.Id, "working", nil))
-			case a2apb.TaskState_TASK_STATE_COMPLETED:
-				events = append(events, NewTaskCompleteEvent(task.Id, nil))
-			case a2apb.TaskState_TASK_STATE_FAILED:
-				events = append(events, NewTaskErrorEvent(task.Id, "Task failed", "FAILED", nil))
-			}
-		}
-
-	case *a2apb.StreamResponse_Msg:
-		// Message with parts - convert each part
-		msg := payload.Msg
-		for _, part := range msg.Parts {
-			partEvents := converter.ConvertPart(part)
-			events = append(events, partEvents...)
-		}
-
-	case *a2apb.StreamResponse_StatusUpdate:
-		// Task status update
-		update := payload.StatusUpdate
-		status := update.Status.State.String()
-		if len(status) > 11 && status[:11] == "TASK_STATE_" {
-			status = status[11:]
-		}
-		events = append(events, NewTaskUpdateEvent(update.TaskId, status, nil))
-
-	case *a2apb.StreamResponse_ArtifactUpdate:
-		// Artifact update - treat as content blocks
-		artifact := payload.ArtifactUpdate.Artifact
-		if artifact != nil {
-			for _, part := range artifact.Parts {
-				partEvents := converter.ConvertPart(part)
-				events = append(events, partEvents...)
-			}
-		}
-	}
-
-	return events
-}
-
-// CreateMessageStartEvent creates a message start event
-func CreateMessageStartEvent(messageID, contextID, taskID, role string) *aguipb.AGUIEvent {
-	return NewMessageStartEvent(messageID, contextID, taskID, role)
-}
-
-// CreateMessageStopEvent creates a message stop event
-func CreateMessageStopEvent(messageID string) *aguipb.AGUIEvent {
-	return NewMessageStopEvent(messageID)
 }

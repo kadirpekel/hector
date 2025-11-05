@@ -139,16 +139,12 @@ func (rl *DefaultRateLimiter) Record(ctx context.Context, scope Scope, identifie
 			continue
 		}
 
-		_, windowEnd, err := rl.store.GetUsage(ctx, scope, identifier, ParseLimitType(limit.Type), ParseTimeWindow(limit.Window))
+		_, _, err := rl.store.GetUsage(ctx, scope, identifier, ParseLimitType(limit.Type), ParseTimeWindow(limit.Window))
 		if err != nil {
 			return fmt.Errorf("failed to get usage for %s/%s: %w", ParseLimitType(limit.Type), ParseTimeWindow(limit.Window), err)
 		}
 
-		// If window has expired, reset
-		if windowEnd.Before(now) {
-			windowEnd = now.Add(ParseTimeWindow(limit.Window).Duration())
-		}
-
+		// Increment usage and get new window end
 		_, newWindowEnd, err := rl.store.IncrementUsage(ctx, scope, identifier, ParseLimitType(limit.Type), ParseTimeWindow(limit.Window), amount)
 		if err != nil {
 			return fmt.Errorf("failed to increment usage for %s/%s: %w", ParseLimitType(limit.Type), ParseTimeWindow(limit.Window), err)
@@ -157,8 +153,8 @@ func (rl *DefaultRateLimiter) Record(ctx context.Context, scope Scope, identifie
 		// Ensure the new usage is set correctly
 		if newWindowEnd.Before(now) {
 			// Window expired, reset
-			windowEnd = now.Add(ParseTimeWindow(limit.Window).Duration())
-			if err := rl.store.SetUsage(ctx, scope, identifier, ParseLimitType(limit.Type), ParseTimeWindow(limit.Window), amount, windowEnd); err != nil {
+			newWindowEnd = now.Add(ParseTimeWindow(limit.Window).Duration())
+			if err := rl.store.SetUsage(ctx, scope, identifier, ParseLimitType(limit.Type), ParseTimeWindow(limit.Window), amount, newWindowEnd); err != nil {
 				return fmt.Errorf("failed to reset usage for %s/%s: %w", ParseLimitType(limit.Type), ParseTimeWindow(limit.Window), err)
 			}
 		}

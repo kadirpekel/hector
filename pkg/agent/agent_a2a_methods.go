@@ -16,9 +16,8 @@ import (
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
 
-// SessionIDKey is the context key for storing session IDs
-// Using string type directly to allow cross-package access
-const SessionIDKey = "hector:sessionID"
+// SessionIDKey is re-exported from protocol package for backward compatibility
+const SessionIDKey = protocol.SessionIDKey
 
 func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
 	if req.Request == nil {

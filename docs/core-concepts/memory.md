@@ -519,7 +519,6 @@ Enable detailed logging:
 agents:
   debug:
     reasoning:
-      show_debug_info: true
     memory:
       working:
         strategy: "summary_buffer"

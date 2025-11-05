@@ -28,21 +28,6 @@ func NewMessageStartEvent(messageID, contextID, taskID, role string) *pb.AGUIEve
 	}
 }
 
-// NewMessageDeltaEvent creates a message_delta event
-func NewMessageDeltaEvent(messageID, delta string) *pb.AGUIEvent {
-	return &pb.AGUIEvent{
-		EventId:   uuid.New().String(),
-		Type:      pb.AGUIEventType_AGUI_EVENT_TYPE_MESSAGE_DELTA,
-		Timestamp: timestamppb.Now(),
-		Payload: &pb.AGUIEvent_MessageDelta{
-			MessageDelta: &pb.MessageDeltaPayload{
-				MessageId: messageID,
-				Delta:     delta,
-			},
-		},
-	}
-}
-
 // NewMessageStopEvent creates a message_stop event
 func NewMessageStopEvent(messageID string) *pb.AGUIEvent {
 	return &pb.AGUIEvent{
@@ -122,21 +107,6 @@ func NewToolCallStartEvent(toolCallID, toolName string, input map[string]interfa
 				ToolCallId: toolCallID,
 				ToolName:   toolName,
 				Input:      inputStruct,
-			},
-		},
-	}
-}
-
-// NewToolCallDeltaEvent creates a tool_call_delta event
-func NewToolCallDeltaEvent(toolCallID, partialInput string) *pb.AGUIEvent {
-	return &pb.AGUIEvent{
-		EventId:   uuid.New().String(),
-		Type:      pb.AGUIEventType_AGUI_EVENT_TYPE_TOOL_CALL_DELTA,
-		Timestamp: timestamppb.Now(),
-		Payload: &pb.AGUIEvent_ToolCallDelta{
-			ToolCallDelta: &pb.ToolCallDeltaPayload{
-				ToolCallId:   toolCallID,
-				PartialInput: partialInput,
 			},
 		},
 	}

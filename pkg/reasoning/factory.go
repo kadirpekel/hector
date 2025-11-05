@@ -45,13 +45,6 @@ func ListAvailableStrategies() []StrategyInfo {
 					Required:    false,
 					Default:     true,
 				},
-				{
-					Name:        "show_debug_info",
-					Type:        "bool",
-					Description: "Show iteration counts and reasoning summary",
-					Required:    false,
-					Default:     false,
-				},
 			},
 		},
 		{
@@ -79,13 +72,6 @@ func ListAvailableStrategies() []StrategyInfo {
 					Description: "Enable streaming output",
 					Required:    false,
 					Default:     true,
-				},
-				{
-					Name:        "show_debug_info",
-					Type:        "bool",
-					Description: "Show iteration counts and orchestration steps",
-					Required:    false,
-					Default:     false,
 				},
 			},
 		},

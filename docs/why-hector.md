@@ -24,7 +24,7 @@ Hector brings production-grade capabilities that enterprise teams expect:
 Beyond production features, Hector provides sophisticated agentic capabilities through pure YAML configuration:
 
 - **Multi-Agent Orchestration**: Coordinate specialized agents with A2A-native federation
-- **Advanced Reasoning**: Chain-of-thought, tree search, and self-reflection strategies
+- **Advanced Reasoning**: Chain-of-thought and iterative reasoning strategies
 - **Flexible Memory**: Working memory with RAG and vector stores for long-term context
 - **Extensive Tooling**: Built-in tools plus MCP protocol for endless extensibility
 - **Real-Time Streaming**: Server-sent events for responsive user experiences
