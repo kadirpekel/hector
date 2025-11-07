@@ -1689,7 +1689,7 @@ func (c *SearchConfig) SetDefaults() {
 		c.TopK = 5
 	}
 	if c.Threshold == 0 {
-		c.Threshold = 0.7 // Default 70% similarity threshold
+		c.Threshold = 0.5 // Default 50% similarity threshold (balanced precision/recall for RAG)
 	}
 
 	if c.PreserveCase == nil {
