@@ -1027,7 +1027,7 @@ func (c *DocumentStoreConfig) SetDefaults() {
 	}
 
 	if c.IncrementalIndexing == nil {
-		c.IncrementalIndexing = BoolPtr(false)
+		c.IncrementalIndexing = BoolPtr(true)
 	}
 
 	// Chunking defaults

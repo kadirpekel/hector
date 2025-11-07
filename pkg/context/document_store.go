@@ -301,19 +301,25 @@ func (ds *DocumentStore) indexDirectory() error {
 		}
 	}
 
+	// Always load index state to track deleted files
 	var existingDocs map[string]FileIndexInfo
-	if ds.config.IncrementalIndexing != nil && *ds.config.IncrementalIndexing {
-		existingDocs, err = ds.loadIndexState()
-		if err != nil {
-			log.Printf("Warning: Failed to load index state, performing full reindex: %v", err)
-			existingDocs = make(map[string]FileIndexInfo)
-		}
+	existingDocs, err = ds.loadIndexState()
+	if err != nil {
+		log.Printf("Warning: Failed to load index state, performing full reindex: %v", err)
+		existingDocs = make(map[string]FileIndexInfo)
+	}
 
-		if len(existingDocs) > 0 {
+	// Check if we should skip unchanged files (incremental indexing)
+	useIncrementalIndexing := ds.config.IncrementalIndexing != nil && *ds.config.IncrementalIndexing
+
+	if len(existingDocs) > 0 {
+		if useIncrementalIndexing {
 			fmt.Printf("📊 Incremental indexing: Found %d existing file(s) in index\n", len(existingDocs))
 		} else {
-			fmt.Printf("📊 First indexing or full reindex mode\n")
+			fmt.Printf("📊 Found %d existing file(s) in index (will be reindexed)\n", len(existingDocs))
 		}
+	} else {
+		fmt.Printf("📊 First indexing or full reindex mode\n")
 	}
 
 	var indexedCount sync.WaitGroup
@@ -499,10 +505,10 @@ func (ds *DocumentStore) indexDirectory() error {
 
 	indexedCount.Wait()
 
-	if ds.config.IncrementalIndexing != nil && *ds.config.IncrementalIndexing {
-		if err := ds.cleanupDeletedFiles(ctx, existingDocs, foundFiles); err != nil {
-			log.Printf("Warning: Cleanup of deleted files failed: %v", err)
-		}
+	// Always cleanup deleted files from the index
+	deletedFiles, cleanedUpFiles, err := ds.cleanupDeletedFiles(ctx, existingDocs, foundFiles)
+	if err != nil {
+		log.Printf("Warning: Cleanup of deleted files failed: %v", err)
 	}
 
 	// Update status with final counts
@@ -511,40 +517,62 @@ func (ds *DocumentStore) indexDirectory() error {
 	ds.status.DocumentCount = int(stats.IndexedFiles)
 	ds.mu.Unlock()
 
-	if ds.config.IncrementalIndexing != nil && *ds.config.IncrementalIndexing {
-		finalState := make(map[string]FileIndexInfo)
+	// Always save index state to track files for future cleanup
+	finalState := make(map[string]FileIndexInfo)
 
-		// Keep existing files that are still present
-		for path, info := range existingDocs {
-			if foundFiles[path] {
-				finalState[path] = info
-			}
-		}
-
-		// Update with newly indexed files
-		for path, info := range indexedFiles {
+	// Keep existing files that are still present OR files that couldn't be cleaned up
+	// (so we can retry deletion next time)
+	for path, info := range existingDocs {
+		if foundFiles[path] {
+			// File still exists on disk
+			finalState[path] = info
+		} else if !cleanedUpFiles[path] {
+			// File was deleted but cleanup failed - keep in state for retry
 			finalState[path] = info
 		}
+		// Files successfully cleaned up are not added (removed from state)
+	}
 
-		if err := ds.saveIndexState(finalState, len(finalState)*3); err != nil {
-			log.Printf("Warning: Failed to save index state: %v", err)
-		}
+	// Update with newly indexed files
+	for path, info := range indexedFiles {
+		finalState[path] = info
+	}
+
+	if err := ds.saveIndexState(finalState, len(finalState)*3); err != nil {
+		log.Printf("Warning: Failed to save index state: %v", err)
 	}
 
 	// Clear checkpoint after successful completion
 	_ = ds.checkpointManager.ClearCheckpoint() // Ignore error - not critical
 
-	// Print failed files summary if in quiet mode
-	if ds.config.QuietMode != nil && *ds.config.QuietMode && len(failedFiles) > 0 {
-		fmt.Println("\n⚠️  Failed Files Summary:")
+	// Print file summaries if in quiet mode
+	if ds.config.QuietMode != nil && *ds.config.QuietMode {
 		maxShow := 10
-		for i, file := range failedFiles {
-			if i >= maxShow {
-				remaining := len(failedFiles) - maxShow
-				fmt.Printf("   ... and %d more files (check logs for details)\n", remaining)
-				break
+
+		// Show deleted files
+		if len(deletedFiles) > 0 {
+			fmt.Println("\n🗑️  Deleted Files:")
+			for i, file := range deletedFiles {
+				if i >= maxShow {
+					remaining := len(deletedFiles) - maxShow
+					fmt.Printf("   ... and %d more files\n", remaining)
+					break
+				}
+				fmt.Printf("   🗑️  %s\n", file)
 			}
-			fmt.Printf("   ❌ %s\n", file)
+		}
+
+		// Show failed files
+		if len(failedFiles) > 0 {
+			fmt.Println("\n⚠️  Failed Files:")
+			for i, file := range failedFiles {
+				if i >= maxShow {
+					remaining := len(failedFiles) - maxShow
+					fmt.Printf("   ... and %d more files (check logs for details)\n", remaining)
+					break
+				}
+				fmt.Printf("   ❌ %s\n", file)
+			}
 		}
 	}
 
@@ -1145,32 +1173,60 @@ func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time
 	return false
 }
 
-func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs map[string]FileIndexInfo, foundFiles map[string]bool) error {
-	if ds.config.IncrementalIndexing == nil || !*ds.config.IncrementalIndexing || len(existingDocs) == 0 || ds.searchEngine == nil {
-		return nil
+func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs map[string]FileIndexInfo, foundFiles map[string]bool) ([]string, map[string]bool, error) {
+	// Skip cleanup if no existing docs
+	if len(existingDocs) == 0 {
+		return nil, nil, nil
 	}
 
-	deletedCount := 0
+	deletedFiles := make([]string, 0)
+	cleanedUpFiles := make(map[string]bool)
+
+	// Identify all deleted files
 	for path := range existingDocs {
 		if !foundFiles[path] {
-			filter := map[string]interface{}{
-				"store_name": ds.name,
-				"path":       path,
-			}
-
-			if err := ds.searchEngine.DeleteByFilter(ctx, filter); err != nil {
-				log.Printf("Warning: Failed to delete indexed file %s: %v", path, err)
-			} else {
-				deletedCount++
-			}
+			deletedFiles = append(deletedFiles, path)
+			ds.progressTracker.IncrementDeleted()
 		}
 	}
 
-	if deletedCount > 0 {
-		fmt.Printf("Cleaned up %d deleted file(s) from index '%s'\n", deletedCount, ds.name)
+	if len(deletedFiles) == 0 {
+		return deletedFiles, cleanedUpFiles, nil
 	}
 
-	return nil
+	// If no search engine, just remove from index state
+	if ds.searchEngine == nil {
+		for _, path := range deletedFiles {
+			cleanedUpFiles[path] = true
+		}
+		fmt.Printf("🗑️  Removed %d deleted file(s) from index state\n", len(deletedFiles))
+		return deletedFiles, cleanedUpFiles, nil
+	}
+
+	// Clean up from vector database
+	successCount := 0
+	for _, path := range deletedFiles {
+		filter := map[string]interface{}{
+			"store_name": ds.name,
+			"path":       path,
+		}
+
+		if err := ds.searchEngine.DeleteByFilter(ctx, filter); err != nil {
+			log.Printf("Warning: Failed to delete %s from vector DB: %v", path, err)
+		} else {
+			cleanedUpFiles[path] = true
+			successCount++
+		}
+	}
+
+	if successCount > 0 {
+		fmt.Printf("🗑️  Cleaned up %d deleted file(s) from index '%s'\n", successCount, ds.name)
+	}
+	if successCount < len(deletedFiles) {
+		fmt.Printf("⚠️  %d file(s) pending cleanup (will retry)\n", len(deletedFiles)-successCount)
+	}
+
+	return deletedFiles, cleanedUpFiles, nil
 }
 
 func (ds *DocumentStore) Close() error {

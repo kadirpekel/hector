@@ -15,6 +15,7 @@ type ProgressTracker struct {
 	indexedFiles   int64
 	skippedFiles   int64
 	failedFiles    int64
+	deletedFiles   int64
 
 	// Current state
 	currentFile   string
@@ -109,6 +110,11 @@ func (pt *ProgressTracker) IncrementFailed() {
 	atomic.AddInt64(&pt.failedFiles, 1)
 }
 
+// IncrementDeleted increments the deleted files counter
+func (pt *ProgressTracker) IncrementDeleted() {
+	atomic.AddInt64(&pt.deletedFiles, 1)
+}
+
 // GetStats returns current statistics
 func (pt *ProgressTracker) GetStats() ProgressStats {
 	pt.currentFileMu.RLock()
@@ -121,6 +127,7 @@ func (pt *ProgressTracker) GetStats() ProgressStats {
 		IndexedFiles:   atomic.LoadInt64(&pt.indexedFiles),
 		SkippedFiles:   atomic.LoadInt64(&pt.skippedFiles),
 		FailedFiles:    atomic.LoadInt64(&pt.failedFiles),
+		DeletedFiles:   atomic.LoadInt64(&pt.deletedFiles),
 		CurrentFile:    currentFile,
 		ElapsedTime:    time.Since(pt.startTime),
 	}
@@ -226,6 +233,10 @@ func (pt *ProgressTracker) printFinalSummary() {
 		fmt.Printf("   Skipped: %d files\n", stats.SkippedFiles)
 	}
 
+	if stats.DeletedFiles > 0 {
+		fmt.Printf("   🗑️  Deleted: %d files\n", stats.DeletedFiles)
+	}
+
 	if stats.FailedFiles > 0 {
 		fmt.Printf("   ❌ Failed: %d files\n", stats.FailedFiles)
 	}
@@ -247,6 +258,7 @@ type ProgressStats struct {
 	IndexedFiles   int64
 	SkippedFiles   int64
 	FailedFiles    int64
+	DeletedFiles   int64
 	CurrentFile    string
 	ElapsedTime    time.Duration
 }

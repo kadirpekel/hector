@@ -313,9 +313,14 @@ func (se *SearchEngine) DeleteByFilter(ctx context.Context, filter map[string]in
 	se.mu.RLock()
 	defer se.mu.RUnlock()
 
-	collection, err := se.getFirstCollection()
-	if err != nil {
-		return err
+	// Get collection from filter (e.g., store_name), fallback to first collection
+	collection := se.getCollectionFromFilter(filter)
+	if collection == "" {
+		var err error
+		collection, err = se.getFirstCollection()
+		if err != nil {
+			return err
+		}
 	}
 
 	return se.db.DeleteByFilter(ctx, collection, filter)
