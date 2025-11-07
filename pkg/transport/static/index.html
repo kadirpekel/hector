@@ -463,6 +463,15 @@
             border-left: 3px solid rgba(255, 255, 255, 0.2);
         }
 
+        .message.system .message-bubble {
+            background: rgba(255, 193, 7, 0.08);
+            border-left: 3px solid #ffc107;
+            text-align: center;
+            font-size: 14px;
+            font-style: italic;
+            color: #ffc107;
+        }
+
         .message-content {
             font-size: 15.5px;
             line-height: 1.6;
@@ -772,6 +781,176 @@
         .status-canceled, .status-cancelled {
             background: rgba(239, 68, 68, 0.2);
             color: #ef4444;
+        }
+
+        /* Human-in-the-Loop Approval UI */
+        .approval-request {
+            display: block;
+            margin: 12px 0;
+            padding: 16px;
+            background: rgba(237, 66, 103, 0.08);
+            border: 2px solid rgba(237, 66, 103, 0.3);
+            border-radius: 12px;
+            animation: approvalPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes approvalPulse {
+            0%, 100% { 
+                border-color: rgba(237, 66, 103, 0.3);
+                box-shadow: 0 0 0 0 rgba(237, 66, 103, 0);
+            }
+            50% { 
+                border-color: rgba(237, 66, 103, 0.5);
+                box-shadow: 0 0 0 4px rgba(237, 66, 103, 0.1);
+            }
+        }
+
+        .approval-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #ed4267;
+        }
+
+        .approval-icon {
+            font-size: 20px;
+        }
+
+        .approval-content {
+            margin-bottom: 12px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .approval-tool-name {
+            color: #53e1b9;
+            font-weight: 600;
+        }
+
+        .approval-tool-input {
+            color: #e8e8e8;
+            margin-top: 4px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .approval-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .approval-btn {
+            flex: 1;
+            min-width: 100px;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .approval-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .approval-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .approval-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .approve-btn {
+            background: #25d366;
+            color: white;
+        }
+
+        .approve-btn:hover:not(:disabled) {
+            background: #20bd5a;
+        }
+
+        .deny-btn {
+            background: #ff4444;
+            color: white;
+        }
+
+        .deny-btn:hover:not(:disabled) {
+            background: #dd3333;
+        }
+
+        .modify-btn {
+            background: rgba(83, 225, 185, 0.2);
+            color: #53e1b9;
+            border: 1px solid #53e1b9;
+        }
+
+        .modify-btn:hover:not(:disabled) {
+            background: rgba(83, 225, 185, 0.3);
+        }
+
+        .modify-input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(83, 225, 185, 0.3);
+            border-radius: 6px;
+            color: #e8e8e8;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            resize: vertical;
+            min-height: 60px;
+            display: none;
+        }
+
+        .modify-input.visible {
+            display: block;
+        }
+
+        .approval-status {
+            margin-top: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            display: none;
+        }
+
+        .approval-status.visible {
+            display: block;
+        }
+
+        .approval-status.approved {
+            background: rgba(37, 211, 102, 0.2);
+            color: #25d366;
+        }
+
+        .approval-status.denied {
+            background: rgba(255, 68, 68, 0.2);
+            color: #ff4444;
+        }
+
+        .approval-status.processing {
+            background: rgba(83, 225, 185, 0.2);
+            color: #53e1b9;
         }
 
         /* Goal/Task decomposition styling (AG-UI structured data) */
@@ -1451,9 +1630,116 @@
     </div>
 
     <script>
+        // ============================================================================
+        // Hector Web UI - A2A Protocol Compliant
+        // ============================================================================
+        // 
+        // Human-in-the-Loop (HIL) Implementation:
+        // - Detects TASK_STATE_INPUT_REQUIRED from agent messages
+        // - Extracts interaction data from DataPart (tool_approval)
+        // - Displays approval UI with approve/deny/modify actions
+        // - Sends user decisions back with same taskId to resume paused task
+        // - Fully compliant with A2A Protocol Section 9.4 (Multi-turn Interaction)
+        //
+        // Key Features:
+        // - Tool approval workflow with interactive buttons
+        // - Task resumption with context preservation
+        // - Visual feedback for approval state changes
+        // - Support for modified input submission
+        // ============================================================================
+
         let currentSessionId = null;
         let sessions = {};
         let availableAgents = [];
+        let activeTaskId = null; // Track currently running task for cancellation
+        let activeAbortController = null; // AbortController for fetch cancellation
+
+        // Toggle send button to cancel button and vice versa
+        function setSendButtonMode(isGenerating) {
+            const sendBtn = document.getElementById('sendBtn');
+            const messageInput = document.getElementById('messageInput');
+
+            if (isGenerating) {
+                sendBtn.innerHTML = '⏹'; // Stop square
+                sendBtn.onclick = cancelGeneration;
+                sendBtn.style.backgroundColor = '#dc3545';
+                sendBtn.disabled = false; // Enable cancel button
+                messageInput.disabled = true;
+            } else {
+                sendBtn.innerHTML = '➤'; // Send arrow
+                sendBtn.onclick = sendMessage;
+                sendBtn.style.backgroundColor = '';
+                sendBtn.disabled = false;
+                messageInput.disabled = false;
+            }
+        }
+
+        // Cancel ongoing generation
+        async function cancelGeneration() {
+            if (!activeTaskId) {
+                console.warn('No active task to cancel');
+                return;
+            }
+
+            const taskId = activeTaskId;
+            const agentSelect = document.getElementById('agent');
+            const agentIndex = parseInt(agentSelect.value);
+            const agent = availableAgents[agentIndex];
+
+            if (!agent || !agent.url) {
+                console.error('No agent available for cancellation');
+                return;
+            }
+
+            // Show cancellation message immediately
+            addMessage('system', '🛑 Generation cancelled by user', { taskId });
+
+            // Abort the fetch request if possible
+            if (activeAbortController) {
+                activeAbortController.abort();
+            }
+
+            try {
+                // Extract agent name from URL (e.g., /v1/agents/assistant)
+                const agentName = agent.name || 'assistant';
+                const endpoint = document.getElementById('endpoint').value.trim();
+                let baseUrl;
+                try {
+                    const url = new URL(endpoint);
+                    baseUrl = `${url.protocol}//${url.host}`;
+                } catch (e) {
+                    baseUrl = window.location.origin;
+                }
+
+                // Call cancel API
+                const cancelUrl = `${baseUrl}/v1/agents/${agentName}/tasks/${taskId}:cancel`;
+                const response = await fetch(cancelUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    console.log('Task cancelled successfully:', taskId);
+                } else if (response.status === 404) {
+                    // Task not found - probably already completed or aborted
+                    console.log('Task already completed or not found:', taskId);
+                } else {
+                    console.error('Failed to cancel task:', response.status);
+                    // Only show error for unexpected failures (not 404 or connection errors)
+                    if (response.status !== 0) {
+                        addMessage('system', `⚠️ Task cancellation returned ${response.status}`, { taskId });
+                    }
+                }
+            } catch (error) {
+                // Silently handle - abort errors are expected during cancellation
+                console.log('Cancel request error (expected during abort):', error.message);
+            } finally {
+                // Reset UI state
+                activeTaskId = null;
+                activeAbortController = null;
+                setSendButtonMode(false);
+            }
+        }
 
         function init() {
             // Configure marked.js options
@@ -2374,6 +2660,374 @@
                 });
         }
 
+        // Extract approval request from A2A parts (DataPart with interaction_type)
+        function extractApprovalRequestFromParts(parts) {
+            if (!parts || !Array.isArray(parts)) return null;
+            
+            for (const part of parts) {
+                if (part.data?.data) {
+                    const data = part.data.data;
+                    if (data.interaction_type === 'tool_approval') {
+                        return {
+                            type: 'tool_approval',
+                            toolName: data.tool_name || 'unknown',
+                            toolInput: data.tool_input || '',
+                            options: data.options || ['approve', 'deny', 'modify']
+                        };
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Create approval request UI element
+        function createApprovalRequestElement(approvalData, taskId, agentUrl) {
+            const approvalDiv = document.createElement('div');
+            approvalDiv.className = 'approval-request';
+            approvalDiv.setAttribute('data-task-id', taskId);
+            
+            // Header
+            const header = document.createElement('div');
+            header.className = 'approval-header';
+            header.innerHTML = '<span class="approval-icon">🔐</span><span>Tool Approval Required</span>';
+            approvalDiv.appendChild(header);
+            
+            // Content
+            const content = document.createElement('div');
+            content.className = 'approval-content';
+            content.innerHTML = `
+                <div>Tool: <span class="approval-tool-name">${approvalData.toolName}</span></div>
+                <div class="approval-tool-input">${approvalData.toolInput}</div>
+            `;
+            approvalDiv.appendChild(content);
+            
+            // Actions
+            const actions = document.createElement('div');
+            actions.className = 'approval-actions';
+            
+            if (approvalData.options.includes('approve')) {
+                const approveBtn = document.createElement('button');
+                approveBtn.className = 'approval-btn approve-btn';
+                approveBtn.innerHTML = '✓ Approve';
+                approveBtn.onclick = () => handleApprovalResponse(approvalDiv, 'approve', taskId, agentUrl);
+                actions.appendChild(approveBtn);
+            }
+            
+            if (approvalData.options.includes('deny')) {
+                const denyBtn = document.createElement('button');
+                denyBtn.className = 'approval-btn deny-btn';
+                denyBtn.innerHTML = '✗ Deny';
+                denyBtn.onclick = () => handleApprovalResponse(approvalDiv, 'deny', taskId, agentUrl);
+                actions.appendChild(denyBtn);
+            }
+            
+            if (approvalData.options.includes('modify')) {
+                const modifyBtn = document.createElement('button');
+                modifyBtn.className = 'approval-btn modify-btn';
+                modifyBtn.innerHTML = '✏️ Modify';
+                modifyBtn.onclick = () => toggleModifyInput(approvalDiv);
+                actions.appendChild(modifyBtn);
+            }
+            
+            approvalDiv.appendChild(actions);
+            
+            // Modify input (hidden by default)
+            const modifyInput = document.createElement('textarea');
+            modifyInput.className = 'modify-input';
+            modifyInput.placeholder = 'Enter modified input as JSON...';
+            modifyInput.value = approvalData.toolInput;
+            approvalDiv.appendChild(modifyInput);
+            
+            // Status message
+            const status = document.createElement('div');
+            status.className = 'approval-status';
+            approvalDiv.appendChild(status);
+            
+            return approvalDiv;
+        }
+
+        // Toggle modify input visibility
+        function toggleModifyInput(approvalDiv) {
+            const modifyInput = approvalDiv.querySelector('.modify-input');
+            const isVisible = modifyInput.classList.contains('visible');
+            
+            if (isVisible) {
+                // Submit modified input
+                const taskId = approvalDiv.getAttribute('data-task-id');
+                const agentUrl = approvalDiv.getAttribute('data-agent-url');
+                const modifiedInput = modifyInput.value.trim();
+                handleApprovalResponse(approvalDiv, 'modify', taskId, agentUrl, modifiedInput);
+            } else {
+                // Show input
+                modifyInput.classList.add('visible');
+                modifyInput.focus();
+                
+                // Change button text
+                const modifyBtn = approvalDiv.querySelector('.modify-btn');
+                modifyBtn.innerHTML = '✓ Submit Modified';
+            }
+        }
+
+        // Handle approval response (approve/deny/modify)
+        async function handleApprovalResponse(approvalDiv, decision, taskId, agentUrl, modifiedInput = null) {
+            // Disable all buttons
+            const buttons = approvalDiv.querySelectorAll('.approval-btn');
+            buttons.forEach(btn => btn.disabled = true);
+            
+            // Show processing status
+            const statusDiv = approvalDiv.querySelector('.approval-status');
+            statusDiv.className = 'approval-status processing visible';
+            statusDiv.textContent = `Processing ${decision}...`;
+            
+            // Stop pulsing animation
+            approvalDiv.style.animation = 'none';
+            
+            try {
+                // Create response message according to A2A Protocol
+                // Must include taskId to resume the paused task
+                const parts = [
+                    {
+                        text: decision === 'approve' ? 'approve' : 
+                              decision === 'deny' ? 'deny' : 
+                              'modify'
+                    },
+                    {
+                        data: {
+                            data: {
+                                decision: decision,
+                                ...(modifiedInput && { modified_input: modifiedInput })
+                            }
+                        }
+                    }
+                ];
+                
+                const session = sessions[currentSessionId];
+                const request = {
+                    jsonrpc: '2.0',
+                    method: 'message/stream',
+                    params: {
+                        request: {
+                            contextId: session.contextId,
+                            taskId: taskId, // Critical: resume the paused task
+                            role: 'user',
+                            parts: parts
+                        }
+                    },
+                    id: generateRequestId()
+                };
+                
+                // Update status
+                statusDiv.className = `approval-status ${decision === 'approve' ? 'approved' : 'denied'} visible`;
+                statusDiv.textContent = decision === 'approve' ? '✓ Approved - Resuming...' :
+                                       decision === 'deny' ? '✗ Denied' :
+                                       '✏️ Modified - Resuming...';
+
+                // Don't add approval as a user message - it confuses the LLM
+                // The approval UI already shows the decision visually
+
+                // Send the approval response via streaming
+                const url = `${agentUrl}/stream`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(request)
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                // Process streaming response (task will resume)
+                await processStreamingResponse(response, agentUrl);
+                
+            } catch (error) {
+                console.error('Approval response error:', error);
+                statusDiv.className = 'approval-status denied visible';
+                statusDiv.textContent = '✗ Error: ' + error.message;
+                
+                // Re-enable buttons on error
+                buttons.forEach(btn => btn.disabled = false);
+            }
+        }
+
+        // Process streaming response (extracted from sendStreamingMessageJsonRpc)
+        async function processStreamingResponse(response, agentUrl) {
+            let currentMessageDiv = null;
+            let accumulatedText = '';
+            let lastTaskId = null;
+            let toolCallsMap = new Map();
+            const thinkingBlocksMap = new Map();
+
+            try {
+                setTyping(true);
+                setSendButtonMode(true); // Switch to cancel button
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.substring(6));
+                                if (data.error) {
+                                    setTyping(false);
+                                    showError(data.error.message);
+                                    throw new Error(data.error.message);
+                                }
+
+                                const result = data.result || data;
+                                let message = null;
+
+                                if (result.message) {
+                                    message = result.message;
+                                    if (message.taskId) {
+                                        lastTaskId = message.taskId;
+                                        activeTaskId = message.taskId; // Track for cancellation
+                                    }
+                                } else if (result.parts) {
+                                    message = result;
+                                }
+
+                                const isAgentRole = message && message.parts && 
+                                    (message.role === 'agent' || message.role === 'ROLE_AGENT');
+                                
+                                if (isAgentRole) {
+                                    const toolCalls = extractToolCallsFromParts(message.parts);
+                                    toolCalls.forEach(tc => {
+                                        if (!toolCallsMap.has(tc.id)) {
+                                            toolCallsMap.set(tc.id, tc);
+                                            if (currentMessageDiv && accumulatedText) {
+                                                accumulatedText += `\u200D\u200D__TOOL_${tc.id}__\u200D\u200D`;
+                                            }
+                                        }
+                                    });
+
+                                    const toolResults = extractToolResultsFromParts(message.parts);
+                                    toolResults.forEach(tr => {
+                                        updateToolCallStatus(tr.tool_call_id, tr.success);
+                                    });
+
+                                    const newThinkingBlocks = extractThinkingFromParts(message.parts);
+                                    newThinkingBlocks.forEach(thinkingBlock => {
+                                        if (!thinkingBlocksMap.has(thinkingBlock.id)) {
+                                            thinkingBlocksMap.set(thinkingBlock.id, thinkingBlock);
+                                        }
+                                    });
+
+                                    let text = extractTextFromParts(message.parts);
+                                    
+                                    if (!currentMessageDiv) {
+                                        toolCalls.forEach(tc => {
+                                            if (toolCallsMap.has(tc.id)) {
+                                                text += `\u200D\u200D__TOOL_${tc.id}__\u200D\u200D`;
+                                            }
+                                        });
+                                        newThinkingBlocks.forEach(thinkingBlock => {
+                                            const marker = `\u200D\u200D__THINKING_${thinkingBlock.id}__\u200D\u200D`;
+                                            text += marker;
+                                        });
+                                    } else {
+                                        newThinkingBlocks.forEach(thinkingBlock => {
+                                            if (thinkingBlock.id && !accumulatedText.includes(`__THINKING_${thinkingBlock.id}__`)) {
+                                                const marker = `\u200D\u200D__THINKING_${thinkingBlock.id}__\u200D\u200D`;
+                                                text += marker;
+                                            }
+                                        });
+                                    }
+
+                                    if (!currentMessageDiv) {
+                                        setTyping(false);
+                                        const initialToolCalls = Array.from(toolCallsMap.values());
+                                        currentMessageDiv = addMessage('agent', text, { taskId: lastTaskId }, false, initialToolCalls, []);
+                                        currentMessageDiv._toolCallsMap = toolCallsMap;
+                                        currentMessageDiv._thinkingBlocksMap = thinkingBlocksMap;
+                                        updateMessage(currentMessageDiv, text, toolCallsMap, thinkingBlocksMap);
+                                        accumulatedText = text;
+                                    } else {
+                                        accumulatedText += text;
+                                        const toolsToUse = currentMessageDiv._toolCallsMap || toolCallsMap;
+                                        const thinkingToUse = currentMessageDiv._thinkingBlocksMap || thinkingBlocksMap;
+                                        updateMessage(currentMessageDiv, accumulatedText, toolsToUse, thinkingToUse);
+                                        currentMessageDiv._toolCallsMap = toolCallsMap;
+                                        currentMessageDiv._thinkingBlocksMap = thinkingBlocksMap;
+                                    }
+
+                                    // Check for approval request (input-required state)
+                                    const approvalRequest = extractApprovalRequestFromParts(message.parts);
+                                    if (approvalRequest && lastTaskId) {
+                                        // Insert approval UI into the message
+                                        const contentDiv = currentMessageDiv.querySelector('.message-content');
+                                        const approvalElement = createApprovalRequestElement(approvalRequest, lastTaskId, agentUrl);
+                                        approvalElement.setAttribute('data-agent-url', agentUrl);
+                                        contentDiv.appendChild(approvalElement);
+                                        scrollToBottom();
+                                    }
+                                }
+                            } catch (err) {
+                                console.error('Parse error:', err);
+                            }
+                        }
+                    }
+                }
+
+                setTyping(false);
+                
+                if (currentMessageDiv && currentSessionId) {
+                    const toolCallsWithStatus = Array.from(toolCallsMap.values()).map(tc => {
+                        const toolElement = currentMessageDiv.querySelector(`[data-tool-id="${tc.id}"]`);
+                        if (toolElement) {
+                            const statusEl = toolElement.querySelector('.tool-status');
+                            if (statusEl) {
+                                let status = 'working';
+                                if (statusEl.classList.contains('success')) {
+                                    status = 'success';
+                                } else if (statusEl.classList.contains('failed')) {
+                                    status = 'failed';
+                                }
+                                return { ...tc, status };
+                            }
+                        }
+                        return tc;
+                    });
+                    
+                    const thinkingBlocksArray = Array.from(thinkingBlocksMap.values());
+                    
+                    sessions[currentSessionId].messages.push({
+                        role: 'agent',
+                        text: accumulatedText,
+                        metadata: { taskId: lastTaskId },
+                        toolCalls: toolCallsWithStatus,
+                        thinkingBlocks: thinkingBlocksArray
+                    });
+                    sessions[currentSessionId].taskId = lastTaskId;
+                    saveSessions();
+                }
+
+            } catch (err) {
+                setTyping(false);
+                setSendButtonMode(false); // Reset to send button
+
+                // Don't throw error if this was a user-initiated cancellation
+                if (err.name !== 'AbortError' && !err.message.includes('aborted')) {
+                    throw err;
+                }
+                // Silently handle abort errors (user cancelled)
+                console.log('Stream aborted by user');
+            } finally {
+                // Always reset button state when streaming ends
+                setSendButtonMode(false);
+                activeTaskId = null;
+                activeAbortController = null;
+            }
+        }
+
         function generateRequestId() {
             return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         }
@@ -2410,14 +3064,19 @@
 
                 try {
                     setTyping(true);
-                    
+                    setSendButtonMode(true); // Switch to cancel button
+
+                    // Create AbortController for cancellation
+                    activeAbortController = new AbortController();
+
                     const response = await fetch(url, {
                         method: 'POST',
-                        headers: { 
+                        headers: {
                             'Content-Type': 'application/json'
                             // A2A native - parts already contain AG-UI metadata for lifecycle
                         },
-                        body: JSON.stringify(request)
+                        body: JSON.stringify(request),
+                        signal: activeAbortController.signal
                     });
 
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -2450,7 +3109,10 @@
 
                                     if (result.message) {
                                         message = result.message;
-                                        if (message.taskId) lastTaskId = message.taskId;
+                                        if (message.taskId) {
+                                            lastTaskId = message.taskId;
+                                            activeTaskId = message.taskId; // Track for cancellation
+                                        }
                                     } else if (result.parts) {
                                         message = result;
                                     }
@@ -2532,22 +3194,33 @@
                                         } else {
                                             accumulatedText += text;
                                             // Pass both maps to updateMessage so it can render all badges
-                                            const toolsToUse = currentMessageDiv._toolCallsMap || toolCallsMap;
-                                            const thinkingToUse = currentMessageDiv._thinkingBlocksMap || thinkingBlocksMap;
-                                            updateMessage(currentMessageDiv, accumulatedText, toolsToUse, thinkingToUse);
-                                            // Update the stored references
-                                            currentMessageDiv._toolCallsMap = toolCallsMap;
-                                            currentMessageDiv._thinkingBlocksMap = thinkingBlocksMap;
-                                        }
+                                        const toolsToUse = currentMessageDiv._toolCallsMap || toolCallsMap;
+                                        const thinkingToUse = currentMessageDiv._thinkingBlocksMap || thinkingBlocksMap;
+                                        updateMessage(currentMessageDiv, accumulatedText, toolsToUse, thinkingToUse);
+                                        // Update the stored references
+                                        currentMessageDiv._toolCallsMap = toolCallsMap;
+                                        currentMessageDiv._thinkingBlocksMap = thinkingBlocksMap;
                                     }
-                                } catch (err) {
-                                    console.error('Parse error:', err);
+
+                                    // Check for approval request (input-required state)
+                                    const approvalRequest = extractApprovalRequestFromParts(message.parts);
+                                    if (approvalRequest && lastTaskId) {
+                                        // Insert approval UI into the message
+                                        const contentDiv = currentMessageDiv.querySelector('.message-content');
+                                        const approvalElement = createApprovalRequestElement(approvalRequest, lastTaskId, agentUrl);
+                                        approvalElement.setAttribute('data-agent-url', agentUrl);
+                                        contentDiv.appendChild(approvalElement);
+                                        scrollToBottom();
+                                    }
                                 }
+                            } catch (err) {
+                                console.error('Parse error:', err);
                             }
                         }
                     }
+                }
 
-                    setTyping(false);
+                setTyping(false);
                     
                     // Save the complete agent message with tool calls
                     if (currentMessageDiv && currentSessionId) {
@@ -2586,7 +3259,20 @@
                     resolve({ text: accumulatedText, taskId: lastTaskId });
                 } catch (err) {
                     setTyping(false);
-                    reject(err);
+                    setSendButtonMode(false); // Reset to send button
+
+                    // Don't reject if this was a user-initiated cancellation
+                    if (err.name === 'AbortError' || err.message.includes('aborted')) {
+                        console.log('Stream aborted by user');
+                        resolve({ text: accumulatedText, taskId: lastTaskId, cancelled: true });
+                    } else {
+                        reject(err);
+                    }
+                } finally {
+                    // Always reset button state when streaming ends
+                    setSendButtonMode(false);
+                    activeTaskId = null;
+                    activeAbortController = null;
                 }
             });
         }

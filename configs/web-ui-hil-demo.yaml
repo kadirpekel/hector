@@ -1,0 +1,110 @@
+# Web UI Human-in-the-Loop Demo Configuration
+# This configuration demonstrates tool approval in the web interface
+# 
+# Usage:
+#   ./hector serve --config configs/web-ui-hil-demo.yaml
+#   Then open: http://localhost:8080
+#
+# Try asking the agent to:
+#   - "Execute ls -la command"
+#   - "Write a file called test.txt with hello world"
+#   - "Delete the test.txt file"
+#
+# The web UI will display approval prompts for dangerous operations.
+
+# LLM Configuration
+llms:
+  gpt-4:
+    type: openai
+    model: gpt-4
+    api_key: ${OPENAI_API_KEY}
+    temperature: 0.7
+    max_tokens: 2000
+
+# Tool definitions with approval requirements
+tools:
+  execute_command:
+    type: command
+    enabled: true
+    requires_approval: true  # ⭐ User must approve
+    approval_prompt: "Execute command: {input}? This may modify your system."
+    allowed_commands:
+      - "ls"
+      - "pwd"
+      - "cat"
+      - "echo"
+      - "date"
+    working_directory: "./"
+    max_execution_time: "30s"
+    
+  write_file:
+    type: write_file
+    enabled: true
+    requires_approval: true  # ⭐ User must approve
+    approval_prompt: "Write to file: {input}?"
+    max_file_size: 1048576  # 1MB
+    working_directory: "./"
+    
+  delete_file:
+    type: delete_file
+    enabled: true
+    requires_approval: true  # ⭐ User must approve (dangerous!)
+    approval_prompt: "⚠️ DELETE file: {input}? This cannot be undone!"
+    working_directory: "./"
+
+  read_file:
+    type: read_file
+    enabled: true
+    requires_approval: false  # Safe operation, no approval needed
+    max_file_size: 10485760  # 10MB
+    working_directory: "./"
+
+  list_directory:
+    type: list_directory
+    enabled: true
+    requires_approval: false  # Safe operation
+    working_directory: "./"
+
+# Agent configuration
+agents:
+  assistant:
+    name: "HIL Demo Assistant"
+    description: "Demonstrates human-in-the-loop approval workflow"
+    llm: "gpt-4"
+    
+    reasoning:
+      engine: "chain_of_thought"
+      enable_streaming: true
+      max_iterations: 30
+      show_thinking: true
+    
+    task:
+      backend: memory
+      worker_pool: 5
+      input_timeout: 600  # 10 minutes to respond to approval requests
+    
+    tools:
+      - execute_command
+      - write_file
+      - delete_file
+      - read_file
+      - list_directory
+    
+    prompt:
+      system_prompt: |
+        You are a helpful assistant that can execute commands and manage files.
+        
+        IMPORTANT GUIDELINES:
+        - When executing commands, explain what you're about to do
+        - For file operations, describe the changes clearly
+        - If a tool requires approval, the user will see a prompt
+        - Wait for their approval before the tool executes
+        - Be patient and respectful of the approval process
+
+# Server configuration
+global:
+  a2a_server:
+    host: "0.0.0.0"
+    port: 8080
+    preferred_transport: "json-rpc"
+

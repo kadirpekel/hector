@@ -41,6 +41,30 @@ func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*p
 		userMessage.MessageId = fmt.Sprintf("msg-%d", time.Now().UnixNano())
 	}
 
+	// A2A Protocol Section 6.3: Check if this is a continuation of an existing task
+	// (multi-turn conversation for INPUT_REQUIRED state)
+	if userMessage.TaskId != "" && a.services.Task() != nil {
+		existingTask, err := a.services.Task().GetTask(ctx, userMessage.TaskId)
+		if err == nil && existingTask.Status.State == pb.TaskState_TASK_STATE_INPUT_REQUIRED {
+			// Task is waiting for user input - provide it and resume
+			if err := a.taskAwaiter.ProvideInput(userMessage.TaskId, userMessage); err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "failed to resume task: %v", err)
+			}
+
+			// Don't add approval messages to task history - they're internal control messages
+			// The decision is extracted and applied by the waiting goroutine
+			// Adding them to history would confuse the LLM
+
+			// Task will resume execution in background goroutine
+			// Return current task state (will be updated as execution continues)
+			return &pb.SendMessageResponse{
+				Payload: &pb.SendMessageResponse_Task{
+					Task: existingTask,
+				},
+			}, nil
+		}
+	}
+
 	if a.services.Task() != nil {
 		blocking := true
 		if req.Configuration != nil {
@@ -177,6 +201,24 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 			_ = a.services.Task().UpdateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil)
 			return status.Errorf(codes.Internal, "failed to create strategy: %v", err)
 		}
+
+		// Create cancellable context for this execution
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		// Register cancellation function for streaming tasks
+		a.executionsMu.Lock()
+		a.activeExecutions[task.Id] = cancel
+		a.executionsMu.Unlock()
+
+		defer func() {
+			a.executionsMu.Lock()
+			delete(a.activeExecutions, task.Id)
+			a.executionsMu.Unlock()
+		}()
+
+		// Add taskID to context for tool approval
+		ctx = context.WithValue(ctx, "taskID", task.Id)
 
 		streamCh, err := a.execute(ctx, userText, strategy)
 		if err != nil {
@@ -475,6 +517,18 @@ func (a *Agent) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) (*pb.
 		return nil, status.Error(codes.InvalidArgument, "invalid task name format")
 	}
 
+	// Cancel active execution context if exists
+	a.executionsMu.RLock()
+	if cancelFunc, exists := a.activeExecutions[taskID]; exists {
+		a.executionsMu.RUnlock()
+		cancelFunc() // Cancel the context to stop execution
+	} else {
+		a.executionsMu.RUnlock()
+	}
+
+	// Cancel any waiting input requests
+	a.taskAwaiter.CancelWaiting(taskID)
+
 	task, err := a.services.Task().CancelTask(ctx, taskID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to cancel task: %v", err)
@@ -535,13 +589,39 @@ func (a *Agent) processTaskAsync(taskID, userText, contextID string) {
 
 	ctx := context.Background()
 
+	// Add taskID to context for tool approval logic
+	ctx = context.WithValue(ctx, "taskID", taskID)
+
+	// Create cancellable context for this task execution
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Register cancellation function for this task
+	a.executionsMu.Lock()
+	a.activeExecutions[taskID] = cancel
+	a.executionsMu.Unlock()
+
+	defer func() {
+		a.executionsMu.Lock()
+		delete(a.activeExecutions, taskID)
+		a.executionsMu.Unlock()
+	}()
+
 	if err := a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
 		return
 	}
 
-	responseText, err := a.executeReasoningForA2A(ctx, userText, contextID)
+	// Execute with INPUT_REQUIRED support
+	responseText, err := a.executeReasoningWithHITL(ctx, userText, contextID, taskID)
 	if err != nil {
 		_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil)
+		return
+	}
+
+	// Check if task is paused (waiting for user input)
+	if a.taskAwaiter.IsWaiting(taskID) {
+		// Task is in INPUT_REQUIRED state, don't complete it yet
+		// Execution will resume when user provides input via SendMessage
 		return
 	}
 
@@ -573,6 +653,69 @@ func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, con
 		// Extract text from parts for full response
 		if textPart, ok := part.Part.(*pb.Part_Text); ok {
 			fullResponse.WriteString(textPart.Text)
+		}
+	}
+
+	return fullResponse.String(), nil
+}
+
+// executeReasoningWithHITL executes reasoning with human-in-the-loop support
+// Handles INPUT_REQUIRED state for tool approval
+func (a *Agent) executeReasoningWithHITL(ctx context.Context, userText string, contextID string, taskID string) (string, error) {
+	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
+	if err != nil {
+		return "", fmt.Errorf("failed to create strategy: %w", err)
+	}
+
+	ctx = context.WithValue(ctx, SessionIDKey, contextID)
+
+	// Execute agent reasoning
+	streamCh, err := a.execute(ctx, userText, strategy)
+	if err != nil {
+		return "", fmt.Errorf("reasoning failed: %w", err)
+	}
+
+	var fullResponse strings.Builder
+	for part := range streamCh {
+		if textPart, ok := part.Part.(*pb.Part_Text); ok {
+			fullResponse.WriteString(textPart.Text)
+		}
+	}
+
+	// Check if execution was interrupted for user input
+	if a.taskAwaiter.IsWaiting(taskID) {
+		// Task is paused waiting for user approval
+		// Wait for user response
+		userMessage, err := a.taskAwaiter.WaitForInput(ctx, taskID, 0)
+		if err != nil {
+			return "", fmt.Errorf("waiting for user input failed: %w", err)
+		}
+
+		// Add user's response to context for next iteration
+		decision := parseUserDecision(userMessage)
+		ctx = context.WithValue(ctx, "userDecision", decision)
+
+		// If user wants to modify, extract the modified input
+		if decision == "modify" {
+			modifiedInput, err := extractModifiedInput(userMessage)
+			if err == nil {
+				ctx = context.WithValue(ctx, "modifiedInput", modifiedInput)
+			}
+		}
+
+		// Update task back to WORKING state
+		_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil)
+
+		// Resume execution with user's decision
+		streamCh, err = a.execute(ctx, userText, strategy)
+		if err != nil {
+			return "", fmt.Errorf("reasoning failed after resume: %w", err)
+		}
+
+		for part := range streamCh {
+			if textPart, ok := part.Part.(*pb.Part_Text); ok {
+				fullResponse.WriteString(textPart.Text)
+			}
 		}
 	}
 

@@ -1,6 +1,7 @@
 package llms
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
@@ -10,9 +11,9 @@ import (
 )
 
 type LLMProvider interface {
-	Generate(messages []*pb.Message, tools []ToolDefinition) (text string, toolCalls []*protocol.ToolCall, tokens int, err error)
+	Generate(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (text string, toolCalls []*protocol.ToolCall, tokens int, err error)
 
-	GenerateStreaming(messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error)
+	GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error)
 
 	GetModelName() string
 
@@ -26,9 +27,9 @@ type LLMProvider interface {
 type StructuredOutputProvider interface {
 	LLMProvider
 
-	GenerateStructured(messages []*pb.Message, tools []ToolDefinition, config *StructuredOutputConfig) (text string, toolCalls []*protocol.ToolCall, tokens int, err error)
+	GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, config *StructuredOutputConfig) (text string, toolCalls []*protocol.ToolCall, tokens int, err error)
 
-	GenerateStructuredStreaming(messages []*pb.Message, tools []ToolDefinition, config *StructuredOutputConfig) (<-chan StreamChunk, error)
+	GenerateStructuredStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, config *StructuredOutputConfig) (<-chan StreamChunk, error)
 
 	SupportsStructuredOutput() bool
 }

@@ -92,12 +92,12 @@ func NewGeminiProviderFromConfig(cfg *config.LLMProviderConfig) (*GeminiProvider
 	}, nil
 }
 
-func (p *GeminiProvider) Generate(messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
 	startTime := time.Now()
 
 	// Create span for LLM request
 	tracer := observability.GetTracer("hector.llm")
-	ctx, span := tracer.Start(context.Background(), observability.SpanLLMRequest,
+	ctx, span := tracer.Start(ctx, observability.SpanLLMRequest,
 		trace.WithAttributes(
 			attribute.String(observability.AttrLLMModel, p.config.Model),
 			attribute.String("provider", "gemini"),
@@ -113,7 +113,7 @@ func (p *GeminiProvider) Generate(messages []*pb.Message, tools []ToolDefinition
 
 	reqBody, _ := json.Marshal(req)
 
-	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(reqBody))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 	if err != nil {
 		reqErr := fmt.Errorf("failed to create request: %w", err)
 		span.RecordError(reqErr)
@@ -191,7 +191,7 @@ func (p *GeminiProvider) Generate(messages []*pb.Message, tools []ToolDefinition
 	return text, toolCalls, tokens, nil
 }
 
-func (p *GeminiProvider) GenerateStreaming(messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
+func (p *GeminiProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, tools, nil)
 
 	url := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?key=%s&alt=sse",
@@ -203,7 +203,7 @@ func (p *GeminiProvider) GenerateStreaming(messages []*pb.Message, tools []ToolD
 		defer close(chunks)
 
 		reqBody, _ := json.Marshal(req)
-		httpReq, err := http.NewRequest("POST", url, bytes.NewReader(reqBody))
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 		if err != nil {
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return
@@ -233,12 +233,12 @@ func (p *GeminiProvider) GenerateStreaming(messages []*pb.Message, tools []ToolD
 	return chunks, nil
 }
 
-func (p *GeminiProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
+func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
 	startTime := time.Now()
 
 	// Create span for structured LLM request
 	tracer := observability.GetTracer("hector.llm")
-	ctx, span := tracer.Start(context.Background(), observability.SpanLLMRequest,
+	ctx, span := tracer.Start(ctx, observability.SpanLLMRequest,
 		trace.WithAttributes(
 			attribute.String(observability.AttrLLMModel, p.config.Model),
 			attribute.String("provider", "gemini"),
@@ -255,7 +255,7 @@ func (p *GeminiProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 
 	reqBody, _ := json.Marshal(req)
 
-	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(reqBody))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 	if err != nil {
 		reqErr := fmt.Errorf("failed to create request: %w", err)
 		span.RecordError(reqErr)
@@ -319,7 +319,7 @@ func (p *GeminiProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 	return text, toolCalls, tokens, nil
 }
 
-func (p *GeminiProvider) GenerateStructuredStreaming(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
+func (p *GeminiProvider) GenerateStructuredStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, tools, structConfig)
 
 	url := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?key=%s&alt=sse",
@@ -331,7 +331,7 @@ func (p *GeminiProvider) GenerateStructuredStreaming(messages []*pb.Message, too
 		defer close(chunks)
 
 		reqBody, _ := json.Marshal(req)
-		httpReq, err := http.NewRequest("POST", url, bytes.NewReader(reqBody))
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 		if err != nil {
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return

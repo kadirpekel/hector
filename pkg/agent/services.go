@@ -186,12 +186,12 @@ func NewLLMService(llmProvider llms.LLMProvider) reasoning.LLMService {
 	}
 }
 
-func (s *DefaultLLMService) Generate(messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, error) {
-	return s.llmProvider.Generate(messages, tools)
+func (s *DefaultLLMService) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+	return s.llmProvider.Generate(ctx, messages, tools)
 }
 
-func (s *DefaultLLMService) GenerateStreaming(messages []*pb.Message, tools []llms.ToolDefinition, outputCh chan<- string) ([]*protocol.ToolCall, int, error) {
-	streamCh, err := s.llmProvider.GenerateStreaming(messages, tools)
+func (s *DefaultLLMService) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition, outputCh chan<- string) ([]*protocol.ToolCall, int, error) {
+	streamCh, err := s.llmProvider.GenerateStreaming(ctx, messages, tools)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -218,7 +218,7 @@ func (s *DefaultLLMService) GenerateStreaming(messages []*pb.Message, tools []ll
 	return toolCalls, tokens, nil
 }
 
-func (s *DefaultLLMService) GenerateStructured(messages []*pb.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
+func (s *DefaultLLMService) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
 
 	structProvider, ok := s.llmProvider.(llms.StructuredOutputProvider)
 	if !ok {
@@ -230,7 +230,7 @@ func (s *DefaultLLMService) GenerateStructured(messages []*pb.Message, tools []l
 		return "", nil, 0, fmt.Errorf("provider does not support structured output")
 	}
 
-	return structProvider.GenerateStructured(messages, tools, config)
+	return structProvider.GenerateStructured(ctx, messages, tools, config)
 }
 
 func (s *DefaultLLMService) SupportsStructuredOutput() bool {

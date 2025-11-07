@@ -160,12 +160,12 @@ func NewOpenAIProviderFromConfig(cfg *config.LLMProviderConfig) (*OpenAIProvider
 	}, nil
 }
 
-func (p *OpenAIProvider) Generate(messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+func (p *OpenAIProvider) Generate(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
 	startTime := time.Now()
 
 	// Create span for LLM request
 	tracer := observability.GetTracer("hector.llm")
-	ctx, span := tracer.Start(context.Background(), observability.SpanLLMRequest,
+	ctx, span := tracer.Start(ctx, observability.SpanLLMRequest,
 		trace.WithAttributes(
 			attribute.String(observability.AttrLLMModel, p.config.Model),
 			attribute.String("provider", "openai"),
@@ -176,7 +176,7 @@ func (p *OpenAIProvider) Generate(messages []*pb.Message, tools []ToolDefinition
 
 	request := p.buildRequest(messages, false, tools)
 
-	response, err := p.makeRequest(request)
+	response, err := p.makeRequest(ctx, request)
 	duration := time.Since(startTime)
 
 	if err != nil {
@@ -252,7 +252,7 @@ func (p *OpenAIProvider) Generate(messages []*pb.Message, tools []ToolDefinition
 	return text, toolCalls, tokensUsed, nil
 }
 
-func (p *OpenAIProvider) GenerateStreaming(messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
+func (p *OpenAIProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	request := p.buildRequest(messages, true, tools)
 
 	outputCh := make(chan StreamChunk, 100)
@@ -260,7 +260,7 @@ func (p *OpenAIProvider) GenerateStreaming(messages []*pb.Message, tools []ToolD
 	go func() {
 		defer close(outputCh)
 
-		if err := p.makeStreamingRequest(request, outputCh); err != nil {
+		if err := p.makeStreamingRequest(ctx, request, outputCh); err != nil {
 			outputCh <- StreamChunk{
 				Type:  "error",
 				Error: err,
@@ -287,12 +287,12 @@ func (p *OpenAIProvider) Close() error {
 	return nil
 }
 
-func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
+func (p *OpenAIProvider) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
 	startTime := time.Now()
 
 	// Create span for structured LLM request
 	tracer := observability.GetTracer("hector.llm")
-	ctx, span := tracer.Start(context.Background(), observability.SpanLLMRequest,
+	ctx, span := tracer.Start(ctx, observability.SpanLLMRequest,
 		trace.WithAttributes(
 			attribute.String(observability.AttrLLMModel, p.config.Model),
 			attribute.String("provider", "openai"),
@@ -330,7 +330,7 @@ func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 		}
 	}
 
-	response, err := p.makeRequest(req)
+	response, err := p.makeRequest(ctx, req)
 	duration := time.Since(startTime)
 
 	if err != nil {
@@ -404,7 +404,7 @@ func (p *OpenAIProvider) GenerateStructured(messages []*pb.Message, tools []Tool
 	return text, toolCalls, tokensUsed, nil
 }
 
-func (p *OpenAIProvider) GenerateStructuredStreaming(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
+func (p *OpenAIProvider) GenerateStructuredStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, true, tools)
 
 	if structConfig != nil && structConfig.Format == "json" && structConfig.Schema != nil {
@@ -428,7 +428,7 @@ func (p *OpenAIProvider) GenerateStructuredStreaming(messages []*pb.Message, too
 	go func() {
 		defer close(outputCh)
 
-		if err := p.makeStreamingRequest(req, outputCh); err != nil {
+		if err := p.makeStreamingRequest(ctx, req, outputCh); err != nil {
 			outputCh <- StreamChunk{
 				Type:  "error",
 				Error: err,
@@ -555,13 +555,13 @@ func parseToolCalls(openaiToolCalls []OpenAIToolCall) ([]*protocol.ToolCall, err
 	return result, nil
 }
 
-func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, error) {
+func (p *OpenAIProvider) makeRequest(ctx context.Context, request OpenAIRequest) (*OpenAIResponse, error) {
 	requestBody, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", p.config.Host+"/chat/completions", bytes.NewReader(requestBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", p.config.Host+"/chat/completions", bytes.NewReader(requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
@@ -632,13 +632,13 @@ func (p *OpenAIProvider) makeRequest(request OpenAIRequest) (*OpenAIResponse, er
 	return &response, nil
 }
 
-func (p *OpenAIProvider) makeStreamingRequest(request OpenAIRequest, outputCh chan<- StreamChunk) error {
+func (p *OpenAIProvider) makeStreamingRequest(ctx context.Context, request OpenAIRequest, outputCh chan<- StreamChunk) error {
 	requestBody, err := json.Marshal(request)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", p.config.Host+"/chat/completions", bytes.NewReader(requestBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", p.config.Host+"/chat/completions", bytes.NewReader(requestBody))
 	if err != nil {
 		return fmt.Errorf("failed to create HTTP request: %w", err)
 	}

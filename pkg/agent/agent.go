@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
@@ -37,6 +38,11 @@ type Agent struct {
 	taskWorkers        chan struct{}
 	baseURL            string // Server base URL for agent card URL construction
 	preferredTransport string // Preferred A2A transport (grpc, json-rpc, rest)
+
+	// Human-in-the-loop support (A2A Protocol Section 6.3 - INPUT_REQUIRED state)
+	taskAwaiter      *TaskAwaiter                  // Handles paused tasks waiting for input
+	activeExecutions map[string]context.CancelFunc // Track active task executions for cancellation
+	executionsMu     sync.RWMutex                  // Protects activeExecutions
 }
 
 func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr interface{}, registry *AgentRegistry, baseURL string, preferredTransport string) (*Agent, error) {
@@ -69,6 +75,12 @@ func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr inte
 		transport = "json-rpc" // Default
 	}
 
+	// Initialize task awaiter with default timeout (can be overridden in config)
+	awaitTimeout := 10 * time.Minute
+	if agentConfig.Task != nil && agentConfig.Task.InputTimeout > 0 {
+		awaitTimeout = time.Duration(agentConfig.Task.InputTimeout) * time.Second
+	}
+
 	return &Agent{
 		id:                 agentID,
 		name:               agentConfig.Name,
@@ -79,6 +91,8 @@ func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr inte
 		taskWorkers:        taskWorkers,
 		baseURL:            baseURL,
 		preferredTransport: transport,
+		taskAwaiter:        NewTaskAwaiter(awaitTimeout),
+		activeExecutions:   make(map[string]context.CancelFunc),
 	}, nil
 }
 
@@ -335,6 +349,75 @@ func (a *Agent) execute(
 			var results []reasoning.ToolResult
 			if len(toolCalls) > 0 {
 
+				// A2A Protocol Section 6.3: Check if any tools require approval (INPUT_REQUIRED state)
+				approvalResult, err := a.filterToolCallsWithApproval(ctx, toolCalls, a.componentManager.GetGlobalConfig().Tools)
+				if err != nil {
+					outputCh <- createTextPart(fmt.Sprintf("Error checking tool approval: %v\n", err))
+					return
+				}
+
+				// If tool requires user approval, transition to INPUT_REQUIRED state
+				if approvalResult.NeedsUserInput {
+					taskID := ""
+					if taskIDValue := ctx.Value("taskID"); taskIDValue != nil {
+						if tid, ok := taskIDValue.(string); ok {
+							taskID = tid
+						}
+					}
+
+					if taskID != "" {
+						// Update task to INPUT_REQUIRED state with approval request message
+						if err := a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_INPUT_REQUIRED, approvalResult.InteractionMsg); err != nil {
+							outputCh <- createTextPart(fmt.Sprintf("Error updating task status: %v\n", err))
+							return
+						}
+
+						// Send approval request message parts to stream so UI can display them
+						if approvalResult.InteractionMsg != nil && len(approvalResult.InteractionMsg.Parts) > 0 {
+							for _, part := range approvalResult.InteractionMsg.Parts {
+								outputCh <- part
+							}
+						}
+
+						// Wait for user approval inline (don't return - keep goroutine alive)
+						userMessage, err := a.taskAwaiter.WaitForInput(ctx, taskID, 0)
+						if err != nil {
+							outputCh <- createTextPart(fmt.Sprintf("❌ Approval timeout or cancelled: %v\n", err))
+							return
+						}
+
+						// Add user's response and extract decision
+						decision := parseUserDecision(userMessage)
+						ctx = context.WithValue(ctx, "userDecision", decision)
+
+						// If user wants to modify, extract the modified input
+						if decision == "modify" {
+							modifiedInput, err := extractModifiedInput(userMessage)
+							if err == nil {
+								ctx = context.WithValue(ctx, "modifiedInput", modifiedInput)
+							}
+						}
+
+						// Update task back to WORKING state
+						_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil)
+
+						// Continue execution with user's decision in context
+						// The approval filter will now apply the decision
+					} else {
+						// No taskID - can't request approval, deny the tool
+						outputCh <- createTextPart("⚠️  Tool requires approval but task tracking not enabled, denying\n")
+						approvalResult.ApprovedCalls = []*protocol.ToolCall{} // Clear approved calls
+					}
+				}
+
+				// Use only approved tool calls
+				toolCalls = approvalResult.ApprovedCalls
+
+				if len(toolCalls) == 0 {
+					// No tools to execute (all denied or waiting for approval)
+					continue
+				}
+
 				assistantMsg := &pb.Message{
 					Role:  pb.Role_ROLE_AGENT,
 					Parts: []*pb.Part{},
@@ -410,7 +493,7 @@ func (a *Agent) callLLM(
 			PropertyOrdering: a.config.StructuredOutput.PropertyOrdering,
 		}
 
-		text, toolCalls, tokens, err := llm.GenerateStructured(messages, toolDefs, structConfig)
+		text, toolCalls, tokens, err := llm.GenerateStructured(ctx, messages, toolDefs, structConfig)
 		if err != nil {
 			return "", nil, 0, err
 		}
@@ -441,7 +524,7 @@ func (a *Agent) callLLM(
 			}
 		}()
 
-		toolCalls, tokens, err := llm.GenerateStreaming(messages, toolDefs, wrappedCh)
+		toolCalls, tokens, err := llm.GenerateStreaming(ctx, messages, toolDefs, wrappedCh)
 
 		close(wrappedCh)
 		<-done
@@ -453,7 +536,7 @@ func (a *Agent) callLLM(
 		return streamedText.String(), toolCalls, tokens, nil
 	}
 
-	text, toolCalls, tokens, err := llm.Generate(messages, toolDefs)
+	text, toolCalls, tokens, err := llm.Generate(ctx, messages, toolDefs)
 	if err != nil {
 		return "", nil, 0, err
 	}

@@ -146,12 +146,12 @@ func (p *AnthropicProvider) Close() error {
 	return nil
 }
 
-func (p *AnthropicProvider) Generate(messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
 	startTime := time.Now()
 
 	// Create span for LLM request
 	tracer := observability.GetTracer("hector.llm")
-	ctx, span := tracer.Start(context.Background(), observability.SpanLLMRequest,
+	ctx, span := tracer.Start(ctx, observability.SpanLLMRequest,
 		trace.WithAttributes(
 			attribute.String(observability.AttrLLMModel, p.config.Model),
 			attribute.String("provider", "anthropic"),
@@ -162,7 +162,7 @@ func (p *AnthropicProvider) Generate(messages []*pb.Message, tools []ToolDefinit
 
 	request := p.buildRequest(messages, false, tools)
 
-	response, err := p.makeRequest(request)
+	response, err := p.makeRequest(ctx, request)
 	duration := time.Since(startTime)
 
 	if err != nil {
@@ -230,7 +230,7 @@ func (p *AnthropicProvider) Generate(messages []*pb.Message, tools []ToolDefinit
 	return text, toolCalls, tokensUsed, nil
 }
 
-func (p *AnthropicProvider) GenerateStreaming(messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
+func (p *AnthropicProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	request := p.buildRequest(messages, true, tools)
 
 	outputCh := make(chan StreamChunk, 100)
@@ -238,7 +238,7 @@ func (p *AnthropicProvider) GenerateStreaming(messages []*pb.Message, tools []To
 	go func() {
 		defer close(outputCh)
 
-		if err := p.makeStreamingRequest(request, outputCh); err != nil {
+		if err := p.makeStreamingRequest(ctx, request, outputCh); err != nil {
 			outputCh <- StreamChunk{
 				Type:  "error",
 				Error: err,
@@ -368,12 +368,12 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 	return request
 }
 
-func (p *AnthropicProvider) makeRequest(request AnthropicRequest) (*AnthropicResponse, error) {
+func (p *AnthropicProvider) makeRequest(ctx context.Context, request AnthropicRequest) (*AnthropicResponse, error) {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	req, err := http.NewRequest("POST", p.config.Host+"/v1/messages", bytes.NewReader(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", p.config.Host+"/v1/messages", bytes.NewReader(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -406,12 +406,12 @@ func (p *AnthropicProvider) makeRequest(request AnthropicRequest) (*AnthropicRes
 	return &response, nil
 }
 
-func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outputCh chan<- StreamChunk) error {
+func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request AnthropicRequest, outputCh chan<- StreamChunk) error {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
-	req, err := http.NewRequest("POST", p.config.Host+"/v1/messages", bytes.NewReader(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", p.config.Host+"/v1/messages", bytes.NewReader(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -523,12 +523,12 @@ func (p *AnthropicProvider) makeStreamingRequest(request AnthropicRequest, outpu
 	return nil
 }
 
-func (p *AnthropicProvider) GenerateStructured(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
+func (p *AnthropicProvider) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
 	startTime := time.Now()
 
 	// Create span for structured LLM request
 	tracer := observability.GetTracer("hector.llm")
-	ctx, span := tracer.Start(context.Background(), observability.SpanLLMRequest,
+	ctx, span := tracer.Start(ctx, observability.SpanLLMRequest,
 		trace.WithAttributes(
 			attribute.String(observability.AttrLLMModel, p.config.Model),
 			attribute.String("provider", "anthropic"),
@@ -561,7 +561,7 @@ func (p *AnthropicProvider) GenerateStructured(messages []*pb.Message, tools []T
 		})
 	}
 
-	text, toolCalls, tokens, err := p.makeStructuredRequest(req)
+	text, toolCalls, tokens, err := p.makeStructuredRequest(ctx, req)
 	duration := time.Since(startTime)
 
 	if err != nil {
@@ -597,7 +597,7 @@ func (p *AnthropicProvider) GenerateStructured(messages []*pb.Message, tools []T
 	return text, toolCalls, tokens, nil
 }
 
-func (p *AnthropicProvider) GenerateStructuredStreaming(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
+func (p *AnthropicProvider) GenerateStructuredStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
 
 	systemPrompt := p.buildSystemPromptWithSchema(structConfig)
 
@@ -634,7 +634,7 @@ func (p *AnthropicProvider) GenerateStructuredStreaming(messages []*pb.Message, 
 			}
 		}
 
-		if err := p.makeStreamingRequest(req, chunks); err != nil {
+		if err := p.makeStreamingRequest(ctx, req, chunks); err != nil {
 			chunks <- StreamChunk{Type: "error", Error: err}
 		}
 	}()
@@ -646,7 +646,7 @@ func (p *AnthropicProvider) SupportsStructuredOutput() bool {
 	return true
 }
 
-func (p *AnthropicProvider) makeStructuredRequest(req AnthropicRequest) (string, []*protocol.ToolCall, int, error) {
+func (p *AnthropicProvider) makeStructuredRequest(ctx context.Context, req AnthropicRequest) (string, []*protocol.ToolCall, int, error) {
 
 	prefill := ""
 	if len(req.Messages) > 0 && req.Messages[len(req.Messages)-1].Role == "assistant" {
@@ -655,7 +655,7 @@ func (p *AnthropicProvider) makeStructuredRequest(req AnthropicRequest) (string,
 		}
 	}
 
-	response, err := p.makeRequest(req)
+	response, err := p.makeRequest(ctx, req)
 	if err != nil {
 		return "", nil, 0, err
 	}

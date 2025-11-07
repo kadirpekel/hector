@@ -875,6 +875,10 @@ type ToolConfig struct {
 
 	MaxReplacements int `yaml:"max_replacements,omitempty"`
 
+	// Human-in-the-loop: Tool approval (A2A Protocol Section 6.3 - INPUT_REQUIRED)
+	RequiresApproval *bool  `yaml:"requires_approval,omitempty"` // If true, agent pauses for user approval
+	ApprovalPrompt   string `yaml:"approval_prompt,omitempty"`   // Custom prompt for approval request
+
 	// read_file, apply_patch, grep_search settings
 	ContextLines int `yaml:"context_lines,omitempty"`
 	MaxResults   int `yaml:"max_results,omitempty"`
@@ -1187,9 +1191,10 @@ func (c *DocumentStoreConfig) SetDefaults() {
 }
 
 type TaskConfig struct {
-	Backend    string         `yaml:"backend,omitempty"`
-	WorkerPool int            `yaml:"worker_pool,omitempty"`
-	SQL        *TaskSQLConfig `yaml:"sql,omitempty"`
+	Backend      string         `yaml:"backend,omitempty"`
+	WorkerPool   int            `yaml:"worker_pool,omitempty"`
+	SQL          *TaskSQLConfig `yaml:"sql,omitempty"`
+	InputTimeout int            `yaml:"input_timeout,omitempty"` // Timeout in seconds for INPUT_REQUIRED state (default: 600)
 }
 
 func (c *TaskConfig) IsEnabled() bool {

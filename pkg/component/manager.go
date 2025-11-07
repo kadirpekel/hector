@@ -439,7 +439,7 @@ type llmPluginBridge struct {
 	adapter *plugingrpc.LLMPluginAdapter
 }
 
-func (b *llmPluginBridge) Generate(messages []*pb.Message, tools []llms.ToolDefinition) (text string, toolCalls []*protocol.ToolCall, tokens int, err error) {
+func (b *llmPluginBridge) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (text string, toolCalls []*protocol.ToolCall, tokens int, err error) {
 
 	pbMessages := make([]*plugingrpc.Message, len(messages))
 	for i, msg := range messages {
@@ -461,7 +461,7 @@ func (b *llmPluginBridge) Generate(messages []*pb.Message, tools []llms.ToolDefi
 		}
 	}
 
-	response, err := b.adapter.GetPlugin().Generate(context.Background(), pbMessages, pbTools)
+	response, err := b.adapter.GetPlugin().Generate(ctx, pbMessages, pbTools)
 	if err != nil {
 		return "", nil, 0, err
 	}
@@ -484,7 +484,7 @@ func (b *llmPluginBridge) Generate(messages []*pb.Message, tools []llms.ToolDefi
 	return response.Text, llmToolCalls, int(response.TokensUsed), nil
 }
 
-func (b *llmPluginBridge) GenerateStreaming(messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
+func (b *llmPluginBridge) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
 
 	pbMessages := make([]*plugingrpc.Message, len(messages))
 	for i, msg := range messages {
@@ -506,7 +506,7 @@ func (b *llmPluginBridge) GenerateStreaming(messages []*pb.Message, tools []llms
 		}
 	}
 
-	pbChunks, err := b.adapter.GetPlugin().GenerateStreaming(context.Background(), pbMessages, pbTools)
+	pbChunks, err := b.adapter.GetPlugin().GenerateStreaming(ctx, pbMessages, pbTools)
 	if err != nil {
 		return nil, err
 	}
