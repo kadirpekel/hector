@@ -119,7 +119,7 @@ func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message 
 		const maxScannerBuffer = 1024 * 1024 // 1MB
 		buf := make([]byte, maxScannerBuffer)
 		scanner.Buffer(buf, maxScannerBuffer)
-		
+
 		var currentEvent string
 		var currentData string
 

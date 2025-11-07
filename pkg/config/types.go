@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	DefaultOpenAIModel    = "gpt-4o-mini"
+	DefaultOpenAIModel    = "gpt-4o"
 	DefaultAnthropicModel = "claude-3-7-sonnet-latest"
 	DefaultGeminiModel    = "gemini-2.0-flash-exp"
 )
@@ -682,6 +682,98 @@ func (c *SearchReplaceConfig) SetDefaults() {
 	}
 }
 
+type ReadFileConfig struct {
+	MaxFileSize      int    `yaml:"max_file_size"`
+	WorkingDirectory string `yaml:"working_directory"`
+	ShowLineNumbers  *bool  `yaml:"show_line_numbers"`
+}
+
+func (c *ReadFileConfig) Validate() error {
+	if c.MaxFileSize < 0 {
+		return fmt.Errorf("max_file_size must be non-negative")
+	}
+	return nil
+}
+
+func (c *ReadFileConfig) SetDefaults() {
+	if c.MaxFileSize == 0 {
+		c.MaxFileSize = 10485760 // 10MB
+	}
+	if c.WorkingDirectory == "" {
+		c.WorkingDirectory = "./"
+	}
+	if c.ShowLineNumbers == nil {
+		c.ShowLineNumbers = BoolPtr(true)
+	}
+}
+
+type ApplyPatchConfig struct {
+	MaxFileSize      int    `yaml:"max_file_size"`
+	CreateBackup     *bool  `yaml:"create_backup"`
+	ContextLines     int    `yaml:"context_lines"`
+	WorkingDirectory string `yaml:"working_directory"`
+}
+
+func (c *ApplyPatchConfig) Validate() error {
+	if c.MaxFileSize < 0 {
+		return fmt.Errorf("max_file_size must be non-negative")
+	}
+	if c.ContextLines < 0 {
+		return fmt.Errorf("context_lines must be non-negative")
+	}
+	return nil
+}
+
+func (c *ApplyPatchConfig) SetDefaults() {
+	if c.MaxFileSize == 0 {
+		c.MaxFileSize = 10485760 // 10MB
+	}
+	if c.ContextLines == 0 {
+		c.ContextLines = 3
+	}
+	if c.WorkingDirectory == "" {
+		c.WorkingDirectory = "./"
+	}
+	if c.CreateBackup == nil {
+		c.CreateBackup = BoolPtr(true)
+	}
+}
+
+type GrepSearchConfig struct {
+	MaxResults       int    `yaml:"max_results"`
+	MaxFileSize      int    `yaml:"max_file_size"`
+	WorkingDirectory string `yaml:"working_directory"`
+	ContextLines     int    `yaml:"context_lines"`
+}
+
+func (c *GrepSearchConfig) Validate() error {
+	if c.MaxResults < 0 {
+		return fmt.Errorf("max_results must be non-negative")
+	}
+	if c.MaxFileSize < 0 {
+		return fmt.Errorf("max_file_size must be non-negative")
+	}
+	if c.ContextLines < 0 {
+		return fmt.Errorf("context_lines must be non-negative")
+	}
+	return nil
+}
+
+func (c *GrepSearchConfig) SetDefaults() {
+	if c.MaxResults == 0 {
+		c.MaxResults = 1000
+	}
+	if c.MaxFileSize == 0 {
+		c.MaxFileSize = 10485760 // 10MB
+	}
+	if c.WorkingDirectory == "" {
+		c.WorkingDirectory = "./"
+	}
+	if c.ContextLines == 0 {
+		c.ContextLines = 2
+	}
+}
+
 // ToolConfigs is kept for backwards compatibility but is no longer used directly in Config.
 // Config.Tools is now a map[string]*ToolConfig directly.
 type ToolConfigs struct {
@@ -705,6 +797,24 @@ func GetDefaultToolConfigs() map[string]*ToolConfig {
 			Type:             "search_replace",
 			MaxReplacements:  100,
 			WorkingDirectory: "./",
+		},
+		"read_file": {
+			Type:             "read_file",
+			MaxFileSize:      10485760, // 10MB
+			WorkingDirectory: "./",
+		},
+		"apply_patch": {
+			Type:             "apply_patch",
+			MaxFileSize:      10485760, // 10MB
+			WorkingDirectory: "./",
+			ContextLines:     3,
+		},
+		"grep_search": {
+			Type:             "grep_search",
+			MaxResults:       1000,
+			MaxFileSize:      10485760, // 10MB
+			WorkingDirectory: "./",
+			ContextLines:     2,
 		},
 		"web_request": {
 			Type:            "web_request",
@@ -764,6 +874,10 @@ type ToolConfig struct {
 	DeniedExtensions  []string `yaml:"denied_extensions,omitempty"`
 
 	MaxReplacements int `yaml:"max_replacements,omitempty"`
+
+	// read_file, apply_patch, grep_search settings
+	ContextLines int `yaml:"context_lines,omitempty"`
+	MaxResults   int `yaml:"max_results,omitempty"`
 
 	DocumentStores     []string `yaml:"document_stores,omitempty"`
 	DefaultLimit       int      `yaml:"default_limit,omitempty"`

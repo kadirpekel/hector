@@ -303,12 +303,15 @@ agents:
     
     # Tools
     tools:
-      - "search"
-      - "write_file"
-      - "search_replace"
-      - "execute_command"
-      - "todo_write"
-      - "agent_call"
+      - "read_file"        # Read file contents
+      - "apply_patch"      # Apply contextual patches
+      - "grep_search"      # Regex pattern search
+      - "search"           # Semantic search
+      - "write_file"       # Create/modify files
+      - "search_replace"   # Find and replace
+      - "execute_command"  # Run shell commands
+      - "todo_write"       # Task tracking
+      - "agent_call"       # Call other agents
     
     # Memory Configuration
     memory:
@@ -426,6 +429,24 @@ tools:
     # Permissive defaults: no restrictions
     # Optional: backup: true
   
+  read_file:
+    type: read_file
+    max_file_size: 10485760  # 10MB
+    working_directory: "./"
+  
+  apply_patch:
+    type: apply_patch
+    max_file_size: 10485760  # 10MB
+    context_lines: 3  # Require context lines before/after changes
+    working_directory: "./"
+  
+  grep_search:
+    type: grep_search
+    max_results: 1000
+    max_file_size: 10485760  # 10MB
+    context_lines: 2
+    working_directory: "./"
+  
   search:
     
     default_limit: 10
@@ -434,6 +455,10 @@ tools:
   todo_write:
     
 ```
+
+**See also:**
+- [File Operations Guide](../tools-file-operations.md) - Detailed documentation for read_file, apply_patch, and grep_search
+- [Tools Overview](../core-concepts/tools.md) - Complete guide to all built-in tools
 
 ### MCP Tools
 

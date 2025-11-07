@@ -13,7 +13,7 @@ agents:
     url: "http://localhost:9090"  # HTTP service URL - UniversalA2AClient will auto-discover gRPC transport
     credentials:
       type: "bearer"
-      token: "${WEATHER_AUTH_TOKEN}"  # JWT token for Auth0 authentication
+      token: "${WEATHER_AUTH_TOKEN:-placeholder-token-for-example}"  # JWT token for Auth0 authentication
     # Optional: target_agent_id: "weather_assistant"  # Defaults to config key if omitted
   
   orchestrator:

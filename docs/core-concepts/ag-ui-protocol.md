@@ -304,7 +304,7 @@ agents:
     llm: default-llm
     
     reasoning:
-      engine: "react"
+      engine: "chain-of-thought"
       enable_streaming: true
       show_thinking: true  # Thinking will be converted to AG-UI thinking events
     

@@ -29,7 +29,7 @@ Tools give agents capabilities beyond language generation—they can execute com
 
     You can opt-in to whitelist (`allowed_*`) or blacklist (`denied_*`) specific extensions/commands as needed.
 
-Hector includes 6 ready-to-use tools:
+Hector includes 9 ready-to-use tools:
 
 ### 1. execute_command
 
@@ -129,7 +129,95 @@ Agent: Updated 5 files
 
 ---
 
-### 4. search
+### 4. read_file
+
+Read file contents with optional line ranges:
+
+```yaml
+agents:
+  coder:
+    tools: ["read_file"]
+
+tools:
+  read_file:
+    type: read_file
+    max_file_size: 10485760  # 10MB
+    working_directory: "./"
+```
+
+**Use cases:** Understanding code structure, reviewing files before edits, inspecting specific sections
+
+**Example:**
+```
+User: Show me the main function
+Agent: read_file("src/main.go", start_line=10, end_line=50)
+Agent: Here's the main function...
+```
+
+---
+
+### 5. apply_patch
+
+Apply contextual patches to files safely:
+
+```yaml
+agents:
+  refactor:
+    tools: ["apply_patch"]
+
+tools:
+  apply_patch:
+    type: apply_patch
+    max_file_size: 10485760  # 10MB
+    context_lines: 3  # Require context before/after changes
+    working_directory: "./"
+```
+
+**Use cases:** Safe code edits, refactoring with context validation, making precise changes
+
+**Example:**
+```
+User: Update the function to handle errors
+Agent: apply_patch("src/handler.go", 
+  old_string="func process() { ... }",
+  new_string="func process() error { ... }")
+Agent: ✅ Patch applied successfully
+```
+
+!!! tip "Safer than search_replace"
+    `apply_patch` validates surrounding context before applying changes, making it safer for code modifications. Use it when you need confidence that the change location is correct.
+
+---
+
+### 6. grep_search
+
+Search for patterns using regular expressions:
+
+```yaml
+agents:
+  explorer:
+    tools: ["grep_search"]
+
+tools:
+  grep_search:
+    type: grep_search
+    max_results: 1000
+    context_lines: 2
+    working_directory: "./"
+```
+
+**Use cases:** Finding exact strings, searching for function definitions, locating TODO comments
+
+**Example:**
+```
+User: Find all TODO comments
+Agent: grep_search(pattern="TODO:", path=".", recursive=true)
+Agent: Found 12 TODO comments across 8 files...
+```
+
+---
+
+### 7. search
 
 Semantic code search (requires Qdrant + Ollama):
 
@@ -168,7 +256,7 @@ See [RAG & Semantic Search](rag.md) for setup.
 
 ---
 
-### 5. todo_write
+### 8. todo_write
 
 Task tracking for agents:
 
@@ -195,7 +283,7 @@ Agent: I'll start with the user model...
 
 ---
 
-### 6. agent_call
+### 9. agent_call
 
 Call other agents:
 

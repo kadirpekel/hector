@@ -80,10 +80,10 @@ agents:
         - Think through problems systematically
         - Test your changes when possible
     reasoning:
-      engine: "chain-of-thought"
+
       max_iterations: 100
       enable_streaming: true
-      show_thinking: true                
+      show_thinking: true
     memory:
       strategy: "summary_buffer"
       budget: 4000

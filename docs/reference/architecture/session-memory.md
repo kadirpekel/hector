@@ -106,7 +106,7 @@ Hector's session and memory system provides **persistent, multi-agent conversati
 **Key Functions:**
 - `SendMessage()` - Synchronous message processing
 - `SendStreamingMessage()` - Streaming response with tool calls
-- `execute()` - Core reasoning loop (ReAct, CoT, Supervisor)
+- `execute()` - Core reasoning loop (CoT, Supervisor)
 - `saveMessages()` - Batch save at turn boundaries
 
 **Session ID Flow:**
@@ -529,7 +529,7 @@ Message saved → Queue in pendingBatches[sessionID]
    ├─ Load history: memoryService calls workingMemory.LoadState()
    │  └─ summary_buffer finds checkpoint, loads efficiently
    ├─ Build prompt with history
-   ├─ Execute reasoning (CoT/ReAct/Supervisor)
+   ├─ Execute reasoning (CoT/Supervisor)
    ├─ Get LLM response
    └─ SAVE MESSAGES (turn boundary)
 ```
