@@ -12,7 +12,7 @@ import (
 
 // parseUserDecision extracts the user's decision from a message
 // Checks DataPart first (structured), then falls back to TextPart
-// Returns: "approve", "deny", "modify", or default value
+// Returns: "approve" or "deny"
 func parseUserDecision(msg *pb.Message) string {
 	if msg == nil {
 		return "deny" // Safe default
@@ -37,43 +37,8 @@ func parseUserDecision(msg *pb.Message) string {
 	if strings.Contains(text, "deny") || text == "no" || text == "n" {
 		return "deny"
 	}
-	if strings.Contains(text, "modify") || strings.Contains(text, "edit") || strings.Contains(text, "change") {
-		return "modify"
-	}
 
 	return "deny" // Safe default
-}
-
-// extractModifiedInput extracts modified tool input from user response
-// Used when user chooses to "modify" tool parameters
-func extractModifiedInput(msg *pb.Message) (string, error) {
-	if msg == nil {
-		return "", fmt.Errorf("message is nil")
-	}
-
-	// Check DataPart for structured modification
-	for _, part := range msg.Parts {
-		if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
-			if modifiedInput, ok := dataPart.Data.Fields["modified_input"]; ok {
-				return modifiedInput.GetStringValue(), nil
-			}
-		}
-	}
-
-	// Fallback: extract from text after "modify:" or similar markers
-	text := protocol.ExtractTextFromMessage(msg)
-	markers := []string{"modify:", "change to:", "use:", "parameters:"}
-
-	for _, marker := range markers {
-		if idx := strings.Index(strings.ToLower(text), marker); idx >= 0 {
-			modified := strings.TrimSpace(text[idx+len(marker):])
-			if modified != "" {
-				return modified, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("no modified input found in message")
 }
 
 // createInteractionMessage creates an A2A-compliant message for INPUT_REQUIRED state
@@ -134,7 +99,7 @@ func createToolApprovalMessage(toolName string, toolInput string, customPrompt s
 	prompt := customPrompt
 	if prompt == "" {
 		prompt = fmt.Sprintf(
-			"🔐 Tool Approval Required\n\nTool: %s\nInput: %s\n\nPlease respond with one of: approve, deny, modify",
+			"🔐 Tool Approval Required\n\nTool: %s\nInput: %s\n\nPlease respond with: approve or deny",
 			toolName,
 			toolInput,
 		)
@@ -149,7 +114,7 @@ func createToolApprovalMessage(toolName string, toolInput string, customPrompt s
 		toolName,
 		toolInput,
 		prompt,
-		[]string{"approve", "deny", "modify"},
+		[]string{"approve", "deny"},
 	)
 }
 

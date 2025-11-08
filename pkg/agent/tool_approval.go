@@ -79,21 +79,6 @@ func (a *Agent) filterToolCallsWithApproval(
 				log.Printf("[HITL] User denied tool %s", call.Name)
 				// Skip this tool (don't add to approved list)
 
-			case "modify":
-				log.Printf("[HITL] User wants to modify tool %s", call.Name)
-				// Try to extract modified input
-				if modifiedInputValue := ctx.Value("modifiedInput"); modifiedInputValue != nil {
-					if modifiedInput, ok := modifiedInputValue.(string); ok && modifiedInput != "" {
-						// Parse modified input as JSON and update Args
-						// For now, just log that modification was requested
-						// In practice, the client should send properly formatted args
-						result.ApprovedCalls = append(result.ApprovedCalls, call)
-					} else {
-						// No modified input provided, deny
-						log.Printf("[HITL] No modified input provided, denying tool %s", call.Name)
-					}
-				}
-
 			default:
 				// Unknown decision, deny for safety
 				log.Printf("[HITL] Unknown decision '%s', denying tool %s", userDecision, call.Name)
@@ -126,45 +111,4 @@ func (a *Agent) filterToolCallsWithApproval(
 	}
 
 	return result, nil
-}
-
-// applyToolApproval applies the approval decision to the pending tool call
-// Called after user provides input to resume execution
-func (a *Agent) applyToolApproval(
-	ctx context.Context,
-	pendingCall *protocol.ToolCall,
-	userMessage *pb.Message,
-) ([]*protocol.ToolCall, error) {
-
-	if pendingCall == nil {
-		return nil, fmt.Errorf("no pending tool call")
-	}
-
-	decision := parseUserDecision(userMessage)
-	log.Printf("[HITL] Applying approval decision '%s' to tool %s", decision, pendingCall.Name)
-
-	switch decision {
-	case "approve":
-		return []*protocol.ToolCall{pendingCall}, nil
-
-	case "deny":
-		return []*protocol.ToolCall{}, nil // No tools to execute
-
-	case "modify":
-		modifiedInput, err := extractModifiedInput(userMessage)
-		if err != nil {
-			log.Printf("[HITL] Failed to extract modified input: %v, denying", err)
-			return []*protocol.ToolCall{}, nil
-		}
-		// Note: For now, we approve the original call
-		// In a full implementation, we'd parse modifiedInput as JSON and update pendingCall.Args
-		// This requires proper JSON parsing based on the tool's schema
-		log.Printf("[HITL] User provided modified input (currently using original): %s", modifiedInput)
-		return []*protocol.ToolCall{pendingCall}, nil
-
-	default:
-		// Unknown decision, deny for safety
-		log.Printf("[HITL] Unknown decision '%s', denying tool", decision)
-		return []*protocol.ToolCall{}, nil
-	}
 }

@@ -390,14 +390,6 @@ func (a *Agent) execute(
 						decision := parseUserDecision(userMessage)
 						ctx = context.WithValue(ctx, "userDecision", decision)
 
-						// If user wants to modify, extract the modified input
-						if decision == "modify" {
-							modifiedInput, err := extractModifiedInput(userMessage)
-							if err == nil {
-								ctx = context.WithValue(ctx, "modifiedInput", modifiedInput)
-							}
-						}
-
 						// Update task back to WORKING state
 						_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil)
 

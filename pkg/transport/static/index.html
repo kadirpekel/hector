@@ -895,35 +895,6 @@
             background: #dd3333;
         }
 
-        .modify-btn {
-            background: rgba(83, 225, 185, 0.2);
-            color: #53e1b9;
-            border: 1px solid #53e1b9;
-        }
-
-        .modify-btn:hover:not(:disabled) {
-            background: rgba(83, 225, 185, 0.3);
-        }
-
-        .modify-input {
-            width: 100%;
-            padding: 10px;
-            margin-top: 8px;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(83, 225, 185, 0.3);
-            border-radius: 6px;
-            color: #e8e8e8;
-            font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 12px;
-            resize: vertical;
-            min-height: 60px;
-            display: none;
-        }
-
-        .modify-input.visible {
-            display: block;
-        }
-
         .approval-status {
             margin-top: 8px;
             padding: 8px 12px;
@@ -1637,7 +1608,7 @@
         // Human-in-the-Loop (HIL) Implementation:
         // - Detects TASK_STATE_INPUT_REQUIRED from agent messages
         // - Extracts interaction data from DataPart (tool_approval)
-        // - Displays approval UI with approve/deny/modify actions
+        // - Displays approval UI with approve/deny actions
         // - Sends user decisions back with same taskId to resume paused task
         // - Fully compliant with A2A Protocol Section 9.4 (Multi-turn Interaction)
         //
@@ -2672,7 +2643,7 @@
                             type: 'tool_approval',
                             toolName: data.tool_name || 'unknown',
                             toolInput: data.tool_input || '',
-                            options: data.options || ['approve', 'deny', 'modify']
+                            options: data.options || ['approve', 'deny']
                         };
                     }
                 }
@@ -2721,22 +2692,7 @@
                 actions.appendChild(denyBtn);
             }
             
-            if (approvalData.options.includes('modify')) {
-                const modifyBtn = document.createElement('button');
-                modifyBtn.className = 'approval-btn modify-btn';
-                modifyBtn.innerHTML = '✏️ Modify';
-                modifyBtn.onclick = () => toggleModifyInput(approvalDiv);
-                actions.appendChild(modifyBtn);
-            }
-            
             approvalDiv.appendChild(actions);
-            
-            // Modify input (hidden by default)
-            const modifyInput = document.createElement('textarea');
-            modifyInput.className = 'modify-input';
-            modifyInput.placeholder = 'Enter modified input as JSON...';
-            modifyInput.value = approvalData.toolInput;
-            approvalDiv.appendChild(modifyInput);
             
             // Status message
             const status = document.createElement('div');
@@ -2746,30 +2702,8 @@
             return approvalDiv;
         }
 
-        // Toggle modify input visibility
-        function toggleModifyInput(approvalDiv) {
-            const modifyInput = approvalDiv.querySelector('.modify-input');
-            const isVisible = modifyInput.classList.contains('visible');
-            
-            if (isVisible) {
-                // Submit modified input
-                const taskId = approvalDiv.getAttribute('data-task-id');
-                const agentUrl = approvalDiv.getAttribute('data-agent-url');
-                const modifiedInput = modifyInput.value.trim();
-                handleApprovalResponse(approvalDiv, 'modify', taskId, agentUrl, modifiedInput);
-            } else {
-                // Show input
-                modifyInput.classList.add('visible');
-                modifyInput.focus();
-                
-                // Change button text
-                const modifyBtn = approvalDiv.querySelector('.modify-btn');
-                modifyBtn.innerHTML = '✓ Submit Modified';
-            }
-        }
-
-        // Handle approval response (approve/deny/modify)
-        async function handleApprovalResponse(approvalDiv, decision, taskId, agentUrl, modifiedInput = null) {
+        // Handle approval response (approve/deny)
+        async function handleApprovalResponse(approvalDiv, decision, taskId, agentUrl) {
             // Disable all buttons
             const buttons = approvalDiv.querySelectorAll('.approval-btn');
             buttons.forEach(btn => btn.disabled = true);
@@ -2787,15 +2721,12 @@
                 // Must include taskId to resume the paused task
                 const parts = [
                     {
-                        text: decision === 'approve' ? 'approve' : 
-                              decision === 'deny' ? 'deny' : 
-                              'modify'
+                        text: decision === 'approve' ? 'approve' : 'deny'
                     },
                     {
                         data: {
                             data: {
-                                decision: decision,
-                                ...(modifiedInput && { modified_input: modifiedInput })
+                                decision: decision
                             }
                         }
                     }
@@ -2845,6 +2776,18 @@
                 
                 // Re-enable buttons on error
                 buttons.forEach(btn => btn.disabled = false);
+            }
+        }
+
+        // Handle approval request UI insertion (extracted common logic)
+        function handleApprovalRequestInMessage(message, currentMessageDiv, lastTaskId, agentUrl) {
+            const approvalRequest = extractApprovalRequestFromParts(message.parts);
+            if (approvalRequest && lastTaskId) {
+                const contentDiv = currentMessageDiv.querySelector('.message-content');
+                const approvalElement = createApprovalRequestElement(approvalRequest, lastTaskId, agentUrl);
+                approvalElement.setAttribute('data-agent-url', agentUrl);
+                contentDiv.appendChild(approvalElement);
+                scrollToBottom();
             }
         }
 
@@ -2960,15 +2903,7 @@
                                     }
 
                                     // Check for approval request (input-required state)
-                                    const approvalRequest = extractApprovalRequestFromParts(message.parts);
-                                    if (approvalRequest && lastTaskId) {
-                                        // Insert approval UI into the message
-                                        const contentDiv = currentMessageDiv.querySelector('.message-content');
-                                        const approvalElement = createApprovalRequestElement(approvalRequest, lastTaskId, agentUrl);
-                                        approvalElement.setAttribute('data-agent-url', agentUrl);
-                                        contentDiv.appendChild(approvalElement);
-                                        scrollToBottom();
-                                    }
+                                    handleApprovalRequestInMessage(message, currentMessageDiv, lastTaskId, agentUrl);
                                 }
                             } catch (err) {
                                 console.error('Parse error:', err);
@@ -3203,15 +3138,7 @@
                                     }
 
                                     // Check for approval request (input-required state)
-                                    const approvalRequest = extractApprovalRequestFromParts(message.parts);
-                                    if (approvalRequest && lastTaskId) {
-                                        // Insert approval UI into the message
-                                        const contentDiv = currentMessageDiv.querySelector('.message-content');
-                                        const approvalElement = createApprovalRequestElement(approvalRequest, lastTaskId, agentUrl);
-                                        approvalElement.setAttribute('data-agent-url', agentUrl);
-                                        contentDiv.appendChild(approvalElement);
-                                        scrollToBottom();
-                                    }
+                                    handleApprovalRequestInMessage(message, currentMessageDiv, lastTaskId, agentUrl);
                                 }
                             } catch (err) {
                                 console.error('Parse error:', err);
