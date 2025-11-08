@@ -133,7 +133,7 @@ func TestShouldExclude(t *testing.T) {
 					ExcludePatterns: tt.excludes,
 				},
 				sourcePath: "/project",
-				fileSource: fileSource,
+				dataSource: fileSource,
 			}
 
 			result := ds.shouldExclude(tt.path)

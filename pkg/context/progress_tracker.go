@@ -30,9 +30,11 @@ type ProgressTracker struct {
 	displayInterval time.Duration
 	verbose         bool
 
-	// Stop channel
+	// Stop channel and state
 	stopChan chan struct{}
 	doneChan chan struct{}
+	running  int32 // Atomic flag to track if running
+	mu       sync.Mutex
 }
 
 // NewProgressTracker creates a new progress tracker
@@ -45,16 +47,29 @@ func NewProgressTracker(enabled bool, verbose bool) *ProgressTracker {
 		lastUpdateTime:  time.Now(),
 		stopChan:        make(chan struct{}),
 		doneChan:        make(chan struct{}),
+		running:         0,
 	}
 }
 
 // Start begins the progress display loop
 func (pt *ProgressTracker) Start() {
 	if !pt.enabled {
-		close(pt.doneChan)
 		return
 	}
 
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	// Check if already running
+	if atomic.LoadInt32(&pt.running) == 1 {
+		return // Already running
+	}
+
+	// Reset channels
+	pt.stopChan = make(chan struct{})
+	pt.doneChan = make(chan struct{})
+
+	atomic.StoreInt32(&pt.running, 1)
 	go pt.displayLoop()
 }
 
@@ -64,6 +79,15 @@ func (pt *ProgressTracker) Stop() {
 		return
 	}
 
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	// Check if already stopped
+	if atomic.LoadInt32(&pt.running) == 0 {
+		return // Already stopped
+	}
+
+	atomic.StoreInt32(&pt.running, 0)
 	close(pt.stopChan)
 	<-pt.doneChan // Wait for display loop to finish
 

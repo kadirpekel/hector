@@ -4,17 +4,17 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"sync/atomic"
+	"time"
 )
 
-// DirectorySource implements FileSource for directory-based file discovery
+// DirectorySource implements DataSource for local filesystem directories
 type DirectorySource struct {
 	basePath    string
 	filter      FileFilter
 	maxFileSize int64
 }
 
-// NewDirectorySource creates a new directory-based file source
+// NewDirectorySource creates a new directory-based data source
 func NewDirectorySource(basePath string, filter FileFilter, maxFileSize int64) *DirectorySource {
 	return &DirectorySource{
 		basePath:    basePath,
@@ -23,14 +23,17 @@ func NewDirectorySource(basePath string, filter FileFilter, maxFileSize int64) *
 	}
 }
 
-// DiscoverFiles walks the directory tree and returns discovered files
-func (ds *DirectorySource) DiscoverFiles(ctx context.Context) (<-chan FileInfo, <-chan error) {
-	filesChan := make(chan FileInfo, 100)
-	errorsChan := make(chan error, 10)
+func (ds *DirectorySource) Type() string {
+	return "directory"
+}
+
+func (ds *DirectorySource) DiscoverDocuments(ctx context.Context) (<-chan Document, <-chan error) {
+	docChan := make(chan Document, 100)
+	errChan := make(chan error, 10)
 
 	go func() {
-		defer close(filesChan)
-		defer close(errorsChan)
+		defer close(docChan)
+		defer close(errChan)
 
 		err := filepath.Walk(ds.basePath, func(path string, info os.FileInfo, err error) error {
 			// Check context cancellation
@@ -43,8 +46,9 @@ func (ds *DirectorySource) DiscoverFiles(ctx context.Context) (<-chan FileInfo, 
 			if err != nil {
 				// Non-fatal error, log and continue
 				select {
-				case errorsChan <- err:
-				default:
+				case errChan <- err:
+				case <-ctx.Done():
+					return ctx.Err()
 				}
 				return nil
 			}
@@ -78,15 +82,34 @@ func (ds *DirectorySource) DiscoverFiles(ctx context.Context) (<-chan FileInfo, 
 				}
 			}
 
-			fileInfo := FileInfo{
-				Path:        path,
-				RelPath:     relPath,
-				Info:        info,
-				ShouldIndex: shouldIndex,
+			// Read file content
+			content, err := os.ReadFile(path)
+			if err != nil {
+				select {
+				case errChan <- err:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				return nil
 			}
 
+			// Create document with content
+			doc := Document{
+				ID:           path,
+				Content:      string(content),
+				Metadata:     make(map[string]interface{}),
+				LastModified: info.ModTime(),
+				Size:         info.Size(),
+				ShouldIndex:  shouldIndex,
+				SourcePath:   relPath,
+			}
+			doc.Metadata["path"] = path
+			doc.Metadata["rel_path"] = relPath
+			doc.Metadata["name"] = info.Name()
+			doc.Metadata["absolute_path"] = path
+
 			select {
-			case filesChan <- fileInfo:
+			case docChan <- doc:
 			case <-ctx.Done():
 				return ctx.Err()
 			}
@@ -96,117 +119,69 @@ func (ds *DirectorySource) DiscoverFiles(ctx context.Context) (<-chan FileInfo, 
 
 		if err != nil && err != context.Canceled {
 			select {
-			case errorsChan <- err:
-			default:
+			case errChan <- err:
+			case <-ctx.Done():
 			}
 		}
 	}()
 
-	return filesChan, errorsChan
+	return docChan, errChan
 }
 
-// GetBasePath returns the base directory path
-func (ds *DirectorySource) GetBasePath() string {
-	return ds.basePath
+func (ds *DirectorySource) ReadDocument(ctx context.Context, id string) (*Document, error) {
+	// ID is the file path
+	info, err := os.Stat(id)
+	if err != nil {
+		return nil, err
+	}
+
+	content, err := os.ReadFile(id)
+	if err != nil {
+		return nil, err
+	}
+
+	relPath, _ := filepath.Rel(ds.basePath, id)
+
+	doc := Document{
+		ID:           id,
+		Content:      string(content),
+		Metadata:     make(map[string]interface{}),
+		LastModified: info.ModTime(),
+		Size:         info.Size(),
+		ShouldIndex:  true,
+		SourcePath:   relPath,
+	}
+	doc.Metadata["path"] = id
+	doc.Metadata["rel_path"] = relPath
+	doc.Metadata["name"] = info.Name()
+	doc.Metadata["absolute_path"] = id
+
+	return &doc, nil
 }
 
-// GetFilter returns the file filter
-func (ds *DirectorySource) GetFilter() FileFilter {
-	return ds.filter
-}
-
-// SupportsIncrementalIndexing returns true for directory sources
 func (ds *DirectorySource) SupportsIncrementalIndexing() bool {
 	return true
 }
 
-// DirectorySourceStats contains statistics about file discovery
-type DirectorySourceStats struct {
-	TotalFiles    int64
-	SkippedFiles  int64
-	ExcludedFiles int64
-	ErrorCount    int64
+func (ds *DirectorySource) GetLastModified(ctx context.Context, id string) (time.Time, error) {
+	info, err := os.Stat(id)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return info.ModTime(), nil
 }
 
-// DiscoverFilesWithStats is like DiscoverFiles but also returns statistics
-func (ds *DirectorySource) DiscoverFilesWithStats(ctx context.Context) (<-chan FileInfo, <-chan error, *DirectorySourceStats) {
-	stats := &DirectorySourceStats{}
-	filesChan := make(chan FileInfo, 100)
-	errorsChan := make(chan error, 10)
+func (ds *DirectorySource) Close() error {
+	// No resources to close for directory source
+	return nil
+}
 
-	go func() {
-		defer close(filesChan)
-		defer close(errorsChan)
+// GetBasePath returns the base directory path (helper method)
+func (ds *DirectorySource) GetBasePath() string {
+	return ds.basePath
+}
 
-		err := filepath.Walk(ds.basePath, func(path string, info os.FileInfo, err error) error {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-
-			if err != nil {
-				atomic.AddInt64(&stats.ErrorCount, 1)
-				select {
-				case errorsChan <- err:
-				default:
-				}
-				return nil
-			}
-
-			if info.IsDir() {
-				if ds.filter != nil && ds.filter.ShouldExclude(path) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
-			atomic.AddInt64(&stats.TotalFiles, 1)
-
-			if info.Size() == 0 {
-				atomic.AddInt64(&stats.SkippedFiles, 1)
-				return nil
-			}
-
-			if ds.maxFileSize > 0 && info.Size() > ds.maxFileSize {
-				atomic.AddInt64(&stats.SkippedFiles, 1)
-				return nil
-			}
-
-			relPath, _ := filepath.Rel(ds.basePath, path)
-			shouldIndex := true
-
-			if ds.filter != nil {
-				if ds.filter.ShouldExclude(path) || !ds.filter.ShouldInclude(path) {
-					shouldIndex = false
-					atomic.AddInt64(&stats.ExcludedFiles, 1)
-				}
-			}
-
-			fileInfo := FileInfo{
-				Path:        path,
-				RelPath:     relPath,
-				Info:        info,
-				ShouldIndex: shouldIndex,
-			}
-
-			select {
-			case filesChan <- fileInfo:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-
-			return nil
-		})
-
-		if err != nil && err != context.Canceled {
-			atomic.AddInt64(&stats.ErrorCount, 1)
-			select {
-			case errorsChan <- err:
-			default:
-			}
-		}
-	}()
-
-	return filesChan, errorsChan, stats
+// GetFilter returns the file filter (helper method)
+func (ds *DirectorySource) GetFilter() FileFilter {
+	return ds.filter
 }

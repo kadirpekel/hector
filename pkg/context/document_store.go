@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -125,10 +126,10 @@ type DocumentStore struct {
 	status *DocumentStoreStatus
 
 	searchEngine *SearchEngine
-	sourcePath   string
+	sourcePath   string // For directory sources, this is the base path
 
-	// New component-based architecture
-	fileSource         indexing.FileSource
+	// Data source architecture
+	dataSource         indexing.DataSource
 	contentExtractors  *extraction.ExtractorRegistry
 	metadataExtractors *metadata.ExtractorRegistry
 	chunker            chunking.Chunker
@@ -156,23 +157,21 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 	// Set defaults for config
 	storeConfig.SetDefaults()
 
-	if storeConfig.MaxFileSize == 0 {
-		storeConfig.MaxFileSize = DefaultMaxFileSize
-	}
-
-	if _, err := os.Stat(storeConfig.Path); os.IsNotExist(err) {
-		return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "source path does not exist", storeConfig.Path, err)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Initialize file source
-	filter, err := indexing.NewPatternFilter(storeConfig.Path, storeConfig.IncludePatterns, storeConfig.ExcludePatterns)
+	// Create data source from configuration
+	factory := indexing.NewDataSourceFactory()
+	dataSource, err := factory.CreateDataSource(storeConfig)
 	if err != nil {
 		cancel()
-		return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "failed to create pattern filter", "", err)
+		return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "failed to create data source", "", err)
 	}
-	fileSource := indexing.NewDirectorySource(storeConfig.Path, filter, storeConfig.MaxFileSize)
+
+	// Determine source path for status/checkpoints
+	sourcePath := storeConfig.Path
+	if sourcePath == "" {
+		sourcePath = dataSource.Type() // Fallback for non-directory sources
+	}
 
 	// Initialize content extractors
 	contentExtractors := extraction.NewExtractorRegistry()
@@ -219,14 +218,14 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 
 	// Initialize checkpoint manager using pointer value (defaults already set in SetDefaults)
 	enableCheckpoints := storeConfig.EnableCheckpoints != nil && *storeConfig.EnableCheckpoints
-	checkpointManager := NewCheckpointManager(storeConfig.Name, storeConfig.Path, enableCheckpoints)
+	checkpointManager := NewCheckpointManager(storeConfig.Name, sourcePath, enableCheckpoints)
 
 	store := &DocumentStore{
 		name:               storeConfig.Name,
 		config:             storeConfig,
 		searchEngine:       searchEngine,
-		sourcePath:         storeConfig.Path,
-		fileSource:         fileSource,
+		sourcePath:         sourcePath,
+		dataSource:         dataSource,
 		contentExtractors:  contentExtractors,
 		metadataExtractors: metadataExtractors,
 		chunker:            chunker,
@@ -238,7 +237,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 		indexingSemaphore:  make(chan struct{}, maxConcurrent),
 		status: &DocumentStoreStatus{
 			Name:        storeConfig.Name,
-			SourcePath:  storeConfig.Path,
+			SourcePath:  sourcePath,
 			Storage:     "vector_database",
 			LastIndexed: time.Time{},
 			IsIndexing:  false,
@@ -246,7 +245,8 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 		},
 	}
 
-	if storeConfig.WatchChanges != nil && *storeConfig.WatchChanges {
+	// File watching only supported for directory sources
+	if storeConfig.WatchChanges != nil && *storeConfig.WatchChanges && dataSource.Type() == "directory" {
 		if err := store.initializeWatcher(); err != nil {
 			cancel()
 			return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "failed to initialize watcher", "", err)
@@ -272,340 +272,72 @@ func (ds *DocumentStore) StartIndexing() error {
 		ds.mu.Unlock()
 	}()
 
-	fmt.Printf("Indexing document store '%s' from: %s\n", ds.name, ds.sourcePath)
+	fmt.Printf("Indexing document store '%s' from: %s (source: %s)\n", ds.name, ds.sourcePath, ds.dataSource.Type())
 
-	// Only directory source is supported
-	if ds.config.Source != "directory" && ds.config.Source != "" {
-		return NewDocumentStoreError(ds.name, "StartIndexing", "only 'directory' source is supported", ds.config.Source, nil)
+	// Validate that config source matches dataSource type
+	if ds.config.Source != "" && ds.config.Source != ds.dataSource.Type() {
+		return NewDocumentStoreError(ds.name, "StartIndexing",
+			fmt.Sprintf("source type mismatch: config has '%s' but dataSource is '%s'", ds.config.Source, ds.dataSource.Type()),
+			"", nil)
 	}
 
-	return ds.indexDirectory()
+	return ds.indexFromDataSource()
 }
 
-func (ds *DocumentStore) indexDirectory() error {
-	// Use the document store's context to respect cancellation
-	ctx := ds.ctx
-
-	// Try to load checkpoint
-	checkpoint, err := ds.checkpointManager.LoadCheckpoint()
-	if checkpoint != nil && err == nil {
-		// Check if checkpoint is complete (processed == total)
-		processedCount := len(checkpoint.ProcessedFiles)
-		if processedCount >= checkpoint.TotalFiles && checkpoint.TotalFiles > 0 {
-			// Checkpoint is complete, clear it and start fresh
-			_ = ds.checkpointManager.ClearCheckpoint() // Ignore error - not critical
-			checkpoint = nil
-		} else {
-			fmt.Println("🔄 " + ds.checkpointManager.FormatCheckpointInfo(checkpoint))
-			fmt.Println("   Resuming from checkpoint...")
-		}
-	}
-
-	// Always load index state to track deleted files
-	var existingDocs map[string]FileIndexInfo
-	existingDocs, err = ds.loadIndexState()
-	if err != nil {
-		log.Printf("Warning: Failed to load index state, performing full reindex: %v", err)
-		existingDocs = make(map[string]FileIndexInfo)
-	}
-
-	// Check if we should skip unchanged files (incremental indexing)
-	useIncrementalIndexing := ds.config.IncrementalIndexing != nil && *ds.config.IncrementalIndexing
-
-	if len(existingDocs) > 0 {
-		if useIncrementalIndexing {
-			fmt.Printf("📊 Incremental indexing: Found %d existing file(s) in index\n", len(existingDocs))
-		} else {
-			fmt.Printf("📊 Found %d existing file(s) in index (will be reindexed)\n", len(existingDocs))
-		}
-	} else {
-		fmt.Printf("📊 First indexing or full reindex mode\n")
-	}
-
-	var indexedCount sync.WaitGroup
-	foundFiles := make(map[string]bool)
-	indexedFiles := make(map[string]FileIndexInfo)
-	var filesMu sync.Mutex
-
-	// Track failed files for summary
-	failedFiles := make([]string, 0)
-	var failedFilesMu sync.Mutex
-
-	// Fast counting pass: stat files to get accurate total (no file reading)
-	// This is much faster than reading files but gives us accurate progress
-	var totalFiles int64
-	err = filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			if info != nil && info.IsDir() && ds.shouldExclude(path) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Apply same filters as processing pass
-		if info.Size() == 0 || info.Size() > ds.config.MaxFileSize {
-			return nil
-		}
-		if ds.shouldExclude(path) || !ds.shouldInclude(path) {
-			return nil
-		}
-
-		relPath, _ := filepath.Rel(ds.sourcePath, path)
-
-		// Skip if already in checkpoint and hasn't changed
-		if checkpoint != nil && !ds.checkpointManager.ShouldProcessFile(relPath, info.Size(), info.ModTime()) {
-			return nil
-		}
-
-		// Skip if incremental indexing says no changes
-		if !ds.shouldReindexFile(path, info.ModTime(), existingDocs) {
-			return nil
-		}
-
-		totalFiles++
-		return nil
-	})
-
-	if err != nil {
-		return NewDocumentStoreError(ds.name, "indexDirectory", "failed to count files", ds.sourcePath, err)
-	}
-
-	// When resuming from checkpoint, show cumulative progress
-	if checkpoint != nil {
-		checkpointProcessed := int64(len(checkpoint.ProcessedFiles))
-		grandTotal := checkpointProcessed + totalFiles
-
-		ds.progressTracker.SetTotalFiles(grandTotal)
-		ds.checkpointManager.SetTotalFiles(int(grandTotal))
-
-		// Pre-populate progress with checkpointed files
-		for i := int64(0); i < checkpointProcessed; i++ {
-			ds.progressTracker.IncrementProcessed()
-		}
-	} else {
-		ds.progressTracker.SetTotalFiles(totalFiles)
-		ds.checkpointManager.SetTotalFiles(int(totalFiles))
-	}
-
-	// Start progress tracker
-	ds.progressTracker.Start()
-	defer func() {
-		ds.progressTracker.Stop()
-		_ = ds.checkpointManager.SaveCheckpoint() // Final save - ignore error
-	}()
-
-	// Processing pass: actually index the files
-	err = filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			ds.progressTracker.IncrementFailed()
-			log.Printf("Warning: Failed to access %s: %v", path, err)
-			return nil
-		}
-
-		if info.IsDir() {
-			// Skip excluded directories early to avoid walking their contents
-			if ds.shouldExclude(path) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		if info.Size() == 0 {
-			return nil
-		}
-
-		if ds.shouldExclude(path) || !ds.shouldInclude(path) {
-			return nil
-		}
-
-		if info.Size() > ds.config.MaxFileSize {
-			return nil
-		}
-
-		relPath, _ := filepath.Rel(ds.sourcePath, path)
-		filesMu.Lock()
-		foundFiles[relPath] = true
-		filesMu.Unlock()
-
-		// Check checkpoint: skip if already processed and hasn't changed
-		if !ds.checkpointManager.ShouldProcessFile(relPath, info.Size(), info.ModTime()) {
-			ds.progressTracker.IncrementSkipped()
-			// Don't increment processed for checkpointed files - they're not part of this run
-			return nil
-		}
-
-		// Check incremental indexing
-		if !ds.shouldReindexFile(path, info.ModTime(), existingDocs) {
-			ds.progressTracker.IncrementSkipped()
-			// Don't increment processed - these files are not part of this indexing run
-			// They were already indexed in a previous run and haven't changed
-			ds.checkpointManager.RecordFile(relPath, info.Size(), info.ModTime(), "skipped")
-			return nil
-		}
-
-		ds.indexingSemaphore <- struct{}{}
-		indexedCount.Add(1)
-		go func(p string, i os.FileInfo) {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("Panic while indexing %s: %v", p, r)
-					ds.progressTracker.IncrementFailed()
-					ds.progressTracker.IncrementProcessed()
-
-					rp, _ := filepath.Rel(ds.sourcePath, p)
-					ds.checkpointManager.RecordFile(rp, i.Size(), i.ModTime(), "failed")
-					_ = ds.checkpointManager.SaveCheckpoint() // Ignore error in panic recovery
-				}
-				<-ds.indexingSemaphore
-				indexedCount.Done()
-			}()
-
-			// Update current file in progress tracker
-			rp, _ := filepath.Rel(ds.sourcePath, p)
-			ds.progressTracker.SetCurrentFile(rp)
-
-			if err := ds.indexDocument(p, i); err != nil {
-				ds.progressTracker.IncrementFailed()
-				ds.progressTracker.IncrementProcessed()
-				ds.checkpointManager.RecordFile(rp, i.Size(), i.ModTime(), "failed")
-
-				// Store failed file for summary
-				failedFilesMu.Lock()
-				failedFiles = append(failedFiles, rp)
-				failedFilesMu.Unlock()
-
-				// Only log if not in quiet mode
-				if ds.config.QuietMode == nil || !*ds.config.QuietMode {
-					log.Printf("Warning: Failed to index %s: %v", p, err)
-				}
-			} else {
-				ds.progressTracker.IncrementIndexed()
-				ds.progressTracker.IncrementProcessed()
-				ds.checkpointManager.RecordFile(rp, i.Size(), i.ModTime(), "indexed")
-
-				filesMu.Lock()
-				indexedFiles[rp] = FileIndexInfo{
-					ModTime: i.ModTime().Unix(),
-					Size:    i.Size(),
-					Hash:    ds.computeFileHash(p),
-				}
-				filesMu.Unlock()
-			}
-
-			// Periodically save checkpoint
-			_ = ds.checkpointManager.SaveCheckpoint() // Ignore error - non-critical
-		}(path, info)
-
-		return nil
-	})
-
-	if err != nil {
-		return NewDocumentStoreError(ds.name, "indexDirectory", "directory walk failed", ds.sourcePath, err)
-	}
-
-	indexedCount.Wait()
-
-	// Always cleanup deleted files from the index
-	deletedFiles, cleanedUpFiles, err := ds.cleanupDeletedFiles(ctx, existingDocs, foundFiles)
-	if err != nil {
-		log.Printf("Warning: Cleanup of deleted files failed: %v", err)
-	}
-
-	// Update status with final counts
-	stats := ds.progressTracker.GetStats()
-	ds.mu.Lock()
-	ds.status.DocumentCount = int(stats.IndexedFiles)
-	ds.mu.Unlock()
-
-	// Always save index state to track files for future cleanup
-	finalState := make(map[string]FileIndexInfo)
-
-	// Keep existing files that are still present OR files that couldn't be cleaned up
-	// (so we can retry deletion next time)
-	for path, info := range existingDocs {
-		if foundFiles[path] {
-			// File still exists on disk
-			finalState[path] = info
-		} else if !cleanedUpFiles[path] {
-			// File was deleted but cleanup failed - keep in state for retry
-			finalState[path] = info
-		}
-		// Files successfully cleaned up are not added (removed from state)
-	}
-
-	// Update with newly indexed files
-	for path, info := range indexedFiles {
-		finalState[path] = info
-	}
-
-	if err := ds.saveIndexState(finalState, len(finalState)*3); err != nil {
-		log.Printf("Warning: Failed to save index state: %v", err)
-	}
-
-	// Clear checkpoint after successful completion
-	_ = ds.checkpointManager.ClearCheckpoint() // Ignore error - not critical
-
-	// Print file summaries if in quiet mode
-	if ds.config.QuietMode != nil && *ds.config.QuietMode {
-		maxShow := 10
-
-		// Show deleted files
-		if len(deletedFiles) > 0 {
-			fmt.Println("\n🗑️  Deleted Files:")
-			for i, file := range deletedFiles {
-				if i >= maxShow {
-					remaining := len(deletedFiles) - maxShow
-					fmt.Printf("   ... and %d more files\n", remaining)
-					break
-				}
-				fmt.Printf("   🗑️  %s\n", file)
-			}
-		}
-
-		// Show failed files
-		if len(failedFiles) > 0 {
-			fmt.Println("\n⚠️  Failed Files:")
-			for i, file := range failedFiles {
-				if i >= maxShow {
-					remaining := len(failedFiles) - maxShow
-					fmt.Printf("   ... and %d more files (check logs for details)\n", remaining)
-					break
-				}
-				fmt.Printf("   ❌ %s\n", file)
-			}
-		}
-	}
-
-	if ds.config.WatchChanges != nil && *ds.config.WatchChanges {
-		fmt.Printf("\nFile watching enabled - changes will be automatically indexed\n")
-	}
-
-	return nil
-}
-
-func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
-	relPath, _ := filepath.Rel(ds.sourcePath, path)
-
+// indexDocument indexes a single document from any source
+func (ds *DocumentStore) indexDocument(doc *indexing.Document) error {
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultIndexingTimeout)
 	defer cancel()
 
-	// Step 1: Extract content using the extractor registry
-	mimeType := ds.detectMIMEType(path)
-	extracted, err := ds.contentExtractors.ExtractContent(ctx, path, mimeType, info.Size())
-	if err != nil {
-		return NewDocumentStoreError(ds.name, "indexDocument", "failed to extract content", path, err)
+	// Determine source path for metadata
+	relPath := doc.SourcePath
+	if relPath == "" {
+		if pathVal, ok := doc.Metadata["rel_path"].(string); ok {
+			relPath = pathVal
+		} else if pathVal, ok := doc.Metadata["path"].(string); ok {
+			relPath = pathVal
+		} else {
+			relPath = doc.ID
+		}
 	}
-	if extracted == nil || extracted.Content == "" {
+
+	// Step 1: Extract/process content
+	// For directory sources: may need binary extraction for PDFs, etc.
+	// For SQL/API sources: content is already in Document.Content
+	content := doc.Content
+	title := ""
+	author := ""
+	extractedMetadata := make(map[string]string)
+
+	if ds.dataSource.Type() == "directory" {
+		// For file sources, check if we need binary extraction
+		path := doc.ID
+		mimeType := ds.detectMIMEType(path)
+
+		// Try to extract using content extractors (for binary files like PDFs)
+		extracted, err := ds.contentExtractors.ExtractContent(ctx, path, mimeType, doc.Size)
+		if err == nil && extracted != nil && extracted.Content != "" {
+			// Binary extraction succeeded, use extracted content
+			content = extracted.Content
+			title = extracted.Title
+			author = extracted.Author
+			extractedMetadata = extracted.Metadata
+		}
+		// If extraction failed or returned empty, use Document.Content (already read from file)
+	}
+
+	if content == "" {
 		return nil // Skip empty content
 	}
 
 	// Step 2: Detect type and language
-	docType, language := ds.detectTypeAndLanguage(path)
+	docType, language := ds.detectDocumentType(doc)
 
-	// Step 3: Extract metadata using metadata extractors
+	// Step 3: Extract metadata using metadata extractors (for code files)
 	var meta *metadata.Metadata
 	if ds.config.ExtractMetadata != nil && *ds.config.ExtractMetadata {
-		meta, err = ds.metadataExtractors.ExtractMetadata(language, extracted.Content, path)
+		var err error
+		meta, err = ds.metadataExtractors.ExtractMetadata(language, content, doc.ID)
 		if err != nil {
 			// Non-fatal: continue without metadata
 			meta = &metadata.Metadata{}
@@ -615,29 +347,47 @@ func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 	}
 
 	// Step 4: Chunk content using the chunker
-	chunks, err := ds.chunker.Chunk(extracted.Content, meta)
+	chunks, err := ds.chunker.Chunk(content, meta)
 	if err != nil {
-		return NewDocumentStoreError(ds.name, "indexDocument", "failed to chunk content", path, err)
+		return NewDocumentStoreError(ds.name, "indexDocument", "failed to chunk content", doc.ID, err)
 	}
 
 	// Step 5: Prepare base metadata for all chunks
-	baseMetadata := map[string]interface{}{
-		"path":          relPath,
-		"name":          info.Name(),
-		"title":         extracted.Title,
-		"type":          docType,
-		"language":      language,
-		"size":          info.Size(),
-		"last_modified": info.ModTime().Unix(),
-		"store_name":    ds.name,
-		"indexed_at":    time.Now().Unix(),
+	baseMetadata := make(map[string]interface{})
+
+	// Copy all metadata from document
+	for k, v := range doc.Metadata {
+		baseMetadata[k] = v
 	}
 
-	// Add metadata from extraction
-	if extracted.Author != "" {
-		baseMetadata["author"] = extracted.Author
+	// Add standard fields
+	baseMetadata["path"] = relPath
+	baseMetadata["source_path"] = relPath
+	if nameVal, ok := doc.Metadata["name"].(string); ok {
+		baseMetadata["name"] = nameVal
+	} else {
+		baseMetadata["name"] = doc.ID
 	}
-	for k, v := range extracted.Metadata {
+
+	if title != "" {
+		baseMetadata["title"] = title
+	} else if titleVal, ok := doc.Metadata["title"].(string); ok {
+		baseMetadata["title"] = titleVal
+	}
+
+	baseMetadata["type"] = docType
+	baseMetadata["language"] = language
+	baseMetadata["size"] = doc.Size
+	baseMetadata["last_modified"] = doc.LastModified.Unix()
+	baseMetadata["store_name"] = ds.name
+	baseMetadata["source_type"] = ds.dataSource.Type()
+	baseMetadata["indexed_at"] = time.Now().Unix()
+
+	// Add extracted metadata
+	if author != "" {
+		baseMetadata["author"] = author
+	}
+	for k, v := range extractedMetadata {
 		baseMetadata["meta_"+k] = v
 	}
 
@@ -661,7 +411,8 @@ func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 	}
 
 	// Step 6: Ingest chunks into vector database
-	if ds.searchEngine != nil {
+	// Only ingest if searchEngine is properly initialized (has db and embedder)
+	if ds.searchEngine != nil && ds.isSearchEngineReady() {
 		for _, chunk := range chunks {
 			chunkKey := fmt.Sprintf("%s:chunk:%d", relPath, chunk.Index)
 			hash := md5.Sum([]byte(fmt.Sprintf("%s:%s", ds.name, chunkKey)))
@@ -688,12 +439,55 @@ func (ds *DocumentStore) indexDocument(path string, info os.FileInfo) error {
 			}
 
 			if err := ds.searchEngine.IngestDocument(ctx, chunkID, chunk.Content, chunkMetadata); err != nil {
-				return NewDocumentStoreError(ds.name, "indexDocument", "failed to ingest chunk", path, err)
+				return NewDocumentStoreError(ds.name, "indexDocument", "failed to ingest chunk", doc.ID, err)
 			}
 		}
 	}
 
 	return nil
+}
+
+// isSearchEngineReady checks if the search engine is properly initialized
+func (ds *DocumentStore) isSearchEngineReady() bool {
+	if ds.searchEngine == nil {
+		return false
+	}
+	// Use reflection to check if db and embedder are set
+	// This is needed because SearchEngine{} (empty struct) is not nil but has nil fields
+	seValue := reflect.ValueOf(ds.searchEngine).Elem()
+	dbField := seValue.FieldByName("db")
+	embedderField := seValue.FieldByName("embedder")
+
+	return !dbField.IsNil() && !embedderField.IsNil()
+}
+
+// detectDocumentType detects document type and language from document metadata or ID
+func (ds *DocumentStore) detectDocumentType(doc *indexing.Document) (string, string) {
+	// Try to get from metadata first
+	if langVal, ok := doc.Metadata["language"].(string); ok {
+		docType := doc.Metadata["type"].(string)
+		if docType == "" {
+			docType = DocumentTypeUnknown
+		}
+		return docType, langVal
+	}
+
+	// For directory sources, detect from file extension
+	if ds.dataSource.Type() == "directory" {
+		return ds.detectTypeAndLanguage(doc.ID)
+	}
+
+	// For SQL sources, default to text
+	if ds.dataSource.Type() == "sql" {
+		return DocumentTypeText, "sql"
+	}
+
+	// For API sources, default to text
+	if ds.dataSource.Type() == "api" {
+		return DocumentTypeText, "json"
+	}
+
+	return DocumentTypeUnknown, "unknown"
 }
 
 // detectMIMEType detects the MIME type of a file
@@ -827,8 +621,8 @@ func (ds *DocumentStore) GetDocument(id string) (databases.SearchResult, bool) {
 }
 
 func (ds *DocumentStore) shouldExclude(path string) bool {
-	// Delegate to the file source filter
-	if dirSource, ok := ds.fileSource.(*indexing.DirectorySource); ok {
+	// Delegate to the data source filter (only for directory sources)
+	if dirSource, ok := ds.dataSource.(*indexing.DirectorySource); ok {
 		filter := dirSource.GetFilter()
 		if filter != nil {
 			return filter.ShouldExclude(path)
@@ -838,8 +632,8 @@ func (ds *DocumentStore) shouldExclude(path string) bool {
 }
 
 func (ds *DocumentStore) shouldInclude(path string) bool {
-	// Delegate to the file source filter
-	if dirSource, ok := ds.fileSource.(*indexing.DirectorySource); ok {
+	// Delegate to the data source filter (only for directory sources)
+	if dirSource, ok := ds.dataSource.(*indexing.DirectorySource); ok {
 		filter := dirSource.GetFilter()
 		if filter != nil {
 			return filter.ShouldInclude(path)
@@ -972,13 +766,19 @@ func (ds *DocumentStore) handleFileEvent(event fsnotify.Event) {
 	switch {
 	case event.Op&fsnotify.Create == fsnotify.Create:
 		operation = OperationCreate
-		if info, err := os.Stat(event.Name); err == nil {
-			_ = ds.indexDocument(event.Name, info)
+		if _, err := os.Stat(event.Name); err == nil {
+			// Read document from data source
+			if doc, err := ds.dataSource.ReadDocument(ds.ctx, event.Name); err == nil {
+				_ = ds.indexDocument(doc)
+			}
 		}
 	case event.Op&fsnotify.Write == fsnotify.Write:
 		operation = OperationModify
-		if info, err := os.Stat(event.Name); err == nil {
-			_ = ds.indexDocument(event.Name, info)
+		if _, err := os.Stat(event.Name); err == nil {
+			// Read document from data source
+			if doc, err := ds.dataSource.ReadDocument(ds.ctx, event.Name); err == nil {
+				_ = ds.indexDocument(doc)
+			}
 		}
 	case event.Op&fsnotify.Remove == fsnotify.Remove:
 		operation = OperationDelete
@@ -1034,13 +834,18 @@ func (ds *DocumentStore) processUpdates() {
 
 func (ds *DocumentStore) RefreshDocument(relativePath string) error {
 	fullPath := filepath.Join(ds.sourcePath, relativePath)
-	info, err := os.Stat(fullPath)
+	_, err := os.Stat(fullPath)
 	if err != nil {
 		fmt.Printf("Document %s might have been deleted\n", relativePath)
 		return nil
 	}
 
-	return ds.indexDocument(fullPath, info)
+	// Read document from data source
+	doc, err := ds.dataSource.ReadDocument(ds.ctx, fullPath)
+	if err != nil {
+		return err
+	}
+	return ds.indexDocument(doc)
 }
 
 type IndexedFileInfo struct {
@@ -1194,8 +999,8 @@ func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs m
 		return deletedFiles, cleanedUpFiles, nil
 	}
 
-	// If no search engine, just remove from index state
-	if ds.searchEngine == nil {
+	// If no search engine or search engine not ready, just remove from index state
+	if ds.searchEngine == nil || !ds.isSearchEngineReady() {
 		for _, path := range deletedFiles {
 			cleanedUpFiles[path] = true
 		}

@@ -663,7 +663,7 @@ func (a *Agent) processTaskAsync(taskID, userText, contextID string) {
 	// The IsWaiting check below handles edge cases where execution was cancelled
 	// or timed out while waiting for input.
 	ctx = context.WithValue(ctx, SessionIDKey, contextID)
-	
+
 	responseText, err := a.executeReasoningForA2A(ctx, userText, contextID)
 	if err != nil {
 		_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil)
@@ -719,7 +719,6 @@ func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, con
 
 	return fullResponse.String(), nil
 }
-
 
 func generateContextID() string {
 	return fmt.Sprintf("ctx-%d", time.Now().UnixNano())

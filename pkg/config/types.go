@@ -344,9 +344,11 @@ type EmbedderProviderConfig struct {
 	Type       string `yaml:"type"`
 	Model      string `yaml:"model"`
 	Host       string `yaml:"host"`
+	APIKey     string `yaml:"api_key,omitempty"`
 	Dimension  int    `yaml:"dimension"`
 	Timeout    int    `yaml:"timeout"`
 	MaxRetries int    `yaml:"max_retries"`
+	BatchSize  int    `yaml:"batch_size,omitempty"`
 }
 
 func (c *EmbedderProviderConfig) Validate() error {
@@ -1014,14 +1016,22 @@ func (c *ToolConfig) SetDefaults() {
 
 type DocumentStoreConfig struct {
 	Name                string   `yaml:"name"`
-	Source              string   `yaml:"source"` // Only "directory" supported
-	Path                string   `yaml:"path"`
+	Source              string   `yaml:"source"` // "directory", "sql", "api"
+	Path                string   `yaml:"path"`   // Required for directory source
 	IncludePatterns     []string `yaml:"include_patterns"`
 	ExcludePatterns     []string `yaml:"exclude_patterns"`            // If set, replaces defaults entirely
 	AdditionalExcludes  []string `yaml:"additional_exclude_patterns"` // Extends default exclusions
-	WatchChanges        *bool    `yaml:"watch_changes"`
-	MaxFileSize         int64    `yaml:"max_file_size"`
+	WatchChanges        *bool    `yaml:"watch_changes"`               // Only for directory source
+	MaxFileSize         int64    `yaml:"max_file_size"`               // Only for directory source
 	IncrementalIndexing *bool    `yaml:"incremental_indexing"`
+
+	// SQL source configuration
+	SQL        *DocumentStoreSQLConfig       `yaml:"sql,omitempty"`
+	SQLTables  []DocumentStoreSQLTableConfig `yaml:"sql_tables,omitempty"`
+	SQLMaxRows int                           `yaml:"sql_max_rows,omitempty"` // Max rows to index per table
+
+	// API source configuration
+	API *DocumentStoreAPIConfig `yaml:"api,omitempty"`
 
 	// Chunking configuration
 	ChunkSize     int    `yaml:"chunk_size"`     // Default: 800 characters
@@ -1029,17 +1039,81 @@ type DocumentStoreConfig struct {
 	ChunkStrategy string `yaml:"chunk_strategy"` // "simple", "overlapping", "semantic"
 
 	// Metadata extraction
-	ExtractMetadata   *bool    `yaml:"extract_metadata"`   // Default: true
+	ExtractMetadata   *bool    `yaml:"extract_metadata"`   // Default: false
 	MetadataLanguages []string `yaml:"metadata_languages"` // Languages to extract metadata from
 
 	// Performance
-	MaxConcurrentFiles int `yaml:"max_concurrent_files"` // Default: 10
+	MaxConcurrentFiles int `yaml:"max_concurrent_files"` // Default: 10 (renamed from MaxConcurrentFiles for clarity)
 
 	// Progress tracking
 	ShowProgress      *bool `yaml:"show_progress"`      // Default: true - show progress bar
 	VerboseProgress   *bool `yaml:"verbose_progress"`   // Default: false - show current file
 	EnableCheckpoints *bool `yaml:"enable_checkpoints"` // Default: true - enable resume capability
 	QuietMode         *bool `yaml:"quiet_mode"`         // Default: true - suppress per-file warnings
+}
+
+// DocumentStoreSQLConfig defines SQL database connection for document store
+type DocumentStoreSQLConfig struct {
+	Driver   string `yaml:"driver"` // "postgres", "mysql", "sqlite3"
+	Host     string `yaml:"host,omitempty"`
+	Port     int    `yaml:"port,omitempty"`
+	Database string `yaml:"database"`
+	Username string `yaml:"username,omitempty"`
+	Password string `yaml:"password,omitempty"`
+	SSLMode  string `yaml:"ssl_mode,omitempty"`
+}
+
+// DocumentStoreSQLTableConfig defines which SQL table to index
+type DocumentStoreSQLTableConfig struct {
+	Table           string   `yaml:"table"`
+	Columns         []string `yaml:"columns"`          // Columns to concatenate for content
+	IDColumn        string   `yaml:"id_column"`        // Primary key or unique identifier
+	UpdatedColumn   string   `yaml:"updated_column"`   // Column for tracking updates (e.g., updated_at)
+	WhereClause     string   `yaml:"where_clause"`     // Optional WHERE clause for filtering
+	MetadataColumns []string `yaml:"metadata_columns"` // Columns to include as metadata
+}
+
+// DocumentStoreAPIConfig defines REST API configuration for document store
+type DocumentStoreAPIConfig struct {
+	BaseURL   string                           `yaml:"base_url"`
+	Auth      *DocumentStoreAPIAuthConfig      `yaml:"auth,omitempty"`
+	Endpoints []DocumentStoreAPIEndpointConfig `yaml:"endpoints"`
+}
+
+// DocumentStoreAPIAuthConfig defines authentication for API requests
+type DocumentStoreAPIAuthConfig struct {
+	Type   string            `yaml:"type"` // "bearer", "basic", "apikey"
+	Token  string            `yaml:"token,omitempty"`
+	User   string            `yaml:"user,omitempty"`
+	Pass   string            `yaml:"pass,omitempty"`
+	Header string            `yaml:"header,omitempty"` // Header name for apikey type
+	Extra  map[string]string `yaml:"extra,omitempty"`
+}
+
+// DocumentStoreAPIEndpointConfig defines an API endpoint to index
+type DocumentStoreAPIEndpointConfig struct {
+	Path           string                            `yaml:"path"`
+	Method         string                            `yaml:"method,omitempty"` // Default: GET
+	Params         map[string]string                 `yaml:"params,omitempty"`
+	Headers        map[string]string                 `yaml:"headers,omitempty"`
+	Body           string                            `yaml:"body,omitempty"`
+	Auth           *DocumentStoreAPIAuthConfig       `yaml:"auth,omitempty"` // Endpoint-specific auth
+	IDField        string                            `yaml:"id_field,omitempty"`
+	ContentField   string                            `yaml:"content_field,omitempty"` // Comma-separated or JSONPath
+	MetadataFields []string                          `yaml:"metadata_fields,omitempty"`
+	UpdatedField   string                            `yaml:"updated_field,omitempty"`
+	Pagination     *DocumentStoreAPIPaginationConfig `yaml:"pagination,omitempty"`
+}
+
+// DocumentStoreAPIPaginationConfig defines pagination for API endpoints
+type DocumentStoreAPIPaginationConfig struct {
+	Type      string `yaml:"type"`       // "offset", "cursor", "page", "link"
+	PageParam string `yaml:"page_param"` // Query parameter name for page/offset
+	SizeParam string `yaml:"size_param"` // Query parameter name for page size
+	MaxPages  int    `yaml:"max_pages"`  // Maximum pages to fetch (0 = unlimited)
+	PageSize  int    `yaml:"page_size"`  // Items per page
+	NextField string `yaml:"next_field"` // JSON field containing next page URL/cursor
+	DataField string `yaml:"data_field"` // JSON field containing array of items (if nested)
 }
 
 func (c *DocumentStoreConfig) Validate() error {
@@ -1049,9 +1123,39 @@ func (c *DocumentStoreConfig) Validate() error {
 	if c.Source == "" {
 		return fmt.Errorf("source is required")
 	}
-	if c.Path == "" {
-		return fmt.Errorf("path is required")
+
+	switch c.Source {
+	case "directory":
+		if c.Path == "" {
+			return fmt.Errorf("path is required for directory source")
+		}
+	case "sql":
+		if c.SQL == nil {
+			return fmt.Errorf("SQL configuration is required for SQL source")
+		}
+		if c.SQL.Driver == "" {
+			return fmt.Errorf("SQL driver is required")
+		}
+		if c.SQL.Database == "" {
+			return fmt.Errorf("SQL database name is required")
+		}
+		if len(c.SQLTables) == 0 {
+			return fmt.Errorf("at least one SQL table configuration is required")
+		}
+	case "api":
+		if c.API == nil {
+			return fmt.Errorf("API configuration is required for API source")
+		}
+		if c.API.BaseURL == "" {
+			return fmt.Errorf("API base URL is required")
+		}
+		if len(c.API.Endpoints) == 0 {
+			return fmt.Errorf("at least one API endpoint is required")
+		}
+	default:
+		return fmt.Errorf("unsupported source type: %s (supported: directory, sql, api)", c.Source)
 	}
+
 	return nil
 }
 
@@ -1063,7 +1167,7 @@ func (c *DocumentStoreConfig) SetDefaults() {
 	if c.Source == "" {
 		c.Source = "directory"
 	}
-	if c.Path == "" {
+	if c.Source == "directory" && c.Path == "" {
 		c.Path = "./"
 	}
 

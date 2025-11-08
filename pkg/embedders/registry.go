@@ -51,6 +51,10 @@ func (r *EmbedderRegistry) CreateEmbedderFromConfig(name string, config *config.
 	switch config.Type {
 	case "ollama":
 		provider, err = NewOllamaEmbedderFromConfig(config)
+	case "openai":
+		provider, err = NewOpenAIEmbedderFromConfig(config)
+	case "cohere":
+		provider, err = NewCohereEmbedderFromConfig(config)
 	default:
 		return nil, fmt.Errorf("unsupported embedder type: %s", config.Type)
 	}

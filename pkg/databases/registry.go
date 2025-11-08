@@ -69,6 +69,8 @@ func (r *DatabaseRegistry) CreateDatabaseFromConfig(name string, config *config.
 	switch config.Type {
 	case "qdrant":
 		provider, err = NewQdrantDatabaseProviderFromConfig(config)
+	case "pinecone":
+		provider, err = NewPineconeDatabaseProviderFromConfig(config)
 	default:
 		return nil, fmt.Errorf("unsupported database type: %s", config.Type)
 	}
