@@ -277,8 +277,19 @@ Learn about the core components of agents:
 - **[Prompts](prompts.md)** - Customize agent behavior and personality
 - **[Memory](memory.md)** - Manage conversation history and context
 - **[Tools](tools.md)** - Give agents capabilities
+- **[RAG & Semantic Search](rag.md)** - Long-term memory with vector stores
 - **[Reasoning Strategies](reasoning.md)** - How agents think and decide
 - **[Multi-Agent Orchestration](multi-agent.md)** - Coordinate multiple agents
+- **[Human-in-the-Loop](human-in-the-loop.md)** - Tool approval and interactive workflows
+- **[AG-UI Protocol](ag-ui.md)** - Standardized streaming event format for UIs
+- **[A2A Protocol](../reference/a2a-protocol.md)** - Agent-to-Agent communication standard
+- **[Sessions](sessions.md)** - Conversation persistence and management
+- **[Streaming](streaming.md)** - Real-time response streaming
+- **[Tasks](tasks.md)** - Task lifecycle and management
+- **[Structured Output](structured-output.md)** - Schema-validated responses
+- **[Observability](observability.md)** - Metrics, tracing, and monitoring
+- **[Security](security.md)** - Authentication, authorization, and sandboxing
+- **[Performance](performance.md)** - Optimization and scaling
 
 ## Related Topics
 

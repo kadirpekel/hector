@@ -62,8 +62,7 @@ nav:
     - Observability: core-concepts/observability.md
     - Security: core-concepts/security.md
     - A2A Protocol: reference/a2a-protocol.md
-    - AG-UI Protocol: core-concepts/ag-ui-protocol.md
-    - AG-UI Metadata Schema: core-concepts/agui-metadata-schema.md
+    - AG-UI Protocol: core-concepts/ag-ui.md
     - LLM Providers: core-concepts/llm-providers.md
     - Prompts: core-concepts/prompts.md
     - Memory: core-concepts/memory.md
@@ -72,18 +71,23 @@ nav:
     - Reasoning: core-concepts/reasoning.md
     - Tasks: core-concepts/tasks.md
     - Multi-Agent: core-concepts/multi-agent.md
+    - Human-in-the-Loop: core-concepts/human-in-the-loop.md
     - Structured Output: core-concepts/structured-output.md
     - Sessions: core-concepts/sessions.md
     - Streaming: core-concepts/streaming.md
+    - Performance: core-concepts/performance.md
+    - Rate Limiting: core-concepts/rate-limiting.md
   - How-To Guides:
     - Build Coding Assistant: how-to/build-coding-assistant.md
     - Build Research System: how-to/build-research-system.md
     - Add Custom Tools: how-to/add-custom-tools.md
     - Setup RAG: how-to/setup-rag.md
     - Setup Session Persistence: how-to/setup-session-persistence.md
+    - Quick Observability: how-to/quick-observability.md
     - Deploy to Production: how-to/deploy-production.md
     - Integrate External Agents: how-to/integrate-external-agents.md
-    - Develop Plugins: plugins.md
+  - Plugin Development:
+    - Overview: plugins.md
   - Reference:
     - CLI Reference: reference/cli.md
     - Configuration: reference/configuration.md

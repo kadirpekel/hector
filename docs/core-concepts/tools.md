@@ -56,6 +56,19 @@ tools:
 
 **Use cases:** Running tests, building projects, checking git status
 
+**Human-in-the-Loop (Tool Approval):**
+Require user approval before executing commands:
+
+```yaml
+tools:
+  execute_command:
+    type: command
+    requires_approval: true  # Pause task for approval
+    approval_prompt: "Execute command: {input}?"
+```
+
+When `requires_approval: true`, the task pauses at `TASK_STATE_INPUT_REQUIRED` and waits for your approval. See [Human-in-the-Loop](human-in-the-loop.md) for details.
+
 **Example:**
 ```
 User: Run the tests
@@ -92,6 +105,17 @@ tools:
     - **Precedence**: Blacklist > Whitelist > Default
 
 **Use cases:** Code generation, documentation creation, config files
+
+**Human-in-the-Loop (Tool Approval):**
+Require approval before writing files:
+
+```yaml
+tools:
+  write_file:
+    type: write_file
+    requires_approval: true  # Pause task for approval
+    approval_prompt: "Write file: {tool} with content: {input}?"
+```
 
 **Example:**
 ```
@@ -312,6 +336,96 @@ Coordinator: Here's the complete article!
 ```
 
 See [Multi-Agent Orchestration](multi-agent.md) for details.
+
+---
+
+### 10. web_request
+
+Make HTTP requests to external APIs and web services:
+
+```yaml
+agents:
+  api_assistant:
+    tools: ["web_request"]
+
+tools:
+  web_request:
+    type: web_request
+    timeout: "30s"
+    max_retries: 3
+    max_request_size: 1048576  # 1MB
+    max_response_size: 10485760  # 10MB
+    allowed_domains:  # Optional: restrict to specific domains
+      - "api.example.com"
+      - "*.github.com"
+    denied_domains:  # Optional: block specific domains
+      - "internal.company.com"
+    allowed_methods:  # Optional: restrict HTTP methods
+      - "GET"
+      - "POST"
+    allow_redirects: true
+    max_redirects: 5
+    user_agent: "Hector-Agent/1.0"
+```
+
+**Use cases:** Calling REST APIs, fetching web data, integrating with external services
+
+**Example:**
+```
+User: Get the weather for San Francisco
+Agent: web_request(
+  url="https://api.weather.com/forecast",
+  method="GET",
+  headers={"Authorization": "Bearer token"}
+)
+Agent: The weather in San Francisco is...
+```
+
+!!! tip "Security Best Practices"
+    - Use `allowed_domains` to restrict which APIs can be called
+    - Set `max_request_size` and `max_response_size` to prevent abuse
+    - Consider using `denied_domains` to block internal/private endpoints
+    - Configure `allowed_methods` to limit HTTP verbs (e.g., GET only for read-only agents)
+
+---
+
+### 11. delete_file
+
+Delete files from the file system:
+
+```yaml
+agents:
+  cleanup:
+    tools: ["delete_file"]
+
+tools:
+  delete_file:
+    type: delete_file
+    enabled: true
+    requires_approval: true  # ⭐ Recommended: require approval for deletions
+    approval_prompt: |
+      🗑️  File Deletion Request
+      
+      Delete: {input}
+      
+      This action cannot be undone. Approve?
+    working_directory: "./"
+```
+
+**Use cases:** Cleanup operations, removing temporary files, file management
+
+**Example:**
+```
+User: Delete the old log files
+Agent: delete_file("logs/old.log")
+Agent: ✅ File deleted successfully
+```
+
+!!! warning "Dangerous Operation"
+    File deletion is irreversible. Always enable `requires_approval: true` for production deployments. See [Human-in-the-Loop](human-in-the-loop.md) for approval configuration.
+
+!!! note "Implementation Status"
+    The `delete_file` tool is referenced in configuration examples but may require implementation. If you encounter issues, consider using `execute_command` with `rm` as an alternative (with proper sandboxing).
 
 ---
 

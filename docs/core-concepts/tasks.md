@@ -52,7 +52,7 @@ All A2A-specified task states are supported:
 | **COMPLETED** | Terminal | Success |
 | **FAILED** | Terminal | Error occurred |
 | **CANCELLED** | Terminal | User cancelled |
-| **INPUT_REQUIRED** | Interrupted | Needs user input |
+| **INPUT_REQUIRED** | Interrupted | Needs user input (e.g., tool approval) |
 | **REJECTED** | Terminal | Agent rejected task |
 | **AUTH_REQUIRED** | Special | Needs authentication |
 
@@ -97,6 +97,7 @@ SUBMITTED → WORKING → COMPLETED
 | `COMPLETED` | Task finished successfully | Yes |
 | `FAILED` | Task encountered an error | Yes |
 | `CANCELLED` | Task was cancelled by user | Yes |
+| `INPUT_REQUIRED` | Task paused, waiting for user input (e.g., tool approval) | No |
 | `REJECTED` | Task was rejected (e.g., quota exceeded) | Yes |
 
 **Terminal states** mean the task won't change anymore and can be archived.
@@ -609,11 +610,41 @@ hector task get assistant task-id --config config.yaml
 
 ---
 
+## Human-in-the-Loop (HITL)
+
+Tasks can pause execution and wait for user input using the `INPUT_REQUIRED` state. This is commonly used for **tool approval** workflows where agents request permission before executing potentially dangerous operations.
+
+**Example:** An agent wants to delete files. Instead of executing immediately, it transitions to `INPUT_REQUIRED` and waits for your approval.
+
+**Key Features:**
+- ✅ A2A Protocol compliant (`TASK_STATE_INPUT_REQUIRED`)
+- ✅ Multi-turn conversations using the same `taskId`
+- ✅ Configurable timeouts for user responses
+- ✅ Simple YAML configuration
+
+**Quick Example:**
+```yaml
+tools:
+  delete_file:
+    type: delete_file
+    requires_approval: true  # Pause for approval
+
+agents:
+  assistant:
+    task:
+      input_timeout: 600  # Wait up to 10 minutes
+```
+
+See **[Human-in-the-Loop](human-in-the-loop.md)** for complete documentation.
+
+---
+
 ## Next Steps
 
 - **[Streaming](streaming.md)** - Real-time task updates
 - **[Multi-Agent Systems](multi-agent.md)** - Coordinate tasks across agents
 - **[Session Persistence](sessions.md)** - Long-term conversation storage
+- **[Human-in-the-Loop](human-in-the-loop.md)** - Tool approval and interactive workflows
 - **[API Reference](../reference/api.md)** - Complete API documentation
 
 ---

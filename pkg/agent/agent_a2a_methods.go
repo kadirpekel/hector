@@ -110,6 +110,10 @@ func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*p
 			return nil, status.Errorf(codes.Internal, "failed to update task status: %v", err)
 		}
 
+		// Add taskID to context for HITL support (tool approval)
+		ctx = context.WithValue(ctx, taskIDContextKey, task.Id)
+		ctx = context.WithValue(ctx, SessionIDKey, contextID)
+
 		responseText, err := a.executeReasoningForA2A(ctx, userText, contextID)
 		if err != nil {
 			if updateErr := a.services.Task().UpdateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
@@ -659,16 +663,27 @@ func (a *Agent) processTaskAsync(taskID, userText, contextID string) {
 		return
 	}
 
-	// Execute with INPUT_REQUIRED support
-	responseText, err := a.executeReasoningWithHITL(ctx, userText, contextID, taskID)
+	// Execute with HITL support
+	// The execute() method handles HITL inline - when a tool requires approval,
+	// it waits for user input, then continues execution. The channel from execute()
+	// remains open until execution fully completes (including resumed execution
+	// after approval). So executeReasoningForA2A will block until everything is done.
+	// The IsWaiting check below handles edge cases where execution was cancelled
+	// or timed out while waiting for input.
+	ctx = context.WithValue(ctx, SessionIDKey, contextID)
+	
+	responseText, err := a.executeReasoningForA2A(ctx, userText, contextID)
 	if err != nil {
 		_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil)
 		return
 	}
 
-	// Check if task is paused (waiting for user input)
+	// Check if task is still waiting for user input (edge case: cancelled/timed out)
+	// In normal flow, executeReasoningForA2A blocks until execution completes,
+	// so this check will be false. However, if execution was cancelled or timed out
+	// while waiting for input, the task may still be in INPUT_REQUIRED state.
 	if a.taskAwaiter.IsWaiting(taskID) {
-		// Task is in INPUT_REQUIRED state, don't complete it yet
+		// Task is still in INPUT_REQUIRED state, don't complete it yet
 		// Execution will resume when user provides input via SendMessage
 		return
 	}
@@ -683,13 +698,19 @@ func (a *Agent) processTaskAsync(taskID, userText, contextID string) {
 	_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_COMPLETED, responseMessage)
 }
 
+// executeReasoningForA2A executes agent reasoning and collects the full response text.
+// For tasks with HITL support, this will block until execution fully completes,
+// including any resumed execution after user provides input for tool approval.
 func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, contextID string) (string, error) {
 	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
 	if err != nil {
 		return "", fmt.Errorf("failed to create strategy: %w", err)
 	}
 
-	ctx = context.WithValue(ctx, SessionIDKey, contextID)
+	// Set SessionIDKey if not already set (may be set by caller)
+	if ctx.Value(SessionIDKey) == nil {
+		ctx = context.WithValue(ctx, SessionIDKey, contextID)
+	}
 
 	streamCh, err := a.execute(ctx, userText, strategy)
 	if err != nil {
@@ -707,60 +728,6 @@ func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, con
 	return fullResponse.String(), nil
 }
 
-// executeReasoningWithHITL executes reasoning with human-in-the-loop support
-// Handles INPUT_REQUIRED state for tool approval
-func (a *Agent) executeReasoningWithHITL(ctx context.Context, userText string, contextID string, taskID string) (string, error) {
-	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
-	if err != nil {
-		return "", fmt.Errorf("failed to create strategy: %w", err)
-	}
-
-	ctx = context.WithValue(ctx, SessionIDKey, contextID)
-
-	// Execute agent reasoning
-	streamCh, err := a.execute(ctx, userText, strategy)
-	if err != nil {
-		return "", fmt.Errorf("reasoning failed: %w", err)
-	}
-
-	var fullResponse strings.Builder
-	for part := range streamCh {
-		if textPart, ok := part.Part.(*pb.Part_Text); ok {
-			fullResponse.WriteString(textPart.Text)
-		}
-	}
-
-	// Check if execution was interrupted for user input
-	if a.taskAwaiter.IsWaiting(taskID) {
-		// Task is paused waiting for user approval
-		// Wait for user response
-		userMessage, err := a.taskAwaiter.WaitForInput(ctx, taskID, 0)
-		if err != nil {
-			return "", fmt.Errorf("waiting for user input failed: %w", err)
-		}
-
-		// Add user's response to context for next iteration
-		decision := parseUserDecision(userMessage)
-		ctx = context.WithValue(ctx, userDecisionContextKey, decision)
-
-		// Update task back to WORKING state
-		_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil)
-
-		// Resume execution with user's decision
-		streamCh, err = a.execute(ctx, userText, strategy)
-		if err != nil {
-			return "", fmt.Errorf("reasoning failed after resume: %w", err)
-		}
-
-		for part := range streamCh {
-			if textPart, ok := part.Part.(*pb.Part_Text); ok {
-				fullResponse.WriteString(textPart.Text)
-			}
-		}
-	}
-
-	return fullResponse.String(), nil
-}
 
 func generateContextID() string {
 	return fmt.Sprintf("ctx-%d", time.Now().UnixNano())

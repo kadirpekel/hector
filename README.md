@@ -705,6 +705,7 @@ Comprehensive documentation available at [gohector.dev](https://gohector.dev):
 - [Tools](https://gohector.dev/core-concepts/tools/)
 - [Reasoning](https://gohector.dev/core-concepts/reasoning/)
 - [Multi-Agent Systems](https://gohector.dev/core-concepts/multi-agent/)
+- [Human-in-the-Loop](https://gohector.dev/core-concepts/human-in-the-loop/) - Tool approval and interactive workflows
 - [Observability](https://gohector.dev/core-concepts/observability/)
 - [Security](https://gohector.dev/core-concepts/security/)
 

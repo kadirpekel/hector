@@ -354,7 +354,40 @@ agents:
     
     # Visibility
     visibility: "public"          # public|internal|private
+    
+    # Task Configuration (for async tasks and HITL)
+    task:
+      backend: "memory"           # "memory" (default) or "sql"
+      worker_pool: 5              # Max concurrent tasks
+      input_timeout: 600          # Seconds to wait for user input (HITL, default: 600 = 10 minutes)
+      
+      # SQL backend (for production persistence)
+      sql:
+        driver: "sqlite"          # sqlite|postgres|mysql
+        database: "./tasks.db"    # Database connection string or file path
+        max_conns: 10             # Max connections
+        max_idle: 2               # Idle connections
 ```
+
+**Task Configuration Options:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `backend` | string | `"memory"` | Storage backend: `"memory"` (volatile) or `"sql"` (persistent) |
+| `worker_pool` | integer | `5` | Maximum number of concurrent tasks |
+| `input_timeout` | integer | `600` | Timeout in seconds for user input (Human-in-the-Loop) |
+| `sql.driver` | string | - | Database driver: `"sqlite"`, `"postgres"`, or `"mysql"` |
+| `sql.database` | string | - | Database connection string or file path |
+| `sql.max_conns` | integer | `10` | Maximum database connections |
+| `sql.max_idle` | integer | `2` | Maximum idle connections |
+
+**Human-in-the-Loop (HITL):**
+- `input_timeout` controls how long tasks wait for user approval
+- When a tool with `requires_approval: true` is called, task pauses and waits
+- User responds using the same `taskId` (A2A multi-turn)
+- See [Human-in-the-Loop](../core-concepts/human-in-the-loop.md) for details
+
+**See:** [Tasks](../core-concepts/tasks.md) for complete task management guide.
 
 ### External A2A Agent
 
@@ -414,6 +447,10 @@ tools:
     # allowed_commands: ["npm", "git", "python"]
     # denied_commands: ["rm", "sudo"]
     # max_execution_time: "30s"
+    
+    # Human-in-the-loop: Require approval before execution
+    requires_approval: true           # Pause task for user approval
+    approval_prompt: "Execute command: {input}?"  # Custom prompt (optional)
   
   write_file:
     type: write_file
@@ -422,6 +459,14 @@ tools:
     # Optional restrictions:
     # allowed_paths: ["./src/", "./docs/"]
     # denied_paths: ["./secrets/"]
+    
+    # Human-in-the-loop: Require approval for file writes
+    requires_approval: true
+    approval_prompt: |
+      📝 File Write Request
+      File: {tool}
+      Content: {input}
+      Approve?
   
   search_replace:
     type: search_replace
@@ -433,6 +478,7 @@ tools:
     type: read_file
     max_file_size: 10485760  # 10MB
     working_directory: "./"
+    requires_approval: false  # Safe read-only operation
   
   apply_patch:
     type: apply_patch
@@ -455,6 +501,33 @@ tools:
   todo_write:
     
 ```
+
+### Human-in-the-Loop (Tool Approval)
+
+Configure tools to require user approval before execution:
+
+```yaml
+tools:
+  dangerous_tool:
+    type: command
+    enabled: true
+    
+    # Enable approval workflow
+    requires_approval: true           # If true, task pauses for approval
+    approval_prompt: "Custom prompt"  # Optional: Custom approval message
+    
+    # Prompt interpolation variables:
+    # {tool} - Tool name
+    # {input} - Tool input/arguments (JSON string)
+```
+
+**When `requires_approval: true`:**
+- Task transitions to `TASK_STATE_INPUT_REQUIRED` when tool is called
+- Execution pauses until user responds with approval/denial
+- User responds using the same `taskId` (A2A multi-turn)
+- Tool executes if approved, skipped if denied
+
+**See:** [Human-in-the-Loop](../core-concepts/human-in-the-loop.md) for complete guide.
 
 **See also:**
 - [File Operations Guide](../tools-file-operations.md) - Detailed documentation for read_file, apply_patch, and grep_search

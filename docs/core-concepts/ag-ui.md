@@ -1,11 +1,9 @@
 ---
 title: AG-UI Protocol
-description: AG-UI streaming event format for standardized agent UIs
+description: AG-UI streaming event format and metadata schema for standardized agent UIs
 ---
 
 # AG-UI Protocol Support
-
-> **💡 See Also:** [AG-UI Metadata Schema](agui-metadata-schema.md) for detailed information about how Hector enriches A2A parts with AG-UI metadata.
 
 Hector implements **AG-UI streaming events** as an optional output format alongside the native A2A protocol. This enables compatibility with modern agentic UIs that have adopted this standardized streaming format.
 
@@ -76,6 +74,94 @@ Hector implements **AG-UI streaming events** as an optional output format alongs
 - `task_update`: Task status change
 - `task_complete`: Task finished successfully
 - `task_error`: Task failed
+
+---
+
+## AG-UI Metadata Schema
+
+Hector enriches all A2A protocol parts with **AG-UI metadata** to make them natively compatible with AG-UI-based user interfaces while remaining 100% A2A compliant. This is achieved by embedding AG-UI event type hints in the A2A `Part.metadata` field, which is explicitly designed for protocol extensions.
+
+### Why AG-UI Metadata in A2A Parts?
+
+The **A2A (Agent-to-Agent) Protocol** is Hector's native protocol and intentionally does not prescribe specific contextual types like "thinking", "tool_call", or "task" in its core specification. Instead, A2A provides an optional `metadata` field on `Part` messages for custom extensions.
+
+**AG-UI (Agent User Interaction) Protocol** is a standardized streaming event format for agent UIs that defines specific event types for rich user experiences (thinking blocks, tool calls, tasks, etc.).
+
+By embedding AG-UI metadata hints in A2A parts, Hector achieves:
+
+1. **A2A Native**: All parts remain valid A2A messages
+2. **AG-UI Ready**: AG-UI clients can read metadata hints for proper UI rendering
+3. **Zero Configuration**: No special configuration needed - AG-UI is a default capability
+4. **Backward Compatible**: A2A-only clients simply ignore unfamiliar metadata
+
+### Core Metadata Fields
+
+All AG-UI-enriched A2A parts include these optional metadata fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agui_event_type` | string | The AG-UI event type: `"content_block"`, `"thinking"`, `"tool_call"`, `"task"`, `"error"`, or `"message"` |
+| `agui_block_type` | string | For content blocks: `"text"`, `"thinking"`, or `"code"` |
+| `agui_block_id` | string | Unique identifier for this content block |
+| `agui_block_index` | integer | Sequential index of this block within the message |
+
+### Tool Call Metadata Fields
+
+For tool call and tool result parts:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agui_tool_call_id` | string | Unique identifier for the tool call |
+| `agui_tool_name` | string | Name of the tool being called |
+| `agui_is_error` | boolean | Whether this tool result represents an error |
+
+### Example A2A Parts with AG-UI Metadata
+
+**Text Content Part:**
+```json
+{
+  "text": "Hello! How can I help you today?",
+  "metadata": {
+    "agui_event_type": "content_block",
+    "agui_block_type": "text",
+    "agui_block_id": "block-1234",
+    "agui_block_index": 0
+  }
+}
+```
+
+**Thinking Block Part:**
+```json
+{
+  "text": "[Thinking: Analyzing the user's request...]\n",
+  "metadata": {
+    "agui_event_type": "thinking",
+    "agui_block_type": "thinking",
+    "agui_block_id": "think-5678",
+    "agui_block_index": 1
+  }
+}
+```
+
+**Tool Call Part:**
+```json
+{
+  "data": {
+    "data": {
+      "id": "call-9abc",
+      "name": "search_code",
+      "arguments": {
+        "query": "authentication logic"
+      }
+    }
+  },
+  "metadata": {
+    "agui_event_type": "tool_call",
+    "agui_tool_call_id": "call-9abc",
+    "agui_tool_name": "search_code"
+  }
+}
+```
 
 ---
 
@@ -316,7 +402,364 @@ Clients choose their preferred format at runtime via Accept header or query para
 
 ---
 
-## Client Implementation
+## UI Implementation Guide
+
+### Building an AG-UI Compatible Client
+
+This section provides guidance for implementing AG-UI clients that consume Hector's AG-UI streaming events.
+
+#### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Client Application                     │
+│  ┌──────────────┬──────────────┬──────────────┐          │
+│  │   Event      │    State     │     UI       │          │
+│  │  Handler     │  Management  │  Rendering   │          │
+│  └──────┬───────┴──────┬───────┴──────┬───────┘          │
+│         │              │              │                   │
+│         └──────────────┴──────────────┘                   │
+│                    Event Stream                            │
+└───────────────────────────┬───────────────────────────────┘
+                            │
+┌───────────────────────────▼───────────────────────────────┐
+│              Hector AG-UI Event Stream                      │
+│  (SSE: application/x-agui-events)                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Step 1: Connect to Event Stream
+
+**JavaScript/TypeScript:**
+```typescript
+const eventSource = new EventSource(
+  'http://localhost:8080/v1/agents/assistant/message:stream',
+  {
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/x-agui-events'  // Opt-in to AG-UI
+    }
+  }
+);
+```
+
+**Python:**
+```python
+import requests
+import json
+
+url = "http://localhost:8080/v1/agents/assistant/message:stream"
+headers = {
+    "Content-Type": "application/json",
+    "Accept": "application/x-agui-events"  # Opt-in to AG-UI
+}
+data = {"message": {"parts": [{"text": "Hello"}]}}
+
+response = requests.post(url, headers=headers, json=data, stream=True)
+```
+
+#### Step 2: Handle Event Types
+
+**Message Lifecycle:**
+```typescript
+interface MessageState {
+  messageId: string;
+  role: 'user' | 'agent';
+  blocks: Map<string, ContentBlock>;
+  thinking: Map<string, ThinkingBlock>;
+  toolCalls: Map<string, ToolCall>;
+}
+
+const messageState = new Map<string, MessageState>();
+
+eventSource.addEventListener('message_start', (e) => {
+  const event = JSON.parse(e.data);
+  const msgId = event.messageStart.messageId;
+  messageState.set(msgId, {
+    messageId: msgId,
+    role: event.messageStart.role,
+    blocks: new Map(),
+    thinking: new Map(),
+    toolCalls: new Map()
+  });
+  // Render new message container in UI
+  createMessageContainer(msgId);
+});
+
+eventSource.addEventListener('message_stop', (e) => {
+  const event = JSON.parse(e.data);
+  const msgId = event.messageStop.messageId;
+  // Finalize message rendering
+  finalizeMessage(msgId);
+});
+```
+
+**Content Blocks:**
+```typescript
+eventSource.addEventListener('content_block_start', (e) => {
+  const event = JSON.parse(e.data);
+  const blockId = event.contentBlockStart.blockId;
+  const blockType = event.contentBlockStart.blockType;
+  
+  // Create new content block in UI
+  createContentBlock(blockId, blockType);
+});
+
+eventSource.addEventListener('content_block_delta', (e) => {
+  const event = JSON.parse(e.data);
+  const blockId = event.contentBlockDelta.blockId;
+  const delta = event.contentBlockDelta.delta;
+  
+  // Append delta to content block (streaming text)
+  appendToBlock(blockId, delta);
+});
+
+eventSource.addEventListener('content_block_stop', (e) => {
+  const event = JSON.parse(e.data);
+  const blockId = event.contentBlockStop.blockId;
+  
+  // Mark block as complete
+  finalizeBlock(blockId);
+});
+```
+
+**Tool Calls:**
+```typescript
+eventSource.addEventListener('tool_call_start', (e) => {
+  const event = JSON.parse(e.data);
+  const toolCallId = event.toolCallStart.toolCallId;
+  const toolName = event.toolCallStart.toolName;
+  const input = event.toolCallStart.input;
+  
+  // Show tool indicator in UI
+  showToolCall(toolCallId, toolName, input);
+});
+
+eventSource.addEventListener('tool_call_stop', (e) => {
+  const event = JSON.parse(e.data);
+  const toolCallId = event.toolCallStop.toolCallId;
+  const result = event.toolCallStop.result;
+  const error = event.toolCallStop.error;
+  
+  // Update tool call with result
+  updateToolCall(toolCallId, result, error);
+});
+```
+
+**Thinking Blocks:**
+```typescript
+eventSource.addEventListener('thinking_start', (e) => {
+  const event = JSON.parse(e.data);
+  const thinkingId = event.thinkingStart.thinkingId;
+  const title = event.thinkingStart.title;
+  
+  // Show thinking block (collapsible by default)
+  showThinkingBlock(thinkingId, title);
+});
+
+eventSource.addEventListener('thinking_delta', (e) => {
+  const event = JSON.parse(e.data);
+  const thinkingId = event.thinkingDelta.thinkingId;
+  const delta = event.thinkingDelta.delta;
+  
+  // Append thinking text
+  appendThinking(thinkingId, delta);
+});
+
+eventSource.addEventListener('thinking_stop', (e) => {
+  const event = JSON.parse(e.data);
+  const thinkingId = event.thinkingStop.thinkingId;
+  
+  // Finalize thinking block
+  finalizeThinking(thinkingId);
+});
+```
+
+**Task Status:**
+```typescript
+eventSource.addEventListener('task_start', (e) => {
+  const event = JSON.parse(e.data);
+  const taskId = event.taskStart.taskId;
+  
+  // Show task indicator
+  showTaskIndicator(taskId);
+});
+
+eventSource.addEventListener('task_update', (e) => {
+  const event = JSON.parse(e.data);
+  const taskId = event.taskUpdate.taskId;
+  const status = event.taskUpdate.status;
+  
+  // Update task status
+  updateTaskStatus(taskId, status);
+});
+
+eventSource.addEventListener('task_complete', (e) => {
+  const event = JSON.parse(e.data);
+  const taskId = event.taskComplete.taskId;
+  
+  // Mark task as complete
+  completeTask(taskId);
+});
+
+eventSource.addEventListener('task_error', (e) => {
+  const event = JSON.parse(e.data);
+  const taskId = event.taskError.taskId;
+  const error = event.taskError.error;
+  
+  // Show error
+  showTaskError(taskId, error);
+});
+```
+
+#### Step 3: State Management
+
+Maintain state for each message to properly render streaming content:
+
+```typescript
+class AGUIStateManager {
+  private messages = new Map<string, MessageState>();
+  
+  handleEvent(eventType: string, eventData: any) {
+    switch (eventType) {
+      case 'message_start':
+        this.startMessage(eventData);
+        break;
+      case 'content_block_delta':
+        this.appendContent(eventData);
+        break;
+      case 'tool_call_start':
+        this.startToolCall(eventData);
+        break;
+      // ... handle all event types
+    }
+  }
+  
+  getMessageState(messageId: string): MessageState | undefined {
+    return this.messages.get(messageId);
+  }
+}
+```
+
+#### Step 4: UI Rendering Best Practices
+
+1. **Progressive Rendering**: Update UI incrementally as deltas arrive
+2. **Visual Indicators**: Show loading states for tool calls and thinking
+3. **Error Handling**: Display errors from `tool_call_stop` and `task_error` events
+4. **Collapsible Thinking**: Make thinking blocks collapsible by default
+5. **Tool Call Visualization**: Show tool name, input, and result clearly
+6. **Task Status**: Display task progress and status updates
+
+#### Step 5: Complete Example
+
+**React Component Example:**
+```typescript
+import React, { useEffect, useState } from 'react';
+
+interface AGUIEvent {
+  eventId: string;
+  type: string;
+  timestamp: string;
+  [key: string]: any;
+}
+
+export function AGUIChat() {
+  const [messages, setMessages] = useState<Map<string, any>>(new Map());
+  
+  useEffect(() => {
+    const eventSource = new EventSource(
+      'http://localhost:8080/v1/agents/assistant/message:stream',
+      {
+        headers: {
+          'Accept': 'application/x-agui-events'
+        }
+      }
+    );
+    
+    eventSource.addEventListener('message_start', (e) => {
+      const event: AGUIEvent = JSON.parse(e.data);
+      setMessages(prev => {
+        const next = new Map(prev);
+        next.set(event.messageStart.messageId, {
+          id: event.messageStart.messageId,
+          role: event.messageStart.role,
+          content: '',
+          toolCalls: [],
+          thinking: []
+        });
+        return next;
+      });
+    });
+    
+    eventSource.addEventListener('content_block_delta', (e) => {
+      const event: AGUIEvent = JSON.parse(e.data);
+      setMessages(prev => {
+        const next = new Map(prev);
+        const msg = next.get(event.contentBlockDelta.blockId);
+        if (msg) {
+          msg.content += event.contentBlockDelta.delta;
+        }
+        return next;
+      });
+    });
+    
+    // ... handle other events
+    
+    return () => eventSource.close();
+  }, []);
+  
+  return (
+    <div className="chat-container">
+      {Array.from(messages.values()).map(msg => (
+        <div key={msg.id} className={`message ${msg.role}`}>
+          <div className="content">{msg.content}</div>
+          {msg.toolCalls.map(tc => (
+            <div key={tc.id} className="tool-call">
+              🔧 {tc.name}: {tc.result}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### Using A2A Format with AG-UI Metadata
+
+If you prefer A2A format but want AG-UI metadata hints:
+
+```javascript
+// A2A parts include AG-UI metadata automatically
+function extractAGUIMetadata(part) {
+  if (!part.metadata) return null;
+  
+  return {
+    eventType: part.metadata.agui_event_type,
+    blockType: part.metadata.agui_block_type,
+    blockId: part.metadata.agui_block_id,
+    toolCallId: part.metadata.agui_tool_call_id,
+    toolName: part.metadata.agui_tool_name
+  };
+}
+
+// Use metadata to render parts appropriately
+function renderPart(part) {
+  const metadata = extractAGUIMetadata(part);
+  
+  if (metadata?.eventType === 'thinking') {
+    return renderThinkingBlock(part.text);
+  } else if (metadata?.eventType === 'tool_call') {
+    return renderToolCall(part.data.data);
+  } else {
+    return renderTextContent(part.text);
+  }
+}
+```
+
+---
+
+## Client Implementation Examples
 
 ### JavaScript/TypeScript Example
 
@@ -400,7 +843,7 @@ for line in response.iter_lines():
 
 ## Testing
 
-**✅ Implementation tested and verified!** See `TEST_RESULTS_AGUI.md` for detailed test results.
+**✅ Implementation tested and verified!**
 
 Start any Hector agent (AG-UI is always available):
 
@@ -515,6 +958,7 @@ The conversion from A2A to AG-UI happens at the transport layer (REST gateway):
 - ✅ Opt-in mechanism (Accept header / query param)
 - ✅ Agent card declaration
 - ✅ Zero configuration
+- ✅ AG-UI metadata in A2A parts
 
 ### What's Not Implemented (AG-UI Full Spec) ⚠️
 
@@ -522,7 +966,7 @@ The full AG-UI specification includes features beyond streaming events:
 
 - ❌ **Bidirectional Communication**: Client → Agent tool invocations, interrupts
 - ❌ **State Management**: Structured state, incremental updates, snapshots
-- ❌ **Human-in-the-Loop**: Pause/modify/approve workflows
+- ❌ **Human-in-the-Loop**: Pause/modify/approve workflows (Note: Hector implements HITL via A2A protocol)
 - ❌ **Multi-Agent Handoff**: Agent-to-agent collaboration protocol
 - ❌ **Client-Defined Tools**: Front-end defines tools for agent to call
 
@@ -555,6 +999,7 @@ For full AG-UI spec features, consider:
 ✅ **Zero Configuration**: Works out-of-the-box  
 ✅ **Full Compatibility**: Both protocols coexist seamlessly  
 ✅ **Tested & Verified**: All features working correctly  
+✅ **UI Implementation Guide**: Complete guidance for building AG-UI clients
 
 The implementation successfully provides AG-UI streaming event compatibility while maintaining 100% A2A protocol fidelity.
 
@@ -562,3 +1007,4 @@ The implementation successfully provides AG-UI streaming event compatibility whi
     - **Use A2A** for: Full-featured agent integration, bidirectional communication, state management
     - **Use AG-UI** for: Streaming UI compatibility, display-only clients, framework integration
     - **Use Both** for: Maximum compatibility with diverse clients
+

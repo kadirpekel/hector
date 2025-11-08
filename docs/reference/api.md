@@ -346,9 +346,34 @@ hector task cancel assistant task-abc123 --url http://localhost:8080
 | `TASK_STATE_COMPLETED` | Task finished successfully | Terminal |
 | `TASK_STATE_FAILED` | Task failed with error | Terminal |
 | `TASK_STATE_CANCELLED` | Task was cancelled | Terminal |
-| `TASK_STATE_INPUT_REQUIRED` | Task needs user input | Interrupted |
+| `TASK_STATE_INPUT_REQUIRED` | Task needs user input (e.g., tool approval) | Interrupted |
 | `TASK_STATE_REJECTED` | Agent rejected task | Terminal |
 | `TASK_STATE_AUTH_REQUIRED` | Authentication required | Special |
+
+**Human-in-the-Loop (HITL):**
+When a task enters `TASK_STATE_INPUT_REQUIRED`, it's waiting for user input (typically tool approval). Respond using the same `taskId` to resume execution:
+
+```bash
+# Task paused for approval
+curl http://localhost:8080/v1/agents/assistant/tasks/task-abc123
+# Response: {"status": {"state": "TASK_STATE_INPUT_REQUIRED", ...}}
+
+# Respond with approval (using same taskId)
+curl -X POST http://localhost:8080/v1/agents/assistant/message:send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request": {
+      "role": "user",
+      "taskId": "task-abc123",
+      "parts": [
+        {"text": "approve"},
+        {"data": {"decision": "approve"}}
+      ]
+    }
+  }'
+```
+
+**See:** [Human-in-the-Loop](../core-concepts/human-in-the-loop.md) for complete HITL guide.
 
 **Complete Documentation:** [Tasks - Lifecycle and Management](../core-concepts/tasks.md)
 
