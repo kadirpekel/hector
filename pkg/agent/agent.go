@@ -365,46 +365,53 @@ func (a *Agent) execute(
 						}
 					}
 
-					if taskID != "" {
-						// Update task to INPUT_REQUIRED state with approval request message
-						if err := a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_INPUT_REQUIRED, approvalResult.InteractionMsg); err != nil {
-							outputCh <- createTextPart(fmt.Sprintf("Error updating task status: %v\n", err))
-							return
-						}
+					if taskID == "" {
+						// No taskID - can't request approval, deny the tool
+						outputCh <- createTextPart("⚠️  Tool requires approval but task tracking not enabled, denying\n")
+						approvalResult.ApprovedCalls = []*protocol.ToolCall{} // Clear approved calls
+						// DeniedCalls already populated in filterToolCallsWithApproval
+						// Continue to next iteration to handle denied tools
+						continue
+					}
 
-						// Send approval request message parts to stream so UI can display them
-						if approvalResult.InteractionMsg != nil && len(approvalResult.InteractionMsg.Parts) > 0 {
-							for _, part := range approvalResult.InteractionMsg.Parts {
-								outputCh <- part
-							}
-						}
+					// Update task to INPUT_REQUIRED state with approval request message
+					if err := a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_INPUT_REQUIRED, approvalResult.InteractionMsg); err != nil {
+						outputCh <- createTextPart(fmt.Sprintf("Error updating task status: %v\n", err))
+						return
+					}
 
+					// Send approval request message parts to stream so UI can display them
+					if approvalResult.InteractionMsg != nil && len(approvalResult.InteractionMsg.Parts) > 0 {
+						for _, part := range approvalResult.InteractionMsg.Parts {
+							outputCh <- part
+						}
+					}
 
 					// Store tool name before waiting (will be nil after re-running filter)
 					pendingToolName := approvalResult.PendingToolCall.Name
-						// Wait for user approval inline (don't return - keep goroutine alive)
-						userMessage, err := a.taskAwaiter.WaitForInput(ctx, taskID, 0)
-						if err != nil {
-							outputCh <- createTextPart(fmt.Sprintf("❌ Approval timeout or cancelled: %v\n", err))
-							return
-						}
+					// Wait for user approval inline (don't return - keep goroutine alive)
+					userMessage, err := a.taskAwaiter.WaitForInput(ctx, taskID, 0)
+					if err != nil {
+						outputCh <- createTextPart(fmt.Sprintf("❌ Approval timeout or cancelled: %v\n", err))
+						return
+					}
 
-						// Add user's response and extract decision
-						decision := parseUserDecision(userMessage)
-						ctx = context.WithValue(ctx, userDecisionContextKey, decision)
+					// Add user's response and extract decision
+					decision := parseUserDecision(userMessage)
+					ctx = context.WithValue(ctx, userDecisionContextKey, decision)
 
-						// Re-run approval filter with user's decision in context
-						approvalResult, err = a.filterToolCallsWithApproval(ctx, toolCalls, a.componentManager.GetGlobalConfig().Tools)
-						if err != nil {
-							outputCh <- createTextPart(fmt.Sprintf("Error re-checking tool approval: %v\n", err))
-							return
-						}
+					// Re-run approval filter with user's decision in context
+					approvalResult, err = a.filterToolCallsWithApproval(ctx, toolCalls, a.componentManager.GetGlobalConfig().Tools)
+					if err != nil {
+						outputCh <- createTextPart(fmt.Sprintf("Error re-checking tool approval: %v\n", err))
+						return
+					}
 
-						// Update task back to WORKING state
-						_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil)
+					// Update task back to WORKING state
+					_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil)
 
 					// Send confirmation message to indicate interaction was resolved
-					if decision == "approve" {
+					if decision == DecisionApprove {
 						confirmMsg := fmt.Sprintf("✅ Approved: %s", pendingToolName)
 						outputCh <- createTextPart(confirmMsg)
 					} else {
@@ -412,12 +419,7 @@ func (a *Agent) execute(
 						outputCh <- createTextPart(confirmMsg)
 					}
 
-						// Continue execution with user's decision applied
-					} else {
-						// No taskID - can't request approval, deny the tool
-						outputCh <- createTextPart("⚠️  Tool requires approval but task tracking not enabled, denying\n")
-						approvalResult.ApprovedCalls = []*protocol.ToolCall{} // Clear approved calls
-					}
+					// Continue execution with user's decision applied
 				}
 
 				// Handle approved and denied tools

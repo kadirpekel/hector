@@ -10,19 +10,32 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+const (
+	// Decision constants for human-in-the-loop tool approval
+	DecisionApprove = "approve"
+	DecisionDeny    = "deny"
+)
+
 // parseUserDecision extracts the user's decision from a message
 // Checks DataPart first (structured), then falls back to TextPart
-// Returns: "approve" or "deny"
+// Returns: DecisionApprove or DecisionDeny
 func parseUserDecision(msg *pb.Message) string {
 	if msg == nil {
-		return "deny" // Safe default
+		return DecisionDeny // Safe default
 	}
 
 	// Check DataPart first (structured response)
 	for _, part := range msg.Parts {
-		if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
-			if decision, ok := dataPart.Data.Fields["decision"]; ok {
-				return strings.ToLower(decision.GetStringValue())
+		if dataPart := part.GetData(); dataPart != nil {
+			// Validate DataPart structure before accessing
+			if dataPart.Data != nil && dataPart.Data.Fields != nil {
+				if decision, ok := dataPart.Data.Fields["decision"]; ok && decision != nil {
+					decisionStr := strings.ToLower(strings.TrimSpace(decision.GetStringValue()))
+					// Only accept valid decisions
+					if decisionStr == DecisionApprove || decisionStr == DecisionDeny {
+						return decisionStr
+					}
+				}
 			}
 		}
 	}
@@ -31,14 +44,14 @@ func parseUserDecision(msg *pb.Message) string {
 	text := strings.ToLower(strings.TrimSpace(protocol.ExtractTextFromMessage(msg)))
 
 	// Check for explicit keywords
-	if strings.Contains(text, "approve") || text == "yes" || text == "y" {
-		return "approve"
+	if strings.Contains(text, DecisionApprove) || text == "yes" || text == "y" {
+		return DecisionApprove
 	}
-	if strings.Contains(text, "deny") || text == "no" || text == "n" {
-		return "deny"
+	if strings.Contains(text, DecisionDeny) || text == "no" || text == "n" {
+		return DecisionDeny
 	}
 
-	return "deny" // Safe default
+	return DecisionDeny // Safe default
 }
 
 // createInteractionMessage creates an A2A-compliant message for INPUT_REQUIRED state
@@ -95,6 +108,15 @@ func createInteractionMessage(
 // createToolApprovalMessage creates a message requesting tool approval
 // A2A Protocol compliant: uses TextPart + DataPart structure
 func createToolApprovalMessage(toolName string, toolInput string, customPrompt string) *pb.Message {
+	// Safety: ensure toolName is not empty
+	if toolName == "" {
+		toolName = "unknown_tool"
+	}
+	// Safety: ensure toolInput is not empty for display
+	if toolInput == "" {
+		toolInput = "{}"
+	}
+
 	// Use custom prompt if provided, otherwise generate default
 	prompt := customPrompt
 	if prompt == "" {
@@ -114,7 +136,7 @@ func createToolApprovalMessage(toolName string, toolInput string, customPrompt s
 		toolName,
 		toolInput,
 		prompt,
-		[]string{"approve", "deny"},
+		[]string{DecisionApprove, DecisionDeny},
 	)
 }
 

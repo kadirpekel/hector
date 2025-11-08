@@ -35,6 +35,12 @@ func (a *Agent) filterToolCallsWithApproval(
 		NeedsUserInput: false,
 	}
 
+	// Safety check: if toolConfigs is nil, allow all tools (no approval configured)
+	if toolConfigs == nil {
+		result.ApprovedCalls = toolCalls
+		return result, nil
+	}
+
 	// Get taskID from context if available
 	taskID := ""
 	if taskIDValue := ctx.Value(taskIDContextKey); taskIDValue != nil {
@@ -74,11 +80,11 @@ func (a *Agent) filterToolCallsWithApproval(
 		// If we have a user decision (resuming from INPUT_REQUIRED), apply it
 		if userDecision != "" {
 			switch userDecision {
-			case "approve":
+			case DecisionApprove:
 				log.Printf("[HITL] User approved tool %s", call.Name)
 				result.ApprovedCalls = append(result.ApprovedCalls, call)
 
-			case "deny":
+			case DecisionDeny:
 				log.Printf("[HITL] User denied tool %s", call.Name)
 				result.DeniedCalls = append(result.DeniedCalls, call)
 
@@ -92,11 +98,20 @@ func (a *Agent) filterToolCallsWithApproval(
 		}
 
 		// No user decision yet - need to request approval
-		// Only handle one tool approval at a time for simplicity
+		// NOTE: Currently handles one tool approval at a time.
+		// Future enhancement: Batch approvals by collecting all tools requiring approval,
+		// presenting them together, and handling a structured batch response.
+		// This would require:
+		//   1. Collecting all approval-required tools instead of early return
+		//   2. Creating a batch approval message with multiple tools
+		//   3. Parsing batch response (e.g., {"approvals": {"tool1": "approve", "tool2": "deny"}})
+		//   4. UI updates to display and handle multiple approvals
+		//   5. Updating createInteractionMessage to support batch mode
 		if taskID == "" {
 			// Can't request approval without task ID (non-async mode)
 			log.Printf("[HITL] Warning: Tool %s requires approval but no taskID available, denying", call.Name)
-			continue // Skip this tool
+			result.DeniedCalls = append(result.DeniedCalls, call)
+			continue
 		}
 
 		// Create approval request message (A2A compliant)
@@ -113,7 +128,7 @@ func (a *Agent) filterToolCallsWithApproval(
 		result.InteractionMsg = interactionMsg
 		result.PendingToolCall = call
 
-		// Only handle one approval at a time
+		// Only handle one approval at a time (see NOTE above for batch enhancement plan)
 		// Return immediately so task can transition to INPUT_REQUIRED
 		return result, nil
 	}
