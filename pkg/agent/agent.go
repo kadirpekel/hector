@@ -359,7 +359,7 @@ func (a *Agent) execute(
 				// If tool requires user approval, transition to INPUT_REQUIRED state
 				if approvalResult.NeedsUserInput {
 					taskID := ""
-					if taskIDValue := ctx.Value("taskID"); taskIDValue != nil {
+					if taskIDValue := ctx.Value(taskIDContextKey); taskIDValue != nil {
 						if tid, ok := taskIDValue.(string); ok {
 							taskID = tid
 						}
@@ -388,7 +388,7 @@ func (a *Agent) execute(
 
 						// Add user's response and extract decision
 						decision := parseUserDecision(userMessage)
-						ctx = context.WithValue(ctx, "userDecision", decision)
+						ctx = context.WithValue(ctx, userDecisionContextKey, decision)
 
 						// Update task back to WORKING state
 						_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil)

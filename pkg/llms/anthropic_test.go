@@ -1,6 +1,7 @@
 package llms
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -167,7 +168,7 @@ func TestAnthropicProvider_Generate_Success(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	text, toolCalls, tokens, err := provider.Generate(messages, tools)
+	text, toolCalls, tokens, err := provider.Generate(context.Background(), messages, tools)
 
 	if err != nil {
 		t.Errorf("Generate() error = %v, want nil", err)
@@ -251,7 +252,7 @@ func TestAnthropicProvider_Generate_WithTools(t *testing.T) {
 		},
 	}
 
-	text, toolCalls, tokens, err := provider.Generate(messages, tools)
+	text, toolCalls, tokens, err := provider.Generate(context.Background(), messages, tools)
 
 	if err != nil {
 		t.Errorf("Generate() error = %v, want nil", err)
@@ -298,7 +299,7 @@ func TestAnthropicProvider_Generate_HTTPError(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	_, _, _, err = provider.Generate(messages, tools)
+	_, _, _, err = provider.Generate(context.Background(), messages, tools)
 
 	if err == nil {
 		t.Error("Generate() expected error, got nil")
@@ -330,7 +331,7 @@ func TestAnthropicProvider_Generate_InvalidJSON(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	_, _, _, err = provider.Generate(messages, tools)
+	_, _, _, err = provider.Generate(context.Background(), messages, tools)
 
 	if err == nil {
 		t.Error("Generate() expected error, got nil")
@@ -400,7 +401,7 @@ data: {"type": "message_stop"}`,
 	}
 	tools := []ToolDefinition{}
 
-	ch, err := provider.GenerateStreaming(messages, tools)
+	ch, err := provider.GenerateStreaming(context.Background(), messages, tools)
 
 	if err != nil {
 		t.Errorf("GenerateStreaming() error = %v, want nil", err)
@@ -452,7 +453,7 @@ func TestAnthropicProvider_GenerateStreaming_Error(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	ch, err := provider.GenerateStreaming(messages, tools)
+	ch, err := provider.GenerateStreaming(context.Background(), messages, tools)
 
 	if err != nil {
 
@@ -517,7 +518,7 @@ func TestAnthropicProvider_WithCustomHTTPClient(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	text, _, tokens, err := provider.Generate(messages, tools)
+	text, _, tokens, err := provider.Generate(context.Background(), messages, tools)
 
 	if err != nil {
 		t.Errorf("Generate() error = %v, want nil", err)

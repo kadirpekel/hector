@@ -34,7 +34,7 @@ func (a *Agent) filterToolCallsWithApproval(
 
 	// Get taskID from context if available
 	taskID := ""
-	if taskIDValue := ctx.Value("taskID"); taskIDValue != nil {
+	if taskIDValue := ctx.Value(taskIDContextKey); taskIDValue != nil {
 		if tid, ok := taskIDValue.(string); ok {
 			taskID = tid
 		}
@@ -42,7 +42,7 @@ func (a *Agent) filterToolCallsWithApproval(
 
 	// Check if we're resuming from INPUT_REQUIRED state with a user decision
 	userDecision := ""
-	if decisionValue := ctx.Value("userDecision"); decisionValue != nil {
+	if decisionValue := ctx.Value(userDecisionContextKey); decisionValue != nil {
 		if decision, ok := decisionValue.(string); ok {
 			userDecision = decision
 		}

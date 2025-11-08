@@ -184,7 +184,7 @@ func (t *GrepSearchTool) Execute(ctx context.Context, args map[string]interface{
 	var filesToSearch []string
 	if fileInfo.IsDir() {
 		if recursive {
-			err = filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
+			_ = filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return nil // skip errors
 				}

@@ -147,7 +147,7 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, args map[string]interface{
 
 	if !strings.Contains(originalContent, oldString) {
 		return t.errorResult(
-			fmt.Sprintf("patch context not found in file. The old_string must match exactly including whitespace."),
+			"patch context not found in file. The old_string must match exactly including whitespace.",
 			start), fmt.Errorf("patch not applicable")
 	}
 

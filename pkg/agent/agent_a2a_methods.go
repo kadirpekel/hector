@@ -19,6 +19,14 @@ import (
 // SessionIDKey is re-exported from protocol package for backward compatibility
 const SessionIDKey = protocol.SessionIDKey
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const (
+	taskIDContextKey       contextKey = "taskID"
+	userDecisionContextKey contextKey = "userDecision"
+)
+
 func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
 	if req.Request == nil {
 		return nil, status.Error(codes.InvalidArgument, "request message cannot be nil")
@@ -218,7 +226,7 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 		}()
 
 		// Add taskID to context for tool approval
-		ctx = context.WithValue(ctx, "taskID", task.Id)
+		ctx = context.WithValue(ctx, taskIDContextKey, task.Id)
 
 		streamCh, err := a.execute(ctx, userText, strategy)
 		if err != nil {
@@ -590,7 +598,7 @@ func (a *Agent) processTaskAsync(taskID, userText, contextID string) {
 	ctx := context.Background()
 
 	// Add taskID to context for tool approval logic
-	ctx = context.WithValue(ctx, "taskID", taskID)
+	ctx = context.WithValue(ctx, taskIDContextKey, taskID)
 
 	// Create cancellable context for this task execution
 	ctx, cancel := context.WithCancel(ctx)
@@ -693,7 +701,7 @@ func (a *Agent) executeReasoningWithHITL(ctx context.Context, userText string, c
 
 		// Add user's response to context for next iteration
 		decision := parseUserDecision(userMessage)
-		ctx = context.WithValue(ctx, "userDecision", decision)
+		ctx = context.WithValue(ctx, userDecisionContextKey, decision)
 
 		// Update task back to WORKING state
 		_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil)
