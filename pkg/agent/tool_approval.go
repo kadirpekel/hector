@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -13,6 +14,7 @@ import (
 // ToolApprovalResult represents the result of tool approval check
 type ToolApprovalResult struct {
 	ApprovedCalls   []*protocol.ToolCall // Tools that were approved
+	DeniedCalls     []*protocol.ToolCall // Tools that were denied by user
 	NeedsUserInput  bool                 // If true, task should pause for INPUT_REQUIRED
 	InteractionMsg  *pb.Message          // Message to send in INPUT_REQUIRED state
 	PendingToolCall *protocol.ToolCall   // The tool call waiting for approval
@@ -29,6 +31,7 @@ func (a *Agent) filterToolCallsWithApproval(
 
 	result := &ToolApprovalResult{
 		ApprovedCalls:  make([]*protocol.ToolCall, 0, len(toolCalls)),
+		DeniedCalls:    make([]*protocol.ToolCall, 0),
 		NeedsUserInput: false,
 	}
 
@@ -77,11 +80,12 @@ func (a *Agent) filterToolCallsWithApproval(
 
 			case "deny":
 				log.Printf("[HITL] User denied tool %s", call.Name)
-				// Skip this tool (don't add to approved list)
+				result.DeniedCalls = append(result.DeniedCalls, call)
 
 			default:
 				// Unknown decision, deny for safety
 				log.Printf("[HITL] Unknown decision '%s', denying tool %s", userDecision, call.Name)
+				result.DeniedCalls = append(result.DeniedCalls, call)
 			}
 
 			continue // Move to next tool call
@@ -98,8 +102,12 @@ func (a *Agent) filterToolCallsWithApproval(
 		// Create approval request message (A2A compliant)
 		customPrompt := getApprovalPrompt(toolConfig)
 		// Convert Args to JSON string for display
-		argsJSON := fmt.Sprintf("%v", call.Args)
-		interactionMsg := createToolApprovalMessage(call.Name, argsJSON, customPrompt)
+		argsJSON, err := json.Marshal(call.Args)
+		argsStr := string(argsJSON)
+		if err != nil {
+			argsStr = fmt.Sprintf("%v", call.Args)
+		}
+		interactionMsg := createToolApprovalMessage(call.Name, argsStr, customPrompt)
 
 		result.NeedsUserInput = true
 		result.InteractionMsg = interactionMsg

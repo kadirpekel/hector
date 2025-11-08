@@ -1066,10 +1066,12 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 		// Reuse the existing streaming logic with the context that has agent metadata
 		var req pb.SendMessageRequest
 		mappedParams := applyA2AFieldMapping(rpcReq.Params)
+		log.Printf("[DEBUG] JSON-RPC params after mapping: %s", string(mappedParams))
 		if err := g.unmarshaler.Unmarshal(mappedParams, &req); err != nil {
 			g.sendSSEError(w, fmt.Sprintf("Invalid params: %v", err))
 			return
 		}
+		log.Printf("[DEBUG] Unmarshaled request - TaskId: %s", req.Request.GetTaskId())
 
 		// Set contextId as session ID for memory persistence
 		if req.Request != nil && req.Request.ContextId != "" {

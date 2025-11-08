@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -52,13 +53,22 @@ func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*p
 	// A2A Protocol Section 6.3: Check if this is a continuation of an existing task
 	// (multi-turn conversation for INPUT_REQUIRED state)
 	if userMessage.TaskId != "" && a.services.Task() != nil {
+		log.Printf("[DEBUG] Received message with TaskId: %s", userMessage.TaskId)
 		existingTask, err := a.services.Task().GetTask(ctx, userMessage.TaskId)
+		if err != nil {
+			log.Printf("[DEBUG] Failed to get task %s: %v", userMessage.TaskId, err)
+		} else {
+			log.Printf("[DEBUG] Task %s state: %v", userMessage.TaskId, existingTask.Status.State)
+		}
 		if err == nil && existingTask.Status.State == pb.TaskState_TASK_STATE_INPUT_REQUIRED {
+			log.Printf("[DEBUG] Resuming INPUT_REQUIRED task %s", userMessage.TaskId)
 			// Task is waiting for user input - provide it and resume
 			if err := a.taskAwaiter.ProvideInput(userMessage.TaskId, userMessage); err != nil {
+				log.Printf("[DEBUG] Failed to provide input: %v", err)
 				return nil, status.Errorf(codes.InvalidArgument, "failed to resume task: %v", err)
 			}
 
+			log.Printf("[DEBUG] Successfully provided input, task will resume")
 			// Don't add approval messages to task history - they're internal control messages
 			// The decision is extracted and applied by the waiting goroutine
 			// Adding them to history would confuse the LLM
@@ -71,6 +81,8 @@ func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*p
 				},
 			}, nil
 		}
+	} else {
+		log.Printf("[DEBUG] TaskId empty or no task service: TaskId=%s, TaskService=%v", userMessage.TaskId, a.services.Task() != nil)
 	}
 
 	if a.services.Task() != nil {
@@ -171,6 +183,34 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 	}
 
 	ctx := stream.Context()
+
+	// A2A Protocol Section 6.3: Check if this is a continuation of an existing task
+	// (multi-turn conversation for INPUT_REQUIRED state)
+	if userMessage.TaskId != "" && a.services.Task() != nil {
+		log.Printf("[DEBUG] Streaming: Received message with TaskId: %s", userMessage.TaskId)
+		existingTask, err := a.services.Task().GetTask(ctx, userMessage.TaskId)
+		if err != nil {
+			log.Printf("[DEBUG] Streaming: Failed to get task %s: %v", userMessage.TaskId, err)
+		} else {
+			log.Printf("[DEBUG] Streaming: Task %s state: %v", userMessage.TaskId, existingTask.Status.State)
+		}
+		if err == nil && existingTask.Status.State == pb.TaskState_TASK_STATE_INPUT_REQUIRED {
+			log.Printf("[DEBUG] Streaming: Resuming INPUT_REQUIRED task %s", userMessage.TaskId)
+			// Task is waiting for user input - provide it and resume
+			if err := a.taskAwaiter.ProvideInput(userMessage.TaskId, userMessage); err != nil {
+				log.Printf("[DEBUG] Streaming: Failed to provide input: %v", err)
+				return status.Errorf(codes.InvalidArgument, "failed to resume task: %v", err)
+			}
+
+			log.Printf("[DEBUG] Streaming: Successfully provided input, task will resume")
+			// Don't add approval messages to task history - they're internal control messages
+			// Task will resume execution in background goroutine
+			// Just return success - the task is already running
+			return nil
+		}
+	} else {
+		log.Printf("[DEBUG] Streaming: TaskId empty or no task service: TaskId=%s, TaskService=%v", userMessage.TaskId, a.services.Task() != nil)
+	}
 
 	if a.services.Task() != nil {
 		task, err := a.services.Task().CreateTask(ctx, contextID, userMessage)

@@ -29,6 +29,8 @@ tools:
       - "git"
       - "npm"
       - "rm"
+      - "find"
+      - "wc"
     working_directory: "./"
     max_execution_time: "30s"
   

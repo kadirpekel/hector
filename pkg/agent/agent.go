@@ -379,6 +379,9 @@ func (a *Agent) execute(
 							}
 						}
 
+
+					// Store tool name before waiting (will be nil after re-running filter)
+					pendingToolName := approvalResult.PendingToolCall.Name
 						// Wait for user approval inline (don't return - keep goroutine alive)
 						userMessage, err := a.taskAwaiter.WaitForInput(ctx, taskID, 0)
 						if err != nil {
@@ -390,11 +393,26 @@ func (a *Agent) execute(
 						decision := parseUserDecision(userMessage)
 						ctx = context.WithValue(ctx, userDecisionContextKey, decision)
 
+						// Re-run approval filter with user's decision in context
+						approvalResult, err = a.filterToolCallsWithApproval(ctx, toolCalls, a.componentManager.GetGlobalConfig().Tools)
+						if err != nil {
+							outputCh <- createTextPart(fmt.Sprintf("Error re-checking tool approval: %v\n", err))
+							return
+						}
+
 						// Update task back to WORKING state
 						_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil)
 
-						// Continue execution with user's decision in context
-						// The approval filter will now apply the decision
+					// Send confirmation message to indicate interaction was resolved
+					if decision == "approve" {
+						confirmMsg := fmt.Sprintf("✅ Approved: %s", pendingToolName)
+						outputCh <- createTextPart(confirmMsg)
+					} else {
+						confirmMsg := fmt.Sprintf("🚫 Denied: %s", pendingToolName)
+						outputCh <- createTextPart(confirmMsg)
+					}
+
+						// Continue execution with user's decision applied
 					} else {
 						// No taskID - can't request approval, deny the tool
 						outputCh <- createTextPart("⚠️  Tool requires approval but task tracking not enabled, denying\n")
@@ -402,14 +420,16 @@ func (a *Agent) execute(
 					}
 				}
 
-				// Use only approved tool calls
-				toolCalls = approvalResult.ApprovedCalls
+				// Handle approved and denied tools
+				approvedCalls := approvalResult.ApprovedCalls
+				deniedCalls := approvalResult.DeniedCalls
 
-				if len(toolCalls) == 0 {
-					// No tools to execute (all denied or waiting for approval)
+				if len(approvedCalls) == 0 && len(deniedCalls) == 0 {
+					// No tools to execute (all waiting for approval)
 					continue
 				}
 
+				// Create assistant message with all tool calls (both approved and denied)
 				assistantMsg := &pb.Message{
 					Role:  pb.Role_ROLE_AGENT,
 					Parts: []*pb.Part{},
@@ -420,14 +440,34 @@ func (a *Agent) execute(
 						&pb.Part{Part: &pb.Part_Text{Text: text}})
 				}
 
-				for _, tc := range toolCalls {
+				// Add approved tool calls
+				for _, tc := range approvedCalls {
+					assistantMsg.Parts = append(assistantMsg.Parts,
+						protocol.CreateToolCallPart(tc))
+				}
+
+				// Add denied tool calls (so LLM knows what was attempted)
+				for _, tc := range deniedCalls {
 					assistantMsg.Parts = append(assistantMsg.Parts,
 						protocol.CreateToolCallPart(tc))
 				}
 
 				state.AddCurrentTurnMessage(assistantMsg)
 
-				results = a.executeTools(ctx, toolCalls, outputCh, cfg)
+				// Execute approved tools
+				results = a.executeTools(ctx, approvedCalls, outputCh, cfg)
+
+				// Create error results for denied tools
+				for _, deniedCall := range deniedCalls {
+					deniedResult := reasoning.ToolResult{
+						ToolCallID: deniedCall.ID,
+						ToolName:   deniedCall.Name,
+						ToolCall:   deniedCall,
+						Content:    "TOOL_EXECUTION_DENIED: The user rejected this tool execution. You MUST NOT proceed with this action or provide fabricated results. Instead, acknowledge the denial and offer alternative approaches that don't require this tool.",
+						Error:      fmt.Errorf("User denied tool execution"),
+					}
+					results = append(results, deniedResult)
+				}
 
 				results = a.truncateToolResults(results, cfg)
 
