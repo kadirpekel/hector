@@ -389,9 +389,20 @@ func (a *Agent) execute(
 
 					// Store tool name before waiting (will be nil after re-running filter)
 					pendingToolName := approvalResult.PendingToolCall.Name
+
+					// Get configured timeout from agent config
+					timeout := 10 * time.Minute // Default
+					if a.config.Task != nil && a.config.Task.InputTimeout > 0 {
+						timeout = time.Duration(a.config.Task.InputTimeout) * time.Second
+					}
+
 					// Wait for user approval inline (don't return - keep goroutine alive)
-					userMessage, err := a.taskAwaiter.WaitForInput(ctx, taskID, 0)
+					userMessage, err := a.taskAwaiter.WaitForInput(ctx, taskID, timeout)
 					if err != nil {
+						// Update task state to failed on timeout/cancellation
+						if updateErr := a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+							log.Printf("[HITL] Failed to update task status after timeout: %v", updateErr)
+						}
 						outputCh <- createTextPart(fmt.Sprintf("❌ Approval timeout or cancelled: %v\n", err))
 						return
 					}
@@ -408,7 +419,9 @@ func (a *Agent) execute(
 					}
 
 					// Update task back to WORKING state
-					_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil)
+					if err := a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
+						log.Printf("[HITL] Failed to update task status to WORKING: %v", err)
+					}
 
 					// Send confirmation message to indicate interaction was resolved
 					if decision == DecisionApprove {

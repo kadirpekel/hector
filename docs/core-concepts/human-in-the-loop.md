@@ -144,14 +144,14 @@ When a task requires input, the `TaskStatus` looks like:
       "role": "ROLE_AGENT",
       "parts": [
         {
-          "text": "🔐 Tool Approval Required\n\nTool: execute_command\nInput: rm -rf /tmp/old-files\n\nPlease respond with one of: approve, deny, modify"
+          "text": "🔐 Tool Approval Required\n\nTool: execute_command\nInput: rm -rf /tmp/old-files\n\nPlease respond with: approve or deny"
         },
         {
           "data": {
             "interaction_type": "tool_approval",
             "tool_name": "execute_command",
             "tool_input": "rm -rf /tmp/old-files",
-            "options": ["approve", "deny", "modify"]
+            "options": ["approve", "deny"]
           }
         }
       ]
@@ -269,7 +269,7 @@ async function executeWithApproval() {
     console.log(textPart.text); // Display to user
     
     // Get user decision
-    const decision = await prompt('Approve? (approve/deny/modify)');
+        const decision = await prompt('Approve? (approve/deny)');
     
     // Send response with SAME taskId (A2A multi-turn)
     task = await client.sendMessage('assistant', {
@@ -313,7 +313,7 @@ def execute_with_approval():
         print(text_part['text'])
         
         # Get user decision
-        decision = input('Approve? (approve/deny/modify): ')
+        decision = input('Approve? (approve/deny): ')
         
         # Send response with same taskId (A2A multi-turn)
         task = client.send_message('assistant', {
@@ -361,24 +361,6 @@ Skip the tool execution:
   "parts": [
     {"text": "deny"},
     {"data": {"decision": "deny"}}
-  ]
-}
-```
-
-### 3. Modify
-
-Modify tool parameters (currently experimental):
-
-```json
-{
-  "role": "user",
-  "taskId": "task-abc123",
-  "parts": [
-    {"text": "modify"},
-    {"data": {
-      "decision": "modify",
-      "modified_input": "{\"command\": \"ls -la /tmp\"}"
-    }}
   ]
 }
 ```

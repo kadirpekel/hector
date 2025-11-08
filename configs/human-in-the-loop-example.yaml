@@ -106,7 +106,7 @@ agents:
         
         1. The system will automatically pause execution
         2. Request user approval with tool details
-        3. Wait for user to approve, deny, or modify the operation
+        3. Wait for user to approve or deny the operation
         4. Resume execution based on user's decision
         
         Always explain what you're going to do before using potentially dangerous tools.

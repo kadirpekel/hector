@@ -56,13 +56,17 @@ func (a *TaskAwaiter) WaitForInput(
 	// Cleanup on exit - safely remove from map and close channel
 	defer func() {
 		a.mu.Lock()
+		defer a.mu.Unlock()
 		// Check if still in map (might have been removed by CancelWaiting)
 		if ch, exists := a.waiting[taskID]; exists && ch == inputCh {
 			delete(a.waiting, taskID)
-			a.mu.Unlock()
-			close(inputCh)
-		} else {
-			a.mu.Unlock()
+			// Only close if we own it (not already closed by CancelWaiting)
+			select {
+			case <-inputCh:
+				// Channel already closed
+			default:
+				close(inputCh)
+			}
 		}
 	}()
 
@@ -95,18 +99,20 @@ func (a *TaskAwaiter) ProvideInput(taskID string, message *pb.Message) error {
 	}
 
 	// Deliver message (non-blocking to prevent deadlock)
-	// Use defer/recover to handle potential send-on-closed-channel panic
-	defer func() {
-		if r := recover(); r != nil {
-			// Channel was closed between RLock and send
-		}
-	}()
-
+	// Channel is buffered (size 1) so this should not block
 	select {
 	case ch <- message:
 		return nil
 	default:
-		return fmt.Errorf("task already received input: %s", taskID)
+		// Channel is full or closed - check if closed
+		select {
+		case <-ch:
+			// Channel was closed
+			return fmt.Errorf("task waiting was cancelled: %s", taskID)
+		default:
+			// Channel is full (shouldn't happen with buffered channel of size 1)
+			return fmt.Errorf("task already received input: %s", taskID)
+		}
 	}
 }
 

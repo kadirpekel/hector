@@ -98,15 +98,8 @@ func (a *Agent) filterToolCallsWithApproval(
 		}
 
 		// No user decision yet - need to request approval
-		// NOTE: Currently handles one tool approval at a time.
-		// Future enhancement: Batch approvals by collecting all tools requiring approval,
-		// presenting them together, and handling a structured batch response.
-		// This would require:
-		//   1. Collecting all approval-required tools instead of early return
-		//   2. Creating a batch approval message with multiple tools
-		//   3. Parsing batch response (e.g., {"approvals": {"tool1": "approve", "tool2": "deny"}})
-		//   4. UI updates to display and handle multiple approvals
-		//   5. Updating createInteractionMessage to support batch mode
+		// Currently handles one tool approval at a time for simplicity and clarity.
+		// This ensures users can make informed decisions about each tool call individually.
 		if taskID == "" {
 			// Can't request approval without task ID (non-async mode)
 			log.Printf("[HITL] Warning: Tool %s requires approval but no taskID available, denying", call.Name)
