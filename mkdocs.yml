@@ -92,7 +92,6 @@ nav:
     - CLI Reference: reference/cli.md
     - Configuration: reference/configuration.md
     - Distributed Configuration: reference/distributed-configuration.md
-    - Config Pointer Pattern: config-pointer-pattern.md
     - API Reference: reference/api.md
     - Architecture:
       - System Design: reference/architecture.md
