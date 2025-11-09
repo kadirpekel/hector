@@ -26,9 +26,6 @@ import (
 //go:embed static/index.html
 var webUIHTML []byte
 
-//go:embed static/letter-h.png
-var letterHPNG []byte
-
 // Context key type for auth claims
 type contextKey string
 
@@ -159,14 +156,6 @@ func (g *RESTGateway) setupRouting() http.Handler {
 	r.Get("/", g.handleWebUI)
 	log.Printf("   → Web UI: /")
 
-	// Static assets
-	r.Get("/letter-h.png", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "image/png")
-		w.Header().Set("Cache-Control", "public, max-age=31536000")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(letterHPNG)
-	})
-
 	// Health check (operational endpoint, not agent-specific)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -282,10 +271,9 @@ func (g *RESTGateway) applyAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Public endpoints that don't require authentication
 		publicPaths := []string{
-			"/",             // Web UI
-			"/letter-h.png", // Static assets
-			"/health",       // Health checks
-			"/metrics",      // Prometheus metrics
+			"/",        // Web UI
+			"/health",  // Health checks
+			"/metrics", // Prometheus metrics
 		}
 
 		// Check if this is a public endpoint

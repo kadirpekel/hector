@@ -450,6 +450,7 @@ func CreateZeroConfig(source interface{}) *Config {
 	role := extractStringField(source, "Role")
 	instruction := extractStringField(source, "Instruction")
 	enableTools := extractBoolField(source, "Tools")
+	thinking := extractBoolField(source, "Thinking")
 	mcpURL := extractStringField(source, "MCPURL")
 	docsFolder := extractStringField(source, "DocsFolder")
 	embedderModel := extractStringField(source, "EmbedderModel")
@@ -567,6 +568,9 @@ func CreateZeroConfig(source interface{}) *Config {
 	} else {
 		agentConfig.Tools = []string{}
 	}
+
+	// Set thinking flag (disabled by default, enabled when --thinking is provided)
+	agentConfig.Reasoning.ShowThinking = BoolPtr(thinking)
 
 	cfg.Agents = map[string]*AgentConfig{
 		agentName: &agentConfig,
