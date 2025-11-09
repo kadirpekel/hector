@@ -355,9 +355,9 @@ func (ds *DocumentStore) indexDocument(doc *indexing.Document) error {
 	// Step 5: Prepare base metadata for all chunks
 	baseMetadata := make(map[string]interface{})
 
-	// Copy all metadata from document
+	// Copy all metadata from document, normalizing time.Time values
 	for k, v := range doc.Metadata {
-		baseMetadata[k] = v
+		baseMetadata[k] = normalizeMetadataValue(v)
 	}
 
 	// Add standard fields
@@ -488,6 +488,24 @@ func (ds *DocumentStore) detectDocumentType(doc *indexing.Document) (string, str
 	}
 
 	return DocumentTypeUnknown, "unknown"
+}
+
+// normalizeMetadataValue converts unsupported types (like time.Time) to supported types
+// for vector database storage. Qdrant and other databases may not support all Go types.
+func normalizeMetadataValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case time.Time:
+		// Convert time.Time to RFC3339 string format
+		return v.Format(time.RFC3339)
+	case *time.Time:
+		if v != nil {
+			return v.Format(time.RFC3339)
+		}
+		return nil
+	default:
+		// Return as-is for supported types (string, int, float, bool, etc.)
+		return value
+	}
 }
 
 // detectMIMEType detects the MIME type of a file

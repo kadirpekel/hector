@@ -295,7 +295,7 @@ func (ds *DocumentStore) indexFromDataSource() error {
 					ds.progressTracker.IncrementFailed()
 					ds.progressTracker.IncrementProcessed()
 					failedDocsMu.Lock()
-					failedDocs = append(failedDocs, d.ID)
+					failedDocs = append(failedDocs, fmt.Sprintf("%s: %v", d.ID, err))
 					failedDocsMu.Unlock()
 
 					// Don't log errors during indexing to avoid breaking progress bar display
