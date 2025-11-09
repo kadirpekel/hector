@@ -358,6 +358,7 @@ func (c *EmbedderProviderConfig) Validate() error {
 	if c.Model == "" {
 		return fmt.Errorf("model is required")
 	}
+	// Host is required for all embedder types (defaults are set in SetDefaults)
 	if c.Host == "" {
 		return fmt.Errorf("host is required")
 	}
@@ -374,22 +375,77 @@ func (c *EmbedderProviderConfig) Validate() error {
 }
 
 func (c *EmbedderProviderConfig) SetDefaults() {
-
+	// Set type default if not specified
 	if c.Type == "" {
 		c.Type = "ollama"
 	}
+
+	// Set model defaults based on type if not specified
 	if c.Model == "" {
-		c.Model = "nomic-embed-text"
+		switch c.Type {
+		case "ollama":
+			c.Model = "nomic-embed-text"
+		case "openai":
+			c.Model = "text-embedding-3-small"
+		case "cohere":
+			c.Model = "embed-english-v3.0"
+		default:
+			c.Model = "nomic-embed-text" // Fallback to Ollama default
+		}
 	}
+
+	// Set Host defaults based on type (all providers have explicit defaults)
 	if c.Host == "" {
-		c.Host = "http://localhost:11434"
+		switch c.Type {
+		case "ollama":
+			c.Host = "http://localhost:11434"
+		case "openai":
+			c.Host = "https://api.openai.com/v1"
+		case "cohere":
+			c.Host = "https://api.cohere.ai/v1"
+		}
 	}
+
+	// Set dimension defaults based on type and model if not specified
 	if c.Dimension == 0 {
-		c.Dimension = 768
+		switch c.Type {
+		case "openai":
+			switch c.Model {
+			case "text-embedding-3-small":
+				c.Dimension = 1536
+			case "text-embedding-3-large":
+				c.Dimension = 3072
+			case "text-embedding-ada-002":
+				c.Dimension = 1536
+			default:
+				c.Dimension = 1536 // Default for OpenAI
+			}
+		case "cohere":
+			switch c.Model {
+			case "embed-english-v3.0":
+				c.Dimension = 1024
+			case "embed-multilingual-v3.0":
+				c.Dimension = 1024
+			case "embed-english-light-v3.0":
+				c.Dimension = 384
+			case "embed-multilingual-light-v3.0":
+				c.Dimension = 384
+			default:
+				c.Dimension = 1024 // Default for Cohere
+			}
+		case "ollama":
+			c.Dimension = 768 // Default for Ollama
+		default:
+			c.Dimension = 768 // Fallback default
+		}
 	}
+
+	// Set timeout default if not specified
 	if c.Timeout == 0 {
 		c.Timeout = 30
 	}
+
+	// Set max retries default if not specified
 	if c.MaxRetries == 0 {
 		c.MaxRetries = 3
 	}
