@@ -420,13 +420,29 @@ func (p *OllamaProvider) buildRequest(messages []*pb.Message, stream bool, tools
 		Model:    p.config.Model,
 		Messages: ollamaMessages,
 		Stream:   stream,
-		Options: &OllamaOptions{
-			Temperature: p.config.Temperature,
-			NumPredict:  p.config.MaxTokens,
-		},
-		// Enable thinking by default for supported models (Qwen3, GPT-OSS, DeepSeek, etc.)
-		// Models that don't support it will ignore this field
-		Think: true,
+	}
+
+	// Add Options only if we have meaningful values
+	// SetDefaults ensures Temperature and MaxTokens have defaults, so we'll always have values
+	// But we should still check to avoid sending empty Options
+	if p.config.Temperature > 0 || p.config.MaxTokens > 0 {
+		opts := &OllamaOptions{}
+		if p.config.Temperature > 0 {
+			opts.Temperature = p.config.Temperature
+		}
+		if p.config.MaxTokens > 0 {
+			opts.NumPredict = p.config.MaxTokens
+		}
+		// Only add Options if at least one field is set
+		if opts.Temperature > 0 || opts.NumPredict > 0 {
+			request.Options = opts
+		}
+	}
+
+	// Enable thinking for known thinking-capable models
+	// Models that don't support it will ignore this field or return an error
+	if p.isThinkingCapableModel(p.config.Model) {
+		request.Think = true
 	}
 
 	// Set format for structured output
@@ -441,12 +457,47 @@ func (p *OllamaProvider) buildRequest(messages []*pb.Message, stream bool, tools
 	}
 
 	// Add tools if provided
+	// Note: Some models (like deepseek-r1:8b) don't support tools
+	// We'll send them anyway and let Ollama return an error if unsupported
 	if len(tools) > 0 {
 		request.Tools = p.convertToOllamaTools(tools)
 		request.ToolChoice = "auto"
 	}
 
 	return request
+}
+
+// isThinkingCapableModel checks if a model name indicates it supports thinking
+func (p *OllamaProvider) isThinkingCapableModel(modelName string) bool {
+	modelLower := strings.ToLower(modelName)
+	// Check for known thinking-capable model patterns
+	// Note: Not all variants support thinking (e.g., qwen3-coder:30b doesn't support thinking)
+	thinkingModels := []string{
+		"qwen3",           // Qwen3 base models support thinking
+		"deepseek-r1",     // DeepSeek R1 models support thinking
+		"deepseek-v3",     // DeepSeek V3 models support thinking
+		"gpt-oss",         // GPT-OSS supports thinking
+	}
+	// Exclude models that don't support thinking despite matching patterns
+	excludedModels := []string{
+		"qwen3-coder", // Qwen3-coder variants don't support thinking
+		"qwen2-coder", // Qwen2-coder variants don't support thinking
+	}
+	
+	// Check exclusions first
+	for _, excluded := range excludedModels {
+		if strings.Contains(modelLower, excluded) {
+			return false
+		}
+	}
+	
+	// Check if model matches thinking-capable patterns
+	for _, pattern := range thinkingModels {
+		if strings.Contains(modelLower, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *OllamaProvider) convertToOllamaTools(tools []ToolDefinition) []OllamaTool {
@@ -538,14 +589,31 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.httpClient.Do(req)
+	// HTTP client may return both response and error for non-2xx status codes
+	// We need to check the response body even if there's an error
+	if resp != nil {
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			bodyBytes, readErr := io.ReadAll(resp.Body)
+			errorBody := string(bodyBytes)
+			if readErr != nil {
+				errorBody = fmt.Sprintf("(failed to read error body: %v)", readErr)
+			}
+			// Try to extract error message from JSON if present
+			var errorJSON struct {
+				Error string `json:"error"`
+			}
+			if json.Unmarshal(bodyBytes, &errorJSON) == nil && errorJSON.Error != "" {
+				return fmt.Errorf("Ollama API error: %s", errorJSON.Error)
+			}
+			return fmt.Errorf("Ollama API request failed with status %d: %s", resp.StatusCode, errorBody)
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("failed to make streaming request: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	if resp == nil {
+		return fmt.Errorf("failed to make streaming request: no response received")
 	}
 
 	reader := bufio.NewReader(resp.Body)

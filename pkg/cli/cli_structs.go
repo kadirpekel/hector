@@ -17,7 +17,7 @@ var CLI struct {
 }
 
 type ZeroConfigFlags struct {
-	Provider      string `help:"LLM provider" enum:"openai,anthropic,gemini" default:"openai" env:"HECTOR_PROVIDER"`
+	Provider      string `help:"LLM provider" enum:"openai,anthropic,gemini,ollama" default:"openai" env:"HECTOR_PROVIDER"`
 	Model         string `help:"LLM model name" env:"HECTOR_MODEL"`
 	APIKey        string `name:"api-key" help:"API key for LLM provider (overrides env vars)"`
 	BaseURL       string `name:"base-url" help:"Custom API base URL" env:"HECTOR_BASE_URL" placeholder:"URL"`

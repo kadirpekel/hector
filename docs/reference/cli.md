@@ -257,7 +257,7 @@ When using zero-config mode (no `--config` flag), use these to configure quickly
 |------|------|-------------|---------|
 | `--api-key KEY` | string | LLM API key | From env |
 | `--model NAME` | string | Model name | `gpt-4o-mini` |
-| `--provider NAME` | string | LLM provider (openai/anthropic/gemini) | `openai` |
+| `--provider NAME` | string | LLM provider (openai/anthropic/gemini/ollama) | `openai` |
 | `--role TEXT` | string | Set agent identity (WHO, merges with strategy) | - |
 | `--instruction TEXT` | string | Add user guidance (WHAT, highest priority) | - |
 | `--tools` | bool | Enable all built-in tools | `false` |

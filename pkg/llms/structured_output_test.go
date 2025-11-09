@@ -120,6 +120,7 @@ func TestStructuredOutputProviderInterface(t *testing.T) {
 	var _ StructuredOutputProvider = (*OpenAIProvider)(nil)
 	var _ StructuredOutputProvider = (*AnthropicProvider)(nil)
 	var _ StructuredOutputProvider = (*GeminiProvider)(nil)
+	var _ StructuredOutputProvider = (*OllamaProvider)(nil)
 }
 
 func TestProviderSupportsStructuredOutput(t *testing.T) {
@@ -143,6 +144,11 @@ func TestProviderSupportsStructuredOutput(t *testing.T) {
 		{
 			name:     "Gemini supports structured output",
 			provider: &GeminiProvider{},
+			expected: true,
+		},
+		{
+			name:     "Ollama supports structured output",
+			provider: &OllamaProvider{},
 			expected: true,
 		},
 	}
