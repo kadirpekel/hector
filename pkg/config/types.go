@@ -226,6 +226,8 @@ func (c *LLMProviderConfig) Validate() error {
 			return fmt.Errorf("api_key is required for Anthropic")
 		case "gemini":
 			return fmt.Errorf("api_key is required for Gemini")
+		case "ollama":
+			// Ollama doesn't require API key for local deployments
 		}
 	}
 	if c.Temperature < 0 || c.Temperature > 2 {
@@ -259,6 +261,8 @@ func (c *LLMProviderConfig) SetDefaults() {
 			c.Model = DefaultAnthropicModel
 		case "gemini":
 			c.Model = DefaultGeminiModel
+		case "ollama":
+			c.Model = "llama3.2" // Default Ollama model
 		default:
 			c.Model = DefaultOpenAIModel
 		}
@@ -272,6 +276,8 @@ func (c *LLMProviderConfig) SetDefaults() {
 			c.Host = "https://api.anthropic.com"
 		case "gemini":
 			c.Host = "https://generativelanguage.googleapis.com"
+		case "ollama":
+			c.Host = "http://localhost:11434"
 		default:
 			c.Host = "https://api.openai.com/v1"
 		}
