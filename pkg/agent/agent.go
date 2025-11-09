@@ -555,32 +555,52 @@ func (a *Agent) callLLM(
 	if cfg.EnableStreaming != nil && *cfg.EnableStreaming {
 
 		var streamedText strings.Builder
-		wrappedCh := make(chan string, 100)
-		done := make(chan struct{})
+		var streamedThinking strings.Builder
+		llmService := a.services.LLM()
 
-		go func() {
-			defer close(done)
-			for chunk := range wrappedCh {
-				streamedText.WriteString(chunk)
-
-				select {
-				case outputCh <- createTextPart(chunk):
-				case <-ctx.Done():
-					return
-				}
-			}
-		}()
-
-		toolCalls, tokens, err := llm.GenerateStreaming(ctx, messages, toolDefs, wrappedCh)
-
-		close(wrappedCh)
-		<-done
-
+		// Use GenerateStreamingChunks to get raw StreamChunks with proper abstraction
+		streamCh, err := llmService.GenerateStreamingChunks(ctx, messages, toolDefs)
 		if err != nil {
 			return "", nil, 0, err
 		}
 
-		return streamedText.String(), toolCalls, tokens, nil
+		var accumulatedToolCalls []*protocol.ToolCall
+		var tokens int
+		var currentThinkingBlockID string
+
+		for chunk := range streamCh {
+			switch chunk.Type {
+			case "text":
+				streamedText.WriteString(chunk.Text)
+				outputCh <- createTextPart(chunk.Text)
+			case "thinking":
+				// Create thinking part with AG-UI metadata
+				if currentThinkingBlockID == "" {
+					currentThinkingBlockID = fmt.Sprintf("think-%d", time.Now().UnixNano())
+					// Start of thinking block - create thinking part
+					thinkingPart := protocol.CreateThinkingPart("", currentThinkingBlockID, 0)
+					outputCh <- thinkingPart
+				}
+				streamedThinking.WriteString(chunk.Text)
+				// Emit thinking delta as text part with thinking metadata
+				thinkingPart := protocol.CreateThinkingPart(chunk.Text, currentThinkingBlockID, 0)
+				outputCh <- thinkingPart
+			case "tool_call":
+				if chunk.ToolCall != nil {
+					accumulatedToolCalls = append(accumulatedToolCalls, chunk.ToolCall)
+				}
+			case "done":
+				tokens = chunk.Tokens
+				// End of thinking block if any
+				if currentThinkingBlockID != "" {
+					currentThinkingBlockID = ""
+				}
+			case "error":
+				return "", nil, 0, chunk.Error
+			}
+		}
+
+		return streamedText.String(), accumulatedToolCalls, tokens, nil
 	}
 
 	text, toolCalls, tokens, err := llm.Generate(ctx, messages, toolDefs)

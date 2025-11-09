@@ -282,10 +282,18 @@ func (c *LLMProviderConfig) SetDefaults() {
 			c.Host = "https://api.openai.com/v1"
 		}
 	}
-	if c.Temperature == 0 {
+	// Only set defaults if temperature is 0 AND it wasn't explicitly set to 0
+	// We use -0.000001 as a sentinel value to indicate "explicitly set to 0" from zero-config
+	if c.Temperature == -0.000001 {
+		c.Temperature = 0.0
+	} else if c.Temperature == 0 {
 		c.Temperature = 0.7
 	}
-	if c.MaxTokens == 0 {
+	// Only set defaults if maxTokens is 0 AND it wasn't explicitly set to 0
+	// We use -1 as a sentinel value to indicate "explicitly set to 0" from zero-config
+	if c.MaxTokens == -1 {
+		c.MaxTokens = 0
+	} else if c.MaxTokens == 0 {
 		c.MaxTokens = 8000
 	}
 	if c.Timeout == 0 {

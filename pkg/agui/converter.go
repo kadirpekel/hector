@@ -12,11 +12,12 @@ import (
 
 // Converter converts A2A protocol messages to AG-UI events
 type Converter struct {
-	messageID      string
-	contextID      string
-	taskID         string
-	currentBlockID string
-	blockIndex     int32
+	messageID        string
+	contextID        string
+	taskID           string
+	currentBlockID   string
+	currentThinkingID string // Track currently open thinking block
+	blockIndex       int32
 }
 
 // NewConverter creates a new AG-UI converter
@@ -58,9 +59,10 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 		// Close any open content block
 		if c.currentBlockID != "" {
 			events = append(events, NewContentBlockStopEvent(c.currentBlockID))
+			c.currentBlockID = ""
 		}
 
-		// Create new thinking block
+		// Get thinking block ID
 		thinkingBlockID := aguiBlockID
 		if thinkingBlockID == "" {
 			thinkingBlockID = uuid.New().String()
@@ -77,13 +79,22 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 			}
 		}
 
-		events = append(events, NewThinkingStartEvent(thinkingBlockID, "")) // empty title
+		// If this is a new thinking block (different ID or no current thinking block)
+		if c.currentThinkingID != thinkingBlockID {
+			// Close previous thinking block if any
+			if c.currentThinkingID != "" {
+				events = append(events, NewThinkingStopEvent(c.currentThinkingID, ""))
+			}
+			// Start new thinking block
+			events = append(events, NewThinkingStartEvent(thinkingBlockID, ""))
+			c.currentThinkingID = thinkingBlockID
+		}
+
+		// Emit delta for this chunk (accumulates content)
 		if text != "" {
 			events = append(events, NewThinkingDeltaEvent(thinkingBlockID, text))
 		}
-		events = append(events, NewThinkingStopEvent(thinkingBlockID, "")) // empty signature
-		c.currentBlockID = ""
-		c.blockIndex++
+
 		return events
 	}
 
@@ -112,6 +123,12 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 
 	// Handle tool calls and tool results (AG-UI metadata only)
 	if aguiEventType == "tool_call" {
+		// Close any open thinking block when tool call starts
+		if c.currentThinkingID != "" {
+			events = append(events, NewThinkingStopEvent(c.currentThinkingID, ""))
+			c.currentThinkingID = ""
+		}
+
 		// Tool calls have is_error field to distinguish call from result
 		if part.Metadata != nil {
 			_, hasIsError := part.Metadata.Fields["is_error"]
@@ -140,13 +157,20 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 
 // CloseCurrentBlock closes the currently open content block if any
 func (c *Converter) CloseCurrentBlock() []*aguipb.AGUIEvent {
-	if c.currentBlockID == "" {
-		return nil
+	var events []*aguipb.AGUIEvent
+	
+	if c.currentBlockID != "" {
+		events = append(events, NewContentBlockStopEvent(c.currentBlockID))
+		c.currentBlockID = ""
 	}
-
-	event := NewContentBlockStopEvent(c.currentBlockID)
-	c.currentBlockID = ""
-	return []*aguipb.AGUIEvent{event}
+	
+	// Also close any open thinking block
+	if c.currentThinkingID != "" {
+		events = append(events, NewThinkingStopEvent(c.currentThinkingID, ""))
+		c.currentThinkingID = ""
+	}
+	
+	return events
 }
 
 // extractToolCallInfo extracts tool call information from a Part

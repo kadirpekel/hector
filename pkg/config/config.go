@@ -445,6 +445,8 @@ func CreateZeroConfig(source interface{}) *Config {
 	apiKey := extractStringField(source, "APIKey")
 	baseURL := extractStringField(source, "BaseURL")
 	model := extractStringField(source, "Model")
+	temperature := extractFloatField(source, "Temperature")
+	maxTokens := extractIntField(source, "MaxTokens")
 	role := extractStringField(source, "Role")
 	instruction := extractStringField(source, "Instruction")
 	enableTools := extractBoolField(source, "Tools")
@@ -494,6 +496,25 @@ func CreateZeroConfig(source interface{}) *Config {
 	}
 	if model != "" {
 		llmConfig.Model = model
+	}
+	// Set temperature and maxTokens
+	// The CLI library (Kong) sets defaults from struct tags BEFORE we extract:
+	// - If user doesn't provide --temperature: field is 0.7 (from default tag)
+	// - If user provides --temperature 0: field is 0.0
+	// - If user provides --temperature 0.5: field is 0.5
+	// So if we extract 0.0, it means user explicitly set it to 0.
+	// We use sentinel values to distinguish "explicitly set to 0" from "not set"
+	if temperature == 0.0 {
+		// Explicitly set to 0 - use sentinel value so SetDefaults knows to keep it as 0
+		llmConfig.Temperature = -0.000001
+	} else {
+		llmConfig.Temperature = temperature
+	}
+	if maxTokens == 0 {
+		// Explicitly set to 0 - use sentinel value so SetDefaults knows to keep it as 0
+		llmConfig.MaxTokens = -1
+	} else {
+		llmConfig.MaxTokens = maxTokens
 	}
 
 	cfg := &Config{
@@ -625,6 +646,42 @@ func extractBoolField(source any, fieldName string) bool {
 	}
 
 	return field.Bool()
+}
+
+func extractFloatField(source any, fieldName string) float64 {
+	v := reflect.ValueOf(source)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	field := v.FieldByName(fieldName)
+	if !field.IsValid() || !field.CanInterface() {
+		return 0
+	}
+
+	if field.Kind() != reflect.Float64 && field.Kind() != reflect.Float32 {
+		return 0
+	}
+
+	return field.Float()
+}
+
+func extractIntField(source any, fieldName string) int {
+	v := reflect.ValueOf(source)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	field := v.FieldByName(fieldName)
+	if !field.IsValid() || !field.CanInterface() {
+		return 0
+	}
+
+	if field.Kind() != reflect.Int && field.Kind() != reflect.Int8 && field.Kind() != reflect.Int16 && field.Kind() != reflect.Int32 && field.Kind() != reflect.Int64 {
+		return 0
+	}
+
+	return int(field.Int())
 }
 
 func generateStoreNameFromPath(sourcePath string) string {

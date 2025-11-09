@@ -186,6 +186,10 @@ func NewLLMService(llmProvider llms.LLMProvider) reasoning.LLMService {
 	}
 }
 
+func (s *DefaultLLMService) GenerateStreamingChunks(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
+	return s.llmProvider.GenerateStreaming(ctx, messages, tools)
+}
+
 func (s *DefaultLLMService) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, error) {
 	return s.llmProvider.Generate(ctx, messages, tools)
 }
@@ -202,6 +206,11 @@ func (s *DefaultLLMService) GenerateStreaming(ctx context.Context, messages []*p
 	for chunk := range streamCh {
 		switch chunk.Type {
 		case "text":
+			outputCh <- chunk.Text
+		case "thinking":
+			// Thinking chunks are handled separately - they need to be converted to parts
+			// For now, we'll pass them through as text with a special marker
+			// The agent layer will need to handle this differently
 			outputCh <- chunk.Text
 		case "tool_call":
 			if chunk.ToolCall != nil {

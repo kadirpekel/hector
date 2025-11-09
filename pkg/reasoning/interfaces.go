@@ -27,6 +27,10 @@ type LLMService interface {
 
 	GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition, outputCh chan<- string) ([]*protocol.ToolCall, int, error)
 
+	// GenerateStreamingChunks returns raw StreamChunks preserving all chunk types (text, thinking, tool_call, etc.)
+	// This method maintains the abstraction from LLMProvider and allows proper handling of thinking blocks
+	GenerateStreamingChunks(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error)
+
 	GenerateStructured(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []*protocol.ToolCall, int, error)
 
 	SupportsStructuredOutput() bool

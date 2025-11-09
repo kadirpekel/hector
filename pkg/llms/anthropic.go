@@ -437,6 +437,7 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 
 	toolCalls := make(map[int]*protocol.ToolCall)
 	toolJSONBuffers := make(map[int]string)
+	thinkingBuffers := make(map[int]string) // Track thinking content by index
 	var totalTokens int
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -460,6 +461,10 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 
 		switch streamResp.Type {
 		case "content_block_start":
+			// Handle thinking blocks (Claude extended thinking)
+			if streamResp.ContentBlock != nil && streamResp.ContentBlock.Type == "thinking" {
+				thinkingBuffers[streamResp.Index] = ""
+			}
 
 			if streamResp.ContentBlock != nil && streamResp.ContentBlock.Type == "tool_use" {
 
@@ -473,8 +478,14 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 
 		case "content_block_delta":
 			if streamResp.Delta != nil {
-
-				if streamResp.Delta.Text != "" {
+				// Handle thinking content deltas
+				if _, isThinking := thinkingBuffers[streamResp.Index]; isThinking {
+					if streamResp.Delta.Text != "" {
+						thinkingBuffers[streamResp.Index] += streamResp.Delta.Text
+						outputCh <- StreamChunk{Type: "thinking", Text: streamResp.Delta.Text}
+					}
+				} else if streamResp.Delta.Text != "" {
+					// Regular text content
 					outputCh <- StreamChunk{Type: "text", Text: streamResp.Delta.Text}
 				}
 
@@ -484,6 +495,10 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 			}
 
 		case "content_block_stop":
+			// Clean up thinking buffer when block stops
+			if _, isThinking := thinkingBuffers[streamResp.Index]; isThinking {
+				delete(thinkingBuffers, streamResp.Index)
+			}
 
 			if tc, exists := toolCalls[streamResp.Index]; exists {
 

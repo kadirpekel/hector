@@ -654,9 +654,9 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 
 		// Handle thinking/reasoning trace (Ollama thinking capability)
 		if chunk.Message.Thinking != "" {
-			// Emit thinking as text chunks - the protocol layer can handle this
+			// Emit thinking as thinking chunks - will be converted to thinking parts
 			outputCh <- StreamChunk{
-				Type: "text",
+				Type: "thinking",
 				Text: chunk.Message.Thinking,
 			}
 		}
