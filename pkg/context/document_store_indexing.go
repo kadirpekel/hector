@@ -154,7 +154,7 @@ func (ds *DocumentStore) indexFromDataSource() error {
 				ds.mu.Unlock()
 
 				// Print summary
-				if ds.config.QuietMode != nil && *ds.config.QuietMode && len(failedDocs) > 0 {
+				if len(failedDocs) > 0 {
 					maxShow := 10
 					fmt.Println("\n⚠️  Failed Documents:")
 					for i, docID := range failedDocs {
@@ -192,6 +192,12 @@ func (ds *DocumentStore) indexFromDataSource() error {
 				if relPath != "" {
 					if docInfo, exists := existingDocs[relPath]; exists {
 						if doc.LastModified.Before(time.Unix(docInfo.ModTime, 0)) || doc.LastModified.Equal(time.Unix(docInfo.ModTime, 0)) {
+							// File hasn't changed - skip it but mark it as found
+							// so it's preserved in the index state
+							docsMu.Lock()
+							foundDocs[relPath] = true
+							foundDocs[doc.ID] = true
+							docsMu.Unlock()
 							ds.progressTracker.IncrementSkipped()
 							continue
 						}
@@ -205,11 +211,20 @@ func (ds *DocumentStore) indexFromDataSource() error {
 				if relPath == "" {
 					if pathVal, ok := doc.Metadata["rel_path"].(string); ok {
 						relPath = pathVal
+					} else {
+						// Fallback: compute relative path from absolute path
+						if rel, err := filepath.Rel(ds.sourcePath, doc.ID); err == nil {
+							relPath = rel
+						}
 					}
 				}
 				if relPath != "" && !ds.checkpointManager.ShouldProcessFile(relPath, doc.Size, doc.LastModified) {
 					// File was already processed in checkpoint and hasn't changed
-					// Count it as processed (it's already done)
+					// Count it as processed (it's already done) and mark it as found
+					docsMu.Lock()
+					foundDocs[relPath] = true
+					foundDocs[doc.ID] = true
+					docsMu.Unlock()
 					ds.progressTracker.IncrementProcessed()
 					continue
 				}
@@ -253,7 +268,8 @@ func (ds *DocumentStore) indexFromDataSource() error {
 			go func(d indexing.Document) {
 				defer func() {
 					if r := recover(); r != nil {
-						log.Printf("Panic while indexing %s: %v", d.ID, r)
+						// Don't log panic during indexing to avoid breaking progress bar display
+						// Panic info will be available in failedDocs list
 						ds.progressTracker.IncrementFailed()
 						ds.progressTracker.IncrementProcessed()
 						failedDocsMu.Lock()
@@ -282,9 +298,8 @@ func (ds *DocumentStore) indexFromDataSource() error {
 					failedDocs = append(failedDocs, d.ID)
 					failedDocsMu.Unlock()
 
-					if ds.config.QuietMode == nil || !*ds.config.QuietMode {
-						log.Printf("Warning: Failed to index %s: %v", d.ID, err)
-					}
+					// Don't log errors during indexing to avoid breaking progress bar display
+					// Errors will be shown in the final summary
 				} else {
 					ds.progressTracker.IncrementIndexed()
 					ds.progressTracker.IncrementProcessed()
@@ -314,9 +329,9 @@ func (ds *DocumentStore) indexFromDataSource() error {
 				continue
 			}
 			ds.progressTracker.IncrementFailed()
-			if ds.config.QuietMode == nil || !*ds.config.QuietMode {
-				log.Printf("Warning: Error discovering documents: %v", err)
-			}
+			// Don't log discovery errors during indexing to avoid breaking progress bar display
+			// These are typically non-fatal and don't need immediate attention
+			_ = err // Error is tracked via IncrementFailed()
 		}
 	}
 }

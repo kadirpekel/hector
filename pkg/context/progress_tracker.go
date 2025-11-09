@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,6 +36,7 @@ type ProgressTracker struct {
 	doneChan chan struct{}
 	running  int32 // Atomic flag to track if running
 	mu       sync.Mutex
+	printMu  sync.Mutex // Mutex for print operations to prevent interleaving
 }
 
 // NewProgressTracker creates a new progress tracker
@@ -176,6 +178,11 @@ func (pt *ProgressTracker) displayLoop() {
 
 // printProgress prints the current progress
 func (pt *ProgressTracker) printProgress() {
+	// Use mutex to ensure only one progress update prints at a time
+	// This prevents interleaved output that can cause newlines
+	pt.printMu.Lock()
+	defer pt.printMu.Unlock()
+	
 	stats := pt.GetStats()
 
 	if stats.TotalFiles == 0 {
@@ -237,11 +244,12 @@ func (pt *ProgressTracker) printProgress() {
 	}
 
 	// Print inline with carriage return to overwrite previous line
-	fmt.Printf("\r%s", output)
-
-	// Pad with spaces to clear any leftover characters from previous line
-	// (terminal width assumed ~120 chars, output is usually ~100)
-	fmt.Print("                    ")
+	// Use ANSI escape code to clear to end of line for better reliability
+	// Use raw Write to avoid any buffering issues with fmt functions
+	os.Stdout.WriteString("\r\033[K" + output)
+	
+	// Flush stdout to ensure the output is displayed immediately
+	os.Stdout.Sync()
 }
 
 // printFinalSummary prints the final summary
