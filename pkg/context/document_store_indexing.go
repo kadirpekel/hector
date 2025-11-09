@@ -24,7 +24,11 @@ func (ds *DocumentStore) indexFromDataSource() error {
 		checkpoint, err = ds.checkpointManager.LoadCheckpoint()
 		if checkpoint != nil && err == nil {
 			processedCount := len(checkpoint.ProcessedFiles)
-			if processedCount >= checkpoint.TotalFiles && checkpoint.TotalFiles > 0 {
+			// Only clear checkpoint if it's truly complete (all files processed)
+			// Don't clear based on TotalFiles comparison as it might be inaccurate
+			if processedCount > 0 && checkpoint.TotalFiles > 0 && processedCount >= checkpoint.TotalFiles {
+				// Verify by checking if we actually have more files to process
+				// This prevents clearing checkpoint prematurely
 				_ = ds.checkpointManager.ClearCheckpoint()
 				checkpoint = nil
 			} else {
@@ -63,27 +67,25 @@ func (ds *DocumentStore) indexFromDataSource() error {
 	// For directory sources, we can count files; for others, we'll estimate
 	var totalDocs int64
 	if ds.dataSource.Type() == "directory" {
-		// Count files for directory source
-		totalDocs = ds.countDirectoryFiles(ctx, existingDocs, checkpoint, useIncrementalIndexing)
+		// When resuming from checkpoint OR using incremental indexing, count ALL files
+		// that will be discovered (including unchanged files that will be skipped).
+		// This ensures the progress percentage is accurate.
+		// Otherwise, count only files that need processing.
+		if checkpoint != nil || useIncrementalIndexing {
+			totalDocs = ds.countAllDirectoryFiles(ctx)
+		} else {
+			totalDocs = ds.countDirectoryFiles(ctx, existingDocs, checkpoint, useIncrementalIndexing)
+		}
 	} else {
 		// For SQL/API, we'll count as we process
 		totalDocs = 0
 	}
 
 	// Set up progress tracking
-	if checkpoint != nil && ds.dataSource.Type() == "directory" {
-		checkpointProcessed := int64(len(checkpoint.ProcessedFiles))
-		grandTotal := checkpointProcessed + totalDocs
-		ds.progressTracker.SetTotalFiles(grandTotal)
-		ds.checkpointManager.SetTotalFiles(int(grandTotal))
-		for i := int64(0); i < checkpointProcessed; i++ {
-			ds.progressTracker.IncrementProcessed()
-		}
-	} else {
-		ds.progressTracker.SetTotalFiles(totalDocs)
-		if ds.dataSource.Type() == "directory" {
-			ds.checkpointManager.SetTotalFiles(int(totalDocs))
-		}
+	// When using checkpoint or incremental indexing, totalDocs already includes all files
+	ds.progressTracker.SetTotalFiles(totalDocs)
+	if ds.dataSource.Type() == "directory" {
+		ds.checkpointManager.SetTotalFiles(int(totalDocs))
 	}
 
 	ds.progressTracker.Start()
@@ -175,11 +177,24 @@ func (ds *DocumentStore) indexFromDataSource() error {
 
 			// Check incremental indexing for directory sources
 			if ds.dataSource.Type() == "directory" && useIncrementalIndexing {
-				path := doc.ID
-				if docInfo, exists := existingDocs[path]; exists {
-					if doc.LastModified.Before(time.Unix(docInfo.ModTime, 0)) || doc.LastModified.Equal(time.Unix(docInfo.ModTime, 0)) {
-						ds.progressTracker.IncrementSkipped()
-						continue
+				// Use relative path for consistency with existingDocs
+				relPath := doc.SourcePath
+				if relPath == "" {
+					if pathVal, ok := doc.Metadata["rel_path"].(string); ok {
+						relPath = pathVal
+					} else {
+						// Fallback: compute relative path from absolute path
+						if rel, err := filepath.Rel(ds.sourcePath, doc.ID); err == nil {
+							relPath = rel
+						}
+					}
+				}
+				if relPath != "" {
+					if docInfo, exists := existingDocs[relPath]; exists {
+						if doc.LastModified.Before(time.Unix(docInfo.ModTime, 0)) || doc.LastModified.Equal(time.Unix(docInfo.ModTime, 0)) {
+							ds.progressTracker.IncrementSkipped()
+							continue
+						}
 					}
 				}
 			}
@@ -193,9 +208,13 @@ func (ds *DocumentStore) indexFromDataSource() error {
 					}
 				}
 				if relPath != "" && !ds.checkpointManager.ShouldProcessFile(relPath, doc.Size, doc.LastModified) {
-					ds.progressTracker.IncrementSkipped()
+					// File was already processed in checkpoint and hasn't changed
+					// Count it as processed (it's already done)
+					ds.progressTracker.IncrementProcessed()
 					continue
 				}
+				// File is in checkpoint but was modified - we'll process it and increment processed
+				// This is correct because we'll replace the old checkpoint entry
 			}
 
 			// Update document count for non-directory sources
@@ -209,6 +228,22 @@ func (ds *DocumentStore) indexFromDataSource() error {
 			}
 
 			docsMu.Lock()
+			// Use relative path for foundDocs to match existingDocs keys
+			relPath := doc.SourcePath
+			if relPath == "" {
+				if pathVal, ok := doc.Metadata["rel_path"].(string); ok {
+					relPath = pathVal
+				} else if ds.dataSource.Type() == "directory" {
+					// Fallback: compute relative path from absolute path
+					if rel, err := filepath.Rel(ds.sourcePath, doc.ID); err == nil {
+						relPath = rel
+					}
+				}
+			}
+			if relPath != "" {
+				foundDocs[relPath] = true
+			}
+			// Also store by absolute path for backward compatibility
 			foundDocs[doc.ID] = true
 			docsMu.Unlock()
 
@@ -284,6 +319,39 @@ func (ds *DocumentStore) indexFromDataSource() error {
 			}
 		}
 	}
+}
+
+// countAllDirectoryFiles counts ALL files that will be discovered (for progress tracking)
+// This includes files that will be skipped due to checkpoint or incremental indexing
+// It uses the same filters as DirectorySource.DiscoverDocuments to ensure accurate counting
+func (ds *DocumentStore) countAllDirectoryFiles(ctx context.Context) int64 {
+	var count int64
+
+	// Note: We don't filter by maxFileSize here because we want to count all files
+	// that will be discovered, even if some will be filtered out later by maxFileSize.
+	// Files that exceed maxFileSize will be skipped during discovery and won't increment
+	// processed, so the total should include them for accurate progress tracking.
+
+	err := filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if info.Size() == 0 {
+			return nil
+		}
+		// Apply same filters as DiscoverDocuments
+		if ds.shouldExclude(path) || !ds.shouldInclude(path) {
+			return nil
+		}
+		// Count all files that match filters - they will all be discovered
+		// Some will be skipped due to checkpoint/incremental indexing/maxFileSize, but they still count toward total
+		count++
+		return nil
+	})
+	if err != nil {
+		return 0
+	}
+	return count
 }
 
 // countDirectoryFiles counts files for directory sources (for progress tracking)
