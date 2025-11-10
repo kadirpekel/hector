@@ -41,10 +41,10 @@ func TestAPISource_DiscoverDocuments_SimpleArray(t *testing.T) {
 
 	endpoints := []APIEndpointConfig{
 		{
-			Path:         "/articles",
-			Method:       "GET",
-			IDField:      "id",
-			ContentField: "title,content",
+			Path:           "/articles",
+			Method:         "GET",
+			IDField:        "id",
+			ContentField:   "title,content",
 			MetadataFields: []string{"author"},
 		},
 	}
@@ -674,11 +674,11 @@ func TestAPISource_MetadataExtraction(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := []map[string]interface{}{
 			{
-				"id":      "1",
-				"title":   "Article",
-				"author":  "John Doe",
-				"status":  "published",
-				"views":   100,
+				"id":     "1",
+				"title":  "Article",
+				"author": "John Doe",
+				"status": "published",
+				"views":  100,
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -750,7 +750,7 @@ func TestAPISource_ContextCancellation(t *testing.T) {
 	}
 
 	source := NewAPISource(server.URL, endpoints, nil)
-	
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
@@ -791,7 +791,7 @@ func TestAPISource_ReadDocument_NotImplemented(t *testing.T) {
 
 func TestAPISource_Close(t *testing.T) {
 	source := NewAPISource("http://example.com", []APIEndpointConfig{}, nil)
-	
+
 	err := source.Close()
 	if err != nil {
 		t.Errorf("Close() error = %v, want nil", err)
@@ -837,4 +837,3 @@ func TestAPISource_HTTPErrorHandling(t *testing.T) {
 		t.Error("DiscoverDocuments() should not return documents on HTTP error")
 	}
 }
-

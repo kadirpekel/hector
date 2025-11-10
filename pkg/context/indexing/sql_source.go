@@ -291,7 +291,7 @@ func (s *SQLSource) ReadDocument(ctx context.Context, id string) (*Document, err
 	metadata := make(map[string]interface{})
 	metadata["table"] = tableConfig.Table
 	metadata["id"] = values[idIdx]
-	
+
 	// Extract metadata columns
 	metadataStartIdx := len(tableConfig.Columns) + 1 // After ID column
 	if tableConfig.UpdatedColumn != "" {

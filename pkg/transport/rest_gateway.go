@@ -196,9 +196,10 @@ func (g *RESTGateway) setupRouting() http.Handler {
 
 		// Task operations (A2A spec core methods - HTTP+JSON/REST transport)
 		// Per A2A spec Section 3.5.3 and 7.3-7.5
-		r.Get("/tasks", g.handleListTasks)                   // Optional: tasks/list
-		r.Get("/tasks/{taskID}", g.handleGetTask)            // Core: tasks/get
-		r.Post("/tasks/{taskID}:cancel", g.handleCancelTask) // Core: tasks/cancel
+		r.Get("/tasks", g.handleListTasks)                           // Optional: tasks/list
+		r.Get("/tasks/{taskID}", g.handleGetTask)                    // Core: tasks/get
+		r.Post("/tasks/{taskID}:cancel", g.handleCancelTask)         // Core: tasks/cancel
+		r.Get("/tasks/{taskID}:subscribe", g.handleTaskSubscription) // Optional: tasks/subscribe
 	})
 
 	log.Printf("   → Agent-scoped endpoints: /v1/agents/{agent}/*")
@@ -206,8 +207,8 @@ func (g *RESTGateway) setupRouting() http.Handler {
 	log.Printf("     • Agent card: /.well-known/agent-card.json (A2A spec compliant)")
 	log.Printf("     • Messages: /message:send, /message:stream")
 	log.Printf("     • JSON-RPC streaming: /stream (POST, agent-scoped)")
-	log.Printf("     • Tasks: /tasks (GET: list), /tasks/{id} (GET: retrieve), /tasks/{id}:cancel (POST: cancel)")
-	log.Printf("   → A2A Protocol Compliance: Core methods (message/send, tasks/get, tasks/cancel) + Optional (tasks/list)")
+	log.Printf("     • Tasks: /tasks (GET: list), /tasks/{id} (GET: retrieve), /tasks/{id}:cancel (POST: cancel), /tasks/{id}:subscribe (GET: subscribe)")
+	log.Printf("   → A2A Protocol Compliance: Core methods (message/send, tasks/get, tasks/cancel) + Optional (tasks/list, tasks/subscribe)")
 
 	return r
 }
@@ -1457,4 +1458,155 @@ func (g *RESTGateway) handleListTasks(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
+}
+
+// handleTaskSubscription implements GET /v1/agents/{agent}/tasks/{taskID}:subscribe
+// A2A spec: Section 7.6 - tasks/subscribe (OPTIONAL METHOD - MAY implement)
+func (g *RESTGateway) handleTaskSubscription(w http.ResponseWriter, r *http.Request) {
+	// Set SSE headers for streaming
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		g.sendSSEError(w, "Streaming not supported")
+		return
+	}
+
+	// Get agent ID from URL parameter
+	agentID := chi.URLParam(r, "agent")
+	if agentID == "" {
+		g.sendSSEError(w, "Agent ID required")
+		return
+	}
+
+	// Get task ID from URL parameter
+	taskID := chi.URLParam(r, "taskID")
+	if taskID == "" {
+		g.sendSSEError(w, "Task ID required")
+		return
+	}
+
+	// Validate agent exists
+	if !g.validateAgentID(agentID, w, true) {
+		return
+	}
+
+	log.Printf("REST SSE Task Subscription: agent=%s task=%s", agentID, taskID)
+
+	// Create incoming metadata for the gRPC service (server-side)
+	md := metadata.Pairs("agent-name", agentID)
+
+	// Forward Authorization header to gRPC metadata (for auth interceptor)
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		md = metadata.Join(md, metadata.Pairs("authorization", authHeader))
+	}
+
+	ctx := metadata.NewIncomingContext(r.Context(), md)
+
+	// Detect AG-UI format preference
+	useAGUI := false
+	acceptHeader := r.Header.Get("Accept")
+	if strings.Contains(acceptHeader, "application/x-agui-events") ||
+		strings.Contains(acceptHeader, "application/agui+json") {
+		useAGUI = true
+	}
+	if r.URL.Query().Get("format") == "agui" {
+		useAGUI = true
+	}
+
+	req := &pb.TaskSubscriptionRequest{
+		Name: fmt.Sprintf("tasks/%s", taskID),
+	}
+
+	// Try to call service directly if available (same pattern as handleStreamingMessageSSE)
+	if g.service != nil {
+		// Create stream wrapper with incoming metadata context (for service call)
+		streamWrapper := &restStreamWrapper{
+			writer:  w,
+			flusher: flusher,
+			context: ctx, // Use incoming metadata context for service call
+			useAGUI: useAGUI,
+		}
+
+		err := g.service.TaskSubscription(req, streamWrapper)
+		if err != nil {
+			g.sendSSEError(w, fmt.Sprintf("Service error: %v", err))
+			return
+		}
+
+		streamWrapper.sendCompletionEvent()
+		return
+	} else {
+		// Fallback to gRPC client call
+		// Create context with agent metadata for gRPC client call
+		clientCtx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
+
+		// Forward Authorization header
+		if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+			clientCtx = metadata.AppendToOutgoingContext(clientCtx, "authorization", authHeader)
+		}
+
+		// Call gRPC TaskSubscription service
+		client := pb.NewA2AServiceClient(g.conn)
+		stream, err := client.TaskSubscription(clientCtx, req)
+		if err != nil {
+			// Convert gRPC error to appropriate SSE error
+			if strings.Contains(err.Error(), "not found") {
+				g.sendSSEError(w, fmt.Sprintf("Task not found: %s", taskID))
+			} else if strings.Contains(err.Error(), "Unimplemented") {
+				g.sendSSEError(w, "Task subscription not supported")
+			} else {
+				g.sendSSEError(w, fmt.Sprintf("Failed to subscribe to task: %v", err))
+			}
+			return
+		}
+
+		// Create stream wrapper with request context (for cancellation checks)
+		streamWrapper := &restStreamWrapper{
+			writer:  w,
+			flusher: flusher,
+			context: r.Context(), // Use original request context for cancellation
+			useAGUI: useAGUI,
+		}
+
+		// Stream task updates
+		// The stream will be cancelled when the HTTP request context is cancelled
+		for {
+			// Check if context is cancelled (client disconnected)
+			select {
+			case <-r.Context().Done():
+				log.Printf("Client disconnected from task subscription: agent=%s task=%s", agentID, taskID)
+				return
+			default:
+			}
+
+			resp, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF {
+					// Stream ended normally (task completed or channel closed)
+					break
+				}
+				// Check if error is due to context cancellation
+				if r.Context().Err() != nil {
+					log.Printf("Stream cancelled due to context: agent=%s task=%s", agentID, taskID)
+					return
+				}
+				// Other errors - send error event and close
+				g.sendSSEError(w, fmt.Sprintf("Stream error: %v", err))
+				return
+			}
+
+			if err := streamWrapper.Send(resp); err != nil {
+				log.Printf("Failed to send SSE event: %v", err)
+				return
+			}
+		}
+
+		streamWrapper.sendCompletionEvent()
+		return
+	}
 }

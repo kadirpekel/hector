@@ -268,7 +268,7 @@ func TestDocumentStore_SQLSource_ReadDocument(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	
+
 	// Read a specific document
 	doc, err := store.dataSource.ReadDocument(ctx, "sqlite3:articles:1")
 	if err != nil {
@@ -394,7 +394,7 @@ func TestDocumentStore_SQLSource_GetLastModified(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	
+
 	lastModified, err := store.dataSource.GetLastModified(ctx, "sqlite3:articles:1")
 	if err != nil {
 		t.Fatalf("GetLastModified() error = %v", err)
@@ -409,7 +409,7 @@ func TestDocumentStore_DataSourceFactory_SQL(t *testing.T) {
 	dbPath := setupSQLTestDB(t)
 
 	factory := indexing.NewDataSourceFactory()
-	
+
 	storeConfig := &config.DocumentStoreConfig{
 		Name:   "sql-test-store",
 		Source: "sql",
@@ -442,7 +442,7 @@ func TestDocumentStore_DataSourceFactory_API(t *testing.T) {
 	defer server.Close()
 
 	factory := indexing.NewDataSourceFactory()
-	
+
 	storeConfig := &config.DocumentStoreConfig{
 		Name:   "api-test-store",
 		Source: "api",
@@ -472,7 +472,7 @@ func TestDocumentStore_DataSourceFactory_API(t *testing.T) {
 
 func TestDocumentStore_DataSourceFactory_InvalidConfig(t *testing.T) {
 	factory := indexing.NewDataSourceFactory()
-	
+
 	tests := []struct {
 		name        string
 		config      *config.DocumentStoreConfig
@@ -567,4 +567,3 @@ func containsMiddle(s, substr string) bool {
 	}
 	return false
 }
-

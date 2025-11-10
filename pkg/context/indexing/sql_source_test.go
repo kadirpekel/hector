@@ -450,7 +450,7 @@ func TestSQLSource_Close(t *testing.T) {
 	defer db.Close()
 
 	source := NewSQLSource(db, "sqlite3", []SQLTableConfig{}, 0)
-	
+
 	err := source.Close()
 	if err != nil {
 		t.Errorf("Close() error = %v, want nil", err)
@@ -476,7 +476,7 @@ func TestSQLSource_ContextCancellation(t *testing.T) {
 	}
 
 	source := NewSQLSource(db, "sqlite3", tableConfigs, 0)
-	
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
@@ -594,4 +594,3 @@ func TestSQLSource_MetadataExtraction(t *testing.T) {
 		t.Error("Metadata should contain id")
 	}
 }
-
