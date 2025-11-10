@@ -1058,6 +1058,10 @@ func (g *RESTGateway) handleJSONRPCAgentScoped(w http.ResponseWriter, r *http.Re
 		g.sendJSONRPCError(w, rpcReq.ID, InvalidRequest, "Use /stream endpoint for streaming messages")
 		return
 
+	case "tasks/subscribe":
+		g.sendJSONRPCError(w, rpcReq.ID, InvalidRequest, "Use /stream endpoint for task subscription")
+		return
+
 	case "tasks/resubscribe":
 		g.sendJSONRPCError(w, rpcReq.ID, InvalidRequest, "Use /stream endpoint for task resubscription")
 		return
@@ -1128,7 +1132,8 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 	}
 
 	// Handle streaming methods
-	if rpcReq.Method == "message/stream" || rpcReq.Method == "tasks/resubscribe" {
+	switch rpcReq.Method {
+	case "message/stream", "tasks/resubscribe":
 		// Reuse the existing streaming logic with the context that has agent metadata
 		var req pb.SendMessageRequest
 		mappedParams := applyA2AFieldMapping(rpcReq.Params)
@@ -1178,9 +1183,125 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 			return
 		}
 		return
-	}
 
-	g.sendSSEError(w, fmt.Sprintf("Method %s does not support streaming", rpcReq.Method))
+	case "tasks/subscribe":
+		// A2A spec: Section 7.6 - tasks/subscribe (OPTIONAL METHOD - MAY implement)
+		// Subscribe to task updates via JSON-RPC streaming endpoint
+		var req pb.TaskSubscriptionRequest
+		mappedParams := applyA2AFieldMapping(rpcReq.Params)
+		if err := g.unmarshaler.Unmarshal(mappedParams, &req); err != nil {
+			g.sendSSEError(w, fmt.Sprintf("Invalid params: %v", err))
+			return
+		}
+
+		// Validate task name format
+		if req.Name == "" {
+			g.sendSSEError(w, "Task name is required")
+			return
+		}
+
+		// Detect AG-UI format preference
+		useAGUI := false
+		acceptHeader := r.Header.Get("Accept")
+		if strings.Contains(acceptHeader, "application/x-agui-events") ||
+			strings.Contains(acceptHeader, "application/agui+json") {
+			useAGUI = true
+		}
+		if r.URL.Query().Get("format") == "agui" {
+			useAGUI = true
+		}
+
+		// Create incoming metadata for the gRPC service (server-side)
+		// This matches the pattern used in handleTaskSubscription REST endpoint
+		md := metadata.Pairs("agent-name", agentID)
+		if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+			md = metadata.Join(md, metadata.Pairs("authorization", authHeader))
+		}
+		serviceCtx := metadata.NewIncomingContext(r.Context(), md)
+
+		// Try to call service directly if available (same pattern as handleTaskSubscription)
+		if g.service != nil {
+			// Create stream wrapper with incoming metadata context (for service call)
+			streamWrapper := &restStreamWrapper{
+				writer:  w,
+				flusher: flusher,
+				context: serviceCtx, // Use incoming metadata context for service call
+				useAGUI: useAGUI,
+			}
+
+			err := g.service.TaskSubscription(&req, streamWrapper)
+			if err != nil {
+				g.sendSSEError(w, fmt.Sprintf("Service error: %v", err))
+				return
+			}
+
+			streamWrapper.sendCompletionEvent()
+			return
+		} else {
+			// Fallback to gRPC client call (should not happen in normal operation)
+			// Use outgoing context for gRPC client call
+			clientCtx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
+			if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+				clientCtx = metadata.AppendToOutgoingContext(clientCtx, "authorization", authHeader)
+			}
+
+			client := pb.NewA2AServiceClient(g.conn)
+			stream, err := client.TaskSubscription(clientCtx, &req)
+			if err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					g.sendSSEError(w, fmt.Sprintf("Task not found"))
+				} else if strings.Contains(err.Error(), "Unimplemented") {
+					g.sendSSEError(w, "Task subscription not supported")
+				} else {
+					g.sendSSEError(w, fmt.Sprintf("Failed to subscribe to task: %v", err))
+				}
+				return
+			}
+
+			// Create stream wrapper with request context (for cancellation checks)
+			streamWrapper := &restStreamWrapper{
+				writer:  w,
+				flusher: flusher,
+				context: r.Context(), // Use original request context for cancellation
+				useAGUI: useAGUI,
+			}
+
+			// Stream task updates
+			for {
+				select {
+				case <-r.Context().Done():
+					log.Printf("Client disconnected from task subscription: agent=%s", agentID)
+					return
+				default:
+				}
+
+				resp, err := stream.Recv()
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					if r.Context().Err() != nil {
+						log.Printf("Stream cancelled due to context: agent=%s", agentID)
+						return
+					}
+					g.sendSSEError(w, fmt.Sprintf("Stream error: %v", err))
+					return
+				}
+
+				if err := streamWrapper.Send(resp); err != nil {
+					log.Printf("Failed to send SSE event: %v", err)
+					return
+				}
+			}
+
+			streamWrapper.sendCompletionEvent()
+			return
+		}
+
+	default:
+		g.sendSSEError(w, fmt.Sprintf("Method %s does not support streaming", rpcReq.Method))
+		return
+	}
 }
 
 func (g *RESTGateway) sendJSONRPCError(w http.ResponseWriter, id interface{}, code int, message string) {
