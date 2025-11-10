@@ -39,39 +39,35 @@
     <script>
         // Wait for Alpine.js to be ready
         function initEmojiAnimation() {
-            // Inject animation styles directly into the page
-            const style = document.createElement('style');
-            style.textContent = `
-                @keyframes breathe {
-                    0%, 100% { transform: scale(1); }
-                    50% { transform: scale(1.3); }
-                }
-            `;
-            document.head.appendChild(style);
+            // Unified badge lifecycle animation system
+            // Note: CSS animation is defined in <style> section as badgeLifecycle
+            // This JavaScript ensures animations work with Alpine.js reactivity
             
             function updateEmojiAnimations() {
                 document.querySelectorAll('.emoji-icon').forEach(el => {
-                    // Check data-should-animate attribute - this is what Alpine sets
-                    const shouldAnimate = el.getAttribute('data-should-animate') === 'true';
+                    // Check if element has 'animate' class (set by Alpine.js :class binding)
+                    const hasAnimateClass = el.classList.contains('animate');
                     
-                    if (shouldAnimate) {
-                        el.style.setProperty('animation', 'breathe 2s ease-in-out infinite', 'important');
-                        el.style.setProperty('transform-origin', 'center center', 'important');
-                        el.style.setProperty('display', 'inline-block', 'important');
-                    } else {
+                    // CRITICAL: Force stop animation immediately when class is removed
+                    // This ensures completed widgets stop animating right away
+                    if (!hasAnimateClass) {
+                        // Force stop by setting animation to none with !important
                         el.style.setProperty('animation', 'none', 'important');
-                        el.style.setProperty('transform-origin', 'center center', 'important');
-                        el.style.setProperty('display', 'inline-block', 'important');
+                        el.style.setProperty('transform', 'scale(1)', 'important');
+                    } else {
+                        // Clear inline styles to let CSS handle it when class is present
+                        el.style.removeProperty('animation');
+                        el.style.removeProperty('transform');
                     }
                 });
             }
             
             // Watch for DOM changes and update animations
             const observer = new MutationObserver(function(mutations) {
-                // Check if any mutations affected data-should-animate or added new emoji-icons
+                // Check if any mutations affected class list or added new emoji-icons
                 let shouldUpdate = false;
                 mutations.forEach(mutation => {
-                    if (mutation.type === 'attributes' && mutation.attributeName === 'data-should-animate') {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
                         shouldUpdate = true;
                     }
                     if (mutation.type === 'childList') {
@@ -90,13 +86,13 @@
                 childList: true, 
                 subtree: true,
                 attributes: true,
-                attributeFilter: ['data-should-animate']
+                attributeFilter: ['class']
             });
             
             // Initial application
             setTimeout(updateEmojiAnimations, 100);
-            // Check frequently to catch Alpine reactivity
-            setInterval(updateEmojiAnimations, 150);
+            // Check frequently to catch Alpine reactivity - increased frequency for better responsiveness
+            setInterval(updateEmojiAnimations, 100);
         }
         
         // Wait for DOM and Alpine.js
@@ -353,23 +349,48 @@
             width: 280px;
         }
         
-        /* Widget emoji animations - using class-based animation instead of !important */
+        /* ============================================
+           Unified Contextual Badge Foundation Styles
+           ============================================ */
+        
+        /* Widget emoji animations - unified lifecycle animation */
         .emoji-icon {
-            display: inline-block;
-            transform-origin: center center;
+            display: inline-block !important;
+            transform-origin: center center !important;
         }
         
         .emoji-icon.animate {
-            animation: breathe 2s ease-in-out infinite;
+            animation: badgeLifecycle 2s ease-in-out infinite !important;
         }
         
-        @keyframes breathe {
+        @keyframes badgeLifecycle {
             0%, 100% { 
                 transform: scale(1);
             }
             50% { 
                 transform: scale(1.2);
             }
+        }
+        
+        /* Unified badge status indicator styling */
+        .badge-status-icon {
+            display: inline-block;
+            font-weight: 500;
+            min-width: 1em;
+            text-align: center;
+        }
+        
+        /* Badge container - ensures consistent layout */
+        .contextual-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        /* Active badge state - visual feedback during lifecycle */
+        .widget-toggle-btn.active {
+            border-left: 3px solid;
+            border-left-color: rgba(251, 191, 36, 0.5); /* yellow-400 with opacity */
         }
         
         /* Typing indicator positioning */
@@ -502,15 +523,16 @@
                                                 <div>
                                                     <button @click.stop="expanded = !expanded; widget.isExpanded = expanded" 
                                                             :class="{
-                                                                'active': widget.status === 'pending' || widget.status === 'working'
+                                                                'active': isBadgeInLifecycle(widget, message, index)
                                                             }"
                                                             class="widget-toggle-btn w-full flex items-center gap-2 px-4 py-3 bg-black/30 hover:bg-black/50 transition-colors cursor-pointer">
                                                         <span class="emoji-icon" 
-                                                              :class="{ 'animate': shouldBadgeAnimate(widget, message, index) }">🔧</span>
-                                                        <span class="text-sm font-medium flex-1 text-left" x-text="widget.data?.name || 'unknown'"></span>
-                                                        <span :class="widget.status === 'success' ? 'text-green-400' : widget.status === 'failed' ? 'text-red-400' : 'text-yellow-400'" 
-                                                              class="text-sm" 
-                                                              x-text="widget.status === 'success' ? '✓' : widget.status === 'failed' ? '✗' : '⏳'"></span>
+                                                              :class="{ 'animate': isBadgeInLifecycle(widget, message, index) }"
+                                                              x-text="getBadgeEmoji(widget)"></span>
+                                                        <span class="text-sm font-medium flex-1 text-left" x-text="getBadgeLabel(widget)"></span>
+                                                        <span :class="getBadgeStatusClass(widget)" 
+                                                              class="text-sm badge-status-icon" 
+                                                              x-text="getBadgeStatusIcon(widget)"></span>
                                                         <span class="text-xs ml-2" x-text="expanded ? '▲' : '▼'"></span>
                                                     </button>
                                                     <div x-show="expanded" 
@@ -541,14 +563,17 @@
                                                 <div>
                                                     <button @click.stop="expanded = !expanded; widget.isExpanded = expanded" 
                                                             :class="{
-                                                                'active': widget.status === 'active' || (isTyping && message.role === 'agent' && index === currentMessages.length - 1 && widget.status !== 'completed')
+                                                                'active': isBadgeInLifecycle(widget, message, index)
                                                             }"
                                                             class="widget-toggle-btn w-full flex items-center gap-2 px-4 py-3 bg-black/30 hover:bg-black/50 transition-colors cursor-pointer">
                                                         <span class="emoji-icon" 
-                                                              :class="{ 'animate': shouldBadgeAnimate(widget, message, index) }"
-                                                              x-text="getThinkingIcon(widget.data?.type || 'default')"></span>
-                                                        <span class="text-sm font-medium flex-1 text-left" x-text="getThinkingLabel(widget.data?.type || 'default')"></span>
-                                                        <span class="text-xs" x-text="expanded ? '▲' : '▼'"></span>
+                                                              :class="{ 'animate': isBadgeInLifecycle(widget, message, index) }"
+                                                              x-text="getBadgeEmoji(widget)"></span>
+                                                        <span class="text-sm font-medium flex-1 text-left" x-text="getBadgeLabel(widget)"></span>
+                                                        <span :class="getBadgeStatusClass(widget)" 
+                                                              class="text-sm badge-status-icon" 
+                                                              x-text="getBadgeStatusIcon(widget)"></span>
+                                                        <span class="text-xs ml-2" x-text="expanded ? '▲' : '▼'"></span>
                                                     </button>
                                                     <div x-show="expanded" 
                                                          x-transition:enter="transition ease-out duration-200"
@@ -566,8 +591,12 @@
                                                     <div class="px-4 py-3 bg-black/30">
                                                         <div class="flex items-center gap-2 mb-3">
                                                             <span class="text-base emoji-icon" 
-                                                                  :class="{ 'animate': shouldBadgeAnimate(widget, message, index) }">🔐</span>
-                                                            <span class="text-sm font-medium text-gray-300">Approval Required</span>
+                                                                  :class="{ 'animate': isBadgeInLifecycle(widget, message, index) }"
+                                                                  x-text="getBadgeEmoji(widget)"></span>
+                                                            <span class="text-sm font-medium text-gray-300 flex-1" x-text="getBadgeLabel(widget)"></span>
+                                                            <span :class="getBadgeStatusClass(widget)" 
+                                                                  class="text-sm badge-status-icon" 
+                                                                  x-text="getBadgeStatusIcon(widget)"></span>
                                                         </div>
                                                         <div class="space-y-2">
                                                             <div>
@@ -595,8 +624,8 @@
                                                     <template x-if="widget.status === 'decided'">
                                                         <div class="px-4 py-3 border-t border-white/10">
                                                             <div class="text-sm font-medium flex items-center gap-2"
-                                                                 :class="widget.decision === 'approve' ? 'text-hector-green' : 'text-gray-400'">
-                                                                <span x-text="widget.decision === 'approve' ? '✓' : '✗'"></span>
+                                                                 :class="getBadgeStatusClass(widget)">
+                                                                <span x-text="getBadgeStatusIcon(widget)"></span>
                                                                 <span x-text="widget.decision === 'approve' ? 'Approved' : 'Denied'"></span>
                                                             </div>
                                                         </div>
@@ -1023,6 +1052,11 @@
                 },
                 
                 
+                // ============================================
+                // Generic Contextual Badge Foundation
+                // ============================================
+                
+                // Legacy helpers for thinking widgets (must be defined first)
                 getThinkingIcon(type) {
                     const icons = {
                         'todo': '📝',
@@ -1043,28 +1077,161 @@
                     return labels[type] || labels.default;
                 },
                 
-                // Generic helper to determine if a badge should animate based on its lifecycle status
-                shouldBadgeAnimate(widget, message, messageIndex) {
-                    if (!widget || !widget.status) return false;
+                // Badge configuration: defines emoji and metadata for each widget type
+                getBadgeConfig(widget) {
+                    if (!widget || !widget.type) return null;
                     
-                    // Tool widgets: animate when pending or working
-                    if (widget.type === 'tool') {
-                        return widget.status === 'pending' || widget.status === 'working';
+                    const self = this; // Capture Alpine component context
+                    
+                    // Return config object with getters that are evaluated at runtime
+                    const configs = {
+                        'tool': {
+                            get emoji() { return '🔧'; },
+                            get label() { return widget.data?.name || 'Tool'; },
+                            getStatusIcon: (status) => {
+                                if (status === 'success') return '✓';
+                                if (status === 'failed') return '✗';
+                                return '⏳'; // pending, working, or any other active state
+                            },
+                            getStatusClass: (status) => {
+                                if (status === 'success') return 'text-green-400';
+                                if (status === 'failed') return 'text-red-400';
+                                return 'text-yellow-400';
+                            }
+                        },
+                        'thinking': {
+                            get emoji() { 
+                                return self.getThinkingIcon(widget.data?.type || 'default');
+                            },
+                            get label() { 
+                                return self.getThinkingLabel(widget.data?.type || 'default');
+                            },
+                            getStatusIcon: (status) => {
+                                if (status === 'completed') return '✓';
+                                return '⏳'; // active or any other state
+                            },
+                            getStatusClass: (status) => {
+                                if (status === 'completed') return 'text-green-400';
+                                return 'text-yellow-400';
+                            }
+                        },
+                        'approval': {
+                            get emoji() { return '🔐'; },
+                            get label() { return 'Approval Required'; },
+                            getStatusIcon: (status, decision) => {
+                                if (status === 'decided') {
+                                    return decision === 'approve' ? '✓' : '✗';
+                                }
+                                return '⏳'; // pending
+                            },
+                            getStatusClass: (status, decision) => {
+                                if (status === 'decided') {
+                                    return decision === 'approve' ? 'text-hector-green' : 'text-gray-400';
+                                }
+                                return 'text-yellow-400';
+                            }
+                        }
+                    };
+                    
+                    return configs[widget.type] || null;
+                },
+                
+                // Unified lifecycle state detection: determines if badge should animate
+                // This is TRULY generic - works the same for ALL widget types
+                isBadgeInLifecycle(widget, message, messageIndex) {
+                    if (!widget) return false;
+                    
+                    // If no status, assume it's pending/active (should animate)
+                    if (!widget.status) {
+                        return true;
                     }
                     
-                    // Thinking widgets: animate when active, or when typing and it's the last message
+                    // Define lifecycle states - GENERIC for all widget types
+                    const activeStates = ['pending', 'working', 'active'];
+                    const completedStates = ['success', 'completed', 'decided', 'failed'];
+                    
+                    // NEVER animate completed widgets - applies to ALL types
+                    if (completedStates.includes(widget.status)) {
+                        return false;
+                    }
+                    
+                    // ALWAYS animate active widgets - applies to ALL types
+                    if (activeStates.includes(widget.status)) {
+                        return true;
+                    }
+                    
+                    // Special case: thinking widgets during typing (when status might be undefined/null)
+                    // This is the ONLY special case needed, and it's for edge cases during streaming
                     if (widget.type === 'thinking') {
                         const isLastMessage = messageIndex === this.currentMessages.length - 1;
-                        const isTyping = this.isTyping && message.role === 'agent' && isLastMessage;
-                        return widget.status === 'active' || (isTyping && widget.status !== 'completed');
+                        const isTyping = this.isTyping && message && message.role === 'agent' && isLastMessage;
+                        // Only animate if typing AND widget is not completed
+                        if (isTyping && widget.status !== 'completed') {
+                            return true;
+                        }
                     }
                     
-                    // Approval widgets: animate when pending
-                    if (widget.type === 'approval') {
-                        return widget.status === 'pending';
-                    }
-                    
+                    // Default: don't animate unknown states
                     return false;
+                },
+                
+                // Legacy compatibility: maps to new unified system
+                shouldBadgeAnimate(widget, message, messageIndex) {
+                    return this.isBadgeInLifecycle(widget, message, messageIndex);
+                },
+                
+                // Get status indicator for badge (⏳ or ✓ or ✗)
+                getBadgeStatusIcon(widget) {
+                    if (!widget) return '';
+                    
+                    const config = this.getBadgeConfig(widget);
+                    if (!config) return '';
+                    
+                    // If no status, show pending indicator
+                    if (!widget.status) {
+                        return '⏳';
+                    }
+                    
+                    if (widget.type === 'approval') {
+                        return config.getStatusIcon(widget.status, widget.decision);
+                    }
+                    return config.getStatusIcon(widget.status);
+                },
+                
+                // Get status indicator CSS class
+                getBadgeStatusClass(widget) {
+                    if (!widget) return '';
+                    
+                    const config = this.getBadgeConfig(widget);
+                    if (!config) return '';
+                    
+                    // If no status, use pending/yellow styling
+                    if (!widget.status) {
+                        return 'text-yellow-400';
+                    }
+                    
+                    if (widget.type === 'approval') {
+                        return config.getStatusClass(widget.status, widget.decision);
+                    }
+                    return config.getStatusClass(widget.status);
+                },
+                
+                // Get badge emoji
+                getBadgeEmoji(widget) {
+                    if (!widget) return '❓';
+                    const config = this.getBadgeConfig(widget);
+                    if (!config) return '❓';
+                    // Access emoji getter with proper 'this' context
+                    return config.emoji;
+                },
+                
+                // Get badge label
+                getBadgeLabel(widget) {
+                    if (!widget) return 'Unknown';
+                    const config = this.getBadgeConfig(widget);
+                    if (!config) return 'Unknown';
+                    // Access label getter with proper 'this' context
+                    return config.label;
                 },
                 
                 escapeHtml(text) {
@@ -1176,7 +1343,7 @@
                             id: tb.id,
                             type: 'thinking',
                             data: { type: tb.type },
-                            status: (tb.content && tb.content.trim()) ? 'completed' : 'active',
+                            status: 'active', // Always start as active - will be finalized later
                             content: tb.content || '',
                             isExpanded: false
                         });
@@ -1397,6 +1564,47 @@
                                                 }
                                             }
 
+                                            // Handle thinking blocks - track completion directly from parts
+                                            const thinkingBlocks = this.extractThinkingFromParts(message.parts);
+                                            const currentThinkingBlockIds = new Set(thinkingBlocks.map(tb => tb.id));
+                                            
+                                            // Mark thinking blocks as completed if their block_id is NOT in current batch
+                                            // This means the thinking block ended (no more parts for that block_id)
+                                            messageRef.widgets.forEach(widget => {
+                                                if (widget.type === 'thinking' && widget.status === 'active') {
+                                                    // If this thinking block_id is NOT in current batch, it has ended
+                                                    if (!currentThinkingBlockIds.has(widget.id)) {
+                                                        widget.status = 'completed';
+                                                        const widgetIdx = messageRef.widgets.findIndex(w => w.id === widget.id);
+                                                        if (widgetIdx >= 0) {
+                                                            messageRef.widgets[widgetIdx] = { ...widget, status: 'completed' };
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                            
+                                            // Process thinking blocks from current batch
+                                            thinkingBlocks.forEach(tb => {
+                                                const existingWidget = messageRef.widgets.find(w => w.id === tb.id);
+                                                if (!existingWidget) {
+                                                    // New thinking block - always start as 'active'
+                                                    messageRef.widgets.push({
+                                                        id: tb.id,
+                                                        type: 'thinking',
+                                                        data: { type: tb.type },
+                                                        status: 'active',
+                                                        content: tb.content || '',
+                                                        isExpanded: false
+                                                    });
+                                                } else {
+                                                    // Append content - keep as 'active' (block is still active since it's in current batch)
+                                                    existingWidget.content += tb.content;
+                                                    if (existingWidget.status !== 'active') {
+                                                        existingWidget.status = 'active';
+                                                    }
+                                                }
+                                            });
+                                            
                                             // Handle tool calls
                                             const toolCalls = this.extractToolCallsFromParts(message.parts);
                                             toolCalls.forEach(tc => {
@@ -1421,28 +1629,6 @@
                                                     widget.status = tr.success ? 'success' : 'failed';
                                                     if (tr.content) {
                                                         widget.content = tr.content;
-                                                    }
-                                                }
-                                            });
-                                            
-                                            // Handle thinking blocks
-                                            const thinkingBlocks = this.extractThinkingFromParts(message.parts);
-                                            thinkingBlocks.forEach(tb => {
-                                                const existingWidget = messageRef.widgets.find(w => w.id === tb.id);
-                                                if (!existingWidget) {
-                                                    messageRef.widgets.push({
-                                                        id: tb.id,
-                                                        type: 'thinking',
-                                                        data: { type: tb.type },
-                                                        status: tb.content && tb.content.trim() ? 'completed' : 'active',
-                                                        content: tb.content,
-                                                        isExpanded: false
-                                                    });
-                                                } else {
-                                                    existingWidget.content += tb.content;
-                                                    // CRITICAL: Mark as completed immediately when content exists
-                                                    if (existingWidget.content && existingWidget.content.trim()) {
-                                                        existingWidget.status = 'completed';
                                                     }
                                                 }
                                             });
@@ -1513,23 +1699,79 @@
                             messageRef.metadata.taskId = lastTaskId;
                         }
                         
-                        // Ensure messageRef is properly saved - CRITICAL for persistence
-                        if (messageRef) {
-                            // Finalize all widget statuses - mark completed widgets as completed IMMEDIATELY
-                            messageRef.widgets.forEach(widget => {
-                                if (widget.type === 'tool' && widget.status === 'working') {
-                                    widget.status = 'success';
+                        // CRITICAL: Finalize widgets - MUST run regardless of lastTaskId
+                        // This ensures thinking widgets stop animating when streaming ends
+                        if (messageRef && messageRef.widgets) {
+                            // FINALIZE ALL WIDGETS USING GENERIC FOUNDATION
+                            // Uses the badge config system to determine completion states
+                            let statusChanged = false;
+                            
+                            console.log('[Badge Foundation] Starting finalization for', messageRef.widgets.length, 'widgets');
+                            
+                            messageRef.widgets.forEach((widget, idx) => {
+                                const config = this.getBadgeConfig(widget);
+                                if (!config) return;
+                                
+                                const currentStatus = widget.status;
+                                const hasContent = widget.content && widget.content.trim();
+                                
+                                console.log(`[Badge Foundation] Widget ${idx}: type=${widget.type}, status=${currentStatus}, hasContent=${!!hasContent}`);
+                                
+                                // Generic rule: widgets in active states should be finalized
+                                const activeStates = ['pending', 'working', 'active'];
+                                if (!activeStates.includes(currentStatus)) {
+                                    console.log(`[Badge Foundation] Widget ${idx} already finalized (status=${currentStatus})`);
+                                    return; // Already finalized
                                 }
-                                if (widget.type === 'thinking') {
-                                    // CRITICAL: Mark as completed if it has content, regardless of current status
-                                    if (widget.content && widget.content.trim()) {
-                                        widget.status = 'completed';
-                                    } else if (widget.status === 'active' && !widget.content) {
-                                        // Keep as active only if no content
-                                        widget.status = 'active';
+                                
+                                // Use config to determine what "completed" means for this widget type
+                                let targetStatus = null;
+                                
+                                if (widget.type === 'tool' && currentStatus === 'working') {
+                                    targetStatus = 'success';
+                                } else if (widget.type === 'thinking' && currentStatus === 'active') {
+                                    if (hasContent) {
+                                        targetStatus = 'completed';
+                                    }
+                                }
+                                
+                                // Apply status change using generic approach
+                                if (targetStatus && currentStatus !== targetStatus) {
+                                    const wouldShowCheck = config.getStatusIcon(targetStatus) === '✓';
+                                    
+                                    if (wouldShowCheck || targetStatus === 'success') {
+                                        console.log(`[Badge Foundation] Finalizing widget ${idx}: ${currentStatus} -> ${targetStatus}`);
+                                        
+                                        // Create new widget object to trigger Alpine reactivity
+                                        const newWidget = {
+                                            ...widget,
+                                            status: targetStatus
+                                        };
+                                        messageRef.widgets[idx] = newWidget;
+                                        statusChanged = true;
+                                        
+                                        console.log(`[Badge Foundation] Widget ${idx} status after update:`, messageRef.widgets[idx].status);
                                     }
                                 }
                             });
+                            
+                            console.log('[Badge Foundation] Finalization complete. statusChanged=', statusChanged);
+                            
+                            // Force Alpine.js reactivity update if status changed
+                            if (statusChanged) {
+                                const session = this.sessions[this.currentSessionId];
+                                if (session && messageRef) {
+                                    // Create new widgets array to trigger reactivity
+                                    messageRef.widgets = messageRef.widgets.map(w => ({ ...w }));
+                                    // Also update the messages array reference
+                                    const msgIndex = session.messages.findIndex(m => m.id === messageRef.id);
+                                    if (msgIndex >= 0) {
+                                        session.messages[msgIndex] = { ...messageRef };
+                                    }
+                                    this.saveSessions();
+                                    console.log('[Badge Foundation] Forced reactivity update');
+                                }
+                            }
                         }
                         
                         // Highlight code blocks after final render
@@ -1884,6 +2126,51 @@
                                                 }
                                             }
 
+                                            // Handle thinking blocks - track completion directly from parts
+                                            const thinkingBlocks = this.extractThinkingFromParts(message.parts);
+                                            const currentThinkingBlockIds = new Set(thinkingBlocks.map(tb => tb.id));
+                                            
+                                            if (!messageRef.widgets) {
+                                                messageRef.widgets = [];
+                                            }
+                                            
+                                            // Mark thinking blocks as completed if their block_id is NOT in current batch
+                                            // This means the thinking block ended (no more parts for that block_id)
+                                            messageRef.widgets.forEach(widget => {
+                                                if (widget.type === 'thinking' && widget.status === 'active') {
+                                                    // If this thinking block_id is NOT in current batch, it has ended
+                                                    if (!currentThinkingBlockIds.has(widget.id)) {
+                                                        widget.status = 'completed';
+                                                        const widgetIdx = messageRef.widgets.findIndex(w => w.id === widget.id);
+                                                        if (widgetIdx >= 0) {
+                                                            messageRef.widgets[widgetIdx] = { ...widget, status: 'completed' };
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                            
+                                            // Process thinking blocks from current batch
+                                            thinkingBlocks.forEach(tb => {
+                                                const existingWidget = messageRef.widgets.find(w => w.id === tb.id);
+                                                if (!existingWidget) {
+                                                    // New thinking block - always start as 'active'
+                                                    messageRef.widgets.push({
+                                                        id: tb.id,
+                                                        type: 'thinking',
+                                                        data: { type: tb.type },
+                                                        status: 'active',
+                                                        content: tb.content || '',
+                                                        isExpanded: false
+                                                    });
+                                                } else {
+                                                    // Append content - keep as 'active' (block is still active since it's in current batch)
+                                                    existingWidget.content += tb.content;
+                                                    if (existingWidget.status !== 'active') {
+                                                        existingWidget.status = 'active';
+                                                    }
+                                                }
+                                            });
+                                            
                                             // Handle tool calls
                                             const toolCalls = this.extractToolCallsFromParts(message.parts);
                                             toolCalls.forEach(tc => {
@@ -1902,7 +2189,7 @@
                                                     });
                                                 }
                                             });
-
+                                            
                                             // Handle tool results
                                             const toolResults = this.extractToolResultsFromParts(message.parts);
                                             toolResults.forEach(tr => {
@@ -1914,30 +2201,6 @@
                                                     widget.status = tr.success ? 'success' : 'failed';
                                                     if (tr.content) {
                                                         widget.content = tr.content;
-                                                    }
-                                                }
-                                            });
-
-                                            // Handle thinking blocks
-                                            const thinkingBlocks = this.extractThinkingFromParts(message.parts);
-                                            thinkingBlocks.forEach(tb => {
-                                                if (!messageRef.widgets) {
-                                                    messageRef.widgets = [];
-                                                }
-                                                const existingWidget = messageRef.widgets.find(w => w.id === tb.id);
-                                                if (!existingWidget) {
-                                                    messageRef.widgets.push({
-                                                        id: tb.id,
-                                                        type: 'thinking',
-                                                        data: { type: tb.type },
-                                                        status: tb.content && tb.content.trim() ? 'completed' : 'active',
-                                                        content: tb.content,
-                                                        isExpanded: false
-                                                    });
-                                                } else {
-                                                    existingWidget.content += tb.content;
-                                                    if (existingWidget.content && existingWidget.content.trim()) {
-                                                        existingWidget.status = 'completed';
                                                     }
                                                 }
                                             });
@@ -1960,6 +2223,51 @@
                         this.isTyping = false;
                         this.isGenerating = false;
                         this.saveSessions();
+                        
+                        // CRITICAL: Finalize widgets in this code path too (approval response streaming)
+                        if (messageRef) {
+                            // FINALIZE ALL WIDGETS USING GENERIC FOUNDATION
+                            let statusChanged = false;
+                            
+                            messageRef.widgets.forEach((widget, idx) => {
+                                const config = this.getBadgeConfig(widget);
+                                if (!config) return;
+                                
+                                const currentStatus = widget.status;
+                                const hasContent = widget.content && widget.content.trim();
+                                const activeStates = ['pending', 'working', 'active'];
+                                if (!activeStates.includes(currentStatus)) return;
+                                
+                                let targetStatus = null;
+                                if (widget.type === 'tool' && currentStatus === 'working') {
+                                    targetStatus = 'success';
+                                } else if (widget.type === 'thinking' && currentStatus === 'active') {
+                                    if (hasContent) {
+                                        targetStatus = 'completed';
+                                    }
+                                }
+                                
+                                if (targetStatus && currentStatus !== targetStatus) {
+                                    const wouldShowCheck = config.getStatusIcon(targetStatus) === '✓';
+                                    if (wouldShowCheck || targetStatus === 'success') {
+                                        messageRef.widgets[idx] = { ...widget, status: targetStatus };
+                                        statusChanged = true;
+                                    }
+                                }
+                            });
+                            
+                            if (statusChanged) {
+                                const session = this.sessions[this.currentSessionId];
+                                if (session && messageRef) {
+                                    messageRef.widgets = messageRef.widgets.map(w => ({ ...w }));
+                                    const msgIndex = session.messages.findIndex(m => m.id === messageRef.id);
+                                    if (msgIndex >= 0) {
+                                        session.messages[msgIndex] = { ...messageRef };
+                                    }
+                                    this.saveSessions();
+                                }
+                            }
+                        }
                         
                         // Focus input when response finishes
                         this.focusInput();
