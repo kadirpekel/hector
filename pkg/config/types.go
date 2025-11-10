@@ -1369,6 +1369,7 @@ type TaskConfig struct {
 	WorkerPool   int            `yaml:"worker_pool,omitempty"`
 	SQL          *TaskSQLConfig `yaml:"sql,omitempty"`
 	InputTimeout int            `yaml:"input_timeout,omitempty"` // Timeout in seconds for INPUT_REQUIRED state (default: 600)
+	Timeout      int            `yaml:"timeout,omitempty"`      // Timeout in seconds for async task execution (default: 3600 = 1 hour)
 }
 
 func (c *TaskConfig) IsEnabled() bool {
@@ -1393,6 +1394,9 @@ func (c *TaskConfig) SetDefaults() {
 	}
 	if c.WorkerPool == 0 {
 		c.WorkerPool = 100
+	}
+	if c.Timeout == 0 {
+		c.Timeout = 3600 // Default: 1 hour
 	}
 	if c.SQL != nil {
 		c.SQL.SetDefaults()

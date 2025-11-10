@@ -819,43 +819,27 @@ func (w *restStreamWrapper) convertToAGUIEvents(resp *pb.StreamResponse) []*agui
 }
 
 // getAGUIEventType returns the SSE event type name for an AG-UI event
+// Converts: AGUI_EVENT_TYPE_MESSAGE_START -> message_start
 func (w *restStreamWrapper) getAGUIEventType(eventType aguipb.AGUIEventType) string {
-	switch eventType {
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_MESSAGE_START:
-		return "message_start"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_MESSAGE_DELTA:
-		return "message_delta"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_MESSAGE_STOP:
-		return "message_stop"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_CONTENT_BLOCK_START:
-		return "content_block_start"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_CONTENT_BLOCK_DELTA:
-		return "content_block_delta"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_CONTENT_BLOCK_STOP:
-		return "content_block_stop"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TOOL_CALL_START:
-		return "tool_call_start"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TOOL_CALL_DELTA:
-		return "tool_call_delta"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TOOL_CALL_STOP:
-		return "tool_call_stop"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_THINKING_START:
-		return "thinking_start"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_THINKING_DELTA:
-		return "thinking_delta"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_THINKING_STOP:
-		return "thinking_stop"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TASK_START:
-		return "task_start"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TASK_UPDATE:
-		return "task_update"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TASK_COMPLETE:
-		return "task_complete"
-	case aguipb.AGUIEventType_AGUI_EVENT_TYPE_TASK_ERROR:
-		return "task_error"
-	default:
+	enumStr := eventType.String()
+
+	// Handle UNSPECIFIED case before trimming
+	if enumStr == "AGUI_EVENT_TYPE_UNSPECIFIED" {
 		return "agui_event"
 	}
+
+	// Remove AGUI_EVENT_TYPE_ prefix
+	if strings.HasPrefix(enumStr, "AGUI_EVENT_TYPE_") {
+		enumStr = strings.TrimPrefix(enumStr, "AGUI_EVENT_TYPE_")
+	}
+
+	// Handle empty string case
+	if enumStr == "" {
+		return "agui_event"
+	}
+
+	// Convert to lowercase
+	return strings.ToLower(enumStr)
 }
 
 func (w *restStreamWrapper) sendCompletionEvent() {
@@ -963,6 +947,99 @@ func (g *RESTGateway) handleJSONRPCAgentScoped(w http.ResponseWriter, r *http.Re
 		resp, svcErr := g.service.SendMessage(ctx, &req)
 		if svcErr != nil {
 			g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Service error: %v", svcErr))
+			return
+		}
+
+		jsonData, marshalErr := g.marshaler.Marshal(resp)
+		if marshalErr != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Failed to marshal response: %v", marshalErr))
+			return
+		}
+
+		if unmarshalErr := json.Unmarshal(jsonData, &result); unmarshalErr != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Failed to unmarshal response: %v", unmarshalErr))
+			return
+		}
+
+	case "tasks/get":
+		// Get task by ID
+		var req pb.GetTaskRequest
+		if err := g.unmarshaler.Unmarshal(mappedParams, &req); err != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InvalidParams, fmt.Sprintf("Invalid params: %v", err))
+			return
+		}
+
+		task, svcErr := g.service.GetTask(ctx, &req)
+		if svcErr != nil {
+			// Convert gRPC error to JSON-RPC error
+			if strings.Contains(svcErr.Error(), "not found") {
+				g.sendJSONRPCError(w, rpcReq.ID, InvalidParams, fmt.Sprintf("Task not found: %v", svcErr))
+			} else if strings.Contains(svcErr.Error(), "Unimplemented") {
+				g.sendJSONRPCError(w, rpcReq.ID, InvalidRequest, "Task tracking not enabled")
+			} else {
+				g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Service error: %v", svcErr))
+			}
+			return
+		}
+
+		jsonData, marshalErr := g.marshaler.Marshal(task)
+		if marshalErr != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Failed to marshal response: %v", marshalErr))
+			return
+		}
+
+		if unmarshalErr := json.Unmarshal(jsonData, &result); unmarshalErr != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Failed to unmarshal response: %v", unmarshalErr))
+			return
+		}
+
+	case "tasks/cancel":
+		// Cancel a task
+		var req pb.CancelTaskRequest
+		if err := g.unmarshaler.Unmarshal(mappedParams, &req); err != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InvalidParams, fmt.Sprintf("Invalid params: %v", err))
+			return
+		}
+
+		task, svcErr := g.service.CancelTask(ctx, &req)
+		if svcErr != nil {
+			// Convert gRPC error to JSON-RPC error
+			if strings.Contains(svcErr.Error(), "not found") {
+				g.sendJSONRPCError(w, rpcReq.ID, InvalidParams, fmt.Sprintf("Task not found: %v", svcErr))
+			} else if strings.Contains(svcErr.Error(), "Unimplemented") {
+				g.sendJSONRPCError(w, rpcReq.ID, InvalidRequest, "Task tracking not enabled")
+			} else {
+				g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Service error: %v", svcErr))
+			}
+			return
+		}
+
+		jsonData, marshalErr := g.marshaler.Marshal(task)
+		if marshalErr != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Failed to marshal response: %v", marshalErr))
+			return
+		}
+
+		if unmarshalErr := json.Unmarshal(jsonData, &result); unmarshalErr != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Failed to unmarshal response: %v", unmarshalErr))
+			return
+		}
+
+	case "tasks/list":
+		// List tasks with filtering
+		var req pb.ListTasksRequest
+		if err := g.unmarshaler.Unmarshal(mappedParams, &req); err != nil {
+			g.sendJSONRPCError(w, rpcReq.ID, InvalidParams, fmt.Sprintf("Invalid params: %v", err))
+			return
+		}
+
+		resp, svcErr := g.service.ListTasks(ctx, &req)
+		if svcErr != nil {
+			if strings.Contains(svcErr.Error(), "Unimplemented") {
+				g.sendJSONRPCError(w, rpcReq.ID, InvalidRequest, "Task tracking not enabled")
+			} else {
+				g.sendJSONRPCError(w, rpcReq.ID, InternalError, fmt.Sprintf("Service error: %v", svcErr))
+			}
 			return
 		}
 

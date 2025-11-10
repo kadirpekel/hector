@@ -42,20 +42,10 @@ func (a *Agent) filterToolCallsWithApproval(
 	}
 
 	// Get taskID from context if available
-	taskID := ""
-	if taskIDValue := ctx.Value(taskIDContextKey); taskIDValue != nil {
-		if tid, ok := taskIDValue.(string); ok {
-			taskID = tid
-		}
-	}
+	taskID := getTaskIDFromContext(ctx)
 
 	// Check if we're resuming from INPUT_REQUIRED state with a user decision
-	userDecision := ""
-	if decisionValue := ctx.Value(userDecisionContextKey); decisionValue != nil {
-		if decision, ok := decisionValue.(string); ok {
-			userDecision = decision
-		}
-	}
+	userDecision := getUserDecisionFromContext(ctx)
 
 	for _, call := range toolCalls {
 		// Get tool configuration

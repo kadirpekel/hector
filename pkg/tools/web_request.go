@@ -316,3 +316,4 @@ func (t *WebRequestTool) GetName() string {
 func (t *WebRequestTool) GetDescription() string {
 	return "Make HTTP requests to external APIs and web services. Supports all HTTP methods, custom headers, and request bodies."
 }
+

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -115,18 +116,18 @@ func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*p
 			}, nil
 		}
 
-		if err := a.services.Task().UpdateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
+		if err := a.updateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to update task status: %v", err)
 		}
 
 		// Add taskID to context for HITL support (tool approval)
-		ctx = context.WithValue(ctx, taskIDContextKey, task.Id)
-		ctx = context.WithValue(ctx, SessionIDKey, contextID)
+		// Use EnsureAgentContext to maintain consistency
+		ctx = EnsureAgentContext(ctx, task.Id, contextID)
 
 		responseText, err := a.executeReasoningForA2A(ctx, userText, contextID)
 		if err != nil {
-			if updateErr := a.services.Task().UpdateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
-				return nil, status.Errorf(codes.Internal, "agent execution failed: %v (status update failed: %v)", err, updateErr)
+			if updateErr := a.updateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+				log.Printf("[Agent:%s] Failed to update task %s status to FAILED: %v", a.id, task.Id, updateErr)
 			}
 			return nil, status.Errorf(codes.Internal, "agent execution failed: %v", err)
 		}
@@ -137,7 +138,7 @@ func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*p
 			return nil, status.Errorf(codes.Internal, "failed to add response message: %v", err)
 		}
 
-		if err := a.services.Task().UpdateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_COMPLETED, responseMessage); err != nil {
+		if err := a.updateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_COMPLETED, responseMessage); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to update task status: %v", err)
 		}
 
@@ -222,7 +223,7 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 			return status.Errorf(codes.Internal, "failed to send task: %v", err)
 		}
 
-		if err := a.services.Task().UpdateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
+		if err := a.updateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
 			return status.Errorf(codes.Internal, "failed to update task status: %v", err)
 		}
 
@@ -242,7 +243,9 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 
 		strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
 		if err != nil {
-			_ = a.services.Task().UpdateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil)
+			if updateErr := a.updateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+				log.Printf("[Agent:%s] Failed to update task %s status to FAILED: %v", a.id, task.Id, updateErr)
+			}
 			return status.Errorf(codes.Internal, "failed to create strategy: %v", err)
 		}
 
@@ -262,11 +265,13 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 		}()
 
 		// Add taskID to context for tool approval
-		ctx = context.WithValue(ctx, taskIDContextKey, task.Id)
+		ctx = EnsureAgentContext(ctx, task.Id, contextID)
 
 		streamCh, err := a.execute(ctx, userText, strategy)
 		if err != nil {
-			_ = a.services.Task().UpdateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil)
+			if updateErr := a.updateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+				log.Printf("[Agent:%s] Failed to update task %s status to FAILED: %v", a.id, task.Id, updateErr)
+			}
 			return status.Errorf(codes.Internal, "reasoning failed: %v", err)
 		}
 
@@ -291,7 +296,9 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 			if err := stream.Send(&pb.StreamResponse{
 				Payload: &pb.StreamResponse_Msg{Msg: chunkMsg},
 			}); err != nil {
-				_ = a.services.Task().UpdateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil)
+				// Stream send failed - log error but don't try to update task status
+				// as the stream is already broken
+				log.Printf("[Agent:%s] Failed to send chunk to stream for task %s: %v", a.id, task.Id, err)
 				return status.Errorf(codes.Internal, "failed to send chunk: %v", err)
 			}
 		}
@@ -303,7 +310,7 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 			return status.Errorf(codes.Internal, "failed to add response message: %v", err)
 		}
 
-		if err := a.services.Task().UpdateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_COMPLETED, responseMessage); err != nil {
+		if err := a.updateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_COMPLETED, responseMessage); err != nil {
 			return status.Errorf(codes.Internal, "failed to update task status: %v", err)
 		}
 
@@ -562,18 +569,52 @@ func (a *Agent) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) (*pb.
 	}
 
 	// Cancel active execution context if exists
-	a.executionsMu.RLock()
-	if cancelFunc, exists := a.activeExecutions[taskID]; exists {
-		a.executionsMu.RUnlock()
-		cancelFunc() // Cancel the context to stop execution
-	} else {
-		a.executionsMu.RUnlock()
+	// Lock properly to prevent race condition: get cancel function and remove from map atomically
+	// We need to ensure atomic cancellation: cancel the context AND update task status together
+	var cancelFunc context.CancelFunc
+	var shouldCancel bool
+	
+	a.executionsMu.Lock()
+	if cancel, exists := a.activeExecutions[taskID]; exists {
+		cancelFunc = cancel
+		shouldCancel = true
+		// Don't delete yet - we'll delete after ensuring cancellation is complete
 	}
+	a.executionsMu.Unlock()
 
-	// Cancel any waiting input requests
+	// Cancel any waiting input requests first (before cancelling execution)
+	// This ensures HITL tasks are properly cancelled
 	a.taskAwaiter.CancelWaiting(taskID)
 
+	// Cancel the execution context if it exists
+	// This must happen before CancelTask to ensure execution stops before status update
+	if shouldCancel && cancelFunc != nil {
+		cancelFunc() // Cancel the context to stop execution
+	}
+
+	// Validate cancellation is allowed (get current state first)
+	currentTask, err := a.services.Task().GetTask(ctx, taskID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get task: %v", err)
+	}
+
+	// Validate transition to CANCELLED (business logic validation)
+	if err := validateStateTransition(currentTask.Status.State, pb.TaskState_TASK_STATE_CANCELLED); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "cannot cancel task: %v", err)
+	}
+
+	// Now update task status - this is safe because:
+	// 1. Execution context is cancelled (goroutine will exit)
+	// 2. Waiting input is cancelled (HITL is resolved)
+	// 3. State transition is validated
 	task, err := a.services.Task().CancelTask(ctx, taskID)
+	
+	// Clean up execution tracking after cancellation is complete
+	if shouldCancel {
+		a.executionsMu.Lock()
+		delete(a.activeExecutions, taskID)
+		a.executionsMu.Unlock()
+	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to cancel task: %v", err)
 	}
@@ -626,21 +667,34 @@ func (a *Agent) DeleteTaskPushNotificationConfig(ctx context.Context, req *pb.De
 }
 
 func (a *Agent) processTaskAsync(taskID, userText, contextID string) {
+	// Add panic recovery to ensure task status is always updated
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[Agent:%s] PANIC in async task %s: %v", a.id, taskID, r)
+			// Try to update task status to FAILED
+			ctx := context.Background()
+			if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+				log.Printf("[Agent:%s] Failed to update task %s status after panic: %v", a.id, taskID, updateErr)
+			}
+		}
+	}()
+
 	if a.taskWorkers != nil {
 		a.taskWorkers <- struct{}{}
 		defer func() { <-a.taskWorkers }()
 	}
 
-	ctx := context.Background()
-
-	// Add taskID to context for tool approval logic
-	ctx = context.WithValue(ctx, taskIDContextKey, taskID)
-
-	// Create cancellable context for this task execution
-	ctx, cancel := context.WithCancel(ctx)
+	// Create cancellable context with timeout for async task execution
+	// Use context with timeout to prevent indefinite execution
+	// Timeout is configurable per agent via TaskConfig.Timeout (default: 1 hour)
+	timeout := 1 * time.Hour // Default
+	if a.config.Task != nil && a.config.Task.Timeout > 0 {
+		timeout = time.Duration(a.config.Task.Timeout) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// Register cancellation function for this task
+	// Register cancellation function for this task BEFORE setting context values
 	a.executionsMu.Lock()
 	a.activeExecutions[taskID] = cancel
 	a.executionsMu.Unlock()
@@ -651,22 +705,42 @@ func (a *Agent) processTaskAsync(taskID, userText, contextID string) {
 		a.executionsMu.Unlock()
 	}()
 
-	if err := a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
-		return
-	}
+	// Add taskID to context for tool approval logic
+	ctx = EnsureAgentContext(ctx, taskID, contextID)
 
-	// Execute with HITL support
-	// The execute() method handles HITL inline - when a tool requires approval,
-	// it waits for user input, then continues execution. The channel from execute()
-	// remains open until execution fully completes (including resumed execution
-	// after approval). So executeReasoningForA2A will block until everything is done.
-	// The IsWaiting check below handles edge cases where execution was cancelled
-	// or timed out while waiting for input.
-	ctx = context.WithValue(ctx, SessionIDKey, contextID)
+	// Retry status update with exponential backoff
+	if err := a.updateTaskStatusWithRetry(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
+		log.Printf("[Agent:%s] Failed to update task %s status to WORKING after retries: %v", a.id, taskID, err)
+		// Don't return - task creation succeeded, just status update failed
+		// Task will still be created and can be queried
+	}
 
 	responseText, err := a.executeReasoningForA2A(ctx, userText, contextID)
 	if err != nil {
-		_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil)
+		// Check if error is due to context cancellation/timeout
+		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
+			log.Printf("[Agent:%s] Task %s execution cancelled or timed out: %v", a.id, taskID, err)
+			// Update task status based on cancellation reason
+			if ctx.Err() == context.DeadlineExceeded {
+				if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+					log.Printf("[Agent:%s] Failed to update task %s status after timeout: %v", a.id, taskID, updateErr)
+				}
+			} else {
+				// Cancelled - task should be in CANCELLED state (handled by CancelTask)
+				// But if it's still active, mark as cancelled
+				if a.taskAwaiter.IsWaiting(taskID) {
+					// Task was cancelled while waiting for input
+					if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_CANCELLED, nil); updateErr != nil {
+						log.Printf("[Agent:%s] Failed to update task %s status after cancellation: %v", a.id, taskID, updateErr)
+					}
+				}
+			}
+		} else {
+			log.Printf("[Agent:%s] Task %s execution failed: %v", a.id, taskID, err)
+			if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+				log.Printf("[Agent:%s] Failed to update task %s status to FAILED: %v", a.id, taskID, updateErr)
+			}
+		}
 		return
 	}
 
@@ -677,17 +751,24 @@ func (a *Agent) processTaskAsync(taskID, userText, contextID string) {
 	if a.taskAwaiter.IsWaiting(taskID) {
 		// Task is still in INPUT_REQUIRED state, don't complete it yet
 		// Execution will resume when user provides input via SendMessage
+		log.Printf("[Agent:%s] Task %s still waiting for user input, not completing", a.id, taskID)
 		return
 	}
 
 	responseMessage := a.createResponseMessage(responseText, contextID, taskID)
 
 	if err := a.services.Task().AddTaskMessage(ctx, taskID, responseMessage); err != nil {
-		_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil)
+		log.Printf("[Agent:%s] Failed to add response message to task %s: %v", a.id, taskID, err)
+		if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+			log.Printf("[Agent:%s] Failed to update task %s status to FAILED: %v", a.id, taskID, updateErr)
+		}
 		return
 	}
 
-	_ = a.services.Task().UpdateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_COMPLETED, responseMessage)
+	if err := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_COMPLETED, responseMessage); err != nil {
+		log.Printf("[Agent:%s] Failed to update task %s status to COMPLETED: %v", a.id, taskID, err)
+		// Don't return - task completed successfully, just status update failed
+	}
 }
 
 // executeReasoningForA2A executes agent reasoning and collects the full response text.
@@ -700,9 +781,7 @@ func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, con
 	}
 
 	// Set SessionIDKey if not already set (may be set by caller)
-	if ctx.Value(SessionIDKey) == nil {
-		ctx = context.WithValue(ctx, SessionIDKey, contextID)
-	}
+	ctx = EnsureAgentContext(ctx, "", contextID)
 
 	streamCh, err := a.execute(ctx, userText, strategy)
 	if err != nil {

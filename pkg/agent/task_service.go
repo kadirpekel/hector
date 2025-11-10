@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
@@ -86,6 +87,9 @@ func (s *InMemoryTaskService) UpdateTaskStatus(ctx context.Context, taskID strin
 	if !exists {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
+
+	// Note: State transition validation happens at Agent level (business logic layer)
+	// This storage layer just persists what it's told
 
 	now := timestamppb.Now()
 	task.Status = &pb.TaskStatus{
@@ -298,9 +302,29 @@ func (s *InMemoryTaskService) SubscribeToTask(ctx context.Context, taskID string
 	s.subscribers[taskID] = append(s.subscribers[taskID], ch)
 	s.subscribersMu.Unlock()
 
+	// Ensure cleanup happens even if goroutine panics
+	cleanupDone := make(chan struct{})
 	go func() {
-		<-ctx.Done()
-		s.unsubscribe(taskID, ch)
+		defer close(cleanupDone)
+		defer func() {
+			if r := recover(); r != nil {
+				// Panic recovery - still cleanup
+				s.unsubscribe(taskID, ch)
+			}
+		}()
+
+		select {
+		case <-ctx.Done():
+			s.unsubscribe(taskID, ch)
+		case <-time.After(30 * time.Minute):
+			// Timeout to prevent memory leaks - close subscription after 30 minutes
+			s.unsubscribe(taskID, ch)
+		}
+	}()
+
+	// Monitor cleanup goroutine to ensure it completes
+	go func() {
+		<-cleanupDone
 	}()
 
 	return ch, nil

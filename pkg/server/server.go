@@ -300,6 +300,27 @@ func (s *Server) runLifecycle() {
 func (s *Server) cleanup(ctx context.Context) {
 	var shutdownErrors []error
 
+	// Shutdown all agents gracefully first
+	if s.runtime != nil {
+		agentRegistry := s.runtime.Registry()
+		if agentRegistry != nil {
+			agentIDs := agentRegistry.ListAgents()
+			for _, agentID := range agentIDs {
+				agent, err := agentRegistry.GetAgent(agentID)
+				if err != nil {
+					log.Printf("Warning: Failed to get agent %s for shutdown: %v", agentID, err)
+					continue
+				}
+				// Check if agent implements Shutdown method
+				if shutdownable, ok := agent.(interface{ Shutdown(context.Context) error }); ok {
+					if err := shutdownable.Shutdown(ctx); err != nil {
+						shutdownErrors = append(shutdownErrors, fmt.Errorf("agent %s: %w", agentID, err))
+					}
+				}
+			}
+		}
+	}
+
 	if s.grpcServer != nil {
 		if err := s.grpcServer.Stop(ctx); err != nil {
 			shutdownErrors = append(shutdownErrors, fmt.Errorf("gRPC: %w", err))

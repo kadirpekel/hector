@@ -227,6 +227,8 @@ WHERE id = $1
 }
 
 func (s *SQLTaskService) UpdateTaskStatus(ctx context.Context, taskID string, state pb.TaskState, message *pb.Message) error {
+	// Note: State transition validation happens at Agent level (business logic layer)
+	// This storage layer just persists what it's told
 
 	task, err := s.GetTask(ctx, taskID)
 	if err != nil {
