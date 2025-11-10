@@ -130,7 +130,8 @@ llms:
 document_stores:
   codebase:
     name: "codebase"
-    paths: ["./src/", "./lib/"]
+    source: "directory"  # Optional: defaults to "directory"
+    path: "./src/"
 
 # Agent with Semantic Search
 agents:
@@ -239,6 +240,105 @@ curl -X POST http://localhost:6334/collections/codebase/points/search \
 
 ## Customizing Your Setup
 
+### Document Store Sources
+
+Hector supports three types of document store sources:
+
+1. **Directory** - Index files from local filesystem
+2. **SQL** - Index data from SQL databases
+3. **API** - Index data from REST API endpoints
+
+### SQL Database Source
+
+Index content from SQL databases (PostgreSQL, MySQL, SQLite):
+
+```yaml
+document_stores:
+  database_content:
+    name: "database_content"
+    source: "sql"
+    sql:
+      driver: "sqlite3"              # "postgres", "mysql", or "sqlite3"
+      database: "./data/content.db"  # Database name or file path
+    sql_tables:
+      - table: "articles"
+        columns: ["title", "content"]  # Columns to concatenate as content
+        id_column: "id"                  # Primary key
+        updated_column: "updated_at"      # For incremental indexing
+        metadata_columns: ["author", "category"]
+    chunk_size: 800
+```
+
+**PostgreSQL Example:**
+```yaml
+document_stores:
+  production_db:
+    name: "production_db"
+    source: "sql"
+    sql:
+      driver: "postgres"
+      host: "db.example.com"
+      port: 5432
+      database: "content_db"
+      username: "${DB_USER}"
+      password: "${DB_PASSWORD}"
+      ssl_mode: "require"
+    sql_tables:
+      - table: "articles"
+        columns: ["title", "body"]
+        id_column: "id"
+        updated_column: "updated_at"
+        where_clause: "published = true"  # Optional filtering
+        metadata_columns: ["author_id", "category_id"]
+```
+
+### REST API Source
+
+Index content from REST API endpoints:
+
+```yaml
+document_stores:
+  api_content:
+    name: "api_content"
+    source: "api"
+    api:
+      base_url: "https://api.example.com"
+      auth:
+        type: "bearer"
+        token: "${API_TOKEN}"
+      endpoints:
+        - path: "/articles"
+          method: "GET"
+          id_field: "id"
+          content_field: "title,content"  # Comma-separated fields
+          metadata_fields: ["author", "published_at"]
+          updated_field: "updated_at"      # For incremental indexing
+```
+
+**Paginated API Example:**
+```yaml
+document_stores:
+  products_api:
+    name: "products_api"
+    source: "api"
+    api:
+      base_url: "https://api.store.com"
+      auth:
+        type: "apikey"
+        token: "${STORE_API_KEY}"
+        header: "X-API-Key"
+      endpoints:
+        - path: "/products"
+          id_field: "id"
+          content_field: "name,description"
+          pagination:
+            type: "page"
+            page_param: "page"
+            size_param: "per_page"
+            page_size: 100
+            max_pages: 50
+```
+
 ### Multiple Document Stores
 
 Index different types of content with different settings:
@@ -248,20 +348,47 @@ document_stores:
   # Source code - small chunks for precision
   source_code:
     name: "source_code"
-    paths: ["./src/"]
+    source: "directory"
+    path: "./src/"
     chunk_size: 512
   
   # Documentation - large chunks for context
   documentation:
     name: "documentation"
-    paths: ["./docs/"]
+    source: "directory"
+    path: "./docs/"
     chunk_size: 2048
   
-  # Configuration files - small chunks
-  configs:
-    name: "configs"
-    paths: ["./config/"]
-    chunk_size: 256
+  # Database content - from SQL
+  database_content:
+    name: "database_content"
+    source: "sql"
+    sql:
+      driver: "sqlite3"
+      database: "./data/content.db"
+    sql_tables:
+      - table: "articles"
+        columns: ["title", "content"]
+        id_column: "id"
+        updated_column: "updated_at"
+        metadata_columns: ["author", "category"]
+    chunk_size: 800
+  
+  # API content - from REST API
+  api_content:
+    name: "api_content"
+    source: "api"
+    api:
+      base_url: "https://api.example.com"
+      auth:
+        type: "bearer"
+        token: "${API_TOKEN}"
+      endpoints:
+        - path: "/articles"
+          id_field: "id"
+          content_field: "title,content"
+          metadata_fields: ["author", "published_at"]
+    chunk_size: 800
 ```
 
 ### Smart Exclusion Patterns

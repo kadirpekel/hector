@@ -271,16 +271,46 @@ func (s *SQLSource) ReadDocument(ctx context.Context, id string) (*Document, err
 	}
 	content := strings.Join(contentParts, "\n\n")
 
+	// Extract last modified time
+	var lastModified time.Time
+	updatedIdx := len(tableConfig.Columns) + 1 // ID column is after content columns
+	if tableConfig.UpdatedColumn != "" {
+		if updatedIdx < len(values) && values[updatedIdx] != nil {
+			switch v := values[updatedIdx].(type) {
+			case time.Time:
+				lastModified = v
+			case string:
+				if t, err := time.Parse(time.RFC3339, v); err == nil {
+					lastModified = t
+				}
+			}
+		}
+	}
+
+	// Build metadata
 	metadata := make(map[string]interface{})
 	metadata["table"] = tableConfig.Table
 	metadata["id"] = values[idIdx]
+	
+	// Extract metadata columns
+	metadataStartIdx := len(tableConfig.Columns) + 1 // After ID column
+	if tableConfig.UpdatedColumn != "" {
+		metadataStartIdx++ // After updated column
+	}
+	for i, col := range tableConfig.MetadataColumns {
+		idx := metadataStartIdx + i
+		if idx < len(values) && values[idx] != nil {
+			metadata[col] = values[idx]
+		}
+	}
 
 	return &Document{
-		ID:          id,
-		Content:     content,
-		Metadata:    metadata,
-		Size:        int64(len(content)),
-		ShouldIndex: true,
+		ID:           id,
+		Content:      content,
+		Metadata:     metadata,
+		LastModified: lastModified,
+		Size:         int64(len(content)),
+		ShouldIndex:  true,
 	}, nil
 }
 

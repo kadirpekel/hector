@@ -781,14 +781,22 @@ embedders:
 
 ## Document Stores
 
-Document stores enable RAG (Retrieval-Augmented Generation) by indexing local directories for semantic search.
+Document stores enable RAG (Retrieval-Augmented Generation) by indexing documents from various sources for semantic search. Hector supports three source types:
+
+- **`directory`** - Index files from local filesystem directories
+- **`sql`** - Index data from SQL databases (PostgreSQL, MySQL, SQLite)
+- **`api`** - Index data from REST API endpoints
+
+### Directory Source
+
+Index files from local directories:
 
 ```yaml
 document_stores:
   codebase:
     # Basic configuration
     name: "codebase"              # Required: Store identifier
-    source: "directory"           # Required: Source type (only "directory" supported)
+    source: "directory"           # Required: Source type
     path: "./src"                 # Required: Directory to index
 
     # File filtering
@@ -864,14 +872,296 @@ When indexing large directories, Hector shows:
 
 If interrupted (Ctrl+C), checkpoints enable resuming from where it left off.
 
-**Example - Minimal:**
+### SQL Source
+
+Index data from SQL databases (PostgreSQL, MySQL, SQLite):
+
+```yaml
+document_stores:
+  database_content:
+    name: "database_content"
+    source: "sql"                 # Required: Source type
+    
+    # Database connection
+    sql:
+      driver: "postgres"           # Required: "postgres", "mysql", or "sqlite3"
+      host: "localhost"            # Optional: Database host (not needed for SQLite)
+      port: 5432                   # Optional: Database port (not needed for SQLite)
+      database: "mydb"             # Required: Database name (or file path for SQLite)
+      username: "user"             # Optional: Database username
+      password: "${DB_PASSWORD}"   # Optional: Database password
+      ssl_mode: "disable"          # Optional: SSL mode (for PostgreSQL)
+    
+    # Tables to index
+    sql_tables:
+      - table: "articles"          # Required: Table name
+        columns:                   # Required: Columns to concatenate as content
+          - "title"
+          - "content"
+        id_column: "id"            # Required: Primary key or unique identifier
+        updated_column: "updated_at"  # Optional: Column for tracking updates (enables incremental indexing)
+        where_clause: "status = 'published'"  # Optional: WHERE clause for filtering
+        metadata_columns:          # Optional: Columns to include as metadata
+          - "author"
+          - "category"
+          - "created_at"
+      
+      - table: "products"
+        columns:
+          - "name"
+          - "description"
+        id_column: "id"
+        updated_column: "updated_at"
+        metadata_columns:
+          - "price"
+          - "status"
+    
+    sql_max_rows: 10000            # Optional: Maximum rows to index per table (default: 10000)
+    
+    # Chunking configuration (same as directory source)
+    chunk_size: 800
+    chunk_overlap: 50
+    chunk_strategy: "simple"
+    
+    # Incremental indexing (requires updated_column)
+    incremental_indexing: true
+```
+
+**Supported Databases:**
+
+| Driver | Description | Connection String Format |
+|--------|-------------|------------------------|
+| `postgres` or `pgx` | PostgreSQL | `host=... port=... user=... password=... dbname=... sslmode=...` |
+| `mysql` | MySQL/MariaDB | `user:password@tcp(host:port)/database` |
+| `sqlite3` | SQLite | File path (database field) |
+
+**Example - SQLite:**
+```yaml
+document_stores:
+  local_db:
+    name: "local_db"
+    source: "sql"
+    sql:
+      driver: "sqlite3"
+      database: "./data/content.db"
+    sql_tables:
+      - table: "articles"
+        columns: ["title", "content"]
+        id_column: "id"
+        updated_column: "updated_at"
+        metadata_columns: ["author", "category"]
+```
+
+**Example - PostgreSQL:**
+```yaml
+document_stores:
+  production_db:
+    name: "production_db"
+    source: "sql"
+    sql:
+      driver: "postgres"
+      host: "db.example.com"
+      port: 5432
+      database: "content_db"
+      username: "${DB_USER}"
+      password: "${DB_PASSWORD}"
+      ssl_mode: "require"
+    sql_tables:
+      - table: "articles"
+        columns: ["title", "body"]
+        id_column: "id"
+        updated_column: "updated_at"
+        where_clause: "published = true"
+        metadata_columns: ["author_id", "category_id"]
+```
+
+### API Source
+
+Index data from REST API endpoints:
+
+```yaml
+document_stores:
+  api_content:
+    name: "api_content"
+    source: "api"                  # Required: Source type
+    
+    # API configuration
+    api:
+      base_url: "https://api.example.com"  # Required: Base URL for API
+      
+      # Global authentication (applied to all endpoints)
+      auth:
+        type: "bearer"             # "bearer", "basic", or "apikey"
+        token: "${API_TOKEN}"      # Token/API key
+        # For basic auth:
+        # user: "username"
+        # pass: "password"
+        # For apikey:
+        # header: "X-API-Key"      # Header name (default: "X-API-Key")
+      
+      # Endpoints to index
+      endpoints:
+        - path: "/articles"        # Required: API path (relative to base_url)
+          method: "GET"            # Optional: HTTP method (default: "GET")
+          
+          # Query parameters
+          params:                   # Optional: Query parameters
+            status: "published"
+            limit: "100"
+          
+          # Custom headers
+          headers:                  # Optional: Additional headers
+            X-Custom-Header: "value"
+          
+          # Request body (for POST/PUT)
+          body: '{"filter": "active"}'  # Optional: Request body
+          
+          # Document extraction
+          id_field: "id"           # Required: JSON field to use as document ID
+          content_field: "title,content"  # Required: JSON field(s) for content (comma-separated)
+          metadata_fields:         # Optional: JSON fields to include as metadata
+            - "author"
+            - "category"
+            - "published_at"
+          updated_field: "updated_at"  # Optional: JSON field for last modified (enables incremental indexing)
+          
+          # Endpoint-specific authentication (overrides global)
+          auth:
+            type: "bearer"
+            token: "${ENDPOINT_TOKEN}"
+        
+        - path: "/products"
+          method: "GET"
+          id_field: "id"
+          content_field: "name,description"
+          metadata_fields: ["price", "status"]
+          
+          # Pagination support
+          pagination:
+            type: "page"           # "page", "offset", "cursor", or "link"
+            page_param: "page"     # Query parameter name for page number
+            size_param: "size"     # Query parameter name for page size
+            page_size: 50          # Items per page
+            max_pages: 100         # Maximum pages to fetch (0 = unlimited)
+            data_field: "items"    # Optional: JSON field containing array (if nested)
+            next_field: "next"     # Optional: JSON field containing next page URL/cursor
+```
+
+**Authentication Types:**
+
+| Type | Description | Required Fields |
+|------|-------------|-----------------|
+| `bearer` | Bearer token authentication | `token` |
+| `basic` | HTTP Basic authentication | `user`, `pass` |
+| `apikey` | API key in header | `token`, `header` (optional, defaults to "X-API-Key") |
+
+**Pagination Types:**
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `page` | Page-based pagination | APIs using `?page=1&size=50` |
+| `offset` | Offset-based pagination | APIs using `?offset=0&limit=50` |
+| `cursor` | Cursor-based pagination | APIs using cursor tokens |
+| `link` | Link-based pagination | APIs returning `next` URL in response |
+
+**Example - Simple API:**
+```yaml
+document_stores:
+  blog_api:
+    name: "blog_api"
+    source: "api"
+    api:
+      base_url: "https://api.blog.com"
+      auth:
+        type: "bearer"
+        token: "${BLOG_API_TOKEN}"
+      endpoints:
+        - path: "/posts"
+          method: "GET"
+          id_field: "id"
+          content_field: "title,body"
+          metadata_fields: ["author", "published_at"]
+```
+
+**Example - Paginated API:**
+```yaml
+document_stores:
+  products_api:
+    name: "products_api"
+    source: "api"
+    api:
+      base_url: "https://api.store.com"
+      auth:
+        type: "apikey"
+        token: "${STORE_API_KEY}"
+        header: "X-API-Key"
+      endpoints:
+        - path: "/products"
+          method: "GET"
+          id_field: "id"
+          content_field: "name,description"
+          metadata_fields: ["price", "category"]
+          pagination:
+            type: "page"
+            page_param: "page"
+            size_param: "per_page"
+            page_size: 100
+            max_pages: 50
+```
+
+**Example - Multiple Endpoints:**
+```yaml
+document_stores:
+  multi_api:
+    name: "multi_api"
+    source: "api"
+    api:
+      base_url: "https://api.example.com"
+      auth:
+        type: "bearer"
+        token: "${API_TOKEN}"
+      endpoints:
+        - path: "/articles"
+          id_field: "id"
+          content_field: "title,content"
+        - path: "/docs"
+          id_field: "id"
+          content_field: "title,body"
+        - path: "/faq"
+          id_field: "id"
+          content_field: "question,answer"
+```
+
+### Common Configuration (All Sources)
+
+All document store sources support these common options:
+
+```yaml
+document_stores:
+  my_store:
+    # Chunking configuration
+    chunk_size: 800               # Default: 800 characters per chunk
+    chunk_overlap: 0              # Default: 0 characters overlap
+    chunk_strategy: "simple"      # Options: "simple", "overlapping", "semantic"
+    
+    # Incremental indexing (SQL and API sources)
+    incremental_indexing: true    # Default: true - Only reindex changed documents
+    
+    # Metadata extraction (directory source only)
+    extract_metadata: false       # Default: false - Extract code metadata
+    metadata_languages:           # Languages for metadata extraction
+      - "go"
+      - "python"
+```
+
+**Example - Minimal (Directory):**
 ```yaml
 document_stores:
   docs:
     path: "./documentation"
 ```
 
-**Example - Advanced:**
+**Example - Advanced (Directory):**
 ```yaml
 document_stores:
   codebase:

@@ -79,8 +79,8 @@ agents:
     tools: ["search"]
     document_stores:
       - name: "codebase"
-        paths: ["./src/"]
-        include_patterns: ["*.go", "*.py", "*.js"]
+        source: "directory"
+        path: "./src/"
 ```
 
 ### 4. Test It
@@ -95,9 +95,13 @@ The agent will semantically search your code and answer!
 
 ## Document Stores
 
-Document stores define what gets indexed for search.
+Document stores define what gets indexed for search. Hector supports three source types:
 
-### Basic Configuration
+- **Directory** - Index files from local filesystem
+- **SQL** - Index data from SQL databases (PostgreSQL, MySQL, SQLite)
+- **API** - Index data from REST API endpoints
+
+### Basic Configuration (Directory Source)
 
 ```yaml
 agents:
@@ -106,9 +110,51 @@ agents:
     embedder: "embedder"
     document_stores:
       - name: "docs"
-        paths: ["./documentation/"]
+        source: "directory"  # Optional: defaults to "directory"
+        path: "./documentation/"
         # Note: Defaults to parseable file types (text + .pdf/.docx/.xlsx)
         # To restrict further: include_patterns: ["*.md", "*.txt"]
+```
+
+### SQL Database Source
+
+Index content from SQL databases:
+
+```yaml
+document_stores:
+  database_content:
+    name: "database_content"
+    source: "sql"
+    sql:
+      driver: "sqlite3"  # "postgres", "mysql", or "sqlite3"
+      database: "./data/content.db"
+    sql_tables:
+      - table: "articles"
+        columns: ["title", "content"]
+        id_column: "id"
+        updated_column: "updated_at"
+        metadata_columns: ["author", "category"]
+```
+
+### REST API Source
+
+Index content from REST API endpoints:
+
+```yaml
+document_stores:
+  api_content:
+    name: "api_content"
+    source: "api"
+    api:
+      base_url: "https://api.example.com"
+      auth:
+        type: "bearer"
+        token: "${API_TOKEN}"
+      endpoints:
+        - path: "/articles"
+          id_field: "id"
+          content_field: "title,content"
+          metadata_fields: ["author", "published_at"]
 ```
 
 ### Multiple Document Stores
@@ -120,20 +166,36 @@ agents:
     embedder: "embedder"
     document_stores:
       - name: "codebase"
-        paths: ["./src/", "./lib/"]
-        # Note: Defaults to common text files + .pdf/.docx/.xlsx
-        # include_patterns: ["*.go", "*.py"]  # Optional: restrict to specific types
+        source: "directory"
+        path: "./src/"
         chunk_size: 512
       
       - name: "documentation"
-        paths: ["./docs/"]
+        source: "directory"
+        path: "./docs/"
         include_patterns: ["*.md"]
         chunk_size: 1024
       
-      - name: "configs"
-        paths: ["./configs/"]
-        include_patterns: ["*.yaml", "*.json"]
-        chunk_size: 256
+      - name: "database_content"
+        source: "sql"
+        sql:
+          driver: "sqlite3"
+          database: "./data/content.db"
+        sql_tables:
+          - table: "articles"
+            columns: ["title", "content"]
+            id_column: "id"
+        chunk_size: 800
+      
+      - name: "api_content"
+        source: "api"
+        api:
+          base_url: "https://api.example.com"
+          endpoints:
+            - path: "/articles"
+              id_field: "id"
+              content_field: "title,content"
+        chunk_size: 800
 ```
 
 ### Configuration Options
@@ -141,7 +203,8 @@ agents:
 ```yaml
 document_stores:
   - name: "my_store"
-    paths: ["./path1/", "./path2/"]
+    source: "directory"  # "directory", "sql", or "api"
+    path: "./path1/"     # For directory source
     include_patterns: ["*.ext"]  # Optional: defaults to common text files + .pdf/.docx/.xlsx
     
     # Chunking
@@ -155,7 +218,7 @@ document_stores:
     collection: "my_collection"  # Qdrant collection name
     batch_size: 100           # Documents per batch
     
-    # Filtering
+    # Filtering (directory source only)
     exclude_patterns: ["*_test.go", "*.min.js"]
 ```
 
