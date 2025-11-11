@@ -192,34 +192,3 @@ func (a *Agent) shouldUseAsyncHITL() bool {
 		return hasSessionStore // Fallback to auto-detect
 	}
 }
-
-// validateHITLConfig validates HITL configuration (called at agent initialization)
-func (a *Agent) validateHITLConfig() error {
-	taskCfg := a.config.Task
-	if taskCfg == nil {
-		return nil // No task config, no HITL
-	}
-
-	hitlMode := "auto" // Default
-	if taskCfg.HITL != nil && taskCfg.HITL.Mode != "" {
-		hitlMode = taskCfg.HITL.Mode
-	}
-
-	hasSessionStore := a.services.Session() != nil
-
-	switch hitlMode {
-	case "async":
-		if !hasSessionStore {
-			return fmt.Errorf("async HITL requires session_store to be configured")
-		}
-	case "blocking":
-		// Always allowed, even if session_store exists
-	case "auto":
-		// Auto-detect: no validation needed
-	default:
-		return fmt.Errorf("invalid hitl.mode: %s (must be 'auto', 'blocking', or 'async')", hitlMode)
-	}
-
-	return nil
-}
-

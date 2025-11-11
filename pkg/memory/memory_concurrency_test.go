@@ -59,6 +59,11 @@ func (m *mockSessionService) GetOrCreateSessionMetadata(sessionID string) (*reas
 	return &reasoning.SessionMetadata{ID: sessionID}, nil
 }
 
+func (m *mockSessionService) UpdateSessionMetadata(sessionID string, metadata map[string]interface{}) error {
+	// Mock implementation - just return success
+	return nil
+}
+
 func (m *mockSessionService) DeleteSession(sessionID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

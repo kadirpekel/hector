@@ -1373,7 +1373,7 @@ type TaskConfig struct {
 	SQL          *TaskSQLConfig `yaml:"sql,omitempty"`
 	InputTimeout int            `yaml:"input_timeout,omitempty"` // Timeout in seconds for INPUT_REQUIRED state (default: 600)
 	Timeout      int            `yaml:"timeout,omitempty"`       // Timeout in seconds for async task execution (default: 3600 = 1 hour)
-	HITL         *HITLConfig    `yaml:"hitl,omitempty"`         // Human-in-the-loop configuration
+	HITL         *HITLConfig    `yaml:"hitl,omitempty"`          // Human-in-the-loop configuration
 }
 
 type HITLConfig struct {
