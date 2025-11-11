@@ -28,28 +28,28 @@ type OllamaProvider struct {
 }
 
 type OllamaRequest struct {
-	Model      string           `json:"model"`
-	Messages   []OllamaMessage  `json:"messages"`
-	Stream     bool             `json:"stream"`
-	Format     interface{}      `json:"format,omitempty"` // "json" string or schema object
-	Options    *OllamaOptions   `json:"options,omitempty"`
-	Tools      []OllamaTool     `json:"tools,omitempty"`
-	ToolChoice string           `json:"tool_choice,omitempty"`
-	Think      interface{}      `json:"think,omitempty"` // true/false or "low"/"medium"/"high" for GPT-OSS
+	Model      string          `json:"model"`
+	Messages   []OllamaMessage `json:"messages"`
+	Stream     bool            `json:"stream"`
+	Format     interface{}     `json:"format,omitempty"` // "json" string or schema object
+	Options    *OllamaOptions  `json:"options,omitempty"`
+	Tools      []OllamaTool    `json:"tools,omitempty"`
+	ToolChoice string          `json:"tool_choice,omitempty"`
+	Think      interface{}     `json:"think,omitempty"` // true/false or "low"/"medium"/"high" for GPT-OSS
 }
 
 type OllamaMessage struct {
-	Role       string                 `json:"role"`
-	Content    string                 `json:"content"`
-	Thinking   string                 `json:"thinking,omitempty"` // Thinking/reasoning trace
-	ToolCalls  []OllamaToolCall       `json:"tool_calls,omitempty"`
-	ToolCallID string                 `json:"tool_call_id,omitempty"`
-	ToolName   string                 `json:"tool_name,omitempty"` // For tool result messages
+	Role       string           `json:"role"`
+	Content    string           `json:"content"`
+	Thinking   string           `json:"thinking,omitempty"` // Thinking/reasoning trace
+	ToolCalls  []OllamaToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string           `json:"tool_call_id,omitempty"`
+	ToolName   string           `json:"tool_name,omitempty"` // For tool result messages
 }
 
 type OllamaTool struct {
-	Type     string                 `json:"type"`
-	Function OllamaToolFunction     `json:"function"`
+	Type     string             `json:"type"`
+	Function OllamaToolFunction `json:"function"`
 }
 
 type OllamaToolFunction struct {
@@ -98,7 +98,7 @@ type OllamaStreamChunk struct {
 	PromptEvalCount    int           `json:"prompt_eval_count"`
 	PromptEvalDuration int64         `json:"prompt_eval_duration"`
 	EvalCount          int           `json:"eval_count"`
-	EvalDuration      int64         `json:"eval_duration"`
+	EvalDuration       int64         `json:"eval_duration"`
 	Error              string        `json:"error,omitempty"`
 }
 
@@ -473,24 +473,24 @@ func (p *OllamaProvider) isThinkingCapableModel(modelName string) bool {
 	// Check for known thinking-capable model patterns
 	// Note: Not all variants support thinking (e.g., qwen3-coder:30b doesn't support thinking)
 	thinkingModels := []string{
-		"qwen3",           // Qwen3 base models support thinking
-		"deepseek-r1",     // DeepSeek R1 models support thinking
-		"deepseek-v3",     // DeepSeek V3 models support thinking
-		"gpt-oss",         // GPT-OSS supports thinking
+		"qwen3",       // Qwen3 base models support thinking
+		"deepseek-r1", // DeepSeek R1 models support thinking
+		"deepseek-v3", // DeepSeek V3 models support thinking
+		"gpt-oss",     // GPT-OSS supports thinking
 	}
 	// Exclude models that don't support thinking despite matching patterns
 	excludedModels := []string{
 		"qwen3-coder", // Qwen3-coder variants don't support thinking
 		"qwen2-coder", // Qwen2-coder variants don't support thinking
 	}
-	
+
 	// Check exclusions first
 	for _, excluded := range excludedModels {
 		if strings.Contains(modelLower, excluded) {
 			return false
 		}
 	}
-	
+
 	// Check if model matches thinking-capable patterns
 	for _, pattern := range thinkingModels {
 		if strings.Contains(modelLower, pattern) {
@@ -753,5 +753,3 @@ func roleToOllama(role pb.Role) string {
 		return "user"
 	}
 }
-
-

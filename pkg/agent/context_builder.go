@@ -56,4 +56,3 @@ func EnsureAgentContext(ctx context.Context, taskID, sessionID string) context.C
 
 	return ctx
 }
-

@@ -92,4 +92,3 @@ func containsState(states []pb.TaskState, state pb.TaskState) bool {
 	}
 	return false
 }
-

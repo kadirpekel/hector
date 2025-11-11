@@ -182,7 +182,7 @@ func (pt *ProgressTracker) printProgress() {
 	// This prevents interleaved output that can cause newlines
 	pt.printMu.Lock()
 	defer pt.printMu.Unlock()
-	
+
 	stats := pt.GetStats()
 
 	if stats.TotalFiles == 0 {
@@ -247,7 +247,7 @@ func (pt *ProgressTracker) printProgress() {
 	// Use ANSI escape code to clear to end of line for better reliability
 	// Use raw Write to avoid any buffering issues with fmt functions
 	os.Stdout.WriteString("\r\033[K" + output)
-	
+
 	// Flush stdout to ensure the output is displayed immediately
 	os.Stdout.Sync()
 }

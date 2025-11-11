@@ -165,16 +165,16 @@ func (ds *DirectorySource) SupportsIncrementalIndexing() bool {
 
 func (ds *DirectorySource) GetLastModified(ctx context.Context, id string) (time.Time, error) {
 	info, err := os.Stat(id)
-			if err != nil {
+	if err != nil {
 		return time.Time{}, err
-				}
+	}
 	return info.ModTime(), nil
-			}
+}
 
 func (ds *DirectorySource) Close() error {
 	// No resources to close for directory source
-				return nil
-			}
+	return nil
+}
 
 // GetBasePath returns the base directory path (helper method)
 func (ds *DirectorySource) GetBasePath() string {

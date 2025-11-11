@@ -12,12 +12,12 @@ import (
 
 // Converter converts A2A protocol messages to AG-UI events
 type Converter struct {
-	messageID        string
-	contextID        string
-	taskID           string
-	currentBlockID   string
+	messageID         string
+	contextID         string
+	taskID            string
+	currentBlockID    string
 	currentThinkingID string // Track currently open thinking block
-	blockIndex       int32
+	blockIndex        int32
 }
 
 // NewConverter creates a new AG-UI converter
@@ -100,6 +100,12 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 
 	// Handle regular text parts with AG-UI metadata
 	if text := part.GetText(); text != "" {
+		// Close any open thinking block when regular text starts
+		if c.currentThinkingID != "" {
+			events = append(events, NewThinkingStopEvent(c.currentThinkingID, ""))
+			c.currentThinkingID = ""
+		}
+
 		// Determine block type from AG-UI metadata
 		blockType := "text"
 		if aguiBlockType != "" {
@@ -158,18 +164,18 @@ func (c *Converter) ConvertPart(part *a2apb.Part) []*aguipb.AGUIEvent {
 // CloseCurrentBlock closes the currently open content block if any
 func (c *Converter) CloseCurrentBlock() []*aguipb.AGUIEvent {
 	var events []*aguipb.AGUIEvent
-	
+
 	if c.currentBlockID != "" {
 		events = append(events, NewContentBlockStopEvent(c.currentBlockID))
 		c.currentBlockID = ""
 	}
-	
+
 	// Also close any open thinking block
 	if c.currentThinkingID != "" {
 		events = append(events, NewThinkingStopEvent(c.currentThinkingID, ""))
 		c.currentThinkingID = ""
 	}
-	
+
 	return events
 }
 

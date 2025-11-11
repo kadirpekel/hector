@@ -26,4 +26,3 @@ func (a *Agent) updateTaskStatus(ctx context.Context, taskID string, state pb.Ta
 	// Delegate to storage implementation (no validation there - it's just persistence)
 	return a.services.Task().UpdateTaskStatus(ctx, taskID, state, message)
 }
-

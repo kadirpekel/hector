@@ -87,7 +87,7 @@ func TestOllamaProvider_GetTemperature(t *testing.T) {
 
 func TestOllamaProvider_Close(t *testing.T) {
 	cfg := &config.LLMProviderConfig{
-		Type: "ollama",
+		Type:  "ollama",
 		Model: "llama3.2",
 		Host:  "http://localhost:11434",
 	}
@@ -100,7 +100,7 @@ func TestOllamaProvider_Close(t *testing.T) {
 
 func TestOllamaProvider_SupportsStructuredOutput(t *testing.T) {
 	cfg := &config.LLMProviderConfig{
-		Type: "ollama",
+		Type:  "ollama",
 		Model: "llama3.2",
 		Host:  "http://localhost:11434",
 	}
@@ -146,7 +146,7 @@ func TestOllamaProvider_Generate_Success(t *testing.T) {
 			},
 			Done:            true,
 			PromptEvalCount: 10,
-			EvalCount:      15,
+			EvalCount:       15,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -223,7 +223,7 @@ func TestOllamaProvider_Generate_WithTools(t *testing.T) {
 			},
 			Done:            true,
 			PromptEvalCount: 20,
-			EvalCount:      10,
+			EvalCount:       10,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -309,7 +309,7 @@ func TestOllamaProvider_Generate_WithToolResults(t *testing.T) {
 			},
 			Done:            true,
 			PromptEvalCount: 30,
-			EvalCount:      10,
+			EvalCount:       10,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -342,11 +342,11 @@ func TestOllamaProvider_Generate_WithToolResults(t *testing.T) {
 	messages := []*pb.Message{
 		protocol.CreateUserMessage("Use the test tool"),
 		{
-			Role: pb.Role_ROLE_AGENT,
+			Role:  pb.Role_ROLE_AGENT,
 			Parts: []*pb.Part{protocol.CreateToolCallPart(toolCall)},
 		},
 		{
-			Role: pb.Role_ROLE_USER,
+			Role:  pb.Role_ROLE_USER,
 			Parts: []*pb.Part{protocol.CreateToolResultPart(toolResult)},
 		},
 	}
@@ -603,7 +603,7 @@ func TestOllamaProvider_GenerateStructured_JSONString(t *testing.T) {
 			},
 			Done:            true,
 			PromptEvalCount: 15,
-			EvalCount:      20,
+			EvalCount:       20,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -667,7 +667,7 @@ func TestOllamaProvider_GenerateStructured_WithSchema(t *testing.T) {
 			},
 			Done:            true,
 			PromptEvalCount: 20,
-			EvalCount:      15,
+			EvalCount:       15,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -905,7 +905,7 @@ func TestOllamaProvider_GenerateStreaming_Error(t *testing.T) {
 
 func TestOllamaProvider_InterfaceCompliance(t *testing.T) {
 	cfg := &config.LLMProviderConfig{
-		Type: "ollama",
+		Type:  "ollama",
 		Model: "llama3.2",
 		Host:  "http://localhost:11434",
 	}
@@ -951,7 +951,7 @@ func TestOllamaProvider_ParallelToolCalls(t *testing.T) {
 			},
 			Done:            true,
 			PromptEvalCount: 25,
-			EvalCount:      15,
+			EvalCount:       15,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -1039,7 +1039,7 @@ func TestOllamaProvider_SystemMessageHandling(t *testing.T) {
 			},
 			Done:            true,
 			PromptEvalCount: 5,
-			EvalCount:      2,
+			EvalCount:       2,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -1068,4 +1068,3 @@ func TestOllamaProvider_SystemMessageHandling(t *testing.T) {
 		t.Errorf("Generate() error = %v, want nil", err)
 	}
 }
-

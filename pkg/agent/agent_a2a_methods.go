@@ -573,7 +573,7 @@ func (a *Agent) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) (*pb.
 	// We need to ensure atomic cancellation: cancel the context AND update task status together
 	var cancelFunc context.CancelFunc
 	var shouldCancel bool
-	
+
 	a.executionsMu.Lock()
 	if cancel, exists := a.activeExecutions[taskID]; exists {
 		cancelFunc = cancel
@@ -608,7 +608,7 @@ func (a *Agent) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) (*pb.
 	// 2. Waiting input is cancelled (HITL is resolved)
 	// 3. State transition is validated
 	task, err := a.services.Task().CancelTask(ctx, taskID)
-	
+
 	// Clean up execution tracking after cancellation is complete
 	if shouldCancel {
 		a.executionsMu.Lock()

@@ -1542,116 +1542,8 @@
                                             (message.role === 'agent' || message.role === 'ROLE_AGENT');
                                         
                                         if (isAgentRole) {
-                                            // Check if this message contains approval requests first
-                                            const currentApprovals = this.extractApprovalFromParts(message.parts);
-                                            const hasApprovals = currentApprovals && currentApprovals.length > 0;
-
-                                            // Handle text - but SKIP if message contains approval requests
-                                            // Approval prompts are displayed in the widget, not as text
-                                            if (hasApprovals) {
-                                                // Clear any existing text if this is an approval message
-                                                // The prompt text should only appear in the widget, not as separate text
-                                                if (messageRef.text) {
-                                                    messageRef.text = '';
-                                                }
-                                            } else {
-                                                const text = this.extractTextFromParts(message.parts);
-                                                if (text) {
-                                                    if (!messageRef.text) {
-                                                        messageRef.text = '';
-                                                    }
-                                                    messageRef.text += text;
-                                                }
-                                            }
-
-                                            // Handle thinking blocks - track completion directly from parts
-                                            const thinkingBlocks = this.extractThinkingFromParts(message.parts);
-                                            const currentThinkingBlockIds = new Set(thinkingBlocks.map(tb => tb.id));
-                                            
-                                            // Mark thinking blocks as completed if their block_id is NOT in current batch
-                                            // This means the thinking block ended (no more parts for that block_id)
-                                            messageRef.widgets.forEach(widget => {
-                                                if (widget.type === 'thinking' && widget.status === 'active') {
-                                                    // If this thinking block_id is NOT in current batch, it has ended
-                                                    if (!currentThinkingBlockIds.has(widget.id)) {
-                                                        widget.status = 'completed';
-                                                        const widgetIdx = messageRef.widgets.findIndex(w => w.id === widget.id);
-                                                        if (widgetIdx >= 0) {
-                                                            messageRef.widgets[widgetIdx] = { ...widget, status: 'completed' };
-                                                        }
-                                                    }
-                                                }
-                                            });
-                                            
-                                            // Process thinking blocks from current batch
-                                            thinkingBlocks.forEach(tb => {
-                                                const existingWidget = messageRef.widgets.find(w => w.id === tb.id);
-                                                if (!existingWidget) {
-                                                    // New thinking block - always start as 'active'
-                                                    messageRef.widgets.push({
-                                                        id: tb.id,
-                                                        type: 'thinking',
-                                                        data: { type: tb.type },
-                                                        status: 'active',
-                                                        content: tb.content || '',
-                                                        isExpanded: false
-                                                    });
-                                                } else {
-                                                    // Append content - keep as 'active' (block is still active since it's in current batch)
-                                                    existingWidget.content += tb.content;
-                                                    if (existingWidget.status !== 'active') {
-                                                        existingWidget.status = 'active';
-                                                    }
-                                                }
-                                            });
-                                            
-                                            // Handle tool calls
-                                            const toolCalls = this.extractToolCallsFromParts(message.parts);
-                                            toolCalls.forEach(tc => {
-                                                const existingWidget = messageRef.widgets.find(w => w.id === tc.id);
-                                                if (!existingWidget) {
-                                                    messageRef.widgets.push({
-                                                        id: tc.id,
-                                                        type: 'tool',
-                                                        data: { name: tc.name, args: tc.args },
-                                                        status: 'working',
-                                                        content: '',
-                                                        isExpanded: false
-                                                    });
-                                                }
-                                            });
-                                            
-                                            // Handle tool results
-                                            const toolResults = this.extractToolResultsFromParts(message.parts);
-                                            toolResults.forEach(tr => {
-                                                const widget = messageRef.widgets.find(w => w.id === tr.tool_call_id);
-                                                if (widget) {
-                                                    widget.status = tr.success ? 'success' : 'failed';
-                                                    if (tr.content) {
-                                                        widget.content = tr.content;
-                                                    }
-                                                }
-                                            });
-
-                                            // Handle approval requests (HITL)
-                                            const approvals = this.extractApprovalFromParts(message.parts);
-                                            approvals.forEach(approval => {
-                                                const existingWidget = messageRef.widgets.find(w => w.id === approval.id);
-                                                if (!existingWidget) {
-                                                    messageRef.widgets.push({
-                                                        id: approval.id,
-                                                        type: 'approval',
-                                                        data: {
-                                                            toolName: approval.toolName,
-                                                            toolInput: approval.toolInput,
-                                                            options: approval.options
-                                                        },
-                                                        status: 'pending',
-                                                        decision: null,
-                                                        isExpanded: true
-                                                    });
-                                                }
-                                            });
+                                            // Process all message parts (text, thinking, tools, approvals) using shared helper
+                                            const result = this.processMessageParts(messageRef, message.parts);
 
                                             // Throttle scroll and highlight updates
                                             this.throttleStreamingUpdate(() => {
@@ -1699,80 +1591,8 @@
                             messageRef.metadata.taskId = lastTaskId;
                         }
                         
-                        // CRITICAL: Finalize widgets - MUST run regardless of lastTaskId
-                        // This ensures thinking widgets stop animating when streaming ends
-                        if (messageRef && messageRef.widgets) {
-                            // FINALIZE ALL WIDGETS USING GENERIC FOUNDATION
-                            // Uses the badge config system to determine completion states
-                            let statusChanged = false;
-                            
-                            console.log('[Badge Foundation] Starting finalization for', messageRef.widgets.length, 'widgets');
-                            
-                            messageRef.widgets.forEach((widget, idx) => {
-                                const config = this.getBadgeConfig(widget);
-                                if (!config) return;
-                                
-                                const currentStatus = widget.status;
-                                const hasContent = widget.content && widget.content.trim();
-                                
-                                console.log(`[Badge Foundation] Widget ${idx}: type=${widget.type}, status=${currentStatus}, hasContent=${!!hasContent}`);
-                                
-                                // Generic rule: widgets in active states should be finalized
-                                const activeStates = ['pending', 'working', 'active'];
-                                if (!activeStates.includes(currentStatus)) {
-                                    console.log(`[Badge Foundation] Widget ${idx} already finalized (status=${currentStatus})`);
-                                    return; // Already finalized
-                                }
-                                
-                                // Use config to determine what "completed" means for this widget type
-                                let targetStatus = null;
-                                
-                                if (widget.type === 'tool' && currentStatus === 'working') {
-                                    targetStatus = 'success';
-                                } else if (widget.type === 'thinking' && currentStatus === 'active') {
-                                    if (hasContent) {
-                                        targetStatus = 'completed';
-                                    }
-                                }
-                                
-                                // Apply status change using generic approach
-                                if (targetStatus && currentStatus !== targetStatus) {
-                                    const wouldShowCheck = config.getStatusIcon(targetStatus) === '✓';
-                                    
-                                    if (wouldShowCheck || targetStatus === 'success') {
-                                        console.log(`[Badge Foundation] Finalizing widget ${idx}: ${currentStatus} -> ${targetStatus}`);
-                                        
-                                        // Create new widget object to trigger Alpine reactivity
-                                        const newWidget = {
-                                            ...widget,
-                                            status: targetStatus
-                                        };
-                                        messageRef.widgets[idx] = newWidget;
-                                        statusChanged = true;
-                                        
-                                        console.log(`[Badge Foundation] Widget ${idx} status after update:`, messageRef.widgets[idx].status);
-                                    }
-                                }
-                            });
-                            
-                            console.log('[Badge Foundation] Finalization complete. statusChanged=', statusChanged);
-                            
-                            // Force Alpine.js reactivity update if status changed
-                            if (statusChanged) {
-                                const session = this.sessions[this.currentSessionId];
-                                if (session && messageRef) {
-                                    // Create new widgets array to trigger reactivity
-                                    messageRef.widgets = messageRef.widgets.map(w => ({ ...w }));
-                                    // Also update the messages array reference
-                                    const msgIndex = session.messages.findIndex(m => m.id === messageRef.id);
-                                    if (msgIndex >= 0) {
-                                        session.messages[msgIndex] = { ...messageRef };
-                                    }
-                                    this.saveSessions();
-                                    console.log('[Badge Foundation] Forced reactivity update');
-                                }
-                            }
-                        }
+                        // Finalize widgets (mark pending/active widgets as completed/failed)
+                        this.finalizeMessageWidgets(messageRef);
                         
                         // Highlight code blocks after final render
                         this.$nextTick(() => {
@@ -1955,6 +1775,172 @@
                     }).filter(t => t).join('\n');
                 },
 
+                // ============================================================================
+                // Shared Message Processing Helpers (eliminates ~300 lines of duplication)
+                // ============================================================================
+
+                // Process message parts and update widgets
+                // Returns: { textUpdated: boolean, widgetsUpdated: boolean }
+                processMessageParts(messageRef, parts) {
+                    if (!parts || !Array.isArray(parts)) {
+                        return { textUpdated: false, widgetsUpdated: false };
+                    }
+
+                    // Initialize widgets array if needed
+                    if (!messageRef.widgets) {
+                        messageRef.widgets = [];
+                    }
+
+                    let textUpdated = false;
+                    let widgetsUpdated = false;
+
+                    // Check for approval requests
+                    const currentApprovals = this.extractApprovalFromParts(parts);
+                    const hasApprovals = currentApprovals && currentApprovals.length > 0;
+
+                    // Handle text (skip if approvals present)
+                    if (hasApprovals) {
+                        if (messageRef.text) {
+                            messageRef.text = '';
+                            textUpdated = true;
+                        }
+                    } else {
+                        const text = this.extractTextFromParts(parts);
+                        if (text) {
+                            if (!messageRef.text) {
+                                messageRef.text = '';
+                            }
+                            messageRef.text += text;
+                            textUpdated = true;
+                        }
+                    }
+
+                    // Handle thinking blocks - inference-based completion detection
+                    const thinkingBlocks = this.extractThinkingFromParts(parts);
+                    const currentThinkingBlockIds = new Set(thinkingBlocks.map(tb => tb.id));
+
+                    // Mark thinking blocks as completed if their block_id is NOT in current batch
+                    messageRef.widgets = messageRef.widgets.map(widget => {
+                        if (widget.type === 'thinking' && widget.status === 'active') {
+                            if (!currentThinkingBlockIds.has(widget.id)) {
+                                widgetsUpdated = true;
+                                return { ...widget, status: 'completed' };
+                            }
+                        }
+                        return widget;
+                    });
+
+                    // Process thinking blocks from current batch
+                    thinkingBlocks.forEach(tb => {
+                        const existingWidget = messageRef.widgets.find(w => w.id === tb.id);
+                        if (!existingWidget) {
+                            messageRef.widgets.push({
+                                id: tb.id,
+                                type: 'thinking',
+                                data: { type: tb.type },
+                                status: 'active',
+                                content: tb.content || '',
+                                isExpanded: false
+                            });
+                            widgetsUpdated = true;
+                        } else if (existingWidget.status !== 'completed') {
+                            existingWidget.content += tb.content;
+                            if (existingWidget.status !== 'active') {
+                                existingWidget.status = 'active';
+                            }
+                            widgetsUpdated = true;
+                        }
+                    });
+
+                    // Handle tool calls
+                    const toolCalls = this.extractToolCallsFromParts(parts);
+                    toolCalls.forEach(tc => {
+                        const existingWidget = messageRef.widgets.find(w => w.id === tc.id);
+                        if (!existingWidget) {
+                            messageRef.widgets.push({
+                                id: tc.id,
+                                type: 'tool',
+                                data: { name: tc.name, args: tc.args },
+                                status: 'working',
+                                content: '',
+                                isExpanded: false
+                            });
+                            widgetsUpdated = true;
+                        }
+                    });
+
+                    // Handle tool results
+                    const toolResults = this.extractToolResultsFromParts(parts);
+                    toolResults.forEach(tr => {
+                        const widget = messageRef.widgets.find(w => w.id === tr.tool_call_id);
+                        if (widget) {
+                            widget.status = tr.success ? 'success' : 'failed';
+                            if (tr.content) {
+                                widget.content = tr.content;
+                            }
+                            widgetsUpdated = true;
+                        }
+                    });
+
+                    // Handle approval requests
+                    currentApprovals.forEach(approval => {
+                        const existingWidget = messageRef.widgets.find(w => w.id === approval.id);
+                        if (!existingWidget) {
+                            messageRef.widgets.push({
+                                id: approval.id,
+                                type: 'approval',
+                                data: {
+                                    toolName: approval.toolName,
+                                    toolInput: approval.toolInput,
+                                    options: approval.options
+                                },
+                                status: 'pending',
+                                decision: null,
+                                isExpanded: true
+                            });
+                            widgetsUpdated = true;
+                        }
+                    });
+
+                    return { textUpdated, widgetsUpdated };
+                },
+
+                // Finalize widgets when stream ends (mark pending/active widgets as completed/failed)
+                finalizeMessageWidgets(messageRef) {
+                    if (!messageRef || !messageRef.widgets) return;
+
+                    messageRef.widgets = messageRef.widgets.map(widget => {
+                        const currentStatus = widget.status;
+
+                        // Tool widgets: finalize based on whether we got a result
+                        if (widget.type === 'tool') {
+                            if (currentStatus === 'working' || currentStatus === 'pending') {
+                                // Tool never completed - mark as failed
+                                return { ...widget, status: 'failed' };
+                            }
+                        }
+                        // Thinking widgets: finalize active ones
+                        else if (widget.type === 'thinking' && currentStatus === 'active') {
+                            return { ...widget, status: 'completed' };
+                        }
+                        // Approval widgets: leave as-is (user interaction required)
+                        // Other widgets: leave as-is
+
+                        return widget;
+                    });
+                },
+
+                // Simple string hash for generating stable IDs
+                simpleHash(str) {
+                    let hash = 0;
+                    for (let i = 0; i < str.length; i++) {
+                        const char = str.charCodeAt(i);
+                        hash = ((hash << 5) - hash) + char;
+                        hash = hash & hash; // Convert to 32bit integer
+                    }
+                    return Math.abs(hash).toString(36);
+                },
+
                 // Extract approval requests from parts (HITL)
                 extractApprovalFromParts(parts) {
                     if (!parts || !Array.isArray(parts)) return [];
@@ -1964,8 +1950,13 @@
                         if (part.data?.data) {
                             const data = part.data.data;
                             if (data.interaction_type === 'tool_approval') {
+                                // Generate stable ID based on tool_name and tool_input to avoid collisions
+                                const contentHash = this.simpleHash(
+                                    (data.tool_name || 'unknown') +
+                                    JSON.stringify(data.tool_input || '')
+                                );
                                 approvals.push({
-                                    id: `approval-${index}`,
+                                    id: `approval-${contentHash}`,
                                     type: 'tool_approval',
                                     toolName: data.tool_name || 'unknown',
                                     toolInput: data.tool_input || '',
@@ -2093,7 +2084,29 @@
                                         const result = data.result || data;
                                         let message = null;
 
-                                        if (result.message) {
+                                        // Handle task status updates (for INPUT_REQUIRED states)
+                                        if (result.statusUpdate) {
+                                            const statusUpdate = result.statusUpdate;
+                                            if (statusUpdate.status && statusUpdate.status.state === 'TASK_STATE_INPUT_REQUIRED') {
+                                                // Task is waiting for user input
+                                                this.isTyping = false;
+                                                this.isGenerating = false;
+
+                                                // Store taskId for resuming
+                                                if (statusUpdate.taskId) {
+                                                    this.activeTaskId = statusUpdate.taskId;
+                                                    this.sessions[this.currentSessionId].taskId = statusUpdate.taskId;
+
+                                                    // Focus input field to prompt user
+                                                    this.focusInput();
+                                                }
+                                            }
+                                        }
+
+                                        // Check if statusUpdate contains a message to process
+                                        if (result.statusUpdate && result.statusUpdate.status && result.statusUpdate.status.update) {
+                                            message = result.statusUpdate.status.update;
+                                        } else if (result.message) {
                                             message = result.message;
                                         } else if (result.msg) {
                                             message = result.msg;
@@ -2104,106 +2117,8 @@
                                             (message.role === 'agent' || message.role === 'ROLE_AGENT');
 
                                         if (isAgentMessage) {
-                                            // Check if this message contains approval requests first
-                                            const currentApprovals = this.extractApprovalFromParts(message.parts);
-                                            const hasApprovals = currentApprovals && currentApprovals.length > 0;
-
-                                            // Handle text - but SKIP if message contains approval requests
-                                            // Approval prompts are displayed in the widget, not as text
-                                            if (hasApprovals) {
-                                                // Clear any existing text if this is an approval message
-                                                // The prompt text should only appear in the widget, not as separate text
-                                                if (messageRef.text) {
-                                                    messageRef.text = '';
-                                                }
-                                            } else {
-                                                const text = this.extractTextFromParts(message.parts);
-                                                if (text) {
-                                                    if (!messageRef.text) {
-                                                        messageRef.text = '';
-                                                    }
-                                                    messageRef.text += text;
-                                                }
-                                            }
-
-                                            // Handle thinking blocks - track completion directly from parts
-                                            const thinkingBlocks = this.extractThinkingFromParts(message.parts);
-                                            const currentThinkingBlockIds = new Set(thinkingBlocks.map(tb => tb.id));
-                                            
-                                            if (!messageRef.widgets) {
-                                                messageRef.widgets = [];
-                                            }
-                                            
-                                            // Mark thinking blocks as completed if their block_id is NOT in current batch
-                                            // This means the thinking block ended (no more parts for that block_id)
-                                            messageRef.widgets.forEach(widget => {
-                                                if (widget.type === 'thinking' && widget.status === 'active') {
-                                                    // If this thinking block_id is NOT in current batch, it has ended
-                                                    if (!currentThinkingBlockIds.has(widget.id)) {
-                                                        widget.status = 'completed';
-                                                        const widgetIdx = messageRef.widgets.findIndex(w => w.id === widget.id);
-                                                        if (widgetIdx >= 0) {
-                                                            messageRef.widgets[widgetIdx] = { ...widget, status: 'completed' };
-                                                        }
-                                                    }
-                                                }
-                                            });
-                                            
-                                            // Process thinking blocks from current batch
-                                            thinkingBlocks.forEach(tb => {
-                                                const existingWidget = messageRef.widgets.find(w => w.id === tb.id);
-                                                if (!existingWidget) {
-                                                    // New thinking block - always start as 'active'
-                                                    messageRef.widgets.push({
-                                                        id: tb.id,
-                                                        type: 'thinking',
-                                                        data: { type: tb.type },
-                                                        status: 'active',
-                                                        content: tb.content || '',
-                                                        isExpanded: false
-                                                    });
-                                                } else {
-                                                    // Append content - keep as 'active' (block is still active since it's in current batch)
-                                                    existingWidget.content += tb.content;
-                                                    if (existingWidget.status !== 'active') {
-                                                        existingWidget.status = 'active';
-                                                    }
-                                                }
-                                            });
-                                            
-                                            // Handle tool calls
-                                            const toolCalls = this.extractToolCallsFromParts(message.parts);
-                                            toolCalls.forEach(tc => {
-                                                if (!messageRef.widgets) {
-                                                    messageRef.widgets = [];
-                                                }
-                                                const existingWidget = messageRef.widgets.find(w => w.id === tc.id);
-                                                if (!existingWidget) {
-                                                    messageRef.widgets.push({
-                                                        id: tc.id,
-                                                        type: 'tool',
-                                                        data: { name: tc.name, args: tc.args },
-                                                        status: 'working',
-                                                        content: '',
-                                                        isExpanded: false
-                                                    });
-                                                }
-                                            });
-                                            
-                                            // Handle tool results
-                                            const toolResults = this.extractToolResultsFromParts(message.parts);
-                                            toolResults.forEach(tr => {
-                                                if (!messageRef.widgets) {
-                                                    messageRef.widgets = [];
-                                                }
-                                                const widget = messageRef.widgets.find(w => w.id === tr.tool_call_id);
-                                                if (widget) {
-                                                    widget.status = tr.success ? 'success' : 'failed';
-                                                    if (tr.content) {
-                                                        widget.content = tr.content;
-                                                    }
-                                                }
-                                            });
+                                            // Process all message parts (text, thinking, tools, approvals) using shared helper
+                                            const result = this.processMessageParts(messageRef, message.parts);
 
                                             this.throttleStreamingUpdate(() => {
                                                 this.$nextTick(() => {
@@ -2224,50 +2139,8 @@
                         this.isGenerating = false;
                         this.saveSessions();
                         
-                        // CRITICAL: Finalize widgets in this code path too (approval response streaming)
-                        if (messageRef) {
-                            // FINALIZE ALL WIDGETS USING GENERIC FOUNDATION
-                            let statusChanged = false;
-                            
-                            messageRef.widgets.forEach((widget, idx) => {
-                                const config = this.getBadgeConfig(widget);
-                                if (!config) return;
-                                
-                                const currentStatus = widget.status;
-                                const hasContent = widget.content && widget.content.trim();
-                                const activeStates = ['pending', 'working', 'active'];
-                                if (!activeStates.includes(currentStatus)) return;
-                                
-                                let targetStatus = null;
-                                if (widget.type === 'tool' && currentStatus === 'working') {
-                                    targetStatus = 'success';
-                                } else if (widget.type === 'thinking' && currentStatus === 'active') {
-                                    if (hasContent) {
-                                        targetStatus = 'completed';
-                                    }
-                                }
-                                
-                                if (targetStatus && currentStatus !== targetStatus) {
-                                    const wouldShowCheck = config.getStatusIcon(targetStatus) === '✓';
-                                    if (wouldShowCheck || targetStatus === 'success') {
-                                        messageRef.widgets[idx] = { ...widget, status: targetStatus };
-                                        statusChanged = true;
-                                    }
-                                }
-                            });
-                            
-                            if (statusChanged) {
-                                const session = this.sessions[this.currentSessionId];
-                                if (session && messageRef) {
-                                    messageRef.widgets = messageRef.widgets.map(w => ({ ...w }));
-                                    const msgIndex = session.messages.findIndex(m => m.id === messageRef.id);
-                                    if (msgIndex >= 0) {
-                                        session.messages[msgIndex] = { ...messageRef };
-                                    }
-                                    this.saveSessions();
-                                }
-                            }
-                        }
+                        // Finalize widgets (mark pending/active widgets as completed/failed)
+                        this.finalizeMessageWidgets(messageRef);
                         
                         // Focus input when response finishes
                         this.focusInput();
