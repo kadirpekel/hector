@@ -360,6 +360,11 @@ agents:
       backend: "memory"           # "memory" (default) or "sql"
       worker_pool: 5              # Max concurrent tasks
       input_timeout: 600          # Seconds to wait for user input (HITL, default: 600 = 10 minutes)
+      timeout: 3600               # Timeout for async task execution (default: 3600 = 1 hour)
+      
+      # HITL Mode Configuration (optional)
+      hitl:
+        mode: "auto"              # "auto" (default), "blocking", or "async"
       
       # SQL backend (for production persistence)
       sql:
@@ -376,16 +381,24 @@ agents:
 | `backend` | string | `"memory"` | Storage backend: `"memory"` (volatile) or `"sql"` (persistent) |
 | `worker_pool` | integer | `5` | Maximum number of concurrent tasks |
 | `input_timeout` | integer | `600` | Timeout in seconds for user input (Human-in-the-Loop) |
+| `timeout` | integer | `3600` | Timeout in seconds for async task execution |
+| `hitl.mode` | string | `"auto"` | HITL mode: `"auto"`, `"blocking"`, or `"async"` |
 | `sql.driver` | string | - | Database driver: `"sqlite"`, `"postgres"`, or `"mysql"` |
 | `sql.database` | string | - | Database connection string or file path |
 | `sql.max_conns` | integer | `10` | Maximum database connections |
 | `sql.max_idle` | integer | `2` | Maximum idle connections |
 
 **Human-in-the-Loop (HITL):**
+
 - `input_timeout` controls how long tasks wait for user approval
 - When a tool with `requires_approval: true` is called, task pauses and waits
 - User responds using the same `taskId` (A2A multi-turn)
+- `hitl.mode` determines execution behavior:
+  - `"auto"` (default): Uses async mode if `session_store` is configured, else blocking
+  - `"blocking"`: Execution goroutine blocks while waiting (simple, but not persistent)
+  - `"async"`: State saved to session metadata, goroutine exits (requires `session_store`)
 - See [Human-in-the-Loop](../core-concepts/human-in-the-loop.md) for details
+- See [Making HITL Truly Asynchronous](../how-to/async-hitl.md) for async mode guide
 
 **See:** [Tasks](../core-concepts/tasks.md) for complete task management guide.
 

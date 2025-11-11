@@ -304,6 +304,39 @@ agents:
 
 [Security Guide](https://gohector.dev/core-concepts/security/)
 
+### Human-in-the-Loop (HITL)
+
+Production-ready tool approval and interactive workflows with state persistence:
+
+**Features:**
+- ✅ A2A Protocol compliant (`TASK_STATE_INPUT_REQUIRED`)
+- ✅ Two execution modes: **blocking** (simple) and **async** (production-ready)
+- ✅ State persistence in async mode (survives server restarts)
+- ✅ Non-blocking execution (scales to many concurrent paused tasks)
+- ✅ Configurable timeouts and custom approval prompts
+
+**Configuration:**
+```yaml
+tools:
+  execute_command:
+    requires_approval: true  # Pause for approval
+
+agents:
+  assistant:
+    session_store: "sqlite"  # Required for async mode
+    task:
+      hitl:
+        mode: "async"  # Production-ready with persistence
+```
+
+**Use Cases:**
+- Tool approval workflows (command execution, file operations)
+- Interactive decision-making
+- Long-running workflows requiring user input
+- Production deployments needing state persistence
+
+[Human-in-the-Loop Guide](https://gohector.dev/core-concepts/human-in-the-loop/) | [Async HITL Implementation](https://gohector.dev/how-to/async-hitl/)
+
 ### Multi-Agent Orchestration
 
 Coordinate specialized agents for complex workflows using A2A protocol:
@@ -379,6 +412,7 @@ agents:
 - SQL-based session storage
 - Cross-session memory continuity
 - Conversation history retrieval
+- **Async HITL state persistence** (execution state survives restarts)
 
 **Rate Limiting:**
 - Multi-layer time windows (minute/hour/day/week/month)

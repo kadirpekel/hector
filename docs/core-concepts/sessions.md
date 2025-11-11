@@ -161,6 +161,8 @@ agents:
 
 **Session persistence:** See [Setup Session Persistence](../how-to/setup-session-persistence.md) guide.
 
+**Note:** Session metadata is also used by **async Human-in-the-Loop (HITL)** to persist execution state when tasks pause for user approval. See [Human-in-the-Loop](human-in-the-loop.md) for details.
+
 ---
 
 ## Session Management

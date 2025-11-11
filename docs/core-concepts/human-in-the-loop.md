@@ -67,7 +67,7 @@ tools:
 
 ### Task Configuration
 
-Configure timeout for user input:
+Configure timeout and HITL mode:
 
 ```yaml
 agents:
@@ -78,11 +78,31 @@ agents:
       backend: "memory"  # or "sql"
       worker_pool: 5
       input_timeout: 600  # Seconds to wait for user input (default: 600 = 10 minutes)
+      
+      # HITL Mode Configuration (optional)
+      hitl:
+        mode: "auto"  # "auto" (default), "blocking", or "async"
+    
+    # Session persistence (required for async HITL)
+    session_store: "sqlite"  # Required when hitl.mode is "async"
     
     tools:
       - "execute_command"
       - "write_file"
 ```
+
+**HITL Mode Options:**
+
+| Mode | Description | Requirements |
+|------|-------------|--------------|
+| `auto` | Automatically detect based on `session_store` presence | None |
+| `blocking` | Block execution goroutine while waiting (default behavior) | None |
+| `async` | Save state and exit goroutine, resume later | Requires `session_store` configured |
+
+**Mode Detection:**
+- If `hitl.mode` is not specified, defaults to `auto`
+- `auto` mode uses **async** if `session_store` is configured, otherwise **blocking**
+- `async` mode requires `session_store` - validation will fail if missing
 
 ### Tool Configuration
 
@@ -564,10 +584,127 @@ The implementation provides secure human-in-the-loop workflows while maintaining
 
 ## Advanced: Truly Asynchronous HITL
 
-The current implementation uses in-memory channels and blocking goroutines, which means:
-- Tasks waiting for input are lost on server restart
-- Execution goroutines remain blocked while waiting
+Hector supports two HITL modes: **blocking** and **async**. The mode determines how tasks handle user input requests.
 
-For production deployments requiring **truly asynchronous HITL** that survives restarts, see:
-- **[Making HITL Truly Asynchronous](../how-to/async-hitl.md)** - Complete guide to implementing persistent, non-blocking HITL
+### Blocking Mode (Default)
+
+In blocking mode, the execution goroutine pauses and waits for user input:
+
+- ✅ Simple and straightforward
+- ✅ Immediate response when user provides input
+- ❌ Goroutine remains blocked while waiting
+- ❌ State lost on server restart
+- ❌ Limited scalability for many concurrent paused tasks
+
+**When to use:** Development, testing, or when you don't need persistence.
+
+### Async Mode (Production-Ready)
+
+In async mode, execution state is saved to session metadata and the goroutine exits:
+
+- ✅ Non-blocking - goroutines are freed immediately
+- ✅ State persists across server restarts
+- ✅ Scales to many concurrent paused tasks
+- ✅ Production-ready for long-running workflows
+- ⚠️ Requires `session_store` configuration
+
+**When to use:** Production deployments, long-running workflows, or when you need state persistence.
+
+### Configuration
+
+```yaml
+agents:
+  assistant:
+    llm: "gpt-4o"
+    
+    # Session persistence (required for async mode)
+    session_store: "sqlite"
+    
+    task:
+      backend: "sql"
+      hitl:
+        mode: "async"  # Enable async HITL
+```
+
+**Mode Selection:**
+
+1. **Explicit async mode:**
+   ```yaml
+   task:
+     hitl:
+       mode: "async"  # Requires session_store
+   ```
+
+2. **Explicit blocking mode:**
+   ```yaml
+   task:
+     hitl:
+       mode: "blocking"  # Always blocking, even with session_store
+   ```
+
+3. **Auto-detect (recommended):**
+   ```yaml
+   task:
+     hitl:
+       mode: "auto"  # Uses async if session_store exists, else blocking
+   ```
+
+### How Async Mode Works
+
+```
+User sends message
+   ↓
+Agent starts processing (TASK_STATE_WORKING)
+   ↓
+Agent wants to call tool requiring approval
+   ↓
+Execution state saved to session metadata  ⭐ State persisted
+   ↓
+Task transitions to TASK_STATE_INPUT_REQUIRED
+   ↓
+Goroutine exits (non-blocking)  ⭐ Resources freed
+   ↓
+[Server can restart - state preserved]
+   ↓
+User sends response with same taskId
+   ↓
+State loaded from session metadata  ⭐ State restored
+   ↓
+New goroutine starts, execution resumes
+   ↓
+Task completes (TASK_STATE_COMPLETED)
+```
+
+**Key Benefits:**
+- State survives server restarts
+- No blocked goroutines
+- Better resource utilization
+- Production-ready reliability
+
+### Migration Guide
+
+**From Blocking to Async:**
+
+1. Configure session persistence:
+   ```yaml
+   session_stores:
+     sqlite:
+       type: sqlite
+       database: "./sessions.db"
+   
+   agents:
+     assistant:
+       session_store: "sqlite"
+   ```
+
+2. Enable async mode:
+   ```yaml
+   task:
+     hitl:
+       mode: "async"
+   ```
+
+3. Restart server - existing blocking tasks will complete, new tasks use async mode
+
+**See:** [Making HITL Truly Asynchronous](../how-to/async-hitl.md) for complete implementation guide.
 

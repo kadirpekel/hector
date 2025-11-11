@@ -620,6 +620,8 @@ Tasks can pause execution and wait for user input using the `INPUT_REQUIRED` sta
 - ✅ A2A Protocol compliant (`TASK_STATE_INPUT_REQUIRED`)
 - ✅ Multi-turn conversations using the same `taskId`
 - ✅ Configurable timeouts for user responses
+- ✅ Two execution modes: **blocking** (default) and **async** (production-ready)
+- ✅ State persistence in async mode (survives server restarts)
 - ✅ Simple YAML configuration
 
 **Quick Example:**
@@ -633,9 +635,17 @@ agents:
   assistant:
     task:
       input_timeout: 600  # Wait up to 10 minutes
+      hitl:
+        mode: "async"  # Use async mode (requires session_store)
+    
+    session_store: "sqlite"  # Required for async mode
 ```
 
-See **[Human-in-the-Loop](human-in-the-loop.md)** for complete documentation.
+**Modes:**
+- **Blocking** (default): Execution goroutine blocks while waiting - simple but not persistent
+- **Async**: State saved to session metadata, goroutine exits - production-ready with persistence
+
+See **[Human-in-the-Loop](human-in-the-loop.md)** for complete documentation, including async mode details.
 
 ---
 
