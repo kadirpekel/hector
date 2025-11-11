@@ -1140,7 +1140,9 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 			g.sendSSEError(w, fmt.Sprintf("Invalid params: %v", err))
 			return
 		}
-		log.Printf("[DEBUG] Unmarshaled request - TaskId: %s", req.Request.GetTaskId())
+		if taskId := req.Request.GetTaskId(); taskId != "" {
+			log.Printf("[DEBUG] Unmarshaled request - TaskId: %s", taskId)
+		}
 
 		// Set contextId as session ID for memory persistence
 		if req.Request != nil && req.Request.ContextId != "" {
