@@ -3,7 +3,7 @@ title: Plugin Development
 description: Build custom LLMs, databases, and tools via gRPC plugins
 ---
 
-# Plugin Development Guide
+# Plugin Development
 
 ## Overview
 

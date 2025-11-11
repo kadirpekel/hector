@@ -87,8 +87,7 @@ nav:
     - Quick Observability: how-to/quick-observability.md
     - Deploy to Production: how-to/deploy-production.md
     - Integrate External Agents: how-to/integrate-external-agents.md
-  - Plugin Development:
-    - Overview: plugins.md
+    - Plugin Development: how-to/plugins.md
   - Reference:
     - CLI Reference: reference/cli.md
     - Configuration: reference/configuration.md
