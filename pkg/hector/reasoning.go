@@ -8,11 +8,11 @@ import (
 
 // ReasoningBuilder provides a fluent API for building reasoning strategies
 type ReasoningBuilder struct {
-	strategyType   string
-	maxIterations  int
+	strategyType    string
+	maxIterations   int
 	enableStreaming *bool
-	showTools      *bool
-	showThinking   *bool
+	showTools       *bool
+	showThinking    *bool
 }
 
 // NewReasoning creates a new reasoning strategy builder
@@ -87,4 +87,3 @@ type ReasoningConfig struct {
 	ShowTools       *bool
 	ShowThinking    *bool
 }
-

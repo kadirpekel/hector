@@ -135,4 +135,3 @@ func (b *SecuritySchemeBuilder) Name(name string) *SecuritySchemeBuilder {
 func (b *SecuritySchemeBuilder) Build() *config.SecurityScheme {
 	return b.scheme
 }
-

@@ -616,4 +616,3 @@ func (b *DocumentStoreAPIPaginationBuilder) DataField(field string) *DocumentSto
 func (b *DocumentStoreAPIPaginationBuilder) Build() (*config.DocumentStoreAPIPaginationConfig, error) {
 	return b.config, nil
 }
-

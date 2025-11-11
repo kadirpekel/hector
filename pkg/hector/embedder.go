@@ -135,4 +135,3 @@ func (b *EmbedderBuilder) Build() (embedders.EmbedderProvider, error) {
 		return nil, fmt.Errorf("unknown embedder type: %s (supported: 'ollama', 'openai', 'cohere')", b.embedderType)
 	}
 }
-

@@ -13,37 +13,37 @@ import (
 
 // AgentBuilder provides a fluent API for building agents programmatically
 type AgentBuilder struct {
-	id                string
-	agentType         string // "native" or "a2a"
-	name              string
-	description       string
-	visibility        string // "public", "internal", "private"
-	url               string // For external A2A agents
-	credentials       *config.AgentCredentials
-	llmProvider       llms.LLMProvider
-	reasoningStrategy reasoning.ReasoningStrategy
-	reasoningConfig   *ReasoningConfig
-	workingMemory     memory.WorkingMemoryStrategy
-	longTermMemory    memory.LongTermMemoryStrategy
-	longTermConfig    memory.LongTermConfig
-	toolList          []tools.Tool
-	systemPrompt      string
-	promptSlots       *reasoning.PromptSlots
-	includeContext    *bool
-	subAgents         []string
-	security          *config.SecurityConfig
-	structuredOutput  *config.StructuredOutputConfig
-	docsFolder        string
-	enableTools       *bool
-	a2aCard           *config.A2ACardConfig
-	database          string // Internal reference name (for config compatibility)
-	embedder          string // Internal reference name (for config compatibility)
-	registry          *agent.AgentRegistry
-	baseURL           string
+	id                 string
+	agentType          string // "native" or "a2a"
+	name               string
+	description        string
+	visibility         string // "public", "internal", "private"
+	url                string // For external A2A agents
+	credentials        *config.AgentCredentials
+	llmProvider        llms.LLMProvider
+	reasoningStrategy  reasoning.ReasoningStrategy
+	reasoningConfig    *ReasoningConfig
+	workingMemory      memory.WorkingMemoryStrategy
+	longTermMemory     memory.LongTermMemoryStrategy
+	longTermConfig     memory.LongTermConfig
+	toolList           []tools.Tool
+	systemPrompt       string
+	promptSlots        *reasoning.PromptSlots
+	includeContext     *bool
+	subAgents          []string
+	security           *config.SecurityConfig
+	structuredOutput   *config.StructuredOutputConfig
+	docsFolder         string
+	enableTools        *bool
+	a2aCard            *config.A2ACardConfig
+	database           string // Internal reference name (for config compatibility)
+	embedder           string // Internal reference name (for config compatibility)
+	registry           *agent.AgentRegistry
+	baseURL            string
 	preferredTransport string
-	sessionService    reasoning.SessionService
-	contextService    reasoning.ContextService
-	taskService       reasoning.TaskService
+	sessionService     reasoning.SessionService
+	contextService     reasoning.ContextService
+	taskService        reasoning.TaskService
 }
 
 // NewAgent creates a new agent builder
@@ -52,10 +52,10 @@ func NewAgent(id string) *AgentBuilder {
 		panic("agent ID cannot be empty")
 	}
 	return &AgentBuilder{
-		id:                id,
-		agentType:         "native", // Default to native agent
-		visibility:        "public", // Default visibility
-		toolList:          make([]tools.Tool, 0),
+		id:                 id,
+		agentType:          "native", // Default to native agent
+		visibility:         "public", // Default visibility
+		toolList:           make([]tools.Tool, 0),
 		preferredTransport: "json-rpc",
 	}
 }
@@ -400,25 +400,24 @@ func (b *AgentBuilder) Build() (*agent.Agent, error) {
 
 	// Use direct agent constructor
 	return agent.NewAgentDirect(agent.AgentBuilderOptions{
-		ID:                b.id,
-		Name:              b.name,
-		Description:       b.description,
-		LLMProvider:       b.llmProvider,
-		ReasoningStrategy: b.reasoningStrategy,
-		ReasoningConfig:   reasoningConfig,
-		WorkingMemory:     b.workingMemory,
-		LongTermMemory:    b.longTermMemory,
-		LongTermConfig:    longTermConfig,
-		Tools:             b.toolList,
-		SystemPrompt:     b.systemPrompt,
-		PromptSlots:       b.promptSlots,
-		IncludeContext:    b.includeContext,
-		Registry:          b.registry,
-		BaseURL:           b.baseURL,
+		ID:                 b.id,
+		Name:               b.name,
+		Description:        b.description,
+		LLMProvider:        b.llmProvider,
+		ReasoningStrategy:  b.reasoningStrategy,
+		ReasoningConfig:    reasoningConfig,
+		WorkingMemory:      b.workingMemory,
+		LongTermMemory:     b.longTermMemory,
+		LongTermConfig:     longTermConfig,
+		Tools:              b.toolList,
+		SystemPrompt:       b.systemPrompt,
+		PromptSlots:        b.promptSlots,
+		IncludeContext:     b.includeContext,
+		Registry:           b.registry,
+		BaseURL:            b.baseURL,
 		PreferredTransport: b.preferredTransport,
-		SessionService:    b.sessionService,
-		ContextService:    b.contextService,
-		TaskService:       b.taskService,
+		SessionService:     b.sessionService,
+		ContextService:     b.contextService,
+		TaskService:        b.taskService,
 	})
 }
-

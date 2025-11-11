@@ -11,10 +11,10 @@ import (
 
 // SessionServiceBuilder provides a fluent API for building session services
 type SessionServiceBuilder struct {
-	backend    string
-	sqlConfig  *config.SessionSQLConfig
-	rateLimit  *config.RateLimitConfig
-	agentID    string
+	backend   string
+	sqlConfig *config.SessionSQLConfig
+	rateLimit *config.RateLimitConfig
+	agentID   string
 }
 
 // NewSessionService creates a new session service builder
@@ -244,4 +244,3 @@ func (b *RateLimitConfigBuilder) Build() *config.RateLimitConfig {
 	b.config.SetDefaults()
 	return b.config
 }
-

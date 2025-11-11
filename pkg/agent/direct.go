@@ -14,25 +14,25 @@ import (
 
 // AgentBuilderOptions contains all options for building an agent directly
 type AgentBuilderOptions struct {
-	ID                string
-	Name              string
-	Description       string
-	LLMProvider       llms.LLMProvider
-	ReasoningStrategy reasoning.ReasoningStrategy
-	ReasoningConfig   *config.ReasoningConfig
-	WorkingMemory     memory.WorkingMemoryStrategy
-	LongTermMemory    memory.LongTermMemoryStrategy
-	LongTermConfig    memory.LongTermConfig
-	Tools             []tools.Tool
-	SystemPrompt      string
-	PromptSlots       *reasoning.PromptSlots
-	IncludeContext    *bool
-	Registry          *AgentRegistry
-	BaseURL           string
+	ID                 string
+	Name               string
+	Description        string
+	LLMProvider        llms.LLMProvider
+	ReasoningStrategy  reasoning.ReasoningStrategy
+	ReasoningConfig    *config.ReasoningConfig
+	WorkingMemory      memory.WorkingMemoryStrategy
+	LongTermMemory     memory.LongTermMemoryStrategy
+	LongTermConfig     memory.LongTermConfig
+	Tools              []tools.Tool
+	SystemPrompt       string
+	PromptSlots        *reasoning.PromptSlots
+	IncludeContext     *bool
+	Registry           *AgentRegistry
+	BaseURL            string
 	PreferredTransport string
-	SessionService    reasoning.SessionService
-	ContextService    reasoning.ContextService
-	TaskService       reasoning.TaskService
+	SessionService     reasoning.SessionService
+	ContextService     reasoning.ContextService
+	TaskService        reasoning.TaskService
 }
 
 // NewAgentDirect creates an agent directly from components without config
@@ -135,7 +135,7 @@ func buildAgentServicesDirect(opts AgentBuilderOptions) (reasoning.AgentServices
 	// History Service (Memory Service)
 	longTermConfig := opts.LongTermConfig
 	longTermConfig.SetDefaults()
-	
+
 	historyService := memory.NewMemoryService(
 		opts.ID,
 		sessionService,
@@ -242,4 +242,3 @@ func registerRequiredToolWithAgentRegistry(registry *tools.ToolRegistry, reqTool
 
 	return registry.RegisterSource(localSource)
 }
-

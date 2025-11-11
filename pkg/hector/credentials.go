@@ -67,4 +67,3 @@ func NewAgentCredentialsWithConfig(cfg *config.AgentCredentials) *AgentCredentia
 		creds: cfg,
 	}
 }
-

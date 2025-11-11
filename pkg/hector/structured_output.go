@@ -60,4 +60,3 @@ func (b *StructuredOutputBuilder) PropertyOrdering(order []string) *StructuredOu
 func (b *StructuredOutputBuilder) Build() *config.StructuredOutputConfig {
 	return b.config
 }
-

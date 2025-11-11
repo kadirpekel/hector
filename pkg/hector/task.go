@@ -22,7 +22,7 @@ func NewTaskService() *TaskServiceBuilder {
 	return &TaskServiceBuilder{
 		backend:      "memory",
 		workerPool:   100,
-		inputTimeout: 600, // 10 minutes default
+		inputTimeout: 600,  // 10 minutes default
 		timeout:      3600, // 1 hour default
 	}
 }
@@ -191,4 +191,3 @@ func (b *TaskSQLConfigBuilder) MaxIdle(max int) *TaskSQLConfigBuilder {
 func (b *TaskSQLConfigBuilder) Build() *config.TaskSQLConfig {
 	return b.config
 }
-

@@ -8,8 +8,8 @@ import (
 
 // ObservabilityBuilder provides a fluent API for building observability configurations
 type ObservabilityBuilder struct {
-	tracingConfig   *TracingBuilder
-	metricsEnabled  *bool
+	tracingConfig  *TracingBuilder
+	metricsEnabled *bool
 }
 
 // NewObservability creates a new observability builder
@@ -117,4 +117,3 @@ func (b *TracingBuilder) Build() (observability.TracerConfig, error) {
 
 	return cfg, nil
 }
-

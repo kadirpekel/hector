@@ -13,11 +13,11 @@ import (
 
 // ContextServiceBuilder provides a fluent API for building context services (RAG)
 type ContextServiceBuilder struct {
-	database        databases.DatabaseProvider
-	embedder        embedders.EmbedderProvider
-	searchConfig    config.SearchConfig
-	documentStores  []*config.DocumentStoreConfig
-	includeContext  *bool
+	database       databases.DatabaseProvider
+	embedder       embedders.EmbedderProvider
+	searchConfig   config.SearchConfig
+	documentStores []*config.DocumentStoreConfig
+	includeContext *bool
 }
 
 // NewContextService creates a new context service builder
@@ -159,4 +159,3 @@ func (b *ContextServiceBuilder) Build() (reasoning.ContextService, error) {
 func (b *ContextServiceBuilder) GetIncludeContext() *bool {
 	return b.includeContext
 }
-

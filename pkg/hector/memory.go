@@ -233,4 +233,3 @@ func (b *LongTermMemoryBuilder) Build() (memory.LongTermMemoryStrategy, memory.L
 
 	return strategy, b.config, nil
 }
-

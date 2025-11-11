@@ -86,4 +86,3 @@ func (b *DatabaseBuilder) Build() (databases.DatabaseProvider, error) {
 		return nil, fmt.Errorf("unknown database type: %s (supported: 'qdrant')", b.dbType)
 	}
 }
-
