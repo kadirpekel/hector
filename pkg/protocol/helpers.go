@@ -10,6 +10,12 @@ type SessionIDKeyType string
 // SessionIDKey is the context key for storing session IDs across the application
 const SessionIDKey SessionIDKeyType = "hector:sessionID"
 
+// ShowThinkingKeyType is a custom type for context keys to avoid collisions
+type ShowThinkingKeyType string
+
+// ShowThinkingKey is the context key for controlling whether thinking should be enabled in LLM providers
+const ShowThinkingKey ShowThinkingKeyType = "hector:showThinking"
+
 func CreateUserMessage(text string) *pb.Message {
 	return &pb.Message{
 		Role: pb.Role_ROLE_USER,

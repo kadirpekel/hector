@@ -829,9 +829,7 @@ func (w *restStreamWrapper) getAGUIEventType(eventType aguipb.AGUIEventType) str
 	}
 
 	// Remove AGUI_EVENT_TYPE_ prefix
-	if strings.HasPrefix(enumStr, "AGUI_EVENT_TYPE_") {
-		enumStr = strings.TrimPrefix(enumStr, "AGUI_EVENT_TYPE_")
-	}
+	enumStr = strings.TrimPrefix(enumStr, "AGUI_EVENT_TYPE_")
 
 	// Handle empty string case
 	if enumStr == "" {
@@ -1249,7 +1247,7 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 			stream, err := client.TaskSubscription(clientCtx, &req)
 			if err != nil {
 				if strings.Contains(err.Error(), "not found") {
-					g.sendSSEError(w, fmt.Sprintf("Task not found"))
+					g.sendSSEError(w, "Task not found")
 				} else if strings.Contains(err.Error(), "Unimplemented") {
 					g.sendSSEError(w, "Task subscription not supported")
 				} else {

@@ -131,9 +131,8 @@ func TestOllamaProvider_Generate_Success(t *testing.T) {
 		if req.Stream {
 			t.Error("Expected stream=false for non-streaming request")
 		}
-		if req.Think != true {
-			t.Error("Expected think=true")
-		}
+		// Note: think field is only set for thinking-capable models when ShowThinking is enabled
+		// llama3.2 is not a thinking-capable model, so think field should not be set
 		if len(req.Messages) == 0 {
 			t.Error("Expected at least one message")
 		}
@@ -482,24 +481,22 @@ func TestOllamaProvider_GenerateStreaming_WithThinking(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	ch, err := provider.GenerateStreaming(context.Background(), messages, tools)
+	// Set ShowThinking in context to enable thinking for thinking-capable models
+	ctx := context.WithValue(context.Background(), protocol.ShowThinkingKey, true)
+	ch, err := provider.GenerateStreaming(ctx, messages, tools)
 
 	if err != nil {
 		t.Errorf("GenerateStreaming() error = %v, want nil", err)
 	}
 
-	var chunks []StreamChunk
 	var thinkingText string
 	var contentText string
 
 	for chunk := range ch {
-		chunks = append(chunks, chunk)
-		if chunk.Type == "text" {
-			if strings.Contains(chunk.Text, "think") || strings.Contains(chunk.Text, "calculate") {
-				thinkingText += chunk.Text
-			} else {
-				contentText += chunk.Text
-			}
+		if chunk.Type == "thinking" {
+			thinkingText += chunk.Text
+		} else if chunk.Type == "text" {
+			contentText += chunk.Text
 		}
 	}
 
@@ -780,10 +777,8 @@ func TestOllamaProvider_GenerateStructuredStreaming(t *testing.T) {
 		t.Errorf("GenerateStructuredStreaming() error = %v, want nil", err)
 	}
 
-	var chunks []StreamChunk
 	var fullText string
 	for chunk := range ch {
-		chunks = append(chunks, chunk)
 		if chunk.Type == "text" {
 			fullText += chunk.Text
 		}

@@ -64,7 +64,7 @@ func setupMockAPIServer(t *testing.T) *httptest.Server {
 				},
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
+			_ = json.NewEncoder(w).Encode(response)
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 		}

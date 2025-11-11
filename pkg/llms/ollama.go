@@ -136,7 +136,7 @@ func (p *OllamaProvider) Generate(ctx context.Context, messages []*pb.Message, t
 	)
 	defer span.End()
 
-	request := p.buildRequest(messages, false, tools, nil)
+	request := p.buildRequest(ctx, messages, false, tools, nil)
 
 	response, err := p.makeRequest(ctx, request)
 	duration := time.Since(startTime)
@@ -191,7 +191,7 @@ func (p *OllamaProvider) Generate(ctx context.Context, messages []*pb.Message, t
 }
 
 func (p *OllamaProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
-	request := p.buildRequest(messages, true, tools, nil)
+	request := p.buildRequest(ctx, messages, true, tools, nil)
 
 	outputCh := make(chan StreamChunk, 100)
 
@@ -236,7 +236,7 @@ func (p *OllamaProvider) GenerateStructured(ctx context.Context, messages []*pb.
 		messages = append([]*pb.Message{systemMsg}, messages...)
 	}
 
-	request := p.buildRequest(messages, false, tools, structConfig)
+	request := p.buildRequest(ctx, messages, false, tools, structConfig)
 
 	response, err := p.makeRequest(ctx, request)
 	duration := time.Since(startTime)
@@ -302,7 +302,7 @@ func (p *OllamaProvider) GenerateStructuredStreaming(ctx context.Context, messag
 		messages = append([]*pb.Message{systemMsg}, messages...)
 	}
 
-	request := p.buildRequest(messages, true, tools, structConfig)
+	request := p.buildRequest(ctx, messages, true, tools, structConfig)
 
 	outputCh := make(chan StreamChunk, 100)
 
@@ -340,7 +340,7 @@ func (p *OllamaProvider) Close() error {
 	return nil
 }
 
-func (p *OllamaProvider) buildRequest(messages []*pb.Message, stream bool, tools []ToolDefinition, structConfig *StructuredOutputConfig) OllamaRequest {
+func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Message, stream bool, tools []ToolDefinition, structConfig *StructuredOutputConfig) OllamaRequest {
 	ollamaMessages := make([]OllamaMessage, 0, len(messages))
 	// Track tool call IDs to tool names for mapping tool results
 	toolCallIDToName := make(map[string]string)
@@ -422,27 +422,48 @@ func (p *OllamaProvider) buildRequest(messages []*pb.Message, stream bool, tools
 		Stream:   stream,
 	}
 
-	// Add Options only if we have meaningful values
+	// Add Options with temperature and maxTokens
+	// Temperature 0 is a valid value (deterministic output), so we always include it if set
 	// SetDefaults ensures Temperature and MaxTokens have defaults, so we'll always have values
-	// But we should still check to avoid sending empty Options
-	if p.config.Temperature > 0 || p.config.MaxTokens > 0 {
-		opts := &OllamaOptions{}
-		if p.config.Temperature > 0 {
-			opts.Temperature = p.config.Temperature
-		}
-		if p.config.MaxTokens > 0 {
-			opts.NumPredict = p.config.MaxTokens
-		}
-		// Only add Options if at least one field is set
-		if opts.Temperature > 0 || opts.NumPredict > 0 {
-			request.Options = opts
+	opts := &OllamaOptions{}
+	hasOptions := false
+
+	// Always include temperature if it's valid (>= 0 and <= 2)
+	// Temperature 0 means deterministic output, which is a valid use case
+	if p.config.Temperature >= 0 && p.config.Temperature <= 2 {
+		opts.Temperature = p.config.Temperature
+		hasOptions = true
+	}
+
+	// Include maxTokens if set (> 0)
+	if p.config.MaxTokens > 0 {
+		opts.NumPredict = p.config.MaxTokens
+		hasOptions = true
+	}
+
+	// Only add Options if at least one field is set
+	if hasOptions {
+		request.Options = opts
+	}
+
+	// Enable thinking for known thinking-capable models only if ShowThinking is enabled
+	// Check context for ShowThinking flag (set by agent based on --thinking flag)
+	showThinking := false
+	if showThinkingValue := ctx.Value(protocol.ShowThinkingKey); showThinkingValue != nil {
+		if st, ok := showThinkingValue.(bool); ok {
+			showThinking = st
 		}
 	}
 
-	// Enable thinking for known thinking-capable models
-	// Models that don't support it will ignore this field or return an error
+	// For thinking-capable models, explicitly control thinking mode
+	// Note: Ollama generates thinking by default for qwen3, so we must explicitly disable it
 	if p.isThinkingCapableModel(p.config.Model) {
-		request.Think = true
+		if showThinking {
+			request.Think = true
+		} else {
+			// Explicitly disable thinking - omitting the field doesn't work for qwen3
+			request.Think = false
+		}
 	}
 
 	// Set format for structured output
@@ -504,12 +525,8 @@ func (p *OllamaProvider) convertToOllamaTools(tools []ToolDefinition) []OllamaTo
 	result := make([]OllamaTool, len(tools))
 	for i, tool := range tools {
 		result[i] = OllamaTool{
-			Type: "function",
-			Function: OllamaToolFunction{
-				Name:        tool.Name,
-				Description: tool.Description,
-				Parameters:  tool.Parameters,
-			},
+			Type:     "function",
+			Function: OllamaToolFunction(tool),
 		}
 	}
 	return result

@@ -145,7 +145,7 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 
 		for chunk := range streamChan {
 			if msgChunk := chunk.GetMsg(); msgChunk != nil {
-				DisplayMessage(msgChunk, "")
+				DisplayMessage(msgChunk, "", args.Thinking)
 			}
 		}
 		fmt.Println()
@@ -158,7 +158,7 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 		}
 
 		if respMsg := resp.GetMsg(); respMsg != nil {
-			DisplayMessageLine(respMsg, "Agent: ")
+			DisplayMessageLine(respMsg, "Agent: ", args.Thinking)
 		} else if task := resp.GetTask(); task != nil {
 			DisplayTask(task)
 		}
@@ -199,10 +199,10 @@ func ChatCommand(args *ChatCmd, cfg *config.Config, mode CLIMode) error {
 		}
 	}
 
-	return executeChat(client, agentID, args.SessionID, !args.NoStream)
+	return executeChat(client, agentID, args.SessionID, !args.NoStream, args.Thinking)
 }
 
-func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streaming bool) error {
+func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streaming bool, showThinking bool) error {
 
 	mode := "Client Mode"
 
@@ -264,7 +264,7 @@ func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streamin
 
 			for chunk := range streamChan {
 				if msgChunk := chunk.GetMsg(); msgChunk != nil {
-					DisplayMessage(msgChunk, "")
+					DisplayMessage(msgChunk, "", showThinking)
 				}
 			}
 			fmt.Println()
@@ -277,7 +277,7 @@ func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streamin
 			}
 
 			if respMsg := resp.GetMsg(); respMsg != nil {
-				DisplayMessageLine(respMsg, "")
+				DisplayMessageLine(respMsg, "", showThinking)
 			} else if task := resp.GetTask(); task != nil {
 				DisplayTask(task)
 			}

@@ -496,9 +496,7 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 
 		case "content_block_stop":
 			// Clean up thinking buffer when block stops
-			if _, isThinking := thinkingBuffers[streamResp.Index]; isThinking {
-				delete(thinkingBuffers, streamResp.Index)
-			}
+			delete(thinkingBuffers, streamResp.Index)
 
 			if tc, exists := toolCalls[streamResp.Index]; exists {
 

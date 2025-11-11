@@ -441,7 +441,9 @@ func (p *GeminiProvider) buildGenerationConfig(structConfig *StructuredOutputCon
 		MaxOutputTokens: p.config.MaxTokens,
 	}
 
-	if p.config.Temperature > 0 {
+	// Always include temperature if it's valid (>= 0 and <= 2)
+	// Temperature 0 means deterministic output, which is a valid use case
+	if p.config.Temperature >= 0 && p.config.Temperature <= 2 {
 		temp := p.config.Temperature
 		config.Temperature = &temp
 	}

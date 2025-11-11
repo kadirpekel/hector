@@ -35,7 +35,7 @@ func TestAPISource_DiscoverDocuments_SimpleArray(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -109,7 +109,7 @@ func TestAPISource_DiscoverDocuments_NestedObject(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -151,7 +151,7 @@ func TestAPISource_DiscoverDocuments_SingleObject(t *testing.T) {
 			"content": "This is a single article",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -193,13 +193,13 @@ func TestAPISource_DiscoverDocuments_WithPagination(t *testing.T) {
 				{"id": "1", "title": "Page 1 Article"},
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
+			_ = json.NewEncoder(w).Encode(response)
 		} else if pageParam == "2" {
 			response := []map[string]interface{}{
 				{"id": "2", "title": "Page 2 Article"},
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
+			_ = json.NewEncoder(w).Encode(response)
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -256,7 +256,7 @@ func TestAPISource_DiscoverDocuments_WithQueryParams(t *testing.T) {
 			{"id": "1", "title": "Active Article"},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -303,7 +303,7 @@ func TestAPISource_DiscoverDocuments_WithHeaders(t *testing.T) {
 			{"id": "1", "title": "Article"},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -350,7 +350,7 @@ func TestAPISource_DiscoverDocuments_WithBearerAuth(t *testing.T) {
 			{"id": "1", "title": "Article"},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -399,7 +399,7 @@ func TestAPISource_DiscoverDocuments_WithBasicAuth(t *testing.T) {
 			{"id": "1", "title": "Article"},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -448,7 +448,7 @@ func TestAPISource_DiscoverDocuments_WithAPIKeyAuth(t *testing.T) {
 			{"id": "1", "title": "Article"},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -493,13 +493,13 @@ func TestAPISource_DiscoverDocuments_MultipleEndpoints(t *testing.T) {
 				{"id": "1", "title": "Article 1"},
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
+			_ = json.NewEncoder(w).Encode(response)
 		} else if r.URL.Path == "/products" {
 			response := []map[string]interface{}{
 				{"id": "1", "name": "Product 1"},
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
+			_ = json.NewEncoder(w).Encode(response)
 		}
 	}))
 	defer server.Close()
@@ -626,7 +626,7 @@ func TestAPISource_ContentExtraction(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -682,7 +682,7 @@ func TestAPISource_MetadataExtraction(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -736,7 +736,7 @@ func TestAPISource_ContextCancellation(t *testing.T) {
 			{"id": "1", "title": "Article"},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 

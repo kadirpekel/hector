@@ -226,6 +226,9 @@ func (e *CohereEmbedder) EmbedBatchWithContext(ctx context.Context, texts []stri
 
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response body: %w", err)
+		}
 
 		if resp.StatusCode != http.StatusOK {
 			var errorResp CohereErrorResponse

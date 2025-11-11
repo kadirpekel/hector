@@ -417,6 +417,9 @@ func (c *EmbedderProviderConfig) SetDefaults() {
 			c.Host = "https://api.openai.com/v1"
 		case "cohere":
 			c.Host = "https://api.cohere.ai/v1"
+		default:
+			// Default to Ollama host for unknown types
+			c.Host = "http://localhost:11434"
 		}
 	}
 

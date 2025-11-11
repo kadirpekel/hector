@@ -12,11 +12,10 @@ import (
 
 // APISource implements DataSource for REST API endpoints
 type APISource struct {
-	client      *http.Client
-	baseURL     string
-	endpoints   []APIEndpointConfig
-	auth        *APIAuthConfig
-	rateLimiter *RateLimiter
+	client    *http.Client
+	baseURL   string
+	endpoints []APIEndpointConfig
+	auth      *APIAuthConfig
 }
 
 // APIEndpointConfig defines an API endpoint to index
@@ -56,10 +55,9 @@ type APIAuthConfig struct {
 }
 
 // RateLimiter provides simple rate limiting for API requests
+// Currently unused but reserved for future rate limiting implementation
 type RateLimiter struct {
-	requestsPerSecond float64
-	lastRequest       time.Time
-	minInterval       time.Duration
+	_ struct{} // Reserved for future use
 }
 
 // NewAPISource creates a new REST API data source

@@ -9,6 +9,15 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// currentThinkingBlockID tracks the active thinking block across multiple DisplayMessage calls
+// This ensures the 💭 prefix is only shown once per thinking block, even when chunks arrive separately
+var currentThinkingBlockID string
+
+// thinkingPrefixPrinted tracks whether we've already printed the prefix for the current thinking block
+// This is needed because the empty start marker sets currentThinkingBlockID, but we want to print
+// the prefix on the first non-empty chunk
+var thinkingPrefixPrinted bool
+
 func DisplayAgentList(agents []*pb.AgentCard, mode string) {
 	fmt.Printf("\nAvailable Agents (%s)\n\n", mode)
 	fmt.Printf("Found %d agent(s):\n\n", len(agents))
@@ -76,7 +85,7 @@ func DisplayAgentCard(agentID string, card *pb.AgentCard) {
 	}
 }
 
-func DisplayMessage(msg *pb.Message, prefix string) {
+func DisplayMessage(msg *pb.Message, prefix string, showThinking bool) {
 	if msg == nil {
 		return
 	}
@@ -86,28 +95,82 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 	}
 
 	for _, part := range msg.Parts {
-		// Display text parts
-		if text := part.GetText(); text != "" {
-			fmt.Print(text)
-			os.Stdout.Sync()
-			continue
-		}
-
-		// Handle parts with metadata
+		// Check metadata FIRST before displaying text
+		// This ensures thinking parts and tool parts are handled correctly
 		if part.Metadata != nil {
 			eventType := ""
 			if et, ok := part.Metadata.Fields["event_type"]; ok {
 				eventType = et.GetStringValue()
 			}
 
-			// Display thinking parts (AG-UI compliant)
+			// Display thinking parts (AG-UI compliant) - only if showThinking is true
 			if eventType == "thinking" {
-				displayThinkingPart(part)
+				if showThinking {
+					// Get block ID to track if this is a new thinking block
+					blockID := ""
+					if bid, ok := part.Metadata.Fields["block_id"]; ok {
+						blockID = bid.GetStringValue()
+					}
+					if blockID == "" {
+						// Generate a fallback ID if none provided
+						blockID = "unknown"
+					}
+
+					// Get text content
+					text := part.GetText()
+					if text == "" {
+						// Try to get text from data part
+						if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
+							if textField, ok := dataPart.Data.Fields["text"]; ok {
+								text = textField.GetStringValue()
+							}
+						}
+					}
+
+					// Skip empty thinking parts (these are just markers for block start)
+					// But track the block ID for the first non-empty chunk
+					if text == "" {
+						// Empty part - track the block ID but don't display anything
+						if blockID != currentThinkingBlockID {
+							// New block starting
+							currentThinkingBlockID = blockID
+							thinkingPrefixPrinted = false
+						}
+						continue
+					}
+
+					// This is a non-empty thinking chunk
+					// Check if this is a new thinking block (different ID)
+					if blockID != currentThinkingBlockID {
+						// Close previous thinking block if any
+						if currentThinkingBlockID != "" {
+							fmt.Print("\033[0m") // Reset styling
+						}
+						// Start new thinking block
+						currentThinkingBlockID = blockID
+						thinkingPrefixPrinted = false
+					}
+
+					// Print prefix only if we haven't printed it for this block yet
+					if !thinkingPrefixPrinted {
+						fmt.Print("\033[90m\033[2m💭 ")
+						thinkingPrefixPrinted = true
+					}
+
+					// Display the thinking content (styling already applied)
+					displayThinkingPart(part)
+				}
 				continue
 			}
 
 			// Display tool call parts (AG-UI format)
 			if eventType == "tool_call" {
+				// Reset thinking block state when transitioning to tool calls
+				if currentThinkingBlockID != "" {
+					fmt.Print("\033[0m") // Reset styling
+					currentThinkingBlockID = ""
+					thinkingPrefixPrinted = false
+				}
 				// Check if it's a tool call (no is_error) or tool result (has is_error)
 				_, hasIsError := part.Metadata.Fields["is_error"]
 
@@ -123,7 +186,10 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 						}
 					}
 					if toolName != "" {
-						fmt.Printf("🔧 %s ", toolName)
+						// Display tool call with better formatting
+						fmt.Print("\033[36m") // Cyan color for tool calls
+						fmt.Printf("🔧 %s", toolName)
+						fmt.Print("\033[0m ")
 						os.Stdout.Sync()
 					}
 					continue
@@ -134,16 +200,32 @@ func DisplayMessage(msg *pb.Message, prefix string) {
 						isError = isErrorField.GetBoolValue()
 					}
 					if isError {
-						fmt.Print("✗\n")
+						fmt.Print("\033[31m✗\033[0m\n") // Red for errors
 					} else {
-						fmt.Print("✓\n")
+						fmt.Print("\033[32m✓\033[0m\n") // Green for success
 					}
 					os.Stdout.Sync()
 					continue
 				}
 			}
 		}
+
+		// Display regular text parts (only if not handled by metadata above)
+		if text := part.GetText(); text != "" {
+			// Reset thinking block state when transitioning to regular text
+			if currentThinkingBlockID != "" {
+				fmt.Print("\033[0m") // Reset styling
+				currentThinkingBlockID = ""
+				thinkingPrefixPrinted = false
+			}
+			fmt.Print(text)
+			os.Stdout.Sync()
+			continue
+		}
 	}
+
+	// Don't reset thinking block state at end of message - thinking blocks can span multiple messages
+	// Only reset styling if we're not in a thinking block (already handled above)
 }
 
 // displayThinkingPart renders thinking parts based on structured data
@@ -182,10 +264,9 @@ func displayThinkingPart(part *pb.Part) {
 	}
 
 	if text != "" {
-		// Display with dimmed styling
-		fmt.Print("\033[90m\033[2m")
+		// Display with dimmed styling (prefix and styling already applied if new block)
+		// Don't reset styling here - let it continue for the entire thinking block
 		fmt.Print(text)
-		fmt.Print("\033[0m")
 		os.Stdout.Sync()
 	}
 }
@@ -202,7 +283,7 @@ func displayTodosCLI(data *structpb.Struct) {
 		return
 	}
 
-	fmt.Print("\033[90m\033[2m")
+	fmt.Print("\033[90m\033[2m💭 ")
 	fmt.Println("📋 Current Tasks:")
 
 	for i, todoValue := range todosList.Values {
@@ -247,7 +328,7 @@ func displayTodosCLI(data *structpb.Struct) {
 
 // displayGoalCLI renders goal decomposition from structured data
 func displayGoalCLI(data *structpb.Struct) {
-	fmt.Print("\033[90m\033[2m")
+	fmt.Print("\033[90m\033[2m💭 ")
 
 	// Display main goal
 	if mainGoal, ok := data.Fields["main_goal"]; ok {
@@ -294,8 +375,8 @@ func displayGoalCLI(data *structpb.Struct) {
 	fmt.Print("\033[0m")
 }
 
-func DisplayMessageLine(msg *pb.Message, prefix string) {
-	DisplayMessage(msg, prefix)
+func DisplayMessageLine(msg *pb.Message, prefix string, showThinking bool) {
+	DisplayMessage(msg, prefix, showThinking)
 	fmt.Println()
 }
 

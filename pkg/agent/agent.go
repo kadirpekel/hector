@@ -271,12 +271,16 @@ func (a *Agent) execute(
 		spanCtx, span := startAgentSpan(ctx, a.name, a.config.LLM, input)
 		defer span.End()
 
+		// Add ShowThinking flag to context for LLM providers
+		showThinking := config.BoolValue(cfg.ShowThinking, false)
+		spanCtx = context.WithValue(spanCtx, protocol.ShowThinkingKey, showThinking)
+
 		state, err := reasoning.Builder().
 			WithQuery(input).
 			WithAgentName(a.name).
 			WithSubAgents(a.config.SubAgents).
 			WithOutputChannel(outputCh).
-			WithShowThinking(config.BoolValue(cfg.ShowThinking, true)).
+			WithShowThinking(showThinking).
 			WithServices(a.services).
 			WithContext(spanCtx).
 			Build()
@@ -362,7 +366,7 @@ func (a *Agent) execute(
 			}
 
 			// Call LLM with retry logic for rate limits
-			text, toolCalls, tokens, err := a.callLLMWithRetry(ctx, messages, toolDefs, outputCh, cfg, span)
+			text, toolCalls, tokens, err := a.callLLMWithRetry(spanCtx, messages, toolDefs, outputCh, cfg, span)
 			if err != nil {
 				span.RecordError(err)
 				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error: LLM call failed: %v\n", err))); sendErr != nil {
@@ -722,8 +726,10 @@ func (a *Agent) callLLM(
 		var streamedText strings.Builder
 		var streamedThinking strings.Builder
 		llmService := a.services.LLM()
+		showThinking := config.BoolValue(cfg.ShowThinking, false)
 
 		// Use GenerateStreamingChunks to get raw StreamChunks with proper abstraction
+		// ctx already has ShowThinking flag from execute() function
 		streamCh, err := llmService.GenerateStreamingChunks(ctx, messages, toolDefs)
 		if err != nil {
 			return "", nil, 0, err
@@ -742,22 +748,28 @@ func (a *Agent) callLLM(
 					return "", nil, 0, sendErr
 				}
 			case "thinking":
-				// Create thinking part with AG-UI metadata
-				if currentThinkingBlockID == "" {
-					currentThinkingBlockID = fmt.Sprintf("think-%d", time.Now().UnixNano())
-					// Start of thinking block - create thinking part
-					thinkingPart := protocol.CreateThinkingPart("", currentThinkingBlockID, 0)
+				// Only create thinking parts if ShowThinking is enabled
+				if showThinking {
+					// Create thinking part with AG-UI metadata
+					if currentThinkingBlockID == "" {
+						currentThinkingBlockID = fmt.Sprintf("think-%d", time.Now().UnixNano())
+						// Start of thinking block - create thinking part
+						thinkingPart := protocol.CreateThinkingPart("", currentThinkingBlockID, 0)
+						if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
+							log.Printf("[Agent:%s] Failed to send thinking start: %v", a.name, sendErr)
+							return "", nil, 0, sendErr
+						}
+					}
+					streamedThinking.WriteString(chunk.Text)
+					// Emit thinking delta as text part with thinking metadata
+					thinkingPart := protocol.CreateThinkingPart(chunk.Text, currentThinkingBlockID, 0)
 					if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
-						log.Printf("[Agent:%s] Failed to send thinking start: %v", a.name, sendErr)
+						log.Printf("[Agent:%s] Failed to send thinking chunk: %v", a.name, sendErr)
 						return "", nil, 0, sendErr
 					}
-				}
-				streamedThinking.WriteString(chunk.Text)
-				// Emit thinking delta as text part with thinking metadata
-				thinkingPart := protocol.CreateThinkingPart(chunk.Text, currentThinkingBlockID, 0)
-				if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
-					log.Printf("[Agent:%s] Failed to send thinking chunk: %v", a.name, sendErr)
-					return "", nil, 0, sendErr
+				} else {
+					// Still accumulate thinking for internal tracking, but don't emit parts
+					streamedThinking.WriteString(chunk.Text)
 				}
 			case "tool_call":
 				if chunk.ToolCall != nil {
@@ -844,7 +856,7 @@ func (a *Agent) executeTools(
 		}
 
 		// Special handling: if todo_write was called, emit display part immediately
-		if toolCall.Name == "todo_write" && config.BoolValue(cfg.ShowThinking, true) {
+		if toolCall.Name == "todo_write" && config.BoolValue(cfg.ShowThinking, false) {
 			a.emitTodoDisplay(ctx, outputCh)
 		}
 
