@@ -59,6 +59,7 @@ nav:
     - Quick Start: getting-started/quick-start.md
   - Core Concepts:
     - Overview: core-concepts/overview.md
+    - Programmatic API: core-concepts/programmatic-api.md
     - Observability: core-concepts/observability.md
     - Security: core-concepts/security.md
     - A2A Protocol: reference/a2a-protocol.md
@@ -91,6 +92,7 @@ nav:
   - Reference:
     - CLI Reference: reference/cli.md
     - Configuration: reference/configuration.md
+    - Programmatic API Reference: reference/programmatic-api.md
     - Distributed Configuration: reference/distributed-configuration.md
     - API Reference: reference/api.md
     - Architecture:

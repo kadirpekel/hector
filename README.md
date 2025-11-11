@@ -700,6 +700,7 @@ Comprehensive documentation available at [gohector.dev](https://gohector.dev):
 
 **Core Concepts:**
 - [Overview](https://gohector.dev/core-concepts/overview/)
+- [Programmatic API](https://gohector.dev/core-concepts/programmatic-api/) - Build agents in Go code
 - [Memory Management](https://gohector.dev/core-concepts/memory/)
 - [Rate Limiting](https://gohector.dev/core-concepts/rate-limiting/)
 - [Tools](https://gohector.dev/core-concepts/tools/)
@@ -711,6 +712,7 @@ Comprehensive documentation available at [gohector.dev](https://gohector.dev):
 
 **Configuration:**
 - [Configuration Reference](https://gohector.dev/reference/configuration/)
+- [Programmatic API Reference](https://gohector.dev/reference/programmatic-api/) - Complete API documentation
 - [Distributed Configuration](https://gohector.dev/reference/distributed-configuration/)
 - [CLI Reference](https://gohector.dev/reference/cli/)
 

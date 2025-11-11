@@ -46,57 +46,6 @@ type Agent struct {
 	executionsMu     sync.RWMutex                  // Protects activeExecutions
 }
 
-func NewAgent(agentID string, agentConfig *config.AgentConfig, componentMgr interface{}, registry *AgentRegistry, baseURL string, preferredTransport string) (*Agent, error) {
-	if agentID == "" {
-		return nil, fmt.Errorf("agent ID cannot be empty")
-	}
-
-	compMgr, ok := componentMgr.(*component.ComponentManager)
-	if !ok {
-		return nil, fmt.Errorf("invalid component manager type")
-	}
-
-	services, err := NewAgentServicesWithRegistry(agentID, agentConfig, compMgr, registry)
-	if err != nil {
-		return nil, err
-	}
-
-	var taskWorkers chan struct{}
-	if services.Task() != nil && agentConfig.Task != nil && agentConfig.Task.WorkerPool > 0 {
-
-		taskWorkers = make(chan struct{}, agentConfig.Task.WorkerPool)
-	}
-
-	// Determine preferred transport: agent-level override > global > default
-	transport := preferredTransport
-	if agentConfig.A2A != nil && agentConfig.A2A.PreferredTransport != "" {
-		transport = agentConfig.A2A.PreferredTransport
-	}
-	if transport == "" {
-		transport = "json-rpc" // Default
-	}
-
-	// Initialize task awaiter with default timeout (can be overridden in config)
-	awaitTimeout := 10 * time.Minute
-	if agentConfig.Task != nil && agentConfig.Task.InputTimeout > 0 {
-		awaitTimeout = time.Duration(agentConfig.Task.InputTimeout) * time.Second
-	}
-
-	return &Agent{
-		id:                 agentID,
-		name:               agentConfig.Name,
-		description:        agentConfig.Description,
-		config:             agentConfig,
-		componentManager:   compMgr,
-		services:           services,
-		taskWorkers:        taskWorkers,
-		baseURL:            baseURL,
-		preferredTransport: transport,
-		taskAwaiter:        NewTaskAwaiter(awaitTimeout),
-		activeExecutions:   make(map[string]context.CancelFunc),
-	}, nil
-}
-
 func (a *Agent) ClearHistory(sessionID string) error {
 	history := a.services.History()
 	if history != nil {

@@ -5,10 +5,10 @@ import (
 	"log"
 
 	"github.com/kadirpekel/hector/pkg/a2a/client"
-	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/hector"
 )
 
 type Runtime struct {
@@ -72,78 +72,25 @@ func NewWithConfig(cfg *config.Config) (*Runtime, error) {
 		return nil, fmt.Errorf("config is required")
 	}
 
-	agentRegistry := agent.NewAgentRegistry()
-
-	componentManager, err := component.NewComponentManagerWithAgentRegistry(cfg, agentRegistry)
+	// Use programmatic API builder internally (foundation pattern)
+	configBuilder, err := hector.NewConfigAgentBuilder(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize components: %w", err)
+		return nil, fmt.Errorf("failed to create config builder: %w", err)
 	}
 
-	// Resolve the base URL from A2A server configuration
-	baseURL := resolveBaseURL(cfg)
-
-	// Get preferred transport from config (global default)
-	preferredTransport := cfg.Global.A2AServer.PreferredTransport
-	if preferredTransport == "" {
-		preferredTransport = "json-rpc" // Default
+	// Build all agents using programmatic API
+	agents, err := configBuilder.BuildAllAgents()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build agents: %w", err)
 	}
 
-	var failures []string
-	successCount := 0
-
-	var cleanupOnError = func() {
-		if err := componentManager.Close(); err != nil {
-			log.Printf("⚠️  Warning: Failed to cleanup component manager on error: %v", err)
-		}
-	}
-
-	for agentID, agentCfg := range cfg.Agents {
-		agentCfgCopy := agentCfg
-
-		var agentInstance pb.A2AServiceServer
-		var err error
-
-		if agentCfgCopy.Type == "a2a" {
-
-			externalAgent, extErr := agent.NewExternalA2AAgent(agentID, agentCfgCopy)
-			if extErr != nil {
-				failures = append(failures, fmt.Sprintf("%s: %v", agentID, extErr))
-				log.Printf("  Warning: Failed to create external agent '%s': %v", agentID, extErr)
-				continue
-			}
-			agentInstance = externalAgent
-		} else {
-
-			agentInstance, err = agent.NewAgent(agentID, agentCfgCopy, componentManager, agentRegistry, baseURL, preferredTransport)
-			if err != nil {
-				failures = append(failures, fmt.Sprintf("%s: %v", agentID, err))
-				log.Printf("  Warning: Failed to create native agent '%s': %v", agentID, err)
-				continue
-			}
-		}
-
-		if err := agentRegistry.RegisterAgent(agentID, agentInstance, agentCfgCopy, nil); err != nil {
-			failures = append(failures, fmt.Sprintf("%s (registration): %v", agentID, err))
-			log.Printf("  Warning: Failed to register agent '%s': %v", agentID, err)
-			continue
-		}
-
-		successCount++
-	}
-
-	if successCount == 0 {
-		cleanupOnError()
-		if len(failures) > 0 {
-			return nil, fmt.Errorf("failed to initialize any agents (attempted: %d, failures: %v)",
-				len(cfg.Agents), failures)
-		}
+	if len(agents) == 0 {
 		return nil, fmt.Errorf("no agents configured")
 	}
 
-	if len(failures) > 0 {
-		log.Printf("Warning: %d/%d agents failed to initialize: %v",
-			len(failures), len(cfg.Agents), failures)
-	}
+	// Get component manager and registry from config builder
+	componentManager := configBuilder.ComponentManager()
+	agentRegistry := configBuilder.AgentRegistry()
 
 	return &Runtime{
 		config:     cfg,
@@ -152,23 +99,67 @@ func NewWithConfig(cfg *config.Config) (*Runtime, error) {
 	}, nil
 }
 
-// resolveBaseURL constructs the base URL from the A2A server configuration
-func resolveBaseURL(cfg *config.Config) string {
-	// If base_url is explicitly set, use it
-	if cfg.Global.A2AServer.BaseURL != "" {
-		return cfg.Global.A2AServer.BaseURL
+// NewRuntimeBuilder creates a new runtime builder (programmatic API)
+func NewRuntimeBuilder() *RuntimeBuilder {
+	return &RuntimeBuilder{
+		agents: make(map[string]*agent.Agent),
+	}
+}
+
+// RuntimeBuilder provides a fluent API for building runtime programmatically
+type RuntimeBuilder struct {
+	agents map[string]*agent.Agent
+}
+
+// WithAgent adds an agent to the runtime
+func (b *RuntimeBuilder) WithAgent(agent *agent.Agent) *RuntimeBuilder {
+	if agent == nil {
+		panic("agent cannot be nil")
+	}
+	b.agents[agent.GetID()] = agent
+	return b
+}
+
+// WithAgents adds multiple agents to the runtime
+func (b *RuntimeBuilder) WithAgents(agents map[string]*agent.Agent) *RuntimeBuilder {
+	for id, agent := range agents {
+		if agent == nil {
+			panic(fmt.Sprintf("agent %s cannot be nil", id))
+		}
+		b.agents[id] = agent
+	}
+	return b
+}
+
+// Start creates and starts the runtime
+func (b *RuntimeBuilder) Start() (*Runtime, error) {
+	if len(b.agents) == 0 {
+		return nil, fmt.Errorf("at least one agent is required")
 	}
 
-	// Otherwise construct from host and port
-	host := cfg.Global.A2AServer.Host
-	if host == "" || host == "0.0.0.0" {
-		host = "localhost"
+	// Create agent registry
+	registry := agent.NewAgentRegistry()
+
+	// Register all agents
+	for id, agentInstance := range b.agents {
+		if err := registry.RegisterAgent(id, agentInstance, nil, nil); err != nil {
+			return nil, fmt.Errorf("failed to register agent %s: %w", id, err)
+		}
 	}
 
-	port := cfg.Global.A2AServer.Port
-	if port == 0 {
-		port = 8080
+	// Create runtime with agents
+	return NewRuntimeWithAgents(registry)
+}
+
+// NewRuntimeWithAgents creates a runtime directly from an agent registry
+func NewRuntimeWithAgents(registry *agent.AgentRegistry) (*Runtime, error) {
+	if registry == nil {
+		return nil, fmt.Errorf("agent registry is required")
 	}
 
-	return fmt.Sprintf("http://%s:%d", host, port)
+	return &Runtime{
+		config:     nil, // No config for programmatic runtime
+		components: nil, // No components for programmatic runtime
+		registry:   registry,
+	}, nil
 }

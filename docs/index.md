@@ -59,7 +59,7 @@ open http://localhost:8080
 </div>
 
 <div class="hero-intro">
-  <p>Deploy observable, secure, and scalable AI agent systems with hot reload, distributed configuration, and A2A-native federation. All configured in YAML.</p>
+  <p>Deploy observable, secure, and scalable AI agent systems with hot reload, distributed configuration, and A2A-native federation. Configure in YAML or build programmatically in Go.</p>
 
   <p>Built for real-world complexity: orchestrate multiple specialized agents, equip them with advanced reasoning strategies like chain-of-thought and tree search, give them long-term memory with RAG and vector stores, connect them to any tool or API, and stream responses in real-time. All while maintaining production-grade observability and security.</p>
 </div>
@@ -72,7 +72,7 @@ open http://localhost:8080
 
 -   :zap: __Zero-Code Configuration__
 
-    Pure YAML agent definition. No Python/Go required—define sophisticated agents declaratively.
+    Pure YAML agent definition. No Python/Go required—define sophisticated agents declaratively. Or use the [programmatic API](core-concepts/programmatic-api.md) for Go code integration.
 
 -   :chart_with_upwards_trend: __Production Observability__
 
