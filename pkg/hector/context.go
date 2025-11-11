@@ -93,6 +93,29 @@ func (b *ContextServiceBuilder) WithDocumentStores(stores []*config.DocumentStor
 	return b
 }
 
+// WithDocumentStoreBuilder adds a document store using a builder
+func (b *ContextServiceBuilder) WithDocumentStoreBuilder(storeBuilder *DocumentStoreBuilder) *ContextServiceBuilder {
+	if storeBuilder == nil {
+		panic("document store builder cannot be nil")
+	}
+	store, err := storeBuilder.Build()
+	if err != nil {
+		panic(fmt.Sprintf("failed to build document store: %v", err))
+	}
+	return b.WithDocumentStore(store)
+}
+
+// WithDocumentStoreBuilders adds multiple document stores using builders
+func (b *ContextServiceBuilder) WithDocumentStoreBuilders(storeBuilders []*DocumentStoreBuilder) *ContextServiceBuilder {
+	for _, storeBuilder := range storeBuilders {
+		if storeBuilder == nil {
+			panic("document store builder cannot be nil")
+		}
+		b.WithDocumentStoreBuilder(storeBuilder)
+	}
+	return b
+}
+
 // IncludeContext enables or disables context inclusion in prompts
 func (b *ContextServiceBuilder) IncludeContext(include bool) *ContextServiceBuilder {
 	b.includeContext = &include

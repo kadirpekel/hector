@@ -431,6 +431,243 @@ Build() *config.A2ACardConfig
 
 ---
 
+## Document Store Builder
+
+### `NewDocumentStore(name, source string) *DocumentStoreBuilder`
+
+Creates a new document store builder. `source` must be one of: `"directory"`, `"sql"`, or `"api"`.
+
+**Example:**
+```go
+// Directory source
+builder := hector.NewDocumentStore("docs", "directory").
+    Path("./docs").
+    ChunkSize(800).
+    ChunkOverlap(100).
+    IncludePatterns([]string{"*.md", "*.txt"}).
+    WatchChanges(true)
+
+// SQL source
+sqlBuilder := hector.NewDocumentStoreSQL("mydb").
+    Driver("postgres").
+    Host("localhost").
+    Port(5432).
+    Username("user").
+    Password("pass")
+
+tableBuilder := hector.NewDocumentStoreSQLTable("articles", []string{"title", "content"}, "id").
+    UpdatedColumn("updated_at").
+    MetadataColumns([]string{"author", "category"})
+
+builder := hector.NewDocumentStore("articles", "sql").
+    WithSQLBuilder(sqlBuilder).
+    WithSQLTableBuilder(tableBuilder)
+
+// API source
+authBuilder := hector.NewDocumentStoreAPIAuth("bearer").
+    Token("my-token")
+
+endpointBuilder := hector.NewDocumentStoreAPIEndpoint("/api/articles").
+    ContentField("content").
+    IDField("id").
+    WithAuthBuilder(authBuilder)
+
+apiBuilder := hector.NewDocumentStoreAPI("https://api.example.com").
+    WithAuthBuilder(authBuilder).
+    WithEndpointBuilder(endpointBuilder)
+
+builder := hector.NewDocumentStore("api-docs", "api").
+    WithAPIBuilder(apiBuilder)
+```
+
+### DocumentStoreBuilder Methods
+
+#### Core Configuration
+
+```go
+Path(path string) *DocumentStoreBuilder                    // Required for directory source
+IncludePatterns(patterns []string) *DocumentStoreBuilder
+ExcludePatterns(patterns []string) *DocumentStoreBuilder
+AdditionalExcludes(patterns []string) *DocumentStoreBuilder
+WatchChanges(watch bool) *DocumentStoreBuilder             // Directory source only
+MaxFileSize(size int64) *DocumentStoreBuilder              // Directory source only
+IncrementalIndexing(enabled bool) *DocumentStoreBuilder
+```
+
+#### Chunking Configuration
+
+```go
+ChunkSize(size int) *DocumentStoreBuilder
+ChunkOverlap(overlap int) *DocumentStoreBuilder
+ChunkStrategy(strategy string) *DocumentStoreBuilder       // "simple", "overlapping", "semantic"
+```
+
+#### Metadata Configuration
+
+```go
+ExtractMetadata(enabled bool) *DocumentStoreBuilder
+MetadataLanguages(languages []string) *DocumentStoreBuilder
+```
+
+#### Performance Configuration
+
+```go
+MaxConcurrentFiles(max int) *DocumentStoreBuilder
+ShowProgress(show bool) *DocumentStoreBuilder
+VerboseProgress(verbose bool) *DocumentStoreBuilder
+EnableCheckpoints(enabled bool) *DocumentStoreBuilder
+QuietMode(quiet bool) *DocumentStoreBuilder
+```
+
+#### SQL Configuration
+
+```go
+WithSQLConfig(sqlConfig *config.DocumentStoreSQLConfig) *DocumentStoreBuilder
+WithSQLBuilder(sqlBuilder *DocumentStoreSQLBuilder) *DocumentStoreBuilder
+SQLMaxRows(maxRows int) *DocumentStoreBuilder
+WithSQLTable(tableConfig *config.DocumentStoreSQLTableConfig) *DocumentStoreBuilder
+WithSQLTableBuilder(tableBuilder *DocumentStoreSQLTableBuilder) *DocumentStoreBuilder
+```
+
+#### API Configuration
+
+```go
+WithAPIConfig(apiConfig *config.DocumentStoreAPIConfig) *DocumentStoreBuilder
+WithAPIBuilder(apiBuilder *DocumentStoreAPIBuilder) *DocumentStoreBuilder
+```
+
+#### Build
+
+```go
+Build() (*config.DocumentStoreConfig, error)
+```
+
+### DocumentStoreSQLBuilder Methods
+
+```go
+NewDocumentStoreSQL(database string) *DocumentStoreSQLBuilder
+Driver(driver string) *DocumentStoreSQLBuilder              // "postgres", "mysql", "sqlite3"
+Host(host string) *DocumentStoreSQLBuilder
+Port(port int) *DocumentStoreSQLBuilder
+Username(username string) *DocumentStoreSQLBuilder
+Password(password string) *DocumentStoreSQLBuilder
+SSLMode(mode string) *DocumentStoreSQLBuilder
+Build() (*config.DocumentStoreSQLConfig, error)
+```
+
+### DocumentStoreSQLTableBuilder Methods
+
+```go
+NewDocumentStoreSQLTable(table string, columns []string, idColumn string) *DocumentStoreSQLTableBuilder
+UpdatedColumn(column string) *DocumentStoreSQLTableBuilder
+WhereClause(clause string) *DocumentStoreSQLTableBuilder
+MetadataColumns(columns []string) *DocumentStoreSQLTableBuilder
+Build() (*config.DocumentStoreSQLTableConfig, error)
+```
+
+### DocumentStoreAPIBuilder Methods
+
+```go
+NewDocumentStoreAPI(baseURL string) *DocumentStoreAPIBuilder
+WithAuth(authConfig *config.DocumentStoreAPIAuthConfig) *DocumentStoreAPIBuilder
+WithAuthBuilder(authBuilder *DocumentStoreAPIAuthBuilder) *DocumentStoreAPIBuilder
+WithEndpoint(endpointConfig *config.DocumentStoreAPIEndpointConfig) *DocumentStoreAPIBuilder
+WithEndpointBuilder(endpointBuilder *DocumentStoreAPIEndpointBuilder) *DocumentStoreAPIBuilder
+Build() (*config.DocumentStoreAPIConfig, error)
+```
+
+### DocumentStoreAPIAuthBuilder Methods
+
+```go
+NewDocumentStoreAPIAuth(authType string) *DocumentStoreAPIAuthBuilder  // "bearer", "basic", "apikey"
+Token(token string) *DocumentStoreAPIAuthBuilder                      // For bearer auth
+Username(username string) *DocumentStoreAPIAuthBuilder                // For basic auth
+Password(password string) *DocumentStoreAPIAuthBuilder                 // For basic auth
+Header(header string) *DocumentStoreAPIAuthBuilder                    // For apikey auth
+Extra(extra map[string]string) *DocumentStoreAPIAuthBuilder
+Build() (*config.DocumentStoreAPIAuthConfig, error)
+```
+
+### DocumentStoreAPIEndpointBuilder Methods
+
+```go
+NewDocumentStoreAPIEndpoint(path string) *DocumentStoreAPIEndpointBuilder
+Method(method string) *DocumentStoreAPIEndpointBuilder
+Params(params map[string]string) *DocumentStoreAPIEndpointBuilder
+Headers(headers map[string]string) *DocumentStoreAPIEndpointBuilder
+Body(body string) *DocumentStoreAPIEndpointBuilder
+WithAuth(authConfig *config.DocumentStoreAPIAuthConfig) *DocumentStoreAPIEndpointBuilder
+WithAuthBuilder(authBuilder *DocumentStoreAPIAuthBuilder) *DocumentStoreAPIEndpointBuilder
+IDField(field string) *DocumentStoreAPIEndpointBuilder
+ContentField(field string) *DocumentStoreAPIEndpointBuilder
+MetadataFields(fields []string) *DocumentStoreAPIEndpointBuilder
+UpdatedField(field string) *DocumentStoreAPIEndpointBuilder
+WithPagination(paginationConfig *config.DocumentStoreAPIPaginationConfig) *DocumentStoreAPIEndpointBuilder
+WithPaginationBuilder(paginationBuilder *DocumentStoreAPIPaginationBuilder) *DocumentStoreAPIEndpointBuilder
+Build() (*config.DocumentStoreAPIEndpointConfig, error)
+```
+
+### DocumentStoreAPIPaginationBuilder Methods
+
+```go
+NewDocumentStoreAPIPagination(paginationType string) *DocumentStoreAPIPaginationBuilder  // "offset", "cursor", "page", "link"
+PageParam(param string) *DocumentStoreAPIPaginationBuilder
+SizeParam(param string) *DocumentStoreAPIPaginationBuilder
+MaxPages(maxPages int) *DocumentStoreAPIPaginationBuilder
+PageSize(size int) *DocumentStoreAPIPaginationBuilder
+NextField(field string) *DocumentStoreAPIPaginationBuilder
+DataField(field string) *DocumentStoreAPIPaginationBuilder
+Build() (*config.DocumentStoreAPIPaginationConfig, error)
+```
+
+---
+
+## Observability Builder
+
+### `NewObservability() *ObservabilityBuilder`
+
+Creates a new observability builder for configuring tracing and metrics.
+
+**Example:**
+```go
+obsConfig, _ := hector.NewObservability().
+    EnableMetrics(true).
+    WithTracing(hector.NewTracing().
+        Enable(true).
+        EndpointURL("http://jaeger:4317").
+        SamplingRate(0.1).
+        ServiceName("my-app")).
+    Build()
+
+// Initialize observability manager
+obsMgr := observability.NewManager(obsConfig)
+if err := obsMgr.Initialize(context.Background()); err != nil {
+    log.Fatal(err)
+}
+```
+
+### ObservabilityBuilder Methods
+
+```go
+EnableMetrics(enabled bool) *ObservabilityBuilder
+WithTracing(tracingBuilder *TracingBuilder) *ObservabilityBuilder
+Build() (observability.Config, error)
+```
+
+### TracingBuilder Methods
+
+```go
+NewTracing() *TracingBuilder
+Enable(enabled bool) *TracingBuilder
+ExporterType(exporterType string) *TracingBuilder
+EndpointURL(url string) *TracingBuilder
+SamplingRate(rate float64) *TracingBuilder                  // 0.0 to 1.0
+ServiceName(name string) *TracingBuilder
+Build() (observability.TracerConfig, error)
+```
+
+---
+
 ## Config Agent Builder
 
 ### `NewConfigAgentBuilder(cfg *config.Config) (*ConfigAgentBuilder, error)`

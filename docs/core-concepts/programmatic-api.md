@@ -264,6 +264,69 @@ contextService, err := hector.NewContextService().
     Build()
 ```
 
+### Document Stores (RAG)
+
+```go
+// Directory-based document store
+docStore, err := hector.NewDocumentStore("docs", "directory").
+    Path("./docs").
+    ChunkSize(800).
+    ChunkOverlap(100).
+    IncludePatterns([]string{"*.md", "*.txt"}).
+    ExcludePatterns([]string{"**/node_modules/**"}).
+    WatchChanges(true).
+    ExtractMetadata(true).
+    MetadataLanguages([]string{"go"}).
+    Build()
+
+// Use with context service
+contextService, err := hector.NewContextService().
+    WithDatabase(db).
+    WithEmbedder(embedder).
+    WithDocumentStoreBuilder(hector.NewDocumentStore("docs", "directory").
+        Path("./docs").
+        ChunkSize(800)).
+    TopK(5).
+    Build()
+
+// SQL-based document store
+sqlBuilder := hector.NewDocumentStoreSQL("mydb").
+    Driver("postgres").
+    Host("localhost").
+    Port(5432).
+    Username("user").
+    Password("pass")
+
+tableBuilder := hector.NewDocumentStoreSQLTable("articles", []string{"title", "content"}, "id").
+    UpdatedColumn("updated_at").
+    MetadataColumns([]string{"author", "category"})
+
+sqlStore, err := hector.NewDocumentStore("articles", "sql").
+    WithSQLBuilder(sqlBuilder).
+    WithSQLTableBuilder(tableBuilder).
+    ChunkSize(1000).
+    Build()
+
+// API-based document store
+authBuilder := hector.NewDocumentStoreAPIAuth("bearer").
+    Token("my-api-token")
+
+endpointBuilder := hector.NewDocumentStoreAPIEndpoint("/api/articles").
+    ContentField("content").
+    IDField("id").
+    UpdatedField("updated_at").
+    WithAuthBuilder(authBuilder)
+
+apiBuilder := hector.NewDocumentStoreAPI("https://api.example.com").
+    WithAuthBuilder(authBuilder).
+    WithEndpointBuilder(endpointBuilder)
+
+apiStore, err := hector.NewDocumentStore("api-docs", "api").
+    WithAPIBuilder(apiBuilder).
+    ChunkSize(800).
+    Build()
+```
+
 ### Task Service
 
 ```go
@@ -301,6 +364,37 @@ sessionService, err := hector.NewSessionService().
         DSN:    "postgres://user:pass@localhost/db",
     }).
     Build()
+```
+
+### Observability (Tracing & Metrics)
+
+```go
+// Configure observability programmatically
+obsConfig, err := hector.NewObservability().
+    EnableMetrics(true).
+    WithTracing(hector.NewTracing().
+        Enable(true).
+        EndpointURL("http://jaeger:4317").
+        SamplingRate(0.1).  // 10% sampling
+        ServiceName("my-hector-app")).
+    Build()
+
+if err != nil {
+    log.Fatal(err)
+}
+
+// Initialize observability manager
+obsMgr := observability.NewManager(obsConfig)
+if err := obsMgr.Initialize(context.Background()); err != nil {
+    log.Fatal(err)
+}
+
+// Use tracer
+tracer := obsMgr.GetTracer("my-component")
+ctx, span := tracer.Start(context.Background(), "my-operation")
+defer span.End()
+
+// Metrics are automatically collected
 ```
 
 ---

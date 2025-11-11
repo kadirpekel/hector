@@ -82,6 +82,7 @@ nav:
     - Build Coding Assistant: how-to/build-coding-assistant.md
     - Build Research System: how-to/build-research-system.md
     - Add Custom Tools: how-to/add-custom-tools.md
+    - Extend Hector: how-to/extend-hector.md
     - Setup RAG: how-to/setup-rag.md
     - Setup Session Persistence: how-to/setup-session-persistence.md
     - Quick Observability: how-to/quick-observability.md

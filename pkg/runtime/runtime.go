@@ -142,7 +142,20 @@ func (b *RuntimeBuilder) Start() (*Runtime, error) {
 
 	// Register all agents
 	for id, agentInstance := range b.agents {
-		if err := registry.RegisterAgent(id, agentInstance, nil, nil); err != nil {
+		// Create minimal config for programmatic agents
+		agentConfig := &config.AgentConfig{
+			Name:        agentInstance.GetName(),
+			Description: agentInstance.GetDescription(),
+			Visibility:  "public", // Default visibility for programmatic agents
+			Type:        "native", // Default type for programmatic agents
+		}
+
+		// Try to get config from agent if available (for agents built from config)
+		if agentConfigFromAgent := agentInstance.GetConfig(); agentConfigFromAgent != nil {
+			agentConfig = agentConfigFromAgent
+		}
+
+		if err := registry.RegisterAgent(id, agentInstance, agentConfig, nil); err != nil {
 			return nil, fmt.Errorf("failed to register agent %s: %w", id, err)
 		}
 	}
