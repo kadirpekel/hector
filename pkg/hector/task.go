@@ -10,11 +10,13 @@ import (
 
 // TaskServiceBuilder provides a fluent API for building task services
 type TaskServiceBuilder struct {
-	backend      string
-	workerPool   int
-	sqlConfig    *config.TaskSQLConfig
-	inputTimeout int
-	timeout      int
+	backend          string
+	workerPool       int
+	sqlConfig        *config.TaskSQLConfig
+	inputTimeout     int
+	timeout          int
+	hitlConfig       *config.HITLConfig
+	checkpointConfig *config.CheckpointConfig
 }
 
 // NewTaskService creates a new task service builder
@@ -77,6 +79,34 @@ func (b *TaskServiceBuilder) Timeout(seconds int) *TaskServiceBuilder {
 	return b
 }
 
+// WithHITL sets the HITL configuration
+func (b *TaskServiceBuilder) WithHITL(cfg *config.HITLConfig) *TaskServiceBuilder {
+	b.hitlConfig = cfg
+	return b
+}
+
+// HITL creates an HITL config builder
+func (b *TaskServiceBuilder) HITL() *HITLConfigBuilder {
+	if b.hitlConfig == nil {
+		b.hitlConfig = &config.HITLConfig{}
+	}
+	return NewHITLConfigBuilder(b.hitlConfig)
+}
+
+// WithCheckpoint sets the checkpoint configuration
+func (b *TaskServiceBuilder) WithCheckpoint(cfg *config.CheckpointConfig) *TaskServiceBuilder {
+	b.checkpointConfig = cfg
+	return b
+}
+
+// Checkpoint creates a checkpoint config builder
+func (b *TaskServiceBuilder) Checkpoint() *CheckpointConfigBuilder {
+	if b.checkpointConfig == nil {
+		b.checkpointConfig = &config.CheckpointConfig{}
+	}
+	return NewCheckpointConfigBuilder(b.checkpointConfig)
+}
+
 // Build creates the task service
 func (b *TaskServiceBuilder) Build() (reasoning.TaskService, error) {
 	switch b.backend {
@@ -101,21 +131,41 @@ func (b *TaskServiceBuilder) Build() (reasoning.TaskService, error) {
 // GetConfig returns the task configuration
 func (b *TaskServiceBuilder) GetConfig() TaskConfig {
 	return TaskConfig{
+		Backend:          b.backend,
+		WorkerPool:       b.workerPool,
+		SQLConfig:        b.sqlConfig,
+		InputTimeout:     b.inputTimeout,
+		Timeout:          b.timeout,
+		HITLConfig:       b.hitlConfig,
+		CheckpointConfig: b.checkpointConfig,
+	}
+}
+
+// GetTaskConfig returns the config.TaskConfig (for agent config)
+func (b *TaskServiceBuilder) GetTaskConfig() *config.TaskConfig {
+	if b.backend == "" && b.workerPool == 0 && b.sqlConfig == nil {
+		return nil // Task not enabled
+	}
+	return &config.TaskConfig{
 		Backend:      b.backend,
 		WorkerPool:   b.workerPool,
-		SQLConfig:    b.sqlConfig,
+		SQL:          b.sqlConfig,
 		InputTimeout: b.inputTimeout,
 		Timeout:      b.timeout,
+		HITL:         b.hitlConfig,
+		Checkpoint:   b.checkpointConfig,
 	}
 }
 
 // TaskConfig represents task configuration
 type TaskConfig struct {
-	Backend      string
-	WorkerPool   int
-	SQLConfig    *config.TaskSQLConfig
-	InputTimeout int
-	Timeout      int
+	Backend          string
+	WorkerPool       int
+	SQLConfig        *config.TaskSQLConfig
+	InputTimeout     int
+	Timeout          int
+	HITLConfig       *config.HITLConfig
+	CheckpointConfig *config.CheckpointConfig
 }
 
 // TaskSQLConfigBuilder provides a fluent API for building SQL task config

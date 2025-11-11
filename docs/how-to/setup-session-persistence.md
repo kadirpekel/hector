@@ -17,6 +17,8 @@ Session persistence stores conversation metadata and working memory in a databas
 - **Distributed deployments** with shared session state
 - **Long-running conversations** that survive process crashes
 - **Multi-agent isolation** with shared infrastructure
+- **Async HITL state persistence** for tool approval workflows
+- **Checkpoint recovery** for crash resilience and long-running tasks
 
 ### Architecture
 

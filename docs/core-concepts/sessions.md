@@ -161,7 +161,11 @@ agents:
 
 **Session persistence:** See [Setup Session Persistence](../how-to/setup-session-persistence.md) guide.
 
-**Note:** Session metadata is also used by **async Human-in-the-Loop (HITL)** to persist execution state when tasks pause for user approval. See [Human-in-the-Loop](human-in-the-loop.md) for details.
+**Note:** Session metadata is also used by:
+- **Async Human-in-the-Loop (HITL)**: Persists execution state when tasks pause for user approval
+- **Checkpoint Recovery**: Stores execution checkpoints for crash recovery and long-running tasks
+
+See [Human-in-the-Loop](human-in-the-loop.md) and [Generic Checkpoint/Resume](../design/generic-checkpoint-resume.md) for details.
 
 ---
 

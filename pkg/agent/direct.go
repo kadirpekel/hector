@@ -33,6 +33,7 @@ type AgentBuilderOptions struct {
 	SessionService     reasoning.SessionService
 	ContextService     reasoning.ContextService
 	TaskService        reasoning.TaskService
+	TaskConfig         *config.TaskConfig // For checkpoint/HITL configuration
 }
 
 // NewAgentDirect creates an agent directly from components without config
@@ -65,6 +66,14 @@ func NewAgentDirect(opts AgentBuilderOptions) (*Agent, error) {
 	// Default timeout
 	awaitTimeout := 10 * time.Minute
 
+	// Build minimal agent config for checkpoint/HITL support
+	var agentConfig *config.AgentConfig
+	if opts.TaskConfig != nil {
+		agentConfig = &config.AgentConfig{
+			Task: opts.TaskConfig,
+		}
+	}
+
 	// Build agent
 	agent := &Agent{
 		id:                 opts.ID,
@@ -75,8 +84,8 @@ func NewAgentDirect(opts AgentBuilderOptions) (*Agent, error) {
 		preferredTransport: transport,
 		taskAwaiter:        NewTaskAwaiter(awaitTimeout),
 		activeExecutions:   make(map[string]context.CancelFunc),
-		componentManager:   nil, // Not needed for direct construction
-		config:             nil, // Not needed for direct construction
+		componentManager:   nil,         // Not needed for direct construction
+		config:             agentConfig, // For checkpoint/HITL configuration
 	}
 
 	return agent, nil

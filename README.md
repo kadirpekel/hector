@@ -413,6 +413,7 @@ agents:
 - Cross-session memory continuity
 - Conversation history retrieval
 - **Async HITL state persistence** (execution state survives restarts)
+- **Checkpoint recovery** (tasks survive crashes and restarts)
 
 **Rate Limiting:**
 - Multi-layer time windows (minute/hour/day/week/month)

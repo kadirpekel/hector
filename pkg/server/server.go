@@ -173,6 +173,14 @@ func (s *Server) initialize() error {
 			log.Printf("External agent '%s' connected to %s", agentID, entry.Config.URL)
 		} else {
 			log.Printf("Native agent '%s' created", agentID)
+
+			// Recover pending tasks with checkpoints (if enabled)
+			if nativeAgent, ok := entry.Agent.(*agent.Agent); ok {
+				if err := nativeAgent.RecoverPendingTasks(context.Background()); err != nil {
+					log.Printf("⚠️  Failed to recover pending tasks for agent '%s': %v", agentID, err)
+					// Don't fail initialization - recovery is best-effort
+				}
+			}
 		}
 	}
 

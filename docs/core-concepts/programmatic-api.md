@@ -337,14 +337,30 @@ taskService, err := hector.NewTaskService().
     InputTimeout(600).
     Build()
 
-// SQL task service
+// SQL task service with HITL and checkpoint
 taskService, err := hector.NewTaskService().
     Backend("sql").
-    WithSQLConfig(&config.SQLConfig{
-        Driver: "postgres",
-        DSN:    "postgres://user:pass@localhost/db",
-    }).
     WorkerPool(10).
+    InputTimeout(600).
+    Timeout(3600).
+    SQLConfig().
+        Driver("sqlite").
+        Database("./tasks.db").
+        Build().
+    HITL().
+        Mode("async").  // Async HITL (requires session_store)
+        Build().
+    Checkpoint().
+        Enabled(true).
+        Strategy("hybrid").
+        Interval().
+            EveryNIterations(5).
+            Build().
+        Recovery().
+            AutoResume(true).
+            ResumeTimeout(3600).
+            Build().
+        Build().
     Build()
 ```
 

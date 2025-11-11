@@ -4,10 +4,35 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/reasoning"
+)
+
+// ExecutionPhase represents the phase of execution when checkpoint was created
+type ExecutionPhase string
+
+const (
+	PhaseInitialized   ExecutionPhase = "initialized"
+	PhasePreLLM        ExecutionPhase = "pre_llm"
+	PhasePostLLM       ExecutionPhase = "post_llm"
+	PhaseToolExecution ExecutionPhase = "tool_execution"
+	PhasePostTool      ExecutionPhase = "post_tool"
+	PhaseIterationEnd  ExecutionPhase = "iteration_end"
+	PhaseToolApproval  ExecutionPhase = "tool_approval" // Used by async HITL
+	PhaseError         ExecutionPhase = "error"
+)
+
+// CheckpointType represents why the checkpoint was created
+type CheckpointType string
+
+const (
+	CheckpointTypeEvent    CheckpointType = "event"    // Event-driven (tool approval, error)
+	CheckpointTypeInterval CheckpointType = "interval" // Interval-based (periodic)
+	CheckpointTypeManual   CheckpointType = "manual"   // Manual pause
+	CheckpointTypeError    CheckpointType = "error"    // Error recovery
 )
 
 // ExecutionState represents the state needed to resume task execution
@@ -17,6 +42,11 @@ type ExecutionState struct {
 	Query           string                  `json:"query"`
 	ReasoningState  *ReasoningStateSnapshot `json:"reasoning_state"`
 	PendingToolCall *protocol.ToolCall      `json:"pending_tool_call"`
+
+	// Checkpoint metadata (optional, backward compatible)
+	Phase          ExecutionPhase `json:"phase,omitempty"`
+	CheckpointType CheckpointType `json:"checkpoint_type,omitempty"`
+	CheckpointTime time.Time      `json:"checkpoint_time,omitempty"`
 }
 
 // ReasoningStateSnapshot is a serializable version of reasoning state

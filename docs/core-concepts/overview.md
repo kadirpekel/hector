@@ -286,6 +286,7 @@ Learn about the core components of agents:
 - **[Sessions](sessions.md)** - Conversation persistence and management
 - **[Streaming](streaming.md)** - Real-time response streaming
 - **[Tasks](tasks.md)** - Task lifecycle and management
+- **[Checkpoint Recovery](checkpoint-recovery.md)** - Crash recovery and long-running tasks
 - **[Structured Output](structured-output.md)** - Schema-validated responses
 - **[Observability](observability.md)** - Metrics, tracing, and monitoring
 - **[Security](security.md)** - Authentication, authorization, and sandboxing

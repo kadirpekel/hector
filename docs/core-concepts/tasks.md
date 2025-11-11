@@ -649,6 +649,51 @@ See **[Human-in-the-Loop](human-in-the-loop.md)** for complete documentation, in
 
 ---
 
+## Checkpoint Recovery
+
+Hector supports **generic checkpoint/resume** functionality that allows tasks to recover from any point in execution, not just HITL pauses. This enables:
+
+- ✅ **Crash Recovery**: Tasks survive server crashes and restarts
+- ✅ **Rate Limit Resilience**: Pause during backoff, resume when limits reset
+- ✅ **Long-Running Tasks**: Checkpoint periodically for very long workflows
+- ✅ **Resource Management**: Free goroutines during waits, resume later
+
+**Configuration:**
+```yaml
+agents:
+  assistant:
+    task:
+      checkpoint:
+        enabled: true
+        strategy: "hybrid"  # "event", "interval", or "hybrid"
+        
+        interval:
+          every_n_iterations: 5  # Checkpoint every 5 iterations
+        
+        recovery:
+          auto_resume: true        # Auto-resume on startup
+          auto_resume_hitl: false  # Don't auto-resume INPUT_REQUIRED
+          resume_timeout: 3600     # 1 hour timeout
+    
+    session_store: "sqlite"  # Required for checkpoint storage
+```
+
+**How It Works:**
+- Checkpoints are stored in session metadata (same foundation as async HITL)
+- Interval-based checkpoints happen in background (task remains in `WORKING` state)
+- Event-driven checkpoints happen on HITL pauses (`INPUT_REQUIRED` state)
+- On server restart, tasks in `WORKING` or `INPUT_REQUIRED` state are automatically recovered if checkpoints exist
+
+**A2A Compliance:**
+- ✅ Background checkpoints remain in `WORKING` (invisible to client)
+- ✅ Explicit pauses use `INPUT_REQUIRED` (standard A2A state)
+- ✅ Recovery uses standard A2A `message:send` with `taskId`
+- ✅ Never checkpoints from terminal states
+
+See **[Checkpoint Recovery](checkpoint-recovery.md)** for complete documentation and **[Generic Checkpoint/Resume Design](../design/generic-checkpoint-resume.md)** for architecture details.
+
+---
+
 ## Next Steps
 
 - **[Streaming](streaming.md)** - Real-time task updates

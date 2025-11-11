@@ -268,6 +268,16 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (*agent.Agent, error) {
 			taskBuilder = taskBuilder.WithSQLConfig(agentCfg.Task.SQL)
 		}
 
+		// Add HITL configuration
+		if agentCfg.Task.HITL != nil {
+			taskBuilder = taskBuilder.WithHITL(agentCfg.Task.HITL)
+		}
+
+		// Add checkpoint configuration
+		if agentCfg.Task.Checkpoint != nil {
+			taskBuilder = taskBuilder.WithCheckpoint(agentCfg.Task.Checkpoint)
+		}
+
 		builder = builder.WithTask(taskBuilder)
 	}
 

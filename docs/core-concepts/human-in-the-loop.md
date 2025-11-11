@@ -681,6 +681,51 @@ Task completes (TASK_STATE_COMPLETED)
 - Better resource utilization
 - Production-ready reliability
 
+---
+
+## Checkpoint Recovery (Generic)
+
+Hector extends async HITL with **generic checkpoint/resume** functionality that enables recovery from any point in execution, not just HITL pauses. This provides:
+
+- ✅ **Crash Recovery**: Tasks survive server crashes and restarts
+- ✅ **Rate Limit Resilience**: Pause during backoff, resume when limits reset
+- ✅ **Long-Running Tasks**: Checkpoint periodically for very long workflows
+- ✅ **Resource Management**: Free goroutines during waits, resume later
+
+**Configuration:**
+```yaml
+agents:
+  assistant:
+    task:
+      checkpoint:
+        enabled: true
+        strategy: "hybrid"  # "event", "interval", or "hybrid"
+        
+        interval:
+          every_n_iterations: 5  # Checkpoint every 5 iterations
+        
+        recovery:
+          auto_resume: true        # Auto-resume on startup
+          auto_resume_hitl: false  # Don't auto-resume INPUT_REQUIRED
+          resume_timeout: 3600     # 1 hour timeout
+    
+    session_store: "sqlite"  # Required for checkpoint storage
+```
+
+**How It Works:**
+- Uses the same foundation as async HITL (`ExecutionState`, session metadata)
+- Interval-based checkpoints happen in background (task remains in `WORKING` state)
+- Event-driven checkpoints happen on HITL pauses (`INPUT_REQUIRED` state)
+- On server restart, tasks in `WORKING` or `INPUT_REQUIRED` state are automatically recovered if checkpoints exist
+
+**A2A Compliance:**
+- ✅ Background checkpoints remain in `WORKING` (invisible to client)
+- ✅ Explicit pauses use `INPUT_REQUIRED` (standard A2A state)
+- ✅ Recovery uses standard A2A `message:send` with `taskId`
+- ✅ Never checkpoints from terminal states
+
+See **[Generic Checkpoint/Resume Design](../design/generic-checkpoint-resume.md)** for complete architecture details.
+
 ### Migration Guide
 
 **From Blocking to Async:**
@@ -707,4 +752,13 @@ Task completes (TASK_STATE_COMPLETED)
 3. Restart server - existing blocking tasks will complete, new tasks use async mode
 
 **See:** [Making HITL Truly Asynchronous](../how-to/async-hitl.md) for complete implementation guide.
+
+---
+
+## Related Topics
+
+- **[Checkpoint Recovery](checkpoint-recovery.md)** - Generic checkpoint/resume system (extends async HITL)
+- **[Tasks](tasks.md)** - Task lifecycle and management
+- **[Sessions](sessions.md)** - Session persistence (checkpoint storage)
+- **[Making HITL Truly Asynchronous](../how-to/async-hitl.md)** - Implementation guide
 

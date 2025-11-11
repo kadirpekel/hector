@@ -266,13 +266,137 @@ builder := hector.NewTaskService()
 
 ### TaskServiceBuilder Methods
 
+#### Core Configuration
+
 ```go
 Backend(backend string) *TaskServiceBuilder  // "memory" or "sql"
 WorkerPool(size int) *TaskServiceBuilder
-WithSQLConfig(cfg *config.SQLConfig) *TaskServiceBuilder
-InputTimeout(seconds int) *TaskServiceBuilder
-Timeout(seconds int) *TaskServiceBuilder
+WithSQLConfig(cfg *config.TaskSQLConfig) *TaskServiceBuilder
+InputTimeout(seconds int) *TaskServiceBuilder  // Timeout for INPUT_REQUIRED state
+Timeout(seconds int) *TaskServiceBuilder      // Timeout for async task execution
 Build() (reasoning.TaskService, error)
+```
+
+#### Human-in-the-Loop (HITL) Configuration
+
+```go
+WithHITL(cfg *config.HITLConfig) *TaskServiceBuilder
+HITL() *HITLConfigBuilder
+```
+
+**HITLConfigBuilder Methods:**
+```go
+Mode(mode string) *HITLConfigBuilder  // "auto", "blocking", or "async"
+Build() *config.HITLConfig
+```
+
+**Example:**
+```go
+taskBuilder := hector.NewTaskService().
+    Backend("sql").
+    WorkerPool(10).
+    HITL().
+        Mode("async").  // Enable async HITL (requires session_store)
+        Build()
+```
+
+#### Checkpoint Configuration
+
+```go
+WithCheckpoint(cfg *config.CheckpointConfig) *TaskServiceBuilder
+Checkpoint() *CheckpointConfigBuilder
+```
+
+**CheckpointConfigBuilder Methods:**
+```go
+Enabled(enabled bool) *CheckpointConfigBuilder
+Strategy(strategy string) *CheckpointConfigBuilder  // "event", "interval", or "hybrid"
+Interval() *CheckpointIntervalConfigBuilder
+Recovery() *CheckpointRecoveryConfigBuilder
+Build() *config.CheckpointConfig
+```
+
+**CheckpointIntervalConfigBuilder Methods:**
+```go
+EveryNIterations(n int) *CheckpointIntervalConfigBuilder
+AfterToolCalls(enabled bool) *CheckpointIntervalConfigBuilder
+BeforeLLMCalls(enabled bool) *CheckpointIntervalConfigBuilder
+Build() *config.CheckpointIntervalConfig
+```
+
+**CheckpointRecoveryConfigBuilder Methods:**
+```go
+AutoResume(enabled bool) *CheckpointRecoveryConfigBuilder
+AutoResumeHITL(enabled bool) *CheckpointRecoveryConfigBuilder
+ResumeTimeout(seconds int) *CheckpointRecoveryConfigBuilder
+Build() *config.CheckpointRecoveryConfig
+```
+
+**Example:**
+```go
+taskBuilder := hector.NewTaskService().
+    Backend("sql").
+    WorkerPool(10).
+    Checkpoint().
+        Enabled(true).
+        Strategy("hybrid").
+        Interval().
+            EveryNIterations(5).
+            AfterToolCalls(true).
+            Build().
+        Recovery().
+            AutoResume(true).
+            AutoResumeHITL(false).
+            ResumeTimeout(3600).
+            Build().
+        Build()
+```
+
+**Complete Example with HITL and Checkpoint:**
+```go
+// Build session service (required for async HITL)
+sessionService := hector.NewSessionService("my-agent").
+    Backend("sql").
+    SQLConfig().
+        Driver("sqlite").
+        Database("./sessions.db").
+        Build().
+    Build()
+
+// Build task service with HITL and checkpoint
+taskService := hector.NewTaskService().
+    Backend("sql").
+    WorkerPool(10).
+    InputTimeout(600).
+    Timeout(3600).
+    SQLConfig().
+        Driver("sqlite").
+        Database("./tasks.db").
+        Build().
+    HITL().
+        Mode("async").
+        Build().
+    Checkpoint().
+        Enabled(true).
+        Strategy("hybrid").
+        Interval().
+            EveryNIterations(5).
+            Build().
+        Recovery().
+            AutoResume(true).
+            ResumeTimeout(3600).
+            Build().
+        Build().
+    Build()
+
+// Build agent with task service
+agent, err := hector.NewAgent("assistant").
+    WithLLMProvider(llm).
+    WithReasoningStrategy(reasoning).
+    WithWorkingMemory(workingMemory).
+    WithSession(sessionService).
+    WithTask(taskService).
+    Build()
 ```
 
 ---

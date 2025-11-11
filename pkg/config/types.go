@@ -1368,16 +1368,36 @@ func (c *DocumentStoreConfig) SetDefaults() {
 }
 
 type TaskConfig struct {
-	Backend      string         `yaml:"backend,omitempty"`
-	WorkerPool   int            `yaml:"worker_pool,omitempty"`
-	SQL          *TaskSQLConfig `yaml:"sql,omitempty"`
-	InputTimeout int            `yaml:"input_timeout,omitempty"` // Timeout in seconds for INPUT_REQUIRED state (default: 600)
-	Timeout      int            `yaml:"timeout,omitempty"`       // Timeout in seconds for async task execution (default: 3600 = 1 hour)
-	HITL         *HITLConfig    `yaml:"hitl,omitempty"`          // Human-in-the-loop configuration
+	Backend      string            `yaml:"backend,omitempty"`
+	WorkerPool   int               `yaml:"worker_pool,omitempty"`
+	SQL          *TaskSQLConfig    `yaml:"sql,omitempty"`
+	InputTimeout int               `yaml:"input_timeout,omitempty"` // Timeout in seconds for INPUT_REQUIRED state (default: 600)
+	Timeout      int               `yaml:"timeout,omitempty"`       // Timeout in seconds for async task execution (default: 3600 = 1 hour)
+	HITL         *HITLConfig       `yaml:"hitl,omitempty"`          // Human-in-the-loop configuration
+	Checkpoint   *CheckpointConfig `yaml:"checkpoint,omitempty"`    // Generic checkpoint/resume configuration
 }
 
 type HITLConfig struct {
 	Mode string `yaml:"mode,omitempty"` // "auto" (default), "blocking", or "async"
+}
+
+type CheckpointConfig struct {
+	Enabled  bool                      `yaml:"enabled,omitempty"`  // Enable generic checkpointing (default: false)
+	Strategy string                    `yaml:"strategy,omitempty"` // "event", "interval", or "hybrid" (default: "event")
+	Interval *CheckpointIntervalConfig `yaml:"interval,omitempty"`
+	Recovery *CheckpointRecoveryConfig `yaml:"recovery,omitempty"`
+}
+
+type CheckpointIntervalConfig struct {
+	EveryNIterations int  `yaml:"every_n_iterations,omitempty"` // Checkpoint every N iterations (0 = disabled)
+	AfterToolCalls   bool `yaml:"after_tool_calls,omitempty"`   // Always checkpoint after tool calls (default: false)
+	BeforeLLMCalls   bool `yaml:"before_llm_calls,omitempty"`   // Checkpoint before LLM calls (default: false)
+}
+
+type CheckpointRecoveryConfig struct {
+	AutoResume     bool `yaml:"auto_resume,omitempty"`      // Auto-resume on startup (default: false)
+	AutoResumeHITL bool `yaml:"auto_resume_hitl,omitempty"` // Auto-resume INPUT_REQUIRED tasks (default: false)
+	ResumeTimeout  int  `yaml:"resume_timeout,omitempty"`   // Max time to resume after restart (seconds, default: 3600)
 }
 
 func (c *TaskConfig) IsEnabled() bool {
@@ -1408,6 +1428,31 @@ func (c *TaskConfig) SetDefaults() {
 	}
 	if c.SQL != nil {
 		c.SQL.SetDefaults()
+	}
+	if c.Checkpoint != nil {
+		c.Checkpoint.SetDefaults()
+	}
+}
+
+func (c *CheckpointConfig) SetDefaults() {
+	if c.Strategy == "" {
+		c.Strategy = "event" // Default: event-driven (async HITL)
+	}
+	if c.Interval != nil {
+		c.Interval.SetDefaults()
+	}
+	if c.Recovery != nil {
+		c.Recovery.SetDefaults()
+	}
+}
+
+func (c *CheckpointIntervalConfig) SetDefaults() {
+	// No defaults - all fields are optional
+}
+
+func (c *CheckpointRecoveryConfig) SetDefaults() {
+	if c.ResumeTimeout == 0 {
+		c.ResumeTimeout = 3600 // Default: 1 hour
 	}
 }
 

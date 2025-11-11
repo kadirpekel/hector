@@ -61,7 +61,7 @@ open http://localhost:8080
 <div class="hero-intro">
   <p>Deploy observable, secure, and scalable AI agent systems with hot reload, distributed configuration, and A2A-native federation. Configure in YAML or build programmatically in Go with full support for document stores, observability, and all agent features.</p>
 
-  <p>Built for real-world complexity: orchestrate multiple specialized agents, equip them with advanced reasoning strategies like chain-of-thought and tree search, give them long-term memory with RAG and vector stores, connect them to any tool or API, and stream responses in real-time. Enable production-ready human-in-the-loop workflows with async state persistence that survives server restarts. All while maintaining production-grade observability and security.</p>
+  <p>Built for real-world complexity: orchestrate multiple specialized agents, equip them with advanced reasoning strategies like chain-of-thought and tree search, give them long-term memory with RAG and vector stores, connect them to any tool or API, and stream responses in real-time. Enable production-ready human-in-the-loop workflows with async state persistence and checkpoint recovery that survive server restarts. All while maintaining production-grade observability and security.</p>
 </div>
 
 [Get Started →](getting-started/quick-start.md){ .md-button .md-button--primary }
@@ -94,9 +94,9 @@ open http://localhost:8080
 
     Single 30MB binary, <100ms startup. 10-20x less resource usage than Python frameworks.
 
--   :handshake: __Human-in-the-Loop__
+-   :handshake: __Human-in-the-Loop & Checkpoint Recovery__
 
-    Production-ready tool approval workflows with async state persistence. Tasks pause for user input and resume seamlessly, even after server restarts.
+    Production-ready tool approval workflows with async state persistence. Tasks pause for user input and resume seamlessly, even after server restarts. Generic checkpoint recovery enables crash resilience and long-running task support.
 
 </div>
 

@@ -44,6 +44,7 @@ type AgentBuilder struct {
 	sessionService     reasoning.SessionService
 	contextService     reasoning.ContextService
 	taskService        reasoning.TaskService
+	taskConfig         *config.TaskConfig // Store task config for checkpoint/HITL
 }
 
 // NewAgent creates a new agent builder
@@ -217,6 +218,8 @@ func (b *AgentBuilder) WithTask(builder *TaskServiceBuilder) *AgentBuilder {
 		panic(fmt.Sprintf("failed to build task service: %v", err))
 	}
 	b.taskService = service
+	// Store task config for checkpoint/HITL support
+	b.taskConfig = builder.GetTaskConfig()
 	return b
 }
 
@@ -419,5 +422,6 @@ func (b *AgentBuilder) Build() (*agent.Agent, error) {
 		SessionService:     b.sessionService,
 		ContextService:     b.contextService,
 		TaskService:        b.taskService,
+		TaskConfig:         b.taskConfig,
 	})
 }

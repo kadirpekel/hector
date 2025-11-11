@@ -362,6 +362,29 @@ func (a *Agent) execute(
 				return
 			}
 
+			// Interval-based checkpointing (if enabled)
+			// Checkpoint at end of iteration for crash recovery
+			if checkpointInterval := a.getCheckpointInterval(); checkpointInterval > 0 {
+				if a.shouldCheckpointInterval(currentIteration, checkpointInterval) {
+					taskID := getTaskIDFromContext(ctx)
+					if taskID != "" {
+						// Background checkpoint - don't block execution
+						// Errors are logged but don't stop execution
+						if err := a.checkpointExecution(
+							ctx,
+							taskID,
+							PhaseIterationEnd,
+							CheckpointTypeInterval,
+							state,
+							nil, // No pending tool call
+						); err != nil {
+							log.Printf("[Agent:%s] Failed to checkpoint at iteration %d: %v", a.name, currentIteration, err)
+							// Continue execution even if checkpoint fails
+						}
+					}
+				}
+			}
+
 			if strategy.ShouldStop(text, toolCalls, state) {
 				break
 			}
@@ -579,20 +602,17 @@ func (a *Agent) handleAsyncHITL(
 		return ctx, false, fmt.Errorf("session ID required for async HITL")
 	}
 
-	query := reasoningState.Query()
-
-	// Capture execution state before pausing
-	execState := CaptureExecutionState(
+	// Use generic checkpoint function with HITL-specific phase
+	err := a.checkpointExecution(
+		ctx,
 		taskID,
-		sessionID,
-		query,
+		PhaseToolApproval,   // HITL-specific phase
+		CheckpointTypeEvent, // Event-driven
 		reasoningState,
 		approvalResult.PendingToolCall,
 	)
-
-	// Save to session metadata
-	if err := a.SaveExecutionStateToSession(ctx, sessionID, taskID, execState); err != nil {
-		return ctx, false, fmt.Errorf("failed to save execution state: %w", err)
+	if err != nil {
+		return ctx, false, fmt.Errorf("failed to checkpoint execution state: %w", err)
 	}
 
 	// Update task to INPUT_REQUIRED state with approval request message

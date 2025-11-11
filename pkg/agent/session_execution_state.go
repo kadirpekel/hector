@@ -69,7 +69,13 @@ func (a *Agent) SaveExecutionStateToSession(
 		return fmt.Errorf("failed to update session metadata: %w", err)
 	}
 
-	log.Printf("[Agent:%s] [HITL] Saved execution state for task %s in session %s", a.id, taskID, sessionID)
+	// Log checkpoint info (handle backward compatibility - old checkpoints may not have phase/type)
+	if execState.Phase != "" || execState.CheckpointType != "" {
+		log.Printf("[Agent:%s] [Checkpoint] Saved execution state for task %s in session %s (phase: %s, type: %s)",
+			a.id, taskID, sessionID, execState.Phase, execState.CheckpointType)
+	} else {
+		log.Printf("[Agent:%s] [HITL] Saved execution state for task %s in session %s", a.id, taskID, sessionID)
+	}
 	return nil
 }
 

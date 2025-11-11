@@ -355,7 +355,7 @@ agents:
     # Visibility
     visibility: "public"          # public|internal|private
     
-    # Task Configuration (for async tasks and HITL)
+    # Task Configuration (for async tasks, HITL, and checkpoint recovery)
     task:
       backend: "memory"           # "memory" (default) or "sql"
       worker_pool: 5              # Max concurrent tasks
@@ -365,6 +365,21 @@ agents:
       # HITL Mode Configuration (optional)
       hitl:
         mode: "auto"              # "auto" (default), "blocking", or "async"
+      
+      # Checkpoint Recovery Configuration (optional)
+      checkpoint:
+        enabled: false            # Enable generic checkpoint/resume (default: false)
+        strategy: "event"          # "event", "interval", or "hybrid" (default: "event")
+        
+        interval:
+          every_n_iterations: 0   # Checkpoint every N iterations (0 = disabled)
+          after_tool_calls: false  # Always checkpoint after tool calls (default: false)
+          before_llm_calls: false  # Checkpoint before LLM calls (default: false)
+        
+        recovery:
+          auto_resume: false       # Auto-resume on startup (default: false)
+          auto_resume_hitl: false  # Auto-resume INPUT_REQUIRED tasks (default: false)
+          resume_timeout: 3600     # Max time to resume after restart (seconds, default: 3600)
       
       # SQL backend (for production persistence)
       sql:
@@ -383,6 +398,14 @@ agents:
 | `input_timeout` | integer | `600` | Timeout in seconds for user input (Human-in-the-Loop) |
 | `timeout` | integer | `3600` | Timeout in seconds for async task execution |
 | `hitl.mode` | string | `"auto"` | HITL mode: `"auto"`, `"blocking"`, or `"async"` |
+| `checkpoint.enabled` | boolean | `false` | Enable generic checkpoint/resume functionality |
+| `checkpoint.strategy` | string | `"event"` | Checkpoint strategy: `"event"`, `"interval"`, or `"hybrid"` |
+| `checkpoint.interval.every_n_iterations` | integer | `0` | Checkpoint every N iterations (0 = disabled) |
+| `checkpoint.interval.after_tool_calls` | boolean | `false` | Always checkpoint after tool calls |
+| `checkpoint.interval.before_llm_calls` | boolean | `false` | Checkpoint before LLM calls |
+| `checkpoint.recovery.auto_resume` | boolean | `false` | Auto-resume tasks on startup |
+| `checkpoint.recovery.auto_resume_hitl` | boolean | `false` | Auto-resume INPUT_REQUIRED tasks |
+| `checkpoint.recovery.resume_timeout` | integer | `3600` | Max time to resume after restart (seconds) |
 | `sql.driver` | string | - | Database driver: `"sqlite"`, `"postgres"`, or `"mysql"` |
 | `sql.database` | string | - | Database connection string or file path |
 | `sql.max_conns` | integer | `10` | Maximum database connections |
@@ -399,6 +422,21 @@ agents:
   - `"async"`: State saved to session metadata, goroutine exits (requires `session_store`)
 - See [Human-in-the-Loop](../core-concepts/human-in-the-loop.md) for details
 - See [Making HITL Truly Asynchronous](../how-to/async-hitl.md) for async mode guide
+
+**Checkpoint Recovery:**
+
+- `checkpoint.enabled` enables generic checkpoint/resume functionality
+- Checkpoints are stored in session metadata (requires `session_store`)
+- Three strategies:
+  - `"event"`: Checkpoint on HITL pauses (uses async HITL foundation)
+  - `"interval"`: Background checkpointing every N iterations (task remains in `WORKING`)
+  - `"hybrid"`: Combines event-driven and interval-based checkpointing
+- Recovery settings:
+  - `auto_resume`: Automatically resume tasks on server startup
+  - `auto_resume_hitl`: Auto-resume INPUT_REQUIRED tasks (use with caution)
+  - `resume_timeout`: Maximum age of checkpoint to resume (prevents stale recovery)
+- See [Generic Checkpoint/Resume Design](../design/generic-checkpoint-resume.md) for architecture details
+- See [Tasks](../core-concepts/tasks.md#checkpoint-recovery) for usage guide
 
 **See:** [Tasks](../core-concepts/tasks.md) for complete task management guide.
 
