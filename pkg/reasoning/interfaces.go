@@ -63,6 +63,7 @@ type SessionService interface {
 	GetMessageCount(sessionID string) (int, error)
 
 	GetOrCreateSessionMetadata(sessionID string) (*SessionMetadata, error)
+	UpdateSessionMetadata(sessionID string, metadata map[string]interface{}) error
 	DeleteSession(sessionID string) error
 	SessionCount() int
 }

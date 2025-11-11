@@ -392,8 +392,14 @@ func (a *Agent) processToolCalls(
 	// Handle tool approval request if needed
 	if approvalResult.NeedsUserInput {
 		var shouldContinue bool
-		ctx, shouldContinue, err = a.handleToolApprovalRequest(ctx, approvalResult, outputCh)
+		ctx, shouldContinue, err = a.handleToolApprovalRequest(ctx, approvalResult, outputCh, state)
 		if err != nil {
+			// Check if this is ErrInputRequired (async HITL pause signal)
+			if err == ErrInputRequired {
+				// Task paused for async HITL - exit this iteration
+				// State is already saved, goroutine can exit
+				return ctx, nil, false, nil
+			}
 			return ctx, nil, false, err
 		}
 		if shouldContinue {
@@ -468,12 +474,14 @@ func (a *Agent) processToolCalls(
 
 // handleToolApprovalRequest handles the tool approval workflow
 // Returns: (updatedContext, shouldContinue, error)
-// - updatedContext: context with user decision added
+// - updatedContext: context with user decision added (if blocking mode)
 // - shouldContinue: true if approval was received and we should re-check, false if we should skip this iteration
+// - error: ErrInputRequired if async HITL mode (task paused), other errors for failures
 func (a *Agent) handleToolApprovalRequest(
 	ctx context.Context,
 	approvalResult *ToolApprovalResult,
 	outputCh chan<- *pb.Part,
+	reasoningState *reasoning.ReasoningState,
 ) (context.Context, bool, error) {
 	taskID := getTaskIDFromContext(ctx)
 	if taskID == "" {
@@ -483,6 +491,22 @@ func (a *Agent) handleToolApprovalRequest(
 		}
 		return ctx, false, nil
 	}
+
+	// Determine which mode to use
+	if a.shouldUseAsyncHITL() {
+		return a.handleAsyncHITL(ctx, approvalResult, outputCh, reasoningState)
+	} else {
+		return a.handleBlockingHITL(ctx, approvalResult, outputCh)
+	}
+}
+
+// handleBlockingHITL handles tool approval in blocking mode (current behavior)
+func (a *Agent) handleBlockingHITL(
+	ctx context.Context,
+	approvalResult *ToolApprovalResult,
+	outputCh chan<- *pb.Part,
+) (context.Context, bool, error) {
+	taskID := getTaskIDFromContext(ctx)
 
 	// Update task to INPUT_REQUIRED state with approval request message
 	if err := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_INPUT_REQUIRED, approvalResult.InteractionMsg); err != nil {
@@ -540,6 +564,56 @@ func (a *Agent) handleToolApprovalRequest(
 
 	// Return updated context and true to indicate we should re-check approval with user decision
 	return ctx, true, nil
+}
+
+// handleAsyncHITL handles tool approval in async mode (saves state and exits)
+func (a *Agent) handleAsyncHITL(
+	ctx context.Context,
+	approvalResult *ToolApprovalResult,
+	outputCh chan<- *pb.Part,
+	reasoningState *reasoning.ReasoningState,
+) (context.Context, bool, error) {
+	taskID := getTaskIDFromContext(ctx)
+	sessionID := getSessionIDFromContext(ctx)
+	if sessionID == "" {
+		return ctx, false, fmt.Errorf("session ID required for async HITL")
+	}
+
+	query := reasoningState.Query()
+
+	// Capture execution state before pausing
+	execState := CaptureExecutionState(
+		taskID,
+		sessionID,
+		query,
+		reasoningState,
+		approvalResult.PendingToolCall,
+	)
+
+	// Save to session metadata
+	if err := a.SaveExecutionStateToSession(ctx, sessionID, taskID, execState); err != nil {
+		return ctx, false, fmt.Errorf("failed to save execution state: %w", err)
+	}
+
+	// Update task to INPUT_REQUIRED state with approval request message
+	if err := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_INPUT_REQUIRED, approvalResult.InteractionMsg); err != nil {
+		return ctx, false, fmt.Errorf("updating task status: %w", err)
+	}
+
+	// Send approval request message parts to stream
+	if approvalResult.InteractionMsg != nil && len(approvalResult.InteractionMsg.Parts) > 0 {
+		for _, part := range approvalResult.InteractionMsg.Parts {
+			if sendErr := safeSendPart(ctx, outputCh, part); sendErr != nil {
+				log.Printf("[Agent:%s] Failed to send approval request part: %v", a.id, sendErr)
+				return ctx, false, sendErr
+			}
+		}
+	}
+
+	// Return ErrInputRequired to signal that execution should pause
+	// The caller should exit the goroutine
+	log.Printf("[Agent:%s] [HITL] Task %s paused for async user input (state saved)", a.id, taskID)
+	return ctx, false, ErrInputRequired
 }
 
 // createAssistantMessageWithToolCalls creates an assistant message with text and tool calls

@@ -50,7 +50,27 @@ func (a *Agent) handleInputRequiredResume(ctx context.Context, userMessage *pb.M
 		return true, nil, status.Errorf(codes.InvalidArgument, "context ID mismatch: cannot resume task with different context")
 	}
 
-	// Task is waiting for user input - provide it and resume
+	// Check if this is async HITL (has execution state) or blocking HITL (has waiting channel)
+	sessionID := existingTask.ContextId
+	if a.shouldUseAsyncHITL() {
+		// Try to load execution state - if found, use async resume
+		execState, err := a.LoadExecutionStateFromSession(ctx, sessionID, userMessage.TaskId)
+		if err == nil {
+			// Async HITL: Load state and resume execution
+			decision := parseUserDecision(userMessage)
+			go a.resumeTaskExecution(userMessage.TaskId, execState, decision)
+
+			return true, &pb.SendMessageResponse{
+				Payload: &pb.SendMessageResponse_Task{
+					Task: existingTask,
+				},
+			}, nil
+		}
+		// If no execution state found, fall through to blocking mode
+		log.Printf("[Agent:%s] [HITL] No execution state found for task %s, trying blocking resume", a.id, userMessage.TaskId)
+	}
+
+	// Blocking HITL: Provide input to waiting goroutine
 	if err := a.taskAwaiter.ProvideInput(userMessage.TaskId, userMessage); err != nil {
 		return true, nil, status.Errorf(codes.InvalidArgument, "failed to resume task: %v", err)
 	}
@@ -768,6 +788,194 @@ func (a *Agent) processTaskAsync(taskID, userText, contextID string) {
 	if err := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_COMPLETED, responseMessage); err != nil {
 		log.Printf("[Agent:%s] Failed to update task %s status to COMPLETED: %v", a.id, taskID, err)
 		// Don't return - task completed successfully, just status update failed
+	}
+
+	// Clear execution state from session metadata
+	if err := a.ClearExecutionStateFromSession(ctx, contextID, taskID); err != nil {
+		log.Printf("[Agent:%s] Failed to clear execution state: %v", a.id, err)
+	}
+}
+
+// resumeTaskExecution continues execution from saved state (async HITL resume)
+func (a *Agent) resumeTaskExecution(
+	taskID string,
+	execState *ExecutionState,
+	userDecision string,
+) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[Agent:%s] PANIC resuming task %s: %v", a.id, taskID, r)
+			ctx := context.Background()
+			if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+				log.Printf("[Agent:%s] Failed to update task %s status after panic: %v", a.id, taskID, updateErr)
+			}
+		}
+	}()
+
+	if a.taskWorkers != nil {
+		a.taskWorkers <- struct{}{}
+		defer func() { <-a.taskWorkers }()
+	}
+
+	// Create context with taskID and user decision
+	ctx := context.Background()
+	ctx = EnsureAgentContext(ctx, taskID, execState.ContextID)
+	ctx = context.WithValue(ctx, userDecisionContextKey, userDecision)
+
+	// Create timeout context
+	timeout := 1 * time.Hour // Default
+	if a.config.Task != nil && a.config.Task.Timeout > 0 {
+		timeout = time.Duration(a.config.Task.Timeout) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Register cancellation function
+	a.executionsMu.Lock()
+	a.activeExecutions[taskID] = cancel
+	a.executionsMu.Unlock()
+
+	defer func() {
+		a.executionsMu.Lock()
+		delete(a.activeExecutions, taskID)
+		a.executionsMu.Unlock()
+	}()
+
+	// Update task to WORKING
+	if err := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
+		log.Printf("[Agent:%s] Failed to update task %s to WORKING: %v", a.id, taskID, err)
+	}
+
+	// Create strategy
+	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
+	if err != nil {
+		if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+			log.Printf("[Agent:%s] Failed to update task status: %v", a.id, updateErr)
+		}
+		return
+	}
+
+	// Create output channel for streaming
+	outputCh := make(chan *pb.Part, outputChannelBuffer)
+	defer close(outputCh)
+
+	// Restore reasoning state
+	reasoningState, err := execState.RestoreReasoningState(
+		outputCh,
+		a.services,
+		ctx,
+	)
+	if err != nil {
+		log.Printf("[Agent:%s] Failed to restore reasoning state: %v", a.id, err)
+		if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+			log.Printf("[Agent:%s] Failed to update task status: %v", a.id, updateErr)
+		}
+		return
+	}
+
+	// Continue execution from where it left off
+	// The tool approval check will now see the user decision in context
+	// and proceed accordingly
+	cfg := a.services.GetConfig()
+	maxIterations := a.getMaxIterations(cfg)
+	toolDefs := a.services.Tools().GetAvailableTools()
+
+	// Continue from the next iteration after the pause
+	for reasoningState.Iteration() < maxIterations {
+		currentIteration := reasoningState.NextIteration()
+
+		select {
+		case <-ctx.Done():
+			if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+				log.Printf("[Agent:%s] Failed to update task status: %v", a.id, updateErr)
+			}
+			return
+		default:
+		}
+
+		if err := strategy.PrepareIteration(currentIteration, reasoningState); err != nil {
+			log.Printf("[Agent:%s] Error preparing iteration: %v", a.id, err)
+			if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+				log.Printf("[Agent:%s] Failed to update task status: %v", a.id, updateErr)
+			}
+			return
+		}
+
+		promptSlots := a.buildPromptSlots(strategy)
+		additionalContext := strategy.GetContextInjection(reasoningState)
+
+		messages, err := a.services.Prompt().BuildMessages(ctx, execState.Query, promptSlots, reasoningState.AllMessages(), additionalContext)
+		if err != nil {
+			log.Printf("[Agent:%s] Error building messages: %v", a.id, err)
+			if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+				log.Printf("[Agent:%s] Failed to update task status: %v", a.id, updateErr)
+			}
+			return
+		}
+
+		// Call LLM
+		text, toolCalls, tokens, err := a.callLLMWithRetry(ctx, messages, toolDefs, outputCh, cfg, nil)
+		if err != nil {
+			log.Printf("[Agent:%s] LLM call failed: %v", a.id, err)
+			if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+				log.Printf("[Agent:%s] Failed to update task status: %v", a.id, updateErr)
+			}
+			return
+		}
+
+		reasoningState.AddTokens(tokens)
+		if text != "" {
+			reasoningState.AppendResponse(text)
+		}
+		reasoningState.RecordFirstToolCalls(toolCalls)
+
+		// Process tool calls if any
+		var results []reasoning.ToolResult
+		if len(toolCalls) > 0 {
+			var shouldContinue bool
+			ctx, results, shouldContinue, err = a.processToolCalls(ctx, text, toolCalls, reasoningState, outputCh, cfg)
+			if err != nil {
+				log.Printf("[Agent:%s] Error processing tool calls: %v", a.id, err)
+				if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+					log.Printf("[Agent:%s] Failed to update task status: %v", a.id, updateErr)
+				}
+				return
+			}
+			if shouldContinue {
+				// Another approval needed - save state again
+				log.Printf("[Agent:%s] Task %s paused again for user input", a.id, taskID)
+				return
+			}
+		}
+
+		if err := strategy.AfterIteration(currentIteration, text, toolCalls, results, reasoningState); err != nil {
+			log.Printf("[Agent:%s] Error in strategy processing: %v", a.id, err)
+			if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
+				log.Printf("[Agent:%s] Failed to update task status: %v", a.id, updateErr)
+			}
+			return
+		}
+
+		if strategy.ShouldStop(text, toolCalls, reasoningState) {
+			break
+		}
+	}
+
+	// Task completed
+	finalResponse := reasoningState.GetAssistantResponse()
+	responseMessage := a.createResponseMessage(finalResponse, execState.ContextID, taskID)
+
+	if err := a.services.Task().AddTaskMessage(ctx, taskID, responseMessage); err != nil {
+		log.Printf("[Agent:%s] Failed to add response message: %v", a.id, err)
+	}
+
+	if err := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_COMPLETED, responseMessage); err != nil {
+		log.Printf("[Agent:%s] Failed to update task status: %v", a.id, err)
+	}
+
+	// Clear execution state from session metadata
+	if err := a.ClearExecutionStateFromSession(ctx, execState.ContextID, taskID); err != nil {
+		log.Printf("[Agent:%s] Failed to clear execution state: %v", a.id, err)
 	}
 }
 

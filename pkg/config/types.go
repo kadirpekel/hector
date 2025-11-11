@@ -1373,6 +1373,11 @@ type TaskConfig struct {
 	SQL          *TaskSQLConfig `yaml:"sql,omitempty"`
 	InputTimeout int            `yaml:"input_timeout,omitempty"` // Timeout in seconds for INPUT_REQUIRED state (default: 600)
 	Timeout      int            `yaml:"timeout,omitempty"`       // Timeout in seconds for async task execution (default: 3600 = 1 hour)
+	HITL         *HITLConfig    `yaml:"hitl,omitempty"`         // Human-in-the-loop configuration
+}
+
+type HITLConfig struct {
+	Mode string `yaml:"mode,omitempty"` // "auto" (default), "blocking", or "async"
 }
 
 func (c *TaskConfig) IsEnabled() bool {
@@ -1543,6 +1548,18 @@ func (c *TaskConfig) Validate() error {
 		if err := c.SQL.Validate(); err != nil {
 			return fmt.Errorf("sql config validation failed: %w", err)
 		}
+	}
+	if c.HITL != nil {
+		if err := c.HITL.Validate(); err != nil {
+			return fmt.Errorf("hitl config validation failed: %w", err)
+		}
+	}
+	return nil
+}
+
+func (c *HITLConfig) Validate() error {
+	if c.Mode != "" && c.Mode != "auto" && c.Mode != "blocking" && c.Mode != "async" {
+		return fmt.Errorf("invalid hitl.mode '%s', must be 'auto', 'blocking', or 'async'", c.Mode)
 	}
 	return nil
 }

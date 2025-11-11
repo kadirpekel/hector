@@ -272,7 +272,25 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (*agent.Agent, error) {
 	}
 
 	// Build using programmatic API
-	return builder.Build()
+	agentInstance, err := builder.Build()
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate HITL configuration
+	if agentCfg.Task != nil && agentCfg.Task.HITL != nil {
+		hasSessionStore := agentCfg.SessionStore != ""
+		hitlMode := agentCfg.Task.HITL.Mode
+		if hitlMode == "" {
+			hitlMode = "auto"
+		}
+
+		if hitlMode == "async" && !hasSessionStore {
+			return nil, fmt.Errorf("agent %s: async HITL requires session_store to be configured", agentID)
+		}
+	}
+
+	return agentInstance, nil
 }
 
 // BuildAllAgents builds all agents from config

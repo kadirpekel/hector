@@ -560,3 +560,14 @@ agents:
 
 The implementation provides secure human-in-the-loop workflows while maintaining full compatibility with the A2A Protocol specification.
 
+---
+
+## Advanced: Truly Asynchronous HITL
+
+The current implementation uses in-memory channels and blocking goroutines, which means:
+- Tasks waiting for input are lost on server restart
+- Execution goroutines remain blocked while waiting
+
+For production deployments requiring **truly asynchronous HITL** that survives restarts, see:
+- **[Making HITL Truly Asynchronous](../how-to/async-hitl.md)** - Complete guide to implementing persistent, non-blocking HITL
+

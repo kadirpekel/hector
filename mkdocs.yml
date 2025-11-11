@@ -85,6 +85,7 @@ nav:
     - Extend Hector: how-to/extend-hector.md
     - Setup RAG: how-to/setup-rag.md
     - Setup Session Persistence: how-to/setup-session-persistence.md
+    - Making HITL Truly Asynchronous: how-to/async-hitl.md
     - Quick Observability: how-to/quick-observability.md
     - Deploy to Production: how-to/deploy-production.md
     - Integrate External Agents: how-to/integrate-external-agents.md

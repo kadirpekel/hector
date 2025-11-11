@@ -156,6 +156,35 @@ func (s *InMemorySessionService) GetOrCreateSessionMetadata(sessionID string) (*
 	return session.Metadata, nil
 }
 
+func (s *InMemorySessionService) UpdateSessionMetadata(sessionID string, metadata map[string]interface{}) error {
+	if sessionID == "" {
+		return fmt.Errorf("sessionID cannot be empty")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	session, exists := s.sessions[sessionID]
+	if !exists {
+		// Create session if it doesn't exist
+		session = &SessionData{
+			Messages: make([]*pb.Message, 0),
+			Metadata: &reasoning.SessionMetadata{
+				ID:        sessionID,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+				Metadata:  make(map[string]interface{}),
+			},
+		}
+		s.sessions[sessionID] = session
+	}
+
+	session.Metadata.Metadata = metadata
+	session.Metadata.UpdatedAt = time.Now()
+
+	return nil
+}
+
 func (s *InMemorySessionService) DeleteSession(sessionID string) error {
 	if sessionID == "" {
 		return fmt.Errorf("sessionID cannot be empty")

@@ -624,6 +624,31 @@ VALUES ($1, $2, $3, $4, $5)
 	return metadata, nil
 }
 
+func (s *SQLSessionService) UpdateSessionMetadata(sessionID string, metadata map[string]interface{}) error {
+	if sessionID == "" {
+		return fmt.Errorf("sessionID cannot be empty")
+	}
+
+	ctx := context.Background()
+
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	query := `UPDATE sessions SET metadata = ?, updated_at = ? WHERE id = ? AND agent_id = ?`
+	if s.dialect == "postgres" {
+		query = `UPDATE sessions SET metadata = $1, updated_at = $2 WHERE id = $3 AND agent_id = $4`
+	}
+
+	_, err = s.db.ExecContext(ctx, query, string(metadataJSON), time.Now(), sessionID, s.agentID)
+	if err != nil {
+		return fmt.Errorf("failed to update session metadata: %w", err)
+	}
+
+	return nil
+}
+
 func (s *SQLSessionService) DeleteSession(sessionID string) error {
 	if sessionID == "" {
 		return fmt.Errorf("sessionID cannot be empty")
