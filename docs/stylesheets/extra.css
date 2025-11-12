@@ -215,6 +215,131 @@
   margin-bottom: 0;
 }
 
+/* A2A Story Section - Two Column Layout */
+.a2a-story-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  margin: 4rem auto;
+  max-width: 1200px;
+  align-items: center;
+  padding: 0 2rem;
+}
+
+.a2a-story-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  justify-content: center;
+}
+
+.a2a-story-title {
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+  color: var(--md-default-fg-color);
+}
+
+[data-md-color-scheme="slate"] .a2a-story-title {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.a2a-story-text {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+}
+
+[data-md-color-scheme="slate"] .a2a-story-text {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.a2a-story-features {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.a2a-feature-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-left: 3px solid;
+  border-radius: 4px;
+}
+
+.a2a-feature-item:nth-child(1) {
+  border-left-color: #ed4267;
+}
+
+.a2a-feature-item:nth-child(2) {
+  border-left-color: #10b981;
+}
+
+.a2a-feature-item:nth-child(3) {
+  border-left-color: #ed4267;
+}
+
+.a2a-feature-item strong {
+  font-size: 1rem;
+  color: var(--md-default-fg-color);
+}
+
+[data-md-color-scheme="slate"] .a2a-feature-item strong {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.a2a-feature-item span {
+  font-size: 0.9rem;
+  color: var(--md-default-fg-color--light);
+}
+
+[data-md-color-scheme="slate"] .a2a-feature-item span {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.a2a-visualization {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+}
+
+#a2a-federation {
+  width: 100%;
+  max-width: 500px;
+  height: auto;
+  aspect-ratio: 1;
+  display: block;
+  border-radius: 12px;
+}
+
+@media (max-width: 960px) {
+  .a2a-story-section {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+    margin: 3rem auto;
+    padding: 0 1rem;
+  }
+  
+  .a2a-visualization {
+    order: -1;
+    padding: 1rem;
+  }
+  
+  .a2a-story-title {
+    font-size: 1.75rem;
+  }
+  
+  .a2a-story-text {
+    font-size: 1rem;
+  }
+}
+
 /* CTA Button */
 .md-button.md-button--primary {
   display: block;
