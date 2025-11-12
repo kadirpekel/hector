@@ -66,345 +66,502 @@ open http://localhost:8080
 
 <!-- A2A Federation Story Section -->
 <div class="a2a-story-section">
-  <div class="a2a-story-content">
-    <h2 class="a2a-story-title">A2A-Native Federation</h2>
-    <p class="a2a-story-text">
-      Hector is built on the <strong>Agent-to-Agent (A2A) protocol</strong> — an open standard for agent communication. Unlike traditional systems with central orchestrators that create bottlenecks and single points of failure, Hector enables true peer-to-peer federation.
-    </p>
-    <p class="a2a-story-text">
-      Deploy agents across different services, languages, and infrastructures. They communicate directly using the A2A protocol, forming federated networks where each agent maintains autonomy while collaborating seamlessly — no central control, no lock-in.
-    </p>
-    <div class="a2a-story-features">
-      <div class="a2a-feature-item">
-        <strong>Peer-to-Peer</strong>
-        <span>Direct agent communication</span>
-      </div>
-      <div class="a2a-feature-item">
-        <strong>No Central Control</strong>
-        <span>Federated, autonomous agents</span>
-      </div>
-      <div class="a2a-feature-item">
-        <strong>Standards-Based</strong>
-        <span>Full A2A protocol implementation</span>
+  <h2 class="a2a-story-title">A2A-Native Federation</h2>
+  
+  <div class="a2a-content-row">
+    <div class="a2a-story-content">
+      <p class="a2a-story-text">
+        Hector is built on the <strong>Agent-to-Agent (A2A) protocol</strong> — an open standard for agent communication. Unlike traditional systems with central orchestrators that create bottlenecks and single points of failure, Hector enables true peer-to-peer federation.
+      </p>
+      <p class="a2a-story-text">
+        Deploy agents across different services, languages, and infrastructures. They communicate directly using the A2A protocol, forming federated networks where each agent maintains autonomy while collaborating seamlessly — no central control, no lock-in.
+      </p>
+    </div>
+    
+    <div class="a2a-visualization">
+      <svg id="a2a-federation" viewBox="50 60 400 300" preserveAspectRatio="xMidYMin meet" xmlns="http://www.w3.org/2000/svg">
+      <!-- Glow filters - subtle for nodes only -->
+      <defs>
+        <filter id="glow-yellow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="glow-purple" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="glow-cyan" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      
+      <!-- Connections -->
+      <g class="connections">
+        <!-- A ↔ B: Horizontal dotted line -->
+        <line id="conn-ab" x1="170" y1="105" x2="330" y2="105" 
+              stroke="rgba(251, 191, 36, 0.6)" stroke-width="2.5" 
+              stroke-dasharray="5,5" fill="none"/>
+        <text x="250" y="85" text-anchor="middle" fill="rgba(255, 255, 255, 0.8)" 
+              font-size="11" font-family="sans-serif">A2A Protocol</text>
+        
+        <!-- A → C: L-shape with rounded corner (connects to C's left middle) -->
+        <path id="conn-ac" d="M 120 130 L 120 305 Q 120 325 140 325 L 200 325" 
+              stroke="rgba(6, 182, 212, 0.6)" stroke-width="2.5" 
+              stroke-dasharray="5,5" fill="none"/>
+        
+        <!-- B → C: L-shape with rounded corner (connects to C's right middle) -->
+        <path id="conn-bc" d="M 380 130 L 380 305 Q 380 325 360 325 L 300 325" 
+              stroke="rgba(139, 92, 246, 0.6)" stroke-width="2.5" 
+              stroke-dasharray="5,5" fill="none"/>
+      </g>
+      
+      <!-- Animated particles -->
+      <g class="particles">
+        <circle id="particle-ab" r="5" fill="#fbbf24">
+          <animateMotion dur="3s" repeatCount="indefinite" 
+                         calcMode="spline" keyTimes="0;1" 
+                         keySplines="0.42 0 0.58 1"
+                         path="M 170 105 L 330 105"/>
+        </circle>
+        <circle id="particle-ac" r="5" fill="#06b6d4">
+          <animateMotion dur="4s" repeatCount="indefinite" 
+                         calcMode="spline" keyTimes="0;1" 
+                         keySplines="0.42 0 0.58 1"
+                         path="M 120 130 L 120 305 Q 120 325 140 325 L 200 325"/>
+        </circle>
+        <circle id="particle-bc" r="5" fill="#8b5cf6">
+          <animateMotion dur="4.5s" repeatCount="indefinite" 
+                         calcMode="spline" keyTimes="0;1" 
+                         keySplines="0.42 0 0.58 1"
+                         path="M 380 130 L 380 305 Q 380 325 360 325 L 300 325"/>
+        </circle>
+      </g>
+      
+      <!-- Nodes -->
+      <g class="nodes">
+        <g class="node" id="node-a" filter="url(#glow-yellow)">
+          <rect x="70" y="80" width="100" height="50" rx="12" 
+                fill="#fbbf24" stroke="none"/>
+          <text x="120" y="108" text-anchor="middle" fill="rgba(0, 0, 0, 0.9)" 
+                font-size="14" font-weight="bold" font-family="sans-serif">Agent A</text>
+        </g>
+        <g class="node" id="node-b" filter="url(#glow-purple)">
+          <rect x="330" y="80" width="100" height="50" rx="12" 
+                fill="#8b5cf6" stroke="none"/>
+          <text x="380" y="108" text-anchor="middle" fill="rgba(255, 255, 255, 0.95)" 
+                font-size="14" font-weight="bold" font-family="sans-serif">Agent B</text>
+        </g>
+        <g class="node" id="node-c" filter="url(#glow-cyan)">
+          <rect x="200" y="300" width="100" height="50" rx="12" 
+                fill="#06b6d4" stroke="none"/>
+          <text x="250" y="328" text-anchor="middle" fill="rgba(255, 255, 255, 0.95)" 
+                font-size="14" font-weight="bold" font-family="sans-serif">Agent C</text>
+        </g>
+      </g>
+    </svg>
+    </div>
+  </div>
+  
+  <div class="a2a-story-features">
+    <div class="a2a-feature-item">
+      <strong>Peer-to-Peer</strong>
+      <span>Direct agent communication</span>
+    </div>
+    <div class="a2a-feature-item">
+      <strong>No Central Control</strong>
+      <span>Federated, autonomous agents</span>
+    </div>
+    <div class="a2a-feature-item">
+      <strong>Standards-Based</strong>
+      <span>Full A2A protocol implementation</span>
+    </div>
+  </div>
+</div>
+
+<!-- RAG Ready Story Section -->
+<div class="a2a-story-section">
+  <h2 class="a2a-story-title">RAG Ready</h2>
+  
+  <div class="a2a-content-row">
+    <div class="a2a-story-content">
+      <p class="a2a-story-text">
+        Hector comes <strong>RAG-ready</strong> out of the box. Connect SQL databases, APIs, and document stores to build comprehensive knowledge bases. Choose from Ollama, OpenAI, or Cohere embedders to convert your data into vectors, automatically indexed into vector databases like Qdrant.
+      </p>
+      <p class="a2a-story-text">
+        Agents retrieve relevant context from vector databases using semantic search, augmenting their responses with accurate, context-aware answers. No complex setup required—everything works out of the box.
+      </p>
+    </div>
+    
+    <div class="a2a-visualization">
+      <svg id="rag-visualization" viewBox="50 60 350 240" preserveAspectRatio="xMidYMin meet" xmlns="http://www.w3.org/2000/svg">
+      <!-- Glow filters - subtle for nodes only -->
+      <defs>
+        <filter id="rag-glow-orange" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="rag-glow-purple" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="rag-glow-blue" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="rag-glow-cyan" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      
+      <!-- Connections -->
+      <g class="connections">
+        <!-- Data Sources → Index convergence point → Vector DB -->
+        <!-- SQL → Index (from right edge of SQL box at y-center) -->
+        <path id="conn-sql-index" d="M 170 85 L 220 150" 
+              stroke="rgba(251, 191, 36, 0.6)" stroke-width="2.5" 
+              stroke-dasharray="5,5" fill="none"/>
+        <!-- API → Index (from right edge of API box at y-center) -->
+        <path id="conn-api-index" d="M 170 150 L 220 150" 
+              stroke="rgba(139, 92, 246, 0.6)" stroke-width="2.5" 
+              stroke-dasharray="5,5" fill="none"/>
+        <!-- Docs → Index (from right edge of Docs box at y-center) -->
+        <path id="conn-docs-index" d="M 170 215 L 220 150" 
+              stroke="rgba(59, 130, 246, 0.6)" stroke-width="2.5" 
+              stroke-dasharray="5,5" fill="none"/>
+        
+        <!-- Index → Vector DB (from convergence point to left edge of Vector DB) -->
+        <path id="conn-index-vector" d="M 220 150 L 280 150" 
+              stroke="rgba(6, 182, 212, 0.6)" stroke-width="2.5" 
+              stroke-dasharray="5,5" fill="none"/>
+        <text x="250" y="135" text-anchor="middle" fill="rgba(255, 255, 255, 0.8)" 
+              font-size="11" font-family="sans-serif">Index</text>
+      </g>
+      
+      <!-- Animated particles -->
+      <g class="particles">
+        <!-- Indexing flow particles -->
+        <circle id="rag-particle-sql" r="4" fill="#fbbf24">
+          <animateMotion dur="4s" repeatCount="indefinite" 
+                         calcMode="spline" keyTimes="0;1" 
+                         keySplines="0.42 0 0.58 1"
+                         path="M 170 85 L 220 150 L 280 150"/>
+        </circle>
+        <circle id="rag-particle-api" r="4" fill="#8b5cf6">
+          <animateMotion dur="4.5s" repeatCount="indefinite" 
+                         calcMode="spline" keyTimes="0;1" 
+                         keySplines="0.42 0 0.58 1"
+                         path="M 170 150 L 220 150 L 280 150"/>
+        </circle>
+        <circle id="rag-particle-docs" r="4" fill="#3b82f6">
+          <animateMotion dur="5s" repeatCount="indefinite" 
+                         calcMode="spline" keyTimes="0;1" 
+                         keySplines="0.42 0 0.58 1"
+                         path="M 170 215 L 220 150 L 280 150"/>
+        </circle>
+        
+        <!-- Particle on Index → Vector DB connection (cyan to match Vector DB) -->
+        <circle id="rag-particle-index" r="4" fill="#06b6d4">
+          <animateMotion dur="3s" repeatCount="indefinite" 
+                         calcMode="spline" keyTimes="0;1" 
+                         keySplines="0.42 0 0.58 1"
+                         path="M 220 150 L 280 150"/>
+        </circle>
+      </g>
+      
+      <!-- Nodes -->
+      <g class="nodes">
+        <!-- Data Sources (Left) - All same size, properly spaced -->
+        <g class="node" id="rag-node-sql" filter="url(#rag-glow-orange)">
+          <rect x="70" y="60" width="100" height="50" rx="12" 
+                fill="#fbbf24" stroke="none"/>
+          <text x="120" y="88" text-anchor="middle" fill="rgba(0, 0, 0, 0.9)" 
+                font-size="14" font-weight="bold" font-family="sans-serif">SQL</text>
+        </g>
+        <g class="node" id="rag-node-api" filter="url(#rag-glow-purple)">
+          <rect x="70" y="125" width="100" height="50" rx="12" 
+                fill="#8b5cf6" stroke="none"/>
+          <text x="120" y="153" text-anchor="middle" fill="rgba(255, 255, 255, 0.95)" 
+                font-size="14" font-weight="bold" font-family="sans-serif">API</text>
+        </g>
+        <g class="node" id="rag-node-docs" filter="url(#rag-glow-blue)">
+          <rect x="70" y="190" width="100" height="50" rx="12" 
+                fill="#3b82f6" stroke="none"/>
+          <text x="120" y="218" text-anchor="middle" fill="rgba(255, 255, 255, 0.95)" 
+                font-size="14" font-weight="bold" font-family="sans-serif">Docs</text>
+        </g>
+        
+        <!-- Vector DB (Right-Center) - Vertically aligned with API, better positioned -->
+        <g class="node" id="rag-node-vector" filter="url(#rag-glow-cyan)">
+          <rect x="280" y="125" width="100" height="50" rx="12" 
+                fill="#06b6d4" stroke="none"/>
+          <text x="330" y="153" text-anchor="middle" fill="rgba(255, 255, 255, 0.95)" 
+                font-size="14" font-weight="bold" font-family="sans-serif">Vector DB</text>
+        </g>
+      </g>
+    </svg>
+    </div>
+  </div>
+  
+  <div class="a2a-story-features">
+    <div class="a2a-feature-item">
+      <strong>Multi-Source</strong>
+      <span>SQL, API, and document stores</span>
+    </div>
+    <div class="a2a-feature-item">
+      <strong>Embedders</strong>
+      <span>Ollama, OpenAI, and Cohere</span>
+    </div>
+    <div class="a2a-feature-item">
+      <strong>Vector Databases</strong>
+      <span>Qdrant and custom vector stores</span>
+    </div>
+  </div>
+</div>
+
+<!-- Distributed Configuration Story Section -->
+<div class="a2a-story-section">
+  <h2 class="a2a-story-title">Distributed Configuration</h2>
+  
+  <div class="a2a-content-row">
+    <div class="a2a-story-content">
+      <p class="a2a-story-text">
+        Start simple with file-based configuration for development, then seamlessly scale to enterprise-grade distributed backends. Hector supports <strong>Consul</strong> for service mesh environments and <strong>ZooKeeper</strong> for big data infrastructure.
+      </p>
+      <p class="a2a-story-text">
+        Enable hot reload with <code>--config-watch</code> for zero-downtime configuration updates. Changes are detected reactively—no polling required. Configuration updates trigger graceful reloads, keeping your agents running smoothly across all instances.
+      </p>
+    </div>
+    
+    <div class="a2a-visualization">
+      <svg id="config-visualization" viewBox="50 60 400 260" preserveAspectRatio="xMidYMin meet" xmlns="http://www.w3.org/2000/svg">
+      <!-- Glow filters - subtle for nodes only -->
+      <defs>
+        <filter id="config-glow-orange" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="config-glow-purple" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="config-glow-blue" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="config-glow-cyan" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      
+      <!-- Connections -->
+      <g class="connections">
+        <!-- Config Sources → Config (all start from bottom middle, join Config at left/top/right middle) -->
+        <!-- File → Config: bottom middle → vertical down → horizontal right to Config left middle -->
+        <path id="conn-file-config" d="M 120 110 L 120 175 L 200 175" 
+              stroke="rgba(251, 191, 36, 0.6)" stroke-width="2.5" 
+              stroke-dasharray="5,5" fill="none"/>
+        <!-- Consul → Config: bottom middle → vertical down to Config top middle -->
+        <path id="conn-consul-config" d="M 250 110 L 250 150" 
+              stroke="rgba(139, 92, 246, 0.6)" stroke-width="2.5" 
+              stroke-dasharray="5,5" fill="none"/>
+        <!-- ZooKeeper → Config: bottom middle → vertical down → horizontal left to Config right middle -->
+        <path id="conn-zk-config" d="M 380 110 L 380 175 L 300 175" 
+              stroke="rgba(59, 130, 246, 0.6)" stroke-width="2.5" 
+              stroke-dasharray="5,5" fill="none"/>
+        
+        <!-- Config → Runtime: bottom middle → vertical down to Runtime top middle -->
+        <path id="conn-config-runtime" d="M 250 200 L 250 250" 
+              stroke="rgba(6, 182, 212, 0.6)" stroke-width="2.5" 
+              stroke-dasharray="5,5" fill="none"/>
+        <text x="265" y="225" text-anchor="middle" fill="rgba(255, 255, 255, 0.8)" 
+              font-size="11" font-family="sans-serif">Hot Reload</text>
+      </g>
+      
+      <!-- Animated particles -->
+      <g class="particles">
+        <!-- Config source particles -->
+        <circle id="config-particle-file" r="4" fill="#fbbf24">
+          <animateMotion dur="4s" repeatCount="indefinite" 
+                         calcMode="spline" keyTimes="0;1" 
+                         keySplines="0.42 0 0.58 1"
+                         path="M 120 110 L 120 175 L 200 175 L 250 175 L 250 200 L 250 250"/>
+        </circle>
+        <circle id="config-particle-consul" r="4" fill="#8b5cf6">
+          <animateMotion dur="4.5s" repeatCount="indefinite" 
+                         calcMode="spline" keyTimes="0;1" 
+                         keySplines="0.42 0 0.58 1"
+                         path="M 250 110 L 250 150 L 250 175 L 250 200 L 250 250"/>
+        </circle>
+        <circle id="config-particle-zk" r="4" fill="#3b82f6">
+          <animateMotion dur="5s" repeatCount="indefinite" 
+                         calcMode="spline" keyTimes="0;1" 
+                         keySplines="0.42 0 0.58 1"
+                         path="M 380 110 L 380 175 L 300 175 L 250 175 L 250 200 L 250 250"/>
+        </circle>
+      </g>
+      
+      <!-- Nodes -->
+      <g class="nodes">
+        <!-- Config Sources (Top row, horizontal) -->
+        <g class="node" id="config-node-file" filter="url(#config-glow-orange)">
+          <rect x="70" y="60" width="100" height="50" rx="12" 
+                fill="#fbbf24" stroke="none"/>
+          <text x="120" y="88" text-anchor="middle" fill="rgba(0, 0, 0, 0.9)" 
+                font-size="14" font-weight="bold" font-family="sans-serif">File</text>
+        </g>
+        <g class="node" id="config-node-consul" filter="url(#config-glow-purple)">
+          <rect x="200" y="60" width="100" height="50" rx="12" 
+                fill="#8b5cf6" stroke="none"/>
+          <text x="250" y="88" text-anchor="middle" fill="rgba(255, 255, 255, 0.95)" 
+                font-size="14" font-weight="bold" font-family="sans-serif">Consul</text>
+        </g>
+        <g class="node" id="config-node-zk" filter="url(#config-glow-blue)">
+          <rect x="330" y="60" width="100" height="50" rx="12" 
+                fill="#3b82f6" stroke="none"/>
+          <text x="380" y="88" text-anchor="middle" fill="rgba(255, 255, 255, 0.95)" 
+                font-size="14" font-weight="bold" font-family="sans-serif">ZooKeeper</text>
+        </g>
+        
+        <!-- Config (Center, middle row) -->
+        <g class="node" id="config-node-config" filter="url(#config-glow-cyan)">
+          <rect x="200" y="150" width="100" height="50" rx="12" 
+                fill="#06b6d4" stroke="none"/>
+          <text x="250" y="178" text-anchor="middle" fill="rgba(255, 255, 255, 0.95)" 
+                font-size="14" font-weight="bold" font-family="sans-serif">Config</text>
+        </g>
+        
+        <!-- Runtime (Bottom) -->
+        <g class="node" id="config-node-runtime" filter="url(#config-glow-cyan)">
+          <rect x="200" y="250" width="100" height="50" rx="12" 
+                fill="#06b6d4" stroke="none"/>
+          <text x="250" y="278" text-anchor="middle" fill="rgba(255, 255, 255, 0.95)" 
+                font-size="14" font-weight="bold" font-family="sans-serif">Runtime</text>
+        </g>
+      </g>
+    </svg>
+    </div>
+  </div>
+  
+  <div class="a2a-story-features">
+    <div class="a2a-feature-item">
+      <strong>Hot Reload</strong>
+      <span>Zero-downtime configuration updates</span>
+    </div>
+    <div class="a2a-feature-item">
+      <strong>Distributed Backends</strong>
+      <span>Consul and ZooKeeper support</span>
+    </div>
+    <div class="a2a-feature-item">
+      <strong>Reactive Watching</strong>
+      <span>Instant updates, no polling</span>
+    </div>
+  </div>
+</div>
+
+<!-- Programmatic API Story Section -->
+<div class="a2a-story-section">
+  <h2 class="a2a-story-title">Programmatic API</h2>
+  
+  <div class="a2a-content-row">
+    <div class="a2a-story-content">
+      <p class="a2a-story-text">
+        When you need to customize agent behavior, integrate with existing systems, or build dynamic agent workflows, Hector's <strong>programmatic API</strong> gives you full control. Build agents programmatically, combine them with config-based agents, or embed agents directly into your Go applications.
+      </p>
+      <p class="a2a-story-text">
+        The configuration system is built on top of the programmatic API, not the other way around. This means you can mix and match: load agents from YAML files, build custom agents programmatically, and combine them all in a single runtime. Perfect for embedding agents into existing applications or building higher-level abstractions.
+      </p>
+    </div>
+    
+    <div class="a2a-visualization">
+      <div class="programmatic-code-block">
+```go
+// Load agents from YAML configuration
+cfg, _ := config.LoadConfig(config.LoaderOptions{
+    Path: "configs/agents.yaml",
+})
+
+// Build agents from config (uses programmatic API internally)
+configBuilder, _ := hector.NewConfigAgentBuilder(cfg)
+configAgents, _ := configBuilder.BuildAllAgents()
+
+// Build a custom agent programmatically
+llm, _ := hector.NewLLMProvider("openai").
+    Model("gpt-4o-mini").
+    APIKeyFromEnv("OPENAI_API_KEY").
+    Build()
+
+reasoning, _ := hector.NewReasoning("chain-of-thought").
+    MaxIterations(100).
+    Build()
+
+programmaticAgent, _ := hector.NewAgent("custom").
+    WithName("Custom Agent").
+    WithLLMProvider(llm).
+    WithReasoningStrategy(reasoning).
+    WithSystemPrompt("You are a helpful assistant.").
+    Build()
+
+// Combine config-based and programmatic agents
+runtime.NewRuntimeBuilder().
+    WithAgents(configAgents).      // From YAML config
+    WithAgent(programmaticAgent).   // Built programmatically
+    Start()
+```
       </div>
     </div>
   </div>
   
-  <div class="a2a-visualization">
-    <canvas id="a2a-federation"></canvas>
+  <div class="a2a-story-features">
+    <div class="a2a-feature-item">
+      <strong>Flexible Building</strong>
+      <span>Mix config and code seamlessly</span>
+    </div>
+    <div class="a2a-feature-item">
+      <strong>Chained API</strong>
+      <span>Fluent, readable builder pattern</span>
+    </div>
+    <div class="a2a-feature-item">
+      <strong>Full Control</strong>
+      <span>Every feature available programmatically</span>
+    </div>
   </div>
 </div>
-
-<script>
-(function() {
-  const canvas = document.getElementById('a2a-federation');
-  if (!canvas) return;
-  
-  const ctx = canvas.getContext('2d');
-  const dpr = window.devicePixelRatio || 1;
-  
-  // Responsive sizing
-  function resizeCanvas() {
-    const container = canvas.parentElement;
-    const size = Math.min(container.clientWidth, container.clientHeight || 500);
-    canvas.style.width = size + 'px';
-    canvas.style.height = size + 'px';
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
-    ctx.scale(dpr, dpr);
-  }
-  
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
-  
-  // Box dimensions
-  const boxWidth = 80;
-  const boxHeight = 50;
-  const boxRadius = 12;
-  
-  // Connections: A↔B (horizontal), A→C (L-shape), B→C (L-shape)
-  const connections = [
-    { from: 0, to: 1, type: 'horizontal', color: 'rgba(237, 66, 103, 0.5)', label: 'A2A Protocol' },
-    { from: 0, to: 2, type: 'lshape', color: 'rgba(237, 66, 103, 0.5)', label: 'A2A' },
-    { from: 1, to: 2, type: 'lshape', color: 'rgba(16, 185, 129, 0.5)', label: 'A2A' }
-  ];
-  
-  // Animated dots
-  const dots = [];
-  connections.forEach((conn, i) => {
-    dots.push({
-      connection: conn,
-      progress: i / connections.length,
-      speed: 0.008
-    });
-  });
-  
-  let animationFrame;
-  
-  function getNodes() {
-    const w = canvas.width / dpr;
-    const h = canvas.height / dpr;
-    const padding = 40;
-    const topY = padding + boxHeight / 2;
-    const bottomY = h - padding - boxHeight / 2;
-    const leftX = padding + boxWidth / 2;
-    const rightX = w - padding - boxWidth / 2;
-    const centerX = w / 2; // Bottom-middle
-    
-    // Triangle layout: A (top-left), B (top-right), C (bottom-middle)
-    return [
-      { x: leftX, y: topY, label: 'Agent A', color: '#ed4267' },
-      { x: rightX, y: topY, label: 'Agent B', color: '#10b981' },
-      { x: centerX, y: bottomY, label: 'Agent C', color: '#ed4267' }
-    ];
-  }
-  
-  // Draw 90-degree cornered connection forming rounded rectangle
-  function drawCorneredConnection(ctx, from, to, conn) {
-    ctx.strokeStyle = conn.color;
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    
-    if (conn.type === 'horizontal') {
-      // A ↔ B: Connect from left side of A to right side of B at middle
-      const leftSideOfA = from.x - boxWidth / 2;
-      const rightSideOfB = to.x + boxWidth / 2;
-      const y = from.y; // Middle (vertically centered)
-      
-      ctx.moveTo(leftSideOfA, y);
-      ctx.lineTo(rightSideOfB, y);
-      
-      // Draw label above
-      if (conn.label) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.font = '10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(conn.label, (leftSideOfA + rightSideOfB) / 2, y - 15);
-      }
-    } else if (conn.type === 'lshape') {
-      // A → C or B → C: Start from bottom middle, go down, then turn to connect to C at middle
-      const bottomMiddleX = from.x; // Center X of the box
-      const bottomOfFrom = from.y + boxHeight / 2;
-      
-      if (from.x < to.x) {
-        // A → C: down from bottom middle of A, turn right, connect to left side of C at middle
-        const leftSideOfC = to.x - boxWidth / 2;
-        const middleY = to.y; // Middle (vertically centered) of C
-        
-        ctx.moveTo(bottomMiddleX, bottomOfFrom);
-        ctx.lineTo(bottomMiddleX, middleY);
-        ctx.lineTo(leftSideOfC, middleY);
-        
-        // Draw label above horizontal segment
-        if (conn.label) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-          ctx.font = '10px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          const labelX = (bottomMiddleX + leftSideOfC) / 2;
-          ctx.fillText(conn.label, labelX, middleY - 15);
-        }
-      } else {
-        // B → C: down from bottom middle of B, turn left, connect to right side of C at middle
-        const rightSideOfC = to.x + boxWidth / 2;
-        const middleY = to.y; // Middle (vertically centered) of C
-        
-        ctx.moveTo(bottomMiddleX, bottomOfFrom);
-        ctx.lineTo(bottomMiddleX, middleY);
-        ctx.lineTo(rightSideOfC, middleY);
-        
-        // Draw label above horizontal segment
-        if (conn.label) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-          ctx.font = '10px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          const labelX = (bottomMiddleX + rightSideOfC) / 2;
-          ctx.fillText(conn.label, labelX, middleY - 15);
-        }
-      }
-    }
-    
-    ctx.stroke();
-  }
-  
-  // Get point along 90-degree cornered path
-  function getPointOnCorneredPath(from, to, progress, conn) {
-    if (conn.type === 'horizontal') {
-      // A ↔ B: horizontal from left side of A to right side of B at middle
-      const leftSideOfA = from.x - boxWidth / 2;
-      const rightSideOfB = to.x + boxWidth / 2;
-      const y = from.y; // Middle (vertically centered)
-      return {
-        x: leftSideOfA + (rightSideOfB - leftSideOfA) * progress,
-        y: y
-      };
-    } else if (conn.type === 'lshape') {
-      const bottomMiddleX = from.x; // Center X of the box
-      const bottomOfFrom = from.y + boxHeight / 2;
-      
-      if (from.x < to.x) {
-        // A → C: down from bottom middle, turn right to left side of C at middle
-        const leftSideOfC = to.x - boxWidth / 2;
-        const middleY = to.y; // Middle (vertically centered) of C
-        
-        const verticalLength = Math.abs(middleY - bottomOfFrom);
-        const horizontalLength = Math.abs(leftSideOfC - bottomMiddleX);
-        const totalLength = verticalLength + horizontalLength;
-        
-        const vProgress = verticalLength / totalLength;
-        
-        if (progress < vProgress) {
-          // Vertical segment: down from bottom middle
-          const t = progress / vProgress;
-          return { x: bottomMiddleX, y: bottomOfFrom + (middleY - bottomOfFrom) * t };
-        } else {
-          // Horizontal segment: right to C's left side
-          const t = (progress - vProgress) / (1 - vProgress);
-          return { x: bottomMiddleX + (leftSideOfC - bottomMiddleX) * t, y: middleY };
-        }
-      } else {
-        // B → C: down from bottom middle, turn left to right side of C at middle
-        const rightSideOfC = to.x + boxWidth / 2;
-        const middleY = to.y; // Middle (vertically centered) of C
-        
-        const verticalLength = Math.abs(middleY - bottomOfFrom);
-        const horizontalLength = Math.abs(rightSideOfC - bottomMiddleX);
-        const totalLength = verticalLength + horizontalLength;
-        
-        const vProgress = verticalLength / totalLength;
-        
-        if (progress < vProgress) {
-          // Vertical segment: down from bottom middle
-          const t = progress / vProgress;
-          return { x: bottomMiddleX, y: bottomOfFrom + (middleY - bottomOfFrom) * t };
-        } else {
-          // Horizontal segment: left to C's right side
-          const t = (progress - vProgress) / (1 - vProgress);
-          return { x: bottomMiddleX + (rightSideOfC - bottomMiddleX) * t, y: middleY };
-        }
-      }
-    }
-  }
-  
-  function draw() {
-    const w = canvas.width / dpr;
-    const h = canvas.height / dpr;
-    const nodes = getNodes();
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, w, h);
-    
-    // Draw subtle white transparent background
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
-    roundRect(ctx, 0, 0, w, h, 12);
-    ctx.fill();
-    
-    // Draw connections with 90-degree corners
-    connections.forEach(conn => {
-      const from = nodes[conn.from];
-      const to = nodes[conn.to];
-      drawCorneredConnection(ctx, from, to, conn);
-    });
-    
-    // Draw animated dots along cornered paths
-    dots.forEach((dot) => {
-      const conn = dot.connection;
-      const from = nodes[conn.from];
-      const to = nodes[conn.to];
-      
-      dot.progress += dot.speed;
-      if (dot.progress >= 1) dot.progress = 0;
-      
-      const point = getPointOnCorneredPath(from, to, dot.progress, conn);
-      
-      // Dot with subtle glow
-      const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, 8);
-      gradient.addColorStop(0, conn.color.replace('0.5', '1'));
-      gradient.addColorStop(0.5, conn.color.replace('0.5', '0.6'));
-      gradient.addColorStop(1, conn.color.replace('0.5', '0'));
-      
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, 8, 0, 2 * Math.PI);
-      ctx.fill();
-      
-      // Core dot
-      ctx.fillStyle = conn.color.replace('0.5', '1');
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
-      ctx.fill();
-    });
-    
-    // Draw agent boxes - bigger, slick style
-    nodes.forEach(node => {
-      const x = node.x - boxWidth / 2;
-      const y = node.y - boxHeight / 2;
-      
-      // Box shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-      roundRect(ctx, x + 2, y + 2, boxWidth, boxHeight, boxRadius);
-      ctx.fill();
-      
-      // Main box with gradient
-      const gradient = ctx.createLinearGradient(x, y, x, y + boxHeight);
-      gradient.addColorStop(0, node.color);
-      gradient.addColorStop(1, adjustColor(node.color, -20));
-      ctx.fillStyle = gradient;
-      roundRect(ctx, x, y, boxWidth, boxHeight, boxRadius);
-      ctx.fill();
-      
-      // Subtle border
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-      ctx.lineWidth = 1;
-      roundRect(ctx, x, y, boxWidth, boxHeight, boxRadius);
-      ctx.stroke();
-      
-      // Label
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(node.label, node.x, node.y);
-    });
-    
-    animationFrame = requestAnimationFrame(draw);
-  }
-  
-  // Helper for rounded rectangles
-  function roundRect(ctx, x, y, width, height, radius) {
-    ctx.beginPath();
-    ctx.moveTo(x + radius, y);
-    ctx.lineTo(x + width - radius, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-    ctx.lineTo(x + width, y + height - radius);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-    ctx.lineTo(x + radius, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-    ctx.lineTo(x, y + radius);
-    ctx.quadraticCurveTo(x, y, x + radius, y);
-    ctx.closePath();
-  }
-  
-  // Helper to adjust color brightness
-  function adjustColor(color, amount) {
-    const num = parseInt(color.replace('#', ''), 16);
-    const r = Math.max(0, Math.min(255, (num >> 16) + amount));
-    const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amount));
-    const b = Math.max(0, Math.min(255, (num & 0x0000FF) + amount));
-    return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
-  }
-  
-  draw();
-  
-  // Cleanup
-  window.addEventListener('beforeunload', () => {
-    if (animationFrame) cancelAnimationFrame(animationFrame);
-  });
-})();
-</script>
 
 [Get Started →](getting-started/quick-start.md){ .md-button .md-button--primary }
 
