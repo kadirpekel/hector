@@ -355,6 +355,18 @@
   flex: 1;
 }
 
+/* Highlight.js integration */
+.hero-content .highlight > pre > code,
+.programmatic-code-block .highlight > pre > code {
+  padding: 1rem;
+  background: transparent;
+}
+
+.hero-content .highlight > pre > code.hljs,
+.programmatic-code-block .highlight > pre > code.hljs {
+  background: transparent !important;
+}
+
 
 @media (max-width: 960px) {
   .a2a-story-section {

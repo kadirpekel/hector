@@ -1,6 +1,4 @@
 ---
-title: Hector Documentation
-description: Declarative A2A-Native AI Agent Platform - Complete Documentation
 hide:
   - navigation
   - toc
@@ -14,6 +12,18 @@ hide:
   padding-top: 0.5rem;
 }
 </style>
+
+<!-- Highlight.js for syntax highlighting -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Highlight all code blocks
+    document.querySelectorAll('pre code').forEach(function(block) {
+      hljs.highlightElement(block);
+    });
+  });
+</script>
 
 <p class="hero-slogan">Production-Ready AI Agents. Zero Code Required.</p>
 
