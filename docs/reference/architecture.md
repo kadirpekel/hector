@@ -22,7 +22,7 @@ Hector is a **declarative AI agent platform** built on three core principles:
     
     For **performance characteristics** (resource usage, scaling, efficiency), see:
     
-    - [Performance Overview](../performance/index.md)
+    - [Performance Overview](../core-concepts/performance.md)
     
     For **technical deep dives** on architecture:
     
@@ -555,7 +555,7 @@ hector call "Hello" --agent assistant --url http://remote:8080
 - **[A2A Protocol](a2a-protocol.md)** - Protocol details
 
 ### Performance & Deployment
-- **[Performance Overview](../performance/index.md)** - Resource efficiency & scaling
+- **[Performance Overview](../core-concepts/performance.md)** - Resource efficiency & scaling
 - **[Deploy to Production](../how-to/deploy-production.md)** - Production setup
 
 ---

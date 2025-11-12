@@ -380,7 +380,7 @@ Tasks with checkpoint recovery enabled can survive server crashes and restarts. 
 - On server restart, tasks in `WORKING` or `INPUT_REQUIRED` state are automatically recovered if checkpoints exist
 
 **See:** [Human-in-the-Loop](../core-concepts/human-in-the-loop.md) for complete HITL guide.  
-**See:** [Generic Checkpoint/Resume](../design/generic-checkpoint-resume.md) for checkpoint recovery architecture.
+**See:** [Checkpoint Recovery](../core-concepts/checkpoint-recovery.md) for checkpoint recovery architecture.
 
 **Complete Documentation:** [Tasks - Lifecycle and Management](../core-concepts/tasks.md)
 

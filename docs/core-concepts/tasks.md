@@ -690,7 +690,7 @@ agents:
 - ✅ Recovery uses standard A2A `message:send` with `taskId`
 - ✅ Never checkpoints from terminal states
 
-See **[Checkpoint Recovery](checkpoint-recovery.md)** for complete documentation and **[Generic Checkpoint/Resume Design](../design/generic-checkpoint-resume.md)** for architecture details.
+See **[Checkpoint Recovery](checkpoint-recovery.md)** for complete documentation and architecture details.
 
 ---
 

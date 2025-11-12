@@ -435,7 +435,7 @@ agents:
   - `auto_resume`: Automatically resume tasks on server startup
   - `auto_resume_hitl`: Auto-resume INPUT_REQUIRED tasks (use with caution)
   - `resume_timeout`: Maximum age of checkpoint to resume (prevents stale recovery)
-- See [Generic Checkpoint/Resume Design](../design/generic-checkpoint-resume.md) for architecture details
+- See [Checkpoint Recovery](../core-concepts/checkpoint-recovery.md) for architecture details
 - See [Tasks](../core-concepts/tasks.md#checkpoint-recovery) for usage guide
 
 **See:** [Tasks](../core-concepts/tasks.md) for complete task management guide.
@@ -581,7 +581,7 @@ tools:
 **See:** [Human-in-the-Loop](../core-concepts/human-in-the-loop.md) for complete guide.
 
 **See also:**
-- [File Operations Guide](../tools-file-operations.md) - Detailed documentation for read_file, apply_patch, and grep_search
+- [Tools Guide](../core-concepts/tools.md) - Detailed documentation for tools including read_file, apply_patch, and grep_search
 - [Tools Overview](../core-concepts/tools.md) - Complete guide to all built-in tools
 
 ### MCP Tools

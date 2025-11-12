@@ -73,10 +73,10 @@ func (a *Agent) GetAgentCardSimple() *pb.AgentCard {
 }
 
 func (a *Agent) getVersion() string {
-	if a.config.A2A != nil && a.config.A2A.Version != "" {
+	if a.config != nil && a.config.A2A != nil && a.config.A2A.Version != "" {
 		return a.config.A2A.Version
 	}
-	return "1.0.0"
+	return "0.3.0"
 }
 
 func (a *Agent) getInputModes() []string {
@@ -133,7 +133,7 @@ func (a *Agent) getProvider() *pb.AgentProvider {
 }
 
 func (a *Agent) getDocumentationURL() string {
-	if a.config.A2A != nil {
+	if a.config != nil && a.config.A2A != nil {
 		return a.config.A2A.DocumentationURL
 	}
 	return ""

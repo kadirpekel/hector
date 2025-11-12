@@ -94,9 +94,5 @@ open http://localhost:8080
 
     Single 30MB binary, <100ms startup. 10-20x less resource usage than Python frameworks.
 
--   :handshake: __Human-in-the-Loop & Checkpoint Recovery__
-
-    Production-ready tool approval workflows with async state persistence. Tasks pause for user input and resume seamlessly, even after server restarts. Generic checkpoint recovery enables crash resilience and long-running task support.
-
 </div>
 

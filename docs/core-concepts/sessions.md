@@ -165,7 +165,7 @@ agents:
 - **Async Human-in-the-Loop (HITL)**: Persists execution state when tasks pause for user approval
 - **Checkpoint Recovery**: Stores execution checkpoints for crash recovery and long-running tasks
 
-See [Human-in-the-Loop](human-in-the-loop.md) and [Generic Checkpoint/Resume](../design/generic-checkpoint-resume.md) for details.
+See [Human-in-the-Loop](human-in-the-loop.md) and [Checkpoint Recovery](checkpoint-recovery.md) for details.
 
 ---
 

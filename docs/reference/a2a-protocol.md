@@ -63,8 +63,6 @@ Hector is built **entirely** on A2A protocol types:
 | **Transport** | ✅ All 3 | gRPC (50051), REST (8080), JSON-RPC (8080) |
 | **REST Endpoints** | ✅✅ **Complete** | Agent-scoped URLs for multi-agent support |
 
-**Full Verification:** See [Task Endpoints Summary](/TASK_ENDPOINTS_SUMMARY.md) and [A2A Compliance Report](/FINAL_A2A_COMPLIANCE_VERIFICATION.md)
-
 ---
 
 ## Core Methods
@@ -772,14 +770,6 @@ curl -X POST http://localhost:8080/v1/agents/assistant/tasks/task_abc123:cancel
 - **[Architecture](architecture.md)** - System architecture
 - **[External Agents](../how-to/integrate-external-agents.md)** - Connect to A2A agents
 - **[Multi-Agent](../core-concepts/multi-agent.md)** - Multi-agent orchestration
-
----
-
-## A2A Compliance Reports
-
-- **[Final Compliance Verification](/FINAL_A2A_COMPLIANCE_VERIFICATION.md)** - Complete verification with test results
-- **[Task Endpoints Summary](/TASK_ENDPOINTS_SUMMARY.md)** - Quick reference for task endpoints  
-- **[A2A Compliance Report](/A2A_COMPLIANCE_REPORT.md)** - Detailed compliance checklist
 
 ---
 

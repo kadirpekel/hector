@@ -537,7 +537,6 @@ recovery:
 - **[Human-in-the-Loop](human-in-the-loop.md)** - Tool approval workflows (uses checkpoint foundation)
 - **[Tasks](tasks.md)** - Task lifecycle and management
 - **[Sessions](sessions.md)** - Session persistence (checkpoint storage)
-- **[Generic Checkpoint/Resume Design](../design/generic-checkpoint-resume.md)** - Complete architecture details
 - **[Programmatic API Reference](../reference/programmatic-api.md)** - Configure checkpoints programmatically
 - **[Configuration Reference](../reference/configuration.md)** - All checkpoint options
 
