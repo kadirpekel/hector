@@ -93,10 +93,10 @@ func (s *SupervisorStrategy) AfterIteration(
 }
 
 func (s *SupervisorStrategy) GetContextInjection(state *ReasoningState) string {
-
 	baseContext := s.ChainOfThoughtStrategy.GetContextInjection(state)
 
-	agentsList := s.buildAvailableAgentsContext(state)
+	// Supervisor can see all agents (not just sub-agents) and excludes itself
+	agentsList := BuildAvailableAgentsContext(state, SupervisorAgentContextOptions())
 
 	if agentsList != "" {
 		if baseContext != "" {
@@ -106,24 +106,6 @@ func (s *SupervisorStrategy) GetContextInjection(state *ReasoningState) string {
 	}
 
 	return baseContext
-}
-
-func (s *SupervisorStrategy) buildAvailableAgentsContext(state *ReasoningState) string {
-	availableAgents := s.getAvailableAgents(state)
-
-	if len(availableAgents) == 0 {
-		return ""
-	}
-
-	context := "AVAILABLE AGENTS (THESE ARE THE ONLY AGENTS YOU CAN CALL):\n"
-	for agentID, description := range availableAgents {
-		context += fmt.Sprintf("- %s: %s\n", agentID, description)
-	}
-	context += "\nCRITICAL: You MUST ONLY use the agent IDs listed above.\n"
-	context += "DO NOT invent or assume other agents exist.\n"
-	context += "If a task needs a different type of agent, use the closest match from the list."
-
-	return context
 }
 
 func (s *SupervisorStrategy) GetRequiredTools() []RequiredTool {
@@ -141,59 +123,6 @@ func (s *SupervisorStrategy) GetRequiredTools() []RequiredTool {
 			AutoCreate:  true,
 		},
 	}
-}
-
-func (s *SupervisorStrategy) getAvailableAgents(state *ReasoningState) map[string]string {
-	agents := make(map[string]string)
-
-	if state == nil || state.GetServices() == nil || state.GetServices().Registry() == nil {
-		return agents
-	}
-
-	registry := state.GetServices().Registry()
-
-	currentAgentName := s.getCurrentAgentName(state)
-
-	subAgents := s.getSubAgentsFromConfig(state)
-
-	var agentEntries []AgentRegistryEntry
-	if len(subAgents) > 0 {
-
-		agentEntries = registry.FilterAgents(subAgents)
-	} else {
-
-		allAgents := registry.ListAgents()
-		agentEntries = make([]AgentRegistryEntry, 0, len(allAgents))
-
-		for _, entry := range allAgents {
-
-			if entry.Visibility != "internal" {
-				agentEntries = append(agentEntries, entry)
-			}
-		}
-	}
-
-	for _, entry := range agentEntries {
-
-		if entry.ID != currentAgentName {
-
-			agents[entry.ID] = entry.Card.Description
-		}
-	}
-
-	return agents
-}
-
-func (s *SupervisorStrategy) getSubAgentsFromConfig(state *ReasoningState) []string {
-	subAgents := state.SubAgents()
-	if len(subAgents) == 0 {
-		return nil
-	}
-	return subAgents
-}
-
-func (s *SupervisorStrategy) getCurrentAgentName(state *ReasoningState) string {
-	return state.AgentName()
 }
 
 func (s *SupervisorStrategy) GetPromptSlots() PromptSlots {

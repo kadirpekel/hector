@@ -3,6 +3,7 @@ package reasoning
 import (
 	"context"
 	"log"
+	"strings"
 
 	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/tools"
@@ -100,26 +101,41 @@ func (s *ChainOfThoughtStrategy) AfterIteration(
 }
 
 func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) string {
+	var contextParts []string
 
 	if state.GetServices() == nil {
 		return ""
 	}
 
+	// Inject TODO context if available
 	todoTool := s.getTodoTool(state)
-	if todoTool == nil {
+	if todoTool != nil {
+		sessionID := extractSessionID(state.GetContext())
+		todos := todoTool.GetTodos(sessionID)
+		if len(todos) > 0 {
+			// Only inject context for LLM, don't display
+			// (display is handled by the tool itself when executed)
+			contextParts = append(contextParts, tools.FormatTodosForContext(todos))
+		}
+	}
+
+	// Inject sub-agent information if available
+	if len(state.SubAgents()) > 0 && state.GetServices().Registry() != nil {
+		agentsList := BuildAvailableAgentsContext(state, DefaultAgentContextOptions())
+		if agentsList != "" {
+			contextParts = append(contextParts, agentsList)
+		}
+	}
+
+	if len(contextParts) == 0 {
 		return ""
 	}
 
-	sessionID := extractSessionID(state.GetContext())
-	todos := todoTool.GetTodos(sessionID)
+	return "\n\n" + joinContextParts(contextParts)
+}
 
-	if len(todos) == 0 {
-		return ""
-	}
-
-	// Only inject context for LLM, don't display
-	// (display is handled by the tool itself when executed)
-	return tools.FormatTodosForContext(todos)
+func joinContextParts(parts []string) string {
+	return strings.Join(parts, "\n\n")
 }
 
 func (s *ChainOfThoughtStrategy) getTodoTool(state *ReasoningState) *tools.TodoTool {

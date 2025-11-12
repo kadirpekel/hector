@@ -33,7 +33,11 @@ type AgentBuilderOptions struct {
 	SessionService     reasoning.SessionService
 	ContextService     reasoning.ContextService
 	TaskService        reasoning.TaskService
-	TaskConfig         *config.TaskConfig // For checkpoint/HITL configuration
+	TaskConfig         *config.TaskConfig             // For checkpoint/HITL configuration
+	SubAgents          []string                       // Sub-agents for multi-agent scenarios
+	Security           *config.SecurityConfig         // For agent card security schemes
+	StructuredOutput   *config.StructuredOutputConfig // For structured output configuration
+	A2ACard            *config.A2ACardConfig          // For A2A card metadata (version, input/output modes, skills, etc.)
 }
 
 // NewAgentDirect creates an agent directly from components without config
@@ -66,11 +70,15 @@ func NewAgentDirect(opts AgentBuilderOptions) (*Agent, error) {
 	// Default timeout
 	awaitTimeout := 10 * time.Minute
 
-	// Build minimal agent config for checkpoint/HITL support
+	// Build agent config for checkpoint/HITL, A2A card, Security, StructuredOutput
+	// This config is needed for GetAgentCard() and other methods that read from agent.config
 	var agentConfig *config.AgentConfig
-	if opts.TaskConfig != nil {
+	if opts.TaskConfig != nil || opts.Security != nil || opts.StructuredOutput != nil || opts.A2ACard != nil {
 		agentConfig = &config.AgentConfig{
-			Task: opts.TaskConfig,
+			Task:             opts.TaskConfig,
+			Security:         opts.Security,
+			StructuredOutput: opts.StructuredOutput,
+			A2A:              opts.A2ACard,
 		}
 	}
 
@@ -82,10 +90,11 @@ func NewAgentDirect(opts AgentBuilderOptions) (*Agent, error) {
 		services:           services,
 		baseURL:            opts.BaseURL,
 		preferredTransport: transport,
+		subAgents:          opts.SubAgents, // Store sub-agents directly on agent (not in config)
 		taskAwaiter:        NewTaskAwaiter(awaitTimeout),
 		activeExecutions:   make(map[string]context.CancelFunc),
 		componentManager:   nil,         // Not needed for direct construction
-		config:             agentConfig, // For checkpoint/HITL configuration
+		config:             agentConfig, // For checkpoint/HITL configuration only
 	}
 
 	return agent, nil

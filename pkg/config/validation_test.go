@@ -14,7 +14,7 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 			name: "valid_openai_config",
 			config: LLMProviderConfig{
 				Type:        "openai",
-				Model:       "gpt-4o",
+				Model:       DefaultOpenAIModel,
 				APIKey:      "sk-test-key",
 				Host:        "https://api.openai.com/v1",
 				Temperature: 0.7,
@@ -54,7 +54,7 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 		{
 			name: "missing_type",
 			config: LLMProviderConfig{
-				Model: "gpt-4o",
+				Model: DefaultOpenAIModel,
 				Host:  "https://api.openai.com/v1",
 			},
 			wantErr: true,
@@ -71,7 +71,7 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 			name: "missing_host",
 			config: LLMProviderConfig{
 				Type:  "openai",
-				Model: "gpt-4o",
+				Model: DefaultOpenAIModel,
 			},
 			wantErr: true,
 		},
@@ -79,7 +79,7 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 			name: "missing_api_key_for_openai",
 			config: LLMProviderConfig{
 				Type:  "openai",
-				Model: "gpt-4o",
+				Model: DefaultOpenAIModel,
 				Host:  "https://api.openai.com/v1",
 			},
 			wantErr: true,
@@ -88,7 +88,7 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 			name: "invalid_temperature_too_low",
 			config: LLMProviderConfig{
 				Type:        "openai",
-				Model:       "gpt-4o",
+				Model:       DefaultOpenAIModel,
 				Host:        "https://api.openai.com/v1",
 				Temperature: -0.1,
 			},
@@ -98,7 +98,7 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 			name: "invalid_temperature_too_high",
 			config: LLMProviderConfig{
 				Type:        "openai",
-				Model:       "gpt-4o",
+				Model:       DefaultOpenAIModel,
 				Host:        "https://api.openai.com/v1",
 				Temperature: 2.1,
 			},
@@ -108,7 +108,7 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 			name: "negative_max_tokens",
 			config: LLMProviderConfig{
 				Type:      "openai",
-				Model:     "gpt-4o",
+				Model:     DefaultOpenAIModel,
 				Host:      "https://api.openai.com/v1",
 				MaxTokens: -1,
 			},
@@ -121,7 +121,7 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 			name: "negative_max_retries",
 			config: LLMProviderConfig{
 				Type:       "openai",
-				Model:      "gpt-4o",
+				Model:      DefaultOpenAIModel,
 				Host:       "https://api.openai.com/v1",
 				MaxRetries: -1,
 			},
@@ -131,7 +131,7 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 			name: "negative_retry_delay",
 			config: LLMProviderConfig{
 				Type:       "openai",
-				Model:      "gpt-4o",
+				Model:      DefaultOpenAIModel,
 				Host:       "https://api.openai.com/v1",
 				RetryDelay: -1,
 			},

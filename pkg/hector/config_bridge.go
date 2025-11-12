@@ -3,11 +3,13 @@ package hector
 import (
 	"fmt"
 
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/memory"
 	"github.com/kadirpekel/hector/pkg/reasoning"
+	"github.com/kadirpekel/hector/pkg/tools"
 )
 
 // ConfigAgentBuilder builds agents from config using the programmatic API
@@ -32,10 +34,8 @@ func NewConfigAgentBuilder(cfg *config.Config) (*ConfigAgentBuilder, error) {
 
 	// Resolve base URL
 	baseURL := resolveBaseURL(cfg)
+	// preferredTransport default is set in config.SetDefaults(), so it should already have a value
 	preferredTransport := cfg.Global.A2AServer.PreferredTransport
-	if preferredTransport == "" {
-		preferredTransport = "json-rpc"
-	}
 
 	return &ConfigAgentBuilder{
 		config:             cfg,
@@ -63,10 +63,25 @@ func resolveBaseURL(cfg *config.Config) string {
 }
 
 // BuildAgent builds an agent from config using programmatic API
-func (b *ConfigAgentBuilder) BuildAgent(agentID string) (*agent.Agent, error) {
+func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, error) {
 	agentCfg, ok := b.config.Agents[agentID]
 	if !ok {
 		return nil, fmt.Errorf("agent %s not found in config", agentID)
+	}
+
+	// Handle external A2A agents separately - they don't need LLM
+	if agentCfg.Type == "a2a" {
+		externalAgent, err := agent.NewExternalA2AAgent(agentID, agentCfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create external A2A agent: %w", err)
+		}
+		return externalAgent, nil
+	}
+
+	// Determine preferred transport: agent-level A2A override > global > default
+	preferredTransport := b.preferredTransport
+	if agentCfg.A2A != nil && agentCfg.A2A.PreferredTransport != "" {
+		preferredTransport = agentCfg.A2A.PreferredTransport
 	}
 
 	// Use programmatic API to build agent
@@ -75,9 +90,16 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (*agent.Agent, error) {
 		WithDescription(agentCfg.Description).
 		WithRegistry(b.agentRegistry).
 		WithBaseURL(b.baseURL).
-		WithPreferredTransport(b.preferredTransport)
+		WithPreferredTransport(preferredTransport)
 
-	// Get LLM provider from component manager
+	// Set visibility (default is "public" per config.SetDefaults())
+	// Builder also defaults to "public", but we respect config value
+	builder = builder.WithVisibility(agentCfg.Visibility)
+
+	// Get LLM provider from component manager (required for native agents)
+	if agentCfg.LLM == "" {
+		return nil, fmt.Errorf("LLM is required for native agents")
+	}
 	llmProvider, err := b.componentManager.GetLLM(agentCfg.LLM)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get LLM %s: %w", agentCfg.LLM, err)
@@ -163,14 +185,104 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (*agent.Agent, error) {
 		builder = builder.WithLongTermMemory(longTermMemory, longTermConfig)
 	}
 
+	// Convert sub-agents
+	if len(agentCfg.SubAgents) > 0 {
+		builder = builder.WithSubAgents(agentCfg.SubAgents)
+	}
+
 	// Convert tools
 	toolRegistry := b.componentManager.GetToolRegistry()
-	for _, toolName := range agentCfg.Tools {
+	defaultToolConfigs := config.GetDefaultToolConfigs()
+
+	// Determine which tools to add to the agent:
+	// - If Tools is nil: use all tools from registry (matches old behavior where allowedTools=nil meant "all tools")
+	//   This happens when:
+	//   * EnableTools=true (expandEnableTools() adds tools to cfg.Tools, but agentCfg.Tools remains nil)
+	//   * MCP_URL is set (MCP tools are registered in registry, agentCfg.Tools is set to nil)
+	// - If Tools is empty slice: no tools are added (explicit empty list)
+	// - If Tools has items: only those specific tools are added
+	var toolsToAdd []string
+	if agentCfg.Tools == nil {
+		// Use all tools from registry (includes MCP tools, default tools from EnableTools, etc.)
+		allTools := toolRegistry.ListTools()
+		for _, toolInfo := range allTools {
+			toolsToAdd = append(toolsToAdd, toolInfo.Name)
+		}
+	} else {
+		// Use explicitly listed tools
+		toolsToAdd = agentCfg.Tools
+	}
+
+	for _, toolName := range toolsToAdd {
 		tool, err := toolRegistry.GetTool(toolName)
 		if err != nil {
-			continue // Skip missing tools
+			// Try to create native tool with default config if it's a known native tool
+			if defaultConfig, isNativeTool := defaultToolConfigs[toolName]; isNativeTool {
+				// Create tool from default config
+				var createdTool tools.Tool
+				var createErr error
+
+				switch defaultConfig.Type {
+				case "command":
+					createdTool, createErr = tools.NewCommandToolWithConfig(toolName, defaultConfig)
+				case "write_file":
+					createdTool, createErr = tools.NewFileWriterToolWithConfig(toolName, defaultConfig)
+				case "search_replace":
+					createdTool, createErr = tools.NewSearchReplaceToolWithConfig(toolName, defaultConfig)
+				case "read_file":
+					createdTool, createErr = tools.NewReadFileToolWithConfig(toolName, defaultConfig)
+				case "apply_patch":
+					createdTool, createErr = tools.NewApplyPatchToolWithConfig(toolName, defaultConfig)
+				case "grep_search":
+					createdTool, createErr = tools.NewGrepSearchToolWithConfig(toolName, defaultConfig)
+				case "web_request":
+					createdTool, createErr = tools.NewWebRequestToolWithConfig(toolName, defaultConfig)
+				case "todo":
+					createdTool = tools.NewTodoTool()
+				case "agent_call":
+					// agent_call requires agent registry
+					if b.agentRegistry != nil {
+						createdTool = tools.NewAgentCallTool(b.agentRegistry)
+					} else {
+						createErr = fmt.Errorf("agent_call tool requires agent registry")
+					}
+				default:
+					createErr = fmt.Errorf("unknown native tool type: %s", defaultConfig.Type)
+				}
+
+				if createErr == nil && createdTool != nil {
+					builder = builder.WithTool(createdTool)
+					continue
+				}
+			}
+
+			// Skip missing tools that couldn't be auto-created
+			continue
 		}
 		builder = builder.WithTool(tool)
+	}
+
+	// Auto-add agent_call tool if sub-agents are present but tool wasn't explicitly added
+	// This ensures sub-agents can be called even if agent_call wasn't in the tools list
+	if len(agentCfg.SubAgents) > 0 && b.agentRegistry != nil {
+		// Check if agent_call was already added (either in tools list or registry)
+		hasAgentCall := false
+		for _, toolName := range toolsToAdd {
+			if toolName == "agent_call" {
+				hasAgentCall = true
+				break
+			}
+		}
+		// Also check if it's in the registry
+		if !hasAgentCall {
+			if _, err := toolRegistry.GetTool("agent_call"); err != nil {
+				// Not in registry either, create it using default config (for consistency)
+				if defaultConfig, ok := defaultToolConfigs["agent_call"]; ok && defaultConfig.Type == "agent_call" {
+					agentCallTool := tools.NewAgentCallTool(b.agentRegistry)
+					builder = builder.WithTool(agentCallTool)
+				}
+			}
+		}
 	}
 
 	// Session service
@@ -281,11 +393,31 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (*agent.Agent, error) {
 		builder = builder.WithTask(taskBuilder)
 	}
 
+	// Set security configuration if present
+	if agentCfg.Security != nil {
+		builder = builder.WithSecurity(agentCfg.Security)
+	}
+
+	// Set A2A card configuration if present
+	if agentCfg.A2A != nil {
+		builder = builder.WithA2ACard(agentCfg.A2A)
+	}
+
+	// Set structured output configuration if present
+	if agentCfg.StructuredOutput != nil {
+		builder = builder.WithStructuredOutput(agentCfg.StructuredOutput)
+	}
+
 	// Build using programmatic API
 	agentInstance, err := builder.Build()
 	if err != nil {
 		return nil, err
 	}
+
+	// Note: The config (A2A, Security, StructuredOutput, Task) is now set on the agent
+	// via the builder, which passes it to NewAgentDirect. This ensures GetAgentCard()
+	// and other methods can access these fields from agent.config.
+	// Sub-agents are stored directly on the Agent struct (not in config) via WithSubAgents()
 
 	// Validate HITL configuration
 	if agentCfg.Task != nil && agentCfg.Task.HITL != nil {
@@ -300,12 +432,13 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (*agent.Agent, error) {
 		}
 	}
 
+	// *agent.Agent implements pb.A2AServiceServer, so we can return it directly
 	return agentInstance, nil
 }
 
 // BuildAllAgents builds all agents from config
-func (b *ConfigAgentBuilder) BuildAllAgents() (map[string]*agent.Agent, error) {
-	agents := make(map[string]*agent.Agent)
+func (b *ConfigAgentBuilder) BuildAllAgents() (map[string]pb.A2AServiceServer, error) {
+	agents := make(map[string]pb.A2AServiceServer)
 
 	// Build all agents first
 	for agentID := range b.config.Agents {

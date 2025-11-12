@@ -25,14 +25,17 @@ func NewSummarizationService(llm llms.LLMProvider, config *SummarizationConfig) 
 		return nil, fmt.Errorf("llm is required")
 	}
 
+	// Use the LLM provider's model name as default
+	llmModelName := llm.GetModelName()
+
 	if config == nil {
 		config = &SummarizationConfig{
-			Model: "gpt-4o",
+			Model: llmModelName,
 		}
 	}
 
 	if config.Model == "" {
-		config.Model = "gpt-4o"
+		config.Model = llmModelName
 	}
 
 	tokenCounter, err := utils.NewTokenCounter(config.Model)

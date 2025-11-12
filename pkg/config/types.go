@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	DefaultOpenAIModel    = "gpt-4o"
+	DefaultOpenAIModel    = "gpt-4o-mini"
 	DefaultAnthropicModel = "claude-3-7-sonnet-latest"
 	DefaultGeminiModel    = "gemini-2.0-flash-exp"
 )
@@ -477,8 +477,9 @@ type AgentConfig struct {
 	Visibility string `yaml:"visibility,omitempty"`
 
 	// External A2A agent configuration
-	URL         string            `yaml:"url,omitempty"` // Agent card URL or service base URL
-	Credentials *AgentCredentials `yaml:"credentials,omitempty"`
+	URL           string            `yaml:"url,omitempty"`             // Agent card URL or service base URL
+	TargetAgentID string            `yaml:"target_agent_id,omitempty"` // Remote agent ID (if different from local config key)
+	Credentials   *AgentCredentials `yaml:"credentials,omitempty"`
 
 	LLM              string                  `yaml:"llm,omitempty"`
 	Database         string                  `yaml:"database,omitempty"`
@@ -903,6 +904,9 @@ func GetDefaultToolConfigs() map[string]*ToolConfig {
 		},
 		"todo_write": {
 			Type: "todo",
+		},
+		"agent_call": {
+			Type: "agent_call",
 		},
 	}
 }
@@ -2148,6 +2152,9 @@ func (c *A2AServerConfig) SetDefaults() {
 	}
 	if c.Port == 0 {
 		c.Port = 8080
+	}
+	if c.PreferredTransport == "" {
+		c.PreferredTransport = "json-rpc"
 	}
 }
 

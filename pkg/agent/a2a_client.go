@@ -16,12 +16,13 @@ import (
 type ExternalA2AAgent struct {
 	pb.UnimplementedA2AServiceServer
 
-	agentID     string // Local agent ID (config key)
-	name        string
-	description string
-	url         string
-	client      client.A2AClient
-	config      *config.AgentConfig
+	agentID       string // Local agent ID (config key)
+	targetAgentID string // Remote agent ID (for routing to external service)
+	name          string
+	description   string
+	url           string
+	client        client.A2AClient
+	config        *config.AgentConfig
 }
 
 // NewExternalA2AAgent creates a proxy to an external A2A agent.
@@ -62,19 +63,28 @@ func NewExternalA2AAgent(agentID string, agentConfig *config.AgentConfig) (*Exte
 		}
 	}
 
+	// Determine target agent ID (remote agent ID to use when calling the service)
+	// Use target_agent_id from config if provided, otherwise use the local agent ID (config key)
+	targetAgentID := agentConfig.TargetAgentID
+	if targetAgentID == "" {
+		targetAgentID = agentID
+	}
+
 	// Create universal A2A client (auto-discovers agent and chooses transport)
-	a2aClient, err := client.NewUniversalA2AClient(agentConfig.URL, agentID, token)
+	// Use targetAgentID for discovery and calls
+	a2aClient, err := client.NewUniversalA2AClient(agentConfig.URL, targetAgentID, token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create A2A client for %s: %w", agentConfig.URL, err)
 	}
 
 	return &ExternalA2AAgent{
-		agentID:     agentID,
-		name:        agentConfig.Name,
-		description: agentConfig.Description,
-		url:         agentConfig.URL,
-		client:      a2aClient,
-		config:      agentConfig,
+		agentID:       agentID,
+		targetAgentID: targetAgentID,
+		name:          agentConfig.Name,
+		description:   agentConfig.Description,
+		url:           agentConfig.URL,
+		client:        a2aClient,
+		config:        agentConfig,
 	}, nil
 }
 
@@ -88,7 +98,8 @@ func (e *ExternalA2AAgent) Close() error {
 
 // GetAgentCard returns the agent card (from cache or remote)
 func (e *ExternalA2AAgent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (*pb.AgentCard, error) {
-	return e.client.GetAgentCard(ctx, e.agentID)
+	// Use targetAgentID to get the cached card from discovery (client was initialized with targetAgentID)
+	return e.client.GetAgentCard(ctx, e.targetAgentID)
 }
 
 // SendMessage sends a message to the external agent
@@ -96,7 +107,8 @@ func (e *ExternalA2AAgent) SendMessage(ctx context.Context, req *pb.SendMessageR
 	if req.Request == nil {
 		return nil, fmt.Errorf("request message cannot be nil")
 	}
-	return e.client.SendMessage(ctx, e.agentID, req.Request)
+	// Use targetAgentID (remote agent ID) instead of local agentID
+	return e.client.SendMessage(ctx, e.targetAgentID, req.Request)
 }
 
 // SendStreamingMessage sends a streaming message to the external agent
@@ -105,7 +117,8 @@ func (e *ExternalA2AAgent) SendStreamingMessage(req *pb.SendMessageRequest, stre
 		return fmt.Errorf("request message cannot be nil")
 	}
 
-	streamChan, err := e.client.StreamMessage(stream.Context(), e.agentID, req.Request)
+	// Use targetAgentID (remote agent ID) instead of local agentID
+	streamChan, err := e.client.StreamMessage(stream.Context(), e.targetAgentID, req.Request)
 	if err != nil {
 		return err
 	}
@@ -123,14 +136,16 @@ func (e *ExternalA2AAgent) SendStreamingMessage(req *pb.SendMessageRequest, stre
 func (e *ExternalA2AAgent) GetTask(ctx context.Context, req *pb.GetTaskRequest) (*pb.Task, error) {
 	// Use extractTaskID from agent_a2a_methods.go
 	taskID := extractTaskID(req.GetName())
-	return e.client.GetTask(ctx, e.agentID, taskID)
+	// Use targetAgentID (remote agent ID) instead of local agentID
+	return e.client.GetTask(ctx, e.targetAgentID, taskID)
 }
 
 // CancelTask cancels a task on the external agent
 func (e *ExternalA2AAgent) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) (*pb.Task, error) {
 	// Use extractTaskID from agent_a2a_methods.go
 	taskID := extractTaskID(req.GetName())
-	return e.client.CancelTask(ctx, e.agentID, taskID)
+	// Use targetAgentID (remote agent ID) instead of local agentID
+	return e.client.CancelTask(ctx, e.targetAgentID, taskID)
 }
 
 // TaskSubscription subscribes to task updates (not yet implemented for external agents)

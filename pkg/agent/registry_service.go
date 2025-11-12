@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"context"
+
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
@@ -32,8 +34,24 @@ func (s *RegistryService) ListAgents() []reasoning.AgentRegistryEntry {
 		var card *pb.AgentCard
 		if agent, ok := entry.Agent.(*Agent); ok {
 			card = agent.GetAgentCardSimple()
+		} else if externalAgent, ok := entry.Agent.(*ExternalA2AAgent); ok {
+			// For external agents, try to fetch the actual agent card
+			// This provides the description and other metadata from the external service
+			fetchedCard, err := externalAgent.GetAgentCard(context.Background(), &pb.GetAgentCardRequest{})
+			if err == nil && fetchedCard != nil {
+				card = fetchedCard
+			} else {
+				// Fallback to config-based card if fetch fails
+				card = &pb.AgentCard{
+					Name:        externalAgent.GetName(),
+					Description: externalAgent.GetDescription(),
+				}
+				if card.Name == "" {
+					card.Name = entry.ID
+				}
+			}
 		} else {
-
+			// Fallback for unknown agent types
 			card = &pb.AgentCard{Name: entry.ID}
 		}
 
@@ -60,8 +78,24 @@ func (s *RegistryService) GetAgent(id string) (reasoning.AgentRegistryEntry, boo
 	var card *pb.AgentCard
 	if agent, ok := entry.Agent.(*Agent); ok {
 		card = agent.GetAgentCardSimple()
+	} else if externalAgent, ok := entry.Agent.(*ExternalA2AAgent); ok {
+		// For external agents, try to fetch the actual agent card
+		// This provides the description and other metadata from the external service
+		fetchedCard, err := externalAgent.GetAgentCard(context.Background(), &pb.GetAgentCardRequest{})
+		if err == nil && fetchedCard != nil {
+			card = fetchedCard
+		} else {
+			// Fallback to config-based card if fetch fails
+			card = &pb.AgentCard{
+				Name:        externalAgent.GetName(),
+				Description: externalAgent.GetDescription(),
+			}
+			if card.Name == "" {
+				card.Name = entry.ID
+			}
+		}
 	} else {
-
+		// Fallback for unknown agent types
 		card = &pb.AgentCard{Name: entry.ID}
 	}
 

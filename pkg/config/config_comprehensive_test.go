@@ -22,7 +22,7 @@ func TestConfig_Validate(t *testing.T) {
 				LLMs: map[string]*LLMProviderConfig{
 					"test-llm": {
 						Type:   "openai",
-						Model:  "gpt-4o",
+						Model:  DefaultOpenAIModel,
 						Host:   "https://api.openai.com/v1",
 						APIKey: "sk-test-key",
 					},
@@ -42,7 +42,7 @@ func TestConfig_Validate(t *testing.T) {
 				LLMs: map[string]*LLMProviderConfig{
 					"test-llm": {
 						Type:   "openai",
-						Model:  "gpt-4o",
+						Model:  DefaultOpenAIModel,
 						Host:   "https://api.openai.com/v1",
 						APIKey: "sk-test-key",
 					},
@@ -71,7 +71,7 @@ func TestConfig_Validate(t *testing.T) {
 				LLMs: map[string]*LLMProviderConfig{
 					"test-llm": {
 						Type:  "openai",
-						Model: "gpt-4o",
+						Model: DefaultOpenAIModel,
 						Host:  "https://api.openai.com/v1",
 					},
 				},
@@ -90,7 +90,7 @@ func TestConfig_Validate(t *testing.T) {
 				LLMs: map[string]*LLMProviderConfig{
 					"test-llm": {
 						Type:  "",
-						Model: "gpt-4o",
+						Model: DefaultOpenAIModel,
 						Host:  "https://api.openai.com/v1",
 					},
 				},
@@ -109,7 +109,7 @@ func TestConfig_Validate(t *testing.T) {
 				LLMs: map[string]*LLMProviderConfig{
 					"test-llm": {
 						Type:  "openai",
-						Model: "gpt-4o",
+						Model: DefaultOpenAIModel,
 						Host:  "https://api.openai.com/v1",
 					},
 				},

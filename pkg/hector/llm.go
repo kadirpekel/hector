@@ -37,19 +37,19 @@ func NewLLMProvider(providerType string) *LLMProviderBuilder {
 	switch providerType {
 	case "openai":
 		builder.host = "https://api.openai.com/v1"
-		builder.model = "gpt-4o"
+		builder.model = config.DefaultOpenAIModel
 	case "anthropic":
 		builder.host = "https://api.anthropic.com"
-		builder.model = "claude-3-7-sonnet-latest"
+		builder.model = config.DefaultAnthropicModel
 	case "gemini":
 		builder.host = "https://generativelanguage.googleapis.com"
-		builder.model = "gemini-2.0-flash-exp"
+		builder.model = config.DefaultGeminiModel
 	case "ollama":
 		builder.host = "http://localhost:11434"
 		builder.model = "llama3.2"
 	default:
 		builder.host = "https://api.openai.com/v1"
-		builder.model = "gpt-4o"
+		builder.model = config.DefaultOpenAIModel
 	}
 
 	return builder

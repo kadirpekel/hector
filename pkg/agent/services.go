@@ -275,7 +275,16 @@ func (s *DefaultToolService) ExecuteToolCall(ctx context.Context, toolCall *prot
 	}
 
 	if !result.Success {
-		return "", result.Metadata, fmt.Errorf("tool failed: %s", result.Error)
+		// Return error content if available, otherwise use Error field
+		// This ensures LLM sees descriptive error messages
+		errorContent := result.Content
+		if errorContent == "" && result.Error != "" {
+			errorContent = result.Error
+		}
+		if errorContent == "" {
+			errorContent = "Tool execution failed"
+		}
+		return errorContent, result.Metadata, fmt.Errorf("tool failed: %s", result.Error)
 	}
 
 	return result.Content, result.Metadata, nil

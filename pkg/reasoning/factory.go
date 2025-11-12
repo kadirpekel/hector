@@ -2,11 +2,15 @@ package reasoning
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/kadirpekel/hector/pkg/config"
 )
 
 func CreateStrategy(engineType string, config config.ReasoningConfig) (ReasoningStrategy, error) {
+	// Normalize engine type to lowercase for case-insensitive comparison
+	engineType = strings.ToLower(strings.TrimSpace(engineType))
+
 	switch engineType {
 	case "default", "", "chain-of-thought":
 		return NewChainOfThoughtStrategy(), nil

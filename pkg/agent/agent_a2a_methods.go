@@ -261,7 +261,9 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 			return status.Errorf(codes.Internal, "failed to send status update: %v", err)
 		}
 
-		strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
+		// Get reasoning config from services (works for both config-based and programmatic agents)
+		reasoningCfg := a.services.GetConfig()
+		strategy, err := reasoning.CreateStrategy(reasoningCfg.Engine, reasoningCfg)
 		if err != nil {
 			if updateErr := a.updateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
 				log.Printf("[Agent:%s] Failed to update task %s status to FAILED: %v", a.id, task.Id, updateErr)
@@ -351,7 +353,9 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 		return nil
 	}
 
-	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
+	// Get reasoning config from services (works for both config-based and programmatic agents)
+	reasoningCfg := a.services.GetConfig()
+	strategy, err := reasoning.CreateStrategy(reasoningCfg.Engine, reasoningCfg)
 	if err != nil {
 		return status.Errorf(codes.Internal, "failed to create strategy: %v", err)
 	}
@@ -847,7 +851,9 @@ func (a *Agent) resumeTaskExecution(
 	}
 
 	// Create strategy
-	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
+	// Get reasoning config from services (works for both config-based and programmatic agents)
+	reasoningCfg := a.services.GetConfig()
+	strategy, err := reasoning.CreateStrategy(reasoningCfg.Engine, reasoningCfg)
 	if err != nil {
 		if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
 			log.Printf("[Agent:%s] Failed to update task status: %v", a.id, updateErr)
@@ -983,7 +989,9 @@ func (a *Agent) resumeTaskExecution(
 // For tasks with HITL support, this will block until execution fully completes,
 // including any resumed execution after user provides input for tool approval.
 func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, contextID string) (string, error) {
-	strategy, err := reasoning.CreateStrategy(a.config.Reasoning.Engine, a.config.Reasoning)
+	// Get reasoning config from services (works for both config-based and programmatic agents)
+	reasoningCfg := a.services.GetConfig()
+	strategy, err := reasoning.CreateStrategy(reasoningCfg.Engine, reasoningCfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to create strategy: %w", err)
 	}

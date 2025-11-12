@@ -423,5 +423,9 @@ func (b *AgentBuilder) Build() (*agent.Agent, error) {
 		ContextService:     b.contextService,
 		TaskService:        b.taskService,
 		TaskConfig:         b.taskConfig,
+		SubAgents:          b.subAgents,
+		Security:           b.security,
+		StructuredOutput:   b.structuredOutput,
+		A2ACard:            b.a2aCard,
 	})
 }

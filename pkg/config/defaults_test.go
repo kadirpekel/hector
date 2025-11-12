@@ -110,7 +110,7 @@ func TestLLMProviderConfig_SetDefaults(t *testing.T) {
 			name: "zero_values_set_defaults",
 			config: LLMProviderConfig{
 				Type:        "openai",
-				Model:       "gpt-4o",
+				Model:       DefaultOpenAIModel,
 				Host:        "https://api.openai.com/v1",
 				Temperature: 0,
 				MaxTokens:   0,

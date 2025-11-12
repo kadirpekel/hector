@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/kadirpekel/hector/pkg/a2a/client"
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
@@ -102,31 +103,50 @@ func NewWithConfig(cfg *config.Config) (*Runtime, error) {
 // NewRuntimeBuilder creates a new runtime builder (programmatic API)
 func NewRuntimeBuilder() *RuntimeBuilder {
 	return &RuntimeBuilder{
-		agents: make(map[string]*agent.Agent),
+		agents: make(map[string]pb.A2AServiceServer),
 	}
 }
 
 // RuntimeBuilder provides a fluent API for building runtime programmatically
 type RuntimeBuilder struct {
-	agents map[string]*agent.Agent
+	agents map[string]pb.A2AServiceServer
 }
 
 // WithAgent adds an agent to the runtime
-func (b *RuntimeBuilder) WithAgent(agent *agent.Agent) *RuntimeBuilder {
-	if agent == nil {
+func (b *RuntimeBuilder) WithAgent(agt pb.A2AServiceServer) *RuntimeBuilder {
+	if agt == nil {
 		panic("agent cannot be nil")
 	}
-	b.agents[agent.GetID()] = agent
+	// Extract agent ID from agent (for *agent.Agent, use GetID(); for ExternalA2AAgent, use the config)
+	if nativeAgent, ok := agt.(*agent.Agent); ok {
+		b.agents[nativeAgent.GetID()] = agt
+	} else {
+		// For external agents or other types, we need to track them differently
+		// For now, we'll require the ID to be passed separately or use a wrapper
+		panic("WithAgent requires *agent.Agent for programmatic API - use WithAgentID for other agent types")
+	}
+	return b
+}
+
+// WithAgentID adds an agent to the runtime with explicit ID
+func (b *RuntimeBuilder) WithAgentID(agentID string, agt pb.A2AServiceServer) *RuntimeBuilder {
+	if agt == nil {
+		panic("agent cannot be nil")
+	}
+	if agentID == "" {
+		panic("agent ID cannot be empty")
+	}
+	b.agents[agentID] = agt
 	return b
 }
 
 // WithAgents adds multiple agents to the runtime
-func (b *RuntimeBuilder) WithAgents(agents map[string]*agent.Agent) *RuntimeBuilder {
-	for id, agent := range agents {
-		if agent == nil {
+func (b *RuntimeBuilder) WithAgents(agents map[string]pb.A2AServiceServer) *RuntimeBuilder {
+	for id, agt := range agents {
+		if agt == nil {
 			panic(fmt.Sprintf("agent %s cannot be nil", id))
 		}
-		b.agents[id] = agent
+		b.agents[id] = agt
 	}
 	return b
 }
@@ -144,15 +164,25 @@ func (b *RuntimeBuilder) Start() (*Runtime, error) {
 	for id, agentInstance := range b.agents {
 		// Create minimal config for programmatic agents
 		agentConfig := &config.AgentConfig{
-			Name:        agentInstance.GetName(),
-			Description: agentInstance.GetDescription(),
-			Visibility:  "public", // Default visibility for programmatic agents
-			Type:        "native", // Default type for programmatic agents
+			Name:       id,       // Default to ID if we can't get name
+			Visibility: "public", // Default visibility for programmatic agents
+			Type:       "native", // Default type for programmatic agents
 		}
 
-		// Try to get config from agent if available (for agents built from config)
-		if agentConfigFromAgent := agentInstance.GetConfig(); agentConfigFromAgent != nil {
-			agentConfig = agentConfigFromAgent
+		// Try to get metadata from agent if available
+		// Both *agent.Agent and *agent.ExternalA2AAgent implement these methods
+		if nativeAgent, ok := agentInstance.(*agent.Agent); ok {
+			agentConfig.Name = nativeAgent.GetName()
+			agentConfig.Description = nativeAgent.GetDescription()
+			if cfg := nativeAgent.GetConfig(); cfg != nil {
+				agentConfig = cfg
+			}
+		} else if externalAgent, ok := agentInstance.(*agent.ExternalA2AAgent); ok {
+			agentConfig.Name = externalAgent.GetName()
+			agentConfig.Description = externalAgent.GetDescription()
+			if cfg := externalAgent.GetConfig(); cfg != nil {
+				agentConfig = cfg
+			}
 		}
 
 		if err := registry.RegisterAgent(id, agentInstance, agentConfig, nil); err != nil {

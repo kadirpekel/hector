@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"github.com/kadirpekel/hector/pkg/protocol"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -201,6 +202,17 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool) {
 					}
 					if isError {
 						fmt.Print("\033[31m✗\033[0m\n") // Red for errors
+						// Extract and display error message
+						if toolResult := protocol.ExtractToolResult(part); toolResult != nil {
+							errorMsg := toolResult.Error
+							if errorMsg == "" && toolResult.Content != "" {
+								// If no error field but content exists, show content (might be error message)
+								errorMsg = toolResult.Content
+							}
+							if errorMsg != "" {
+								fmt.Printf("\033[31m   Error: %s\033[0m\n", errorMsg)
+							}
+						}
 					} else {
 						fmt.Print("\033[32m✓\033[0m\n") // Green for success
 					}

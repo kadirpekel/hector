@@ -37,8 +37,9 @@ type Agent struct {
 	componentManager   *component.ComponentManager // For accessing global config
 	services           reasoning.AgentServices
 	taskWorkers        chan struct{}
-	baseURL            string // Server base URL for agent card URL construction
-	preferredTransport string // Preferred A2A transport (grpc, json-rpc, rest)
+	baseURL            string   // Server base URL for agent card URL construction
+	preferredTransport string   // Preferred A2A transport (grpc, json-rpc, rest)
+	subAgents          []string // Sub-agents for multi-agent scenarios (set from config or builder)
 
 	// Human-in-the-loop support (A2A Protocol Section 6.3 - INPUT_REQUIRED state)
 	taskAwaiter      *TaskAwaiter                  // Handles paused tasks waiting for input
@@ -217,17 +218,23 @@ func (a *Agent) execute(
 		startTime := time.Now()
 		cfg := a.services.GetConfig()
 
-		spanCtx, span := startAgentSpan(ctx, a.name, a.config.LLM, input)
+		// Get LLM name from config if available, otherwise use empty string
+		llmName := ""
+		if a.config != nil {
+			llmName = a.config.LLM
+		}
+		spanCtx, span := startAgentSpan(ctx, a.name, llmName, input)
 		defer span.End()
 
 		// Add ShowThinking flag to context for LLM providers
 		showThinking := config.BoolValue(cfg.ShowThinking, false)
 		spanCtx = context.WithValue(spanCtx, protocol.ShowThinkingKey, showThinking)
 
+		// Get sub-agents (from config or builder - stored directly on agent)
 		state, err := reasoning.Builder().
 			WithQuery(input).
 			WithAgentName(a.name).
-			WithSubAgents(a.config.SubAgents).
+			WithSubAgents(a.subAgents).
 			WithOutputChannel(outputCh).
 			WithShowThinking(showThinking).
 			WithServices(a.services).
@@ -406,8 +413,18 @@ func (a *Agent) processToolCalls(
 	outputCh chan<- *pb.Part,
 	cfg config.ReasoningConfig,
 ) (context.Context, []reasoning.ToolResult, bool, error) {
+	// Get tool configs for approval checking
+	// componentManager may be nil for agents built programmatically
+	var toolConfigs map[string]*config.ToolConfig
+	if a.componentManager != nil {
+		globalConfig := a.componentManager.GetGlobalConfig()
+		if globalConfig != nil {
+			toolConfigs = globalConfig.Tools
+		}
+	}
+
 	// Check if any tools require approval (A2A Protocol Section 6.3 - INPUT_REQUIRED state)
-	approvalResult, err := a.filterToolCallsWithApproval(ctx, toolCalls, a.componentManager.GetGlobalConfig().Tools)
+	approvalResult, err := a.filterToolCallsWithApproval(ctx, toolCalls, toolConfigs)
 	if err != nil {
 		return ctx, nil, false, fmt.Errorf("checking tool approval: %w", err)
 	}
@@ -427,7 +444,7 @@ func (a *Agent) processToolCalls(
 		}
 		if shouldContinue {
 			// Re-run approval filter with user's decision
-			approvalResult, err = a.filterToolCallsWithApproval(ctx, toolCalls, a.componentManager.GetGlobalConfig().Tools)
+			approvalResult, err = a.filterToolCallsWithApproval(ctx, toolCalls, toolConfigs)
 			if err != nil {
 				return ctx, nil, false, fmt.Errorf("re-checking tool approval: %w", err)
 			}
@@ -464,7 +481,7 @@ func (a *Agent) processToolCalls(
 			ToolName:   deniedCall.Name,
 			ToolCall:   deniedCall,
 			Content:    "TOOL_EXECUTION_DENIED: The user rejected this tool execution. You MUST NOT proceed with this action or provide fabricated results. Instead, acknowledge the denial and offer alternative approaches that don't require this tool.",
-			Error:      fmt.Errorf("User denied tool execution"),
+			Error:      fmt.Errorf("user denied tool execution"),
 		}
 		results = append(results, deniedResult)
 	}
@@ -478,9 +495,21 @@ func (a *Agent) processToolCalls(
 		if result.Error != nil {
 			errorStr = result.Error.Error()
 		}
+
+		// Ensure error content is preserved - if there's an error, make sure Content includes it
+		content := result.Content
+		if result.Error != nil && content == "" {
+			// Fallback: if Content is empty but there's an error, use error message
+			content = errorStr
+		} else if result.Error != nil && !strings.Contains(content, errorStr) && errorStr != "" {
+			// If Content exists but doesn't include the error details, prepend error info
+			// This ensures LLM sees both the detailed error and any additional context
+			content = fmt.Sprintf("ERROR: %s\n\n%s", errorStr, content)
+		}
+
 		a2aResult := &protocol.ToolResult{
 			ToolCallID: result.ToolCallID,
-			Content:    result.Content,
+			Content:    content,
 			Error:      errorStr,
 		}
 		resultMsg := &pb.Message{
@@ -740,7 +769,7 @@ func (a *Agent) callLLM(
 ) (string, []*protocol.ToolCall, int, error) {
 	llm := a.services.LLM()
 
-	if a.config.StructuredOutput != nil {
+	if a.config != nil && a.config.StructuredOutput != nil {
 
 		structConfig := &llms.StructuredOutputConfig{
 			Format:           a.config.StructuredOutput.Format,
@@ -879,15 +908,18 @@ func (a *Agent) executeTools(
 
 		result, metadata, err := tools.ExecuteToolCall(ctx, toolCall)
 		resultContent := result
+		errorStr := ""
 		if err != nil {
-			resultContent = fmt.Sprintf("Error: %v", err)
+			// If ExecuteToolCall returned an error, it also returned error content in result
+			// Use that content (which includes detailed error messages) instead of overwriting
+			if resultContent == "" {
+				// Fallback if no content was returned
+				resultContent = fmt.Sprintf("Error: %v", err)
+			}
+			errorStr = err.Error()
 		}
 
 		// EMIT TOOL RESULT PART (for web UI animations & CLI can extract from this)
-		errorStr := ""
-		if err != nil {
-			errorStr = err.Error()
-		}
 		a2aResult := &protocol.ToolResult{
 			ToolCallID: toolCall.ID,
 			Content:    resultContent,
@@ -1052,21 +1084,23 @@ func (a *Agent) saveToHistory(
 }
 
 func (a *Agent) buildPromptSlots(strategy reasoning.ReasoningStrategy) reasoning.PromptSlots {
-
-	if a.config.Prompt.SystemPrompt != "" {
-		return reasoning.PromptSlots{}
-	}
-
 	strategySlots := strategy.GetPromptSlots()
 
-	// Use typed config slots if provided
-	if a.config.Prompt.PromptSlots != nil {
-		userSlots := reasoning.PromptSlots{
-			SystemRole:   a.config.Prompt.PromptSlots.SystemRole,
-			Instructions: a.config.Prompt.PromptSlots.Instructions,
-			UserGuidance: a.config.Prompt.PromptSlots.UserGuidance,
+	// Use config prompt slots if available
+	if a.config != nil {
+		if a.config.Prompt.SystemPrompt != "" {
+			return reasoning.PromptSlots{}
 		}
-		strategySlots = strategySlots.Merge(userSlots)
+
+		// Use typed config slots if provided
+		if a.config.Prompt.PromptSlots != nil {
+			userSlots := reasoning.PromptSlots{
+				SystemRole:   a.config.Prompt.PromptSlots.SystemRole,
+				Instructions: a.config.Prompt.PromptSlots.Instructions,
+				UserGuidance: a.config.Prompt.PromptSlots.UserGuidance,
+			}
+			strategySlots = strategySlots.Merge(userSlots)
+		}
 	}
 
 	return strategySlots
