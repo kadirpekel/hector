@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -30,8 +31,10 @@ type Server struct {
 	restGateway *transport.RESTGateway
 
 	stopChan   chan struct{}
-	reloadChan chan struct{}
+	reloadChan chan *config.Config // Pass config through channel to avoid races
 	doneChan   chan struct{}
+
+	mu sync.RWMutex // Protect config updates during reload
 }
 
 type Options struct {
@@ -55,19 +58,26 @@ func New(opts Options) (*Server, error) {
 		configLoader: opts.ConfigLoader,
 		opts:         opts,
 		stopChan:     make(chan struct{}),
-		reloadChan:   make(chan struct{}, 1),
+		reloadChan:   make(chan *config.Config, 1), // Buffered to hold latest config
 		doneChan:     make(chan struct{}),
 	}
 
 	if s.configLoader != nil {
 		s.configLoader.SetOnChange(func(newCfg *config.Config) error {
 			log.Printf("📝 Configuration change detected, triggering server reload...")
-			s.config = newCfg
+			// Send config through channel (non-blocking, will overwrite if reload in progress)
 			select {
-			case s.reloadChan <- struct{}{}:
-
+			case s.reloadChan <- newCfg:
+				// Config queued for reload
 			default:
-
+				// Reload already in progress, replace with latest config
+				select {
+				case <-s.reloadChan: // Remove old config
+					s.reloadChan <- newCfg // Queue latest config
+				default:
+					// Channel was already empty, just send
+					s.reloadChan <- newCfg
+				}
 			}
 			return nil
 		})
@@ -121,6 +131,9 @@ func (s *Server) Stop(ctx context.Context) error {
 }
 
 func (s *Server) initialize() error {
+	s.mu.RLock()
+	cfg := s.config
+	s.mu.RUnlock()
 
 	if s.opts.Debug {
 		log.Println("Initializing runtime and agents...")
@@ -128,26 +141,26 @@ func (s *Server) initialize() error {
 
 	// Resolve base URL before creating runtime so agents can use it
 	addresses := s.resolveAddresses()
-	s.config.Global.A2AServer.BaseURL = addresses.BaseURL
+	cfg.Global.A2AServer.BaseURL = addresses.BaseURL
 
-	rt, err := runtime.NewWithConfig(s.config)
+	rt, err := runtime.NewWithConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("runtime initialization failed: %w", err)
 	}
 	s.runtime = rt
 
-	if config.BoolValue(s.config.Global.Observability.MetricsEnabled, false) || config.BoolValue(s.config.Global.Observability.Tracing.Enabled, false) {
+	if config.BoolValue(cfg.Global.Observability.MetricsEnabled, false) || config.BoolValue(cfg.Global.Observability.Tracing.Enabled, false) {
 		log.Println("🔭 Initializing observability...")
 
 		obsConfig := observability.Config{
 			Tracing: observability.TracerConfig{
-				Enabled:      config.BoolValue(s.config.Global.Observability.Tracing.Enabled, false),
-				ExporterType: s.config.Global.Observability.Tracing.ExporterType,
-				EndpointURL:  s.config.Global.Observability.Tracing.EndpointURL,
-				SamplingRate: s.config.Global.Observability.Tracing.SamplingRate,
-				ServiceName:  s.config.Global.Observability.Tracing.ServiceName,
+				Enabled:      config.BoolValue(cfg.Global.Observability.Tracing.Enabled, false),
+				ExporterType: cfg.Global.Observability.Tracing.ExporterType,
+				EndpointURL:  cfg.Global.Observability.Tracing.EndpointURL,
+				SamplingRate: cfg.Global.Observability.Tracing.SamplingRate,
+				ServiceName:  cfg.Global.Observability.Tracing.ServiceName,
 			},
-			MetricsEnabled: config.BoolValue(s.config.Global.Observability.MetricsEnabled, false),
+			MetricsEnabled: config.BoolValue(cfg.Global.Observability.MetricsEnabled, false),
 		}
 
 		obsMgr := observability.NewManager(obsConfig)
@@ -282,21 +295,74 @@ func (s *Server) runLifecycle() {
 			s.cleanup(context.Background())
 			return
 
-		case <-s.reloadChan:
+		case newCfg := <-s.reloadChan:
 			log.Println("🔄 Configuration reload requested...")
+
+			// Store old config for rollback (can't store runtime/servers as they'll be shut down)
+			s.mu.RLock()
+			oldConfig := s.config
+			s.mu.RUnlock()
+
+			// Update config atomically
+			s.mu.Lock()
+			s.config = newCfg
+			s.mu.Unlock()
 
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			s.cleanup(shutdownCtx)
 			cancel()
 
+			// Try to initialize with new config
 			if err := s.initialize(); err != nil {
 				log.Printf("❌ Failed to reinitialize after reload: %v", err)
-				return
+				log.Printf("⚠️  Attempting to restore previous configuration...")
+
+				// Rollback: restore old config and recreate everything
+				s.mu.Lock()
+				s.config = oldConfig
+				s.mu.Unlock()
+
+				// Recreate runtime and servers with old config
+				if err := s.initialize(); err != nil {
+					log.Printf("❌ Failed to restore previous configuration: %v", err)
+					log.Printf("❌ Server is in an inconsistent state. Manual restart required.")
+					return
+				}
+
+				if err := s.startTransport(); err != nil {
+					log.Printf("❌ Failed to restore transport with previous configuration: %v", err)
+					log.Printf("❌ Server is in an inconsistent state. Manual restart required.")
+					return
+				}
+				log.Printf("✅ Previous configuration restored successfully")
+				s.logStartup()
+				continue // Continue lifecycle loop
 			}
 
 			if err := s.startTransport(); err != nil {
 				log.Printf("❌ Failed to start transport after reload: %v", err)
-				return
+				log.Printf("⚠️  Attempting to restore previous configuration...")
+
+				// Rollback: restore old config and recreate everything
+				s.mu.Lock()
+				s.config = oldConfig
+				s.mu.Unlock()
+
+				// Recreate runtime and servers with old config
+				if err := s.initialize(); err != nil {
+					log.Printf("❌ Failed to restore previous configuration: %v", err)
+					log.Printf("❌ Server is in an inconsistent state. Manual restart required.")
+					return
+				}
+
+				if err := s.startTransport(); err != nil {
+					log.Printf("❌ Failed to restore transport with previous configuration: %v", err)
+					log.Printf("❌ Server is in an inconsistent state. Manual restart required.")
+					return
+				}
+				log.Printf("✅ Previous configuration restored successfully")
+				s.logStartup()
+				continue // Continue lifecycle loop
 			}
 
 			s.logStartup()
@@ -360,23 +426,27 @@ func (s *Server) cleanup(ctx context.Context) {
 }
 
 func (s *Server) resolveAddresses() ServerAddresses {
+	s.mu.RLock()
+	cfg := s.config
+	s.mu.RUnlock()
+
 	httpPort := 8080
 	grpcPort := 50051
 	serverHost := "0.0.0.0"
 	baseURL := ""
 
-	if s.config.Global.A2AServer.IsEnabled() {
-		if s.config.Global.A2AServer.Port > 0 {
-			httpPort = s.config.Global.A2AServer.Port
+	if cfg.Global.A2AServer.IsEnabled() {
+		if cfg.Global.A2AServer.Port > 0 {
+			httpPort = cfg.Global.A2AServer.Port
 		}
-		if s.config.Global.A2AServer.GRPCPort > 0 {
-			grpcPort = s.config.Global.A2AServer.GRPCPort
+		if cfg.Global.A2AServer.GRPCPort > 0 {
+			grpcPort = cfg.Global.A2AServer.GRPCPort
 		}
-		if s.config.Global.A2AServer.Host != "" {
-			serverHost = s.config.Global.A2AServer.Host
+		if cfg.Global.A2AServer.Host != "" {
+			serverHost = cfg.Global.A2AServer.Host
 		}
-		if s.config.Global.A2AServer.BaseURL != "" {
-			baseURL = s.config.Global.A2AServer.BaseURL
+		if cfg.Global.A2AServer.BaseURL != "" {
+			baseURL = cfg.Global.A2AServer.BaseURL
 		}
 	}
 
@@ -405,14 +475,18 @@ func (s *Server) resolveAddresses() ServerAddresses {
 }
 
 func (s *Server) setupAuth() (*transport.AuthConfig, error) {
-	if !s.config.Global.Auth.IsEnabled() {
+	s.mu.RLock()
+	cfg := s.config
+	s.mu.RUnlock()
+
+	if !cfg.Global.Auth.IsEnabled() {
 		return nil, nil
 	}
 
 	jwtValidator, err := auth.NewJWTValidator(
-		s.config.Global.Auth.JWKSURL,
-		s.config.Global.Auth.Issuer,
-		s.config.Global.Auth.Audience,
+		cfg.Global.Auth.JWKSURL,
+		cfg.Global.Auth.Issuer,
+		cfg.Global.Auth.Audience,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("JWT validator creation failed: %w", err)

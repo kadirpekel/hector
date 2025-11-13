@@ -8,14 +8,15 @@ import (
 	"github.com/kadirpekel/hector/pkg/server"
 )
 
-func ServeCommand(args *ServeCmd, cfg *config.Config, mode CLIMode) error {
+func ServeCommand(args *ServeCmd, cfg *config.Config, configLoader *config.Loader, mode CLIMode) error {
 
 	srv, err := server.New(server.Options{
-		Config:  cfg,
-		Host:    args.Host,
-		Port:    args.Port,
-		BaseURL: args.A2ABaseURL,
-		Debug:   CLI.Debug,
+		Config:       cfg,
+		ConfigLoader: configLoader,
+		Host:         args.Host,
+		Port:         args.Port,
+		BaseURL:      args.A2ABaseURL,
+		Debug:        CLI.Debug,
 	})
 	if err != nil {
 		return fmt.Errorf("server creation failed: %w", err)

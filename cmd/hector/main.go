@@ -48,6 +48,7 @@ func main() {
 	)
 
 	var cfg *config.Config
+	var configLoader *config.Loader
 
 	command := ctx.Command()
 
@@ -77,7 +78,7 @@ func main() {
 				Watch:     cli.CLI.ConfigWatch,
 			}
 
-			cfg, err = config.LoadConfig(loaderOpts)
+			cfg, configLoader, err = config.LoadConfigWithLoader(loaderOpts)
 			if err != nil {
 				cli.Fatalf("%s", cli.FormatConfigError(cli.CLI.Config, err))
 			}
@@ -85,8 +86,8 @@ func main() {
 			cfg = createZeroConfig(command)
 		}
 
-		var err error
 		if cfg != nil {
+			var err error
 			cfg, err = config.ProcessConfigPipeline(cfg)
 			if err != nil {
 				cli.Fatalf("%s", cli.FormatConfigError(cli.CLI.Config, err))
@@ -104,7 +105,7 @@ func main() {
 	}
 
 	mode := determineMode(command, isClientMode, hasConfigFile)
-	if err := routeCommand(ctx, cfg, mode); err != nil {
+	if err := routeCommand(ctx, cfg, configLoader, mode); err != nil {
 		cli.Fatalf("Command failed: %v", err)
 	}
 }
@@ -128,13 +129,13 @@ func determineMode(command string, isClientMode bool, hasConfig bool) cli.CLIMod
 	}
 }
 
-func routeCommand(ctx *kong.Context, cfg *config.Config, mode cli.CLIMode) error {
+func routeCommand(ctx *kong.Context, cfg *config.Config, configLoader *config.Loader, mode cli.CLIMode) error {
 
 	switch ctx.Command() {
 	case "version":
 		return cli.VersionCommand(&cli.CLI.Version, cfg, mode)
 	case "serve", "serve <agent-name>":
-		return cli.ServeCommand(&cli.CLI.Serve, cfg, mode)
+		return cli.ServeCommand(&cli.CLI.Serve, cfg, configLoader, mode)
 	case "info <agent>":
 		return cli.InfoCommand(&cli.CLI.Info, cfg, mode)
 	case "call <message>":

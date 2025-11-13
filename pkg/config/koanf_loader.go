@@ -194,6 +194,8 @@ func (l *Loader) watch(provider koanf.Provider) {
 			} else {
 				log.Printf("✅ Configuration reloaded successfully from %s", l.options.Type)
 			}
+		} else {
+			log.Printf("⚠️  Config change detected but OnChange callback not set - config reloaded but server not notified")
 		}
 	})
 
@@ -259,17 +261,22 @@ func (l *Loader) SetOnChange(callback func(*Config) error) {
 }
 
 func LoadConfig(opts LoaderOptions) (*Config, error) {
+	cfg, _, err := LoadConfigWithLoader(opts)
+	return cfg, err
+}
+
+func LoadConfigWithLoader(opts LoaderOptions) (*Config, *Loader, error) {
 	loader, err := NewLoader(opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create loader: %w", err)
+		return nil, nil, fmt.Errorf("failed to create loader: %w", err)
 	}
 
 	cfg, err := loader.Load()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	return cfg, nil
+	return cfg, loader, nil
 }
 
 func ParseConfigType(s string) (ConfigType, error) {
