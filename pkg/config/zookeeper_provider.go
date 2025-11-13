@@ -44,7 +44,6 @@ func (p *ZookeeperProvider) ReadBytes() ([]byte, error) {
 	return data, nil
 }
 
-
 func (p *ZookeeperProvider) Watch(callback func(event interface{}, err error)) error {
 	for {
 

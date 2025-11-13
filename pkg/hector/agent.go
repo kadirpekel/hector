@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kadirpekel/hector/pkg/agent"
+	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/llms"
 	"github.com/kadirpekel/hector/pkg/memory"
@@ -44,7 +45,8 @@ type AgentBuilder struct {
 	sessionService     reasoning.SessionService
 	contextService     reasoning.ContextService
 	taskService        reasoning.TaskService
-	taskConfig         *config.TaskConfig // Store task config for checkpoint/HITL
+	taskConfig         *config.TaskConfig          // Store task config for checkpoint/HITL
+	componentManager   *component.ComponentManager // For accessing global config (tool approval, etc.)
 }
 
 // NewAgent creates a new agent builder
@@ -357,6 +359,12 @@ func (b *AgentBuilder) WithEmbedder(embedderName string) *AgentBuilder {
 	return b
 }
 
+// WithComponentManager sets the component manager (for accessing global config, tool approval, etc.)
+func (b *AgentBuilder) WithComponentManager(cm *component.ComponentManager) *AgentBuilder {
+	b.componentManager = cm
+	return b
+}
+
 // Build creates the agent using the programmatic API
 func (b *AgentBuilder) Build() (*agent.Agent, error) {
 	if b.llmProvider == nil {
@@ -427,5 +435,6 @@ func (b *AgentBuilder) Build() (*agent.Agent, error) {
 		Security:           b.security,
 		StructuredOutput:   b.structuredOutput,
 		A2ACard:            b.a2aCard,
+		ComponentManager:   b.componentManager,
 	})
 }

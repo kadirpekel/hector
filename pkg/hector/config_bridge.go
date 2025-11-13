@@ -90,7 +90,8 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 		WithDescription(agentCfg.Description).
 		WithRegistry(b.agentRegistry).
 		WithBaseURL(b.baseURL).
-		WithPreferredTransport(preferredTransport)
+		WithPreferredTransport(preferredTransport).
+		WithComponentManager(b.componentManager)
 
 	// Set visibility (default is "public" per config.SetDefaults())
 	// Builder also defaults to "public", but we respect config value

@@ -37,6 +37,7 @@ func (a *Agent) filterToolCallsWithApproval(
 
 	// Safety check: if toolConfigs is nil, allow all tools (no approval configured)
 	if toolConfigs == nil {
+		log.Printf("[HITL] WARNING: toolConfigs is nil, allowing all tools without approval check")
 		result.ApprovedCalls = toolCalls
 		return result, nil
 	}
@@ -52,6 +53,7 @@ func (a *Agent) filterToolCallsWithApproval(
 		toolConfig, exists := toolConfigs[call.Name]
 		if !exists {
 			// Tool not in config, allow by default
+			log.Printf("[HITL] WARNING: Tool '%s' not found in config map (available keys: %v), allowing without approval", call.Name, getConfigKeys(toolConfigs))
 			result.ApprovedCalls = append(result.ApprovedCalls, call)
 			continue
 		}
@@ -117,4 +119,16 @@ func (a *Agent) filterToolCallsWithApproval(
 	}
 
 	return result, nil
+}
+
+// getConfigKeys returns a slice of all keys in the toolConfigs map for debugging
+func getConfigKeys(toolConfigs map[string]*config.ToolConfig) []string {
+	if toolConfigs == nil {
+		return []string{}
+	}
+	keys := make([]string, 0, len(toolConfigs))
+	for k := range toolConfigs {
+		keys = append(keys, k)
+	}
+	return keys
 }

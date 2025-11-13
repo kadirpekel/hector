@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/llms"
 	"github.com/kadirpekel/hector/pkg/memory"
@@ -38,6 +39,7 @@ type AgentBuilderOptions struct {
 	Security           *config.SecurityConfig         // For agent card security schemes
 	StructuredOutput   *config.StructuredOutputConfig // For structured output configuration
 	A2ACard            *config.A2ACardConfig          // For A2A card metadata (version, input/output modes, skills, etc.)
+	ComponentManager   *component.ComponentManager    // ComponentManager for accessing global config (tool approval, etc.)
 }
 
 // NewAgentDirect creates an agent directly from components without config
@@ -103,8 +105,8 @@ func NewAgentDirect(opts AgentBuilderOptions) (*Agent, error) {
 		subAgents:          opts.SubAgents, // Store sub-agents directly on agent (not in config)
 		taskAwaiter:        NewTaskAwaiter(awaitTimeout),
 		activeExecutions:   make(map[string]context.CancelFunc),
-		componentManager:   nil,         // Not needed for direct construction
-		config:             agentConfig, // For checkpoint/HITL configuration only
+		componentManager:   opts.ComponentManager, // For accessing global config (tool approval, etc.)
+		config:             agentConfig,           // For checkpoint/HITL configuration only
 	}
 
 	return agent, nil

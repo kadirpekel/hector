@@ -58,6 +58,7 @@ func (a *Agent) handleInputRequiredResume(ctx context.Context, userMessage *pb.M
 		if err == nil {
 			// Async HITL: Load state and resume execution
 			decision := parseUserDecision(userMessage)
+			log.Printf("[Agent:%s] [HITL] Resuming task %s from async execution state (decision: %s)", a.id, userMessage.TaskId, decision)
 			go a.resumeTaskExecution(userMessage.TaskId, execState, decision)
 
 			return true, &pb.SendMessageResponse{
@@ -66,8 +67,21 @@ func (a *Agent) handleInputRequiredResume(ctx context.Context, userMessage *pb.M
 				},
 			}, nil
 		}
-		// If no execution state found, fall through to blocking mode
-		log.Printf("[Agent:%s] [HITL] No execution state found for task %s, trying blocking resume", a.id, userMessage.TaskId)
+		// If no execution state found, check if blocking mode is available
+		log.Printf("[Agent:%s] [HITL] No execution state found for task %s (sessionID: %s, error: %v), checking blocking mode", a.id, userMessage.TaskId, sessionID, err)
+		if a.taskAwaiter.IsWaiting(userMessage.TaskId) {
+			// Blocking HITL: Provide input to waiting goroutine
+			if err := a.taskAwaiter.ProvideInput(userMessage.TaskId, userMessage); err != nil {
+				return true, nil, status.Errorf(codes.InvalidArgument, "failed to resume task: %v", err)
+			}
+			return true, &pb.SendMessageResponse{
+				Payload: &pb.SendMessageResponse_Task{
+					Task: existingTask,
+				},
+			}, nil
+		}
+		// Neither async nor blocking mode available - this is an error
+		return true, nil, status.Errorf(codes.InvalidArgument, "failed to resume task: task %s is in INPUT_REQUIRED state but no execution state found and task is not waiting for input. This may indicate the execution state was lost or the task was already resumed.", userMessage.TaskId)
 	}
 
 	// Blocking HITL: Provide input to waiting goroutine
@@ -445,7 +459,7 @@ func (a *Agent) GetAgentCard(ctx context.Context, req *pb.GetAgentCardRequest) (
 		// Add global auth configuration if no per-agent security configured
 		// This follows A2A spec Section 5.5 for declaring authentication requirements
 		globalConfig := a.componentManager.GetGlobalConfig()
-		if globalConfig.Global.Auth.IsEnabled() {
+		if globalConfig != nil && globalConfig.Global.Auth.IsEnabled() {
 			card.SecuritySchemes = make(map[string]*pb.SecurityScheme)
 			card.SecuritySchemes["BearerAuth"] = &pb.SecurityScheme{
 				Scheme: &pb.SecurityScheme_HttpAuthSecurityScheme{

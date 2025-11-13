@@ -2,8 +2,11 @@ package agent
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"testing"
+
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
@@ -224,7 +227,45 @@ func TestShouldUseAsyncHITL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var sessionService reasoning.SessionService
 			if tt.hasSession {
-				sessionService = memory.NewInMemorySessionService()
+				// For async HITL tests, use SQL session service (persistent)
+				// In-memory session service should NOT enable async HITL
+				// Create a minimal SQLite in-memory database for testing
+				db, err := sql.Open("sqlite3", ":memory:")
+				if err != nil {
+					t.Fatalf("Failed to create test database: %v", err)
+				}
+				defer db.Close()
+				
+				// Initialize tables
+				_, err = db.Exec(`
+					CREATE TABLE IF NOT EXISTS sessions (
+						id VARCHAR(255) NOT NULL,
+						agent_id VARCHAR(255) NOT NULL,
+						metadata TEXT,
+						created_at TIMESTAMP NOT NULL,
+						updated_at TIMESTAMP NOT NULL,
+						PRIMARY KEY (id, agent_id)
+					);
+					CREATE TABLE IF NOT EXISTS session_messages (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						session_id VARCHAR(255) NOT NULL,
+						message_id VARCHAR(255) NOT NULL,
+						context_id VARCHAR(255),
+						task_id VARCHAR(255),
+						role VARCHAR(50) NOT NULL,
+						message_json TEXT NOT NULL,
+						sequence_num INTEGER NOT NULL,
+						created_at TIMESTAMP NOT NULL
+					);
+				`)
+				if err != nil {
+					t.Fatalf("Failed to initialize test database: %v", err)
+				}
+				
+				sessionService, err = memory.NewSQLSessionService(db, "sqlite", "test-agent")
+				if err != nil {
+					t.Fatalf("Failed to create SQL session service: %v", err)
+				}
 			}
 
 			agent := &Agent{

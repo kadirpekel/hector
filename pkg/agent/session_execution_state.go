@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+
+	"github.com/kadirpekel/hector/pkg/reasoning"
 )
 
 const (
@@ -96,21 +98,29 @@ func (a *Agent) LoadExecutionStateFromSession(
 	}
 
 	if metadata.Metadata == nil {
+		log.Printf("[Agent:%s] [HITL] No metadata found for session %s (task %s)", a.id, sessionID, taskID)
 		return nil, fmt.Errorf("no execution state found for task %s", taskID)
 	}
 
 	pendingExecutions, exists := metadata.Metadata[pendingExecutionsKey]
 	if !exists {
+		log.Printf("[Agent:%s] [HITL] No pending_executions key in session %s metadata (task %s). Available keys: %v", a.id, sessionID, taskID, getMetadataKeys(metadata.Metadata))
 		return nil, fmt.Errorf("no pending executions in session")
 	}
 
 	pendingMap, ok := pendingExecutions.(map[string]interface{})
 	if !ok {
+		log.Printf("[Agent:%s] [HITL] Invalid pending_executions format in session %s (task %s): expected map, got %T", a.id, sessionID, taskID, pendingExecutions)
 		return nil, fmt.Errorf("invalid pending_executions format")
 	}
 
 	taskState, exists := pendingMap[taskID]
 	if !exists {
+		availableTasks := make([]string, 0, len(pendingMap))
+		for k := range pendingMap {
+			availableTasks = append(availableTasks, k)
+		}
+		log.Printf("[Agent:%s] [HITL] Task %s not found in pending executions for session %s. Available tasks: %v", a.id, taskID, sessionID, availableTasks)
 		return nil, fmt.Errorf("execution state not found for task %s", taskID)
 	}
 
@@ -120,7 +130,25 @@ func (a *Agent) LoadExecutionStateFromSession(
 		return nil, fmt.Errorf("failed to marshal task state: %w", err)
 	}
 
-	return DeserializeExecutionState(stateJSON)
+	execState, err := DeserializeExecutionState(stateJSON)
+	if err != nil {
+		log.Printf("[Agent:%s] [HITL] Failed to deserialize execution state for task %s in session %s: %v", a.id, taskID, sessionID, err)
+		return nil, fmt.Errorf("failed to deserialize execution state: %w", err)
+	}
+	log.Printf("[Agent:%s] [HITL] Successfully loaded execution state for task %s from session %s", a.id, taskID, sessionID)
+	return execState, nil
+}
+
+// getMetadataKeys returns a slice of all keys in the metadata map for debugging
+func getMetadataKeys(metadata map[string]interface{}) []string {
+	if metadata == nil {
+		return []string{}
+	}
+	keys := make([]string, 0, len(metadata))
+	for k := range metadata {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // ClearExecutionStateFromSession removes execution state after resuming
@@ -172,8 +200,16 @@ func (a *Agent) ClearExecutionStateFromSession(
 // shouldUseAsyncHITL determines if async HITL should be used based on configuration
 func (a *Agent) shouldUseAsyncHITL() bool {
 	if a.config == nil {
-		// Programmatic API: auto-detect based on session service
-		return a.services.Session() != nil
+		// Programmatic API: auto-detect based on session service type
+		// Only use async HITL if session service is SQL/persistent (not in-memory)
+		sessionService := a.services.Session()
+		if sessionService == nil {
+			return false
+		}
+		// Check if it's a SQL session service (has GetDB method or similar indicator)
+		// For now, we'll check if it's NOT an in-memory service by checking for a method
+		// that only SQL services have. If we can't determine, default to blocking for safety.
+		return isPersistentSessionService(sessionService)
 	}
 
 	taskCfg := a.config.Task
@@ -185,16 +221,58 @@ func (a *Agent) shouldUseAsyncHITL() bool {
 		}
 	}
 
-	hasSessionStore := a.services.Session() != nil
+	// Check if agent has a configured session_store (from config, not just any session service)
+	// This is more reliable than checking if session service exists, since in-memory
+	// session service is always created even without session_store config
+	hasPersistentSessionStore := a.hasConfiguredSessionStore()
 
 	switch mode {
 	case "async":
-		return true // Explicit async
+		if !hasPersistentSessionStore {
+			log.Printf("[Agent:%s] [HITL] Warning: async HITL mode requested but no persistent session_store configured, falling back to blocking mode", a.id)
+			return false
+		}
+		return true // Explicit async (requires persistent store)
 	case "blocking":
 		return false // Explicit blocking
 	case "auto":
-		return hasSessionStore // Auto-detect
+		return hasPersistentSessionStore // Auto-detect: async only if persistent store configured
 	default:
-		return hasSessionStore // Fallback to auto-detect
+		return hasPersistentSessionStore // Fallback to auto-detect
 	}
+}
+
+// hasConfiguredSessionStore checks if agent has a configured session_store in config
+// (not just an in-memory session service which is always created)
+func (a *Agent) hasConfiguredSessionStore() bool {
+	// For config-based agents, check if SessionStore field is set in agent config
+	// This is the most reliable way to determine if a persistent session store was configured
+	if a.config != nil && a.config.SessionStore != "" {
+		// SessionStore is configured in agent config - verify it's a persistent store
+		// by checking if the session service is SQL-based
+		return isPersistentSessionService(a.services.Session())
+	}
+
+	// For programmatic API or agents without SessionStore config, check if session service is persistent
+	return isPersistentSessionService(a.services.Session())
+}
+
+// persistentSessionService is a minimal interface to check if a session service is persistent
+// SQLSessionService implements Close() method, InMemorySessionService does not
+type persistentSessionService interface {
+	Close() error
+}
+
+// isPersistentSessionService checks if a session service is persistent (SQL) vs in-memory
+// It uses type assertion to check if the service implements Close() method,
+// which only SQLSessionService has (InMemorySessionService doesn't implement it)
+func isPersistentSessionService(service reasoning.SessionService) bool {
+	if service == nil {
+		return false
+	}
+
+	// Use type assertion to check if service implements Close() method
+	// This is more reliable than string matching on type names
+	_, isPersistent := service.(persistentSessionService)
+	return isPersistent
 }
