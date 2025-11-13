@@ -44,10 +44,6 @@ func (p *ZookeeperProvider) ReadBytes() ([]byte, error) {
 	return data, nil
 }
 
-func (p *ZookeeperProvider) Read() (map[string]interface{}, error) {
-
-	return nil, fmt.Errorf("Read() not implemented for ZooKeeper provider, use ReadBytes()")
-}
 
 func (p *ZookeeperProvider) Watch(callback func(event interface{}, err error)) error {
 	for {

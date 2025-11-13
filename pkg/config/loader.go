@@ -179,7 +179,11 @@ func (l *Loader) loadAndProcess() (*Config, error) {
 	}
 
 	// 3. Expand environment variables
-	expandedMap := ExpandEnvVarsInData(rawMap).(map[string]interface{})
+	expandedData := ExpandEnvVarsInData(rawMap)
+	expandedMap, ok := expandedData.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("env var expansion returned unexpected type %T", expandedData)
+	}
 
 	// 4. Validate structure
 	strictResult, err := ValidateConfigStructure(expandedMap)
@@ -265,9 +269,15 @@ func (l *Loader) watchFile() {
 
 	log.Printf("🔄 Watching config file: %s", l.options.Path)
 
+	var debounceTimer *time.Timer
+	const debounceDelay = 100 * time.Millisecond
+
 	for {
 		select {
 		case <-l.stopChan:
+			if debounceTimer != nil {
+				debounceTimer.Stop()
+			}
 			return
 		case event, ok := <-watcher.Events:
 			if !ok {
@@ -276,9 +286,12 @@ func (l *Loader) watchFile() {
 			// Only reload if the watched file changed
 			if filepath.Base(event.Name) == configFile {
 				if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
-					// Small delay to avoid multiple reloads during file save
-					time.Sleep(100 * time.Millisecond)
-					l.reload()
+					// Cancel previous timer if exists
+					if debounceTimer != nil {
+						debounceTimer.Stop()
+					}
+					// Start new debounce timer
+					debounceTimer = time.AfterFunc(debounceDelay, l.reload)
 				} else if event.Op&fsnotify.Remove == fsnotify.Remove {
 					log.Printf("⚠️  Config file %s was deleted", l.options.Path)
 					// Try to re-add watch if file is recreated
@@ -302,10 +315,8 @@ func (l *Loader) watchConsul() {
 	var lastIndex uint64
 
 	for {
-		select {
-		case <-l.stopChan:
+		if l.shouldStopWatching() {
 			return
-		default:
 		}
 
 		kv, meta, err := l.consulClient.KV().Get(l.options.Path, &api.QueryOptions{
@@ -314,13 +325,8 @@ func (l *Loader) watchConsul() {
 		})
 
 		if err != nil {
-			log.Printf("⚠️  Watch error: %v", err)
-			time.Sleep(1 * time.Second)
+			l.handleWatchError(err)
 			continue
-		}
-
-		if meta != nil {
-			lastIndex = meta.LastIndex
 		}
 
 		if kv == nil {
@@ -328,23 +334,45 @@ func (l *Loader) watchConsul() {
 			return
 		}
 
-		// Only reload if index changed (actual update)
-		if meta != nil && meta.LastIndex > 0 {
+		// Only reload if index actually changed (actual update, not just timeout)
+		if meta != nil && meta.LastIndex != lastIndex && lastIndex > 0 {
 			l.reload()
+		}
+
+		if meta != nil {
+			lastIndex = meta.LastIndex
 		}
 	}
 }
 
 func (l *Loader) watchEtcd() {
-	rch := l.etcdClient.Watch(context.Background(), l.options.Path)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		select {
+		case <-l.stopChan:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	rch := l.etcdClient.Watch(ctx, l.options.Path)
 	for {
 		select {
 		case <-l.stopChan:
 			return
-		case wresp := <-rch:
+		case wresp, ok := <-rch:
+			if !ok {
+				return
+			}
 			if wresp.Canceled {
 				log.Printf("⚠️  Etcd watch canceled: %v", wresp.Err())
 				return
+			}
+			if wresp.Err() != nil {
+				l.handleWatchError(wresp.Err())
+				continue
 			}
 			for _, ev := range wresp.Events {
 				if ev.Type == clientv3.EventTypePut {
@@ -364,19 +392,33 @@ func (l *Loader) watchZookeeper() {
 	}
 
 	l.zkProvider.Watch(func(event interface{}, err error) {
-		select {
-		case <-l.stopChan:
+		if l.shouldStopWatching() {
 			return
-		default:
 		}
 
 		if err != nil {
-			log.Printf("⚠️  Watch error: %v", err)
+			l.handleWatchError(err)
 			return
 		}
 
 		l.reload()
 	})
+}
+
+// shouldStopWatching checks if the loader should stop watching
+func (l *Loader) shouldStopWatching() bool {
+	select {
+	case <-l.stopChan:
+		return true
+	default:
+		return false
+	}
+}
+
+// handleWatchError handles watch errors with consistent logging and backoff
+func (l *Loader) handleWatchError(err error) {
+	log.Printf("⚠️  Watch error: %v", err)
+	time.Sleep(1 * time.Second)
 }
 
 func (l *Loader) reload() {

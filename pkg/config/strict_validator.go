@@ -383,10 +383,3 @@ func min(a, b, c int) int {
 	}
 	return c
 }
-
-// ValidateConfigBytes validates raw YAML/JSON bytes for structural issues
-func ValidateConfigBytes(data []byte, format string) (*StrictValidationResult, error) {
-	// This is a placeholder for future implementation if needed
-	// For now, users should use the full config loader which does strict validation automatically
-	return nil, fmt.Errorf("use the config loader which includes strict validation automatically")
-}
