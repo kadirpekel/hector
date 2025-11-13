@@ -235,7 +235,7 @@ func TestShouldUseAsyncHITL(t *testing.T) {
 					t.Fatalf("Failed to create test database: %v", err)
 				}
 				defer db.Close()
-				
+
 				// Initialize tables
 				_, err = db.Exec(`
 					CREATE TABLE IF NOT EXISTS sessions (
@@ -261,7 +261,7 @@ func TestShouldUseAsyncHITL(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to initialize test database: %v", err)
 				}
-				
+
 				sessionService, err = memory.NewSQLSessionService(db, "sqlite", "test-agent")
 				if err != nil {
 					t.Fatalf("Failed to create SQL session service: %v", err)
