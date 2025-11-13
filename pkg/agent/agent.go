@@ -769,8 +769,8 @@ func (a *Agent) callLLM(
 ) (string, []*protocol.ToolCall, int, error) {
 	llm := a.services.LLM()
 
+	// Check for structured output configuration
 	if a.config != nil && a.config.StructuredOutput != nil {
-
 		structConfig := &llms.StructuredOutputConfig{
 			Format:           a.config.StructuredOutput.Format,
 			Schema:           a.config.StructuredOutput.Schema,

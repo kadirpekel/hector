@@ -55,8 +55,12 @@ func NewAgentDirect(opts AgentBuilderOptions) (*Agent, error) {
 		return nil, fmt.Errorf("working memory strategy is required")
 	}
 
+	// Build prompt config from builder options (needed for both PromptService and agent.config)
+	// This is used by PromptService and also stored in agent.config for buildPromptSlots()
+	promptConfig := buildPromptConfigFromOptions(opts)
+
 	// Build services from components
-	services, err := buildAgentServicesDirect(opts)
+	services, err := buildAgentServicesDirect(opts, promptConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build agent services: %w", err)
 	}
@@ -70,15 +74,21 @@ func NewAgentDirect(opts AgentBuilderOptions) (*Agent, error) {
 	// Default timeout
 	awaitTimeout := 10 * time.Minute
 
-	// Build agent config for checkpoint/HITL, A2A card, Security, StructuredOutput
-	// This config is needed for GetAgentCard() and other methods that read from agent.config
+	// Build agent config for checkpoint/HITL, A2A card, Security, StructuredOutput, Prompt
+	// This config is needed for GetAgentCard(), buildPromptSlots(), getInputTimeout(), and other methods that read from agent.config
+	// Note: LLM field is not set here because it's only used for tracing and defaults to empty string.
+	// For programmatic agents, we don't have the LLM provider name string (only the provider instance).
 	var agentConfig *config.AgentConfig
-	if opts.TaskConfig != nil || opts.Security != nil || opts.StructuredOutput != nil || opts.A2ACard != nil {
+	hasPromptConfig := promptConfig.SystemPrompt != "" || promptConfig.PromptSlots != nil || (promptConfig.IncludeContext != nil && *promptConfig.IncludeContext)
+	if opts.TaskConfig != nil || opts.Security != nil || opts.StructuredOutput != nil || opts.A2ACard != nil || hasPromptConfig {
 		agentConfig = &config.AgentConfig{
 			Task:             opts.TaskConfig,
 			Security:         opts.Security,
 			StructuredOutput: opts.StructuredOutput,
 			A2A:              opts.A2ACard,
+			Prompt:           promptConfig,
+			// LLM field is intentionally not set - it's only used for tracing and defaults to empty string
+			// For programmatic agents, we don't have the LLM provider name string (only the instance)
 		}
 	}
 
@@ -100,8 +110,27 @@ func NewAgentDirect(opts AgentBuilderOptions) (*Agent, error) {
 	return agent, nil
 }
 
+// buildPromptConfigFromOptions builds PromptConfig from AgentBuilderOptions
+func buildPromptConfigFromOptions(opts AgentBuilderOptions) config.PromptConfig {
+	promptConfig := config.PromptConfig{}
+	if opts.SystemPrompt != "" {
+		promptConfig.SystemPrompt = opts.SystemPrompt
+	}
+	if opts.PromptSlots != nil {
+		promptConfig.PromptSlots = &config.PromptSlotsConfig{
+			SystemRole:   opts.PromptSlots.SystemRole,
+			Instructions: opts.PromptSlots.Instructions,
+			UserGuidance: opts.PromptSlots.UserGuidance,
+		}
+	}
+	if opts.IncludeContext != nil {
+		promptConfig.IncludeContext = opts.IncludeContext
+	}
+	return promptConfig
+}
+
 // buildAgentServicesDirect builds agent services from components
-func buildAgentServicesDirect(opts AgentBuilderOptions) (reasoning.AgentServices, error) {
+func buildAgentServicesDirect(opts AgentBuilderOptions, promptConfig config.PromptConfig) (reasoning.AgentServices, error) {
 	// LLM Service
 	llmService := NewLLMService(opts.LLMProvider)
 
@@ -162,22 +191,7 @@ func buildAgentServicesDirect(opts AgentBuilderOptions) (reasoning.AgentServices
 		longTermConfig,
 	)
 
-	// Prompt Service
-	promptConfig := config.PromptConfig{}
-	if opts.SystemPrompt != "" {
-		promptConfig.SystemPrompt = opts.SystemPrompt
-	}
-	if opts.PromptSlots != nil {
-		promptConfig.PromptSlots = &config.PromptSlotsConfig{
-			SystemRole:   opts.PromptSlots.SystemRole,
-			Instructions: opts.PromptSlots.Instructions,
-			UserGuidance: opts.PromptSlots.UserGuidance,
-		}
-	}
-	if opts.IncludeContext != nil {
-		promptConfig.IncludeContext = opts.IncludeContext
-	}
-
+	// Prompt Service (reuse promptConfig built earlier)
 	promptService := NewPromptService(promptConfig, contextService, historyService)
 
 	// Registry Service
