@@ -1,47 +1,33 @@
+# OAuth Demo Configuration - Minimal Required Setup
+# Uses Auth0 environment variables from .env file:
+#   - AUTH0_DOMAIN (e.g., your-tenant.auth0.com)
+#   - AUTH0_AUDIENCE (e.g., hector-api)
+# 
+# IMPORTANT: Authentication is ENABLED only when both variables are set.
+# If any are missing, authentication is DISABLED and all requests are allowed.
 global:
   a2a_server:
     host: "0.0.0.0"
     port: 8080
     base_url: "http://localhost:8080"
   auth:
-    jwks_url: "https://your-auth-provider.com/.well-known/jwks.json"
-    issuer: "https://your-auth-provider.com"
-    audience: "hector-api"
+    # OAuth2/OIDC Provider Configuration (Auth0)
+    # JWKS URL and Issuer are constructed from AUTH0_DOMAIN
+    jwks_url: "https://${AUTH0_DOMAIN}/.well-known/jwks.json"
+    issuer: "https://${AUTH0_DOMAIN}/"
+    audience: "${AUTH0_AUDIENCE}"
+
 agents:
-  public_agent:
-    visibility: public
-    name: "Public Agent"
-    description: "Accessible without authentication"
-    llm: "main-llm"
-    reasoning:
-      engine: "chain-of-thought"
-    prompt:
-      system_prompt: |
-        You are a helpful assistant accessible to everyone.
   secure_agent:
-    visibility: public
     name: "Secure Agent"
-    description: "Requires valid JWT token"
+    description: "Requires valid OAuth JWT token"
     llm: "main-llm"
-    reasoning:
-      engine: "chain-of-thought"
     prompt:
       system_prompt: |
         You are a secure assistant. Only authenticated users can access you.
-  helper_agent:
-    visibility: private
-    name: "Helper Agent"
-    description: "Internal use only"
-    llm: "main-llm"
-    reasoning:
-      engine: "chain-of-thought"
-    prompt:
-      system_prompt: |
-        You are an internal helper agent.
+
 llms:
   main-llm:
     type: "openai"
     model: "gpt-4o-mini"
     api_key: "${OPENAI_API_KEY}"
-    temperature: 0.7
-    max_tokens: 4000
