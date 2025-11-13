@@ -55,8 +55,8 @@ invalid_field: value
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			k := loadYAML(t, tt.yaml)
-			result, err := ValidateConfigStructure(k)
+			data := loadYAML(t, tt.yaml)
+			result, err := ValidateConfigStructure(data)
 			if err != nil {
 				t.Fatalf("validation check failed: %v", err)
 			}
@@ -117,8 +117,8 @@ ageents:
   test: {}
 random_field: value
 `
-	k := loadYAML(t, yaml)
-	result, err := ValidateConfigStructure(k)
+	data := loadYAML(t, yaml)
+	result, err := ValidateConfigStructure(data)
 	if err != nil {
 		t.Fatalf("validation check failed: %v", err)
 	}

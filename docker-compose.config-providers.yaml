@@ -1,0 +1,79 @@
+services:
+  consul:
+    image: hashicorp/consul:1.17
+    container_name: hector-consul
+    ports:
+      - "8500:8500"  # HTTP API
+      - "8600:8600"  # DNS
+    environment:
+      - CONSUL_BIND_INTERFACE=eth0
+    command: agent -server -ui -bootstrap-expect=1 -client=0.0.0.0
+    volumes:
+      - consul-data:/consul/data
+    networks:
+      - hector-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8500/v1/status/leader"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.9
+    container_name: hector-etcd
+    ports:
+      - "2379:2379"  # Client API
+      - "2380:2380"  # Peer communication
+    environment:
+      - ETCD_NAME=etcd0
+      - ETCD_DATA_DIR=/etcd-data
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd:2380
+      - ETCD_INITIAL_CLUSTER=etcd0=http://etcd:2380
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster-1
+      - ETCD_INITIAL_CLUSTER_STATE=new
+    hostname: etcd
+    volumes:
+      - etcd-data:/etcd-data
+    networks:
+      - hector-network
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: hector-zookeeper
+    ports:
+      - "2181:2181"  # Client port
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - hector-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  consul-data:
+  etcd-data:
+  zookeeper-data:
+  zookeeper-logs:
+
+networks:
+  hector-network:
+    driver: bridge
+

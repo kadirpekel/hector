@@ -5,28 +5,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/knadh/koanf/parsers/yaml"
-	"github.com/knadh/koanf/providers/confmap"
-	"github.com/knadh/koanf/v2"
+	"gopkg.in/yaml.v3"
 )
 
-func loadYAML(t *testing.T, yamlStr string) *koanf.Koanf {
+func loadYAML(t *testing.T, yamlStr string) map[string]interface{} {
 	t.Helper()
 
-	// Parse YAML into a map first
-	parser := yaml.Parser()
-	data, err := parser.Unmarshal([]byte(yamlStr))
-	if err != nil {
+	var data map[string]interface{}
+	if err := yaml.Unmarshal([]byte(yamlStr), &data); err != nil {
 		t.Fatalf("failed to parse YAML: %v", err)
 	}
 
-	// Load into koanf using confmap
-	k := koanf.New(".")
-	if err := k.Load(confmap.Provider(data, "."), nil); err != nil {
-		t.Fatalf("failed to load config: %v", err)
-	}
-
-	return k
+	return data
 }
 
 func TestValidateConfigStructure_ValidConfig(t *testing.T) {
@@ -41,9 +31,9 @@ llms:
   openai:
     model: gpt-4
 `
-	k := loadYAML(t, validYAML)
+	data := loadYAML(t, validYAML)
 
-	result, err := ValidateConfigStructure(k)
+	result, err := ValidateConfigStructure(data)
 	if err != nil {
 		t.Fatalf("validation failed: %v", err)
 	}
@@ -118,9 +108,9 @@ global:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			k := loadYAML(t, tt.yaml)
+			data := loadYAML(t, tt.yaml)
 
-			result, err := ValidateConfigStructure(k)
+			result, err := ValidateConfigStructure(data)
 			if err != nil {
 				t.Fatalf("validation check failed: %v", err)
 			}
@@ -204,9 +194,9 @@ name:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			k := loadYAML(t, tt.yaml)
+			data := loadYAML(t, tt.yaml)
 
-			result, err := ValidateConfigStructure(k)
+			result, err := ValidateConfigStructure(data)
 			if err != nil {
 				t.Fatalf("validation check failed: %v", err)
 			}

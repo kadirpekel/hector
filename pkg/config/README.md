@@ -17,7 +17,7 @@ The configuration system is built on a **unified processing pipeline** that ensu
 
 Phase 1: LOAD
   ├─ Source: File / Consul / Etcd / ZooKeeper / Zero-Config
-  ├─ Parser: YAML/JSON (handled by koanf)
+  ├─ Parser: YAML/JSON (direct parsing)
   └─ Output: Raw Config struct
 
 Phase 2: EXPAND
@@ -38,7 +38,7 @@ Phase 4: VALIDATE
 
 ### Loader
 
-**`koanf_loader.go`** - **Unified Configuration Loader**
+**`loader.go`** - **Unified Configuration Loader**
    - Supports: File, Consul, Etcd, ZooKeeper
    - Features: Reactive watching, environment variable expansion
    - **Always processes through the pipeline**
@@ -46,10 +46,12 @@ Phase 4: VALIDATE
 
 ### Providers
 
-- **File**: Built-in koanf file provider (YAML)
-- **Consul**: Built-in koanf consul provider (JSON)
-- **Etcd**: Built-in koanf etcd provider (JSON)
-- **ZooKeeper**: Custom provider (YAML) - koanf doesn't have one
+- **File**: Direct file reading with YAML/JSON parser (YAML standard)
+- **Consul**: Direct Consul API with YAML/JSON parser (YAML standard)
+- **Etcd**: Direct Etcd client with YAML/JSON parser (YAML standard)
+- **ZooKeeper**: Custom provider with YAML/JSON parser (YAML standard)
+
+**Note**: All providers support YAML as the standard format. JSON is supported as a fallback for compatibility.
 
 ### Configuration Flow
 
@@ -57,7 +59,7 @@ Phase 4: VALIDATE
 ```
 CLI Command / Runtime
     ↓
-koanf_loader.go: LoadConfig()
+loader.go: LoadConfig()
     ↓
 Provider → Parser → Raw Config
     ↓
@@ -196,18 +198,17 @@ When a change is detected:
 # Run config tests
 go test ./pkg/config/...
 
-# Test with real Consul
-docker-compose -f docker-compose.consul.yaml up -d
-./test-consul-watch.sh
+# Test with real providers
+docker-compose -f docker-compose.config-providers.yaml up -d
+./test-config-providers.sh consul --watch
 ```
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `koanf_loader.go` | Main distributed config loader (koanf-based) |
-| `loader.go` | Legacy file-only loader (for tests) |
-| `zookeeper_provider.go` | Custom ZooKeeper provider for koanf |
+| `loader.go` | Main distributed config loader |
+| `zookeeper_provider.go` | Custom ZooKeeper provider |
 | `config.go` | Main Config struct and validation |
 | `types.go` | All configuration types |
 | `env.go` | Environment variable expansion |

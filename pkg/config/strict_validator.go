@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/knadh/koanf/v2"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -108,27 +107,22 @@ func (r *StrictValidationResult) FormatErrors() string {
 	return sb.String()
 }
 
-// ValidateConfigStructure performs strict validation on raw config data
+// ValidateConfigStructure validates config structure from a map[string]interface{}
 // This catches typos, unknown fields, and incorrect nesting BEFORE
 // the config is processed, providing early feedback to users
-func ValidateConfigStructure(k *koanf.Koanf) (*StrictValidationResult, error) {
+func ValidateConfigStructure(rawMap map[string]interface{}) (*StrictValidationResult, error) {
 	result := &StrictValidationResult{
 		UnknownFields: []FieldError{},
 		TypeErrors:    []FieldError{},
 		Warnings:      []FieldError{},
 	}
 
-	// Try to unmarshal with strict error detection
 	cfg := &Config{}
-
-	// Use mapstructure with ErrorUnused to catch unknown fields
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		Result:      cfg,
-		ErrorUnused: true, // This is the key: error on unknown fields
-		TagName:     "yaml",
-		// Weak type coercion disabled - catch type mismatches
+		Result:           cfg,
+		ErrorUnused:      true,
+		TagName:          "yaml",
 		WeaklyTypedInput: false,
-		// Decode hook for better error messages
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
 			mapstructure.StringToTimeDurationHookFunc(),
 			mapstructure.StringToSliceHookFunc(","),
@@ -138,10 +132,7 @@ func ValidateConfigStructure(k *koanf.Koanf) (*StrictValidationResult, error) {
 		return nil, fmt.Errorf("failed to create decoder: %w", err)
 	}
 
-	// Unmarshal and collect ALL errors
-	rawMap := k.Raw()
 	if err := decoder.Decode(rawMap); err != nil {
-		// Collect all errors instead of stopping at the first one
 		collectValidationErrors(err, rawMap, result)
 	}
 
@@ -394,7 +385,6 @@ func min(a, b, c int) int {
 }
 
 // ValidateConfigBytes validates raw YAML/JSON bytes for structural issues
-// This would require additional implementation to parse and create a koanf instance
 func ValidateConfigBytes(data []byte, format string) (*StrictValidationResult, error) {
 	// This is a placeholder for future implementation if needed
 	// For now, users should use the full config loader which does strict validation automatically

@@ -26,9 +26,9 @@ Hector addresses these needs through distributed configuration backends.
 
 ## Configuration Storage Format
 
-### File & ZooKeeper: YAML Format
+### YAML: Standard Format for All Providers
 
-Local files and ZooKeeper use **YAML format** for human readability:
+**All providers (File, Consul, Etcd, ZooKeeper) support YAML as the standard format:**
 
 ```yaml
 version: "1.0"
@@ -46,9 +46,9 @@ agents:
     llm: openai
 ```
 
-### Consul & Etcd: JSON Format
+### JSON: Fallback Support
 
-Consul and Etcd use **JSON format** (their native format):
+JSON is supported as a fallback for all providers. The system automatically detects and parses both formats:
 
 ```json
 {
@@ -70,7 +70,12 @@ Consul and Etcd use **JSON format** (their native format):
 }
 ```
 
-**Note**: You can convert between formats:
+**Format Detection**: The loader tries YAML first (since YAML is a superset of JSON), then falls back to JSON if YAML parsing fails. This means:
+- ✅ YAML configs work with all providers (recommended)
+- ✅ JSON configs work with all providers (fallback)
+- ✅ No format conversion needed between providers
+
+**Note**: You can convert between formats if needed:
 ```bash
 # YAML to JSON
 yq eval -o=json configs/production.yaml > configs/production.json
@@ -94,12 +99,12 @@ hector serve --config configs/production.yaml --config-watch
 ### Consul Backend
 
 ```bash
-# Convert YAML to JSON and upload to Consul
-yq eval -o=json configs/production.yaml | \
-  curl -X PUT -d @- http://localhost:8500/v1/kv/hector/production
+# Upload YAML directly (recommended)
+curl -X PUT --data-binary @configs/production.yaml \
+  http://localhost:8500/v1/kv/hector/production
 
-# Or upload JSON directly
-curl -X PUT -d @configs/production.json \
+# Or upload JSON (also supported)
+curl -X PUT --data-binary @configs/production.json \
   http://localhost:8500/v1/kv/hector/production
 
 # Run with Consul backend
@@ -117,11 +122,11 @@ hector serve --config hector/production --config-type consul \
 ### Etcd Backend
 
 ```bash
-# Convert YAML to JSON and upload to Etcd
-yq eval -o=json configs/production.yaml | etcdctl put /hector/production
+# Upload YAML directly (recommended)
+cat configs/production.yaml | etcdctl put /hector/production
 
-# Or use JSON file
-etcdctl put /hector/production < configs/production.json
+# Or upload JSON (also supported)
+cat configs/production.json | etcdctl put /hector/production
 
 # Run with Etcd backend
 hector serve --config /hector/production --config-type etcd
@@ -135,9 +140,30 @@ hector serve --config /hector/production --config-type etcd \
 ### ZooKeeper Backend
 
 ```bash
-# Upload configuration to ZooKeeper (using zkCli or similar)
+# Upload configuration to ZooKeeper (using Python kazoo)
+python3 << PYTHON
+from kazoo.client import KazooClient
+import yaml
+
+zk = KazooClient(hosts='127.0.0.1:2181')
+zk.start()
+
+with open('configs/production.yaml', 'r') as f:
+    config_yaml = f.read()
+
+zk.ensure_path('/hector')
+if zk.exists('/hector/production'):
+    zk.set('/hector/production', config_yaml.encode('utf-8'))
+else:
+    zk.create('/hector/production', config_yaml.encode('utf-8'), ephemeral=False)
+
+zk.stop()
+PYTHON
+
+# Or using zkCli
+docker exec -it hector-zookeeper zkCli.sh -server localhost:2181
 create /hector ""
-create /hector/production "<yaml content>"
+create /hector/production "$(cat configs/production.yaml)"
 
 # Run with ZooKeeper backend
 hector serve --config /hector/production --config-type zookeeper
@@ -208,7 +234,8 @@ hector serve --config configs/dev.yaml --config-watch --debug
 
 ```bash
 # Upload config
-consul kv put staging/hector @configs/staging.yaml
+curl -X PUT --data-binary @configs/staging.yaml \
+  http://localhost:8500/v1/kv/staging/hector
 
 # Run
 hector serve --config staging/hector --config-type consul --config-watch
@@ -510,8 +537,8 @@ docker run -d --name=zookeeper -p 2181:2181 zookeeper
 # Current: File-based
 hector serve --config configs/production.yaml
 
-# Upload to backend
-curl -X PUT -d @configs/production.yaml \
+# Upload to backend (YAML works for all)
+curl -X PUT --data-binary @configs/production.yaml \
   http://localhost:8500/v1/kv/hector/production
 
 # Test new backend
@@ -556,6 +583,6 @@ Distributed configuration management transforms Hector from a single-instance ap
 ✅ **Multi-Instance**: Consistent configuration across deployments  
 ✅ **A2A Integration**: Dynamic agent orchestration  
 ✅ **Enterprise Features**: ACLs, audit trails, versioning  
+✅ **Format Flexibility**: YAML standard, JSON fallback for all providers
 
 This enables large-scale AI agent deployments with operational excellence and reliability.
-
