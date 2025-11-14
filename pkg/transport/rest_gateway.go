@@ -914,13 +914,15 @@ func (g *RESTGateway) handleJSONRPCAgentScoped(w http.ResponseWriter, r *http.Re
 
 	slog.Debug("JSON-RPC request", "agent", agentID, "method", rpcReq.Method, "id", rpcReq.ID)
 
-	// Create context with agent metadata
-	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
+	// Create incoming metadata for the gRPC service (server-side)
+	md := metadata.Pairs("agent-name", agentID)
 
-	// Forward Authorization header
+	// Forward Authorization header to gRPC metadata (for auth interceptor)
 	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
-		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
+		md = metadata.Join(md, metadata.Pairs("authorization", authHeader))
 	}
+
+	ctx := metadata.NewIncomingContext(r.Context(), md)
 
 	// Handle JSON-RPC methods
 	mappedParams := applyA2AFieldMapping(rpcReq.Params)
@@ -1115,13 +1117,15 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 
 	slog.Debug("JSON-RPC Stream request", "agent", agentID, "method", rpcReq.Method)
 
-	// Create context with agent metadata
-	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
+	// Create incoming metadata for the gRPC service (server-side)
+	md := metadata.Pairs("agent-name", agentID)
 
-	// Forward Authorization header
+	// Forward Authorization header to gRPC metadata (for auth interceptor)
 	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
-		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", authHeader)
+		md = metadata.Join(md, metadata.Pairs("authorization", authHeader))
 	}
+
+	ctx := metadata.NewIncomingContext(r.Context(), md)
 
 	// Handle streaming methods
 	switch rpcReq.Method {
