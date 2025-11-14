@@ -7,6 +7,27 @@ import (
 	hectorcontext "github.com/kadirpekel/hector/pkg/context"
 )
 
+// Built-in tool names - single source of truth
+var builtInToolNames = map[string]bool{
+	"execute_command": true,
+	"write_file":      true,
+	"read_file":       true,
+	"search_replace":  true,
+	"apply_patch":     true,
+	"grep_search":     true,
+	"search":          true,
+	"todo":            true,
+	"agent_call":      true,
+	"web_request":     true,
+}
+
+// Constants for context building
+const (
+	maxDescriptionLength    = 100
+	maxContextDocuments     = 5
+	maxContextContentLength = 500
+)
+
 // AgentContextOptions controls how agent context is built
 type AgentContextOptions struct {
 	// OnlySubAgents: if true, only list sub-agents from config; if false, list all available agents
@@ -138,20 +159,6 @@ func BuildAvailableToolsContext(state *ReasoningState) string {
 	searchOps := []string{}
 	otherOps := []string{}
 
-	// Common built-in tool patterns
-	builtInPatterns := map[string]bool{
-		"execute_command": true,
-		"write_file":      true,
-		"read_file":       true,
-		"search_replace":  true,
-		"apply_patch":     true,
-		"grep_search":     true,
-		"search":          true,
-		"todo":            true,
-		"agent_call":      true,
-		"web_request":     true,
-	}
-
 	fileToolPatterns := []string{"write_file", "read_file", "search_replace", "apply_patch"}
 	codeToolPatterns := []string{"grep_search", "search"}
 	searchToolPatterns := []string{"search", "grep_search"}
@@ -160,7 +167,7 @@ func BuildAvailableToolsContext(state *ReasoningState) string {
 		name := toolDef.Name
 
 		// Check if it's a known built-in
-		if builtInPatterns[name] {
+		if builtInToolNames[name] {
 			builtIn = append(builtIn, name)
 
 			// Also categorize by function
@@ -242,22 +249,9 @@ func BuildAvailableMCPIntegrationsContext(state *ReasoningState) string {
 	}
 
 	// Identify likely MCP tools (tools that aren't standard built-ins)
-	builtInNames := map[string]bool{
-		"execute_command": true,
-		"write_file":      true,
-		"read_file":       true,
-		"search_replace":  true,
-		"apply_patch":     true,
-		"grep_search":     true,
-		"search":          true,
-		"todo":            true,
-		"agent_call":      true,
-		"web_request":     true,
-	}
-
 	mcpTools := []string{}
 	for _, toolDef := range toolDefs {
-		if !builtInNames[toolDef.Name] {
+		if !builtInToolNames[toolDef.Name] {
 			mcpTools = append(mcpTools, toolDef.Name)
 		}
 	}
@@ -277,8 +271,8 @@ func BuildAvailableMCPIntegrationsContext(state *ReasoningState) string {
 			}
 		}
 
-		if desc != "" && len(desc) > 100 {
-			desc = desc[:100] + "..."
+		if desc != "" && len(desc) > maxDescriptionLength {
+			desc = desc[:maxDescriptionLength] + "..."
 		}
 
 		if desc != "" {
@@ -310,6 +304,47 @@ func BuildMemoryContext(state *ReasoningState) string {
 	context += "You can reference past interactions and build on previous context."
 
 	return context
+}
+
+// BuildCommonContext builds all common context that should be available to all strategies
+// This includes: tools, document stores, memory, and other shared resources
+// Strategies should call this and append their strategy-specific context
+func BuildCommonContext(state *ReasoningState) string {
+	if state == nil {
+		return ""
+	}
+
+	var contextParts []string
+
+	// Document stores (available to all)
+	storesList := BuildAvailableDocumentStoresContext(state)
+	if storesList != "" {
+		contextParts = append(contextParts, storesList)
+	}
+
+	// Tool categorization (available to all)
+	toolsList := BuildAvailableToolsContext(state)
+	if toolsList != "" {
+		contextParts = append(contextParts, toolsList)
+	}
+
+	// MCP integration details (available to all)
+	mcpList := BuildAvailableMCPIntegrationsContext(state)
+	if mcpList != "" {
+		contextParts = append(contextParts, mcpList)
+	}
+
+	// Memory information (available to all)
+	memoryInfo := BuildMemoryContext(state)
+	if memoryInfo != "" {
+		contextParts = append(contextParts, memoryInfo)
+	}
+
+	if len(contextParts) == 0 {
+		return ""
+	}
+
+	return strings.Join(contextParts, "\n\n")
 }
 
 // BuildAvailableDocumentStoresContext builds context string listing available document stores

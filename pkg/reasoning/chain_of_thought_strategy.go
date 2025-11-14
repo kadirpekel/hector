@@ -118,36 +118,18 @@ func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) stri
 		}
 	}
 
-	// Inject sub-agent information if available
+	// Build common context (tools, stores, memory, etc.) - shared across all strategies
+	commonContext := BuildCommonContext(state)
+	if commonContext != "" {
+		contextParts = append(contextParts, commonContext)
+	}
+
+	// Inject strategy-specific context: sub-agent information
 	if len(state.SubAgents()) > 0 && state.GetServices().Registry() != nil {
 		agentsList := BuildAvailableAgentsContext(state, DefaultAgentContextOptions())
 		if agentsList != "" {
 			contextParts = append(contextParts, agentsList)
 		}
-	}
-
-	// Inject document store information if available
-	storesList := BuildAvailableDocumentStoresContext(state)
-	if storesList != "" {
-		contextParts = append(contextParts, storesList)
-	}
-
-	// Inject tool categorization if available
-	toolsList := BuildAvailableToolsContext(state)
-	if toolsList != "" {
-		contextParts = append(contextParts, toolsList)
-	}
-
-	// Inject MCP integration details if available
-	mcpList := BuildAvailableMCPIntegrationsContext(state)
-	if mcpList != "" {
-		contextParts = append(contextParts, mcpList)
-	}
-
-	// Inject memory information if available
-	memoryInfo := BuildMemoryContext(state)
-	if memoryInfo != "" {
-		contextParts = append(contextParts, memoryInfo)
 	}
 
 	if len(contextParts) == 0 {

@@ -119,13 +119,15 @@ func (s *DefaultPromptService) BuildMessages(
 		if err == nil && len(contextResults) > 0 {
 			var contextText strings.Builder
 			contextText.WriteString("Relevant context from documents:\n")
+			maxDocs := 5 // TODO: Make this configurable
+			maxContentLen := 500
 			for i, doc := range contextResults {
-				if i >= 5 {
+				if i >= maxDocs {
 					break
 				}
 				content := doc.Content
-				if len(content) > 500 {
-					content = content[:500] + "..."
+				if len(content) > maxContentLen {
+					content = content[:maxContentLen] + "..."
 				}
 				contextText.WriteString(fmt.Sprintf("- %s\n", content))
 			}
