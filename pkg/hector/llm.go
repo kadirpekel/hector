@@ -28,7 +28,7 @@ func NewLLMProvider(providerType string) *LLMProviderBuilder {
 		providerType: providerType,
 		temperature:  0.7,
 		maxTokens:    8000,
-		timeout:      60,
+		timeout:      600, // Default: 10 minutes
 		maxRetries:   5,
 		retryDelay:   2,
 	}

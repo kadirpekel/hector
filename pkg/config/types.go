@@ -297,7 +297,7 @@ func (c *LLMProviderConfig) SetDefaults() {
 		c.MaxTokens = 8000
 	}
 	if c.Timeout == 0 {
-		c.Timeout = 60
+		c.Timeout = 600 // Default: 10 minutes
 	}
 	if c.MaxRetries == 0 {
 
