@@ -384,10 +384,10 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 	}, nil
 }
 
-// ExecuteStreaming implements StreamingTool interface for agent_call
-// It streams responses from the called agent incrementally
-// Note: Currently uses SendMessage (non-streaming) and streams the result chunks as they're extracted.
-// TODO: Enhance AgentRegistry to support streaming clients for true real-time streaming support.
+// ExecuteStreaming implements StreamingTool interface for agent_call.
+// It streams responses from the called agent incrementally.
+// True streaming is supported via StreamingAgentClient interface (see line 23).
+// Non-streaming agents gracefully fall back to SendMessage with pseudo-streaming.
 func (t *AgentCallTool) ExecuteStreaming(ctx context.Context, args map[string]interface{}, resultCh chan<- string) (ToolResult, error) {
 	start := time.Now()
 
@@ -410,14 +410,15 @@ func (t *AgentCallTool) ExecuteStreaming(ctx context.Context, args map[string]in
 	request := t.buildAgentRequest(agentID, task)
 
 	// Try to use true streaming if the agent supports it
-	// Check if agent implements StreamingAgentClient (external agents)
+	// True streaming is supported via StreamingAgentClient interface (see line 23).
+	// Non-streaming agents gracefully fall back to SendMessage with pseudo-streaming.
 	if streamingClient, ok := targetAgent.(StreamingAgentClient); ok {
 		return t.executeStreamingMessage(ctx, agentID, task, streamingClient, request.Request, resultCh, start)
 	}
 
 	// Fallback to non-streaming SendMessage (for local agents or agents without streaming support)
-	// Note: Local agents would require creating a streaming server wrapper, which is complex
-	// For now, we use SendMessage and stream the result chunks as they're extracted
+	// Note: Local agents would require creating a streaming server wrapper, which is complex.
+	// For now, we use SendMessage and stream the result chunks as they're extracted.
 	response, err := targetAgent.SendMessage(ctx, request)
 	if err != nil {
 		errorResult, callErr := t.buildAgentCallError(agentID, err)

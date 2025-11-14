@@ -941,52 +941,13 @@ func (a *Agent) executeTools(
 		}
 
 		// Check if tool implements StreamingTool interface
-		// Use anonymous interface matching the actual StreamingTool interface signature
-		type streamingToolInterface interface {
-			ExecuteStreaming(ctx context.Context, args map[string]interface{}, resultCh chan<- string) (tools.ToolResult, error)
-		}
-
-		if _, ok := tool.(streamingToolInterface); ok {
-			// Assert to full StreamingTool interface for orchestrator
-			// We know it implements StreamingTool because it has ExecuteStreaming
-			fullStreamingTool, ok := tool.(tools.StreamingTool)
-			if !ok {
-				// Fallback to non-streaming if assertion fails
-				slog.Warn("Tool implements ExecuteStreaming but not full StreamingTool interface", "tool", toolCall.Name)
-				result, metadata, execErr := toolService.ExecuteToolCall(ctx, toolCall)
-				resultContent := result
-				errorStr := ""
-				if execErr != nil {
-					if resultContent == "" {
-						resultContent = fmt.Sprintf("Error: %v", execErr)
-					}
-					errorStr = execErr.Error()
-				}
-				a2aResult := &protocol.ToolResult{
-					ToolCallID: toolCall.ID,
-					Content:    resultContent,
-					Error:      errorStr,
-				}
-				if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPart(a2aResult)); sendErr != nil {
-					slog.Error("Failed to send tool result part", "agent", a.name, "error", sendErr)
-					return results
-				}
-				results = append(results, reasoning.ToolResult{
-					ToolCall:   toolCall,
-					Content:    resultContent,
-					Error:      execErr,
-					ToolCallID: toolCall.ID,
-					ToolName:   toolCall.Name,
-					Metadata:   metadata,
-				})
-				continue
-			}
-
+		// Directly assert to StreamingTool to avoid double type checking
+		if streamingTool, ok := tool.(tools.StreamingTool); ok {
 			// Use streaming orchestrator to handle streaming execution
 			const streamingChannelBufferSize = 10
 			orchestrator := tools.NewStreamingOrchestrator(streamingChannelBufferSize)
 
-			finalResult, execErr := orchestrator.Execute(ctx, fullStreamingTool, toolCall.Args, func(content string) error {
+			finalResult, execErr := orchestrator.Execute(ctx, streamingTool, toolCall.Args, func(content string) error {
 				// Emit incremental tool result part
 				a2aResult := &protocol.ToolResult{
 					ToolCallID: toolCall.ID,
