@@ -48,6 +48,17 @@ type Tool interface {
 	GetDescription() string
 }
 
+// StreamingTool is an optional interface for tools that can stream their results incrementally
+// Tools implementing this interface can emit incremental result chunks as they execute
+type StreamingTool interface {
+	Tool
+
+	// ExecuteStreaming executes the tool and streams result chunks to the provided channel
+	// The channel should receive incremental content chunks as they become available
+	// Returns the final ToolResult with complete content and metadata
+	ExecuteStreaming(ctx context.Context, args map[string]interface{}, resultCh chan<- string) (ToolResult, error)
+}
+
 type ToolSource interface {
 	GetName() string
 

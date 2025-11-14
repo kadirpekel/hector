@@ -286,8 +286,8 @@ func (a *Agent) execute(
 
 		maxIterations := a.getMaxIterations(cfg)
 
-		tools := a.services.Tools()
-		toolDefs := tools.GetAvailableTools()
+		toolService := a.services.Tools()
+		toolDefs := toolService.GetAvailableTools()
 
 		for state.Iteration() < maxIterations {
 
@@ -881,7 +881,7 @@ func (a *Agent) executeTools(
 	outputCh chan<- *pb.Part,
 	cfg config.ReasoningConfig,
 ) []reasoning.ToolResult {
-	tools := a.services.Tools()
+	toolService := a.services.Tools()
 
 	results := make([]reasoning.ToolResult, 0, len(toolCalls))
 
@@ -906,7 +906,126 @@ func (a *Agent) executeTools(
 			return results
 		}
 
-		result, metadata, err := tools.ExecuteToolCall(ctx, toolCall)
+		// Check if tool supports streaming
+		tool, err := toolService.GetTool(toolCall.Name)
+		if err != nil {
+			slog.Error("Failed to get tool", "agent", a.name, "tool", toolCall.Name, "error", err)
+			// Fall back to non-streaming execution
+			result, metadata, execErr := toolService.ExecuteToolCall(ctx, toolCall)
+			resultContent := result
+			errorStr := ""
+			if execErr != nil {
+				if resultContent == "" {
+					resultContent = fmt.Sprintf("Error: %v", execErr)
+				}
+				errorStr = execErr.Error()
+			}
+			a2aResult := &protocol.ToolResult{
+				ToolCallID: toolCall.ID,
+				Content:    resultContent,
+				Error:      errorStr,
+			}
+			if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPart(a2aResult)); sendErr != nil {
+				slog.Error("Failed to send tool result part", "agent", a.name, "error", sendErr)
+				return results
+			}
+			results = append(results, reasoning.ToolResult{
+				ToolCall:   toolCall,
+				Content:    resultContent,
+				Error:      execErr,
+				ToolCallID: toolCall.ID,
+				ToolName:   toolCall.Name,
+				Metadata:   metadata,
+			})
+			continue
+		}
+
+		// Check if tool implements StreamingTool interface
+		// Use anonymous interface matching the actual StreamingTool interface signature
+		type streamingToolInterface interface {
+			ExecuteStreaming(ctx context.Context, args map[string]interface{}, resultCh chan<- string) (tools.ToolResult, error)
+		}
+
+		if _, ok := tool.(streamingToolInterface); ok {
+			// Assert to full StreamingTool interface for orchestrator
+			// We know it implements StreamingTool because it has ExecuteStreaming
+			fullStreamingTool, ok := tool.(tools.StreamingTool)
+			if !ok {
+				// Fallback to non-streaming if assertion fails
+				slog.Warn("Tool implements ExecuteStreaming but not full StreamingTool interface", "tool", toolCall.Name)
+				result, metadata, execErr := toolService.ExecuteToolCall(ctx, toolCall)
+				resultContent := result
+				errorStr := ""
+				if execErr != nil {
+					if resultContent == "" {
+						resultContent = fmt.Sprintf("Error: %v", execErr)
+					}
+					errorStr = execErr.Error()
+				}
+				a2aResult := &protocol.ToolResult{
+					ToolCallID: toolCall.ID,
+					Content:    resultContent,
+					Error:      errorStr,
+				}
+				if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPart(a2aResult)); sendErr != nil {
+					slog.Error("Failed to send tool result part", "agent", a.name, "error", sendErr)
+					return results
+				}
+				results = append(results, reasoning.ToolResult{
+					ToolCall:   toolCall,
+					Content:    resultContent,
+					Error:      execErr,
+					ToolCallID: toolCall.ID,
+					ToolName:   toolCall.Name,
+					Metadata:   metadata,
+				})
+				continue
+			}
+
+			// Use streaming orchestrator to handle streaming execution
+			const streamingChannelBufferSize = 10
+			orchestrator := tools.NewStreamingOrchestrator(streamingChannelBufferSize)
+
+			finalResult, execErr := orchestrator.Execute(ctx, fullStreamingTool, toolCall.Args, func(content string) error {
+				// Emit incremental tool result part
+				a2aResult := &protocol.ToolResult{
+					ToolCallID: toolCall.ID,
+					Content:    content,
+					Error:      "",
+				}
+				if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPart(a2aResult)); sendErr != nil {
+					slog.Error("Failed to send streaming tool result chunk", "agent", a.name, "error", sendErr)
+					return sendErr
+				}
+				return nil
+			})
+
+			// Emit final tool result part (in case there were no chunks or to ensure final state)
+			if finalResult.Content != "" || finalResult.Error != "" {
+				a2aResult := &protocol.ToolResult{
+					ToolCallID: toolCall.ID,
+					Content:    finalResult.Content,
+					Error:      finalResult.Error,
+				}
+				if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPart(a2aResult)); sendErr != nil {
+					slog.Error("Failed to send final tool result part", "agent", a.name, "error", sendErr)
+					return results
+				}
+			}
+
+			results = append(results, reasoning.ToolResult{
+				ToolCall:   toolCall,
+				Content:    finalResult.Content,
+				Error:      execErr,
+				ToolCallID: toolCall.ID,
+				ToolName:   toolCall.Name,
+				Metadata:   finalResult.Metadata,
+			})
+			continue
+		}
+
+		// Non-streaming tool execution (existing path)
+		result, metadata, err := toolService.ExecuteToolCall(ctx, toolCall)
 		resultContent := result
 		errorStr := ""
 		if err != nil {
@@ -930,11 +1049,6 @@ func (a *Agent) executeTools(
 			return results
 		}
 
-		// Special handling: if todo_write was called, emit display part immediately
-		if toolCall.Name == "todo_write" && config.BoolValue(cfg.ShowThinking, false) {
-			a.emitTodoDisplay(ctx, outputCh)
-		}
-
 		results = append(results, reasoning.ToolResult{
 			ToolCall:   toolCall,
 			Content:    resultContent,
@@ -943,6 +1057,11 @@ func (a *Agent) executeTools(
 			ToolName:   toolCall.Name,
 			Metadata:   metadata,
 		})
+
+		// Special handling: if todo_write was called, emit display part immediately
+		if toolCall.Name == "todo_write" && config.BoolValue(cfg.ShowThinking, false) {
+			a.emitTodoDisplay(ctx, outputCh)
+		}
 	}
 
 	return results

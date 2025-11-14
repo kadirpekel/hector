@@ -20,6 +20,30 @@ type AgentRegistry interface {
 	GetAgent(name string) (pb.A2AServiceServer, error)
 }
 
+// StreamingAgentClient is an interface for agents that support streaming.
+// This allows us to use true streaming for both local and external agents.
+//
+// Example usage:
+//
+//	resultCh := make(chan string, 10)
+//	go func() {
+//		for chunk := range resultCh {
+//			fmt.Print(chunk) // Process chunks as they arrive
+//		}
+//	}()
+//	streamChan, err := client.StreamMessage(ctx, agentID, message)
+//	if err != nil {
+//		return err
+//	}
+//	for resp := range streamChan {
+//		// Process StreamResponse messages
+//	}
+type StreamingAgentClient interface {
+	// StreamMessage streams messages from the agent in real-time.
+	// Returns a channel of StreamResponse messages that will be closed when streaming completes.
+	StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error)
+}
+
 func NewAgentCallTool(registry AgentRegistry) *AgentCallTool {
 	return &AgentCallTool{
 		name:        "agent_call",
@@ -57,80 +81,82 @@ func (t *AgentCallTool) GetDescription() string {
 	return t.description
 }
 
-func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
-	start := time.Now()
-
+// validateAndExtractArgs validates and extracts agent and task arguments
+// Returns agentID, task, and error if validation fails
+func (t *AgentCallTool) validateAndExtractArgs(args map[string]interface{}) (agentID, task string, err error) {
 	agentID, ok := args["agent"].(string)
 	if !ok {
-
 		if agentID, ok = args["agent_name"].(string); !ok {
-			return ToolResult{
-				Success: false,
-				Error:   "Missing or invalid 'agent' parameter",
-			}, nil
+			return "", "", fmt.Errorf("missing or invalid 'agent' parameter")
 		}
 	}
 
-	task, ok := args["task"].(string)
+	task, ok = args["task"].(string)
 	if !ok {
-
 		if task, ok = args["message"].(string); !ok {
-			return ToolResult{
-				Success: false,
-				Error:   "Missing or invalid 'task' parameter",
-			}, nil
+			return "", "", fmt.Errorf("missing or invalid 'task' parameter")
 		}
 	}
 
 	agentID = strings.TrimSpace(agentID)
 	if agentID == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "agent ID cannot be empty",
-		}, nil
+		return "", "", fmt.Errorf("agent ID cannot be empty")
 	}
 
 	task = strings.TrimSpace(task)
 	if task == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "task cannot be empty",
-		}, nil
+		return "", "", fmt.Errorf("task cannot be empty")
 	}
 
 	if t.registry == nil {
-		return ToolResult{
-			Success: false,
-			Error:   "agent registry not available",
-		}, nil
+		return "", "", fmt.Errorf("agent registry not available")
 	}
 
-	targetAgent, err := t.registry.GetAgent(agentID)
-	if err != nil {
-		// Extract available agents from error message if present
-		errStr := err.Error()
+	return agentID, task, nil
+}
 
-		// Make the error message more actionable for the LLM
-		// The registry error already includes available agents, but we can enhance it
-		var errorMsg string
-		if strings.Contains(errStr, "Available agents:") {
-			// Error already has available agents list - enhance it with explicit instructions
-			// Make it clear and actionable for the LLM without being too harsh
-			errorMsg = fmt.Sprintf("Agent '%s' was not found. The agent name you used does not exist.\n\n%s\n\nTo fix this:\n- Use one of the exact agent IDs listed above\n- Do not invent agent names - only use the IDs from the list above\n\nPlease retry the agent_call tool with the correct agent ID.", agentID, errStr)
-		} else {
-			// Try to get available agents from registry if possible
-			// Note: We can't easily access ListAgents() from the interface, so rely on error message
-			errorMsg = fmt.Sprintf("Agent '%s' not found. %s\n\nPlease check the available agents list in the context and use the correct agent ID.", agentID, errStr)
-		}
-
-		return ToolResult{
-			Success: false,
-			Content: errorMsg, // Put error message in Content so LLM sees it clearly
-			Error:   errorMsg,
-		}, fmt.Errorf("agent '%s' not found: %v", agentID, err)
+// buildAgentNotFoundError creates a user-friendly error message when agent is not found
+func (t *AgentCallTool) buildAgentNotFoundError(agentID string, err error) (ToolResult, error) {
+	errStr := err.Error()
+	var errorMsg string
+	if strings.Contains(errStr, "Available agents:") {
+		errorMsg = fmt.Sprintf("Agent '%s' was not found. The agent name you used does not exist.\n\n%s\n\nTo fix this:\n- Use one of the exact agent IDs listed above\n- Do not invent agent names - only use the IDs from the list above\n\nPlease retry the agent_call tool with the correct agent ID.", agentID, errStr)
+	} else {
+		errorMsg = fmt.Sprintf("Agent '%s' not found. %s\n\nPlease check the available agents list in the context and use the correct agent ID.", agentID, errStr)
 	}
 
-	request := &pb.SendMessageRequest{
+	return ToolResult{
+		Success: false,
+		Content: errorMsg,
+		Error:   errorMsg,
+	}, fmt.Errorf("agent '%s' not found: %v", agentID, err)
+}
+
+// buildAgentCallError creates a user-friendly error message for agent call failures
+func (t *AgentCallTool) buildAgentCallError(agentID string, err error) (ToolResult, error) {
+	errorMsg := fmt.Sprintf("Failed to call agent '%s': %v", agentID, err)
+	errStr := err.Error()
+
+	if strings.Contains(errStr, "connection refused") || strings.Contains(errStr, "no such host") {
+		errorMsg = fmt.Sprintf("Agent '%s' is not reachable at its configured URL. The agent service may be down or the URL is incorrect. Error: %v", agentID, err)
+	} else if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") {
+		errorMsg = fmt.Sprintf("Agent '%s' did not respond within the timeout period. The agent may be overloaded or slow. Error: %v", agentID, err)
+	} else if strings.Contains(errStr, "429") || strings.Contains(errStr, "rate limit") {
+		errorMsg = fmt.Sprintf("Agent '%s' is rate limiting requests. Please wait and try again later. Error: %v", agentID, err)
+	} else if strings.Contains(errStr, "not found") || strings.Contains(errStr, "404") {
+		errorMsg = fmt.Sprintf("Agent '%s' was not found. The agent may not be registered or the agent ID is incorrect. Error: %v", agentID, err)
+	}
+
+	return ToolResult{
+		Success: false,
+		Content: errorMsg,
+		Error:   errorMsg,
+	}, fmt.Errorf("failed to call agent '%s': %v", agentID, err)
+}
+
+// buildAgentRequest creates a SendMessageRequest for calling another agent
+func (t *AgentCallTool) buildAgentRequest(agentID, task string) *pb.SendMessageRequest {
+	return &pb.SendMessageRequest{
 		Request: &pb.Message{
 			MessageId: fmt.Sprintf("agent_call_%s_%d", agentID, time.Now().UnixNano()),
 			ContextId: fmt.Sprintf("%s:agent_call_session", agentID),
@@ -141,66 +167,34 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 			},
 		},
 	}
+}
 
-	response, err := targetAgent.SendMessage(ctx, request)
-	if err != nil {
-		// Provide more descriptive error messages for common failure scenarios
-		errorMsg := fmt.Sprintf("Failed to call agent '%s': %v", agentID, err)
-
-		// Check for common error patterns and provide helpful context
-		errStr := err.Error()
-		if strings.Contains(errStr, "connection refused") || strings.Contains(errStr, "no such host") {
-			errorMsg = fmt.Sprintf("Agent '%s' is not reachable at its configured URL. The agent service may be down or the URL is incorrect. Error: %v", agentID, err)
-		} else if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") {
-			errorMsg = fmt.Sprintf("Agent '%s' did not respond within the timeout period. The agent may be overloaded or slow. Error: %v", agentID, err)
-		} else if strings.Contains(errStr, "429") || strings.Contains(errStr, "rate limit") {
-			errorMsg = fmt.Sprintf("Agent '%s' is rate limiting requests. Please wait and try again later. Error: %v", agentID, err)
-		} else if strings.Contains(errStr, "not found") || strings.Contains(errStr, "404") {
-			errorMsg = fmt.Sprintf("Agent '%s' was not found. The agent may not be registered or the agent ID is incorrect. Error: %v", agentID, err)
-		}
-
-		return ToolResult{
-			Success: false,
-			Content: errorMsg, // Put error message in Content so LLM sees it clearly
-			Error:   errorMsg,
-		}, fmt.Errorf("failed to call agent '%s': %v", agentID, err)
-	}
-
+// extractResponseText extracts response text from SendMessageResponse (non-streaming version)
+func (t *AgentCallTool) extractResponseText(response *pb.SendMessageResponse) string {
 	var responseText string
 	if response.Payload != nil {
 		switch payload := response.Payload.(type) {
 		case *pb.SendMessageResponse_Msg:
 			if payload.Msg != nil {
-				// Extract all text parts (not just the first one)
 				responseText = protocol.ExtractAllTextFromMessage(payload.Msg)
 			}
 		case *pb.SendMessageResponse_Task:
 			if payload.Task != nil {
-				// For task responses, extract text from the task history if available
-				// With blocking=true (default), task should be in a terminal state (COMPLETED, FAILED, etc.)
 				if payload.Task.Status != nil {
 					state := payload.Task.Status.State
-
-					// Handle terminal states (COMPLETED, FAILED, CANCELLED, REJECTED)
 					if state == pb.TaskState_TASK_STATE_COMPLETED ||
 						state == pb.TaskState_TASK_STATE_FAILED ||
 						state == pb.TaskState_TASK_STATE_CANCELLED ||
 						state == pb.TaskState_TASK_STATE_REJECTED {
-
-						// Try to extract text from task history first
 						if taskText := protocol.ExtractTextFromTask(payload.Task); taskText != "" {
 							responseText = taskText
-						} else {
-							// Task in terminal state but no text found - try extracting from message parts
-							// Check status update message first (may contain error info for FAILED)
-							if payload.Task.Status.Update != nil {
-								if statusText := protocol.ExtractAllTextFromMessage(payload.Task.Status.Update); statusText != "" {
-									responseText = statusText
-								}
+						} else if payload.Task.Status.Update != nil {
+							if statusText := protocol.ExtractAllTextFromMessage(payload.Task.Status.Update); statusText != "" {
+								responseText = statusText
 							}
-
-							// If still no text, try extracting from the last agent message in history
-							if responseText == "" && len(payload.Task.History) > 0 {
+						} else {
+							// Try extracting from the last agent message in history
+							if len(payload.Task.History) > 0 {
 								for i := len(payload.Task.History) - 1; i >= 0; i-- {
 									if payload.Task.History[i].Role == pb.Role_ROLE_AGENT {
 										if msgText := protocol.ExtractAllTextFromMessage(payload.Task.History[i]); msgText != "" {
@@ -210,7 +204,6 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 									}
 								}
 							}
-
 							// If still no text, provide informative message based on state
 							if responseText == "" {
 								switch state {
@@ -226,13 +219,10 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 							}
 						}
 					} else {
-						// Task not in terminal state (shouldn't happen with blocking=true, but handle gracefully)
-						// This could happen if task is INPUT_REQUIRED, WORKING, etc.
 						statusStr := state.String()
 						responseText = fmt.Sprintf("Task %s is still %s (expected terminal state with blocking=true)", payload.Task.Id, statusStr)
 					}
 				} else {
-					// Task has no status (shouldn't happen, but handle gracefully)
 					responseText = fmt.Sprintf("Task %s has no status information", payload.Task.Id)
 				}
 			}
@@ -242,6 +232,204 @@ func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}
 	if responseText == "" {
 		responseText = "No response content"
 	}
+
+	return responseText
+}
+
+// processAgentResponse extracts response text from SendMessageResponse and streams it
+func (t *AgentCallTool) processAgentResponse(response *pb.SendMessageResponse, agentID string, resultCh chan<- string) string {
+	responseText := t.extractResponseText(response)
+	if responseText != "" {
+		resultCh <- fmt.Sprintf("[Delegated to: %s]\n\n", agentID)
+		resultCh <- responseText
+	} else {
+		responseText = "No response content"
+		resultCh <- fmt.Sprintf("[Delegated to: %s]\n\n%s", agentID, responseText)
+	}
+	return responseText
+}
+
+// extractTextFromStreamMsg extracts text from a StreamResponse message
+func (t *AgentCallTool) extractTextFromStreamMsg(msg *pb.Message) string {
+	return protocol.ExtractAllTextFromMessage(msg)
+}
+
+// extractTextFromStreamTask extracts text from a StreamResponse task
+func (t *AgentCallTool) extractTextFromStreamTask(task *pb.Task) string {
+	if task.Status != nil {
+		state := task.Status.State
+		// Check if task is in terminal state
+		if state == pb.TaskState_TASK_STATE_COMPLETED ||
+			state == pb.TaskState_TASK_STATE_FAILED ||
+			state == pb.TaskState_TASK_STATE_CANCELLED ||
+			state == pb.TaskState_TASK_STATE_REJECTED {
+			// Extract final text from task
+			if taskText := protocol.ExtractTextFromTask(task); taskText != "" {
+				return taskText
+			} else if task.Status.Update != nil {
+				return protocol.ExtractAllTextFromMessage(task.Status.Update)
+			}
+		}
+	}
+	return ""
+}
+
+// executeStreamingMessage handles true real-time streaming from an agent
+func (t *AgentCallTool) executeStreamingMessage(
+	ctx context.Context,
+	agentID, task string,
+	streamingClient StreamingAgentClient,
+	message *pb.Message,
+	resultCh chan<- string,
+	start time.Time,
+) (ToolResult, error) {
+	// Stream messages in real-time
+	streamChan, err := streamingClient.StreamMessage(ctx, agentID, message)
+	if err != nil {
+		errorResult, callErr := t.buildAgentCallError(agentID, err)
+		resultCh <- errorResult.Content
+		close(resultCh)
+		return errorResult, callErr
+	}
+
+	var responseText strings.Builder
+	prefixSent := false
+
+	// Stream responses in real-time
+	for streamResp := range streamChan {
+		if streamResp == nil {
+			continue
+		}
+
+		// Send delegation prefix on first chunk
+		if !prefixSent {
+			resultCh <- fmt.Sprintf("[Delegated to: %s]\n\n", agentID)
+			prefixSent = true
+		}
+
+		// Handle different payload types
+		switch payload := streamResp.Payload.(type) {
+		case *pb.StreamResponse_Msg:
+			if payload.Msg != nil {
+				text := t.extractTextFromStreamMsg(payload.Msg)
+				if text != "" {
+					responseText.WriteString(text)
+					// Stream the text chunk immediately
+					resultCh <- text
+				}
+			}
+		case *pb.StreamResponse_Task:
+			if payload.Task != nil {
+				text := t.extractTextFromStreamTask(payload.Task)
+				if text != "" {
+					responseText.WriteString(text)
+					resultCh <- text
+				}
+			}
+		}
+	}
+
+	close(resultCh)
+
+	finalText := responseText.String()
+	if finalText == "" {
+		finalText = "No response content"
+	}
+
+	return ToolResult{
+		Success: true,
+		Content: fmt.Sprintf("[Delegated to: %s]\n\n%s", agentID, finalText),
+		Metadata: map[string]interface{}{
+			"agent_id":          agentID,
+			"task":              task,
+			"execution_time_ms": time.Since(start).Milliseconds(),
+			"streaming":         true, // Indicate that true streaming was used
+		},
+	}, nil
+}
+
+func (t *AgentCallTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
+	start := time.Now()
+
+	agentID, task, err := t.validateAndExtractArgs(args)
+	if err != nil {
+		return ToolResult{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
+	}
+
+	targetAgent, err := t.registry.GetAgent(agentID)
+	if err != nil {
+		return t.buildAgentNotFoundError(agentID, err)
+	}
+
+	request := t.buildAgentRequest(agentID, task)
+	response, err := targetAgent.SendMessage(ctx, request)
+	if err != nil {
+		return t.buildAgentCallError(agentID, err)
+	}
+
+	// Reuse response extraction helper
+	responseText := t.extractResponseText(response)
+
+	return ToolResult{
+		Success: true,
+		Content: fmt.Sprintf("[Delegated to: %s]\n\n%s", agentID, responseText),
+		Metadata: map[string]interface{}{
+			"agent_id":          agentID,
+			"task":              task,
+			"execution_time_ms": time.Since(start).Milliseconds(),
+		},
+	}, nil
+}
+
+// ExecuteStreaming implements StreamingTool interface for agent_call
+// It streams responses from the called agent incrementally
+// Note: Currently uses SendMessage (non-streaming) and streams the result chunks as they're extracted.
+// TODO: Enhance AgentRegistry to support streaming clients for true real-time streaming support.
+func (t *AgentCallTool) ExecuteStreaming(ctx context.Context, args map[string]interface{}, resultCh chan<- string) (ToolResult, error) {
+	start := time.Now()
+
+	// Reuse validation helper
+	agentID, task, err := t.validateAndExtractArgs(args)
+	if err != nil {
+		return ToolResult{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
+	}
+
+	// Reuse agent lookup logic
+	targetAgent, err := t.registry.GetAgent(agentID)
+	if err != nil {
+		return t.buildAgentNotFoundError(agentID, err)
+	}
+
+	// Reuse request building helper
+	request := t.buildAgentRequest(agentID, task)
+
+	// Try to use true streaming if the agent supports it
+	// Check if agent implements StreamingAgentClient (external agents)
+	if streamingClient, ok := targetAgent.(StreamingAgentClient); ok {
+		return t.executeStreamingMessage(ctx, agentID, task, streamingClient, request.Request, resultCh, start)
+	}
+
+	// Fallback to non-streaming SendMessage (for local agents or agents without streaming support)
+	// Note: Local agents would require creating a streaming server wrapper, which is complex
+	// For now, we use SendMessage and stream the result chunks as they're extracted
+	response, err := targetAgent.SendMessage(ctx, request)
+	if err != nil {
+		errorResult, callErr := t.buildAgentCallError(agentID, err)
+		// Send error as chunk
+		resultCh <- errorResult.Content
+		close(resultCh)
+		return errorResult, callErr
+	}
+
+	// Reuse response processing helper
+	responseText := t.processAgentResponse(response, agentID, resultCh)
+	close(resultCh)
 
 	return ToolResult{
 		Success: true,

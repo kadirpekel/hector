@@ -25,6 +25,12 @@ type ExternalA2AAgent struct {
 	config        *config.AgentConfig
 }
 
+// StreamMessage implements StreamingAgentClient interface for true streaming support
+func (e *ExternalA2AAgent) StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error) {
+	// Use targetAgentID (remote agent ID) instead of local agentID
+	return e.client.StreamMessage(ctx, e.targetAgentID, message)
+}
+
 // NewExternalA2AAgent creates a proxy to an external A2A agent.
 // The agent is discovered via its agent card, and the appropriate transport is chosen automatically.
 func NewExternalA2AAgent(agentID string, agentConfig *config.AgentConfig) (*ExternalA2AAgent, error) {
