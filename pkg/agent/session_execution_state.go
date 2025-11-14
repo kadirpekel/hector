@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
@@ -73,10 +73,9 @@ func (a *Agent) SaveExecutionStateToSession(
 
 	// Log checkpoint info (handle backward compatibility - old checkpoints may not have phase/type)
 	if execState.Phase != "" || execState.CheckpointType != "" {
-		log.Printf("[Agent:%s] [Checkpoint] Saved execution state for task %s in session %s (phase: %s, type: %s)",
-			a.id, taskID, sessionID, execState.Phase, execState.CheckpointType)
+		slog.Debug("Saved execution state for task", "agent", a.id, "task", taskID, "session", sessionID, "phase", execState.Phase, "type", execState.CheckpointType)
 	} else {
-		log.Printf("[Agent:%s] [HITL] Saved execution state for task %s in session %s", a.id, taskID, sessionID)
+		slog.Debug("Saved execution state for task", "agent", a.id, "task", taskID, "session", sessionID)
 	}
 	return nil
 }
@@ -98,19 +97,19 @@ func (a *Agent) LoadExecutionStateFromSession(
 	}
 
 	if metadata.Metadata == nil {
-		log.Printf("[Agent:%s] [HITL] No metadata found for session %s (task %s)", a.id, sessionID, taskID)
+		slog.Debug("No metadata found for session", "agent", a.id, "session", sessionID, "task", taskID)
 		return nil, fmt.Errorf("no execution state found for task %s", taskID)
 	}
 
 	pendingExecutions, exists := metadata.Metadata[pendingExecutionsKey]
 	if !exists {
-		log.Printf("[Agent:%s] [HITL] No pending_executions key in session %s metadata (task %s). Available keys: %v", a.id, sessionID, taskID, getMetadataKeys(metadata.Metadata))
+		slog.Debug("No pending_executions key in session metadata", "agent", a.id, "session", sessionID, "task", taskID, "available_keys", getMetadataKeys(metadata.Metadata))
 		return nil, fmt.Errorf("no pending executions in session")
 	}
 
 	pendingMap, ok := pendingExecutions.(map[string]interface{})
 	if !ok {
-		log.Printf("[Agent:%s] [HITL] Invalid pending_executions format in session %s (task %s): expected map, got %T", a.id, sessionID, taskID, pendingExecutions)
+		slog.Warn("Invalid pending_executions format in session metadata", "agent", a.id, "session", sessionID, "task", taskID, "got_type", fmt.Sprintf("%T", pendingExecutions))
 		return nil, fmt.Errorf("invalid pending_executions format")
 	}
 
@@ -120,7 +119,7 @@ func (a *Agent) LoadExecutionStateFromSession(
 		for k := range pendingMap {
 			availableTasks = append(availableTasks, k)
 		}
-		log.Printf("[Agent:%s] [HITL] Task %s not found in pending executions for session %s. Available tasks: %v", a.id, taskID, sessionID, availableTasks)
+		slog.Debug("Task not found in pending executions", "agent", a.id, "task", taskID, "session", sessionID, "available_tasks", availableTasks)
 		return nil, fmt.Errorf("execution state not found for task %s", taskID)
 	}
 
@@ -132,10 +131,10 @@ func (a *Agent) LoadExecutionStateFromSession(
 
 	execState, err := DeserializeExecutionState(stateJSON)
 	if err != nil {
-		log.Printf("[Agent:%s] [HITL] Failed to deserialize execution state for task %s in session %s: %v", a.id, taskID, sessionID, err)
+		slog.Error("Failed to deserialize execution state", "agent", a.id, "task", taskID, "session", sessionID, "error", err)
 		return nil, fmt.Errorf("failed to deserialize execution state: %w", err)
 	}
-	log.Printf("[Agent:%s] [HITL] Successfully loaded execution state for task %s from session %s", a.id, taskID, sessionID)
+	slog.Debug("Successfully loaded execution state", "agent", a.id, "task", taskID, "session", sessionID)
 	return execState, nil
 }
 
@@ -193,7 +192,7 @@ func (a *Agent) ClearExecutionStateFromSession(
 		return fmt.Errorf("failed to update session metadata: %w", err)
 	}
 
-	log.Printf("[Agent:%s] [HITL] Cleared execution state for task %s from session %s", a.id, taskID, sessionID)
+	slog.Debug("Cleared execution state", "agent", a.id, "task", taskID, "session", sessionID)
 	return nil
 }
 
@@ -229,7 +228,7 @@ func (a *Agent) shouldUseAsyncHITL() bool {
 	switch mode {
 	case "async":
 		if !hasPersistentSessionStore {
-			log.Printf("[Agent:%s] [HITL] Warning: async HITL mode requested but no persistent session_store configured, falling back to blocking mode", a.id)
+			slog.Warn("Async HITL mode requested but no persistent session_store configured, falling back to blocking mode", "agent", a.id)
 			return false
 		}
 		return true // Explicit async (requires persistent store)

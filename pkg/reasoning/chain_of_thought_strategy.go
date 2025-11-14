@@ -2,7 +2,7 @@ package reasoning
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/kadirpekel/hector/pkg/protocol"
@@ -93,8 +93,7 @@ func (s *ChainOfThoughtStrategy) AfterIteration(
 			toolNames[i] = tc.Name
 		}
 
-		log.Printf("[ChainOfThought] Iteration %d: executed %d tool(s) %v (success: %d, failed: %d)",
-			iteration, len(toolCalls), toolNames, successCount, failCount)
+		slog.Debug("ChainOfThought iteration", "iteration", iteration, "tools_executed", len(toolCalls), "tool_names", toolNames, "success", successCount, "failed", failCount)
 	}
 
 	return nil

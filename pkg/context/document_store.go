@@ -5,7 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -746,7 +746,7 @@ func (ds *DocumentStore) setupFileWatching() error {
 		if info.IsDir() {
 			err := ds.watcher.Add(path)
 			if err != nil {
-				log.Printf("Warning: Failed to watch directory %s: %v", path, err)
+				slog.Warn("Failed to watch directory", "path", path, "error", err)
 			}
 		}
 
@@ -768,7 +768,7 @@ func (ds *DocumentStore) watchFileEvents() {
 			if !ok {
 				return
 			}
-			log.Printf("File watcher error in store %s: %v", ds.name, err)
+			slog.Error("File watcher error in store", "store", ds.name, "error", err)
 		}
 	}
 }
@@ -813,7 +813,7 @@ func (ds *DocumentStore) handleFileEvent(event fsnotify.Event) {
 	case <-ds.ctx.Done():
 		return
 	default:
-		log.Printf("Update channel full for store %s, dropping update for %s", ds.name, event.Name)
+		slog.Warn("Update channel full for store, dropping update", "store", ds.name, "file", event.Name)
 	}
 }
 
@@ -830,7 +830,7 @@ func (ds *DocumentStore) processUpdates() {
 			switch update.Operation {
 			case OperationCreate, OperationModify:
 				// File already re-indexed in handleFileEvent
-				log.Printf("Document updated: %s (operation: %s)", update.FilePath, update.Operation)
+				slog.Debug("Document updated", "file", update.FilePath, "operation", update.Operation)
 			case OperationDelete:
 				// Clean up deleted file from index
 				if ds.searchEngine != nil {
@@ -841,7 +841,7 @@ func (ds *DocumentStore) processUpdates() {
 					}
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					if err := ds.searchEngine.DeleteByFilter(ctx, filter); err != nil {
-						log.Printf("Failed to delete document %s from index: %v", relPath, err)
+						slog.Error("Failed to delete document from index", "path", relPath, "error", err)
 					}
 					cancel()
 				}
@@ -910,8 +910,7 @@ func (ds *DocumentStore) loadIndexState() (map[string]FileIndexInfo, error) {
 	}
 
 	if state.StoreName != ds.name || state.SourcePath != ds.sourcePath {
-		log.Printf("Index state mismatch (store: %s vs %s, path: %s vs %s), rebuilding index",
-			state.StoreName, ds.name, state.SourcePath, ds.sourcePath)
+		slog.Warn("Index state mismatch, rebuilding index", "state_store", state.StoreName, "current_store", ds.name, "state_path", state.SourcePath, "current_path", ds.sourcePath)
 		return make(map[string]FileIndexInfo), nil
 	}
 
@@ -1035,7 +1034,7 @@ func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs m
 		}
 
 		if err := ds.searchEngine.DeleteByFilter(ctx, filter); err != nil {
-			log.Printf("Warning: Failed to delete %s from vector DB: %v", path, err)
+			slog.Warn("Failed to delete from vector DB", "path", path, "error", err)
 		} else {
 			cleanedUpFiles[path] = true
 			successCount++

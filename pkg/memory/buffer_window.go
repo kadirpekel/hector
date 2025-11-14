@@ -2,7 +2,7 @@ package memory
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	hectorcontext "github.com/kadirpekel/hector/pkg/context"
@@ -71,10 +71,10 @@ func (s *BufferWindowStrategy) LoadState(sessionID string, sessionService interf
 
 	for _, msg := range messages {
 		if err := session.AddMessage(msg); err != nil {
-			log.Printf("⚠️  Failed to add message to session: %v", err)
+			slog.Warn("Failed to add message to session", "error", err)
 		}
 	}
 
-	log.Printf("✅ Loaded %d messages (window size: %d) for session %s", len(messages), s.windowSize, sessionID)
+	slog.Info("Loaded messages", "count", len(messages), "window_size", s.windowSize, "session", sessionID)
 	return session, nil
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -245,7 +245,7 @@ func (a *Agent) execute(
 			span.RecordError(err)
 			recordAgentMetrics(spanCtx, time.Since(startTime), 0, err)
 			if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error: Failed to initialize state: %v\n", err))); sendErr != nil {
-				log.Printf("[Agent:%s] Failed to send error to output channel: %v", a.name, sendErr)
+				slog.Error("Failed to send error to output channel", "agent", a.name, "error", sendErr)
 			}
 			return
 		}
@@ -265,7 +265,7 @@ func (a *Agent) execute(
 				notifiable.SetStatusNotifier(func(message string) {
 					if message != "" {
 						if sendErr := safeSendPart(ctx, outputCh, createTextPart("\n"+message+"\n")); sendErr != nil {
-							log.Printf("[Agent:%s] Failed to send status notification: %v", a.name, sendErr)
+							slog.Error("Failed to send status notification", "agent", a.name, "error", sendErr)
 						}
 					}
 				})
@@ -274,7 +274,7 @@ func (a *Agent) execute(
 			recentHistory, err := historyService.GetRecentHistory(sessionID)
 			if err != nil {
 				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Warning: Failed to load conversation history: %v\n", err))); sendErr != nil {
-					log.Printf("[Agent:%s] Failed to send warning: %v", a.name, sendErr)
+					slog.Error("Failed to send warning", "agent", a.name, "error", sendErr)
 				}
 			} else if len(recentHistory) > 0 {
 				state.SetHistory(recentHistory)
@@ -296,7 +296,7 @@ func (a *Agent) execute(
 			select {
 			case <-ctx.Done():
 				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("\nCanceled: %v\n", ctx.Err()))); sendErr != nil {
-					log.Printf("[Agent:%s] Failed to send cancellation message: %v", a.name, sendErr)
+					slog.Error("Failed to send cancellation message", "agent", a.name, "error", sendErr)
 				}
 				return
 			default:
@@ -304,7 +304,7 @@ func (a *Agent) execute(
 
 			if err := strategy.PrepareIteration(currentIteration, state); err != nil {
 				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error preparing iteration: %v\n", err))); sendErr != nil {
-					log.Printf("[Agent:%s] Failed to send error: %v", a.name, sendErr)
+					slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
 				}
 				return
 			}
@@ -316,7 +316,7 @@ func (a *Agent) execute(
 			messages, err := a.services.Prompt().BuildMessages(ctx, input, promptSlots, state.AllMessages(), additionalContext)
 			if err != nil {
 				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error building messages: %v\n", err))); sendErr != nil {
-					log.Printf("[Agent:%s] Failed to send error: %v", a.name, sendErr)
+					slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
 				}
 				return
 			}
@@ -326,7 +326,7 @@ func (a *Agent) execute(
 			if err != nil {
 				span.RecordError(err)
 				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error: LLM call failed: %v\n", err))); sendErr != nil {
-					log.Printf("[Agent:%s] Failed to send error: %v", a.name, sendErr)
+					slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
 				}
 				return
 			}
@@ -352,7 +352,7 @@ func (a *Agent) execute(
 				ctx, results, shouldContinue, err = a.processToolCalls(ctx, text, toolCalls, state, outputCh, cfg)
 				if err != nil {
 					if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error processing tool calls: %v\n", err))); sendErr != nil {
-						log.Printf("[Agent:%s] Failed to send error: %v", a.name, sendErr)
+						slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
 					}
 					return
 				}
@@ -364,7 +364,7 @@ func (a *Agent) execute(
 
 			if err := strategy.AfterIteration(currentIteration, text, toolCalls, results, state); err != nil {
 				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error in strategy processing: %v\n", err))); sendErr != nil {
-					log.Printf("[Agent:%s] Failed to send error: %v", a.name, sendErr)
+					slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
 				}
 				return
 			}
@@ -385,7 +385,7 @@ func (a *Agent) execute(
 							state,
 							nil, // No pending tool call
 						); err != nil {
-							log.Printf("[Agent:%s] Failed to checkpoint at iteration %d: %v", a.name, currentIteration, err)
+							slog.Warn("Failed to checkpoint at iteration", "agent", a.name, "iteration", currentIteration, "error", err)
 							// Continue execution even if checkpoint fails
 						}
 					}
@@ -539,7 +539,7 @@ func (a *Agent) handleToolApprovalRequest(
 	if taskID == "" {
 		// No taskID - can't request approval, deny the tool
 		if sendErr := safeSendPart(ctx, outputCh, createTextPart("⚠️  Tool requires approval but task tracking not enabled, denying\n")); sendErr != nil {
-			log.Printf("[Agent:%s] Failed to send approval denial message: %v", a.id, sendErr)
+			slog.Error("Failed to send approval denial message", "agent", a.id, "error", sendErr)
 		}
 		return ctx, false, nil
 	}
@@ -569,7 +569,7 @@ func (a *Agent) handleBlockingHITL(
 	if approvalResult.InteractionMsg != nil && len(approvalResult.InteractionMsg.Parts) > 0 {
 		for _, part := range approvalResult.InteractionMsg.Parts {
 			if sendErr := safeSendPart(ctx, outputCh, part); sendErr != nil {
-				log.Printf("[Agent:%s] Failed to send approval request part: %v", a.id, sendErr)
+				slog.Error("Failed to send approval request part", "agent", a.id, "error", sendErr)
 				return ctx, false, sendErr
 			}
 		}
@@ -584,10 +584,10 @@ func (a *Agent) handleBlockingHITL(
 	if err != nil {
 		// Update task state to failed on timeout/cancellation
 		if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
-			log.Printf("[Agent:%s] [HITL] Failed to update task %s status after timeout: %v", a.id, taskID, updateErr)
+			slog.Error("Failed to update task status after timeout", "agent", a.id, "task", taskID, "error", updateErr)
 		}
 		if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("❌ Approval timeout or cancelled: %v\n", err))); sendErr != nil {
-			log.Printf("[Agent:%s] Failed to send timeout message: %v", a.id, sendErr)
+			slog.Error("Failed to send timeout message", "agent", a.id, "error", sendErr)
 		}
 		return ctx, false, err
 	}
@@ -598,19 +598,19 @@ func (a *Agent) handleBlockingHITL(
 
 	// Update task back to WORKING state
 	if err := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
-		log.Printf("[Agent:%s] [HITL] Failed to update task %s status to WORKING: %v", a.id, taskID, err)
+		slog.Error("Failed to update task status to WORKING", "agent", a.id, "task", taskID, "error", err)
 	}
 
 	// Send confirmation message to indicate interaction was resolved
 	if decision == DecisionApprove {
 		confirmMsg := fmt.Sprintf("✅ Approved: %s", pendingToolName)
 		if sendErr := safeSendPart(ctx, outputCh, createTextPart(confirmMsg)); sendErr != nil {
-			log.Printf("[Agent:%s] Failed to send approval confirmation: %v", a.id, sendErr)
+			slog.Error("Failed to send approval confirmation", "agent", a.id, "error", sendErr)
 		}
 	} else {
 		confirmMsg := fmt.Sprintf("🚫 Denied: %s", pendingToolName)
 		if sendErr := safeSendPart(ctx, outputCh, createTextPart(confirmMsg)); sendErr != nil {
-			log.Printf("[Agent:%s] Failed to send denial confirmation: %v", a.id, sendErr)
+			slog.Error("Failed to send denial confirmation", "agent", a.id, "error", sendErr)
 		}
 	}
 
@@ -653,7 +653,7 @@ func (a *Agent) handleAsyncHITL(
 	if approvalResult.InteractionMsg != nil && len(approvalResult.InteractionMsg.Parts) > 0 {
 		for _, part := range approvalResult.InteractionMsg.Parts {
 			if sendErr := safeSendPart(ctx, outputCh, part); sendErr != nil {
-				log.Printf("[Agent:%s] Failed to send approval request part: %v", a.id, sendErr)
+				slog.Error("Failed to send approval request part", "agent", a.id, "error", sendErr)
 				return ctx, false, sendErr
 			}
 		}
@@ -661,7 +661,7 @@ func (a *Agent) handleAsyncHITL(
 
 	// Return ErrInputRequired to signal that execution should pause
 	// The caller should exit the goroutine
-	log.Printf("[Agent:%s] [HITL] Task %s paused for async user input (state saved)", a.id, taskID)
+	slog.Info("Task paused for async user input", "agent", a.id, "task", taskID)
 	return ctx, false, ErrInputRequired
 }
 
@@ -742,7 +742,7 @@ func (a *Agent) callLLMWithRetry(
 
 		if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("⏳ Rate limit exceeded (HTTP %d). Waiting %v before retry %d/%d...\n",
 			retryErr.StatusCode, waitTime.Round(time.Second), attempt+1, maxLLMRetries))); sendErr != nil {
-			log.Printf("[Agent:%s] Failed to send rate limit message: %v", a.name, sendErr)
+			slog.Error("Failed to send rate limit message", "agent", a.name, "error", sendErr)
 		}
 
 		// Wait with context cancellation support
@@ -753,7 +753,7 @@ func (a *Agent) callLLMWithRetry(
 		}
 
 		if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("🔄 Retrying LLM call (attempt %d/%d)...\n", attempt+1, maxLLMRetries))); sendErr != nil {
-			log.Printf("[Agent:%s] Failed to send retry message: %v", a.name, sendErr)
+			slog.Error("Failed to send retry message", "agent", a.name, "error", sendErr)
 		}
 	}
 
@@ -786,7 +786,7 @@ func (a *Agent) callLLM(
 
 		if text != "" {
 			if sendErr := safeSendPart(ctx, outputCh, createTextPart(text)); sendErr != nil {
-				log.Printf("[Agent:%s] Failed to send structured output text: %v", a.name, sendErr)
+				slog.Error("Failed to send structured output text", "agent", a.name, "error", sendErr)
 			}
 		}
 
@@ -816,7 +816,7 @@ func (a *Agent) callLLM(
 			case "text":
 				streamedText.WriteString(chunk.Text)
 				if sendErr := safeSendPart(ctx, outputCh, createTextPart(chunk.Text)); sendErr != nil {
-					log.Printf("[Agent:%s] Failed to send streaming text chunk: %v", a.name, sendErr)
+					slog.Error("Failed to send streaming text chunk", "agent", a.name, "error", sendErr)
 					return "", nil, 0, sendErr
 				}
 			case "thinking":
@@ -828,7 +828,7 @@ func (a *Agent) callLLM(
 						// Start of thinking block - create thinking part
 						thinkingPart := protocol.CreateThinkingPart("", currentThinkingBlockID, 0)
 						if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
-							log.Printf("[Agent:%s] Failed to send thinking start: %v", a.name, sendErr)
+							slog.Error("Failed to send thinking start", "agent", a.name, "error", sendErr)
 							return "", nil, 0, sendErr
 						}
 					}
@@ -836,7 +836,7 @@ func (a *Agent) callLLM(
 					// Emit thinking delta as text part with thinking metadata
 					thinkingPart := protocol.CreateThinkingPart(chunk.Text, currentThinkingBlockID, 0)
 					if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
-						log.Printf("[Agent:%s] Failed to send thinking chunk: %v", a.name, sendErr)
+						slog.Error("Failed to send thinking chunk", "agent", a.name, "error", sendErr)
 						return "", nil, 0, sendErr
 					}
 				} else {
@@ -868,7 +868,7 @@ func (a *Agent) callLLM(
 
 	if text != "" {
 		if sendErr := safeSendPart(ctx, outputCh, createTextPart(text)); sendErr != nil {
-			log.Printf("[Agent:%s] Failed to send LLM response text: %v", a.name, sendErr)
+			slog.Error("Failed to send LLM response text", "agent", a.name, "error", sendErr)
 		}
 	}
 
@@ -888,7 +888,7 @@ func (a *Agent) executeTools(
 	// Add newline before tools if showing them
 	if len(toolCalls) > 0 && config.BoolValue(cfg.ShowTools, true) {
 		if sendErr := safeSendPart(ctx, outputCh, createTextPart("\n")); sendErr != nil {
-			log.Printf("[Agent:%s] Failed to send newline: %v", a.name, sendErr)
+			slog.Error("Failed to send newline", "agent", a.name, "error", sendErr)
 		}
 	}
 
@@ -902,7 +902,7 @@ func (a *Agent) executeTools(
 
 		// EMIT TOOL CALL PART (for web UI animations & CLI can extract from this)
 		if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolCallPart(toolCall)); sendErr != nil {
-			log.Printf("[Agent:%s] Failed to send tool call part: %v", a.name, sendErr)
+			slog.Error("Failed to send tool call part", "agent", a.name, "error", sendErr)
 			return results
 		}
 
@@ -926,7 +926,7 @@ func (a *Agent) executeTools(
 			Error:      errorStr,
 		}
 		if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPart(a2aResult)); sendErr != nil {
-			log.Printf("[Agent:%s] Failed to send tool result part: %v", a.name, sendErr)
+			slog.Error("Failed to send tool result part", "agent", a.name, "error", sendErr)
 			return results
 		}
 
@@ -1010,7 +1010,7 @@ func (a *Agent) emitTodoDisplay(ctx context.Context, outputCh chan<- *pb.Part) {
 	// Emit as AG-UI thinking part
 	part := protocol.CreateThinkingPartWithData(textBuilder.String(), "todo", data)
 	if sendErr := safeSendPart(ctx, outputCh, part); sendErr != nil {
-		log.Printf("[Agent:%s] Failed to send todo display: %v", a.name, sendErr)
+		slog.Error("Failed to send todo display", "agent", a.name, "error", sendErr)
 	}
 }
 func (a *Agent) truncateToolResults(results []reasoning.ToolResult, cfg config.ReasoningConfig) []reasoning.ToolResult {
@@ -1078,7 +1078,7 @@ func (a *Agent) saveToHistory(
 	if len(messagesToSave) > 0 {
 		err := history.AddBatchToHistory(sessionID, messagesToSave)
 		if err != nil {
-			log.Printf("Warning: Failed to save messages to history: %v", err)
+			slog.Warn("Failed to save messages to history", "error", err)
 		}
 	}
 }
@@ -1136,7 +1136,7 @@ func (a *Agent) GetServices() reasoning.AgentServices {
 // Shutdown gracefully shuts down the agent, cancelling all active tasks
 // and waiting for them to complete (with timeout)
 func (a *Agent) Shutdown(ctx context.Context) error {
-	log.Printf("[Agent:%s] Shutting down...", a.id)
+	slog.Info("Shutting down", "agent", a.id)
 
 	// Cancel all active executions
 	a.executionsMu.Lock()
@@ -1144,7 +1144,7 @@ func (a *Agent) Shutdown(ctx context.Context) error {
 	cancelFuncs := make([]context.CancelFunc, 0, activeCount)
 	for taskID, cancel := range a.activeExecutions {
 		cancelFuncs = append(cancelFuncs, cancel)
-		log.Printf("[Agent:%s] Cancelling task: %s", a.id, taskID)
+		slog.Info("Cancelling task", "agent", a.id, "task", taskID)
 	}
 	a.executionsMu.Unlock()
 
@@ -1157,12 +1157,12 @@ func (a *Agent) Shutdown(ctx context.Context) error {
 	waitingTasks := a.taskAwaiter.GetWaitingTasks()
 	for _, taskID := range waitingTasks {
 		a.taskAwaiter.CancelWaiting(taskID)
-		log.Printf("[Agent:%s] Cancelled waiting task: %s", a.id, taskID)
+		slog.Info("Cancelled waiting task", "agent", a.id, "task", taskID)
 	}
 
 	// Wait for active executions to finish (with timeout)
 	if activeCount > 0 {
-		log.Printf("[Agent:%s] Waiting for %d active tasks to complete...", a.id, activeCount)
+		slog.Info("Waiting for active tasks to complete", "agent", a.id, "count", activeCount)
 		// Give tasks up to 30 seconds to complete
 		waitCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
@@ -1179,7 +1179,7 @@ func (a *Agent) Shutdown(ctx context.Context) error {
 				remaining := len(a.activeExecutions)
 				a.executionsMu.RUnlock()
 				if remaining > 0 {
-					log.Printf("[Agent:%s] Warning: %d tasks still active after shutdown timeout", a.id, remaining)
+					slog.Warn("Tasks still active after shutdown timeout", "agent", a.id, "remaining", remaining)
 				}
 				return waitCtx.Err()
 			case <-ticker.C:
@@ -1187,13 +1187,13 @@ func (a *Agent) Shutdown(ctx context.Context) error {
 				remaining := len(a.activeExecutions)
 				a.executionsMu.RUnlock()
 				if remaining == 0 {
-					log.Printf("[Agent:%s] All tasks completed", a.id)
+					slog.Info("All tasks completed", "agent", a.id)
 					return nil
 				}
 			}
 		}
 	}
 
-	log.Printf("[Agent:%s] Shutdown complete", a.id)
+	slog.Info("Shutdown complete", "agent", a.id)
 	return nil
 }

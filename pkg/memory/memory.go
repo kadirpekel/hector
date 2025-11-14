@@ -2,7 +2,7 @@ package memory
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
@@ -56,7 +56,7 @@ func (s *MemoryService) AddToHistory(sessionID string, msg *pb.Message) error {
 	}
 
 	if err := s.sessionService.AppendMessage(sessionID, msg); err != nil {
-		log.Printf("Warning: Failed to append message to session: %v", err)
+		slog.Warn("Failed to append message to session", "error", err)
 		return fmt.Errorf("failed to append message: %w", err)
 	}
 
@@ -87,16 +87,16 @@ func (s *MemoryService) AddBatchToHistory(sessionID string, messages []*pb.Messa
 	history, err := s.workingMemory.LoadState(sessionID, s.sessionService)
 	if err != nil {
 
-		log.Printf("Warning: Failed to load state for summarization check: %v", err)
-		log.Printf("Warning: Skipping summarization for this turn (messages saved successfully)")
+		slog.Warn("Failed to load state for summarization check", "error", err)
+		slog.Warn("Skipping summarization for this turn (messages saved successfully)")
 		return nil
 	}
 
 	newMessages, err := s.workingMemory.CheckAndSummarize(history)
 	if err != nil {
 
-		log.Printf("Warning: Summarization check failed: %v", err)
-		log.Printf("Warning: Continuing without summarization (messages saved successfully)")
+		slog.Warn("Summarization check failed", "error", err)
+		slog.Warn("Continuing without summarization (messages saved successfully)")
 
 	}
 
@@ -106,7 +106,7 @@ func (s *MemoryService) AddBatchToHistory(sessionID string, messages []*pb.Messa
 
 			return fmt.Errorf("failed to save strategy messages: %w", err)
 		}
-		log.Printf("💾 Saved %d strategy message(s)", len(newMessages))
+		slog.Info("Saved strategy messages", "count", len(newMessages))
 	}
 
 	return nil
@@ -120,14 +120,14 @@ func (s *MemoryService) GetRecentHistory(sessionID string) ([]*pb.Message, error
 
 	history, err := s.workingMemory.LoadState(sessionID, s.sessionService)
 	if err != nil {
-		log.Printf("Warning: Failed to load state from strategy: %v", err)
+		slog.Warn("Failed to load state from strategy", "error", err)
 
 		history, _ = hectorcontext.NewConversationHistory(sessionID)
 	}
 
 	filteredMessages, err := s.workingMemory.GetMessages(history)
 	if err != nil {
-		log.Printf("Warning: Working memory strategy failed: %v", err)
+		slog.Warn("Working memory strategy failed", "error", err)
 
 		return []*pb.Message{}, nil
 	}
@@ -137,7 +137,7 @@ func (s *MemoryService) GetRecentHistory(sessionID string) ([]*pb.Message, error
 		if query != "" {
 			recalled, err := s.longTermMemory.Recall(s.agentID, sessionID, query, s.longTermConfig.RecallLimit)
 			if err != nil {
-				log.Printf("Warning: Long-term recall failed: %v", err)
+				slog.Warn("Long-term recall failed", "error", err)
 			} else if len(recalled) > 0 {
 
 				filteredMessages = append(recalled, filteredMessages...)
@@ -162,7 +162,7 @@ func (s *MemoryService) ClearHistory(sessionID string) error {
 
 		if hasPending {
 			if err := s.flushLongTermBatch(sessionID); err != nil {
-				log.Printf("Warning: Failed to flush pending batch on clear: %v", err)
+				slog.Warn("Failed to flush pending batch on clear", "error", err)
 			}
 		}
 	}
@@ -211,7 +211,7 @@ func (s *MemoryService) Shutdown() error {
 	var firstError error
 	for _, sessionID := range sessionIDs {
 		if err := s.flushLongTermBatch(sessionID); err != nil {
-			log.Printf("Warning: Failed to flush batch for session %s during shutdown: %v", sessionID, err)
+			slog.Warn("Failed to flush batch for session during shutdown", "session", sessionID, "error", err)
 			if firstError == nil {
 				firstError = err
 			}
@@ -222,7 +222,7 @@ func (s *MemoryService) Shutdown() error {
 		return fmt.Errorf("failed to flush all batches during shutdown: %w", firstError)
 	}
 
-	log.Printf("Memory service shutdown complete (flushed %d sessions)", len(sessionIDs))
+	slog.Info("Memory service shutdown complete", "flushed_sessions", len(sessionIDs))
 	return nil
 }
 
@@ -241,7 +241,7 @@ func (s *MemoryService) addToLongTermBatch(sessionID string, msg *pb.Message) {
 
 		if shouldFlush {
 			if err := s.flushLongTermBatch(sessionID); err != nil {
-				log.Printf("Warning: Long-term storage failed: %v", err)
+				slog.Warn("Long-term storage failed", "error", err)
 			}
 		}
 	}
@@ -261,7 +261,7 @@ func (s *MemoryService) flushLongTermBatch(sessionID string) error {
 
 	if err := s.longTermMemory.Store(s.agentID, sessionID, batch); err != nil {
 
-		log.Printf("Warning: Failed to store batch for session %s: %v", sessionID, err)
+		slog.Warn("Failed to store batch for session", "session", sessionID, "error", err)
 		return err
 	}
 

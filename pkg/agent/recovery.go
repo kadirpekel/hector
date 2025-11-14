@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
@@ -17,7 +17,7 @@ func (a *Agent) RecoverPendingTasks(ctx context.Context) error {
 
 	// Check if recovery is enabled
 	if !a.isRecoveryEnabled() {
-		log.Printf("[Agent:%s] Checkpoint recovery disabled, skipping", a.id)
+		slog.Debug("Checkpoint recovery disabled, skipping", "agent", a.id)
 		return nil
 	}
 
@@ -32,31 +32,31 @@ func (a *Agent) RecoverPendingTasks(ctx context.Context) error {
 	for _, state := range recoverableStates {
 		tasks, _, _, err := a.services.Task().ListTasks(ctx, "", state, 100, "")
 		if err != nil {
-			log.Printf("[Agent:%s] Failed to list tasks in state %v: %v", a.id, state, err)
+			slog.Error("Failed to list tasks in state", "agent", a.id, "state", state, "error", err)
 			continue
 		}
 		allPendingTasks = append(allPendingTasks, tasks...)
 	}
 
 	if len(allPendingTasks) == 0 {
-		log.Printf("[Agent:%s] No pending tasks to recover", a.id)
+		slog.Debug("No pending tasks to recover", "agent", a.id)
 		return nil
 	}
 
-	log.Printf("[Agent:%s] Found %d pending tasks, checking for checkpoints...", a.id, len(allPendingTasks))
+	slog.Info("Found pending tasks, checking for checkpoints", "agent", a.id, "count", len(allPendingTasks))
 
 	recoveredCount := 0
 	for _, task := range allPendingTasks {
 		// A2A Compliance: Validate state is still recoverable
 		if isTerminalState(task.Status.State) {
-			log.Printf("[Agent:%s] Task %s in terminal state, skipping recovery", a.id, task.Id)
+			slog.Debug("Task in terminal state, skipping recovery", "agent", a.id, "task", task.Id)
 			continue
 		}
 
 		// Check if task has a checkpoint
 		sessionID := task.ContextId
 		if sessionID == "" {
-			log.Printf("[Agent:%s] Task %s has no context ID, skipping recovery", a.id, task.Id)
+			slog.Debug("Task has no context ID, skipping recovery", "agent", a.id, "task", task.Id)
 			continue
 		}
 
@@ -65,9 +65,9 @@ func (a *Agent) RecoverPendingTasks(ctx context.Context) error {
 			// No checkpoint found - this is OK (task might not have checkpointing enabled)
 			// If task is WORKING but has no checkpoint, mark as FAILED (crash scenario)
 			if task.Status.State == pb.TaskState_TASK_STATE_WORKING {
-				log.Printf("[Agent:%s] Task %s in WORKING state but no checkpoint found, marking as FAILED", a.id, task.Id)
+				slog.Warn("Task in WORKING state but no checkpoint found, marking as FAILED", "agent", a.id, "task", task.Id)
 				if updateErr := a.updateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
-					log.Printf("[Agent:%s] Failed to update task %s status: %v", a.id, task.Id, updateErr)
+					slog.Error("Failed to update task status", "agent", a.id, "task", task.Id, "error", updateErr)
 				}
 			}
 			continue
@@ -75,10 +75,10 @@ func (a *Agent) RecoverPendingTasks(ctx context.Context) error {
 
 		// Check if checkpoint is still valid (not expired)
 		if a.isCheckpointExpired(execState) {
-			log.Printf("[Agent:%s] Checkpoint expired for task %s, marking as FAILED", a.id, task.Id)
+			slog.Warn("Checkpoint expired for task, marking as FAILED", "agent", a.id, "task", task.Id)
 			// A2A Compliance: Transition to FAILED (valid from WORKING/INPUT_REQUIRED)
 			if updateErr := a.updateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
-				log.Printf("[Agent:%s] Failed to update task %s status: %v", a.id, task.Id, updateErr)
+				slog.Error("Failed to update task status", "agent", a.id, "task", task.Id, "error", updateErr)
 			}
 			continue
 		}
@@ -87,20 +87,19 @@ func (a *Agent) RecoverPendingTasks(ctx context.Context) error {
 		if task.Status.State == pb.TaskState_TASK_STATE_INPUT_REQUIRED {
 			// INPUT_REQUIRED tasks: Only auto-resume if configured
 			if !a.shouldAutoResumeHITL() {
-				log.Printf("[Agent:%s] Task %s in INPUT_REQUIRED state, waiting for user input (auto-resume disabled)", a.id, task.Id)
+				slog.Info("Task in INPUT_REQUIRED state, waiting for user input (auto-resume disabled)", "agent", a.id, "task", task.Id)
 				continue
 			}
 		}
 
 		// Resume task from checkpoint
-		log.Printf("[Agent:%s] Recovering task %s from checkpoint (phase: %s, type: %s)",
-			a.id, task.Id, execState.Phase, execState.CheckpointType)
+		slog.Info("Recovering task from checkpoint", "agent", a.id, "task", task.Id, "phase", execState.Phase, "type", execState.CheckpointType)
 
 		go a.resumeFromCheckpoint(ctx, execState, "")
 		recoveredCount++
 	}
 
-	log.Printf("[Agent:%s] Recovered %d tasks from checkpoints", a.id, recoveredCount)
+	slog.Info("Recovered tasks from checkpoints", "agent", a.id, "count", recoveredCount)
 	return nil
 }
 
@@ -167,22 +166,21 @@ func (a *Agent) resumeFromCheckpoint(
 	// Get current task state (A2A compliance check)
 	task, err := a.services.Task().GetTask(ctx, execState.TaskID)
 	if err != nil {
-		log.Printf("[Agent:%s] Failed to get task %s: %v", a.id, execState.TaskID, err)
+		slog.Error("Failed to get task", "agent", a.id, "task", execState.TaskID, "error", err)
 		return
 	}
 
 	// A2A Compliance: Validate checkpoint state
 	if task.Status.State != pb.TaskState_TASK_STATE_WORKING &&
 		task.Status.State != pb.TaskState_TASK_STATE_INPUT_REQUIRED {
-		log.Printf("[Agent:%s] Cannot resume task %s from terminal state: %v", a.id, execState.TaskID, task.Status.State)
+		slog.Warn("Cannot resume task from terminal state", "agent", a.id, "task", execState.TaskID, "state", task.Status.State)
 		return
 	}
 
 	// Resume execution using the existing resumeTaskExecution mechanism
 	// This reuses the logic from agent_a2a_methods.go
 	// For generic recovery, we pass empty user decision - task continues from checkpoint
-	log.Printf("[Agent:%s] Resuming task %s execution from checkpoint (phase: %s)",
-		a.id, execState.TaskID, execState.Phase)
+	slog.Info("Resuming task execution from checkpoint", "agent", a.id, "task", execState.TaskID, "phase", execState.Phase)
 
 	// Use the existing resume mechanism (from agent_a2a_methods.go)
 	// Pass empty string for user decision - task will continue from checkpoint

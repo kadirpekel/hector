@@ -2,7 +2,7 @@ package runtime
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/kadirpekel/hector/pkg/a2a/client"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
@@ -54,7 +54,7 @@ func (r *Runtime) Close() error {
 	if r.components != nil {
 		if err := r.components.Close(); err != nil {
 			errors = append(errors, fmt.Errorf("component manager cleanup: %w", err))
-			log.Printf("Warning: Component manager cleanup error: %v", err)
+			slog.Warn("Component manager cleanup error", "error", err)
 		}
 	}
 

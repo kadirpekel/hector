@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -43,7 +43,7 @@ func (ds *DocumentStore) indexFromDataSource() error {
 	if ds.dataSource.Type() == "directory" {
 		existingDocs, err = ds.loadIndexState()
 		if err != nil {
-			log.Printf("Warning: Failed to load index state, performing full reindex: %v", err)
+			slog.Warn("Failed to load index state, performing full reindex", "error", err)
 			existingDocs = make(map[string]FileIndexInfo)
 		}
 	} else {
@@ -122,7 +122,7 @@ func (ds *DocumentStore) indexFromDataSource() error {
 				if ds.dataSource.Type() == "directory" {
 					deletedDocs, cleanedUpDocs, err := ds.cleanupDeletedFiles(ctx, existingDocs, foundDocs)
 					if err != nil {
-						log.Printf("Warning: Cleanup of deleted files failed: %v", err)
+						slog.Warn("Cleanup of deleted files failed", "error", err)
 					}
 					if len(deletedDocs) > 0 {
 						fmt.Printf("🗑️  Cleaned up %d deleted document(s) from index '%s'\n", len(deletedDocs), ds.name)
@@ -141,7 +141,7 @@ func (ds *DocumentStore) indexFromDataSource() error {
 						finalState[path] = info
 					}
 					if err := ds.saveIndexState(finalState, len(finalState)*3); err != nil {
-						log.Printf("Warning: Failed to save index state: %v", err)
+						slog.Warn("Failed to save index state", "error", err)
 					}
 
 					_ = ds.checkpointManager.ClearCheckpoint()

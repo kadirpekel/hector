@@ -3,7 +3,7 @@ package transport
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"time"
 
@@ -61,7 +61,7 @@ func (s *Server) Start() error {
 
 	reflection.Register(s.grpcServer)
 
-	log.Printf("A2A gRPC server starting on %s", s.config.Address)
+	slog.Info("A2A gRPC server starting", "address", s.config.Address)
 
 	if err := s.grpcServer.Serve(listener); err != nil {
 		return fmt.Errorf("server failed: %w", err)
@@ -75,7 +75,7 @@ func (s *Server) Stop(ctx context.Context) error {
 		return nil
 	}
 
-	log.Printf("Shutting down A2A gRPC server...")
+	slog.Info("Shutting down A2A gRPC server")
 
 	stopped := make(chan struct{})
 
@@ -86,9 +86,9 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	select {
 	case <-stopped:
-		log.Printf("Server stopped gracefully")
+		slog.Info("Server stopped gracefully")
 	case <-ctx.Done():
-		log.Printf("Warning: Graceful stop timeout, forcing shutdown")
+		slog.Warn("Graceful stop timeout, forcing shutdown")
 		s.grpcServer.Stop()
 	}
 

@@ -3,7 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
@@ -141,8 +141,7 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 		return nil, nil
 	}
 
-	log.Printf("🧠 Summarizing %d messages (keeping %d recent)...",
-		len(oldMessages), len(recentMessages))
+	slog.Info("Summarizing messages", "total", len(oldMessages), "keeping_recent", len(recentMessages))
 
 	if s.statusNotifier != nil {
 		s.statusNotifier("💭 Summarizing conversation history...")
@@ -150,15 +149,14 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 
 	summary, err := s.summarizer.SummarizeConversation(context.Background(), oldMessages)
 	if err != nil {
-		log.Printf("Warning: Summarization failed: %v", err)
+		slog.Warn("Summarization failed", "error", err)
 		if s.statusNotifier != nil {
 			s.statusNotifier("Warning: Summarization failed, continuing with full history")
 		}
 		return nil, fmt.Errorf("summarization failed: %w", err)
 	}
 
-	log.Printf("Summarized %d messages into %d tokens",
-		len(oldMessages), len(summary))
+	slog.Info("Summarized messages", "count", len(oldMessages), "summary_tokens", len(summary))
 
 	session.Clear()
 
@@ -174,11 +172,11 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 
 	for _, msg := range recentMessages {
 		if err := session.AddMessage(msg); err != nil {
-			log.Printf("Warning: Failed to re-add message: %v", err)
+			slog.Warn("Failed to re-add message", "error", err)
 		}
 	}
 
-	log.Printf("Summarization complete (kept %d recent messages)", len(recentMessages))
+	slog.Info("Summarization complete", "kept_recent", len(recentMessages))
 
 	return summaryMsg, nil
 }
@@ -259,15 +257,14 @@ func (s *SummaryBufferStrategy) LoadState(sessionID string, sessionService inter
 	if lastSummaryIdx >= 0 {
 
 		messagesToLoad = allMessages[lastSummaryIdx:]
-		log.Printf("📍 Checkpoint detected at message %d/%d, loading %d messages (%.1f%% reduction)",
-			lastSummaryIdx+1, len(allMessages), len(messagesToLoad),
-			float64(len(allMessages)-len(messagesToLoad))/float64(len(allMessages))*100)
+		reduction := float64(len(allMessages)-len(messagesToLoad)) / float64(len(allMessages)) * 100
+		slog.Info("Checkpoint detected, loading messages", "checkpoint_idx", lastSummaryIdx+1, "total", len(allMessages), "loading", len(messagesToLoad), "reduction_pct", reduction)
 	} else {
 
 		maxRecent := 100
 		if len(allMessages) > maxRecent {
 			messagesToLoad = allMessages[len(allMessages)-maxRecent:]
-			log.Printf("Warning: No checkpoint found, loading recent %d of %d messages", maxRecent, len(allMessages))
+			slog.Warn("No checkpoint found, loading recent messages", "loading", maxRecent, "total", len(allMessages))
 		} else {
 			messagesToLoad = allMessages
 		}
@@ -280,7 +277,7 @@ func (s *SummaryBufferStrategy) LoadState(sessionID string, sessionService inter
 
 	for _, msg := range messagesToLoad {
 		if err := session.AddMessage(msg); err != nil {
-			log.Printf("Warning: Failed to add message to session: %v", err)
+			slog.Warn("Failed to add message to session", "error", err)
 		}
 	}
 

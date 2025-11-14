@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -222,7 +222,7 @@ func (p *GeminiProvider) GenerateStreaming(ctx context.Context, messages []*pb.M
 
 			bodyBytes, _ := io.ReadAll(resp.Body)
 			err := fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
-			log.Printf("[GEMINI ERROR] %v\n", err)
+			slog.Error("Gemini API error", "error", err)
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return
 		}
@@ -350,7 +350,7 @@ func (p *GeminiProvider) GenerateStructuredStreaming(ctx context.Context, messag
 
 			bodyBytes, _ := io.ReadAll(resp.Body)
 			err := fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
-			log.Printf("[GEMINI ERROR] %v\n", err)
+			slog.Error("Gemini API error", "error", err)
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return
 		}

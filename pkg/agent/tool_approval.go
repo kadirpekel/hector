@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
@@ -37,7 +37,7 @@ func (a *Agent) filterToolCallsWithApproval(
 
 	// Safety check: if toolConfigs is nil, allow all tools (no approval configured)
 	if toolConfigs == nil {
-		log.Printf("[HITL] WARNING: toolConfigs is nil, allowing all tools without approval check")
+		slog.Warn("toolConfigs is nil, allowing all tools without approval check")
 		result.ApprovedCalls = toolCalls
 		return result, nil
 	}
@@ -53,7 +53,7 @@ func (a *Agent) filterToolCallsWithApproval(
 		toolConfig, exists := toolConfigs[call.Name]
 		if !exists {
 			// Tool not in config, allow by default
-			log.Printf("[HITL] WARNING: Tool '%s' not found in config map (available keys: %v), allowing without approval", call.Name, getConfigKeys(toolConfigs))
+			slog.Warn("Tool not found in config map, allowing without approval", "tool", call.Name, "available_keys", getConfigKeys(toolConfigs))
 			result.ApprovedCalls = append(result.ApprovedCalls, call)
 			continue
 		}
@@ -67,22 +67,22 @@ func (a *Agent) filterToolCallsWithApproval(
 		}
 
 		// Tool requires approval
-		log.Printf("[HITL] Tool %s requires approval (taskID: %s)", call.Name, taskID)
+		slog.Debug("Tool requires approval", "tool", call.Name, "task", taskID)
 
 		// If we have a user decision (resuming from INPUT_REQUIRED), apply it
 		if userDecision != "" {
 			switch userDecision {
 			case DecisionApprove:
-				log.Printf("[HITL] User approved tool %s", call.Name)
+				slog.Debug("User approved tool", "tool", call.Name)
 				result.ApprovedCalls = append(result.ApprovedCalls, call)
 
 			case DecisionDeny:
-				log.Printf("[HITL] User denied tool %s", call.Name)
+				slog.Debug("User denied tool", "tool", call.Name)
 				result.DeniedCalls = append(result.DeniedCalls, call)
 
 			default:
 				// Unknown decision, deny for safety
-				log.Printf("[HITL] Unknown decision '%s', denying tool %s", userDecision, call.Name)
+				slog.Warn("Unknown decision, denying tool", "decision", userDecision, "tool", call.Name)
 				result.DeniedCalls = append(result.DeniedCalls, call)
 			}
 
@@ -94,7 +94,7 @@ func (a *Agent) filterToolCallsWithApproval(
 		// This ensures users can make informed decisions about each tool call individually.
 		if taskID == "" {
 			// Can't request approval without task ID (non-async mode)
-			log.Printf("[HITL] Warning: Tool %s requires approval but no taskID available, denying", call.Name)
+			slog.Warn("Tool requires approval but no taskID available, denying", "tool", call.Name)
 			result.DeniedCalls = append(result.DeniedCalls, call)
 			continue
 		}

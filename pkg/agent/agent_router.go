@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	"google.golang.org/grpc/codes"
@@ -27,7 +27,7 @@ func NewAgentRouter(registry *AgentRegistry) *AgentRouter {
 
 func (s *AgentRouter) RegisterAgent(agentName string, agentSvc pb.A2AServiceServer) {
 
-	log.Printf("  ✅ Registered agent: %s", agentName)
+	slog.Info("Registered agent", "agent", agentName)
 }
 
 func (s *AgentRouter) GetAgentCardAndVisibility(agentID string) (*pb.AgentCard, string, error) {

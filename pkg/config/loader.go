@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -234,7 +234,7 @@ func (l *Loader) Load() (*Config, error) {
 }
 
 func (l *Loader) watch() {
-	log.Printf("🔄 Config watcher started for %s", l.options.Type)
+	slog.Info("Config watcher started", "type", l.options.Type)
 
 	switch l.options.Type {
 	case ConfigTypeFile:
@@ -251,7 +251,7 @@ func (l *Loader) watch() {
 func (l *Loader) watchFile() {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Printf("⚠️  Failed to create file watcher: %v", err)
+		slog.Error("Failed to create file watcher", "error", err)
 		return
 	}
 	defer watcher.Close()
@@ -263,11 +263,11 @@ func (l *Loader) watchFile() {
 	configFile := filepath.Base(l.options.Path)
 
 	if err := watcher.Add(configDir); err != nil {
-		log.Printf("⚠️  Failed to watch config directory %s: %v", configDir, err)
+		slog.Error("Failed to watch config directory", "dir", configDir, "error", err)
 		return
 	}
 
-	log.Printf("🔄 Watching config file: %s", l.options.Path)
+	slog.Info("Watching config file", "path", l.options.Path)
 
 	var debounceTimer *time.Timer
 	const debounceDelay = 100 * time.Millisecond
@@ -293,7 +293,7 @@ func (l *Loader) watchFile() {
 					// Start new debounce timer
 					debounceTimer = time.AfterFunc(debounceDelay, l.reload)
 				} else if event.Op&fsnotify.Remove == fsnotify.Remove {
-					log.Printf("⚠️  Config file %s was deleted", l.options.Path)
+					slog.Warn("Config file was deleted", "path", l.options.Path)
 					// Try to re-add watch if file is recreated
 					time.Sleep(500 * time.Millisecond)
 					if _, err := os.Stat(l.options.Path); err == nil {
@@ -305,7 +305,7 @@ func (l *Loader) watchFile() {
 			if !ok {
 				return
 			}
-			log.Printf("⚠️  File watcher error: %v", err)
+			slog.Error("File watcher error", "error", err)
 		}
 	}
 }
@@ -330,7 +330,7 @@ func (l *Loader) watchConsul() {
 		}
 
 		if kv == nil {
-			log.Printf("⚠️  Consul key %s was deleted", l.options.Path)
+			slog.Warn("Consul key was deleted", "path", l.options.Path)
 			return
 		}
 
@@ -367,7 +367,7 @@ func (l *Loader) watchEtcd() {
 				return
 			}
 			if wresp.Canceled {
-				log.Printf("⚠️  Etcd watch canceled: %v", wresp.Err())
+				slog.Warn("Etcd watch canceled", "error", wresp.Err())
 				return
 			}
 			if wresp.Err() != nil {
@@ -378,7 +378,7 @@ func (l *Loader) watchEtcd() {
 				if ev.Type == clientv3.EventTypePut {
 					l.reload()
 				} else if ev.Type == clientv3.EventTypeDelete {
-					log.Printf("⚠️  Etcd key %s was deleted", l.options.Path)
+					slog.Warn("Etcd key was deleted", "path", l.options.Path)
 					return
 				}
 			}
@@ -417,22 +417,22 @@ func (l *Loader) shouldStopWatching() bool {
 
 // handleWatchError handles watch errors with consistent logging and backoff
 func (l *Loader) handleWatchError(err error) {
-	log.Printf("⚠️  Watch error: %v", err)
+	slog.Warn("Watch error", "error", err)
 	time.Sleep(1 * time.Second)
 }
 
 func (l *Loader) reload() {
 	newCfg, err := l.loadAndProcess()
 	if err != nil {
-		log.Printf("⚠️  Failed to reload config: %v", err)
+		slog.Error("Failed to reload config", "error", err)
 		return
 	}
 
 	if l.options.OnChange != nil {
 		if err := l.options.OnChange(newCfg); err != nil {
-			log.Printf("⚠️  Config change callback failed: %v", err)
+			slog.Error("Config change callback failed", "error", err)
 		} else {
-			log.Printf("✅ Configuration reloaded successfully from %s", l.options.Type)
+			slog.Info("Configuration reloaded successfully", "type", l.options.Type)
 		}
 	}
 }

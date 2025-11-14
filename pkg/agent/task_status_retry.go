@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -33,7 +33,7 @@ func (a *Agent) updateTaskStatusWithRetry(ctx context.Context, taskID string, st
 
 		if attempt < maxRetries-1 {
 			backoff := initialBackoff * time.Duration(1<<uint(attempt))
-			log.Printf("[Agent:%s] Task status update failed (attempt %d/%d), retrying in %v: %v", a.id, attempt+1, maxRetries, backoff, err)
+			slog.Debug("Task status update failed, retrying", "agent", a.id, "attempt", attempt+1, "max_retries", maxRetries, "backoff", backoff, "error", err)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()

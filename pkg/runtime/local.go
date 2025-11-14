@@ -3,7 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"google.golang.org/grpc/metadata"
 
@@ -58,7 +58,7 @@ func (r *Runtime) StreamMessage(ctx context.Context, agentID string, message *pb
 	go func() {
 		defer close(streamChan)
 		if err := agentEntry.Agent.SendStreamingMessage(req, stream); err != nil {
-			log.Printf("Warning: streaming error for agent '%s': %v", agentID, err)
+			slog.Warn("Streaming error for agent", "agent", agentID, "error", err)
 		}
 	}()
 

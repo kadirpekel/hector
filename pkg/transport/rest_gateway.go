@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -125,9 +125,9 @@ func (g *RESTGateway) Start(ctx context.Context) error {
 		Handler: handler,
 	}
 
-	log.Printf("🌐 HTTP Server starting on %s", g.config.HTTPAddress)
+	slog.Info("HTTP Server starting", "address", g.config.HTTPAddress)
 	if g.authConfig != nil && g.authConfig.Enabled {
-		log.Printf("   → Authentication: ENABLED")
+		slog.Info("Authentication enabled")
 	}
 
 	if err := g.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -154,7 +154,7 @@ func (g *RESTGateway) setupRouting() http.Handler {
 
 	// Root path: Web UI only
 	r.Get("/", g.handleWebUI)
-	log.Printf("   → Web UI: /")
+	slog.Debug("Web UI endpoint", "path", "/")
 
 	// Health check (operational endpoint, not agent-specific)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -164,12 +164,12 @@ func (g *RESTGateway) setupRouting() http.Handler {
 
 	// Metrics (operational endpoint, not agent-specific)
 	r.Get("/metrics", MetricsHandler().ServeHTTP)
-	log.Printf("   → Prometheus metrics: /metrics")
+	slog.Debug("Prometheus metrics endpoint", "path", "/metrics")
 
 	// REST API: Discovery (the only v1/ root endpoint)
 	if g.discovery != nil {
 		r.Get("/v1/agents", g.discovery.ServeHTTP)
-		log.Printf("   → Discovery endpoint: /v1/agents")
+		slog.Debug("Discovery endpoint", "path", "/v1/agents")
 	}
 
 	// REST API: All agent-specific routes under /v1/agents/{agent}/
@@ -202,13 +202,7 @@ func (g *RESTGateway) setupRouting() http.Handler {
 		r.Get("/tasks/{taskID}:subscribe", g.handleTaskSubscription) // Optional: tasks/subscribe
 	})
 
-	log.Printf("   → Agent-scoped endpoints: /v1/agents/{agent}/*")
-	log.Printf("     • Agent root: / (GET: agent card, POST: JSON-RPC)")
-	log.Printf("     • Agent card: /.well-known/agent-card.json (A2A spec compliant)")
-	log.Printf("     • Messages: /message:send, /message:stream")
-	log.Printf("     • JSON-RPC streaming: /stream (POST, agent-scoped)")
-	log.Printf("     • Tasks: /tasks (GET: list), /tasks/{id} (GET: retrieve), /tasks/{id}:cancel (POST: cancel), /tasks/{id}:subscribe (GET: subscribe)")
-	log.Printf("   → A2A Protocol Compliance: Core methods (message/send, tasks/get, tasks/cancel) + Optional (tasks/list, tasks/subscribe)")
+	slog.Debug("Agent-scoped endpoints registered", "base_path", "/v1/agents/{agent}/*")
 
 	return r
 }
@@ -254,13 +248,13 @@ func (g *RESTGateway) Stop(ctx context.Context) error {
 		return nil
 	}
 
-	log.Printf("Shutting down REST gateway...")
+	slog.Info("Shutting down REST gateway")
 
 	if err := g.httpServer.Shutdown(ctx); err != nil {
 		return fmt.Errorf("failed to shutdown REST gateway: %w", err)
 	}
 
-	log.Printf("REST gateway stopped")
+	slog.Info("REST gateway stopped")
 	return nil
 }
 
@@ -426,7 +420,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		if r.Method != "PRI" {
-			log.Printf("REST: %s %s", r.Method, r.URL.Path)
+			slog.Debug("REST request", "method", r.Method, "path", r.URL.Path)
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -474,7 +468,7 @@ func (g *RESTGateway) handleStreamingMessageSSE(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	log.Printf("REST SSE: agent=%s", agentID)
+	slog.Debug("REST SSE", "agent", agentID)
 
 	// Create incoming metadata for the gRPC service (server-side)
 	md := metadata.Pairs("agent-name", agentID)
@@ -540,7 +534,7 @@ func (g *RESTGateway) handleStreamingMessageSSE(w http.ResponseWriter, r *http.R
 			}
 
 			if err := streamWrapper.Send(resp); err != nil {
-				log.Printf("Failed to send SSE event: %v", err)
+				slog.Error("Failed to send SSE event", "error", err)
 				return
 			}
 		}
@@ -587,7 +581,7 @@ func (g *RESTGateway) handleSendMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	log.Printf("REST: agent=%s", agentID)
+	slog.Debug("REST request", "agent", agentID)
 
 	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
 
@@ -918,7 +912,7 @@ func (g *RESTGateway) handleJSONRPCAgentScoped(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	log.Printf("JSON-RPC (agent-scoped): agent=%s method=%s id=%v", agentID, rpcReq.Method, rpcReq.ID)
+	slog.Debug("JSON-RPC request", "agent", agentID, "method", rpcReq.Method, "id", rpcReq.ID)
 
 	// Create context with agent metadata
 	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
@@ -1119,7 +1113,7 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 		return
 	}
 
-	log.Printf("JSON-RPC Stream (agent-scoped): agent=%s method=%s", agentID, rpcReq.Method)
+	slog.Debug("JSON-RPC Stream request", "agent", agentID, "method", rpcReq.Method)
 
 	// Create context with agent metadata
 	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
@@ -1135,13 +1129,13 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 		// Reuse the existing streaming logic with the context that has agent metadata
 		var req pb.SendMessageRequest
 		mappedParams := applyA2AFieldMapping(rpcReq.Params)
-		log.Printf("[DEBUG] JSON-RPC params after mapping: %s", string(mappedParams))
+		slog.Debug("JSON-RPC params after mapping", "params", string(mappedParams))
 		if err := g.unmarshaler.Unmarshal(mappedParams, &req); err != nil {
 			g.sendSSEError(w, fmt.Sprintf("Invalid params: %v", err))
 			return
 		}
 		if taskId := req.Request.GetTaskId(); taskId != "" {
-			log.Printf("[DEBUG] Unmarshaled request - TaskId: %s", taskId)
+			slog.Debug("Unmarshaled request", "task_id", taskId)
 		}
 
 		// Set contextId as session ID for memory persistence
@@ -1270,7 +1264,7 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 			for {
 				select {
 				case <-r.Context().Done():
-					log.Printf("Client disconnected from task subscription: agent=%s", agentID)
+					slog.Debug("Client disconnected from task subscription", "agent", agentID)
 					return
 				default:
 				}
@@ -1281,7 +1275,7 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 						break
 					}
 					if r.Context().Err() != nil {
-						log.Printf("Stream cancelled due to context: agent=%s", agentID)
+						slog.Debug("Stream cancelled due to context", "agent", agentID)
 						return
 					}
 					g.sendSSEError(w, fmt.Sprintf("Stream error: %v", err))
@@ -1289,7 +1283,7 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 				}
 
 				if err := streamWrapper.Send(resp); err != nil {
-					log.Printf("Failed to send SSE event: %v", err)
+					slog.Error("Failed to send SSE event", "error", err)
 					return
 				}
 			}
@@ -1457,7 +1451,7 @@ func (g *RESTGateway) handleGetTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("REST: GET /v1/agents/%s/tasks/%s", agentID, taskID)
+	slog.Debug("REST GET task", "agent", agentID, "task", taskID)
 
 	// Create context with agent metadata
 	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
@@ -1537,7 +1531,7 @@ func (g *RESTGateway) handleCancelTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("REST: POST /v1/agents/%s/tasks/%s:cancel", agentID, taskID)
+	slog.Debug("REST POST cancel task", "agent", agentID, "task", taskID)
 
 	// Create context with agent metadata
 	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
@@ -1595,7 +1589,7 @@ func (g *RESTGateway) handleListTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("REST: GET /v1/agents/%s/tasks", agentID)
+	slog.Debug("REST GET tasks", "agent", agentID)
 
 	// Create context with agent metadata
 	ctx := metadata.AppendToOutgoingContext(r.Context(), "agent-name", agentID)
@@ -1693,7 +1687,7 @@ func (g *RESTGateway) handleTaskSubscription(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	log.Printf("REST SSE Task Subscription: agent=%s task=%s", agentID, taskID)
+	slog.Debug("REST SSE Task Subscription", "agent", agentID, "task", taskID)
 
 	// Create incoming metadata for the gRPC service (server-side)
 	md := metadata.Pairs("agent-name", agentID)
@@ -1777,7 +1771,7 @@ func (g *RESTGateway) handleTaskSubscription(w http.ResponseWriter, r *http.Requ
 			// Check if context is cancelled (client disconnected)
 			select {
 			case <-r.Context().Done():
-				log.Printf("Client disconnected from task subscription: agent=%s task=%s", agentID, taskID)
+				slog.Debug("Client disconnected from task subscription", "agent", agentID, "task", taskID)
 				return
 			default:
 			}
@@ -1790,7 +1784,7 @@ func (g *RESTGateway) handleTaskSubscription(w http.ResponseWriter, r *http.Requ
 				}
 				// Check if error is due to context cancellation
 				if r.Context().Err() != nil {
-					log.Printf("Stream cancelled due to context: agent=%s task=%s", agentID, taskID)
+					slog.Debug("Stream cancelled due to context", "agent", agentID, "task", taskID)
 					return
 				}
 				// Other errors - send error event and close
@@ -1799,7 +1793,7 @@ func (g *RESTGateway) handleTaskSubscription(w http.ResponseWriter, r *http.Requ
 			}
 
 			if err := streamWrapper.Send(resp); err != nil {
-				log.Printf("Failed to send SSE event: %v", err)
+				slog.Error("Failed to send SSE event", "error", err)
 				return
 			}
 		}

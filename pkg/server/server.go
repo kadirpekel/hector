@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"sync"
@@ -64,7 +64,7 @@ func New(opts Options) (*Server, error) {
 
 	if s.configLoader != nil {
 		s.configLoader.SetOnChange(func(newCfg *config.Config) error {
-			log.Printf("📝 Configuration change detected, triggering server reload...")
+			slog.Info("Configuration change detected, triggering server reload")
 			// Send config through channel (non-blocking, will overwrite if reload in progress)
 			select {
 			case s.reloadChan <- newCfg:
@@ -136,7 +136,7 @@ func (s *Server) initialize() error {
 	s.mu.RUnlock()
 
 	if s.opts.Debug {
-		log.Println("Initializing runtime and agents...")
+		slog.Info("Initializing runtime and agents...")
 	}
 
 	// Resolve base URL before creating runtime so agents can use it
@@ -150,7 +150,7 @@ func (s *Server) initialize() error {
 	s.runtime = rt
 
 	if config.BoolValue(cfg.Global.Observability.MetricsEnabled, false) || config.BoolValue(cfg.Global.Observability.Tracing.Enabled, false) {
-		log.Println("🔭 Initializing observability...")
+		slog.Info("Initializing observability...")
 
 		obsConfig := observability.Config{
 			Tracing: observability.TracerConfig{
@@ -165,15 +165,14 @@ func (s *Server) initialize() error {
 
 		obsMgr := observability.NewManager(obsConfig)
 		if err := obsMgr.Initialize(context.Background()); err != nil {
-			log.Printf("⚠️  Failed to initialize observability: %v", err)
+			slog.Warn("Failed to initialize observability", "error", err)
 		} else {
 			s.observability = obsMgr
 			if obsConfig.Tracing.Enabled {
-				log.Printf("  ✅ Tracing enabled (endpoint: %s, sampling: %.2f)",
-					obsConfig.Tracing.EndpointURL, obsConfig.Tracing.SamplingRate)
+				slog.Info("Tracing enabled", "endpoint", obsConfig.Tracing.EndpointURL, "sampling", obsConfig.Tracing.SamplingRate)
 			}
 			if obsConfig.MetricsEnabled {
-				log.Printf("  ✅ Metrics enabled")
+				slog.Info("Metrics enabled")
 			}
 		}
 	}
@@ -183,14 +182,14 @@ func (s *Server) initialize() error {
 		entry, _ := agentRegistry.Get(agentID)
 
 		if entry.Config.Type == "a2a" {
-			log.Printf("External agent '%s' connected to %s", agentID, entry.Config.URL)
+			slog.Info("External agent connected", "agent", agentID, "url", entry.Config.URL)
 		} else {
-			log.Printf("Native agent '%s' created", agentID)
+			slog.Info("Native agent created", "agent", agentID)
 
 			// Recover pending tasks with checkpoints (if enabled)
 			if nativeAgent, ok := entry.Agent.(*agent.Agent); ok {
 				if err := nativeAgent.RecoverPendingTasks(context.Background()); err != nil {
-					log.Printf("⚠️  Failed to recover pending tasks for agent '%s': %v", agentID, err)
+					slog.Warn("Failed to recover pending tasks for agent", "agent", agentID, "error", err)
 					// Don't fail initialization - recovery is best-effort
 				}
 			}
@@ -286,17 +285,17 @@ func (s *Server) runLifecycle() {
 	for {
 		select {
 		case <-sigCh:
-			log.Println("Shutting down...")
+			slog.Info("Shutting down...")
 			s.cleanup(context.Background())
 			return
 
 		case <-s.stopChan:
-			log.Println("Stop requested...")
+			slog.Info("Stop requested...")
 			s.cleanup(context.Background())
 			return
 
 		case newCfg := <-s.reloadChan:
-			log.Println("🔄 Configuration reload requested...")
+			slog.Info("Configuration reload requested")
 
 			// Store old config for rollback (can't store runtime/servers as they'll be shut down)
 			s.mu.RLock()
@@ -314,8 +313,8 @@ func (s *Server) runLifecycle() {
 
 			// Try to initialize with new config
 			if err := s.initialize(); err != nil {
-				log.Printf("❌ Failed to reinitialize after reload: %v", err)
-				log.Printf("⚠️  Attempting to restore previous configuration...")
+				slog.Error("Failed to reinitialize after reload", "error", err)
+				slog.Warn("Attempting to restore previous configuration")
 
 				// Rollback: restore old config and recreate everything
 				s.mu.Lock()
@@ -324,24 +323,24 @@ func (s *Server) runLifecycle() {
 
 				// Recreate runtime and servers with old config
 				if err := s.initialize(); err != nil {
-					log.Printf("❌ Failed to restore previous configuration: %v", err)
-					log.Printf("❌ Server is in an inconsistent state. Manual restart required.")
+					slog.Error("Failed to restore previous configuration", "error", err)
+					slog.Error("Server is in an inconsistent state. Manual restart required.")
 					return
 				}
 
 				if err := s.startTransport(); err != nil {
-					log.Printf("❌ Failed to restore transport with previous configuration: %v", err)
-					log.Printf("❌ Server is in an inconsistent state. Manual restart required.")
+					slog.Error("Failed to restore transport with previous configuration", "error", err)
+					slog.Error("Server is in an inconsistent state. Manual restart required.")
 					return
 				}
-				log.Printf("✅ Previous configuration restored successfully")
+				slog.Info("Previous configuration restored successfully")
 				s.logStartup()
 				continue // Continue lifecycle loop
 			}
 
 			if err := s.startTransport(); err != nil {
-				log.Printf("❌ Failed to start transport after reload: %v", err)
-				log.Printf("⚠️  Attempting to restore previous configuration...")
+				slog.Error("Failed to start transport after reload", "error", err)
+				slog.Warn("Attempting to restore previous configuration")
 
 				// Rollback: restore old config and recreate everything
 				s.mu.Lock()
@@ -350,23 +349,23 @@ func (s *Server) runLifecycle() {
 
 				// Recreate runtime and servers with old config
 				if err := s.initialize(); err != nil {
-					log.Printf("❌ Failed to restore previous configuration: %v", err)
-					log.Printf("❌ Server is in an inconsistent state. Manual restart required.")
+					slog.Error("Failed to restore previous configuration", "error", err)
+					slog.Error("Server is in an inconsistent state. Manual restart required.")
 					return
 				}
 
 				if err := s.startTransport(); err != nil {
-					log.Printf("❌ Failed to restore transport with previous configuration: %v", err)
-					log.Printf("❌ Server is in an inconsistent state. Manual restart required.")
+					slog.Error("Failed to restore transport with previous configuration", "error", err)
+					slog.Error("Server is in an inconsistent state. Manual restart required.")
 					return
 				}
-				log.Printf("✅ Previous configuration restored successfully")
+				slog.Info("Previous configuration restored successfully")
 				s.logStartup()
 				continue // Continue lifecycle loop
 			}
 
 			s.logStartup()
-			log.Println("✅ Server reloaded successfully")
+			slog.Info("Server reloaded successfully")
 		}
 	}
 }
@@ -382,7 +381,7 @@ func (s *Server) cleanup(ctx context.Context) {
 			for _, agentID := range agentIDs {
 				agent, err := agentRegistry.GetAgent(agentID)
 				if err != nil {
-					log.Printf("Warning: Failed to get agent %s for shutdown: %v", agentID, err)
+					slog.Warn("Failed to get agent for shutdown", "agent", agentID, "error", err)
 					continue
 				}
 				// Check if agent implements Shutdown method
@@ -420,7 +419,7 @@ func (s *Server) cleanup(ctx context.Context) {
 
 	if len(shutdownErrors) > 0 {
 		for _, err := range shutdownErrors {
-			log.Printf("Shutdown error: %v", err)
+			slog.Error("Shutdown error", "error", err)
 		}
 	}
 }
@@ -492,7 +491,7 @@ func (s *Server) setupAuth() (*transport.AuthConfig, error) {
 		return nil, fmt.Errorf("JWT validator creation failed: %w", err)
 	}
 
-	log.Printf("✅ Authentication configured (JWT)")
+	slog.Info("Authentication configured", "type", "JWT")
 
 	return &transport.AuthConfig{
 		Enabled:   true,
@@ -504,17 +503,17 @@ func (s *Server) logStartup() {
 	addresses := s.resolveAddresses()
 	agentCount := len(s.runtime.Registry().ListAgents())
 
-	log.Printf("✅ Server started with %d agents", agentCount)
-	log.Printf("🌐 HTTP: http://%s", addresses.HTTP)
-	log.Printf("📡 gRPC: %s", addresses.GRPC)
+	slog.Info("Server started", "agents", agentCount)
+	slog.Info("HTTP server", "address", fmt.Sprintf("http://%s", addresses.HTTP))
+	slog.Info("gRPC server", "address", addresses.GRPC)
 
 	if s.opts.Debug {
-		log.Printf("   → Web UI (GET): http://%s/", addresses.HTTP)
-		log.Printf("   → JSON-RPC (POST): http://%s/", addresses.HTTP)
-		log.Printf("   → REST API: http://%s/v1/", addresses.HTTP)
+		slog.Info("Web UI", "url", fmt.Sprintf("http://%s/", addresses.HTTP))
+		slog.Info("JSON-RPC", "url", fmt.Sprintf("http://%s/", addresses.HTTP))
+		slog.Info("REST API", "url", fmt.Sprintf("http://%s/v1/", addresses.HTTP))
 	}
 
-	log.Printf("Press Ctrl+C to stop")
+	slog.Info("Press Ctrl+C to stop")
 }
 
 type ServerAddresses struct {
