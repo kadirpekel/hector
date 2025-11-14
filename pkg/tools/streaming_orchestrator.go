@@ -55,7 +55,8 @@ func (o *StreamingOrchestrator) Execute(
 		finalResult, execErr = tool.ExecuteStreaming(ctx, args, resultCh)
 	}()
 
-	// Stream incremental tool result parts
+	// Stream incremental tool result parts (similar to thinking block streaming)
+	// Each chunk triggers an immediate emission with accumulated content
 	streaming := true
 	for streaming {
 		select {
@@ -66,7 +67,8 @@ func (o *StreamingOrchestrator) Execute(
 			}
 			if chunk != "" {
 				accumulated.WriteString(chunk)
-				// Emit incremental tool result part
+				// Emit incremental tool result part immediately (like thinking delta)
+				// The emitChunk callback will create and send a ToolResult part
 				if err := emitChunk(accumulated.String()); err != nil {
 					return ToolResult{}, err
 				}

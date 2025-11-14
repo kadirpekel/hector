@@ -195,7 +195,8 @@ func (t *CommandTool) GetDescription() string {
 }
 
 // ExecuteStreaming implements StreamingTool interface for execute_command
-// It streams command output incrementally as it's produced
+// It streams command output incrementally as it's produced, similar to thinking blocks.
+// Each line from stdout/stderr triggers an immediate tool result part emission.
 func (t *CommandTool) ExecuteStreaming(ctx context.Context, args map[string]interface{}, resultCh chan<- string) (ToolResult, error) {
 	command, workingDir, execCtx, cancel, err := t.validateAndPrepareArgs(ctx, args)
 	if cancel != nil {
@@ -220,12 +221,15 @@ type pipeStreamer struct {
 }
 
 // stream reads from the pipe and streams lines to the result channel
+// Each line triggers an immediate emission via StreamingOrchestrator,
+// which creates and sends a ToolResult part (streams like thinking blocks)
 func (s *pipeStreamer) stream(pipe *bufio.Scanner) error {
 	for pipe.Scan() {
 		line := pipe.Text()
 		s.builder.WriteString(line)
 		s.builder.WriteString("\n")
 		// Send line to result channel with optional prefix
+		// This triggers immediate tool result part emission via StreamingOrchestrator
 		select {
 		case s.resultCh <- s.prefix + line + "\n":
 		case <-s.ctx.Done():

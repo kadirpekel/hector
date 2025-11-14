@@ -1,13 +1,16 @@
 package agent
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/registry"
+	"google.golang.org/grpc/metadata"
 )
 
 type AgentEntry struct {
@@ -111,6 +114,78 @@ func (r *AgentRegistry) GetAgent(agentID string) (pb.A2AServiceServer, error) {
 				agentID, strings.Join(availableAgents, "\n  - ")), nil)
 	}
 	return entry.Agent, nil
+}
+
+// StreamMessage streams messages from a local agent for true streaming support.
+// This enables agent_call to stream responses from local agents in real-time.
+func (r *AgentRegistry) StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error) {
+	entry, exists := r.Get(agentID)
+	if !exists {
+		return nil, NewAgentRegistryError("AgentRegistry", "StreamMessage",
+			fmt.Sprintf("agent '%s' not found", agentID), nil)
+	}
+
+	req := &pb.SendMessageRequest{
+		Request: message,
+	}
+
+	streamChan := make(chan *pb.StreamResponse, 10)
+
+	// Create a streaming server wrapper similar to runtime/local.go
+	stream := &localStreamWrapper{
+		ctx:  ctx,
+		send: streamChan,
+	}
+
+	go func() {
+		defer close(streamChan)
+		if err := entry.Agent.SendStreamingMessage(req, stream); err != nil {
+			// Log error but don't return it - channel is already closed
+			// The error will be visible in the stream response
+			slog.Error("Failed to stream message from agent", "agent", agentID, "error", err)
+		}
+	}()
+
+	return streamChan, nil
+}
+
+// localStreamWrapper wraps a channel to implement the gRPC streaming server interface
+// Similar to runtime/local.go's localStream implementation
+type localStreamWrapper struct {
+	ctx  context.Context
+	send chan<- *pb.StreamResponse
+}
+
+func (s *localStreamWrapper) Send(resp *pb.StreamResponse) error {
+	select {
+	case s.send <- resp:
+		return nil
+	case <-s.ctx.Done():
+		return s.ctx.Err()
+	}
+}
+
+func (s *localStreamWrapper) Context() context.Context {
+	return s.ctx
+}
+
+func (s *localStreamWrapper) SendMsg(m interface{}) error {
+	return nil
+}
+
+func (s *localStreamWrapper) RecvMsg(m interface{}) error {
+	return nil
+}
+
+func (s *localStreamWrapper) SendHeader(_ metadata.MD) error {
+	return nil
+}
+
+func (s *localStreamWrapper) SetHeader(_ metadata.MD) error {
+	return nil
+}
+
+func (s *localStreamWrapper) SetTrailer(_ metadata.MD) {
 }
 
 func (r *AgentRegistry) GetAllAgents() map[string]pb.A2AServiceServer {

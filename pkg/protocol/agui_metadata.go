@@ -144,10 +144,17 @@ func CreateToolResultPartWithAGUI(result *ToolResult) *pb.Part {
 	})
 
 	isError := result.Error != ""
+	// For streaming support: check if this is explicitly marked as final
+	// We'll add a parameter to indicate if this is a final result
+	// Default behavior: if error exists, it's final; otherwise assume it's incremental during streaming
+	// The caller should pass isFinal parameter, but for backward compat, we default based on error
+	isFinal := isError // If there's an error, it's always final
+
 	metadata, _ := structpb.NewStruct(map[string]interface{}{
 		"event_type":   AGUIEventTypeToolCall,
 		"tool_call_id": result.ToolCallID,
 		"is_error":     isError,
+		"is_final":     isFinal, // Will be overridden by CreateToolResultPartWithFinal if needed
 	})
 
 	return &pb.Part{

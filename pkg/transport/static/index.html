@@ -1748,7 +1748,8 @@
                             return {
                                 tool_call_id: metadata.tool_call_id || data.tool_call_id,
                                 success: !metadata.is_error && (!data.error || data.error === ''),
-                                content: data.content || ''
+                                content: data.content || '',
+                                is_final: metadata.is_final !== false // Default to true if not specified (backward compat)
                             };
                         });
                 },
@@ -1938,7 +1939,14 @@
                     toolResults.forEach(tr => {
                         const widget = messageRef.widgets.find(w => w.id === tr.tool_call_id);
                         if (widget) {
-                            widget.status = tr.success ? 'success' : 'failed';
+                            // Only update status if this is a final result (is_final: true)
+                            // During streaming (is_final: false), keep status as 'working'
+                            if (tr.is_final !== false) {
+                                widget.status = tr.success ? 'success' : 'failed';
+                            } else if (widget.status === 'working') {
+                                // Keep as 'working' during streaming
+                                widget.status = 'working';
+                            }
                             if (tr.content) {
                                 widget.content = tr.content;
                             }

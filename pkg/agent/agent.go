@@ -515,7 +515,7 @@ func (a *Agent) processToolCalls(
 		resultMsg := &pb.Message{
 			Role: pb.Role_ROLE_AGENT,
 			Parts: []*pb.Part{
-				protocol.CreateToolResultPart(a2aResult),
+				protocol.CreateToolResultPartWithFinal(a2aResult, true), // Final result
 			},
 		}
 		state.AddCurrentTurnMessage(resultMsg)
@@ -925,7 +925,8 @@ func (a *Agent) executeTools(
 				Content:    resultContent,
 				Error:      errorStr,
 			}
-			if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPart(a2aResult)); sendErr != nil {
+			// Mark as final since this is a complete (non-streaming) result
+			if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPartWithFinal(a2aResult, true)); sendErr != nil {
 				slog.Error("Failed to send tool result part", "agent", a.name, "error", sendErr)
 				return results
 			}
@@ -944,17 +945,22 @@ func (a *Agent) executeTools(
 		// Directly assert to StreamingTool to avoid double type checking
 		if streamingTool, ok := tool.(tools.StreamingTool); ok {
 			// Use streaming orchestrator to handle streaming execution
+			// This enables incremental tool result streaming, similar to thinking blocks.
+			// Each chunk from the tool triggers an immediate tool result part emission.
 			const streamingChannelBufferSize = 10
 			orchestrator := tools.NewStreamingOrchestrator(streamingChannelBufferSize)
 
 			finalResult, execErr := orchestrator.Execute(ctx, streamingTool, toolCall.Args, func(content string) error {
-				// Emit incremental tool result part
+				// Emit incremental tool result part (streams like thinking blocks)
+				// Each chunk triggers a new tool result part with accumulated content
+				// Mark as not final (is_final: false) so web UI keeps status as 'working'
 				a2aResult := &protocol.ToolResult{
 					ToolCallID: toolCall.ID,
-					Content:    content,
+					Content:    content, // Accumulated content up to this point
 					Error:      "",
 				}
-				if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPart(a2aResult)); sendErr != nil {
+				// Use CreateToolResultPartWithFinal to mark as incremental (not final)
+				if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPartWithFinal(a2aResult, false)); sendErr != nil {
 					slog.Error("Failed to send streaming tool result chunk", "agent", a.name, "error", sendErr)
 					return sendErr
 				}
@@ -962,13 +968,15 @@ func (a *Agent) executeTools(
 			})
 
 			// Emit final tool result part (in case there were no chunks or to ensure final state)
+			// Mark as final (is_final: true) so web UI updates status to 'success'/'failed'
 			if finalResult.Content != "" || finalResult.Error != "" {
 				a2aResult := &protocol.ToolResult{
 					ToolCallID: toolCall.ID,
 					Content:    finalResult.Content,
 					Error:      finalResult.Error,
 				}
-				if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPart(a2aResult)); sendErr != nil {
+				// Use CreateToolResultPartWithFinal to mark as final
+				if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPartWithFinal(a2aResult, true)); sendErr != nil {
 					slog.Error("Failed to send final tool result part", "agent", a.name, "error", sendErr)
 					return results
 				}
@@ -1000,12 +1008,14 @@ func (a *Agent) executeTools(
 		}
 
 		// EMIT TOOL RESULT PART (for web UI animations & CLI can extract from this)
+		// Non-streaming tools always emit final results
 		a2aResult := &protocol.ToolResult{
 			ToolCallID: toolCall.ID,
 			Content:    resultContent,
 			Error:      errorStr,
 		}
-		if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPart(a2aResult)); sendErr != nil {
+		// Mark as final since this is a complete (non-streaming) result
+		if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPartWithFinal(a2aResult, true)); sendErr != nil {
 			slog.Error("Failed to send tool result part", "agent", a.name, "error", sendErr)
 			return results
 		}

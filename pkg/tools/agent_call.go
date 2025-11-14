@@ -18,6 +18,9 @@ type AgentCallTool struct {
 
 type AgentRegistry interface {
 	GetAgent(name string) (pb.A2AServiceServer, error)
+	// StreamMessage streams messages from a local agent (optional - for local agent streaming support)
+	// Returns nil, nil if streaming is not supported for this agent
+	StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error)
 }
 
 // StreamingAgentClient is an interface for agents that support streaming.
@@ -42,6 +45,17 @@ type StreamingAgentClient interface {
 	// StreamMessage streams messages from the agent in real-time.
 	// Returns a channel of StreamResponse messages that will be closed when streaming completes.
 	StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error)
+}
+
+// registryStreamingClientWrapper wraps a stream channel to implement StreamingAgentClient
+// This allows local agents to stream via the registry's StreamMessage method
+type registryStreamingClientWrapper struct {
+	streamChan <-chan *pb.StreamResponse
+}
+
+func (w *registryStreamingClientWrapper) StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error) {
+	// The stream channel is already created by the registry
+	return w.streamChan, nil
 }
 
 func NewAgentCallTool(registry AgentRegistry) *AgentCallTool {
@@ -416,9 +430,17 @@ func (t *AgentCallTool) ExecuteStreaming(ctx context.Context, args map[string]in
 		return t.executeStreamingMessage(ctx, agentID, task, streamingClient, request.Request, resultCh, start)
 	}
 
-	// Fallback to non-streaming SendMessage (for local agents or agents without streaming support)
-	// Note: Local agents would require creating a streaming server wrapper, which is complex.
-	// For now, we use SendMessage and stream the result chunks as they're extracted.
+	// Try to use registry's StreamMessage for local agents
+	if streamChan, err := t.registry.StreamMessage(ctx, agentID, request.Request); err == nil && streamChan != nil {
+		// Create a streaming client wrapper for the registry
+		registryStreamingClient := &registryStreamingClientWrapper{
+			streamChan: streamChan,
+		}
+		return t.executeStreamingMessage(ctx, agentID, task, registryStreamingClient, request.Request, resultCh, start)
+	}
+
+	// Fallback to non-streaming SendMessage (for agents without streaming support)
+	// Note: This provides pseudo-streaming by sending the complete response in chunks.
 	response, err := targetAgent.SendMessage(ctx, request)
 	if err != nil {
 		errorResult, callErr := t.buildAgentCallError(agentID, err)

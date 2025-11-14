@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // SessionIDKeyType is a custom type for context keys to avoid collisions
@@ -58,6 +59,16 @@ func CreateToolCallPart(toolCall *ToolCall) *pb.Part {
 func CreateToolResultPart(result *ToolResult) *pb.Part {
 	// Use AG-UI enriched version by default
 	return CreateToolResultPartWithAGUI(result)
+}
+
+// CreateToolResultPartWithFinal creates a tool result part with explicit final flag
+func CreateToolResultPartWithFinal(result *ToolResult, isFinal bool) *pb.Part {
+	// Create the part and override is_final in metadata
+	part := CreateToolResultPartWithAGUI(result)
+	if part.Metadata != nil && part.Metadata.Fields != nil {
+		part.Metadata.Fields["is_final"] = structpb.NewBoolValue(isFinal)
+	}
+	return part
 }
 
 func IsToolCallPart(part *pb.Part) bool {
