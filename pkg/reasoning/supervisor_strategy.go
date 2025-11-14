@@ -21,7 +21,29 @@ func NewSupervisorStrategy() *SupervisorStrategy {
 func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningState) error {
 
 	if iteration == 1 && state.GetServices() != nil && state.ShowThinking() {
-		decomposition, err := ExtractGoals(state.GetContext(), state.Query(), []string{}, state.GetServices())
+		// Get available agents from registry for goal extraction
+		// Respect sub_agents configuration (same logic as GetAgentContextOptions)
+		var availableAgents []string
+		if registry := state.GetServices().Registry(); registry != nil {
+			subAgents := state.SubAgents()
+			if len(subAgents) > 0 {
+				// Use configured sub-agents
+				agentEntries := registry.FilterAgents(subAgents)
+				availableAgents = make([]string, len(agentEntries))
+				for i, entry := range agentEntries {
+					availableAgents[i] = entry.ID
+				}
+			} else {
+				// No sub-agents configured, use all available agents
+				agentEntries := registry.ListAgents()
+				availableAgents = make([]string, len(agentEntries))
+				for i, entry := range agentEntries {
+					availableAgents[i] = entry.ID
+				}
+			}
+		}
+
+		decomposition, err := ExtractGoals(state.GetContext(), state.Query(), availableAgents, state.GetServices())
 		if err == nil {
 			state.GetCustomState()["task_decomposition"] = decomposition
 
@@ -78,7 +100,17 @@ func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecompo
 }
 
 func (s *SupervisorStrategy) ShouldStop(text string, toolCalls []*protocol.ToolCall, state *ReasoningState) bool {
+	// Supervisor-specific stop logic: if we have agent results and a synthesis response, we can stop
+	if tracking, ok := state.GetCustomState()["decomposition_tracking"].(map[string]interface{}); ok {
+		if calledAgents, ok := tracking["called_agents"].(map[string]bool); ok && len(calledAgents) > 0 {
+			// If agents were called and we have a text response with no pending tool calls, synthesis is complete
+			if text != "" && len(toolCalls) == 0 {
+				return true
+			}
+		}
+	}
 
+	// Fall back to base strategy logic
 	return s.ChainOfThoughtStrategy.ShouldStop(text, toolCalls, state)
 }
 
@@ -89,6 +121,41 @@ func (s *SupervisorStrategy) AfterIteration(
 	results []ToolResult,
 	state *ReasoningState,
 ) error {
+	// Track task decomposition progress if available
+	if decomp, ok := state.GetCustomState()["task_decomposition"].(*TaskDecomposition); ok && decomp != nil {
+		// Track which agents have been called in this iteration
+		calledAgents := make(map[string]bool)
+		for _, toolCall := range toolCalls {
+			if toolCall.Name == "agent_call" {
+				if agentID, ok := toolCall.Args["agent"].(string); ok {
+					calledAgents[agentID] = true
+				}
+			}
+		}
+
+		// Store tracking info for potential future use (progress tracking, validation, etc.)
+		customState := state.GetCustomState()
+		if customState["decomposition_tracking"] == nil {
+			customState["decomposition_tracking"] = make(map[string]interface{})
+		}
+		
+		tracking, ok := customState["decomposition_tracking"].(map[string]interface{})
+		if ok {
+			// Accumulate called agents across iterations
+			if existingCalled, ok := tracking["called_agents"].(map[string]bool); ok {
+				for agentID := range calledAgents {
+					existingCalled[agentID] = true
+				}
+				tracking["called_agents"] = existingCalled
+				tracking["total_agent_calls"] = len(existingCalled)
+			} else {
+				tracking["called_agents"] = calledAgents
+				tracking["total_agent_calls"] = len(calledAgents)
+			}
+			tracking["iteration"] = iteration
+		}
+	}
+
 	return s.ChainOfThoughtStrategy.AfterIteration(iteration, text, toolCalls, results, state)
 }
 
@@ -96,7 +163,31 @@ func (s *SupervisorStrategy) GetContextInjection(state *ReasoningState) string {
 	// Supervisor uses the same common context as all strategies
 	// This includes unified multi-agent foundation (respects sub_agents config)
 	// Strategy differences are in HOW agents are used (orchestration), not WHICH agents are visible
-	return s.ChainOfThoughtStrategy.GetContextInjection(state)
+	baseContext := s.ChainOfThoughtStrategy.GetContextInjection(state)
+
+	// Add synthesis guidance if agents have been called and we have their results
+	// This helps the supervisor know when to synthesize rather than delegate further
+	if tracking, ok := state.GetCustomState()["decomposition_tracking"].(map[string]interface{}); ok {
+		if calledAgents, ok := tracking["called_agents"].(map[string]bool); ok && len(calledAgents) > 0 {
+			// Build list of called agents for context
+			agentList := make([]string, 0, len(calledAgents))
+			for agentID := range calledAgents {
+				agentList = append(agentList, agentID)
+			}
+
+			synthesisGuidance := fmt.Sprintf(
+				"\n\n[SYNTHESIS CONTEXT] You have received results from the following agents: %s. "+
+					"If you have all the information needed, now is the time to SYNTHESIZE: "+
+					"combine these agent outputs into a unified, coherent response. "+
+					"Find connections across their insights, resolve any conflicts, and present a clear, "+
+					"actionable answer to the user. Don't just concatenate - add value through synthesis.",
+				strings.Join(agentList, ", "))
+
+			return baseContext + synthesisGuidance
+		}
+	}
+
+	return baseContext
 }
 
 func (s *SupervisorStrategy) GetRequiredTools() []RequiredTool {
