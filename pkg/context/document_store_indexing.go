@@ -16,30 +16,11 @@ import (
 // indexFromDataSource indexes documents from any data source (directory, SQL, API)
 func (ds *DocumentStore) indexFromDataSource() error {
 
-	// Try to load checkpoint (only for directory sources with file tracking)
-	var checkpoint *IndexCheckpoint
+	// Load existing index state for incremental indexing (directory sources only)
+	// Load this early so we can use it when evaluating checkpoint completion
+	var existingDocs map[string]FileIndexInfo
 	ctx := ds.ctx
 	var err error
-	if ds.dataSource.Type() == "directory" {
-		checkpoint, err = ds.checkpointManager.LoadCheckpoint()
-		if checkpoint != nil && err == nil {
-			processedCount := len(checkpoint.ProcessedFiles)
-			// Only clear checkpoint if it's truly complete (all files processed)
-			// Don't clear based on TotalFiles comparison as it might be inaccurate
-			if processedCount > 0 && checkpoint.TotalFiles > 0 && processedCount >= checkpoint.TotalFiles {
-				// Verify by checking if we actually have more files to process
-				// This prevents clearing checkpoint prematurely
-				_ = ds.checkpointManager.ClearCheckpoint()
-				checkpoint = nil
-			} else {
-				fmt.Println("🔄 " + ds.checkpointManager.FormatCheckpointInfo(checkpoint))
-				fmt.Println("   Resuming from checkpoint...")
-			}
-		}
-	}
-
-	// Load existing index state for incremental indexing (directory sources only)
-	var existingDocs map[string]FileIndexInfo
 	if ds.dataSource.Type() == "directory" {
 		existingDocs, err = ds.loadIndexState()
 		if err != nil {
@@ -51,6 +32,26 @@ func (ds *DocumentStore) indexFromDataSource() error {
 	}
 
 	useIncrementalIndexing := ds.config.IncrementalIndexing != nil && *ds.config.IncrementalIndexing && ds.dataSource.SupportsIncrementalIndexing()
+
+	// Try to load checkpoint (only for directory sources with file tracking)
+	var checkpoint *IndexCheckpoint
+	if ds.dataSource.Type() == "directory" {
+		checkpoint, err = ds.checkpointManager.LoadCheckpoint()
+		if checkpoint != nil && err == nil {
+			processedCount := len(checkpoint.ProcessedFiles)
+			// Only clear checkpoint if it's truly complete (all files processed)
+			if processedCount > 0 && checkpoint.TotalFiles > 0 && processedCount >= checkpoint.TotalFiles {
+				// Checkpoint is complete - previous indexing finished successfully
+				// Clear it and rely on incremental indexing (if enabled) for this run
+				_ = ds.checkpointManager.ClearCheckpoint()
+				checkpoint = nil
+			} else {
+				// Incomplete checkpoint - resume from where we left off
+				fmt.Println("🔄 " + ds.checkpointManager.FormatCheckpointInfo(checkpoint))
+				fmt.Println("   Resuming from checkpoint...")
+			}
+		}
+	}
 
 	if len(existingDocs) > 0 && useIncrementalIndexing {
 		fmt.Printf("📊 Incremental indexing: Found %d existing document(s) in index\n", len(existingDocs))
@@ -144,7 +145,10 @@ func (ds *DocumentStore) indexFromDataSource() error {
 						slog.Warn("Failed to save index state", "error", err)
 					}
 
-					_ = ds.checkpointManager.ClearCheckpoint()
+					// Don't clear checkpoint after successful indexing - keep it temporarily
+					// On next restart, we detect that previous indexing completed successfully
+					// and clear it before using incremental indexing (if enabled)
+					// _ = ds.checkpointManager.ClearCheckpoint()
 				}
 
 				// Update status
