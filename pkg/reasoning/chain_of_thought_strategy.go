@@ -118,18 +118,11 @@ func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) stri
 		}
 	}
 
-	// Build common context (tools, stores, memory, etc.) - shared across all strategies
+	// Build common context (tools, stores, memory, agents, etc.) - shared across all strategies
+	// This includes unified multi-agent foundation
 	commonContext := BuildCommonContext(state)
 	if commonContext != "" {
 		contextParts = append(contextParts, commonContext)
-	}
-
-	// Inject strategy-specific context: sub-agent information
-	if len(state.SubAgents()) > 0 && state.GetServices().Registry() != nil {
-		agentsList := BuildAvailableAgentsContext(state, DefaultAgentContextOptions())
-		if agentsList != "" {
-			contextParts = append(contextParts, agentsList)
-		}
 	}
 
 	if len(contextParts) == 0 {

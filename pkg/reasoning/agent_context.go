@@ -40,23 +40,32 @@ type AgentContextOptions struct {
 	MessageStyle string
 }
 
-// DefaultAgentContextOptions returns default options for chain-of-thought strategy
-func DefaultAgentContextOptions() AgentContextOptions {
-	return AgentContextOptions{
-		OnlySubAgents:       true,
-		ExcludeCurrentAgent: false,
-		IncludeInternal:     false,
-		MessageStyle:        "assistant",
+// GetAgentContextOptions determines agent context options from state/config
+// This provides unified, config-driven behavior across all strategies
+// - If sub_agents configured, use them (respect user intent)
+// - If empty, show all agents (reasonable default)
+// - All strategies get the same foundation
+func GetAgentContextOptions(state *ReasoningState) AgentContextOptions {
+	if state == nil {
+		return AgentContextOptions{
+			OnlySubAgents:       false,
+			ExcludeCurrentAgent: false,
+			IncludeInternal:     false,
+			MessageStyle:        "assistant",
+		}
 	}
-}
 
-// SupervisorAgentContextOptions returns options for supervisor strategy
-func SupervisorAgentContextOptions() AgentContextOptions {
+	subAgents := state.SubAgents()
+
+	// Unified logic: respect sub_agents config if provided
+	// If sub_agents is empty, show all agents (consistent across strategies)
+	onlySubAgents := len(subAgents) > 0
+
 	return AgentContextOptions{
-		OnlySubAgents:       false, // Supervisor can see all agents
-		ExcludeCurrentAgent: true,  // Don't include self
-		IncludeInternal:     false, // Exclude internal agents
-		MessageStyle:        "supervisor",
+		OnlySubAgents:       onlySubAgents,
+		ExcludeCurrentAgent: false,       // Default: include self
+		IncludeInternal:     false,       // Default: exclude internal
+		MessageStyle:        "assistant", // Default: helpful tone
 	}
 }
 
@@ -307,8 +316,9 @@ func BuildMemoryContext(state *ReasoningState) string {
 }
 
 // BuildCommonContext builds all common context that should be available to all strategies
-// This includes: tools, document stores, memory, and other shared resources
+// This includes: tools, document stores, memory, agents, and other shared resources
 // Strategies should call this and append their strategy-specific context
+// All strategies get the same unified multi-agent foundation
 func BuildCommonContext(state *ReasoningState) string {
 	if state == nil {
 		return ""
@@ -338,6 +348,13 @@ func BuildCommonContext(state *ReasoningState) string {
 	memoryInfo := BuildMemoryContext(state)
 	if memoryInfo != "" {
 		contextParts = append(contextParts, memoryInfo)
+	}
+
+	// Agent context (unified multi-agent foundation - available to all)
+	agentOptions := GetAgentContextOptions(state)
+	agentsList := BuildAvailableAgentsContext(state, agentOptions)
+	if agentsList != "" {
+		contextParts = append(contextParts, agentsList)
 	}
 
 	if len(contextParts) == 0 {
