@@ -208,7 +208,7 @@ func setupConsulTest(t *testing.T) (string, func()) {
 	}
 
 	cleanup := func() {
-		client.KV().Delete(testKey, nil)
+		_, _ = client.KV().Delete(testKey, nil)
 	}
 
 	return testKey, cleanup
@@ -265,7 +265,7 @@ func setupEtcdTest(t *testing.T) (string, func()) {
 		})
 		if cleanupClient != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			cleanupClient.Delete(ctx, testKey)
+			_, _ = cleanupClient.Delete(ctx, testKey)
 			cancel()
 			cleanupClient.Close()
 		}
@@ -327,7 +327,7 @@ func setupZookeeperTest(t *testing.T) (string, func()) {
 
 	cleanup := func() {
 		zkProvider.Close()
-		deleteZookeeperNode([]string{"localhost:2181"}, testKey)
+		_ = deleteZookeeperNode([]string{"localhost:2181"}, testKey)
 	}
 
 	return testKey, cleanup

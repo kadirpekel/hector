@@ -62,7 +62,7 @@ func TestLoader_Consul_Integration(t *testing.T) {
 	}
 	defer func() {
 		// Cleanup
-		client.KV().Delete(testKey, nil)
+		_, _ = client.KV().Delete(testKey, nil)
 	}()
 
 	// Test loading
@@ -190,7 +190,9 @@ func TestLoader_Consul_InvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to upload invalid JSON: %v", err)
 	}
-	defer client.KV().Delete(testKey, nil)
+	defer func() {
+		_, _ = client.KV().Delete(testKey, nil)
+	}()
 
 	loader, err := NewLoader(LoaderOptions{
 		Type:      ConfigTypeConsul,

@@ -297,7 +297,9 @@ func (l *Loader) watchFile() {
 					// Try to re-add watch if file is recreated
 					time.Sleep(500 * time.Millisecond)
 					if _, err := os.Stat(l.options.Path); err == nil {
-						watcher.Add(configDir)
+						if err := watcher.Add(configDir); err != nil {
+							slog.Warn("Failed to re-add watch for config directory", "dir", configDir, "error", err)
+						}
 					}
 				}
 			}
@@ -391,7 +393,7 @@ func (l *Loader) watchZookeeper() {
 		return
 	}
 
-	l.zkProvider.Watch(func(event interface{}, err error) {
+	if err := l.zkProvider.Watch(func(event interface{}, err error) {
 		if l.shouldStopWatching() {
 			return
 		}
@@ -402,7 +404,9 @@ func (l *Loader) watchZookeeper() {
 		}
 
 		l.reload()
-	})
+	}); err != nil {
+		slog.Warn("Zookeeper watch stopped", "error", err)
+	}
 }
 
 // shouldStopWatching checks if the loader should stop watching

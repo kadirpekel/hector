@@ -85,8 +85,3 @@ func splitZookeeperPath(path string) []string {
 	}
 	return parts
 }
-
-// Helper function to split path - used by setupZookeeperNode
-func splitPath(path string) []string {
-	return splitZookeeperPath(path)
-}
