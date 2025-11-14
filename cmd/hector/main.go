@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/kadirpekel/hector/pkg/cli"
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/logger"
 )
 
 func getVersion() string {
@@ -105,6 +107,30 @@ func main() {
 	}
 
 	mode := determineMode(command, isClientMode, hasConfigFile)
+
+	// Configure logging using standard library log/slog
+	// In client/local mode, suppress INFO/DEBUG logs unless --debug is enabled
+	// This keeps program output clean while still showing important warnings/errors
+	var logLevel slog.Level
+	if mode == cli.ModeClient || mode == cli.ModeLocalConfig || mode == cli.ModeLocalZeroConfig {
+		if cli.CLI.Debug {
+			logLevel = slog.LevelDebug
+		} else {
+			// Show only warnings and errors in client/local mode
+			logLevel = slog.LevelWarn
+		}
+	} else {
+		// Server mode: show info level by default, or debug if flag is set
+		if cli.CLI.Debug {
+			logLevel = slog.LevelDebug
+		} else {
+			logLevel = slog.LevelInfo
+		}
+	}
+
+	// Initialize logger with appropriate level
+	logger.Init(logLevel, os.Stderr)
+
 	if err := routeCommand(ctx, cfg, configLoader, mode); err != nil {
 		cli.Fatalf("Command failed: %v", err)
 	}
