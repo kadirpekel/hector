@@ -126,6 +126,30 @@ func (s *ChainOfThoughtStrategy) GetContextInjection(state *ReasoningState) stri
 		}
 	}
 
+	// Inject document store information if available
+	storesList := BuildAvailableDocumentStoresContext(state)
+	if storesList != "" {
+		contextParts = append(contextParts, storesList)
+	}
+
+	// Inject tool categorization if available
+	toolsList := BuildAvailableToolsContext(state)
+	if toolsList != "" {
+		contextParts = append(contextParts, toolsList)
+	}
+
+	// Inject MCP integration details if available
+	mcpList := BuildAvailableMCPIntegrationsContext(state)
+	if mcpList != "" {
+		contextParts = append(contextParts, mcpList)
+	}
+
+	// Inject memory information if available
+	memoryInfo := BuildMemoryContext(state)
+	if memoryInfo != "" {
+		contextParts = append(contextParts, memoryInfo)
+	}
+
 	if len(contextParts) == 0 {
 		return ""
 	}

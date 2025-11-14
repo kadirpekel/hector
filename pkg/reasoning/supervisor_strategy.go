@@ -98,14 +98,22 @@ func (s *SupervisorStrategy) GetContextInjection(state *ReasoningState) string {
 	// Supervisor can see all agents (not just sub-agents) and excludes itself
 	agentsList := BuildAvailableAgentsContext(state, SupervisorAgentContextOptions())
 
+	var contextParts []string
+	if baseContext != "" {
+		contextParts = append(contextParts, baseContext)
+	}
 	if agentsList != "" {
-		if baseContext != "" {
-			return baseContext + "\n\n" + agentsList
-		}
-		return agentsList
+		contextParts = append(contextParts, agentsList)
 	}
 
-	return baseContext
+	// All other context (stores, tools, MCP, memory) is already in baseContext
+	// from ChainOfThoughtStrategy, so we don't need to add them again
+
+	if len(contextParts) == 0 {
+		return ""
+	}
+
+	return strings.Join(contextParts, "\n\n")
 }
 
 func (s *SupervisorStrategy) GetRequiredTools() []RequiredTool {

@@ -375,9 +375,17 @@ func minInt(a, b int) int {
 }
 
 func (t *SearchTool) GetInfo() ToolInfo {
+	// Get available stores to include in description
+	storeNames := hectorcontext.ListDocumentStoresFromRegistry()
+	
+	description := "Search across configured document stores for files, content, functions, or structs"
+	if len(storeNames) > 0 {
+		description += fmt.Sprintf(". Available stores: %s", strings.Join(storeNames, ", "))
+	}
+	
 	return ToolInfo{
 		Name:        "search",
-		Description: "Search across configured document stores for files, content, functions, or structs",
+		Description: description,
 		Parameters: []ToolParameter{
 			{
 				Name:        "query",
