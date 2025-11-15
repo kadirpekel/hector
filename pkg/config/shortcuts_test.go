@@ -44,8 +44,8 @@ func TestAgentShortcuts_DocsFolder(t *testing.T) {
 		t.Errorf("Document store path should be './test-folder', got '%s'", store.Path)
 	}
 
-	if agent.Database != "default-database" {
-		t.Errorf("Database should be 'default-database', got '%s'", agent.Database)
+	if agent.VectorStore != "default-vector-store" {
+		t.Errorf("VectorStore should be 'default-vector-store', got '%s'", agent.VectorStore)
 	}
 	if agent.Embedder != "default-embedder" {
 		t.Errorf("Embedder should be 'default-embedder', got '%s'", agent.Embedder)

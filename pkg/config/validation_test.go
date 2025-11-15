@@ -149,15 +149,15 @@ func TestLLMProviderConfig_Validate(t *testing.T) {
 	}
 }
 
-func TestDatabaseProviderConfig_Validate(t *testing.T) {
+func TestVectorStoreConfig_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  DatabaseProviderConfig
+		config  VectorStoreConfig
 		wantErr bool
 	}{
 		{
 			name: "valid_qdrant_config",
-			config: DatabaseProviderConfig{
+			config: VectorStoreConfig{
 				Type:   "qdrant",
 				Host:   "localhost",
 				Port:   6334,
@@ -169,7 +169,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "valid_qdrant_config_without_tls",
-			config: DatabaseProviderConfig{
+			config: VectorStoreConfig{
 				Type: "qdrant",
 				Host: "localhost",
 				Port: 6334,
@@ -180,7 +180,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "missing_type",
-			config: DatabaseProviderConfig{
+			config: VectorStoreConfig{
 				Host: "localhost",
 				Port: 6334,
 			},
@@ -188,7 +188,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "missing_host",
-			config: DatabaseProviderConfig{
+			config: VectorStoreConfig{
 				Type: "qdrant",
 				Port: 6334,
 			},
@@ -196,7 +196,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "invalid_port_zero",
-			config: DatabaseProviderConfig{
+			config: VectorStoreConfig{
 				Type: "qdrant",
 				Host: "localhost",
 				Port: 0,
@@ -205,7 +205,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "invalid_port_negative",
-			config: DatabaseProviderConfig{
+			config: VectorStoreConfig{
 				Type: "qdrant",
 				Host: "localhost",
 				Port: -1,
@@ -214,7 +214,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "invalid_port_too_high",
-			config: DatabaseProviderConfig{
+			config: VectorStoreConfig{
 				Type: "qdrant",
 				Host: "localhost",
 				Port: 70000,
@@ -230,7 +230,7 @@ func TestDatabaseProviderConfig_Validate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.Validate()
 			if (err != nil) != tt.wantErr {
-				t.Errorf("DatabaseProviderConfig.Validate() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("VectorStoreConfig.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -377,7 +377,7 @@ func TestAgentConfig_Validate(t *testing.T) {
 				Type:           "native",
 				Name:           "Test Agent",
 				LLM:            "test-llm",
-				Database:       "test-db",
+				VectorStore:    "test-db",
 				Embedder:       "test-embedder",
 				DocumentStores: []string{"test-store"},
 				Reasoning: ReasoningConfig{
@@ -459,7 +459,7 @@ func TestAgentConfig_Validate(t *testing.T) {
 				Type:           "native",
 				Name:           "Test Agent",
 				LLM:            "test-llm",
-				Database:       "test-db",
+				VectorStore:    "test-db",
 				DocumentStores: []string{"test-store"},
 			},
 			wantErr: true,

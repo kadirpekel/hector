@@ -169,19 +169,19 @@ func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSea
 	for _, storeConfig := range b.documentStores {
 		var searchEngine *context.SearchEngine
 
-		// If store specifies its own database/embedder, create a separate search engine
-		if storeConfig.Database != "" || storeConfig.Embedder != "" {
+		// If store specifies its own vector_store/embedder, create a separate search engine
+		if storeConfig.VectorStore != "" || storeConfig.Embedder != "" {
 			if b.componentManager == nil {
-				return fmt.Errorf("component manager required for document store '%s' with custom database/embedder", storeConfig.Name)
+				return fmt.Errorf("component manager required for document store '%s' with custom vector_store/embedder", storeConfig.Name)
 			}
 
-			// Get database (use store's database or default)
+			// Get vector store (use store's vector_store or default)
 			db := b.database
-			if storeConfig.Database != "" {
+			if storeConfig.VectorStore != "" {
 				var err error
-				db, err = b.componentManager.GetDatabase(storeConfig.Database)
+				db, err = b.componentManager.GetDatabase(storeConfig.VectorStore)
 				if err != nil {
-					return fmt.Errorf("failed to get database '%s' for document store '%s': %w", storeConfig.Database, storeConfig.Name, err)
+					return fmt.Errorf("failed to get vector store '%s' for document store '%s': %w", storeConfig.VectorStore, storeConfig.Name, err)
 				}
 			}
 

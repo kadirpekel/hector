@@ -75,34 +75,35 @@ func NewComponentManagerWithAgentRegistry(globalConfig *config.Config, agentRegi
 		}
 	}
 
-	usedDatabases := make(map[string]bool)
 	usedEmbedders := make(map[string]bool)
 
-	// Collect databases/embedders from agents
+	// Collect vector stores/embedders from agents
+	usedVectorStores := make(map[string]bool)
 	for _, agentConfig := range cm.globalConfig.Agents {
-		if agentConfig.Database != "" {
-			usedDatabases[agentConfig.Database] = true
+		if agentConfig.VectorStore != "" {
+			usedVectorStores[agentConfig.VectorStore] = true
 		}
 		if agentConfig.Embedder != "" {
 			usedEmbedders[agentConfig.Embedder] = true
 		}
 	}
 
-	// Also collect databases/embedders from document stores
+	// Also collect vector stores/embedders from document stores
 	for _, storeConfig := range cm.globalConfig.DocumentStores {
-		if storeConfig.Database != "" {
-			usedDatabases[storeConfig.Database] = true
+		if storeConfig.VectorStore != "" {
+			usedVectorStores[storeConfig.VectorStore] = true
 		}
 		if storeConfig.Embedder != "" {
 			usedEmbedders[storeConfig.Embedder] = true
 		}
 	}
 
-	for name, dbConfig := range cm.globalConfig.Databases {
-		if usedDatabases[name] {
-			_, err := cm.dbRegistry.CreateDatabaseFromConfig(name, dbConfig)
+	// Initialize vector stores
+	for name, vsConfig := range cm.globalConfig.VectorStores {
+		if usedVectorStores[name] {
+			_, err := cm.dbRegistry.CreateDatabaseFromConfig(name, vsConfig)
 			if err != nil {
-				return nil, fmt.Errorf("failed to initialize database '%s': %w", name, err)
+				return nil, fmt.Errorf("failed to initialize vector store '%s': %w", name, err)
 			}
 		}
 	}
@@ -151,6 +152,21 @@ func (cm *ComponentManager) GetDatabase(name string) (databases.DatabaseProvider
 	return cm.dbRegistry.GetDatabase(name)
 }
 
+// GetSQLDatabase returns a SQL database connection and driver name
+func (cm *ComponentManager) GetSQLDatabase(name string) (*sql.DB, string, error) {
+	dbConfig, exists := cm.globalConfig.Databases[name]
+	if !exists {
+		return nil, "", fmt.Errorf("SQL database '%s' not found", name)
+	}
+
+	db, err := cm.getOrCreateSQLDatabase(name, dbConfig)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return db, dbConfig.Driver, nil
+}
+
 func (cm *ComponentManager) GetEmbedder(name string) (embedders.EmbedderProvider, error) {
 	return cm.embedderRegistry.GetEmbedder(name)
 }
@@ -175,21 +191,98 @@ func (cm *ComponentManager) GetSessionService(storeName string, agentID string) 
 	}
 
 	if storeConfig.Backend == "sql" {
-		if storeConfig.SQL == nil {
-			return nil, fmt.Errorf("SQL configuration is required for SQL session store '%s'", storeName)
+		var db *sql.DB
+		var driver string
+		var err error
+
+		// Check if database reference is provided (new way)
+		if storeConfig.Database != "" {
+			dbConfig, exists := cm.globalConfig.Databases[storeConfig.Database]
+			if !exists {
+				return nil, fmt.Errorf("session store '%s': database '%s' not found", storeName, storeConfig.Database)
+			}
+			db, err = cm.getOrCreateSQLDatabase(storeConfig.Database, dbConfig)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get SQL database '%s': %w", storeConfig.Database, err)
+			}
+			driver = dbConfig.Driver
+		} else if storeConfig.SQL != nil {
+			// Fallback to inline SQL config (deprecated but supported)
+			db, err = cm.getOrCreateSessionStoreDB(storeName, storeConfig.SQL)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get database for session store '%s': %w", storeName, err)
+			}
+			driver = storeConfig.SQL.Driver
+		} else {
+			return nil, fmt.Errorf("session store '%s': either 'database' reference or 'sql' config is required", storeName)
 		}
 
-		db, err := cm.getOrCreateSessionStoreDB(storeName, storeConfig.SQL)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get database for session store '%s': %w", storeName, err)
-		}
-
-		return memory.NewSQLSessionService(db, storeConfig.SQL.Driver, agentID)
+		return memory.NewSQLSessionService(db, driver, agentID)
 	}
 
 	return nil, fmt.Errorf("unsupported session store backend '%s' for store '%s'", storeConfig.Backend, storeName)
 }
 
+// getOrCreateSQLDatabase creates or retrieves a cached SQL database connection
+func (cm *ComponentManager) getOrCreateSQLDatabase(dbName string, cfg *config.DatabaseConfig) (*sql.DB, error) {
+	// Check cache first
+	if cached, ok := cm.sessionStoreDBs[dbName]; ok {
+		if db, ok := cached.(*sql.DB); ok {
+			return db, nil
+		}
+	}
+
+	driverName := cfg.Driver
+	if driverName == "sqlite" {
+		driverName = "sqlite3"
+	}
+
+	db, err := sql.Open(driverName, cfg.ConnectionString())
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	db.SetMaxOpenConns(cfg.MaxConns)
+	db.SetMaxIdleConns(cfg.MaxIdle)
+
+	// Parse connection lifetime
+	if cfg.ConnMaxLifetime != "" {
+		if lifetime, err := time.ParseDuration(cfg.ConnMaxLifetime); err == nil {
+			db.SetConnMaxLifetime(lifetime)
+		} else {
+			db.SetConnMaxLifetime(time.Hour) // Default
+		}
+	} else {
+		db.SetConnMaxLifetime(time.Hour)
+	}
+
+	// Parse idle timeout
+	if cfg.ConnMaxIdleTime != "" {
+		if idleTime, err := time.ParseDuration(cfg.ConnMaxIdleTime); err == nil {
+			db.SetConnMaxIdleTime(idleTime)
+		} else {
+			db.SetConnMaxIdleTime(30 * time.Minute) // Default
+		}
+	} else {
+		db.SetConnMaxIdleTime(30 * time.Minute)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	cm.sessionStoreDBs[dbName] = db
+
+	fmt.Printf("✅ SQL database '%s' connected (driver: %s, database: %s)\n", dbName, cfg.Driver, cfg.Database)
+
+	return db, nil
+}
+
+// getOrCreateSessionStoreDB is deprecated - use getOrCreateSQLDatabase instead
 func (cm *ComponentManager) getOrCreateSessionStoreDB(storeName string, cfg *config.SessionSQLConfig) (*sql.DB, error) {
 
 	if cached, ok := cm.sessionStoreDBs[storeName]; ok {

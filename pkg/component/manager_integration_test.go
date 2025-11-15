@@ -9,11 +9,12 @@ import (
 
 func createMinimalConfig() *config.Config {
 	return &config.Config{
-		LLMs:      make(map[string]*config.LLMProviderConfig),
-		Databases: make(map[string]*config.DatabaseProviderConfig),
-		Embedders: make(map[string]*config.EmbedderProviderConfig),
-		Agents:    make(map[string]*config.AgentConfig),
-		Tools:     make(map[string]*config.ToolConfig),
+		LLMs:         make(map[string]*config.LLMProviderConfig),
+		VectorStores: make(map[string]*config.VectorStoreConfig),
+		Databases:    make(map[string]*config.DatabaseConfig),
+		Embedders:    make(map[string]*config.EmbedderProviderConfig),
+		Agents:       make(map[string]*config.AgentConfig),
+		Tools:        make(map[string]*config.ToolConfig),
 		Plugins: config.PluginConfigs{
 			Discovery:           config.PluginDiscoveryConfig{Enabled: config.BoolPtr(false)},
 			LLMProviders:        make(map[string]*config.PluginConfig),

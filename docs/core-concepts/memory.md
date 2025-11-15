@@ -176,7 +176,7 @@ embedders:
 # Agent with long-term memory
 agents:
   assistant:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     memory:
       working:
@@ -271,7 +271,7 @@ agents:
 ```yaml
 agents:
   support:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     memory:
       working:
@@ -288,7 +288,7 @@ agents:
 ```yaml
 agents:
   personal:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     memory:
       working:
@@ -397,7 +397,7 @@ Combine strategies for optimal performance:
 ```yaml
 agents:
   advanced:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     memory:
       working:
@@ -418,7 +418,7 @@ Different memory per session/user:
 ```yaml
 agents:
   multi_user:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     memory:
       longterm:
@@ -454,7 +454,7 @@ agents:
 agents:
   support:
     llm: "gpt-4o"
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     
     memory:
@@ -484,7 +484,7 @@ agents:
 agents:
   researcher:
     llm: "claude"
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     
     memory:

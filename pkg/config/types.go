@@ -315,9 +315,9 @@ func (c *LLMProviderConfig) SetDefaults() {
 	}
 }
 
-// DatabaseProviderConfig holds configuration for database connections.
-// Note: For operation timeouts, use database client-specific timeout settings.
-type DatabaseProviderConfig struct {
+// VectorStoreConfig holds configuration for vector database connections (Qdrant, Pinecone, etc.)
+// Note: For operation timeouts, use vector store client-specific timeout settings.
+type VectorStoreConfig struct {
 	Type   string `yaml:"type"`
 	Host   string `yaml:"host"`
 	Port   int    `yaml:"port"`
@@ -325,7 +325,7 @@ type DatabaseProviderConfig struct {
 	UseTLS *bool  `yaml:"use_tls"`
 }
 
-func (c *DatabaseProviderConfig) Validate() error {
+func (c *VectorStoreConfig) Validate() error {
 	if c.Type == "" {
 		return fmt.Errorf("type is required")
 	}
@@ -338,8 +338,7 @@ func (c *DatabaseProviderConfig) Validate() error {
 	return nil
 }
 
-func (c *DatabaseProviderConfig) SetDefaults() {
-
+func (c *VectorStoreConfig) SetDefaults() {
 	if c.Type == "" {
 		c.Type = "qdrant"
 	}
@@ -351,6 +350,82 @@ func (c *DatabaseProviderConfig) SetDefaults() {
 	}
 	if c.UseTLS == nil {
 		c.UseTLS = BoolPtr(false)
+	}
+}
+
+// DatabaseConfig holds configuration for SQL database connections (PostgreSQL, MySQL, SQLite)
+type DatabaseConfig struct {
+	Driver          string `yaml:"driver"`         // "postgres", "mysql", "sqlite"
+	Host            string `yaml:"host,omitempty"` // Not required for SQLite
+	Port            int    `yaml:"port,omitempty"` // Not required for SQLite
+	Database        string `yaml:"database"`       // Database name (or file path for SQLite)
+	Username        string `yaml:"username,omitempty"`
+	Password        string `yaml:"password,omitempty"`
+	SSLMode         string `yaml:"ssl_mode,omitempty"` // For PostgreSQL
+	MaxConns        int    `yaml:"max_conns,omitempty"`
+	MaxIdle         int    `yaml:"max_idle,omitempty"`
+	ConnMaxLifetime string `yaml:"conn_max_lifetime,omitempty"`  // e.g., "1h"
+	ConnMaxIdleTime string `yaml:"conn_max_idle_time,omitempty"` // e.g., "30m"
+}
+
+func (c *DatabaseConfig) Validate() error {
+	if c.Driver == "" {
+		return fmt.Errorf("driver is required")
+	}
+	if c.Driver != "postgres" && c.Driver != "mysql" && c.Driver != "sqlite" {
+		return fmt.Errorf("invalid driver '%s', must be 'postgres', 'mysql', or 'sqlite'", c.Driver)
+	}
+	if c.Database == "" {
+		return fmt.Errorf("database is required")
+	}
+	if c.Driver != "sqlite" {
+		if c.Host == "" {
+			return fmt.Errorf("host is required for %s", c.Driver)
+		}
+		if c.Port <= 0 {
+			return fmt.Errorf("port must be positive for %s", c.Driver)
+		}
+	}
+	if c.MaxConns <= 0 {
+		c.MaxConns = 25 // Default
+	}
+	if c.MaxIdle < 0 {
+		c.MaxIdle = 5 // Default
+	}
+	return nil
+}
+
+func (c *DatabaseConfig) SetDefaults() {
+	if c.MaxConns == 0 {
+		c.MaxConns = 25
+	}
+	if c.MaxIdle == 0 {
+		c.MaxIdle = 5
+	}
+	if c.ConnMaxLifetime == "" {
+		c.ConnMaxLifetime = "1h"
+	}
+	if c.ConnMaxIdleTime == "" {
+		c.ConnMaxIdleTime = "30m"
+	}
+	if c.Driver == "postgres" && c.SSLMode == "" {
+		c.SSLMode = "disable"
+	}
+}
+
+// ConnectionString returns the database connection string
+func (c *DatabaseConfig) ConnectionString() string {
+	switch c.Driver {
+	case "postgres", "pgx":
+		return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			c.Host, c.Port, c.Username, c.Password, c.Database, c.SSLMode)
+	case "mysql":
+		return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
+			c.Username, c.Password, c.Host, c.Port, c.Database)
+	case "sqlite", "sqlite3":
+		return c.Database // For SQLite, database is the file path
+	default:
+		return ""
 	}
 }
 
@@ -482,7 +557,7 @@ type AgentConfig struct {
 	Credentials   *AgentCredentials `yaml:"credentials,omitempty"`
 
 	LLM              string                  `yaml:"llm,omitempty"`
-	Database         string                  `yaml:"database,omitempty"`
+	VectorStore      string                  `yaml:"vector_store,omitempty"`
 	Embedder         string                  `yaml:"embedder,omitempty"`
 	DocumentStores   []string                `yaml:"document_stores,omitempty"`
 	Prompt           PromptConfig            `yaml:"prompt,omitempty"`
@@ -558,8 +633,8 @@ func (c *AgentConfig) Validate() error {
 			return fmt.Errorf("enable_tools shortcut and explicit tools list are mutually exclusive (use one or the other)")
 		}
 
-		// Note: Database/embedder requirement validation is done in Config.validateReferences()
-		// where we have access to document store configs to check if they have their own database/embedder
+		// Note: VectorStore/embedder requirement validation is done in Config.validateReferences()
+		// where we have access to document store configs to check if they have their own vector_store/embedder
 
 		if err := c.Prompt.Validate(); err != nil {
 			return fmt.Errorf("prompt configuration validation failed: %w", err)
@@ -1087,11 +1162,12 @@ func (c *ToolConfig) SetDefaults() {
 
 type DocumentStoreConfig struct {
 	Name                string   `yaml:"name"`
-	Collection          string   `yaml:"collection"` // Optional: points to existing Qdrant collection (no indexing)
-	Database            string   `yaml:"database"`   // Optional: database to use (defaults to agent's database)
-	Embedder            string   `yaml:"embedder"`   // Optional: embedder to use (defaults to agent's embedder)
-	Source              string   `yaml:"source"`     // "directory", "sql", "api" (required if collection not set)
-	Path                string   `yaml:"path"`       // Required for directory source
+	Collection          string   `yaml:"collection"`   // Optional: points to existing Qdrant collection (no indexing)
+	VectorStore         string   `yaml:"vector_store"` // Optional: vector store to use (defaults to agent's vector_store)
+	Database            string   `yaml:"database"`     // Optional: SQL database reference (for SQL source)
+	Embedder            string   `yaml:"embedder"`     // Optional: embedder to use (defaults to agent's embedder)
+	Source              string   `yaml:"source"`       // "directory", "sql", "api" (required if collection not set)
+	Path                string   `yaml:"path"`         // Required for directory source
 	IncludePatterns     []string `yaml:"include_patterns"`
 	ExcludePatterns     []string `yaml:"exclude_patterns"`            // If set, replaces defaults entirely
 	AdditionalExcludes  []string `yaml:"additional_exclude_patterns"` // Extends default exclusions
@@ -1379,7 +1455,8 @@ func (c *DocumentStoreConfig) SetDefaults() {
 type TaskConfig struct {
 	Backend      string            `yaml:"backend,omitempty"`
 	WorkerPool   int               `yaml:"worker_pool,omitempty"`
-	SQL          *TaskSQLConfig    `yaml:"sql,omitempty"`
+	Database     string            `yaml:"database,omitempty"`      // Reference to SQL database from databases section
+	SQL          *TaskSQLConfig    `yaml:"sql,omitempty"`           // Deprecated: use Database reference instead
 	InputTimeout int               `yaml:"input_timeout,omitempty"` // Timeout in seconds for INPUT_REQUIRED state (default: 600)
 	Timeout      int               `yaml:"timeout,omitempty"`       // Timeout in seconds for async task execution (default: 3600 = 1 hour)
 	HITL         *HITLConfig       `yaml:"hitl,omitempty"`          // Human-in-the-loop configuration
@@ -1410,7 +1487,7 @@ type CheckpointRecoveryConfig struct {
 }
 
 func (c *TaskConfig) IsEnabled() bool {
-	return c.Backend != "" || c.WorkerPool > 0 || c.SQL != nil
+	return c.Backend != "" || c.WorkerPool > 0 || c.Database != "" || c.SQL != nil
 }
 
 type TaskSQLConfig struct {
@@ -1595,12 +1672,20 @@ func (c *TaskConfig) Validate() error {
 	if c.WorkerPool < 0 {
 		return fmt.Errorf("worker_pool must be non-negative")
 	}
-	if c.Backend == "sql" && c.SQL == nil {
-		return fmt.Errorf("sql configuration is required when backend is 'sql'")
-	}
-	if c.SQL != nil {
-		if err := c.SQL.Validate(); err != nil {
-			return fmt.Errorf("sql config validation failed: %w", err)
+	if c.Backend == "sql" {
+		// Either database reference or inline SQL config must be provided
+		if c.Database == "" && c.SQL == nil {
+			return fmt.Errorf("SQL backend requires either 'database' reference or 'sql' configuration")
+		}
+		// If both are provided, prefer database reference
+		if c.Database != "" && c.SQL != nil {
+			return fmt.Errorf("cannot specify both 'database' reference and 'sql' configuration (use 'database' reference)")
+		}
+		// Validate inline SQL config if provided (deprecated)
+		if c.SQL != nil {
+			if err := c.SQL.Validate(); err != nil {
+				return fmt.Errorf("sql config validation failed: %w", err)
+			}
 		}
 	}
 	if c.HITL != nil {
@@ -1671,7 +1756,8 @@ func (c *TaskSQLConfig) ConnectionString() string {
 
 type SessionStoreConfig struct {
 	Backend   string            `yaml:"backend,omitempty"`
-	SQL       *SessionSQLConfig `yaml:"sql,omitempty"`
+	Database  string            `yaml:"database,omitempty"` // Reference to SQL database from databases section
+	SQL       *SessionSQLConfig `yaml:"sql,omitempty"`      // Deprecated: use Database reference instead
 	RateLimit *RateLimitConfig  `yaml:"rate_limit,omitempty"`
 }
 
@@ -1737,12 +1823,20 @@ func (c *SessionStoreConfig) Validate() error {
 	if c.Backend != "" && c.Backend != "memory" && c.Backend != "sql" {
 		return fmt.Errorf("invalid session store backend '%s', must be 'memory' or 'sql'", c.Backend)
 	}
-	if c.Backend == "sql" && c.SQL == nil {
-		return fmt.Errorf("sql configuration is required when backend is 'sql'")
-	}
-	if c.SQL != nil {
-		if err := c.SQL.Validate(); err != nil {
-			return fmt.Errorf("sql config validation failed: %w", err)
+	if c.Backend == "sql" {
+		// Either database reference or inline SQL config must be provided
+		if c.Database == "" && c.SQL == nil {
+			return fmt.Errorf("SQL backend requires either 'database' reference or 'sql' configuration")
+		}
+		// If both are provided, prefer database reference
+		if c.Database != "" && c.SQL != nil {
+			return fmt.Errorf("cannot specify both 'database' reference and 'sql' configuration (use 'database' reference)")
+		}
+		// Validate inline SQL config if provided (deprecated)
+		if c.SQL != nil {
+			if err := c.SQL.Validate(); err != nil {
+				return fmt.Errorf("sql config validation failed: %w", err)
+			}
 		}
 	}
 	if c.RateLimit != nil {

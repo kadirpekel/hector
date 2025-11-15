@@ -48,8 +48,11 @@ func (c *Config) initializeMaps() {
 	if c.LLMs == nil {
 		c.LLMs = make(map[string]*LLMProviderConfig)
 	}
+	if c.VectorStores == nil {
+		c.VectorStores = make(map[string]*VectorStoreConfig)
+	}
 	if c.Databases == nil {
-		c.Databases = make(map[string]*DatabaseProviderConfig)
+		c.Databases = make(map[string]*DatabaseConfig)
 	}
 	if c.Embedders == nil {
 		c.Embedders = make(map[string]*EmbedderProviderConfig)
@@ -84,11 +87,11 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 	agent.DocumentStores = []string{storeName}
 	agent.DocsFolder = ""
 
-	if agent.Database == "" {
-		if _, exists := c.Databases["default-database"]; !exists {
-			c.Databases["default-database"] = &DatabaseProviderConfig{}
+	if agent.VectorStore == "" {
+		if _, exists := c.VectorStores["default-vector-store"]; !exists {
+			c.VectorStores["default-vector-store"] = &VectorStoreConfig{}
 		}
-		agent.Database = "default-database"
+		agent.VectorStore = "default-vector-store"
 	}
 
 	if agent.Embedder == "" {
@@ -127,8 +130,11 @@ func (c *Config) SetDefaults() {
 	if c.LLMs == nil {
 		c.LLMs = make(map[string]*LLMProviderConfig)
 	}
+	if c.VectorStores == nil {
+		c.VectorStores = make(map[string]*VectorStoreConfig)
+	}
 	if c.Databases == nil {
-		c.Databases = make(map[string]*DatabaseProviderConfig)
+		c.Databases = make(map[string]*DatabaseConfig)
 	}
 	if c.Embedders == nil {
 		c.Embedders = make(map[string]*EmbedderProviderConfig)
@@ -149,8 +155,8 @@ func (c *Config) SetDefaults() {
 	if len(c.LLMs) == 0 {
 		c.LLMs["default-llm"] = &LLMProviderConfig{}
 	}
-	if len(c.Databases) == 0 {
-		c.Databases["default-database"] = &DatabaseProviderConfig{}
+	if len(c.VectorStores) == 0 {
+		c.VectorStores["default-vector-store"] = &VectorStoreConfig{}
 	}
 	if len(c.Embedders) == 0 {
 		c.Embedders["default-embedder"] = &EmbedderProviderConfig{}
@@ -162,6 +168,12 @@ func (c *Config) SetDefaults() {
 	for name := range c.LLMs {
 		if c.LLMs[name] != nil {
 			c.LLMs[name].SetDefaults()
+		}
+	}
+
+	for name := range c.VectorStores {
+		if c.VectorStores[name] != nil {
+			c.VectorStores[name].SetDefaults()
 		}
 	}
 
@@ -216,9 +228,10 @@ type Config struct {
 
 	Global GlobalSettings `yaml:"global,omitempty"`
 
-	LLMs      map[string]*LLMProviderConfig      `yaml:"llms,omitempty"`
-	Databases map[string]*DatabaseProviderConfig `yaml:"databases,omitempty"`
-	Embedders map[string]*EmbedderProviderConfig `yaml:"embedders,omitempty"`
+	LLMs         map[string]*LLMProviderConfig      `yaml:"llms,omitempty"`
+	VectorStores map[string]*VectorStoreConfig      `yaml:"vector_stores,omitempty"`
+	Databases    map[string]*DatabaseConfig         `yaml:"databases,omitempty"`
+	Embedders    map[string]*EmbedderProviderConfig `yaml:"embedders,omitempty"`
 
 	Agents map[string]*AgentConfig `yaml:"agents,omitempty"`
 
@@ -350,10 +363,10 @@ func (c *Config) validateReferences() error {
 			}
 		}
 
-		if agent.Database != "" {
-			if _, exists := c.Databases[agent.Database]; !exists {
-				return fmt.Errorf("agent '%s': database '%s' not found (available: %v)",
-					agentName, agent.Database, mapKeys(c.Databases))
+		if agent.VectorStore != "" {
+			if _, exists := c.VectorStores[agent.VectorStore]; !exists {
+				return fmt.Errorf("agent '%s': vector_store '%s' not found (available: %v)",
+					agentName, agent.VectorStore, mapKeys(c.VectorStores))
 			}
 		}
 
@@ -366,8 +379,8 @@ func (c *Config) validateReferences() error {
 
 		// Validate conditional database/embedder requirements for agents with document stores
 		if len(agent.DocumentStores) > 0 {
-			// Check if all document stores have their own database/embedder
-			allStoresHaveDatabase := true
+			// Check if all document stores have their own vector_store/embedder
+			allStoresHaveVectorStore := true
 			allStoresHaveEmbedder := true
 			for _, dsName := range agent.DocumentStores {
 				dsConfig, exists := c.DocumentStores[dsName]
@@ -375,8 +388,8 @@ func (c *Config) validateReferences() error {
 					return fmt.Errorf("agent '%s': document store '%s' not found (available: %v)",
 						agentName, dsName, mapKeys(c.DocumentStores))
 				}
-				if dsConfig.Database == "" {
-					allStoresHaveDatabase = false
+				if dsConfig.VectorStore == "" {
+					allStoresHaveVectorStore = false
 				}
 				if dsConfig.Embedder == "" {
 					allStoresHaveEmbedder = false
@@ -389,12 +402,12 @@ func (c *Config) validateReferences() error {
 			// Check if long-term memory is enabled
 			longTermMemoryEnabled := agent.Memory.LongTerm.IsEnabled()
 
-			// Determine if agent database/embedder is needed
-			needsAgentDatabase := longTermMemoryEnabled || includeContextEnabled || !allStoresHaveDatabase
+			// Determine if agent vector_store/embedder is needed
+			needsAgentVectorStore := longTermMemoryEnabled || includeContextEnabled || !allStoresHaveVectorStore
 			needsAgentEmbedder := longTermMemoryEnabled || includeContextEnabled || !allStoresHaveEmbedder
 
 			// Validate requirements
-			if needsAgentDatabase && agent.Database == "" {
+			if needsAgentVectorStore && agent.VectorStore == "" {
 				reasons := []string{}
 				if longTermMemoryEnabled {
 					reasons = append(reasons, "long-term memory is enabled")
@@ -402,10 +415,10 @@ func (c *Config) validateReferences() error {
 				if includeContextEnabled {
 					reasons = append(reasons, "IncludeContext is enabled")
 				}
-				if !allStoresHaveDatabase {
-					reasons = append(reasons, "at least one document store doesn't specify its own database")
+				if !allStoresHaveVectorStore {
+					reasons = append(reasons, "at least one document store doesn't specify its own vector_store")
 				}
-				return fmt.Errorf("agent '%s': database is required when: %s", agentName, strings.Join(reasons, ", "))
+				return fmt.Errorf("agent '%s': vector_store is required when: %s", agentName, strings.Join(reasons, ", "))
 			}
 
 			if needsAgentEmbedder && agent.Embedder == "" {
@@ -428,7 +441,7 @@ func (c *Config) validateReferences() error {
 			includeContextEnabled := agent.Prompt.IncludeContext != nil && *agent.Prompt.IncludeContext
 			longTermMemoryEnabled := agent.Memory.LongTerm.IsEnabled()
 
-			if (includeContextEnabled || longTermMemoryEnabled) && agent.Database == "" {
+			if (includeContextEnabled || longTermMemoryEnabled) && agent.VectorStore == "" {
 				reasons := []string{}
 				if longTermMemoryEnabled {
 					reasons = append(reasons, "long-term memory is enabled")
@@ -436,7 +449,7 @@ func (c *Config) validateReferences() error {
 				if includeContextEnabled {
 					reasons = append(reasons, "IncludeContext is enabled")
 				}
-				return fmt.Errorf("agent '%s': database is required when: %s", agentName, strings.Join(reasons, ", "))
+				return fmt.Errorf("agent '%s': vector_store is required when: %s", agentName, strings.Join(reasons, ", "))
 			}
 
 			if (includeContextEnabled || longTermMemoryEnabled) && agent.Embedder == "" {
@@ -467,6 +480,20 @@ func (c *Config) validateReferences() error {
 		}
 	}
 
+	// Validate session store references (database references)
+	for storeName, store := range c.SessionStores {
+		if store == nil {
+			continue
+		}
+
+		if store.Backend == "sql" && store.Database != "" {
+			if _, exists := c.Databases[store.Database]; !exists {
+				return fmt.Errorf("session store '%s': database '%s' not found (available: %v)",
+					storeName, store.Database, mapKeys(c.Databases))
+			}
+		}
+	}
+
 	for toolName, tool := range c.Tools {
 		if tool == nil {
 			continue
@@ -478,6 +505,51 @@ func (c *Config) validateReferences() error {
 					return fmt.Errorf("tool '%s': document store '%s' not found (available: %v)",
 						toolName, storeName, mapKeys(c.DocumentStores))
 				}
+			}
+		}
+	}
+
+	// Validate task database references
+	for agentName, agent := range c.Agents {
+		if agent == nil || agent.Task == nil {
+			continue
+		}
+
+		if agent.Task.Backend == "sql" && agent.Task.Database != "" {
+			if _, exists := c.Databases[agent.Task.Database]; !exists {
+				return fmt.Errorf("agent '%s': task database '%s' not found (available: %v)",
+					agentName, agent.Task.Database, mapKeys(c.Databases))
+			}
+		}
+	}
+
+	// Validate document store references (vector_store, database, embedder)
+	for storeName, store := range c.DocumentStores {
+		if store == nil {
+			continue
+		}
+
+		// Validate vector_store reference
+		if store.VectorStore != "" {
+			if _, exists := c.VectorStores[store.VectorStore]; !exists {
+				return fmt.Errorf("document store '%s': vector_store '%s' not found (available: %v)",
+					storeName, store.VectorStore, mapKeys(c.VectorStores))
+			}
+		}
+
+		// Validate database reference (for SQL source)
+		if store.Database != "" {
+			if _, exists := c.Databases[store.Database]; !exists {
+				return fmt.Errorf("document store '%s': database '%s' not found (available: %v)",
+					storeName, store.Database, mapKeys(c.Databases))
+			}
+		}
+
+		// Validate embedder reference
+		if store.Embedder != "" {
+			if _, exists := c.Embedders[store.Embedder]; !exists {
+				return fmt.Errorf("document store '%s': embedder '%s' not found (available: %v)",
+					storeName, store.Embedder, mapKeys(c.Embedders))
 			}
 		}
 	}
@@ -611,7 +683,8 @@ func CreateZeroConfig(source interface{}) *Config {
 		LLMs: map[string]*LLMProviderConfig{
 			provider: llmConfig,
 		},
-		Databases:      make(map[string]*DatabaseProviderConfig),
+		VectorStores:   make(map[string]*VectorStoreConfig),
+		Databases:      make(map[string]*DatabaseConfig),
 		Embedders:      make(map[string]*EmbedderProviderConfig),
 		DocumentStores: make(map[string]*DocumentStoreConfig),
 		SessionStores:  make(map[string]*SessionStoreConfig),

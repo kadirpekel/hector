@@ -57,8 +57,8 @@ ollama pull nomic-embed-text
 ### 3. Configure Hector
 
 ```yaml
-# Vector database
-databases:
+# Vector store
+vector_stores:
   qdrant:
     type: "qdrant"
     host: "localhost"
@@ -74,7 +74,7 @@ embedders:
 # Agent with semantic search
 agents:
   coder:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     tools: ["search"]
     document_stores:
@@ -104,9 +104,15 @@ Document stores define what gets indexed for search. Hector supports three sourc
 ### Basic Configuration (Directory Source)
 
 ```yaml
+vector_stores:
+  qdrant:
+    type: "qdrant"
+    host: "localhost"
+    port: 6334
+
 agents:
   assistant:
-    database: "qdrant"
+    vector_store: "qdrant"  # Reference to vector_stores section
     embedder: "embedder"
     document_stores:
       - name: "docs"
@@ -162,7 +168,7 @@ document_stores:
 ```yaml
 agents:
   researcher:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     document_stores:
       - name: "codebase"
@@ -397,7 +403,7 @@ Configure how documents are searched and ranked:
 ```yaml
 agents:
   searcher:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     document_stores:
       - name: "docs"
@@ -487,7 +493,7 @@ databases:
 ```yaml
 agents:
   code_assistant:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     tools: ["search", "write_file"]
     document_stores:
@@ -507,7 +513,7 @@ agents:
 ```yaml
 agents:
   docs_bot:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     document_stores:
       - name: "documentation"
@@ -526,7 +532,7 @@ agents:
 ```yaml
 agents:
   researcher:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     document_stores:
       - name: "papers"

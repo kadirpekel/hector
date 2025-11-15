@@ -9,7 +9,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func NewPineconeDatabaseProviderFromConfig(config *config.DatabaseProviderConfig) (DatabaseProvider, error) {
+func NewPineconeDatabaseProviderFromConfig(config *config.VectorStoreConfig) (DatabaseProvider, error) {
 	if config.APIKey == "" {
 		return nil, fmt.Errorf("API key is required for Pinecone")
 	}
@@ -38,7 +38,7 @@ func NewPineconeDatabaseProviderFromConfig(config *config.DatabaseProviderConfig
 
 type pineconeDatabaseProvider struct {
 	client    *pinecone.Client
-	config    *config.DatabaseProviderConfig
+	config    *config.VectorStoreConfig
 	indexName string
 }
 

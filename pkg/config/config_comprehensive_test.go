@@ -157,8 +157,8 @@ func TestConfig_SetDefaults(t *testing.T) {
 				if len(config.LLMs) == 0 {
 					t.Error("SetDefaults() should create default LLM")
 				}
-				if len(config.Databases) == 0 {
-					t.Error("SetDefaults() should create default database")
+				if len(config.VectorStores) == 0 {
+					t.Error("SetDefaults() should create default vector store")
 				}
 				if len(config.Embedders) == 0 {
 					t.Error("SetDefaults() should create default embedder")
@@ -216,8 +216,8 @@ func TestConfig_SetDefaults(t *testing.T) {
 					t.Errorf("Should have 1 agent, got %d", len(config.Agents))
 				}
 
-				if len(config.Databases) == 0 {
-					t.Error("SetDefaults() should create default database")
+				if len(config.VectorStores) == 0 {
+					t.Error("SetDefaults() should create default vector store")
 				}
 				if len(config.Embedders) == 0 {
 					t.Error("SetDefaults() should create default embedder")

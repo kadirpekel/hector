@@ -74,7 +74,7 @@ func (b *DatabaseBuilder) Build() (databases.DatabaseProvider, error) {
 
 	switch b.dbType {
 	case "qdrant":
-		cfg := &config.DatabaseProviderConfig{
+		cfg := &config.VectorStoreConfig{
 			Type:   "qdrant",
 			Host:   b.host,
 			Port:   b.port,

@@ -119,7 +119,7 @@ agents:
         max_tokens: 4000
       long_term:
         type: vector
-        database: qdrant-cluster
+        vector_store: qdrant-cluster
 ```
 
 No Python. No JavaScript. No code.
@@ -288,7 +288,7 @@ agents:
         max_tokens: 4000
       long_term:
         type: vector
-        database: qdrant-cluster
+        vector_store: qdrant-cluster
 
 llms:
   gpt-4o:

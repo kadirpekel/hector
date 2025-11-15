@@ -20,7 +20,8 @@ global:
 
 # Providers
 llms:             # LLM providers
-databases:        # Vector databases
+vector_stores:    # Vector databases (Qdrant, Pinecone, etc.)
+databases:        # SQL databases (PostgreSQL, MySQL, SQLite)
 embedders:        # Embedding models
 plugins:          # gRPC plugins
 
@@ -248,7 +249,7 @@ agents:
   advanced:
     name: "Advanced Agent"
     llm: "gpt-4o"
-    database: "qdrant"           # For RAG & long-term memory
+    vector_store: "qdrant"       # For RAG & long-term memory
     embedder: "embedder"         # For RAG & long-term memory
     
     # Prompt Configuration (choose ONE approach)
@@ -641,60 +642,51 @@ databases:
 
 Session stores provide persistent storage for conversation history and session metadata. When configured, agents can resume conversations after server restarts.
 
-### SQL Session Store (SQLite)
+### SQL Session Store (Using Database Reference)
+
+**Recommended:** Reference a SQL database from the `databases:` section:
+
+```yaml
+# Define SQL database once
+databases:
+  postgres-main:
+    driver: "postgres"
+    host: "localhost"
+    port: 5432
+    database: "hector_main"
+    username: "user"
+    password: "${DB_PASSWORD}"
+    ssl_mode: "require"
+    max_conns: 25
+    max_idle: 5
+    conn_max_lifetime: "1h"
+    conn_max_idle_time: "30m"
+
+# Reference it in session store
+session_stores:
+  default:
+    backend: sql
+    database: "postgres-main"  # Reference to databases section
+```
+
+**Best for:** Production deployments, shared database connections
+
+### SQL Session Store (Inline Config - Deprecated)
+
+**Note:** Inline SQL configuration is deprecated. Use database references instead.
 
 ```yaml
 session_stores:
   local-db:
     backend: sql
-    sql:
+    sql:                          # Deprecated: use 'database' reference instead
       driver: sqlite
       database: ./data/sessions.db
-      max_conns: 10              # Maximum connections
-      max_idle: 2                # Idle connections
-      conn_max_lifetime: 3600    # Seconds (default: 0 = unlimited)
+      max_conns: 10
+      max_idle: 2
 ```
 
-**Best for:** Local development, single-instance deployments
-
-### SQL Session Store (PostgreSQL)
-
-```yaml
-session_stores:
-  postgres-db:
-    backend: sql
-    sql:
-      driver: postgres
-      host: localhost
-      port: 5432
-      user: hector
-      password: "${DB_PASSWORD}"  # From environment
-      database: hector_sessions
-      ssl_mode: require          # disable|require|verify-ca|verify-full
-      max_conns: 100
-      max_idle: 25
-      conn_max_lifetime: 3600
-```
-
-**Best for:** Production deployments, distributed systems
-
-### SQL Session Store (MySQL)
-
-```yaml
-session_stores:
-  mysql-db:
-    backend: sql
-    sql:
-      driver: mysql
-      host: localhost
-      port: 3306
-      user: hector
-      password: "${DB_PASSWORD}"
-      database: hector_sessions
-      max_conns: 100
-      max_idle: 25
-      conn_max_lifetime: 3600
-```
+**Best for:** Local development, single-instance deployments (legacy support)
 
 ### Agent Configuration
 
@@ -928,20 +920,25 @@ If interrupted (Ctrl+C), checkpoints enable resuming from where it left off.
 Index data from SQL databases (PostgreSQL, MySQL, SQLite):
 
 ```yaml
+# Define SQL database once
+databases:
+  postgres-main:
+    driver: "postgres"
+    host: "localhost"
+    port: 5432
+    database: "mydb"
+    username: "user"
+    password: "${DB_PASSWORD}"
+    ssl_mode: "disable"
+    max_conns: 25
+    max_idle: 5
+
+# Reference database in document store
 document_stores:
   database_content:
     name: "database_content"
     source: "sql"                 # Required: Source type
-    
-    # Database connection
-    sql:
-      driver: "postgres"           # Required: "postgres", "mysql", or "sqlite3"
-      host: "localhost"            # Optional: Database host (not needed for SQLite)
-      port: 5432                   # Optional: Database port (not needed for SQLite)
-      database: "mydb"             # Required: Database name (or file path for SQLite)
-      username: "user"             # Optional: Database username
-      password: "${DB_PASSWORD}"   # Optional: Database password
-      ssl_mode: "disable"          # Optional: SSL mode (for PostgreSQL)
+    database: "postgres-main"     # Reference to databases section
     
     # Tables to index
     sql_tables:
@@ -1310,12 +1307,22 @@ llms:
     api_key: "${OPENAI_API_KEY}"
     temperature: 0.7
 
-# Vector Database
-databases:
+# Vector Store
+vector_stores:
   qdrant:
     type: "qdrant"
     host: "localhost"
     port: 6334
+
+# SQL Database
+databases:
+  postgres-main:
+    driver: "postgres"
+    host: "localhost"
+    port: 5432
+    database: "hector_main"
+    username: "user"
+    password: "${DB_PASSWORD}"
 
 # Embedder
 embedders:
@@ -1329,7 +1336,7 @@ agents:
   coder:
     name: "Coding Assistant"
     llm: "gpt-4o"
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     
     prompt:

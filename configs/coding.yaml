@@ -95,8 +95,8 @@ embedders:
     model: mxbai-embed-large
     host: "http://localhost:11434"
 
-# Vector database configuration
-databases:
+# Vector store configuration
+vector_stores:
   qdrant_local:
     type: qdrant
     host: "localhost"

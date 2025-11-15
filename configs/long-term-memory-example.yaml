@@ -1,4 +1,4 @@
-databases:
+vector_stores:
   main:
     type: qdrant
     host: localhost
@@ -17,7 +17,7 @@ agents:
   default-agent:
     name: "Default Agent"
     llm: gpt4o
-    database: main      
+    vector_store: main      
     embedder: main      
     memory:
       strategy: "summary_buffer"
@@ -31,7 +31,7 @@ agents:
   optimized-agent:
     name: "Optimized Agent"
     llm: gpt4o
-    database: main
+    vector_store: main
     embedder: main
     memory:
       strategy: "summary_buffer"
@@ -45,7 +45,7 @@ agents:
   precise-agent:
     name: "Precise Agent"
     llm: gpt4o
-    database: main
+    vector_store: main
     embedder: main
     memory:
       strategy: "summary_buffer"

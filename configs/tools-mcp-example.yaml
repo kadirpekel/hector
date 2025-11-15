@@ -9,7 +9,7 @@ llms:
     api_key: "${OPENAI_API_KEY}"
     temperature: 0.7
     max_tokens: 4000
-databases:
+vector_stores:
   qdrant-db:
     type: "qdrant"
     host: "localhost"
@@ -60,7 +60,7 @@ agents:
     name: "File Assistant"
     description: "Helps with file operations and searches"
     llm: "gpt-4o"
-    database: "qdrant-db"
+    vector_store: "qdrant-db"
     embedder: "ollama-embedder"
     document_stores: ["knowledge_base"]
     prompt:
@@ -115,7 +115,7 @@ agents:
     name: "Super Agent"
     description: "Orchestrates tasks using all available tools"
     llm: "gpt-4o"
-    database: "qdrant-db"
+    vector_store: "qdrant-db"
     embedder: "ollama-embedder"
     document_stores: ["knowledge_base"]
     reasoning:

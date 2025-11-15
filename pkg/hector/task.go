@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kadirpekel/hector/pkg/agent"
+	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
@@ -12,11 +13,13 @@ import (
 type TaskServiceBuilder struct {
 	backend          string
 	workerPool       int
-	sqlConfig        *config.TaskSQLConfig
+	database         string                // Reference to SQL database from databases section
+	sqlConfig        *config.TaskSQLConfig // Deprecated: use database reference instead
 	inputTimeout     int
 	timeout          int
 	hitlConfig       *config.HITLConfig
 	checkpointConfig *config.CheckpointConfig
+	componentManager *component.ComponentManager // For getting SQL database connections
 }
 
 // NewTaskService creates a new task service builder
@@ -47,7 +50,19 @@ func (b *TaskServiceBuilder) WorkerPool(size int) *TaskServiceBuilder {
 	return b
 }
 
-// WithSQLConfig sets the SQL configuration for SQL backend
+// Database sets the SQL database reference for SQL backend
+func (b *TaskServiceBuilder) Database(dbName string) *TaskServiceBuilder {
+	b.database = dbName
+	return b
+}
+
+// WithComponentManager sets the component manager for getting SQL database connections
+func (b *TaskServiceBuilder) WithComponentManager(cm *component.ComponentManager) *TaskServiceBuilder {
+	b.componentManager = cm
+	return b
+}
+
+// WithSQLConfig sets the SQL configuration for SQL backend (deprecated: use Database instead)
 func (b *TaskServiceBuilder) WithSQLConfig(cfg *config.TaskSQLConfig) *TaskServiceBuilder {
 	b.sqlConfig = cfg
 	return b
@@ -114,14 +129,28 @@ func (b *TaskServiceBuilder) Build() (reasoning.TaskService, error) {
 		return agent.NewInMemoryTaskService(), nil
 
 	case "sql":
-		if b.sqlConfig == nil {
-			return nil, fmt.Errorf("SQL configuration is required for SQL backend")
+		// Check if database reference is provided (new way)
+		if b.database != "" {
+			if b.componentManager == nil {
+				return nil, fmt.Errorf("component manager is required when using database reference")
+			}
+
+			db, driver, err := b.componentManager.GetSQLDatabase(b.database)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get SQL database '%s': %w", b.database, err)
+			}
+
+			return agent.NewSQLTaskService(db, driver)
+		} else if b.sqlConfig != nil {
+			// Fallback to inline SQL config (deprecated but supported)
+			b.sqlConfig.SetDefaults()
+			if err := b.sqlConfig.Validate(); err != nil {
+				return nil, fmt.Errorf("invalid SQL configuration: %w", err)
+			}
+			return agent.NewSQLTaskServiceFromConfig(b.sqlConfig)
+		} else {
+			return nil, fmt.Errorf("SQL backend requires either 'database' reference or 'sql' configuration")
 		}
-		b.sqlConfig.SetDefaults()
-		if err := b.sqlConfig.Validate(); err != nil {
-			return nil, fmt.Errorf("invalid SQL configuration: %w", err)
-		}
-		return agent.NewSQLTaskServiceFromConfig(b.sqlConfig)
 
 	default:
 		return nil, fmt.Errorf("unsupported backend: %s", b.backend)

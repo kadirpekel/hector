@@ -362,7 +362,7 @@ tools:
 ```yaml
 agents:
   research_coordinator:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     memory:
       longterm:

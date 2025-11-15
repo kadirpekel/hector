@@ -301,7 +301,7 @@ agents:
   coder:
     name: "Production Coding Assistant"
     llm: "claude"
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "ollama"
     document_stores: ["frontend", "backend"]
     tools:

@@ -55,7 +55,7 @@ func (r *DatabaseRegistry) RegisterDatabase(name string, provider DatabaseProvid
 	return r.Register(name, provider)
 }
 
-func (r *DatabaseRegistry) CreateDatabaseFromConfig(name string, config *config.DatabaseProviderConfig) (DatabaseProvider, error) {
+func (r *DatabaseRegistry) CreateDatabaseFromConfig(name string, config *config.VectorStoreConfig) (DatabaseProvider, error) {
 	if name == "" {
 		return nil, fmt.Errorf("database name cannot be empty")
 	}

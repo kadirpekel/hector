@@ -150,16 +150,16 @@ func TestLLMProviderConfig_SetDefaults(t *testing.T) {
 	}
 }
 
-func TestDatabaseProviderConfig_SetDefaults(t *testing.T) {
+func TestVectorStoreConfig_SetDefaults(t *testing.T) {
 	tests := []struct {
 		name           string
-		config         DatabaseProviderConfig
-		validateConfig func(t *testing.T, config DatabaseProviderConfig)
+		config         VectorStoreConfig
+		validateConfig func(t *testing.T, config VectorStoreConfig)
 	}{
 		{
 			name:   "empty_config_qdrant_defaults",
-			config: DatabaseProviderConfig{},
-			validateConfig: func(t *testing.T, config DatabaseProviderConfig) {
+			config: VectorStoreConfig{},
+			validateConfig: func(t *testing.T, config VectorStoreConfig) {
 				if config.Type != "qdrant" {
 					t.Errorf("Default type = %v, want %v", config.Type, "qdrant")
 				}
@@ -169,7 +169,7 @@ func TestDatabaseProviderConfig_SetDefaults(t *testing.T) {
 				if config.Port != 6334 {
 					t.Errorf("Default port = %v, want %v", config.Port, 6334)
 				}
-				// Timeout field was removed from DatabaseProviderConfig
+				// Timeout field was removed from VectorStoreConfig
 				// if config.Timeout != 30 {
 				// 	t.Errorf("Default timeout = %v, want %v", config.Timeout, 30)
 				// }
@@ -177,11 +177,11 @@ func TestDatabaseProviderConfig_SetDefaults(t *testing.T) {
 		},
 		{
 			name: "partial_config_preserves_values",
-			config: DatabaseProviderConfig{
+			config: VectorStoreConfig{
 				Type: "custom",
 				Host: "custom-host",
 			},
-			validateConfig: func(t *testing.T, config DatabaseProviderConfig) {
+			validateConfig: func(t *testing.T, config VectorStoreConfig) {
 				if config.Type != "custom" {
 					t.Errorf("Type should be preserved: %v", config.Type)
 				}
@@ -199,13 +199,13 @@ func TestDatabaseProviderConfig_SetDefaults(t *testing.T) {
 		},
 		{
 			name: "zero_values_set_defaults",
-			config: DatabaseProviderConfig{
+			config: VectorStoreConfig{
 				Type: "qdrant",
 				Host: "localhost",
 				Port: 0,
-				// Timeout field was removed from DatabaseProviderConfig
+				// Timeout field was removed from VectorStoreConfig
 			},
-			validateConfig: func(t *testing.T, config DatabaseProviderConfig) {
+			validateConfig: func(t *testing.T, config VectorStoreConfig) {
 				if config.Port != 6334 {
 					t.Errorf("Zero port should be set to default: %v", config.Port)
 				}

@@ -94,7 +94,7 @@ import "github.com/kadirpekel/hector/pkg/databases"
 import "github.com/kadirpekel/hector/pkg/config"
 
 // Direct database construction (prefer hector.NewDatabase() instead)
-func NewQdrantDatabaseProviderFromConfig(config *config.DatabaseProviderConfig) (databases.DatabaseProvider, error)
+func NewQdrantDatabaseProviderFromConfig(config *config.VectorStoreConfig) (databases.DatabaseProvider, error)
 ```
 
 **When to Use**: Only if you need direct control or are building custom database providers.

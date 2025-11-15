@@ -125,20 +125,31 @@ agents:
 
 ### SQL-Backed Tasks (Production)
 
-For production use, configure SQL persistence:
+For production use, configure SQL persistence using database references:
 
 ```yaml
+# Define SQL database once
+databases:
+  postgres-tasks:
+    driver: "postgres"
+    host: "localhost"
+    port: 5432
+    database: "hector_tasks"
+    username: "user"
+    password: "${DB_PASSWORD}"
+    ssl_mode: "require"
+    max_conns: 25
+    max_idle: 5
+    conn_max_lifetime: "1h"
+    conn_max_idle_time: "30m"
+
 agents:
   production-agent:
     llm: gpt-4o
     task:
       backend: sql
       worker_pool: 100  # Max concurrent tasks
-      sql:
-        driver: sqlite  # or: postgres, mysql
-        database: ./data/tasks.db
-        max_conns: 10
-        max_idle: 2
+      database: "postgres-tasks"  # Reference to databases section
 
 llms:
   gpt-4o:
@@ -152,16 +163,21 @@ llms:
 - **PostgreSQL** - Production-grade, multi-instance
 - **MySQL** - Alternative production option
 
-**PostgreSQL Example:**
+**SQLite Example:**
 ```yaml
-task:
-  backend: sql
-  sql:
-    driver: postgres
-    database: postgres://user:password@localhost:5432/hector_tasks?sslmode=disable
-    max_conns: 25
-    max_idle: 5
+databases:
+  sqlite-tasks:
+    driver: "sqlite"
+    database: "./data/tasks.db"
+
+agents:
+  assistant:
+    task:
+      backend: sql
+      database: "sqlite-tasks"  # Reference to databases section
 ```
+
+**Note:** Inline `sql:` configuration is deprecated. Use `database:` references instead.
 
 ---
 

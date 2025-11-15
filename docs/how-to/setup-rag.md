@@ -137,7 +137,7 @@ document_stores:
 agents:
   coder:
     llm: "gpt-4o"
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     document_stores: ["codebase"]
     
@@ -147,7 +147,7 @@ agents:
 
 **Key components:**
 
-1. **database: "qdrant"** - Connect to vector database
+1. **vector_store: "qdrant"** - Connect to vector store
 2. **embedder: "embedder"** - Use Ollama for embeddings
 3. **tools: ["search"]** - Enable search tool
 4. **document_stores** - Define what to index
@@ -577,7 +577,7 @@ agents:
 ```yaml
 agents:
   fullstack_dev:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     document_stores: ["frontend", "backend", "docs"]
 

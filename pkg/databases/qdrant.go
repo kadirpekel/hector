@@ -10,7 +10,7 @@ import (
 )
 
 func NewQdrantDatabaseProvider() (DatabaseProvider, error) {
-	config := &config.DatabaseProviderConfig{
+	config := &config.VectorStoreConfig{
 		Type:   "qdrant",
 		Host:   "localhost",
 		Port:   6334,
@@ -20,7 +20,7 @@ func NewQdrantDatabaseProvider() (DatabaseProvider, error) {
 	return NewQdrantDatabaseProviderFromConfig(config)
 }
 
-func NewQdrantDatabaseProviderFromConfig(config *config.DatabaseProviderConfig) (DatabaseProvider, error) {
+func NewQdrantDatabaseProviderFromConfig(config *config.VectorStoreConfig) (DatabaseProvider, error) {
 	useTLS := false
 	if config.UseTLS != nil {
 		useTLS = *config.UseTLS
@@ -44,7 +44,7 @@ func NewQdrantDatabaseProviderFromConfig(config *config.DatabaseProviderConfig) 
 
 type qdrantDatabaseProvider struct {
 	client *qdrant.Client
-	config *config.DatabaseProviderConfig
+	config *config.VectorStoreConfig
 }
 
 func (db *qdrantDatabaseProvider) Upsert(ctx context.Context, collection string, id string, vector []float32, metadata map[string]interface{}) error {

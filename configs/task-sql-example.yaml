@@ -1,24 +1,33 @@
+# Task SQL Example Configuration
+# This example shows how to configure task service with SQL database reference
+
+# SQL Database Configuration
+databases:
+  postgres-tasks:
+    driver: "postgres"
+    host: "localhost"
+    port: 5432
+    database: "tasks"
+    username: "postgres"
+    password: "postgres"
+    ssl_mode: "disable"
+    max_conns: 25
+    max_idle: 5
+    conn_max_lifetime: "1h"
+    conn_max_idle_time: "30m"
+
 agents:
   assistant:
-    name: "SQL Task Assistant (SQLite)"
-    description: "Agent with SQLite task persistence"
+    name: "SQL Task Assistant"
+    description: "Agent with PostgreSQL task persistence"
     llm: "gpt"
     task:
-      backend: sql        
-      worker_pool: 100    
-      sql:
-        driver: sqlite    
-        database: ./data/tasks.db  
-        max_conns: 10     
-        max_idle: 2       
-    reasoning:
-      engine: chain-of-thought
-      max_iterations: 100
-    memory:
-      strategy: buffer_window
-      window_size: 20
+      backend: "sql"
+      worker_pool: 100
+      database: "postgres-tasks"  # Reference to databases section
+
 llms:
   gpt:
-    type: openai
-    model: gpt-4o-mini
-    api_key: ${OPENAI_API_KEY}
+    type: "openai"
+    model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"

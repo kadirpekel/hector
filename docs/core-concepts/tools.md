@@ -259,7 +259,7 @@ embedders:
 
 agents:
   coder:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     tools: ["search"]
     document_stores:
@@ -747,7 +747,7 @@ embedders:
 
 agents:
   coder:
-    database: "qdrant"
+    vector_store: "qdrant"
     embedder: "embedder"
     tools: ["execute_command", "write_file", "search_replace", "search"]
     document_stores:
