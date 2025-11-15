@@ -227,7 +227,7 @@ func (a *Agent) execute(
 		defer span.End()
 
 		// Add ShowThinking flag to context for LLM providers
-		showThinking := config.BoolValue(cfg.ShowThinking, false)
+		showThinking := config.BoolValue(cfg.EnableThinkingDisplay, false)
 		spanCtx = context.WithValue(spanCtx, protocol.ShowThinkingKey, showThinking)
 
 		// Get sub-agents (from config or builder - stored directly on agent)
@@ -798,7 +798,7 @@ func (a *Agent) callLLM(
 		var streamedText strings.Builder
 		var streamedThinking strings.Builder
 		llmService := a.services.LLM()
-		showThinking := config.BoolValue(cfg.ShowThinking, false)
+		showThinking := config.BoolValue(cfg.EnableThinkingDisplay, false)
 
 		// Use GenerateStreamingChunks to get raw StreamChunks with proper abstraction
 		// ctx already has ShowThinking flag from execute() function
@@ -886,7 +886,7 @@ func (a *Agent) executeTools(
 	results := make([]reasoning.ToolResult, 0, len(toolCalls))
 
 	// Add newline before tools if showing them
-	if len(toolCalls) > 0 && config.BoolValue(cfg.ShowTools, true) {
+	if len(toolCalls) > 0 && config.BoolValue(cfg.EnableToolDisplay, true) {
 		if sendErr := safeSendPart(ctx, outputCh, createTextPart("\n")); sendErr != nil {
 			slog.Error("Failed to send newline", "agent", a.name, "error", sendErr)
 		}
@@ -1030,7 +1030,7 @@ func (a *Agent) executeTools(
 		})
 
 		// Special handling: if todo_write was called, emit display part immediately
-		if toolCall.Name == "todo_write" && config.BoolValue(cfg.ShowThinking, false) {
+		if toolCall.Name == "todo_write" && config.BoolValue(cfg.EnableThinkingDisplay, false) {
 			a.emitTodoDisplay(ctx, outputCh)
 		}
 	}

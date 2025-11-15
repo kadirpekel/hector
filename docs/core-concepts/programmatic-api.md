@@ -79,8 +79,8 @@ func main() {
 
     // Build working memory
     workingMemory, err := hector.NewWorkingMemory("summary_buffer").
-        Budget(2000).
-        Threshold(0.8).
+        Budget(8000).      // Default: 8000
+        Threshold(0.85).   // Default: 0.85
         WithLLMProvider(llm).
         Build()
     if err != nil {
@@ -205,9 +205,9 @@ reasoning, err := hector.NewReasoning("supervisor").
 ```go
 // Summary Buffer
 memory, err := hector.NewWorkingMemory("summary_buffer").
-    Budget(2000).
-    Threshold(0.8).
-    Target(0.6).
+    Budget(8000).      // Default: 8000
+    Threshold(0.85).   // Default: 0.85
+    Target(0.7).       // Default: 0.7
     WithLLMProvider(llm).
     Build()
 

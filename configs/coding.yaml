@@ -83,7 +83,7 @@ agents:
 
       max_iterations: 100
       enable_streaming: true
-      show_thinking: true
+      enable_thinking_display: true
     memory:
       strategy: "summary_buffer"
       budget: 4000
@@ -122,6 +122,6 @@ document_stores:
     chunk_strategy: simple
 
     # Metadata extraction
-    extract_metadata: true
+    enable_metadata_extraction: true
     metadata_languages:
       - go

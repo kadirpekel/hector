@@ -134,7 +134,7 @@ func NewOpenAIProvider(apiKey string, model string) *OpenAIProvider {
 		Model:       model,
 		APIKey:      apiKey,
 		Host:        "https://api.openai.com/v1",
-		Temperature: 0.7,
+		Temperature: func() *float64 { t := 0.7; return &t }(),
 		MaxTokens:   1000,
 		Timeout:     60,
 	}
@@ -280,7 +280,10 @@ func (p *OpenAIProvider) GetMaxTokens() int {
 }
 
 func (p *OpenAIProvider) GetTemperature() float64 {
-	return p.config.Temperature
+	if p.config.Temperature == nil {
+		return 0.7 // Default
+	}
+	return *p.config.Temperature
 }
 
 func (p *OpenAIProvider) Close() error {
@@ -504,10 +507,15 @@ func (p *OpenAIProvider) buildRequest(messages []*pb.Message, stream bool, tools
 	}
 
 	request := OpenAIRequest{
-		Model:       p.config.Model,
-		Messages:    openaiMessages,
-		Temperature: p.config.Temperature,
-		Stream:      stream,
+		Model:    p.config.Model,
+		Messages: openaiMessages,
+		Temperature: func() float64 {
+			if p.config.Temperature == nil {
+				return 0.7 // Default
+			}
+			return *p.config.Temperature
+		}(),
+		Stream: stream,
 	}
 
 	if strings.HasPrefix(p.config.Model, "o1-") || strings.HasPrefix(p.config.Model, "o3-") {

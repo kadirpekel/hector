@@ -33,7 +33,13 @@ func ProcessConfigPipeline(cfg *Config) (*Config, error) {
 func (c *Config) PreProcess() {
 	c.initializeMaps()
 
+	// Apply defaults to agents
+	c.applyDefaults()
+
 	for _, agent := range c.Agents {
+		// Expand inline configs to top-level providers
+		c.expandInlineConfigs(agent)
+
 		if agent.DocsFolder != "" && len(agent.DocumentStores) == 0 {
 			c.expandDocsFolder(agent)
 		}
@@ -75,21 +81,26 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 	storeName := generateStoreNameFromPath(agent.DocsFolder)
 
 	docStoreConfig := &DocumentStoreConfig{
-		Name:                storeName,
-		Source:              "directory",
-		Path:                agent.DocsFolder,
-		WatchChanges:        BoolPtr(true),
-		MaxFileSize:         DefaultMaxDocumentStoreSize,
-		IncrementalIndexing: BoolPtr(true),
+		Name:                      storeName,
+		Source:                    "directory",
+		Path:                      agent.DocsFolder,
+		EnableWatchChanges:        BoolPtr(true),
+		MaxFileSize:               DefaultMaxDocumentStoreSize,
+		EnableIncrementalIndexing: BoolPtr(true),
 	}
 	c.DocumentStores[storeName] = docStoreConfig
 
 	agent.DocumentStores = []string{storeName}
 	agent.DocsFolder = ""
 
+	// Warn about auto-created components
+	fmt.Printf("⚠️  Auto-created from docs_folder shortcut:\n")
+	fmt.Printf("   - document_store: '%s' (path: %s)\n", storeName, docStoreConfig.Path)
+
 	if agent.VectorStore == "" {
 		if _, exists := c.VectorStores["default-vector-store"]; !exists {
 			c.VectorStores["default-vector-store"] = &VectorStoreConfig{}
+			fmt.Printf("   - vector_store: 'default-vector-store' (using defaults)\n")
 		}
 		agent.VectorStore = "default-vector-store"
 	}
@@ -97,6 +108,7 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 	if agent.Embedder == "" {
 		if _, exists := c.Embedders["default-embedder"]; !exists {
 			c.Embedders["default-embedder"] = &EmbedderProviderConfig{}
+			fmt.Printf("   - embedder: 'default-embedder' (using defaults)\n")
 		}
 		agent.Embedder = "default-embedder"
 	}
@@ -109,7 +121,9 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 			Type:           "search",
 			DocumentStores: []string{storeName},
 		}
+		fmt.Printf("   - tool: 'search' (auto-configured)\n")
 	}
+	fmt.Printf("💡 To customize these, define them explicitly in your configuration.\n")
 }
 
 func (c *Config) expandEnableTools() {
@@ -117,10 +131,20 @@ func (c *Config) expandEnableTools() {
 		c.Tools = make(map[string]*ToolConfig)
 	}
 
+	createdTools := []string{}
 	for toolName, toolConfig := range GetDefaultToolConfigs() {
 		if _, exists := c.Tools[toolName]; !exists {
 			c.Tools[toolName] = toolConfig
+			createdTools = append(createdTools, toolName)
 		}
+	}
+
+	if len(createdTools) > 0 {
+		fmt.Printf("⚠️  Auto-created tools from enable_tools shortcut:\n")
+		for _, toolName := range createdTools {
+			fmt.Printf("   - tool: '%s' (using defaults)\n", toolName)
+		}
+		fmt.Printf("💡 To customize these, define them explicitly in your configuration.\n")
 	}
 }
 
@@ -228,6 +252,9 @@ type Config struct {
 
 	Global GlobalSettings `yaml:"global,omitempty"`
 
+	// Defaults for agents (new feature)
+	Defaults *AgentDefaultsConfig `yaml:"defaults,omitempty"`
+
 	LLMs         map[string]*LLMProviderConfig      `yaml:"llms,omitempty"`
 	VectorStores map[string]*VectorStoreConfig      `yaml:"vector_stores,omitempty"`
 	Databases    map[string]*DatabaseConfig         `yaml:"databases,omitempty"`
@@ -242,6 +269,14 @@ type Config struct {
 	SessionStores map[string]*SessionStoreConfig `yaml:"session_stores,omitempty"`
 
 	Plugins PluginConfigs `yaml:"plugins,omitempty"`
+}
+
+// AgentDefaultsConfig provides default values for agent configurations
+type AgentDefaultsConfig struct {
+	LLM          string `yaml:"llm,omitempty"`           // Default LLM reference
+	VectorStore  string `yaml:"vector_store,omitempty"`  // Default vector store reference
+	Embedder     string `yaml:"embedder,omitempty"`      // Default embedder reference
+	SessionStore string `yaml:"session_store,omitempty"` // Default session store reference
 }
 
 func (c *Config) ValidateAgent(agentID string) error {
@@ -339,6 +374,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("plugins validation failed: %w", err)
 	}
 
+	// Validate all references (moved from separate validateReferences() method)
 	if err := c.validateReferences(); err != nil {
 		return fmt.Errorf("reference validation failed: %w", err)
 	}
@@ -346,6 +382,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// validateReferences validates all cross-references between configuration sections
 func (c *Config) validateReferences() error {
 	for agentName, agent := range c.Agents {
 		if agent == nil {
@@ -486,10 +523,10 @@ func (c *Config) validateReferences() error {
 			continue
 		}
 
-		if store.Backend == "sql" && store.Database != "" {
-			if _, exists := c.Databases[store.Database]; !exists {
-				return fmt.Errorf("session store '%s': database '%s' not found (available: %v)",
-					storeName, store.Database, mapKeys(c.Databases))
+		if store.Backend == "sql" && store.SQLDatabase != "" {
+			if _, exists := c.Databases[store.SQLDatabase]; !exists {
+				return fmt.Errorf("session store '%s': sql_database '%s' not found (available: %v)",
+					storeName, store.SQLDatabase, mapKeys(c.Databases))
 			}
 		}
 	}
@@ -515,10 +552,10 @@ func (c *Config) validateReferences() error {
 			continue
 		}
 
-		if agent.Task.Backend == "sql" && agent.Task.Database != "" {
-			if _, exists := c.Databases[agent.Task.Database]; !exists {
-				return fmt.Errorf("agent '%s': task database '%s' not found (available: %v)",
-					agentName, agent.Task.Database, mapKeys(c.Databases))
+		if agent.Task.Backend == "sql" && agent.Task.SQLDatabase != "" {
+			if _, exists := c.Databases[agent.Task.SQLDatabase]; !exists {
+				return fmt.Errorf("agent '%s': task sql_database '%s' not found (available: %v)",
+					agentName, agent.Task.SQLDatabase, mapKeys(c.Databases))
 			}
 		}
 	}
@@ -538,10 +575,10 @@ func (c *Config) validateReferences() error {
 		}
 
 		// Validate database reference (for SQL source)
-		if store.Database != "" {
-			if _, exists := c.Databases[store.Database]; !exists {
-				return fmt.Errorf("document store '%s': database '%s' not found (available: %v)",
-					storeName, store.Database, mapKeys(c.Databases))
+		if store.SQLDatabase != "" {
+			if _, exists := c.Databases[store.SQLDatabase]; !exists {
+				return fmt.Errorf("document store '%s': sql_database '%s' not found (available: %v)",
+					storeName, store.SQLDatabase, mapKeys(c.Databases))
 			}
 		}
 
@@ -663,14 +700,8 @@ func CreateZeroConfig(source interface{}) *Config {
 	// - If user doesn't provide --temperature: field is 0.7 (from default tag)
 	// - If user provides --temperature 0: field is 0.0
 	// - If user provides --temperature 0.5: field is 0.5
-	// So if we extract 0.0, it means user explicitly set it to 0.
-	// We use sentinel values to distinguish "explicitly set to 0" from "not set"
-	if temperature == 0.0 {
-		// Explicitly set to 0 - use sentinel value so SetDefaults knows to keep it as 0
-		llmConfig.Temperature = -0.000001
-	} else {
-		llmConfig.Temperature = temperature
-	}
+	// Use pointer to distinguish "explicitly set" from "not set"
+	llmConfig.Temperature = &temperature
 	if maxTokens == 0 {
 		// Explicitly set to 0 - use sentinel value so SetDefaults knows to keep it as 0
 		llmConfig.MaxTokens = -1
@@ -692,7 +723,7 @@ func CreateZeroConfig(source interface{}) *Config {
 
 	if observe {
 		cfg.Global.Observability = ObservabilityConfig{
-			MetricsEnabled: BoolPtr(true),
+			EnableMetrics: BoolPtr(true),
 			Tracing: TracingConfig{
 				Enabled: BoolPtr(true),
 			},
@@ -731,7 +762,7 @@ func CreateZeroConfig(source interface{}) *Config {
 	}
 
 	// Set thinking flag (disabled by default, enabled when --thinking is provided)
-	agentConfig.Reasoning.ShowThinking = BoolPtr(thinking)
+	agentConfig.Reasoning.EnableThinkingDisplay = BoolPtr(thinking)
 
 	cfg.Agents = map[string]*AgentConfig{
 		agentName: &agentConfig,

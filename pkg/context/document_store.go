@@ -184,7 +184,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 
 	// Initialize metadata extractors
 	metadataExtractors := metadata.NewExtractorRegistry()
-	if storeConfig.ExtractMetadata != nil && *storeConfig.ExtractMetadata {
+	if storeConfig.EnableMetadataExtraction != nil && *storeConfig.EnableMetadataExtraction {
 		for _, lang := range storeConfig.MetadataLanguages {
 			if lang == "go" {
 				metadataExtractors.Register(metadata.NewGoExtractor())
@@ -212,8 +212,8 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 	}
 
 	// Initialize progress tracker using pointer values (defaults already set in SetDefaults)
-	showProgress := storeConfig.ShowProgress != nil && *storeConfig.ShowProgress
-	verboseProgress := storeConfig.VerboseProgress != nil && *storeConfig.VerboseProgress
+	showProgress := storeConfig.EnableProgressDisplay != nil && *storeConfig.EnableProgressDisplay
+	verboseProgress := storeConfig.EnableVerboseProgress != nil && *storeConfig.EnableVerboseProgress
 	progressTracker := NewProgressTracker(showProgress, verboseProgress)
 
 	// Initialize checkpoint manager using pointer value (defaults already set in SetDefaults)
@@ -246,7 +246,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 	}
 
 	// File watching only supported for directory sources
-	if storeConfig.WatchChanges != nil && *storeConfig.WatchChanges && dataSource.Type() == "directory" {
+	if storeConfig.EnableWatchChanges != nil && *storeConfig.EnableWatchChanges && dataSource.Type() == "directory" {
 		if err := store.initializeWatcher(); err != nil {
 			cancel()
 			return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "failed to initialize watcher", "", err)
@@ -345,7 +345,7 @@ func (ds *DocumentStore) indexDocument(doc *indexing.Document) error {
 
 	// Step 3: Extract metadata using metadata extractors (for code files)
 	var meta *metadata.Metadata
-	if ds.config.ExtractMetadata != nil && *ds.config.ExtractMetadata {
+	if ds.config.EnableMetadataExtraction != nil && *ds.config.EnableMetadataExtraction {
 		var err error
 		meta, err = ds.metadataExtractors.ExtractMetadata(language, content, doc.ID)
 		if err != nil {
@@ -712,7 +712,7 @@ func (ds *DocumentStore) initializeWatcher() error {
 }
 
 func (ds *DocumentStore) StartWatching() error {
-	if ds.config.WatchChanges == nil || !*ds.config.WatchChanges || ds.watcher == nil {
+	if ds.config.EnableWatchChanges == nil || !*ds.config.EnableWatchChanges || ds.watcher == nil {
 		return NewDocumentStoreError(ds.name, "StartWatching", "file watching not enabled", "", nil)
 	}
 
@@ -987,7 +987,7 @@ func (ds *DocumentStore) saveIndexState(files map[string]FileIndexInfo, totalChu
 }
 
 func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time, existingDocs map[string]FileIndexInfo) bool {
-	if ds.config.IncrementalIndexing == nil || !*ds.config.IncrementalIndexing {
+	if ds.config.EnableIncrementalIndexing == nil || !*ds.config.EnableIncrementalIndexing {
 		return true
 	}
 
@@ -1186,7 +1186,7 @@ func InitializeDocumentStoresFromConfig(configs []*config.DocumentStoreConfig, s
 			continue
 		}
 
-		if store.config.WatchChanges != nil && *store.config.WatchChanges {
+		if store.config.EnableWatchChanges != nil && *store.config.EnableWatchChanges {
 			go func(s *DocumentStore, name string) {
 				if err := s.StartWatching(); err != nil {
 					fmt.Printf("Warning: Failed to start file watching for %s: %v\n", name, err)

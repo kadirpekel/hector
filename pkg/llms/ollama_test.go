@@ -18,7 +18,7 @@ func TestNewOllamaProviderFromConfig(t *testing.T) {
 		Type:        "ollama",
 		Model:       "llama3.2",
 		Host:        "http://localhost:11434",
-		Temperature: 0.7,
+		Temperature: func() *float64 { t := 0.7; return &t }(),
 		MaxTokens:   2000,
 	}
 
@@ -76,7 +76,7 @@ func TestOllamaProvider_GetTemperature(t *testing.T) {
 		Type:        "ollama",
 		Model:       "llama3.2",
 		Host:        "http://localhost:11434",
-		Temperature: 0.9,
+		Temperature: func() *float64 { t := 0.9; return &t }(),
 	}
 
 	provider, _ := NewOllamaProviderFromConfig(cfg)

@@ -171,9 +171,7 @@ func TestGetCheckpointInterval(t *testing.T) {
 			name: "Checkpoint disabled",
 			config: &config.AgentConfig{
 				Task: &config.TaskConfig{
-					Checkpoint: &config.CheckpointConfig{
-						Enabled: false,
-					},
+					EnableCheckpointing: config.BoolPtr(false),
 				},
 			},
 			expected:    0,
@@ -183,13 +181,9 @@ func TestGetCheckpointInterval(t *testing.T) {
 			name: "Event strategy",
 			config: &config.AgentConfig{
 				Task: &config.TaskConfig{
-					Checkpoint: &config.CheckpointConfig{
-						Enabled:  true,
-						Strategy: "event",
-						Interval: &config.CheckpointIntervalConfig{
-							EveryNIterations: 5,
-						},
-					},
+					EnableCheckpointing: config.BoolPtr(true),
+					CheckpointStrategy:  "event",
+					CheckpointInterval:  5,
 				},
 			},
 			expected:    0,
@@ -199,13 +193,9 @@ func TestGetCheckpointInterval(t *testing.T) {
 			name: "Interval strategy",
 			config: &config.AgentConfig{
 				Task: &config.TaskConfig{
-					Checkpoint: &config.CheckpointConfig{
-						Enabled:  true,
-						Strategy: "interval",
-						Interval: &config.CheckpointIntervalConfig{
-							EveryNIterations: 5,
-						},
-					},
+					EnableCheckpointing: config.BoolPtr(true),
+					CheckpointStrategy:  "interval",
+					CheckpointInterval:  5,
 				},
 			},
 			expected:    5,
@@ -215,13 +205,9 @@ func TestGetCheckpointInterval(t *testing.T) {
 			name: "Hybrid strategy",
 			config: &config.AgentConfig{
 				Task: &config.TaskConfig{
-					Checkpoint: &config.CheckpointConfig{
-						Enabled:  true,
-						Strategy: "hybrid",
-						Interval: &config.CheckpointIntervalConfig{
-							EveryNIterations: 10,
-						},
-					},
+					EnableCheckpointing: config.BoolPtr(true),
+					CheckpointStrategy:  "hybrid",
+					CheckpointInterval:  10,
 				},
 			},
 			expected:    10,
@@ -253,12 +239,12 @@ func TestIsCheckpointEnabled(t *testing.T) {
 		{"No checkpoint config", &config.AgentConfig{Task: &config.TaskConfig{}}, false},
 		{"Checkpoint disabled", &config.AgentConfig{
 			Task: &config.TaskConfig{
-				Checkpoint: &config.CheckpointConfig{Enabled: false},
+				EnableCheckpointing: config.BoolPtr(false),
 			},
 		}, false},
 		{"Checkpoint enabled", &config.AgentConfig{
 			Task: &config.TaskConfig{
-				Checkpoint: &config.CheckpointConfig{Enabled: true},
+				EnableCheckpointing: config.BoolPtr(true),
 			},
 		}, true},
 	}
@@ -285,28 +271,24 @@ func TestIsRecoveryEnabled(t *testing.T) {
 		{"No checkpoint config", &config.AgentConfig{Task: &config.TaskConfig{}}, false},
 		{"Checkpoint disabled", &config.AgentConfig{
 			Task: &config.TaskConfig{
-				Checkpoint: &config.CheckpointConfig{Enabled: false},
+				EnableCheckpointing: config.BoolPtr(false),
 			},
 		}, false},
 		{"No recovery config", &config.AgentConfig{
 			Task: &config.TaskConfig{
-				Checkpoint: &config.CheckpointConfig{Enabled: true},
+				EnableCheckpointing: config.BoolPtr(true),
 			},
 		}, false},
 		{"Recovery disabled", &config.AgentConfig{
 			Task: &config.TaskConfig{
-				Checkpoint: &config.CheckpointConfig{
-					Enabled:  true,
-					Recovery: &config.CheckpointRecoveryConfig{AutoResume: false},
-				},
+				EnableCheckpointing: config.BoolPtr(true),
+				AutoResume:          config.BoolPtr(false),
 			},
 		}, false},
 		{"Recovery enabled", &config.AgentConfig{
 			Task: &config.TaskConfig{
-				Checkpoint: &config.CheckpointConfig{
-					Enabled:  true,
-					Recovery: &config.CheckpointRecoveryConfig{AutoResume: true},
-				},
+				EnableCheckpointing: config.BoolPtr(true),
+				AutoResume:          config.BoolPtr(true),
 			},
 		}, true},
 	}
@@ -346,11 +328,7 @@ func TestIsCheckpointExpired(t *testing.T) {
 			agent := &Agent{
 				config: &config.AgentConfig{
 					Task: &config.TaskConfig{
-						Checkpoint: &config.CheckpointConfig{
-							Recovery: &config.CheckpointRecoveryConfig{
-								ResumeTimeout: tt.timeout,
-							},
-						},
+						ResumeTimeout: tt.timeout,
 					},
 				},
 			}
@@ -373,21 +351,17 @@ func TestGetRecoveryTimeout(t *testing.T) {
 		{"No checkpoint config", &config.AgentConfig{Task: &config.TaskConfig{}}, 0},
 		{"No recovery config", &config.AgentConfig{
 			Task: &config.TaskConfig{
-				Checkpoint: &config.CheckpointConfig{Enabled: true},
+				EnableCheckpointing: config.BoolPtr(true),
 			},
 		}, 0},
 		{"Default timeout", &config.AgentConfig{
 			Task: &config.TaskConfig{
-				Checkpoint: &config.CheckpointConfig{
-					Recovery: &config.CheckpointRecoveryConfig{ResumeTimeout: 0},
-				},
+				ResumeTimeout: 0,
 			},
 		}, 0},
 		{"Custom timeout", &config.AgentConfig{
 			Task: &config.TaskConfig{
-				Checkpoint: &config.CheckpointConfig{
-					Recovery: &config.CheckpointRecoveryConfig{ResumeTimeout: 7200},
-				},
+				ResumeTimeout: 7200,
 			},
 		}, 7200},
 	}
@@ -414,21 +388,17 @@ func TestShouldAutoResumeHITL(t *testing.T) {
 		{"No checkpoint config", &config.AgentConfig{Task: &config.TaskConfig{}}, false},
 		{"No recovery config", &config.AgentConfig{
 			Task: &config.TaskConfig{
-				Checkpoint: &config.CheckpointConfig{Enabled: true},
+				EnableCheckpointing: config.BoolPtr(true),
 			},
 		}, false},
 		{"AutoResumeHITL disabled", &config.AgentConfig{
 			Task: &config.TaskConfig{
-				Checkpoint: &config.CheckpointConfig{
-					Recovery: &config.CheckpointRecoveryConfig{AutoResumeHITL: false},
-				},
+				AutoResumeHITL: config.BoolPtr(false),
 			},
 		}, false},
 		{"AutoResumeHITL enabled", &config.AgentConfig{
 			Task: &config.TaskConfig{
-				Checkpoint: &config.CheckpointConfig{
-					Recovery: &config.CheckpointRecoveryConfig{AutoResumeHITL: true},
-				},
+				AutoResumeHITL: config.BoolPtr(true),
 			},
 		}, true},
 	}

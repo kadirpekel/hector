@@ -242,6 +242,68 @@ agents:
       max_iterations: 100
 ```
 
+### Inline Provider Configs (Single-Agent Setups)
+
+For single-agent setups, you can define providers inline to reduce cognitive load:
+
+```yaml
+agents:
+  my-agent:
+    name: "My Agent"
+    
+    # Inline LLM config (alternative to top-level llms: section)
+    llm_config:
+      type: "openai"
+      model: "gpt-4o"
+      api_key: "${OPENAI_API_KEY}"
+      temperature: 0.7
+    
+    # Inline vector store config
+    vector_store_config:
+      type: "qdrant"
+      host: "localhost"
+      port: 6334
+    
+    # Inline embedder config
+    embedder_config:
+      type: "ollama"
+      model: "nomic-embed-text"
+      host: "http://localhost:11434"
+      dimension: 768
+```
+
+**Note:** Inline configs are automatically expanded to top-level providers during processing. You cannot use both a reference (`llm: "name"`) and an inline config (`llm_config: {...}`) for the same provider.
+
+### Defaults for Multi-Agent Setups
+
+Reduce repetition in multi-agent configurations using the `defaults` section:
+
+```yaml
+# Define defaults once
+defaults:
+  llm: "gpt-4o"
+  vector_store: "main"
+  embedder: "ollama"
+  session_store: "postgres"
+
+# Agents inherit defaults
+agents:
+  agent1:
+    name: "Agent 1"
+    # Inherits: llm, vector_store, embedder, session_store from defaults
+  
+  agent2:
+    name: "Agent 2"
+    llm: "claude"  # Override default LLM
+    # Inherits: vector_store, embedder, session_store from defaults
+  
+  agent3:
+    name: "Agent 3"
+    # Inherits all defaults
+```
+
+Defaults are only applied if the agent doesn't explicitly set the field.
+
 ### Complete Agent Configuration
 
 ```yaml
@@ -299,7 +361,7 @@ agents:
       enable_goal_extraction: false       # For supervisor strategy only
       
       # Display Options
-      show_thinking: false                # Show [Thinking: ...] meta-reflection blocks
+      enable_thinking_display: false      # Show [Thinking: ...] meta-reflection blocks
       enable_streaming: true              # Real-time output (default: true)
     
     # Tools
@@ -318,10 +380,10 @@ agents:
     memory:
       working:
         strategy: "summary_buffer"  # summary_buffer|buffer_window
-        budget: 2000                # Tokens
-        threshold: 0.8              # Trigger at 80%
-        target: 0.6                 # Compress to 60%
-        window_size: 20             # For buffer_window
+        budget: 8000                # Tokens (default: 8000)
+        threshold: 0.85              # Trigger at 85% (default: 0.85)
+        target: 0.7                  # Compress to 70% (default: 0.7)
+        window_size: 20              # For buffer_window
       
       longterm:
         
@@ -367,27 +429,20 @@ agents:
       hitl:
         mode: "auto"              # "auto" (default), "blocking", or "async"
       
-      # Checkpoint Recovery Configuration (optional)
-      checkpoint:
-        enabled: false            # Enable generic checkpoint/resume (default: false)
-        strategy: "event"          # "event", "interval", or "hybrid" (default: "event")
-        
-        interval:
-          every_n_iterations: 0   # Checkpoint every N iterations (0 = disabled)
-          after_tool_calls: false  # Always checkpoint after tool calls (default: false)
-          before_llm_calls: false  # Checkpoint before LLM calls (default: false)
-        
-        recovery:
-          auto_resume: false       # Auto-resume on startup (default: false)
-          auto_resume_hitl: false  # Auto-resume INPUT_REQUIRED tasks (default: false)
-          resume_timeout: 3600     # Max time to resume after restart (seconds, default: 3600)
+      # Checkpoint Recovery Configuration (flattened structure)
+      enable_checkpointing: false      # Enable checkpointing (default: false)
+      checkpoint_strategy: "event"     # "event", "interval", or "hybrid" (default: "event")
+      checkpoint_interval: 0            # Checkpoint every N iterations (0 = disabled)
+      checkpoint_after_tools: false    # Always checkpoint after tool calls (default: false)
+      checkpoint_before_llm: false     # Checkpoint before LLM calls (default: false)
+      
+      # Recovery configuration
+      auto_resume: false          # Auto-resume on startup (default: false)
+      auto_resume_hitl: false     # Auto-resume INPUT_REQUIRED tasks (default: false)
+      resume_timeout: 3600        # Max time to resume after restart (seconds, default: 3600)
       
       # SQL backend (for production persistence)
-      sql:
-        driver: "sqlite"          # sqlite|postgres|mysql
-        database: "./tasks.db"    # Database connection string or file path
-        max_conns: 10             # Max connections
-        max_idle: 2               # Idle connections
+      sql_database: "tasks-db"    # Reference to SQL database from databases: section
 ```
 
 **Task Configuration Options:**
@@ -399,18 +454,15 @@ agents:
 | `input_timeout` | integer | `600` | Timeout in seconds for user input (Human-in-the-Loop) |
 | `timeout` | integer | `3600` | Timeout in seconds for async task execution |
 | `hitl.mode` | string | `"auto"` | HITL mode: `"auto"`, `"blocking"`, or `"async"` |
-| `checkpoint.enabled` | boolean | `false` | Enable generic checkpoint/resume functionality |
-| `checkpoint.strategy` | string | `"event"` | Checkpoint strategy: `"event"`, `"interval"`, or `"hybrid"` |
-| `checkpoint.interval.every_n_iterations` | integer | `0` | Checkpoint every N iterations (0 = disabled) |
-| `checkpoint.interval.after_tool_calls` | boolean | `false` | Always checkpoint after tool calls |
-| `checkpoint.interval.before_llm_calls` | boolean | `false` | Checkpoint before LLM calls |
-| `checkpoint.recovery.auto_resume` | boolean | `false` | Auto-resume tasks on startup |
-| `checkpoint.recovery.auto_resume_hitl` | boolean | `false` | Auto-resume INPUT_REQUIRED tasks |
-| `checkpoint.recovery.resume_timeout` | integer | `3600` | Max time to resume after restart (seconds) |
-| `sql.driver` | string | - | Database driver: `"sqlite"`, `"postgres"`, or `"mysql"` |
-| `sql.database` | string | - | Database connection string or file path |
-| `sql.max_conns` | integer | `10` | Maximum database connections |
-| `sql.max_idle` | integer | `2` | Maximum idle connections |
+| `enable_checkpointing` | boolean | `false` | Enable checkpointing |
+| `checkpoint_strategy` | string | `"event"` | Checkpoint strategy: `"event"`, `"interval"`, or `"hybrid"` |
+| `checkpoint_interval` | integer | `0` | Checkpoint every N iterations (0 = disabled) |
+| `checkpoint_after_tools` | boolean | `false` | Always checkpoint after tool calls |
+| `checkpoint_before_llm` | boolean | `false` | Checkpoint before LLM calls |
+| `auto_resume` | boolean | `false` | Auto-resume tasks on startup |
+| `auto_resume_hitl` | boolean | `false` | Auto-resume INPUT_REQUIRED tasks |
+| `resume_timeout` | integer | `3600` | Max time to resume after restart (seconds) |
+| `sql_database` | string | - | Reference to SQL database from `databases:` section |
 
 **Human-in-the-Loop (HITL):**
 
@@ -605,36 +657,102 @@ tools:
 
 ---
 
-## Databases (Vector Stores)
+## Vector Stores
+
+Vector stores are used for storing embeddings and performing similarity search. They are required for RAG (document stores) and long-term memory.
 
 ### Qdrant
 
 ```yaml
-databases:
+vector_stores:
   qdrant:
     type: "qdrant"
     host: "localhost"
     port: 6334                    # Default: 6334
-    timeout: 300
     use_tls: false
-    insecure: false
     api_key: "${QDRANT_API_KEY}"  # Optional
 ```
 
-### Custom Database (Plugin)
+### Pinecone
+
+```yaml
+vector_stores:
+  pinecone:
+    type: "pinecone"
+    api_key: "${PINECONE_API_KEY}"
+    environment: "us-east-1"
+```
+
+### Custom Vector Store (Plugin)
 
 ```yaml
 plugins:
-  databases:
-    - name: "custom-db"
+  database_providers:
+    - name: "custom-vector-store"
       protocol: "grpc"
       path: "/path/to/plugin"
 
-databases:
+vector_stores:
   custom:
-    type: "plugin:custom-db"
+    type: "plugin:custom-vector-store"
     # Plugin-specific configuration
 ```
+
+---
+
+## SQL Databases
+
+SQL databases are used for relational data storage (session stores, task persistence, document store SQL sources). All SQL database configurations are centralized in the `databases:` section.
+
+### PostgreSQL
+
+```yaml
+databases:
+  postgres-main:
+    driver: "postgres"
+    host: "localhost"
+    port: 5432
+    database: "hector_main"
+    username: "user"
+    password: "${DB_PASSWORD}"
+    ssl_mode: "require"           # disable|require|verify-ca|verify-full
+    max_conns: 25                  # Maximum connections
+    max_idle: 5                    # Idle connections
+    conn_max_lifetime: "1h"        # Connection lifetime (e.g., "1h", "30m")
+    conn_max_idle_time: "30m"      # Idle timeout (e.g., "30m", "15m")
+```
+
+### MySQL
+
+```yaml
+databases:
+  mysql-analytics:
+    driver: "mysql"
+    host: "analytics.example.com"
+    port: 3306
+    database: "analytics"
+    username: "analytics_user"
+    password: "${MYSQL_PASSWORD}"
+    max_conns: 25
+    max_idle: 5
+    conn_max_lifetime: "1h"
+    conn_max_idle_time: "30m"
+```
+
+### SQLite
+
+```yaml
+databases:
+  sqlite-local:
+    driver: "sqlite"
+    database: "./data/hector.db"   # File path for SQLite
+    max_conns: 1                    # SQLite typically uses 1 connection
+    max_idle: 1
+    conn_max_lifetime: "1h"
+    conn_max_idle_time: "30m"
+```
+
+**Note:** For SQLite, `host` and `port` are not required. The `database` field contains the file path.
 
 ---
 
@@ -679,26 +797,25 @@ session_stores:
 session_stores:
   local-db:
     backend: sql
-    sql:                          # Deprecated: use 'database' reference instead
-      driver: sqlite
-      database: ./data/sessions.db
-      max_conns: 10
-      max_idle: 2
+    sql_database: "sessions-db"  # Reference to SQL database from databases: section
 ```
 
-**Best for:** Local development, single-instance deployments (legacy support)
+**Best for:** Production deployments with shared databases
 
 ### Agent Configuration
 
 Reference session stores by name:
 
 ```yaml
+databases:
+  sessions-db:
+    driver: sqlite
+    database: ./data/sessions.db
+
 session_stores:
   main-db:
     backend: sql
-    sql:
-      driver: sqlite
-      database: ./data/sessions.db
+    sql_database: "sessions-db"
 
 agents:
   assistant:
@@ -715,12 +832,15 @@ agents:
 Control API usage with flexible rate limiting per session or user:
 
 ```yaml
+databases:
+  hector-db:
+    driver: postgres
+    database: hector_db
+
 session_stores:
   default:
     backend: sql
-    sql:
-      driver: postgres
-      database: hector_db
+    sql_database: "hector-db"
     rate_limit:
       enabled: true
       scope: user              # "session" or "user"
@@ -751,29 +871,34 @@ See [Rate Limiting](../core-concepts/rate-limiting.md) for details.
 ### Complete Example
 
 ```yaml
+databases:
+  prod-sessions:
+    driver: postgres
+    host: db.example.com
+    port: 5432
+    username: hector
+    password: "${HECTOR_DB_PASSWORD}"
+    database: hector_sessions
+    ssl_mode: require
+    max_conns: 200
+    max_idle: 50
+    conn_max_lifetime: 7200
+
+  dev-sessions:
+    driver: sqlite
+    database: ./dev-sessions.db
+    max_conns: 5
+
 session_stores:
   # Shared production database
   prod-db:
     backend: sql
-    sql:
-      driver: postgres
-      host: db.example.com
-      port: 5432
-      user: hector
-      password: "${HECTOR_DB_PASSWORD}"
-      database: hector_sessions
-      ssl_mode: require
-      max_conns: 200
-      max_idle: 50
-      conn_max_lifetime: 7200
+    sql_database: "prod-sessions"
 
   # Local development database
   dev-db:
     backend: sql
-    sql:
-      driver: sqlite
-      database: ./dev-sessions.db
-      max_conns: 5
+    sql_database: "dev-sessions"
 
 agents:
   customer-support:
@@ -985,13 +1110,16 @@ document_stores:
 
 **Example - SQLite:**
 ```yaml
+databases:
+  content-db:
+    driver: "sqlite3"
+    database: "./data/content.db"
+
 document_stores:
   local_db:
     name: "local_db"
     source: "sql"
-    sql:
-      driver: "sqlite3"
-      database: "./data/content.db"
+    sql_database: "content-db"
     sql_tables:
       - table: "articles"
         columns: ["title", "content"]
@@ -1002,18 +1130,21 @@ document_stores:
 
 **Example - PostgreSQL:**
 ```yaml
+databases:
+  content-db:
+    driver: "postgres"
+    host: "db.example.com"
+    port: 5432
+    database: "content_db"
+    username: "${DB_USER}"
+    password: "${DB_PASSWORD}"
+    ssl_mode: "require"
+
 document_stores:
   production_db:
     name: "production_db"
     source: "sql"
-    sql:
-      driver: "postgres"
-      host: "db.example.com"
-      port: 5432
-      database: "content_db"
-      username: "${DB_USER}"
-      password: "${DB_PASSWORD}"
-      ssl_mode: "require"
+    sql_database: "content-db"
     sql_tables:
       - table: "articles"
         columns: ["title", "body"]

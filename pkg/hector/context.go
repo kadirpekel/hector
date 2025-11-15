@@ -220,7 +220,7 @@ func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSea
 		}
 
 		// Start watching if enabled
-		if storeConfig.WatchChanges != nil && *storeConfig.WatchChanges {
+		if storeConfig.EnableWatchChanges != nil && *storeConfig.EnableWatchChanges {
 			go func(s *context.DocumentStore, name string) {
 				if err := s.StartWatching(); err != nil {
 					fmt.Printf("Warning: Failed to start file watching for %s: %v\n", name, err)

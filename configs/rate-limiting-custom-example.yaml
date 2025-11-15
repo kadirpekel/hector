@@ -1,6 +1,11 @@
 # Custom Rate Limiting Configuration Examples
 # This file shows various rate limiting patterns
 
+databases:
+  api-sessions-db:
+    driver: sqlite
+    database: ./api_sessions.db
+
 llms:
   gpt-4-llm:
     type: "openai"
@@ -66,9 +71,7 @@ session_stores:
   # Pattern 4: API-style rate limiting (similar to Stripe, GitHub)
   api-style:
     backend: sql
-    sql:
-      driver: sqlite
-      database: ./api_sessions.db
+    sql_database: api-sessions-db
     rate_limit:
       enabled: true
       scope: user

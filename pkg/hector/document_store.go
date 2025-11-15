@@ -58,7 +58,7 @@ func (b *DocumentStoreBuilder) AdditionalExcludes(patterns []string) *DocumentSt
 
 // WatchChanges enables file watching for directory source
 func (b *DocumentStoreBuilder) WatchChanges(watch bool) *DocumentStoreBuilder {
-	b.config.WatchChanges = boolPtr(watch)
+	b.config.EnableWatchChanges = boolPtr(watch)
 	return b
 }
 
@@ -73,7 +73,7 @@ func (b *DocumentStoreBuilder) MaxFileSize(size int64) *DocumentStoreBuilder {
 
 // IncrementalIndexing enables incremental indexing
 func (b *DocumentStoreBuilder) IncrementalIndexing(enabled bool) *DocumentStoreBuilder {
-	b.config.IncrementalIndexing = boolPtr(enabled)
+	b.config.EnableIncrementalIndexing = boolPtr(enabled)
 	return b
 }
 
@@ -103,7 +103,7 @@ func (b *DocumentStoreBuilder) ChunkStrategy(strategy string) *DocumentStoreBuil
 
 // ExtractMetadata enables metadata extraction
 func (b *DocumentStoreBuilder) ExtractMetadata(enabled bool) *DocumentStoreBuilder {
-	b.config.ExtractMetadata = boolPtr(enabled)
+	b.config.EnableMetadataExtraction = boolPtr(enabled)
 	return b
 }
 
@@ -124,13 +124,13 @@ func (b *DocumentStoreBuilder) MaxConcurrentFiles(max int) *DocumentStoreBuilder
 
 // ShowProgress enables/disables progress bar display
 func (b *DocumentStoreBuilder) ShowProgress(show bool) *DocumentStoreBuilder {
-	b.config.ShowProgress = boolPtr(show)
+	b.config.EnableProgressDisplay = boolPtr(show)
 	return b
 }
 
 // VerboseProgress enables/disables verbose progress (shows current file)
 func (b *DocumentStoreBuilder) VerboseProgress(verbose bool) *DocumentStoreBuilder {
-	b.config.VerboseProgress = boolPtr(verbose)
+	b.config.EnableVerboseProgress = boolPtr(verbose)
 	return b
 }
 
@@ -142,7 +142,7 @@ func (b *DocumentStoreBuilder) EnableCheckpoints(enabled bool) *DocumentStoreBui
 
 // QuietMode enables/disables quiet mode (suppresses per-file warnings)
 func (b *DocumentStoreBuilder) QuietMode(quiet bool) *DocumentStoreBuilder {
-	b.config.QuietMode = boolPtr(quiet)
+	b.config.EnableQuietMode = boolPtr(quiet)
 	return b
 }
 

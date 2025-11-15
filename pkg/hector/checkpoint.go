@@ -50,7 +50,7 @@ func NewCheckpointConfigBuilder(cfg *config.CheckpointConfig) *CheckpointConfigB
 
 // Enabled enables or disables checkpointing
 func (b *CheckpointConfigBuilder) Enabled(enabled bool) *CheckpointConfigBuilder {
-	b.config.Enabled = enabled
+	b.config.Enabled = config.BoolPtr(enabled)
 	return b
 }
 
@@ -110,13 +110,13 @@ func (b *CheckpointIntervalConfigBuilder) EveryNIterations(n int) *CheckpointInt
 
 // AfterToolCalls enables checkpointing after tool calls
 func (b *CheckpointIntervalConfigBuilder) AfterToolCalls(enabled bool) *CheckpointIntervalConfigBuilder {
-	b.config.AfterToolCalls = enabled
+	b.config.AfterToolCalls = config.BoolPtr(enabled)
 	return b
 }
 
 // BeforeLLMCalls enables checkpointing before LLM calls
 func (b *CheckpointIntervalConfigBuilder) BeforeLLMCalls(enabled bool) *CheckpointIntervalConfigBuilder {
-	b.config.BeforeLLMCalls = enabled
+	b.config.BeforeLLMCalls = config.BoolPtr(enabled)
 	return b
 }
 
@@ -142,13 +142,13 @@ func NewCheckpointRecoveryConfigBuilder(cfg *config.CheckpointRecoveryConfig) *C
 
 // AutoResume enables or disables auto-resume on startup
 func (b *CheckpointRecoveryConfigBuilder) AutoResume(enabled bool) *CheckpointRecoveryConfigBuilder {
-	b.config.AutoResume = enabled
+	b.config.AutoResume = config.BoolPtr(enabled)
 	return b
 }
 
 // AutoResumeHITL enables or disables auto-resume for INPUT_REQUIRED tasks
 func (b *CheckpointRecoveryConfigBuilder) AutoResumeHITL(enabled bool) *CheckpointRecoveryConfigBuilder {
-	b.config.AutoResumeHITL = enabled
+	b.config.AutoResumeHITL = config.BoolPtr(enabled)
 	return b
 }
 

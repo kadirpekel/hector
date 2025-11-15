@@ -75,11 +75,11 @@ func (b *DatabaseBuilder) Build() (databases.DatabaseProvider, error) {
 	switch b.dbType {
 	case "qdrant":
 		cfg := &config.VectorStoreConfig{
-			Type:   "qdrant",
-			Host:   b.host,
-			Port:   b.port,
-			APIKey: b.apiKey,
-			UseTLS: b.useTLS,
+			Type:      "qdrant",
+			Host:      b.host,
+			Port:      b.port,
+			APIKey:    b.apiKey,
+			EnableTLS: b.useTLS,
 		}
 		return databases.NewQdrantDatabaseProviderFromConfig(cfg)
 	default:

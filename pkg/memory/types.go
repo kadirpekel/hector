@@ -22,12 +22,12 @@ type WorkingMemoryStrategy interface {
 }
 
 type LongTermConfig struct {
-	Enabled      bool         `yaml:"enabled"`
-	StorageScope StorageScope `yaml:"storage_scope"`
-	BatchSize    int          `yaml:"batch_size"`
-	AutoRecall   bool         `yaml:"auto_recall"`
-	RecallLimit  int          `yaml:"recall_limit"`
-	Collection   string       `yaml:"collection"`
+	Enabled          bool         `yaml:"enabled"`
+	StorageScope     StorageScope `yaml:"storage_scope"`
+	BatchSize        int          `yaml:"batch_size"`
+	EnableAutoRecall bool         `yaml:"enable_auto_recall"`
+	RecallLimit      int          `yaml:"recall_limit"`
+	Collection       string       `yaml:"collection"`
 }
 
 type StorageScope string

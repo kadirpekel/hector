@@ -13,8 +13,7 @@ import (
 type TaskServiceBuilder struct {
 	backend          string
 	workerPool       int
-	database         string                // Reference to SQL database from databases section
-	sqlConfig        *config.TaskSQLConfig // Deprecated: use database reference instead
+	database         string // Reference to SQL database from databases section
 	inputTimeout     int
 	timeout          int
 	hitlConfig       *config.HITLConfig
@@ -60,20 +59,6 @@ func (b *TaskServiceBuilder) Database(dbName string) *TaskServiceBuilder {
 func (b *TaskServiceBuilder) WithComponentManager(cm *component.ComponentManager) *TaskServiceBuilder {
 	b.componentManager = cm
 	return b
-}
-
-// WithSQLConfig sets the SQL configuration for SQL backend (deprecated: use Database instead)
-func (b *TaskServiceBuilder) WithSQLConfig(cfg *config.TaskSQLConfig) *TaskServiceBuilder {
-	b.sqlConfig = cfg
-	return b
-}
-
-// SQLConfig creates a SQL config builder
-func (b *TaskServiceBuilder) SQLConfig() *TaskSQLConfigBuilder {
-	if b.sqlConfig == nil {
-		b.sqlConfig = &config.TaskSQLConfig{}
-	}
-	return NewTaskSQLConfigBuilder(b.sqlConfig)
 }
 
 // InputTimeout sets the timeout for INPUT_REQUIRED state (seconds)
@@ -129,28 +114,19 @@ func (b *TaskServiceBuilder) Build() (reasoning.TaskService, error) {
 		return agent.NewInMemoryTaskService(), nil
 
 	case "sql":
-		// Check if database reference is provided (new way)
-		if b.database != "" {
-			if b.componentManager == nil {
-				return nil, fmt.Errorf("component manager is required when using database reference")
-			}
-
-			db, driver, err := b.componentManager.GetSQLDatabase(b.database)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get SQL database '%s': %w", b.database, err)
-			}
-
-			return agent.NewSQLTaskService(db, driver)
-		} else if b.sqlConfig != nil {
-			// Fallback to inline SQL config (deprecated but supported)
-			b.sqlConfig.SetDefaults()
-			if err := b.sqlConfig.Validate(); err != nil {
-				return nil, fmt.Errorf("invalid SQL configuration: %w", err)
-			}
-			return agent.NewSQLTaskServiceFromConfig(b.sqlConfig)
-		} else {
-			return nil, fmt.Errorf("SQL backend requires either 'database' reference or 'sql' configuration")
+		if b.database == "" {
+			return nil, fmt.Errorf("SQL backend requires database reference (use Database() method)")
 		}
+		if b.componentManager == nil {
+			return nil, fmt.Errorf("component manager is required when using database reference")
+		}
+
+		db, driver, err := b.componentManager.GetSQLDatabase(b.database)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get SQL database '%s': %w", b.database, err)
+		}
+
+		return agent.NewSQLTaskService(db, driver)
 
 	default:
 		return nil, fmt.Errorf("unsupported backend: %s", b.backend)
@@ -159,114 +135,81 @@ func (b *TaskServiceBuilder) Build() (reasoning.TaskService, error) {
 
 // GetConfig returns the task configuration
 func (b *TaskServiceBuilder) GetConfig() TaskConfig {
-	return TaskConfig{
-		Backend:          b.backend,
-		WorkerPool:       b.workerPool,
-		SQLConfig:        b.sqlConfig,
-		InputTimeout:     b.inputTimeout,
-		Timeout:          b.timeout,
-		HITLConfig:       b.hitlConfig,
-		CheckpointConfig: b.checkpointConfig,
+	cfg := TaskConfig{
+		Backend:      b.backend,
+		WorkerPool:   b.workerPool,
+		InputTimeout: b.inputTimeout,
+		Timeout:      b.timeout,
+		HITLConfig:   b.hitlConfig,
 	}
+
+	// Convert CheckpointConfig to flattened fields
+	if b.checkpointConfig != nil {
+		cfg.EnableCheckpointing = b.checkpointConfig.Enabled
+		cfg.CheckpointStrategy = b.checkpointConfig.Strategy
+		if b.checkpointConfig.Interval != nil {
+			cfg.CheckpointInterval = b.checkpointConfig.Interval.EveryNIterations
+			cfg.CheckpointAfterTools = b.checkpointConfig.Interval.AfterToolCalls
+			cfg.CheckpointBeforeLLM = b.checkpointConfig.Interval.BeforeLLMCalls
+		}
+		if b.checkpointConfig.Recovery != nil {
+			cfg.AutoResume = b.checkpointConfig.Recovery.AutoResume
+			cfg.AutoResumeHITL = b.checkpointConfig.Recovery.AutoResumeHITL
+			cfg.ResumeTimeout = b.checkpointConfig.Recovery.ResumeTimeout
+		}
+	}
+
+	return cfg
 }
 
 // GetTaskConfig returns the config.TaskConfig (for agent config)
 func (b *TaskServiceBuilder) GetTaskConfig() *config.TaskConfig {
-	if b.backend == "" && b.workerPool == 0 && b.sqlConfig == nil {
+	if b.backend == "" && b.workerPool == 0 && b.database == "" {
 		return nil // Task not enabled
 	}
-	return &config.TaskConfig{
+	cfg := &config.TaskConfig{
 		Backend:      b.backend,
 		WorkerPool:   b.workerPool,
-		SQL:          b.sqlConfig,
+		SQLDatabase:  b.database,
 		InputTimeout: b.inputTimeout,
 		Timeout:      b.timeout,
 		HITL:         b.hitlConfig,
-		Checkpoint:   b.checkpointConfig,
 	}
+
+	// Convert CheckpointConfig to flattened fields
+	if b.checkpointConfig != nil {
+		cfg.EnableCheckpointing = b.checkpointConfig.Enabled
+		cfg.CheckpointStrategy = b.checkpointConfig.Strategy
+		if b.checkpointConfig.Interval != nil {
+			cfg.CheckpointInterval = b.checkpointConfig.Interval.EveryNIterations
+			cfg.CheckpointAfterTools = b.checkpointConfig.Interval.AfterToolCalls
+			cfg.CheckpointBeforeLLM = b.checkpointConfig.Interval.BeforeLLMCalls
+		}
+		if b.checkpointConfig.Recovery != nil {
+			cfg.AutoResume = b.checkpointConfig.Recovery.AutoResume
+			cfg.AutoResumeHITL = b.checkpointConfig.Recovery.AutoResumeHITL
+			cfg.ResumeTimeout = b.checkpointConfig.Recovery.ResumeTimeout
+		}
+	}
+
+	return cfg
 }
 
 // TaskConfig represents task configuration
 type TaskConfig struct {
-	Backend          string
-	WorkerPool       int
-	SQLConfig        *config.TaskSQLConfig
-	InputTimeout     int
-	Timeout          int
-	HITLConfig       *config.HITLConfig
-	CheckpointConfig *config.CheckpointConfig
+	Backend              string
+	WorkerPool           int
+	InputTimeout         int
+	Timeout              int
+	HITLConfig           *config.HITLConfig
+	EnableCheckpointing  *bool
+	CheckpointStrategy   string
+	CheckpointInterval   int
+	CheckpointAfterTools *bool
+	CheckpointBeforeLLM  *bool
+	AutoResume           *bool
+	AutoResumeHITL       *bool
+	ResumeTimeout        int
 }
 
 // TaskSQLConfigBuilder provides a fluent API for building SQL task config
-type TaskSQLConfigBuilder struct {
-	config *config.TaskSQLConfig
-}
-
-// NewTaskSQLConfigBuilder creates a new SQL task config builder
-func NewTaskSQLConfigBuilder(cfg *config.TaskSQLConfig) *TaskSQLConfigBuilder {
-	if cfg == nil {
-		cfg = &config.TaskSQLConfig{}
-	}
-	return &TaskSQLConfigBuilder{
-		config: cfg,
-	}
-}
-
-// Driver sets the database driver ("postgres", "mysql", or "sqlite")
-func (b *TaskSQLConfigBuilder) Driver(driver string) *TaskSQLConfigBuilder {
-	b.config.Driver = driver
-	return b
-}
-
-// Host sets the database host
-func (b *TaskSQLConfigBuilder) Host(host string) *TaskSQLConfigBuilder {
-	b.config.Host = host
-	return b
-}
-
-// Port sets the database port
-func (b *TaskSQLConfigBuilder) Port(port int) *TaskSQLConfigBuilder {
-	b.config.Port = port
-	return b
-}
-
-// Database sets the database name
-func (b *TaskSQLConfigBuilder) Database(db string) *TaskSQLConfigBuilder {
-	b.config.Database = db
-	return b
-}
-
-// Username sets the database username
-func (b *TaskSQLConfigBuilder) Username(user string) *TaskSQLConfigBuilder {
-	b.config.Username = user
-	return b
-}
-
-// Password sets the database password
-func (b *TaskSQLConfigBuilder) Password(pass string) *TaskSQLConfigBuilder {
-	b.config.Password = pass
-	return b
-}
-
-// SSLMode sets the SSL mode (for PostgreSQL)
-func (b *TaskSQLConfigBuilder) SSLMode(mode string) *TaskSQLConfigBuilder {
-	b.config.SSLMode = mode
-	return b
-}
-
-// MaxConns sets the maximum connections
-func (b *TaskSQLConfigBuilder) MaxConns(max int) *TaskSQLConfigBuilder {
-	b.config.MaxConns = max
-	return b
-}
-
-// MaxIdle sets the maximum idle connections
-func (b *TaskSQLConfigBuilder) MaxIdle(max int) *TaskSQLConfigBuilder {
-	b.config.MaxIdle = max
-	return b
-}
-
-// Build returns the SQL config
-func (b *TaskSQLConfigBuilder) Build() *config.TaskSQLConfig {
-	return b.config
-}

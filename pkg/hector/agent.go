@@ -385,11 +385,11 @@ func (b *AgentBuilder) Build() (*agent.Agent, error) {
 	var reasoningConfig *config.ReasoningConfig
 	if b.reasoningConfig != nil {
 		reasoningConfig = &config.ReasoningConfig{
-			Engine:          b.reasoningConfig.Engine,
-			MaxIterations:   b.reasoningConfig.MaxIterations,
-			EnableStreaming: b.reasoningConfig.EnableStreaming,
-			ShowTools:       b.reasoningConfig.ShowTools,
-			ShowThinking:    b.reasoningConfig.ShowThinking,
+			Engine:                b.reasoningConfig.Engine,
+			MaxIterations:         b.reasoningConfig.MaxIterations,
+			EnableStreaming:       b.reasoningConfig.EnableStreaming,
+			EnableToolDisplay:     b.reasoningConfig.ShowTools,
+			EnableThinkingDisplay: b.reasoningConfig.ShowThinking,
 		}
 	}
 

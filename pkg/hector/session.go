@@ -1,9 +1,9 @@
 package hector
 
 import (
-	"database/sql"
 	"fmt"
 
+	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/memory"
 	"github.com/kadirpekel/hector/pkg/reasoning"
@@ -11,10 +11,11 @@ import (
 
 // SessionServiceBuilder provides a fluent API for building session services
 type SessionServiceBuilder struct {
-	backend   string
-	sqlConfig *config.SessionSQLConfig
-	rateLimit *config.RateLimitConfig
-	agentID   string
+	backend          string
+	database         string // Reference to SQL database from databases section
+	rateLimit        *config.RateLimitConfig
+	agentID          string
+	componentManager *component.ComponentManager // For getting SQL database connections
 }
 
 // NewSessionService creates a new session service builder
@@ -37,18 +38,16 @@ func (b *SessionServiceBuilder) Backend(backend string) *SessionServiceBuilder {
 	return b
 }
 
-// WithSQLConfig sets the SQL configuration for SQL backend
-func (b *SessionServiceBuilder) WithSQLConfig(cfg *config.SessionSQLConfig) *SessionServiceBuilder {
-	b.sqlConfig = cfg
+// Database sets the SQL database reference for SQL backend
+func (b *SessionServiceBuilder) Database(dbName string) *SessionServiceBuilder {
+	b.database = dbName
 	return b
 }
 
-// SQLConfig creates a SQL config builder
-func (b *SessionServiceBuilder) SQLConfig() *SessionSQLConfigBuilder {
-	if b.sqlConfig == nil {
-		b.sqlConfig = &config.SessionSQLConfig{}
-	}
-	return NewSessionSQLConfigBuilder(b.sqlConfig)
+// WithComponentManager sets the component manager for getting SQL database connections
+func (b *SessionServiceBuilder) WithComponentManager(cm *component.ComponentManager) *SessionServiceBuilder {
+	b.componentManager = cm
+	return b
 }
 
 // WithRateLimit sets the rate limit configuration
@@ -74,33 +73,21 @@ func (b *SessionServiceBuilder) Build() (reasoning.SessionService, error) {
 		service = memory.NewInMemorySessionService()
 
 	case "sql":
-		if b.sqlConfig == nil {
-			return nil, fmt.Errorf("SQL configuration is required for SQL backend")
+		if b.database == "" {
+			return nil, fmt.Errorf("SQL backend requires database reference (use Database() method)")
 		}
-		b.sqlConfig.SetDefaults()
-		if err := b.sqlConfig.Validate(); err != nil {
-			return nil, fmt.Errorf("invalid SQL configuration: %w", err)
-		}
-
-		// Create database connection
-		driverName := b.sqlConfig.Driver
-		if driverName == "sqlite" {
-			driverName = "sqlite3"
+		if b.componentManager == nil {
+			return nil, fmt.Errorf("component manager is required when using database reference")
 		}
 
-		db, err := sql.Open(driverName, b.sqlConfig.ConnectionString())
+		db, driver, err := b.componentManager.GetSQLDatabase(b.database)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open database: %w", err)
+			return nil, fmt.Errorf("failed to get SQL database '%s': %w", b.database, err)
 		}
 
-		db.SetMaxOpenConns(b.sqlConfig.MaxConns)
-		db.SetMaxIdleConns(b.sqlConfig.MaxIdle)
-
-		var err2 error
-		service, err2 = memory.NewSQLSessionService(db, b.sqlConfig.Driver, b.agentID)
-		if err2 != nil {
-			db.Close()
-			return nil, fmt.Errorf("failed to create SQL session service: %w", err2)
+		service, err = memory.NewSQLSessionService(db, driver, b.agentID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SQL session service: %w", err)
 		}
 
 	default:
@@ -117,80 +104,6 @@ func (b *SessionServiceBuilder) Build() (reasoning.SessionService, error) {
 // GetRateLimitConfig returns the rate limit configuration
 func (b *SessionServiceBuilder) GetRateLimitConfig() *config.RateLimitConfig {
 	return b.rateLimit
-}
-
-// SessionSQLConfigBuilder provides a fluent API for building SQL session config
-type SessionSQLConfigBuilder struct {
-	config *config.SessionSQLConfig
-}
-
-// NewSessionSQLConfigBuilder creates a new SQL session config builder
-func NewSessionSQLConfigBuilder(cfg *config.SessionSQLConfig) *SessionSQLConfigBuilder {
-	if cfg == nil {
-		cfg = &config.SessionSQLConfig{}
-	}
-	return &SessionSQLConfigBuilder{
-		config: cfg,
-	}
-}
-
-// Driver sets the database driver ("postgres", "mysql", or "sqlite")
-func (b *SessionSQLConfigBuilder) Driver(driver string) *SessionSQLConfigBuilder {
-	b.config.Driver = driver
-	return b
-}
-
-// Host sets the database host
-func (b *SessionSQLConfigBuilder) Host(host string) *SessionSQLConfigBuilder {
-	b.config.Host = host
-	return b
-}
-
-// Port sets the database port
-func (b *SessionSQLConfigBuilder) Port(port int) *SessionSQLConfigBuilder {
-	b.config.Port = port
-	return b
-}
-
-// Database sets the database name
-func (b *SessionSQLConfigBuilder) Database(db string) *SessionSQLConfigBuilder {
-	b.config.Database = db
-	return b
-}
-
-// Username sets the database username
-func (b *SessionSQLConfigBuilder) Username(user string) *SessionSQLConfigBuilder {
-	b.config.Username = user
-	return b
-}
-
-// Password sets the database password
-func (b *SessionSQLConfigBuilder) Password(pass string) *SessionSQLConfigBuilder {
-	b.config.Password = pass
-	return b
-}
-
-// SSLMode sets the SSL mode (for PostgreSQL)
-func (b *SessionSQLConfigBuilder) SSLMode(mode string) *SessionSQLConfigBuilder {
-	b.config.SSLMode = mode
-	return b
-}
-
-// MaxConns sets the maximum connections
-func (b *SessionSQLConfigBuilder) MaxConns(max int) *SessionSQLConfigBuilder {
-	b.config.MaxConns = max
-	return b
-}
-
-// MaxIdle sets the maximum idle connections
-func (b *SessionSQLConfigBuilder) MaxIdle(max int) *SessionSQLConfigBuilder {
-	b.config.MaxIdle = max
-	return b
-}
-
-// Build returns the SQL config
-func (b *SessionSQLConfigBuilder) Build() *config.SessionSQLConfig {
-	return b.config
 }
 
 // RateLimitConfigBuilder provides a fluent API for building rate limit config

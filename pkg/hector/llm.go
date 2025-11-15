@@ -166,7 +166,7 @@ func (b *LLMProviderBuilder) Build() (llms.LLMProvider, error) {
 		Model:       b.model,
 		APIKey:      b.apiKey,
 		Host:        b.host,
-		Temperature: b.temperature,
+		Temperature: &b.temperature,
 		MaxTokens:   b.maxTokens,
 		Timeout:     b.timeout,
 		MaxRetries:  b.maxRetries,

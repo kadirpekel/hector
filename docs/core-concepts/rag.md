@@ -461,7 +461,7 @@ agents:
       - name: "optimized"
         search_config:
           top_k: 3             # Fewer results = faster
-          threshold: 0.8       # Higher threshold = fewer candidates
+          threshold: 0.85      # Default: 0.85, higher threshold = fewer candidates
 ```
 
 ### Resource Management

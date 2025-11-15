@@ -154,11 +154,11 @@ func NewLongTermMemory() *LongTermMemoryBuilder {
 		collection: "hector_session_memory",
 		enabled:    false,
 		config: memory.LongTermConfig{
-			Enabled:      false,
-			StorageScope: memory.StorageScopeAll,
-			BatchSize:    1,
-			AutoRecall:   false,
-			RecallLimit:  5,
+			Enabled:          false,
+			StorageScope:     memory.StorageScopeAll,
+			BatchSize:        1,
+			EnableAutoRecall: false,
+			RecallLimit:      5,
 		},
 	}
 }
@@ -203,7 +203,7 @@ func (b *LongTermMemoryBuilder) BatchSize(size int) *LongTermMemoryBuilder {
 
 // AutoRecall enables automatic recall
 func (b *LongTermMemoryBuilder) AutoRecall(enabled bool) *LongTermMemoryBuilder {
-	b.config.AutoRecall = enabled
+	b.config.EnableAutoRecall = enabled
 	return b
 }
 

@@ -16,7 +16,7 @@ tools:
   execute_command:
     type: command
     enabled: true
-    requires_approval: true  # ⭐ Enable human-in-the-loop approval
+    enable_approval: true  # ⭐ Enable human-in-the-loop approval
     approval_prompt: |
       ⚠️  Command Execution Request
       
@@ -38,7 +38,7 @@ tools:
   write_file:
     type: write_file
     enabled: true
-    requires_approval: true  # ⭐ Require approval for file writes
+    enable_approval: true  # ⭐ Require approval for file writes
     approval_prompt: "Write file: {input}?"
     max_file_size: 1048576  # 1MB
     working_directory: "./"
@@ -46,7 +46,7 @@ tools:
   delete_file:
     type: delete_file
     enabled: true
-    requires_approval: true  # ⭐ Require approval for deletions
+    enable_approval: true  # ⭐ Require approval for deletions
     approval_prompt: |
       🗑️  File Deletion Request
       
@@ -59,14 +59,14 @@ tools:
   read_file:
     type: read_file
     enabled: true
-    requires_approval: false  # Safe operation - no approval needed
+    enable_approval: false  # Safe operation - no approval needed
     max_file_size: 10485760  # 10MB
     working_directory: "./"
   
   grep_search:
     type: grep_search
     enabled: true
-    requires_approval: false  # Safe read-only operation
+    enable_approval: false  # Safe read-only operation
     max_results: 1000
     context_lines: 2
     working_directory: "./"
@@ -82,7 +82,7 @@ agents:
       engine: "chain-of-thought"
       enable_streaming: true
       max_iterations: 30
-      show_thinking: true
+      enable_thinking_display: true
     
     # Task configuration for human-in-the-loop
     task:

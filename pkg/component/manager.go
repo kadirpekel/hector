@@ -195,27 +195,18 @@ func (cm *ComponentManager) GetSessionService(storeName string, agentID string) 
 		var driver string
 		var err error
 
-		// Check if database reference is provided (new way)
-		if storeConfig.Database != "" {
-			dbConfig, exists := cm.globalConfig.Databases[storeConfig.Database]
-			if !exists {
-				return nil, fmt.Errorf("session store '%s': database '%s' not found", storeName, storeConfig.Database)
-			}
-			db, err = cm.getOrCreateSQLDatabase(storeConfig.Database, dbConfig)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get SQL database '%s': %w", storeConfig.Database, err)
-			}
-			driver = dbConfig.Driver
-		} else if storeConfig.SQL != nil {
-			// Fallback to inline SQL config (deprecated but supported)
-			db, err = cm.getOrCreateSessionStoreDB(storeName, storeConfig.SQL)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get database for session store '%s': %w", storeName, err)
-			}
-			driver = storeConfig.SQL.Driver
-		} else {
-			return nil, fmt.Errorf("session store '%s': either 'database' reference or 'sql' config is required", storeName)
+		if storeConfig.SQLDatabase == "" {
+			return nil, fmt.Errorf("session store '%s': sql_database reference is required for SQL backend", storeName)
 		}
+		dbConfig, exists := cm.globalConfig.Databases[storeConfig.SQLDatabase]
+		if !exists {
+			return nil, fmt.Errorf("session store '%s': sql_database '%s' not found", storeName, storeConfig.SQLDatabase)
+		}
+		db, err = cm.getOrCreateSQLDatabase(storeConfig.SQLDatabase, dbConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get SQL database '%s': %w", storeConfig.SQLDatabase, err)
+		}
+		driver = dbConfig.Driver
 
 		return memory.NewSQLSessionService(db, driver, agentID)
 	}
@@ -278,44 +269,6 @@ func (cm *ComponentManager) getOrCreateSQLDatabase(dbName string, cfg *config.Da
 	cm.sessionStoreDBs[dbName] = db
 
 	fmt.Printf("✅ SQL database '%s' connected (driver: %s, database: %s)\n", dbName, cfg.Driver, cfg.Database)
-
-	return db, nil
-}
-
-// getOrCreateSessionStoreDB is deprecated - use getOrCreateSQLDatabase instead
-func (cm *ComponentManager) getOrCreateSessionStoreDB(storeName string, cfg *config.SessionSQLConfig) (*sql.DB, error) {
-
-	if cached, ok := cm.sessionStoreDBs[storeName]; ok {
-		if db, ok := cached.(*sql.DB); ok {
-			return db, nil
-		}
-	}
-
-	driverName := cfg.Driver
-	if driverName == "sqlite" {
-		driverName = "sqlite3"
-	}
-
-	db, err := sql.Open(driverName, cfg.ConnectionString())
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
-	}
-
-	db.SetMaxOpenConns(cfg.MaxConns)
-	db.SetMaxIdleConns(cfg.MaxIdle)
-	db.SetConnMaxLifetime(time.Hour)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	cm.sessionStoreDBs[storeName] = db
-
-	fmt.Printf("✅ Session store '%s' connected (driver: %s, database: %s)\n", storeName, cfg.Driver, cfg.Database)
 
 	return db, nil
 }
@@ -662,6 +615,10 @@ func (b *llmPluginBridge) GetTemperature() float64 {
 	if err != nil {
 		return 0.0
 	}
+	// Plugin ModelInfo.Temperature is float64, not *float64
+	// Return the value as-is - temperature 0.0 is a valid value for deterministic output
+	// If the plugin needs to indicate "not set", it should use a sentinel value or
+	// the protobuf definition should be updated to support optional fields
 	return info.Temperature
 }
 

@@ -315,7 +315,7 @@ func TestDocumentStore_SQLSource_IncrementalIndexing(t *testing.T) {
 				UpdatedColumn: "updated_at",
 			},
 		},
-		IncrementalIndexing: config.BoolPtr(true),
+		EnableIncrementalIndexing: config.BoolPtr(true),
 	}
 
 	store, err := NewDocumentStore(storeConfig, searchEngine)
@@ -351,7 +351,7 @@ func TestDocumentStore_APISource_IncrementalIndexing(t *testing.T) {
 				},
 			},
 		},
-		IncrementalIndexing: config.BoolPtr(true),
+		EnableIncrementalIndexing: config.BoolPtr(true),
 	}
 
 	store, err := NewDocumentStore(storeConfig, searchEngine)

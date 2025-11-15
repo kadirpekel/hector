@@ -1,11 +1,14 @@
+databases:
+  sessions-db:
+    driver: sqlite
+    database: ./data/sessions.db
+    max_conns: 10
+    max_idle: 2
+
 session_stores:
   main-db:
-    backend: sql        
-    sql:
-      driver: sqlite    
-      database: ./data/sessions.db  
-      max_conns: 10     
-      max_idle: 2       
+    backend: sql
+    sql_database: sessions-db       
 agents:
   assistant:
     name: "Persistent Session Assistant"

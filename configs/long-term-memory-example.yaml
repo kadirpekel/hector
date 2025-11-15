@@ -25,7 +25,7 @@ agents:
       long_term:
         storage_scope: "all"        
         batch_size: 1               
-        auto_recall: true           
+        enable_auto_recall: true           
         recall_limit: 5             
         collection: "hector_session_memory"  
   optimized-agent:
@@ -39,7 +39,7 @@ agents:
       long_term:
         storage_scope: "conversational"  
         batch_size: 10                   
-        auto_recall: true
+        enable_auto_recall: true
         recall_limit: 5
         collection: "hector_optimized_memory"
   precise-agent:
@@ -52,7 +52,7 @@ agents:
       long_term:
         storage_scope: "all"
         batch_size: 1                    
-        auto_recall: true
+        enable_auto_recall: true
         recall_limit: 10                 
         collection: "hector_precise_memory"
   simple-agent:

@@ -374,7 +374,10 @@ func (p *GeminiProvider) GetMaxTokens() int {
 }
 
 func (p *GeminiProvider) GetTemperature() float64 {
-	return p.config.Temperature
+	if p.config.Temperature == nil {
+		return 0.7 // Default
+	}
+	return *p.config.Temperature
 }
 
 func (p *GeminiProvider) Close() error {
@@ -443,9 +446,8 @@ func (p *GeminiProvider) buildGenerationConfig(structConfig *StructuredOutputCon
 
 	// Always include temperature if it's valid (>= 0 and <= 2)
 	// Temperature 0 means deterministic output, which is a valid use case
-	if p.config.Temperature >= 0 && p.config.Temperature <= 2 {
-		temp := p.config.Temperature
-		config.Temperature = &temp
+	if p.config.Temperature != nil && *p.config.Temperature >= 0 && *p.config.Temperature <= 2 {
+		config.Temperature = p.config.Temperature
 	}
 
 	if structConfig != nil {

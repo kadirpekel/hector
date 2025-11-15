@@ -24,7 +24,7 @@ agents:
     task:
       backend: "sql"
       worker_pool: 100
-      database: "postgres-tasks"  # Reference to databases section
+      sql_database: "postgres-tasks"  # Reference to databases section
 
 llms:
   gpt:

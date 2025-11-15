@@ -108,14 +108,17 @@ func (a *Agent) isRecoveryEnabled() bool {
 	if a.config == nil || a.config.Task == nil {
 		return false
 	}
-	checkpointCfg := a.config.Task.Checkpoint
-	if checkpointCfg == nil || !checkpointCfg.Enabled {
+	taskCfg := a.config.Task
+
+	if taskCfg.EnableCheckpointing == nil || !*taskCfg.EnableCheckpointing {
 		return false
 	}
-	if checkpointCfg.Recovery == nil {
-		return false
+
+	if taskCfg.AutoResume != nil {
+		return *taskCfg.AutoResume
 	}
-	return checkpointCfg.Recovery.AutoResume
+
+	return false
 }
 
 // shouldAutoResumeHITL returns true if INPUT_REQUIRED tasks should be auto-resumed
@@ -123,11 +126,13 @@ func (a *Agent) shouldAutoResumeHITL() bool {
 	if a.config == nil || a.config.Task == nil {
 		return false
 	}
-	checkpointCfg := a.config.Task.Checkpoint
-	if checkpointCfg == nil || checkpointCfg.Recovery == nil {
-		return false
+	taskCfg := a.config.Task
+
+	if taskCfg.AutoResumeHITL != nil {
+		return *taskCfg.AutoResumeHITL
 	}
-	return checkpointCfg.Recovery.AutoResumeHITL
+
+	return false
 }
 
 // isCheckpointExpired checks if a checkpoint is expired based on recovery timeout
@@ -150,11 +155,13 @@ func (a *Agent) getRecoveryTimeout() int {
 	if a.config == nil || a.config.Task == nil {
 		return 0
 	}
-	checkpointCfg := a.config.Task.Checkpoint
-	if checkpointCfg == nil || checkpointCfg.Recovery == nil {
-		return 0
+	taskCfg := a.config.Task
+
+	if taskCfg.ResumeTimeout > 0 {
+		return taskCfg.ResumeTimeout
 	}
-	return checkpointCfg.Recovery.ResumeTimeout
+
+	return 0
 }
 
 // resumeFromCheckpoint resumes task execution from a checkpoint

@@ -16,6 +16,11 @@ func BoolPtr(b bool) *bool {
 	return &b
 }
 
+// Float64Ptr returns a pointer to the given float64 value
+func Float64Ptr(f float64) *float64 {
+	return &f
+}
+
 // BoolValue returns the value of the bool pointer, or the default if nil
 func BoolValue(b *bool, defaultValue bool) bool {
 	if b == nil {
@@ -182,15 +187,15 @@ func (c *PluginConfigs) Validate() error {
 }
 
 type LLMProviderConfig struct {
-	Type        string  `yaml:"type"`
-	Model       string  `yaml:"model"`
-	APIKey      string  `yaml:"api_key"`
-	Host        string  `yaml:"host"`
-	Temperature float64 `yaml:"temperature"`
-	MaxTokens   int     `yaml:"max_tokens"`
-	Timeout     int     `yaml:"timeout"`
-	MaxRetries  int     `yaml:"max_retries"`
-	RetryDelay  int     `yaml:"retry_delay"`
+	Type        string   `yaml:"type"`
+	Model       string   `yaml:"model"`
+	APIKey      string   `yaml:"api_key"`
+	Host        string   `yaml:"host"`
+	Temperature *float64 `yaml:"temperature,omitempty"` // Use pointer to distinguish nil (not set) from 0.0 (explicitly set)
+	MaxTokens   int      `yaml:"max_tokens"`
+	Timeout     int      `yaml:"timeout"`
+	MaxRetries  int      `yaml:"max_retries"`
+	RetryDelay  int      `yaml:"retry_delay"`
 
 	StructuredOutput *StructuredOutputConfig `yaml:"structured_output,omitempty"`
 }
@@ -230,7 +235,7 @@ func (c *LLMProviderConfig) Validate() error {
 			// Ollama doesn't require API key for local deployments
 		}
 	}
-	if c.Temperature < 0 || c.Temperature > 2 {
+	if c.Temperature != nil && (*c.Temperature < 0 || *c.Temperature > 2) {
 		return fmt.Errorf("temperature must be between 0 and 2")
 	}
 	if c.MaxTokens < 0 {
@@ -282,12 +287,10 @@ func (c *LLMProviderConfig) SetDefaults() {
 			c.Host = "https://api.openai.com/v1"
 		}
 	}
-	// Only set defaults if temperature is 0 AND it wasn't explicitly set to 0
-	// We use -0.000001 as a sentinel value to indicate "explicitly set to 0" from zero-config
-	if c.Temperature == -0.000001 {
-		c.Temperature = 0.0
-	} else if c.Temperature == 0 {
-		c.Temperature = 0.7
+	// Set default temperature if not specified
+	if c.Temperature == nil {
+		defaultTemp := 0.7
+		c.Temperature = &defaultTemp
 	}
 	// Only set defaults if maxTokens is 0 AND it wasn't explicitly set to 0
 	// We use -1 as a sentinel value to indicate "explicitly set to 0" from zero-config
@@ -318,11 +321,11 @@ func (c *LLMProviderConfig) SetDefaults() {
 // VectorStoreConfig holds configuration for vector database connections (Qdrant, Pinecone, etc.)
 // Note: For operation timeouts, use vector store client-specific timeout settings.
 type VectorStoreConfig struct {
-	Type   string `yaml:"type"`
-	Host   string `yaml:"host"`
-	Port   int    `yaml:"port"`
-	APIKey string `yaml:"api_key"`
-	UseTLS *bool  `yaml:"use_tls"`
+	Type      string `yaml:"type"`
+	Host      string `yaml:"host"`
+	Port      int    `yaml:"port"`
+	APIKey    string `yaml:"api_key"`
+	EnableTLS *bool  `yaml:"enable_tls"`
 }
 
 func (c *VectorStoreConfig) Validate() error {
@@ -348,13 +351,16 @@ func (c *VectorStoreConfig) SetDefaults() {
 	if c.Port == 0 {
 		c.Port = 6334
 	}
-	if c.UseTLS == nil {
-		c.UseTLS = BoolPtr(false)
+	if c.EnableTLS == nil {
+		c.EnableTLS = BoolPtr(false)
 	}
 }
 
 // DatabaseConfig holds configuration for SQL database connections (PostgreSQL, MySQL, SQLite)
-type DatabaseConfig struct {
+// SQLConnectionConfig is the base configuration for all SQL database connections.
+// This struct is used directly for top-level database configurations and as the base
+// for task, session, and document store SQL configurations.
+type SQLConnectionConfig struct {
 	Driver          string `yaml:"driver"`         // "postgres", "mysql", "sqlite"
 	Host            string `yaml:"host,omitempty"` // Not required for SQLite
 	Port            int    `yaml:"port,omitempty"` // Not required for SQLite
@@ -368,17 +374,21 @@ type DatabaseConfig struct {
 	ConnMaxIdleTime string `yaml:"conn_max_idle_time,omitempty"` // e.g., "30m"
 }
 
-func (c *DatabaseConfig) Validate() error {
+// DatabaseConfig is an alias for SQLConnectionConfig for top-level database configurations
+type DatabaseConfig = SQLConnectionConfig
+
+// Validate validates SQLConnectionConfig (used by all SQL config types)
+func (c *SQLConnectionConfig) Validate() error {
 	if c.Driver == "" {
 		return fmt.Errorf("driver is required")
 	}
-	if c.Driver != "postgres" && c.Driver != "mysql" && c.Driver != "sqlite" {
-		return fmt.Errorf("invalid driver '%s', must be 'postgres', 'mysql', or 'sqlite'", c.Driver)
+	if c.Driver != "postgres" && c.Driver != "mysql" && c.Driver != "sqlite" && c.Driver != "sqlite3" {
+		return fmt.Errorf("invalid driver '%s', must be 'postgres', 'mysql', 'sqlite', or 'sqlite3'", c.Driver)
 	}
 	if c.Database == "" {
 		return fmt.Errorf("database is required")
 	}
-	if c.Driver != "sqlite" {
+	if c.Driver != "sqlite" && c.Driver != "sqlite3" {
 		if c.Host == "" {
 			return fmt.Errorf("host is required for %s", c.Driver)
 		}
@@ -556,20 +566,24 @@ type AgentConfig struct {
 	TargetAgentID string            `yaml:"target_agent_id,omitempty"` // Remote agent ID (if different from local config key)
 	Credentials   *AgentCredentials `yaml:"credentials,omitempty"`
 
-	LLM              string                  `yaml:"llm,omitempty"`
-	VectorStore      string                  `yaml:"vector_store,omitempty"`
-	Embedder         string                  `yaml:"embedder,omitempty"`
-	DocumentStores   []string                `yaml:"document_stores,omitempty"`
-	Prompt           PromptConfig            `yaml:"prompt,omitempty"`
-	Memory           MemoryConfig            `yaml:"memory,omitempty"`
-	Reasoning        ReasoningConfig         `yaml:"reasoning,omitempty"`
-	Search           SearchConfig            `yaml:"search,omitempty"`
-	Task             *TaskConfig             `yaml:"task,omitempty"`
-	SessionStore     string                  `yaml:"session_store,omitempty"`
-	Tools            []string                `yaml:"tools,omitempty"`
-	SubAgents        []string                `yaml:"sub_agents,omitempty"`
-	Security         *SecurityConfig         `yaml:"security,omitempty"`
-	StructuredOutput *StructuredOutputConfig `yaml:"structured_output,omitempty"`
+	// Provider references - support both string references and inline configs
+	LLM               string                  `yaml:"llm,omitempty"`                 // String reference (existing)
+	LLMInline         *LLMProviderConfig      `yaml:"llm_config,omitempty"`          // Inline LLM config (new - alternative to llm)
+	VectorStore       string                  `yaml:"vector_store,omitempty"`        // String reference (existing)
+	VectorStoreInline *VectorStoreConfig      `yaml:"vector_store_config,omitempty"` // Inline vector store config (new - alternative to vector_store)
+	Embedder          string                  `yaml:"embedder,omitempty"`            // String reference (existing)
+	EmbedderInline    *EmbedderProviderConfig `yaml:"embedder_config,omitempty"`     // Inline embedder config (new - alternative to embedder)
+	DocumentStores    []string                `yaml:"document_stores,omitempty"`
+	Prompt            PromptConfig            `yaml:"prompt,omitempty"`
+	Memory            MemoryConfig            `yaml:"memory,omitempty"`
+	Reasoning         ReasoningConfig         `yaml:"reasoning,omitempty"`
+	Search            SearchConfig            `yaml:"search,omitempty"`
+	Task              *TaskConfig             `yaml:"task,omitempty"`
+	SessionStore      string                  `yaml:"session_store,omitempty"`
+	Tools             []string                `yaml:"tools,omitempty"`
+	SubAgents         []string                `yaml:"sub_agents,omitempty"`
+	Security          *SecurityConfig         `yaml:"security,omitempty"`
+	StructuredOutput  *StructuredOutputConfig `yaml:"structured_output,omitempty"`
 
 	DocsFolder  string `yaml:"docs_folder,omitempty"`
 	EnableTools *bool  `yaml:"enable_tools,omitempty"`
@@ -622,8 +636,35 @@ func (c *AgentConfig) Validate() error {
 
 	case "native":
 
-		if c.LLM == "" {
-			return fmt.Errorf("llm provider reference is required for native agents")
+		// Validate that either reference or inline config is provided, but not both
+		if c.LLM == "" && c.LLMInline == nil {
+			return fmt.Errorf("llm provider reference or inline config is required for native agents")
+		}
+		if c.LLM != "" && c.LLMInline != nil {
+			return fmt.Errorf("cannot specify both llm reference and llm_config inline config (use one or the other)")
+		}
+		if c.VectorStore != "" && c.VectorStoreInline != nil {
+			return fmt.Errorf("cannot specify both vector_store reference and vector_store_config inline config (use one or the other)")
+		}
+		if c.Embedder != "" && c.EmbedderInline != nil {
+			return fmt.Errorf("cannot specify both embedder reference and embedder_config inline config (use one or the other)")
+		}
+
+		// Validate inline configs if provided
+		if c.LLMInline != nil {
+			if err := c.LLMInline.Validate(); err != nil {
+				return fmt.Errorf("inline LLM config validation failed: %w", err)
+			}
+		}
+		if c.VectorStoreInline != nil {
+			if err := c.VectorStoreInline.Validate(); err != nil {
+				return fmt.Errorf("inline vector store config validation failed: %w", err)
+			}
+		}
+		if c.EmbedderInline != nil {
+			if err := c.EmbedderInline.Validate(); err != nil {
+				return fmt.Errorf("inline embedder config validation failed: %w", err)
+			}
 		}
 
 		if c.DocsFolder != "" && len(c.DocumentStores) > 0 {
@@ -682,8 +723,21 @@ func (c *AgentConfig) SetDefaults() {
 		if c.Description == "" {
 			c.Description = "AI assistant with local tools and knowledge"
 		}
-		if c.LLM == "" {
+		// LLM default is handled by defaults mechanism or inline config expansion
+		// Only set default if neither reference nor inline is provided
+		if c.LLM == "" && c.LLMInline == nil {
 			c.LLM = "default-llm"
+		}
+
+		// Set defaults for inline configs if provided
+		if c.LLMInline != nil {
+			c.LLMInline.SetDefaults()
+		}
+		if c.VectorStoreInline != nil {
+			c.VectorStoreInline.SetDefaults()
+		}
+		if c.EmbedderInline != nil {
+			c.EmbedderInline.SetDefaults()
 		}
 
 		c.Prompt.SetDefaults()
@@ -919,7 +973,6 @@ func (c *GrepSearchConfig) SetDefaults() {
 	}
 }
 
-// ToolConfigs is kept for backwards compatibility but is no longer used directly in Config.
 // Config.Tools is now a map[string]*ToolConfig directly.
 type ToolConfigs struct {
 	Tools map[string]*ToolConfig `yaml:"tools,omitempty"`
@@ -1024,8 +1077,8 @@ type ToolConfig struct {
 	MaxReplacements int `yaml:"max_replacements,omitempty"`
 
 	// Human-in-the-loop: Tool approval (A2A Protocol Section 6.3 - INPUT_REQUIRED)
-	RequiresApproval *bool  `yaml:"requires_approval,omitempty"` // If true, agent pauses for user approval
-	ApprovalPrompt   string `yaml:"approval_prompt,omitempty"`   // Custom prompt for approval request
+	EnableApproval *bool  `yaml:"enable_approval,omitempty"` // If true, agent pauses for user approval
+	ApprovalPrompt string `yaml:"approval_prompt,omitempty"` // Custom prompt for approval request
 
 	// read_file, apply_patch, grep_search settings
 	ContextLines int `yaml:"context_lines,omitempty"`
@@ -1161,19 +1214,19 @@ func (c *ToolConfig) SetDefaults() {
 }
 
 type DocumentStoreConfig struct {
-	Name                string   `yaml:"name"`
-	Collection          string   `yaml:"collection"`   // Optional: points to existing Qdrant collection (no indexing)
-	VectorStore         string   `yaml:"vector_store"` // Optional: vector store to use (defaults to agent's vector_store)
-	Database            string   `yaml:"database"`     // Optional: SQL database reference (for SQL source)
-	Embedder            string   `yaml:"embedder"`     // Optional: embedder to use (defaults to agent's embedder)
-	Source              string   `yaml:"source"`       // "directory", "sql", "api" (required if collection not set)
-	Path                string   `yaml:"path"`         // Required for directory source
-	IncludePatterns     []string `yaml:"include_patterns"`
-	ExcludePatterns     []string `yaml:"exclude_patterns"`            // If set, replaces defaults entirely
-	AdditionalExcludes  []string `yaml:"additional_exclude_patterns"` // Extends default exclusions
-	WatchChanges        *bool    `yaml:"watch_changes"`               // Only for directory source
-	MaxFileSize         int64    `yaml:"max_file_size"`               // Only for directory source
-	IncrementalIndexing *bool    `yaml:"incremental_indexing"`
+	Name                      string   `yaml:"name"`
+	Collection                string   `yaml:"collection"`   // Optional: points to existing Qdrant collection (no indexing)
+	VectorStore               string   `yaml:"vector_store"` // Optional: vector store to use (defaults to agent's vector_store)
+	SQLDatabase               string   `yaml:"sql_database"` // Optional: SQL database reference (for SQL source)
+	Embedder                  string   `yaml:"embedder"`     // Optional: embedder to use (defaults to agent's embedder)
+	Source                    string   `yaml:"source"`       // "directory", "sql", "api" (required if collection not set)
+	Path                      string   `yaml:"path"`         // Required for directory source
+	IncludePatterns           []string `yaml:"include_patterns"`
+	ExcludePatterns           []string `yaml:"exclude_patterns"`            // If set, replaces defaults entirely
+	AdditionalExcludes        []string `yaml:"additional_exclude_patterns"` // Extends default exclusions
+	EnableWatchChanges        *bool    `yaml:"enable_watch_changes"`        // Only for directory source
+	MaxFileSize               int64    `yaml:"max_file_size"`               // Only for directory source
+	EnableIncrementalIndexing *bool    `yaml:"enable_incremental_indexing"`
 
 	// SQL source configuration
 	SQL        *DocumentStoreSQLConfig       `yaml:"sql,omitempty"`
@@ -1189,29 +1242,22 @@ type DocumentStoreConfig struct {
 	ChunkStrategy string `yaml:"chunk_strategy"` // "simple", "overlapping", "semantic"
 
 	// Metadata extraction
-	ExtractMetadata   *bool    `yaml:"extract_metadata"`   // Default: false
-	MetadataLanguages []string `yaml:"metadata_languages"` // Languages to extract metadata from
+	EnableMetadataExtraction *bool    `yaml:"enable_metadata_extraction"` // Default: false
+	MetadataLanguages        []string `yaml:"metadata_languages"`         // Languages to extract metadata from
 
 	// Performance
 	MaxConcurrentFiles int `yaml:"max_concurrent_files"` // Default: 10 (renamed from MaxConcurrentFiles for clarity)
 
 	// Progress tracking
-	ShowProgress      *bool `yaml:"show_progress"`      // Default: true - show progress bar
-	VerboseProgress   *bool `yaml:"verbose_progress"`   // Default: false - show current file
-	EnableCheckpoints *bool `yaml:"enable_checkpoints"` // Default: true - enable resume capability
-	QuietMode         *bool `yaml:"quiet_mode"`         // Default: true - suppress per-file warnings
+	EnableProgressDisplay *bool `yaml:"enable_progress_display"` // Default: true - show progress bar
+	EnableVerboseProgress *bool `yaml:"enable_verbose_progress"` // Default: false - show current file
+	EnableCheckpoints     *bool `yaml:"enable_checkpoints"`      // Default: true - enable resume capability
+	EnableQuietMode       *bool `yaml:"enable_quiet_mode"`       // Default: true - suppress per-file warnings
 }
 
 // DocumentStoreSQLConfig defines SQL database connection for document store
-type DocumentStoreSQLConfig struct {
-	Driver   string `yaml:"driver"` // "postgres", "mysql", "sqlite3"
-	Host     string `yaml:"host,omitempty"`
-	Port     int    `yaml:"port,omitempty"`
-	Database string `yaml:"database"`
-	Username string `yaml:"username,omitempty"`
-	Password string `yaml:"password,omitempty"`
-	SSLMode  string `yaml:"ssl_mode,omitempty"`
-}
+// DocumentStoreSQLConfig is an alias for SQLConnectionConfig for document store SQL source configurations
+type DocumentStoreSQLConfig = SQLConnectionConfig
 
 // DocumentStoreSQLTableConfig defines which SQL table to index
 type DocumentStoreSQLTableConfig struct {
@@ -1402,12 +1448,12 @@ func (c *DocumentStoreConfig) SetDefaults() {
 		c.MaxFileSize = 10 * 1024 * 1024
 	}
 
-	if c.WatchChanges == nil {
-		c.WatchChanges = BoolPtr(true)
+	if c.EnableWatchChanges == nil {
+		c.EnableWatchChanges = BoolPtr(true)
 	}
 
-	if c.IncrementalIndexing == nil {
-		c.IncrementalIndexing = BoolPtr(true)
+	if c.EnableIncrementalIndexing == nil {
+		c.EnableIncrementalIndexing = BoolPtr(true)
 	}
 
 	// Chunking defaults
@@ -1423,22 +1469,22 @@ func (c *DocumentStoreConfig) SetDefaults() {
 	if len(c.MetadataLanguages) == 0 {
 		c.MetadataLanguages = []string{"go"} // Only Go by default
 	}
-	if c.ExtractMetadata == nil {
-		c.ExtractMetadata = BoolPtr(false)
+	if c.EnableMetadataExtraction == nil {
+		c.EnableMetadataExtraction = BoolPtr(false)
 	}
 
 	// Progress tracking defaults (using pointers for proper default detection)
-	if c.ShowProgress == nil {
-		c.ShowProgress = BoolPtr(true)
+	if c.EnableProgressDisplay == nil {
+		c.EnableProgressDisplay = BoolPtr(true)
 	}
-	if c.VerboseProgress == nil {
-		c.VerboseProgress = BoolPtr(false)
+	if c.EnableVerboseProgress == nil {
+		c.EnableVerboseProgress = BoolPtr(false)
 	}
 	if c.EnableCheckpoints == nil {
 		c.EnableCheckpoints = BoolPtr(true)
 	}
-	if c.QuietMode == nil {
-		c.QuietMode = BoolPtr(true) // Default to true - suppress warnings
+	if c.EnableQuietMode == nil {
+		c.EnableQuietMode = BoolPtr(true) // Default to true - suppress warnings
 	}
 
 	// Performance defaults
@@ -1447,60 +1493,64 @@ func (c *DocumentStoreConfig) SetDefaults() {
 	}
 
 	// Progress tracking defaults (use field presence to determine if unset)
-	// ShowProgress defaults to true (enable by default)
-	// VerboseProgress defaults to false
+	// EnableProgressDisplay defaults to true (enable by default)
+	// EnableVerboseProgress defaults to false
 	// EnableCheckpoints defaults to true (enable by default)
 }
 
 type TaskConfig struct {
-	Backend      string            `yaml:"backend,omitempty"`
-	WorkerPool   int               `yaml:"worker_pool,omitempty"`
-	Database     string            `yaml:"database,omitempty"`      // Reference to SQL database from databases section
-	SQL          *TaskSQLConfig    `yaml:"sql,omitempty"`           // Deprecated: use Database reference instead
-	InputTimeout int               `yaml:"input_timeout,omitempty"` // Timeout in seconds for INPUT_REQUIRED state (default: 600)
-	Timeout      int               `yaml:"timeout,omitempty"`       // Timeout in seconds for async task execution (default: 3600 = 1 hour)
-	HITL         *HITLConfig       `yaml:"hitl,omitempty"`          // Human-in-the-loop configuration
-	Checkpoint   *CheckpointConfig `yaml:"checkpoint,omitempty"`    // Generic checkpoint/resume configuration
+	Backend      string      `yaml:"backend,omitempty"`
+	WorkerPool   int         `yaml:"worker_pool,omitempty"`
+	SQLDatabase  string      `yaml:"sql_database,omitempty"`  // Reference to SQL database from databases section
+	InputTimeout int         `yaml:"input_timeout,omitempty"` // Timeout in seconds for INPUT_REQUIRED state (default: 600)
+	Timeout      int         `yaml:"timeout,omitempty"`       // Timeout in seconds for async task execution (default: 3600 = 1 hour)
+	HITL         *HITLConfig `yaml:"hitl,omitempty"`          // Human-in-the-loop configuration
+
+	// Flattened checkpoint configuration (replaces nested checkpoint.recovery structure)
+	EnableCheckpointing  *bool  `yaml:"enable_checkpointing,omitempty"`   // Enable checkpointing (default: false)
+	CheckpointStrategy   string `yaml:"checkpoint_strategy,omitempty"`    // "event", "interval", or "hybrid" (default: "event")
+	CheckpointInterval   int    `yaml:"checkpoint_interval,omitempty"`    // Checkpoint every N iterations (0 = disabled)
+	CheckpointAfterTools *bool  `yaml:"checkpoint_after_tools,omitempty"` // Checkpoint after tool calls (default: false)
+	CheckpointBeforeLLM  *bool  `yaml:"checkpoint_before_llm,omitempty"`  // Checkpoint before LLM calls (default: false)
+
+	// Flattened recovery configuration
+	AutoResume     *bool `yaml:"auto_resume,omitempty"`      // Auto-resume on startup (default: false)
+	AutoResumeHITL *bool `yaml:"auto_resume_hitl,omitempty"` // Auto-resume INPUT_REQUIRED tasks (default: false)
+	ResumeTimeout  int   `yaml:"resume_timeout,omitempty"`   // Max time to resume after restart (seconds, default: 3600)
 }
 
 type HITLConfig struct {
 	Mode string `yaml:"mode,omitempty"` // "auto" (default), "blocking", or "async"
 }
 
+// CheckpointConfig, CheckpointIntervalConfig, and CheckpointRecoveryConfig are internal types
+// used only by the builder pattern in pkg/hector/checkpoint.go. They are NOT exposed in YAML configuration.
+// TaskConfig uses flattened fields (enable_checkpointing, checkpoint_strategy, etc.) instead.
 type CheckpointConfig struct {
-	Enabled  bool                      `yaml:"enabled,omitempty"`  // Enable generic checkpointing (default: false)
-	Strategy string                    `yaml:"strategy,omitempty"` // "event", "interval", or "hybrid" (default: "event")
+	Enabled  *bool                     `yaml:"enabled,omitempty"`  // Internal use only
+	Strategy string                    `yaml:"strategy,omitempty"` // Internal use only
 	Interval *CheckpointIntervalConfig `yaml:"interval,omitempty"`
 	Recovery *CheckpointRecoveryConfig `yaml:"recovery,omitempty"`
 }
 
 type CheckpointIntervalConfig struct {
-	EveryNIterations int  `yaml:"every_n_iterations,omitempty"` // Checkpoint every N iterations (0 = disabled)
-	AfterToolCalls   bool `yaml:"after_tool_calls,omitempty"`   // Always checkpoint after tool calls (default: false)
-	BeforeLLMCalls   bool `yaml:"before_llm_calls,omitempty"`   // Checkpoint before LLM calls (default: false)
+	EveryNIterations int   `yaml:"every_n_iterations,omitempty"` // Internal use only
+	AfterToolCalls   *bool `yaml:"after_tool_calls,omitempty"`   // Internal use only
+	BeforeLLMCalls   *bool `yaml:"before_llm_calls,omitempty"`   // Internal use only
 }
 
 type CheckpointRecoveryConfig struct {
-	AutoResume     bool `yaml:"auto_resume,omitempty"`      // Auto-resume on startup (default: false)
-	AutoResumeHITL bool `yaml:"auto_resume_hitl,omitempty"` // Auto-resume INPUT_REQUIRED tasks (default: false)
-	ResumeTimeout  int  `yaml:"resume_timeout,omitempty"`   // Max time to resume after restart (seconds, default: 3600)
+	AutoResume     *bool `yaml:"auto_resume,omitempty"`      // Internal use only
+	AutoResumeHITL *bool `yaml:"auto_resume_hitl,omitempty"` // Internal use only
+	ResumeTimeout  int   `yaml:"resume_timeout,omitempty"`   // Internal use only
 }
 
 func (c *TaskConfig) IsEnabled() bool {
-	return c.Backend != "" || c.WorkerPool > 0 || c.Database != "" || c.SQL != nil
+	return c.Backend != "" || c.WorkerPool > 0 || c.SQLDatabase != ""
 }
 
-type TaskSQLConfig struct {
-	Driver   string `yaml:"driver"`
-	Host     string `yaml:"host,omitempty"`
-	Port     int    `yaml:"port,omitempty"`
-	Database string `yaml:"database"`
-	Username string `yaml:"username,omitempty"`
-	Password string `yaml:"password,omitempty"`
-	SSLMode  string `yaml:"ssl_mode,omitempty"`
-	MaxConns int    `yaml:"max_conns,omitempty"`
-	MaxIdle  int    `yaml:"max_idle,omitempty"`
-}
+// TaskSQLConfig is an alias for SQLConnectionConfig for task service SQL configurations
+type TaskSQLConfig = SQLConnectionConfig
 
 func (c *TaskConfig) SetDefaults() {
 	if c.Backend == "" {
@@ -1512,15 +1562,38 @@ func (c *TaskConfig) SetDefaults() {
 	if c.Timeout == 0 {
 		c.Timeout = 3600 // Default: 1 hour
 	}
-	if c.SQL != nil {
-		c.SQL.SetDefaults()
+	if c.InputTimeout == 0 {
+		c.InputTimeout = 600 // Default: 10 minutes
 	}
-	if c.Checkpoint != nil {
-		c.Checkpoint.SetDefaults()
+
+	// Set defaults for checkpoint fields
+	if c.EnableCheckpointing == nil {
+		c.EnableCheckpointing = BoolPtr(false)
+	}
+	if c.CheckpointStrategy == "" {
+		c.CheckpointStrategy = "event"
+	}
+	if c.CheckpointAfterTools == nil {
+		c.CheckpointAfterTools = BoolPtr(false)
+	}
+	if c.CheckpointBeforeLLM == nil {
+		c.CheckpointBeforeLLM = BoolPtr(false)
+	}
+	if c.AutoResume == nil {
+		c.AutoResume = BoolPtr(false)
+	}
+	if c.AutoResumeHITL == nil {
+		c.AutoResumeHITL = BoolPtr(false)
+	}
+	if c.ResumeTimeout == 0 {
+		c.ResumeTimeout = 3600 // Default: 1 hour
 	}
 }
 
 func (c *CheckpointConfig) SetDefaults() {
+	if c.Enabled == nil {
+		c.Enabled = BoolPtr(false)
+	}
 	if c.Strategy == "" {
 		c.Strategy = "event" // Default: event-driven (async HITL)
 	}
@@ -1534,37 +1607,23 @@ func (c *CheckpointConfig) SetDefaults() {
 
 func (c *CheckpointIntervalConfig) SetDefaults() {
 	// No defaults - all fields are optional
+	if c.AfterToolCalls == nil {
+		c.AfterToolCalls = BoolPtr(false)
+	}
+	if c.BeforeLLMCalls == nil {
+		c.BeforeLLMCalls = BoolPtr(false)
+	}
 }
 
 func (c *CheckpointRecoveryConfig) SetDefaults() {
+	if c.AutoResume == nil {
+		c.AutoResume = BoolPtr(false)
+	}
+	if c.AutoResumeHITL == nil {
+		c.AutoResumeHITL = BoolPtr(false)
+	}
 	if c.ResumeTimeout == 0 {
 		c.ResumeTimeout = 3600 // Default: 1 hour
-	}
-}
-
-func (c *TaskSQLConfig) SetDefaults() {
-	if c.Driver == "" {
-		c.Driver = "postgres"
-	}
-	if c.Host == "" && c.Driver != "sqlite" {
-		c.Host = "localhost"
-	}
-	if c.Port == 0 {
-		switch c.Driver {
-		case "postgres":
-			c.Port = 5432
-		case "mysql":
-			c.Port = 3306
-		}
-	}
-	if c.SSLMode == "" && c.Driver == "postgres" {
-		c.SSLMode = "disable"
-	}
-	if c.MaxConns == 0 {
-		c.MaxConns = 25
-	}
-	if c.MaxIdle == 0 {
-		c.MaxIdle = 5
 	}
 }
 
@@ -1673,20 +1732,18 @@ func (c *TaskConfig) Validate() error {
 		return fmt.Errorf("worker_pool must be non-negative")
 	}
 	if c.Backend == "sql" {
-		// Either database reference or inline SQL config must be provided
-		if c.Database == "" && c.SQL == nil {
-			return fmt.Errorf("SQL backend requires either 'database' reference or 'sql' configuration")
+		if c.SQLDatabase == "" {
+			return fmt.Errorf("SQL backend requires 'sql_database' reference")
 		}
-		// If both are provided, prefer database reference
-		if c.Database != "" && c.SQL != nil {
-			return fmt.Errorf("cannot specify both 'database' reference and 'sql' configuration (use 'database' reference)")
-		}
-		// Validate inline SQL config if provided (deprecated)
-		if c.SQL != nil {
-			if err := c.SQL.Validate(); err != nil {
-				return fmt.Errorf("sql config validation failed: %w", err)
-			}
-		}
+	}
+	if c.CheckpointStrategy != "" && c.CheckpointStrategy != "event" && c.CheckpointStrategy != "interval" && c.CheckpointStrategy != "hybrid" {
+		return fmt.Errorf("invalid checkpoint_strategy '%s', must be 'event', 'interval', or 'hybrid'", c.CheckpointStrategy)
+	}
+	if c.CheckpointInterval < 0 {
+		return fmt.Errorf("checkpoint_interval must be non-negative")
+	}
+	if c.ResumeTimeout < 0 {
+		return fmt.Errorf("resume_timeout must be non-negative")
 	}
 	if c.HITL != nil {
 		if err := c.HITL.Validate(); err != nil {
@@ -1703,119 +1760,27 @@ func (c *HITLConfig) Validate() error {
 	return nil
 }
 
-func (c *TaskSQLConfig) Validate() error {
-	if c.Driver == "" {
-		return fmt.Errorf("driver is required")
-	}
-	if c.Driver != "postgres" && c.Driver != "mysql" && c.Driver != "sqlite" {
-		return fmt.Errorf("invalid driver '%s', must be 'postgres', 'mysql', or 'sqlite'", c.Driver)
-	}
-	if c.Database == "" {
-		return fmt.Errorf("database is required")
-	}
-	if c.Driver != "sqlite" {
-		if c.Host == "" {
-			return fmt.Errorf("host is required for %s", c.Driver)
-		}
-		if c.Port <= 0 {
-			return fmt.Errorf("port must be positive for %s", c.Driver)
-		}
-	}
-	if c.MaxConns <= 0 {
-		return fmt.Errorf("max_conns must be positive")
-	}
-	if c.MaxIdle < 0 {
-		return fmt.Errorf("max_idle must be non-negative")
-	}
-	return nil
-}
-
-func (c *TaskSQLConfig) ConnectionString() string {
-	switch c.Driver {
-	case "postgres":
-		sslMode := c.SSLMode
-		if sslMode == "" {
-			sslMode = "disable"
-		}
-
-		if c.Password != "" {
-			return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-				c.Host, c.Port, c.Username, c.Password, c.Database, sslMode)
-		}
-		return fmt.Sprintf("host=%s port=%d user=%s dbname=%s sslmode=%s",
-			c.Host, c.Port, c.Username, c.Database, sslMode)
-	case "mysql":
-		return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
-			c.Username, c.Password, c.Host, c.Port, c.Database)
-	case "sqlite":
-		return c.Database
-	default:
-		return ""
-	}
-}
+// TaskSQLConfig.Validate and TaskSQLConfig.ConnectionString use SQLConnectionConfig methods (via type alias)
 
 type SessionStoreConfig struct {
-	Backend   string            `yaml:"backend,omitempty"`
-	Database  string            `yaml:"database,omitempty"` // Reference to SQL database from databases section
-	SQL       *SessionSQLConfig `yaml:"sql,omitempty"`      // Deprecated: use Database reference instead
-	RateLimit *RateLimitConfig  `yaml:"rate_limit,omitempty"`
+	Backend     string           `yaml:"backend,omitempty"`
+	SQLDatabase string           `yaml:"sql_database,omitempty"` // Reference to SQL database from databases section
+	RateLimit   *RateLimitConfig `yaml:"rate_limit,omitempty"`
 }
 
 func (c *SessionStoreConfig) IsEnabled() bool {
-	return c.Backend != "" || c.SQL != nil
+	return c.Backend != "" || c.SQLDatabase != ""
 }
 
-type SessionSQLConfig struct {
-	Driver   string `yaml:"driver"`
-	Host     string `yaml:"host,omitempty"`
-	Port     int    `yaml:"port,omitempty"`
-	Database string `yaml:"database"`
-	Username string `yaml:"username,omitempty"`
-	Password string `yaml:"password,omitempty"`
-	SSLMode  string `yaml:"ssl_mode,omitempty"`
-	MaxConns int    `yaml:"max_conns,omitempty"`
-	MaxIdle  int    `yaml:"max_idle,omitempty"`
-}
+// SessionSQLConfig is an alias for SQLConnectionConfig for session store SQL configurations
+type SessionSQLConfig = SQLConnectionConfig
 
 func (c *SessionStoreConfig) SetDefaults() {
 	if c.Backend == "" {
 		c.Backend = "memory"
 	}
-	if c.SQL != nil {
-		c.SQL.SetDefaults()
-	}
 	if c.RateLimit != nil {
 		c.RateLimit.SetDefaults()
-	}
-}
-
-func (c *SessionSQLConfig) SetDefaults() {
-	if c.Driver == "" {
-		c.Driver = "sqlite"
-	}
-
-	if c.Driver == "sqlite" && c.Database == "" {
-		c.Database = "./sessions.db"
-	}
-	if c.Host == "" && c.Driver != "sqlite" {
-		c.Host = "localhost"
-	}
-	if c.Port == 0 {
-		switch c.Driver {
-		case "postgres":
-			c.Port = 5432
-		case "mysql":
-			c.Port = 3306
-		}
-	}
-	if c.SSLMode == "" && c.Driver == "postgres" {
-		c.SSLMode = "disable"
-	}
-	if c.MaxConns == 0 {
-		c.MaxConns = 25
-	}
-	if c.MaxIdle == 0 {
-		c.MaxIdle = 5
 	}
 }
 
@@ -1824,19 +1789,8 @@ func (c *SessionStoreConfig) Validate() error {
 		return fmt.Errorf("invalid session store backend '%s', must be 'memory' or 'sql'", c.Backend)
 	}
 	if c.Backend == "sql" {
-		// Either database reference or inline SQL config must be provided
-		if c.Database == "" && c.SQL == nil {
-			return fmt.Errorf("SQL backend requires either 'database' reference or 'sql' configuration")
-		}
-		// If both are provided, prefer database reference
-		if c.Database != "" && c.SQL != nil {
-			return fmt.Errorf("cannot specify both 'database' reference and 'sql' configuration (use 'database' reference)")
-		}
-		// Validate inline SQL config if provided (deprecated)
-		if c.SQL != nil {
-			if err := c.SQL.Validate(); err != nil {
-				return fmt.Errorf("sql config validation failed: %w", err)
-			}
+		if c.SQLDatabase == "" {
+			return fmt.Errorf("SQL backend requires 'sql_database' reference")
 		}
 	}
 	if c.RateLimit != nil {
@@ -1847,32 +1801,7 @@ func (c *SessionStoreConfig) Validate() error {
 	return nil
 }
 
-func (c *SessionSQLConfig) Validate() error {
-	if c.Driver == "" {
-		return fmt.Errorf("driver is required")
-	}
-	if c.Driver != "postgres" && c.Driver != "mysql" && c.Driver != "sqlite" {
-		return fmt.Errorf("invalid driver '%s', must be 'postgres', 'mysql', or 'sqlite'", c.Driver)
-	}
-	if c.Database == "" {
-		return fmt.Errorf("database is required")
-	}
-	if c.Driver != "sqlite" {
-		if c.Host == "" {
-			return fmt.Errorf("host is required for %s", c.Driver)
-		}
-		if c.Port <= 0 {
-			return fmt.Errorf("port must be positive for %s", c.Driver)
-		}
-	}
-	if c.MaxConns <= 0 {
-		return fmt.Errorf("max_conns must be positive")
-	}
-	if c.MaxIdle < 0 {
-		return fmt.Errorf("max_idle must be non-negative")
-	}
-	return nil
-}
+// SessionSQLConfig methods use SQLConnectionConfig methods (via type alias)
 
 // RateLimitConfig defines rate limiting configuration
 type RateLimitConfig struct {
@@ -1942,29 +1871,7 @@ func (r *RateLimitRule) Validate() error {
 	return nil
 }
 
-func (c *SessionSQLConfig) ConnectionString() string {
-	switch c.Driver {
-	case "postgres":
-		sslMode := c.SSLMode
-		if sslMode == "" {
-			sslMode = "disable"
-		}
-
-		if c.Password != "" {
-			return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-				c.Host, c.Port, c.Username, c.Password, c.Database, sslMode)
-		}
-		return fmt.Sprintf("host=%s port=%d user=%s dbname=%s sslmode=%s",
-			c.Host, c.Port, c.Username, c.Database, sslMode)
-	case "mysql":
-		return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
-			c.Username, c.Password, c.Host, c.Port, c.Database)
-	case "sqlite":
-		return c.Database
-	default:
-		return ""
-	}
-}
+// SessionSQLConfig.ConnectionString uses SQLConnectionConfig.ConnectionString (via type alias)
 
 type MemoryConfig struct {
 	Strategy string `yaml:"strategy,omitempty"`
@@ -1980,11 +1887,11 @@ type MemoryConfig struct {
 }
 
 type LongTermMemoryConfig struct {
-	StorageScope string `yaml:"storage_scope,omitempty"`
-	BatchSize    int    `yaml:"batch_size,omitempty"`
-	AutoRecall   *bool  `yaml:"auto_recall,omitempty"`
-	RecallLimit  int    `yaml:"recall_limit,omitempty"`
-	Collection   string `yaml:"collection,omitempty"`
+	StorageScope     string `yaml:"storage_scope,omitempty"`
+	BatchSize        int    `yaml:"batch_size,omitempty"`
+	EnableAutoRecall *bool  `yaml:"enable_auto_recall,omitempty"`
+	RecallLimit      int    `yaml:"recall_limit,omitempty"`
+	Collection       string `yaml:"collection,omitempty"`
 }
 
 func (c *LongTermMemoryConfig) IsEnabled() bool {
@@ -1992,8 +1899,8 @@ func (c *LongTermMemoryConfig) IsEnabled() bool {
 }
 
 func (c *LongTermMemoryConfig) SetDefaults() {
-	if c.AutoRecall == nil {
-		c.AutoRecall = BoolPtr(false)
+	if c.EnableAutoRecall == nil {
+		c.EnableAutoRecall = BoolPtr(false)
 	}
 }
 
@@ -2078,8 +1985,8 @@ type ReasoningConfig struct {
 	EnableStreaming *bool  `yaml:"enable_streaming"`
 
 	// Display flags (enabled by default)
-	ShowTools    *bool `yaml:"show_tools"`    // Show all tool-related events (calls, results, execution)
-	ShowThinking *bool `yaml:"show_thinking"` // Show all thinking-related content (todos, goals, internal reasoning)
+	EnableToolDisplay     *bool `yaml:"enable_tool_display"`     // Show all tool-related events (calls, results, execution)
+	EnableThinkingDisplay *bool `yaml:"enable_thinking_display"` // Show all thinking-related content (todos, goals, internal reasoning)
 }
 
 func (c *ReasoningConfig) Validate() error {
@@ -2105,11 +2012,11 @@ func (c *ReasoningConfig) SetDefaults() {
 	}
 
 	// Both flags enabled by default
-	if c.ShowTools == nil {
-		c.ShowTools = BoolPtr(true)
+	if c.EnableToolDisplay == nil {
+		c.EnableToolDisplay = BoolPtr(true)
 	}
-	if c.ShowThinking == nil {
-		c.ShowThinking = BoolPtr(true)
+	if c.EnableThinkingDisplay == nil {
+		c.EnableThinkingDisplay = BoolPtr(true)
 	}
 }
 
@@ -2286,8 +2193,8 @@ func (c *AuthConfig) SetDefaults() {
 }
 
 type ObservabilityConfig struct {
-	Tracing        TracingConfig `yaml:"tracing,omitempty"`
-	MetricsEnabled *bool         `yaml:"metrics_enabled,omitempty"`
+	Tracing       TracingConfig `yaml:"tracing,omitempty"`
+	EnableMetrics *bool         `yaml:"enable_metrics,omitempty"`
 }
 
 type TracingConfig struct {
@@ -2307,8 +2214,8 @@ func (c *ObservabilityConfig) Validate() error {
 
 func (c *ObservabilityConfig) SetDefaults() {
 	c.Tracing.SetDefaults()
-	if c.MetricsEnabled == nil {
-		c.MetricsEnabled = BoolPtr(false)
+	if c.EnableMetrics == nil {
+		c.EnableMetrics = BoolPtr(false)
 	}
 }
 

@@ -1,6 +1,6 @@
 global:
   observability:
-    metrics_enabled: true
+    enable_metrics: true
     tracing:
       enabled: true
       exporter_type: "jaeger"

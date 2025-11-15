@@ -1,6 +1,13 @@
 # Basic Rate Limiting Configuration Example
 # This example shows how to configure rate limiting for session stores
 
+databases:
+  sessions-db:
+    driver: sqlite
+    database: ./sessions.db
+    max_conns: 25
+    max_idle: 5
+
 llms:
   gpt-4-llm:
     type: "openai"
@@ -32,11 +39,7 @@ session_stores:
   # Example 2: SQL-backed session store with user-level rate limiting
   persistent:
     backend: sql
-    sql:
-      driver: sqlite
-      database: ./sessions.db
-      max_conns: 25
-      max_idle: 5
+    sql_database: sessions-db
     rate_limit:
       enabled: true
       scope: user  # Rate limit per user (all sessions for a user share quota)

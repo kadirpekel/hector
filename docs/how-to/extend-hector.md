@@ -633,8 +633,8 @@ func main() {
 
     // 4. Build working memory (using built-in)
     workingMemory, err := hector.NewWorkingMemory("summary_buffer").
-        Budget(2000).
-        Threshold(0.8).
+        Budget(8000).      // Default: 8000
+        Threshold(0.85).    // Default: 0.85
         WithLLMProvider(llm).
         Build()
     if err != nil {

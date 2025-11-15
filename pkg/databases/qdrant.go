@@ -11,10 +11,10 @@ import (
 
 func NewQdrantDatabaseProvider() (DatabaseProvider, error) {
 	config := &config.VectorStoreConfig{
-		Type:   "qdrant",
-		Host:   "localhost",
-		Port:   6334,
-		UseTLS: config.BoolPtr(false),
+		Type:      "qdrant",
+		Host:      "localhost",
+		Port:      6334,
+		EnableTLS: config.BoolPtr(false),
 	}
 
 	return NewQdrantDatabaseProviderFromConfig(config)
@@ -22,8 +22,8 @@ func NewQdrantDatabaseProvider() (DatabaseProvider, error) {
 
 func NewQdrantDatabaseProviderFromConfig(config *config.VectorStoreConfig) (DatabaseProvider, error) {
 	useTLS := false
-	if config.UseTLS != nil {
-		useTLS = *config.UseTLS
+	if config.EnableTLS != nil {
+		useTLS = *config.EnableTLS
 	}
 
 	client, err := qdrant.NewClient(&qdrant.Config{

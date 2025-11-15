@@ -25,8 +25,12 @@ func TestLLMProviderConfig_SetDefaults(t *testing.T) {
 				if config.Host != "https://api.openai.com/v1" {
 					t.Errorf("Default host = %v, want %v", config.Host, "https://api.openai.com/v1")
 				}
-				if config.Temperature != 0.7 {
-					t.Errorf("Default temperature = %v, want %v", config.Temperature, 0.7)
+				if config.Temperature == nil || *config.Temperature != 0.7 {
+					got := 0.0
+					if config.Temperature != nil {
+						got = *config.Temperature
+					}
+					t.Errorf("Default temperature = %v, want %v", got, 0.7)
 				}
 				if config.MaxTokens != 8000 {
 					t.Errorf("Default max_tokens = %v, want %v", config.MaxTokens, 8000)
@@ -59,8 +63,12 @@ func TestLLMProviderConfig_SetDefaults(t *testing.T) {
 				if config.Host != "https://api.anthropic.com" {
 					t.Errorf("Default host for anthropic = %v, want %v", config.Host, "https://api.anthropic.com")
 				}
-				if config.Temperature != 0.7 {
-					t.Errorf("Default temperature = %v, want %v", config.Temperature, 0.7)
+				if config.Temperature == nil || *config.Temperature != 0.7 {
+					got := 0.0
+					if config.Temperature != nil {
+						got = *config.Temperature
+					}
+					t.Errorf("Default temperature = %v, want %v", got, 0.7)
 				}
 			},
 		},
@@ -112,13 +120,17 @@ func TestLLMProviderConfig_SetDefaults(t *testing.T) {
 				Type:        "openai",
 				Model:       DefaultOpenAIModel,
 				Host:        "https://api.openai.com/v1",
-				Temperature: 0,
+				Temperature: nil, // nil means "not set", should get default
 				MaxTokens:   0,
 				Timeout:     0,
 			},
 			validateConfig: func(t *testing.T, config LLMProviderConfig) {
-				if config.Temperature != 0.7 {
-					t.Errorf("Zero temperature should be set to default: %v", config.Temperature)
+				if config.Temperature == nil || *config.Temperature != 0.7 {
+					got := 0.0
+					if config.Temperature != nil {
+						got = *config.Temperature
+					}
+					t.Errorf("Nil temperature should be set to default: got %v, want 0.7", got)
 				}
 				if config.MaxTokens != 8000 {
 					t.Errorf("Zero max_tokens should be set to default: %v", config.MaxTokens)

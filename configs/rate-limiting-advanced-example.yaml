@@ -1,6 +1,15 @@
 # Advanced Rate Limiting Configuration Example
 # This example demonstrates multi-tier rate limiting with different quotas
 
+databases:
+  hector-db:
+    driver: postgres
+    host: localhost
+    port: 5432
+    database: hector_db
+    username: hector
+    password: secret
+
 llms:
   gpt-3.5-turbo-llm:
     type: "openai"
@@ -20,13 +29,7 @@ session_stores:
   # Free tier: Conservative limits
   free-tier:
     backend: sql
-    sql:
-      driver: postgres
-      host: localhost
-      port: 5432
-      database: hector_db
-      username: hector
-      password: secret
+    sql_database: hector-db
     rate_limit:
       enabled: true
       scope: user
@@ -46,13 +49,7 @@ session_stores:
   # Pro tier: Higher limits
   pro-tier:
     backend: sql
-    sql:
-      driver: postgres
-      host: localhost
-      port: 5432
-      database: hector_db
-      username: hector
-      password: secret
+    sql_database: hector-db
     rate_limit:
       enabled: true
       scope: user
@@ -72,13 +69,7 @@ session_stores:
   # Enterprise tier: Very high limits
   enterprise-tier:
     backend: sql
-    sql:
-      driver: postgres
-      host: localhost
-      port: 5432
-      database: hector_db
-      username: hector
-      password: secret
+    sql_database: hector-db
     rate_limit:
       enabled: true
       scope: user

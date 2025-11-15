@@ -50,13 +50,13 @@ func TestNewDocumentStore(t *testing.T) {
 		{
 			name: "valid_configuration",
 			storeConfig: &config.DocumentStoreConfig{
-				Name:            "test-store",
-				Path:            tempDir,
-				Source:          "directory",
-				MaxFileSize:     1024 * 1024,
-				IncludePatterns: []string{"*.txt", "*.md"},
-				ExcludePatterns: []string{"*.tmp"},
-				WatchChanges:    config.BoolPtr(false),
+				Name:               "test-store",
+				Path:               tempDir,
+				Source:             "directory",
+				MaxFileSize:        1024 * 1024,
+				IncludePatterns:    []string{"*.txt", "*.md"},
+				ExcludePatterns:    []string{"*.tmp"},
+				EnableWatchChanges: config.BoolPtr(false),
 			},
 			searchEngine: &SearchEngine{},
 			wantError:    false,
@@ -162,13 +162,13 @@ func TestDocumentStore_StartIndexing(t *testing.T) {
 	}
 
 	storeConfig := &config.DocumentStoreConfig{
-		Name:            "test-store",
-		Path:            tempDir,
-		Source:          "directory",
-		MaxFileSize:     1024 * 1024,
-		IncludePatterns: []string{"*"},
-		ExcludePatterns: []string{},
-		WatchChanges:    config.BoolPtr(false),
+		Name:               "test-store",
+		Path:               tempDir,
+		Source:             "directory",
+		MaxFileSize:        1024 * 1024,
+		IncludePatterns:    []string{"*"},
+		ExcludePatterns:    []string{},
+		EnableWatchChanges: config.BoolPtr(false),
 	}
 
 	store, err := NewDocumentStore(storeConfig, &SearchEngine{})

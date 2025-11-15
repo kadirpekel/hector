@@ -31,7 +31,7 @@ func (ds *DocumentStore) indexFromDataSource() error {
 		existingDocs = make(map[string]FileIndexInfo)
 	}
 
-	useIncrementalIndexing := ds.config.IncrementalIndexing != nil && *ds.config.IncrementalIndexing && ds.dataSource.SupportsIncrementalIndexing()
+	useIncrementalIndexing := ds.config.EnableIncrementalIndexing != nil && *ds.config.EnableIncrementalIndexing && ds.dataSource.SupportsIncrementalIndexing()
 
 	// Try to load checkpoint (only for directory sources with file tracking)
 	var checkpoint *IndexCheckpoint

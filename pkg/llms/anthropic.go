@@ -99,7 +99,7 @@ func NewAnthropicProvider(apiKey string, model string) *AnthropicProvider {
 		Model:       model,
 		APIKey:      apiKey,
 		Host:        "https://api.anthropic.com",
-		Temperature: 1.0,
+		Temperature: func() *float64 { t := 1.0; return &t }(),
 		MaxTokens:   4096,
 		Timeout:     120,
 	}
@@ -139,7 +139,10 @@ func (p *AnthropicProvider) GetMaxTokens() int {
 }
 
 func (p *AnthropicProvider) GetTemperature() float64 {
-	return p.config.Temperature
+	if p.config.Temperature == nil {
+		return 0.7 // Default
+	}
+	return *p.config.Temperature
 }
 
 func (p *AnthropicProvider) Close() error {
@@ -346,12 +349,17 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 	}
 
 	request := AnthropicRequest{
-		Model:       p.config.Model,
-		Messages:    anthropicMessages,
-		MaxTokens:   p.config.MaxTokens,
-		Temperature: p.config.Temperature,
-		Stream:      stream,
-		System:      systemPrompt,
+		Model:     p.config.Model,
+		Messages:  anthropicMessages,
+		MaxTokens: p.config.MaxTokens,
+		Temperature: func() float64 {
+			if p.config.Temperature == nil {
+				return 0.7 // Default
+			}
+			return *p.config.Temperature
+		}(),
+		Stream: stream,
+		System: systemPrompt,
 	}
 
 	if len(tools) > 0 {

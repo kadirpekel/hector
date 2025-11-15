@@ -34,9 +34,9 @@ func NewMemoryService(
 	longTermConfig.SetDefaults()
 
 	if longTerm == nil {
-		longTermConfig.AutoRecall = false
-	} else if longTermConfig.AutoRecall {
-		longTermConfig.AutoRecall = true
+		longTermConfig.EnableAutoRecall = false
+	} else if longTermConfig.EnableAutoRecall {
+		longTermConfig.EnableAutoRecall = true
 	}
 
 	return &MemoryService{
@@ -132,7 +132,7 @@ func (s *MemoryService) GetRecentHistory(sessionID string) ([]*pb.Message, error
 		return []*pb.Message{}, nil
 	}
 
-	if s.longTermMemory != nil && s.longTermConfig.AutoRecall && len(filteredMessages) > 0 {
+	if s.longTermMemory != nil && s.longTermConfig.EnableAutoRecall && len(filteredMessages) > 0 {
 		query := s.getLastUserMessage(filteredMessages)
 		if query != "" {
 			recalled, err := s.longTermMemory.Recall(s.agentID, sessionID, query, s.longTermConfig.RecallLimit)

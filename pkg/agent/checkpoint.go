@@ -60,21 +60,17 @@ func (a *Agent) getCheckpointInterval() int {
 		return 0 // Disabled by default
 	}
 
-	checkpointCfg := a.config.Task.Checkpoint
-	if checkpointCfg == nil || !checkpointCfg.Enabled {
+	taskCfg := a.config.Task
+
+	if taskCfg.EnableCheckpointing == nil || !*taskCfg.EnableCheckpointing {
 		return 0 // Checkpointing disabled
 	}
 
-	// Only return interval if strategy is "interval" or "hybrid"
-	if checkpointCfg.Strategy != "interval" && checkpointCfg.Strategy != "hybrid" {
+	if taskCfg.CheckpointStrategy != "interval" && taskCfg.CheckpointStrategy != "hybrid" {
 		return 0
 	}
 
-	if checkpointCfg.Interval == nil {
-		return 0
-	}
-
-	return checkpointCfg.Interval.EveryNIterations
+	return taskCfg.CheckpointInterval
 }
 
 // isCheckpointEnabled returns true if checkpointing is enabled
@@ -82,5 +78,9 @@ func (a *Agent) isCheckpointEnabled() bool {
 	if a.config == nil || a.config.Task == nil {
 		return false
 	}
-	return a.config.Task.Checkpoint != nil && a.config.Task.Checkpoint.Enabled
+	taskCfg := a.config.Task
+	if taskCfg.EnableCheckpointing != nil {
+		return *taskCfg.EnableCheckpointing
+	}
+	return false
 }

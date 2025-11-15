@@ -65,9 +65,9 @@ agents:
     memory:
       working:
         strategy: "summary_buffer"  # Default
-        budget: 2000                # Token budget
-        threshold: 0.8              # Summarize at 80% capacity
-        target: 0.6                 # Compress to 60% capacity
+        budget: 8000                # Token budget (default: 8000)
+        threshold: 0.85              # Summarize at 85% capacity (default: 0.85)
+        target: 0.7                  # Compress to 70% capacity (default: 0.7)
 ```
 
 **How it works:**

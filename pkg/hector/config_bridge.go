@@ -132,11 +132,11 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 	if agentCfg.Reasoning.EnableStreaming != nil {
 		reasoningBuilder = reasoningBuilder.EnableStreaming(*agentCfg.Reasoning.EnableStreaming)
 	}
-	if agentCfg.Reasoning.ShowTools != nil {
-		reasoningBuilder = reasoningBuilder.ShowTools(*agentCfg.Reasoning.ShowTools)
+	if agentCfg.Reasoning.EnableToolDisplay != nil {
+		reasoningBuilder = reasoningBuilder.ShowTools(*agentCfg.Reasoning.EnableToolDisplay)
 	}
-	if agentCfg.Reasoning.ShowThinking != nil {
-		reasoningBuilder = reasoningBuilder.ShowThinking(*agentCfg.Reasoning.ShowThinking)
+	if agentCfg.Reasoning.EnableThinkingDisplay != nil {
+		reasoningBuilder = reasoningBuilder.ShowThinking(*agentCfg.Reasoning.EnableThinkingDisplay)
 	}
 	builder = builder.WithReasoning(reasoningBuilder)
 
@@ -183,7 +183,7 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 			Collection(agentCfg.Memory.LongTerm.Collection).
 			StorageScope(memory.StorageScope(agentCfg.Memory.LongTerm.StorageScope)).
 			BatchSize(agentCfg.Memory.LongTerm.BatchSize).
-			AutoRecall(boolValue(agentCfg.Memory.LongTerm.AutoRecall, false)).
+			AutoRecall(boolValue(agentCfg.Memory.LongTerm.EnableAutoRecall, false)).
 			RecallLimit(agentCfg.Memory.LongTerm.RecallLimit).
 			WithDatabase(db).
 			WithEmbedder(embedder)
@@ -303,12 +303,12 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 			return nil, fmt.Errorf("session store '%s' not found", agentCfg.SessionStore)
 		}
 
-		sessionBuilder := NewSessionService(agentID)
+		sessionBuilder := NewSessionService(agentID).WithComponentManager(b.componentManager)
 		if storeConfig.Backend == "sql" {
-			if storeConfig.SQL == nil {
-				return nil, fmt.Errorf("SQL configuration is required for SQL session store")
+			if storeConfig.SQLDatabase == "" {
+				return nil, fmt.Errorf("sql_database reference is required for SQL session store")
 			}
-			sessionBuilder = sessionBuilder.Backend("sql").WithSQLConfig(storeConfig.SQL)
+			sessionBuilder = sessionBuilder.Backend("sql").Database(storeConfig.SQLDatabase)
 		} else {
 			sessionBuilder = sessionBuilder.Backend("memory")
 		}
@@ -476,12 +476,8 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 			Timeout(agentCfg.Task.Timeout).
 			WithComponentManager(b.componentManager)
 
-		// Check if database reference is provided (new way)
-		if agentCfg.Task.Database != "" {
-			taskBuilder = taskBuilder.Database(agentCfg.Task.Database)
-		} else if agentCfg.Task.SQL != nil {
-			// Fallback to inline SQL config (deprecated but supported)
-			taskBuilder = taskBuilder.WithSQLConfig(agentCfg.Task.SQL)
+		if agentCfg.Task.SQLDatabase != "" {
+			taskBuilder = taskBuilder.Database(agentCfg.Task.SQLDatabase)
 		}
 
 		// Add HITL configuration
@@ -489,9 +485,28 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 			taskBuilder = taskBuilder.WithHITL(agentCfg.Task.HITL)
 		}
 
-		// Add checkpoint configuration
-		if agentCfg.Task.Checkpoint != nil {
-			taskBuilder = taskBuilder.WithCheckpoint(agentCfg.Task.Checkpoint)
+		// Add checkpoint configuration (using flattened fields)
+		if agentCfg.Task.EnableCheckpointing != nil && *agentCfg.Task.EnableCheckpointing {
+			// Build CheckpointConfig from flattened fields for builder compatibility
+			checkpointCfg := &config.CheckpointConfig{
+				Enabled:  agentCfg.Task.EnableCheckpointing,
+				Strategy: agentCfg.Task.CheckpointStrategy,
+			}
+			if agentCfg.Task.CheckpointInterval > 0 || agentCfg.Task.CheckpointAfterTools != nil || agentCfg.Task.CheckpointBeforeLLM != nil {
+				checkpointCfg.Interval = &config.CheckpointIntervalConfig{
+					EveryNIterations: agentCfg.Task.CheckpointInterval,
+					AfterToolCalls:   agentCfg.Task.CheckpointAfterTools,
+					BeforeLLMCalls:   agentCfg.Task.CheckpointBeforeLLM,
+				}
+			}
+			if agentCfg.Task.AutoResume != nil || agentCfg.Task.AutoResumeHITL != nil || agentCfg.Task.ResumeTimeout > 0 {
+				checkpointCfg.Recovery = &config.CheckpointRecoveryConfig{
+					AutoResume:     agentCfg.Task.AutoResume,
+					AutoResumeHITL: agentCfg.Task.AutoResumeHITL,
+					ResumeTimeout:  agentCfg.Task.ResumeTimeout,
+				}
+			}
+			taskBuilder = taskBuilder.WithCheckpoint(checkpointCfg)
 		}
 
 		builder = builder.WithTask(taskBuilder)

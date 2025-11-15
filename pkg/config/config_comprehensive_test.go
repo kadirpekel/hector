@@ -241,7 +241,7 @@ func TestConfig_SetDefaults(t *testing.T) {
 					if llm.Host == "" {
 						t.Error("SetDefaults() should set default host for LLM")
 					}
-					if llm.Temperature == 0 {
+					if llm.Temperature == nil || *llm.Temperature == 0 {
 						t.Error("SetDefaults() should set default temperature for LLM")
 					}
 				} else {

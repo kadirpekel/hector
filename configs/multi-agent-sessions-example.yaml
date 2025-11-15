@@ -1,11 +1,15 @@
+databases:
+  shared-sessions:
+    driver: sqlite
+    database: ./data/shared-sessions.db
+    max_conns: 25
+    max_idle: 5
+
 session_stores:
   shared-db:
     backend: sql
-    sql:
-      driver: sqlite
-      database: ./data/shared-sessions.db
-      max_conns: 25    
-      max_idle: 5
+    sql_database: shared-sessions
+
 agents:
   assistant:
     name: "General Assistant"

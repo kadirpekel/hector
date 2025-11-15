@@ -146,8 +146,8 @@ func isApprovalRequired(toolConfig *config.ToolConfig) bool {
 		return false
 	}
 
-	if toolConfig.RequiresApproval != nil {
-		return *toolConfig.RequiresApproval
+	if toolConfig.EnableApproval != nil {
+		return *toolConfig.EnableApproval
 	}
 
 	// Default: no approval required

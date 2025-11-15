@@ -333,7 +333,10 @@ func (p *OllamaProvider) GetMaxTokens() int {
 }
 
 func (p *OllamaProvider) GetTemperature() float64 {
-	return p.config.Temperature
+	if p.config.Temperature == nil {
+		return 0.7 // Default
+	}
+	return *p.config.Temperature
 }
 
 func (p *OllamaProvider) Close() error {
@@ -430,8 +433,8 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 
 	// Always include temperature if it's valid (>= 0 and <= 2)
 	// Temperature 0 means deterministic output, which is a valid use case
-	if p.config.Temperature >= 0 && p.config.Temperature <= 2 {
-		opts.Temperature = p.config.Temperature
+	if p.config.Temperature != nil && *p.config.Temperature >= 0 && *p.config.Temperature <= 2 {
+		opts.Temperature = *p.config.Temperature
 		hasOptions = true
 	}
 
