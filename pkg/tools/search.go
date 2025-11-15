@@ -18,12 +18,13 @@ type SearchTool struct {
 }
 
 type SearchRequest struct {
-	Query    string            `json:"query"`
-	Type     string            `json:"type"`
-	Stores   []string          `json:"stores"`
-	Language string            `json:"language"`
-	Limit    int               `json:"limit"`
-	Context  map[string]string `json:"context"`
+	Query       string            `json:"query"`
+	Type        string            `json:"type"`
+	Stores      []string          `json:"stores"`      // Document stores to search
+	Collections []string          `json:"collections"` // Collection names to search directly
+	Language    string            `json:"language"`
+	Limit       int               `json:"limit"`
+	Context     map[string]string `json:"context"`
 }
 
 type DocumentSearchResult struct {
@@ -131,33 +132,79 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 		return t.createErrorResponse(fmt.Sprintf("Search type '%s' is not enabled", req.Type))
 	}
 
-	availableStores := t.getAvailableStores()
-	if len(availableStores) == 0 {
-		return t.createErrorResponse("No document stores available")
-	}
-
-	storesToSearch := t.getStoresToSearch(req.Stores, availableStores)
-	if len(storesToSearch) == 0 {
-		return t.createErrorResponse("No matching document stores found")
-	}
-
 	var allResults []DocumentSearchResult
 	var storesUsed []string
+	var collectionsUsed []string
 
-	for _, storeName := range storesToSearch {
-		store, exists := hectorcontext.GetDocumentStoreFromRegistry(storeName)
-		if !exists {
-			fmt.Printf("Warning: Store %s not found in registry\n", storeName)
-			continue
+	// If collections are specified, search them directly
+	if len(req.Collections) > 0 {
+		// Search each collection directly
+		// Try to find a document store that points to this collection to get the correct database
+		availableStores := t.getAvailableStores()
+
+		for _, collectionName := range req.Collections {
+			var searchEngine *hectorcontext.SearchEngine
+
+			// Try to find a document store that points to this collection
+			foundStore := false
+			for _, store := range availableStores {
+				if store.GetConfig().Collection == collectionName {
+					searchEngine = store.GetSearchEngine()
+					foundStore = true
+					break
+				}
+			}
+
+			// If no store found for this collection, use first available store's search engine
+			if !foundStore && len(availableStores) > 0 {
+				for _, store := range availableStores {
+					searchEngine = store.GetSearchEngine()
+					if searchEngine != nil {
+						break
+					}
+				}
+			}
+
+			if searchEngine == nil {
+				fmt.Printf("Warning: No search engine available for collection %s, skipping\n", collectionName)
+				continue
+			}
+
+			results, err := t.searchCollection(ctx, searchEngine, collectionName, req)
+			if err != nil {
+				fmt.Printf("Error: Search in collection %s failed: %v\n", collectionName, err)
+				continue
+			}
+			allResults = append(allResults, results...)
+			collectionsUsed = append(collectionsUsed, collectionName)
 		}
-		results, err := t.searchInStore(ctx, store, storeName, req)
-		if err != nil {
-			fmt.Printf("Error: Search in store %s failed: %v\n", storeName, err)
-			continue
+	} else {
+		// Search document stores
+		availableStores := t.getAvailableStores()
+		if len(availableStores) == 0 {
+			return t.createErrorResponse("No document stores available")
 		}
 
-		allResults = append(allResults, results...)
-		storesUsed = append(storesUsed, storeName)
+		storesToSearch := t.getStoresToSearch(req.Stores, availableStores)
+		if len(storesToSearch) == 0 {
+			return t.createErrorResponse("No matching document stores found")
+		}
+
+		for _, storeName := range storesToSearch {
+			store, exists := hectorcontext.GetDocumentStoreFromRegistry(storeName)
+			if !exists {
+				fmt.Printf("Warning: Store %s not found in registry\n", storeName)
+				continue
+			}
+			results, err := t.searchInStore(ctx, store, storeName, req)
+			if err != nil {
+				fmt.Printf("Error: Search in store %s failed: %v\n", storeName, err)
+				continue
+			}
+
+			allResults = append(allResults, results...)
+			storesUsed = append(storesUsed, storeName)
+		}
 	}
 
 	t.sortResultsByScore(allResults)
@@ -172,6 +219,11 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 		Query:      req.Query,
 		Duration:   time.Since(start),
 		StoresUsed: storesUsed,
+	}
+
+	// Add collections used to stores used for display
+	if len(collectionsUsed) > 0 {
+		response.StoresUsed = append(response.StoresUsed, collectionsUsed...)
 	}
 
 	if len(allResults) == 0 {
@@ -294,6 +346,114 @@ func (t *SearchTool) searchInStore(ctx context.Context, store *hectorcontext.Doc
 	return results, nil
 }
 
+// searchCollection searches a collection directly using the search engine
+func (t *SearchTool) searchCollection(ctx context.Context, searchEngine *hectorcontext.SearchEngine, collectionName string, req SearchRequest) ([]DocumentSearchResult, error) {
+	// Search the collection directly
+	filter := map[string]interface{}{
+		"collection": collectionName,
+	}
+
+	searchResults, err := searchEngine.SearchWithFilter(ctx, req.Query, req.Limit, filter)
+	if err != nil {
+		return nil, fmt.Errorf("collection search failed: %w", err)
+	}
+
+	// Convert search results to document search results
+	var results []DocumentSearchResult
+	for _, result := range searchResults {
+		language := ""
+		filePath := ""
+		title := ""
+		docType := ""
+		storeName := collectionName // Use collection name as store name
+
+		if result.Metadata != nil {
+			if lang, ok := result.Metadata["language"].(string); ok {
+				language = lang
+			}
+			if path, ok := result.Metadata["path"].(string); ok {
+				filePath = path
+			}
+			if t, ok := result.Metadata["title"].(string); ok {
+				title = t
+			}
+			if dt, ok := result.Metadata["type"].(string); ok {
+				docType = dt
+			}
+			// Use collection name from metadata if available, otherwise use the one we searched
+			if sn, ok := result.Metadata["store_name"].(string); ok && sn != "" {
+				storeName = sn
+			}
+		}
+
+		if req.Language != "" && language != req.Language {
+			continue
+		}
+
+		startLine := 0
+		endLine := 0
+		if result.Metadata != nil {
+			if sl, ok := result.Metadata["start_line"].(float64); ok {
+				startLine = int(sl)
+			}
+			if el, ok := result.Metadata["end_line"].(float64); ok {
+				endLine = int(el)
+			}
+		}
+
+		content := ""
+		if result.Metadata != nil {
+			if c, ok := result.Metadata["content"].(string); ok {
+				content = c
+			}
+		}
+
+		if title == "" {
+			if filePath != "" {
+				title = filePath
+			} else {
+				title = result.ID
+			}
+		}
+
+		matchType := req.Type
+		if matchType == "" {
+			matchType = "content"
+		}
+
+		metadata := make(map[string]string)
+		if result.Metadata != nil {
+			for k, v := range result.Metadata {
+				if str, ok := v.(string); ok {
+					metadata[k] = str
+				}
+			}
+		}
+
+		// Ensure collection name is in metadata
+		metadata["collection"] = collectionName
+
+		documentResult := DocumentSearchResult{
+			DocumentID: result.ID,
+			StoreName:  storeName,
+			FilePath:   filePath,
+			Title:      title,
+			Content:    content,
+			Type:       docType,
+			Language:   language,
+			Score:      float64(result.Score),
+			StartLine:  startLine,
+			EndLine:    endLine,
+			MatchType:  matchType,
+			Metadata:   metadata,
+		}
+
+		results = append(results, documentResult)
+	}
+
+	return results, nil
+}
+
 func (t *SearchTool) isSearchTypeEnabled(searchType string) bool {
 	for _, enabled := range t.config.EnabledSearchTypes {
 		if enabled == searchType {
@@ -377,12 +537,12 @@ func minInt(a, b int) int {
 func (t *SearchTool) GetInfo() ToolInfo {
 	// Get available stores to include in description
 	storeNames := hectorcontext.ListDocumentStoresFromRegistry()
-	
+
 	description := "Search across configured document stores for files, content, functions, or structs"
 	if len(storeNames) > 0 {
 		description += fmt.Sprintf(". Available stores: %s", strings.Join(storeNames, ", "))
 	}
-	
+
 	return ToolInfo{
 		Name:        "search",
 		Description: description,
@@ -405,6 +565,15 @@ func (t *SearchTool) GetInfo() ToolInfo {
 				Name:        "stores",
 				Type:        "array",
 				Description: "Document stores to search (empty = all)",
+				Required:    false,
+				Items: map[string]interface{}{
+					"type": "string",
+				},
+			},
+			{
+				Name:        "collections",
+				Type:        "array",
+				Description: "Collection names to search directly (bypasses document stores)",
 				Required:    false,
 				Items: map[string]interface{}{
 					"type": "string",
@@ -468,6 +637,23 @@ func (t *SearchTool) Execute(ctx context.Context, args map[string]interface{}) (
 		case string:
 			if v != "" {
 				req.Stores = []string{v}
+			}
+		}
+	}
+
+	if collections, ok := args["collections"]; ok {
+		switch v := collections.(type) {
+		case []interface{}:
+			for _, collection := range v {
+				if c, ok := collection.(string); ok {
+					req.Collections = append(req.Collections, c)
+				}
+			}
+		case []string:
+			req.Collections = v
+		case string:
+			if v != "" {
+				req.Collections = []string{v}
 			}
 		}
 	}

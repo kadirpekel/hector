@@ -355,6 +355,12 @@ func (se *SearchEngine) getCollectionFromFilter(filter map[string]interface{}) s
 		return ""
 	}
 
+	// Check for explicit collection name first
+	if collection, ok := filter["collection"].(string); ok && collection != "" {
+		return collection
+	}
+
+	// Fall back to store_name (for backward compatibility)
 	if storeName, ok := filter["store_name"].(string); ok && storeName != "" {
 		return storeName
 	}

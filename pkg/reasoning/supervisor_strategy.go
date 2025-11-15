@@ -138,7 +138,7 @@ func (s *SupervisorStrategy) AfterIteration(
 		if customState["decomposition_tracking"] == nil {
 			customState["decomposition_tracking"] = make(map[string]interface{})
 		}
-		
+
 		tracking, ok := customState["decomposition_tracking"].(map[string]interface{})
 		if ok {
 			// Accumulate called agents across iterations

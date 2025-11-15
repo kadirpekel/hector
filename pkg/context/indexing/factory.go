@@ -19,6 +19,11 @@ func NewDataSourceFactory() *DataSourceFactory {
 
 // CreateDataSource creates a DataSource from DocumentStoreConfig
 func (f *DataSourceFactory) CreateDataSource(cfg *config.DocumentStoreConfig) (DataSource, error) {
+	// If collection is set, this is a collection-only store (no indexing)
+	if cfg.Collection != "" {
+		return NewCollectionSource(cfg.Collection), nil
+	}
+
 	sourceType := cfg.Source
 	if sourceType == "" {
 		sourceType = "directory" // Default

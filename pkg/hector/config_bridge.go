@@ -7,6 +7,8 @@ import (
 	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/databases"
+	"github.com/kadirpekel/hector/pkg/embedders"
 	"github.com/kadirpekel/hector/pkg/memory"
 	"github.com/kadirpekel/hector/pkg/reasoning"
 	"github.com/kadirpekel/hector/pkg/tools"
@@ -157,7 +159,15 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 	builder = builder.WithWorkingMemory(workingMemory)
 
 	// Long-term memory
+	// Note: If long-term memory is enabled, validation ensures agent database/embedder are set
 	if agentCfg.Memory.LongTerm.IsEnabled() {
+		if agentCfg.Database == "" {
+			return nil, fmt.Errorf("database is required when long-term memory is enabled")
+		}
+		if agentCfg.Embedder == "" {
+			return nil, fmt.Errorf("embedder is required when long-term memory is enabled")
+		}
+
 		db, err := b.componentManager.GetDatabase(agentCfg.Database)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get database: %w", err)
@@ -311,27 +321,105 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 	}
 
 	// Context service (for RAG/document stores)
+	// Check if agent database/embedder is needed
+	needsAgentDatabase := false
+	needsAgentEmbedder := false
+
+	// Check if IncludeContext is enabled (requires database/embedder for RAG)
+	includeContextEnabled := agentCfg.Prompt.IncludeContext != nil && *agentCfg.Prompt.IncludeContext
+
 	if len(agentCfg.DocumentStores) > 0 {
-		if agentCfg.Database == "" {
-			return nil, fmt.Errorf("database is required when document stores are configured")
-		}
-		if agentCfg.Embedder == "" {
-			return nil, fmt.Errorf("embedder is required when document stores are configured")
+		// Check if all document stores have their own database/embedder
+		allStoresHaveDatabase := true
+		allStoresHaveEmbedder := true
+
+		for _, storeName := range agentCfg.DocumentStores {
+			storeConfig, exists := b.config.DocumentStores[storeName]
+			if !exists {
+				return nil, fmt.Errorf("document store '%s' not found", storeName)
+			}
+			if storeConfig.Database == "" {
+				allStoresHaveDatabase = false
+			}
+			if storeConfig.Embedder == "" {
+				allStoresHaveEmbedder = false
+			}
 		}
 
-		db, err := b.componentManager.GetDatabase(agentCfg.Database)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get database: %w", err)
+		// Agent database/embedder needed if:
+		// 1. IncludeContext is enabled (for RAG), OR
+		// 2. Not all stores have their own database/embedder (as fallback)
+		needsAgentDatabase = includeContextEnabled || !allStoresHaveDatabase
+		needsAgentEmbedder = includeContextEnabled || !allStoresHaveEmbedder
+	} else if includeContextEnabled {
+		// IncludeContext enabled but no document stores - still needs database/embedder for RAG
+		needsAgentDatabase = true
+		needsAgentEmbedder = true
+	}
+
+	// Validate requirements
+	if needsAgentDatabase && agentCfg.Database == "" {
+		return nil, fmt.Errorf("database is required when: IncludeContext is enabled, or document stores are configured and at least one doesn't specify its own database")
+	}
+	if needsAgentEmbedder && agentCfg.Embedder == "" {
+		return nil, fmt.Errorf("embedder is required when: IncludeContext is enabled, or document stores are configured and at least one doesn't specify its own embedder")
+	}
+
+	// Only create context service if document stores are configured
+	if len(agentCfg.DocumentStores) > 0 {
+		var db databases.DatabaseProvider
+		var embedder embedders.EmbedderProvider
+		var err error
+
+		// Get database (required if needed)
+		if needsAgentDatabase {
+			db, err = b.componentManager.GetDatabase(agentCfg.Database)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get database: %w", err)
+			}
 		}
 
-		embedder, err := b.componentManager.GetEmbedder(agentCfg.Embedder)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get embedder: %w", err)
+		// Get embedder (required if needed)
+		if needsAgentEmbedder {
+			embedder, err = b.componentManager.GetEmbedder(agentCfg.Embedder)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get embedder: %w", err)
+			}
+		}
+
+		// If database/embedder not needed (all stores have their own and IncludeContext disabled),
+		// we still need them for the context builder (it requires database/embedder instances).
+		// Use first store's database/embedder since all stores should have their own at this point.
+		if !needsAgentDatabase {
+			// All stores have their own database - use first one for context builder
+			firstStoreName := agentCfg.DocumentStores[0]
+			firstStoreConfig := b.config.DocumentStores[firstStoreName]
+			if firstStoreConfig.Database == "" {
+				return nil, fmt.Errorf("internal error: store '%s' should have database specified", firstStoreName)
+			}
+			db, err = b.componentManager.GetDatabase(firstStoreConfig.Database)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get database from store '%s': %w", firstStoreName, err)
+			}
+		}
+
+		if !needsAgentEmbedder {
+			// All stores have their own embedder - use first one for context builder
+			firstStoreName := agentCfg.DocumentStores[0]
+			firstStoreConfig := b.config.DocumentStores[firstStoreName]
+			if firstStoreConfig.Embedder == "" {
+				return nil, fmt.Errorf("internal error: store '%s' should have embedder specified", firstStoreName)
+			}
+			embedder, err = b.componentManager.GetEmbedder(firstStoreConfig.Embedder)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get embedder from store '%s': %w", firstStoreName, err)
+			}
 		}
 
 		contextBuilder := NewContextService().
 			WithDatabase(db).
-			WithEmbedder(embedder)
+			WithEmbedder(embedder).
+			WithComponentManager(b.componentManager)
 
 		// Set search config
 		if agentCfg.Search.TopK > 0 {
@@ -364,8 +452,18 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 		}
 
 		builder = builder.WithContext(contextBuilder)
-	} else if agentCfg.Prompt.IncludeContext != nil && *agentCfg.Prompt.IncludeContext {
-		// IncludeContext is enabled but no document stores - still set it
+	} else if includeContextEnabled {
+		// IncludeContext is enabled but no document stores
+		// This requires database/embedder for RAG
+		if agentCfg.Database == "" {
+			return nil, fmt.Errorf("database is required when IncludeContext is enabled")
+		}
+		if agentCfg.Embedder == "" {
+			return nil, fmt.Errorf("embedder is required when IncludeContext is enabled")
+		}
+
+		// Note: Without document stores, IncludeContext won't have anything to search
+		// but we still validate the requirement for consistency
 		builder = builder.IncludeContext(true)
 	}
 

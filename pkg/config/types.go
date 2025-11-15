@@ -558,14 +558,8 @@ func (c *AgentConfig) Validate() error {
 			return fmt.Errorf("enable_tools shortcut and explicit tools list are mutually exclusive (use one or the other)")
 		}
 
-		if len(c.DocumentStores) > 0 {
-			if c.Database == "" {
-				return fmt.Errorf("database provider reference is required when document stores are configured")
-			}
-			if c.Embedder == "" {
-				return fmt.Errorf("embedder provider reference is required when document stores are configured")
-			}
-		}
+		// Note: Database/embedder requirement validation is done in Config.validateReferences()
+		// where we have access to document store configs to check if they have their own database/embedder
 
 		if err := c.Prompt.Validate(); err != nil {
 			return fmt.Errorf("prompt configuration validation failed: %w", err)
@@ -1093,8 +1087,11 @@ func (c *ToolConfig) SetDefaults() {
 
 type DocumentStoreConfig struct {
 	Name                string   `yaml:"name"`
-	Source              string   `yaml:"source"` // "directory", "sql", "api"
-	Path                string   `yaml:"path"`   // Required for directory source
+	Collection          string   `yaml:"collection"` // Optional: points to existing Qdrant collection (no indexing)
+	Database            string   `yaml:"database"`   // Optional: database to use (defaults to agent's database)
+	Embedder            string   `yaml:"embedder"`   // Optional: embedder to use (defaults to agent's embedder)
+	Source              string   `yaml:"source"`     // "directory", "sql", "api" (required if collection not set)
+	Path                string   `yaml:"path"`       // Required for directory source
 	IncludePatterns     []string `yaml:"include_patterns"`
 	ExcludePatterns     []string `yaml:"exclude_patterns"`            // If set, replaces defaults entirely
 	AdditionalExcludes  []string `yaml:"additional_exclude_patterns"` // Extends default exclusions
@@ -1197,8 +1194,16 @@ func (c *DocumentStoreConfig) Validate() error {
 	if c.Name == "" {
 		return fmt.Errorf("name is required")
 	}
+
+	// If collection is set, this is a collection-only store (points to existing collection)
+	if c.Collection != "" {
+		// Collection-only stores don't need source or path
+		return nil
+	}
+
+	// Otherwise, source is required
 	if c.Source == "" {
-		return fmt.Errorf("source is required")
+		return fmt.Errorf("source is required (or set collection to point to existing collection)")
 	}
 
 	switch c.Source {

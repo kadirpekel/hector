@@ -257,6 +257,16 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 }
 
 func (ds *DocumentStore) StartIndexing() error {
+	// Collection-only stores don't need indexing
+	if ds.config.Collection != "" {
+		ds.mu.Lock()
+		ds.status.IsIndexing = false
+		ds.status.LastIndexed = time.Now()
+		ds.mu.Unlock()
+		fmt.Printf("Collection-only store '%s' (collection: %s) - skipping indexing\n", ds.name, ds.config.Collection)
+		return nil
+	}
+
 	ds.mu.Lock()
 	if ds.status.IsIndexing {
 		ds.mu.Unlock()
@@ -609,11 +619,35 @@ func (ds *DocumentStore) detectTypeAndLanguage(path string) (string, string) {
 	return docType, language
 }
 
+// GetSearchEngine returns the search engine associated with this document store
+func (ds *DocumentStore) GetSearchEngine() *SearchEngine {
+	return ds.searchEngine
+}
+
+// GetConfig returns the document store configuration
+func (ds *DocumentStore) GetConfig() *config.DocumentStoreConfig {
+	return ds.config
+}
+
 func (ds *DocumentStore) Search(ctx context.Context, query string, limit int) ([]databases.SearchResult, error) {
 	if ds.searchEngine == nil {
 		return nil, NewDocumentStoreError(ds.name, "Search", "search engine not available", "", nil)
 	}
 
+	// If this is a collection-only store, search the collection directly
+	if ds.config.Collection != "" {
+		// Use collection name in filter so search engine knows which collection to search
+		filter := map[string]interface{}{
+			"collection": ds.config.Collection,
+		}
+		results, err := ds.searchEngine.SearchWithFilter(ctx, query, limit, filter)
+		if err != nil {
+			return nil, NewDocumentStoreError(ds.name, "Search", "vector search failed", "", err)
+		}
+		return results, nil
+	}
+
+	// For regular stores, filter by store_name
 	filter := map[string]interface{}{
 		"store_name": ds.name,
 	}

@@ -364,6 +364,94 @@ func (c *Config) validateReferences() error {
 			}
 		}
 
+		// Validate conditional database/embedder requirements for agents with document stores
+		if len(agent.DocumentStores) > 0 {
+			// Check if all document stores have their own database/embedder
+			allStoresHaveDatabase := true
+			allStoresHaveEmbedder := true
+			for _, dsName := range agent.DocumentStores {
+				dsConfig, exists := c.DocumentStores[dsName]
+				if !exists {
+					return fmt.Errorf("agent '%s': document store '%s' not found (available: %v)",
+						agentName, dsName, mapKeys(c.DocumentStores))
+				}
+				if dsConfig.Database == "" {
+					allStoresHaveDatabase = false
+				}
+				if dsConfig.Embedder == "" {
+					allStoresHaveEmbedder = false
+				}
+			}
+
+			// Check if IncludeContext is enabled
+			includeContextEnabled := agent.Prompt.IncludeContext != nil && *agent.Prompt.IncludeContext
+
+			// Check if long-term memory is enabled
+			longTermMemoryEnabled := agent.Memory.LongTerm.IsEnabled()
+
+			// Determine if agent database/embedder is needed
+			needsAgentDatabase := longTermMemoryEnabled || includeContextEnabled || !allStoresHaveDatabase
+			needsAgentEmbedder := longTermMemoryEnabled || includeContextEnabled || !allStoresHaveEmbedder
+
+			// Validate requirements
+			if needsAgentDatabase && agent.Database == "" {
+				reasons := []string{}
+				if longTermMemoryEnabled {
+					reasons = append(reasons, "long-term memory is enabled")
+				}
+				if includeContextEnabled {
+					reasons = append(reasons, "IncludeContext is enabled")
+				}
+				if !allStoresHaveDatabase {
+					reasons = append(reasons, "at least one document store doesn't specify its own database")
+				}
+				return fmt.Errorf("agent '%s': database is required when: %s", agentName, strings.Join(reasons, ", "))
+			}
+
+			if needsAgentEmbedder && agent.Embedder == "" {
+				reasons := []string{}
+				if longTermMemoryEnabled {
+					reasons = append(reasons, "long-term memory is enabled")
+				}
+				if includeContextEnabled {
+					reasons = append(reasons, "IncludeContext is enabled")
+				}
+				if !allStoresHaveEmbedder {
+					reasons = append(reasons, "at least one document store doesn't specify its own embedder")
+				}
+				return fmt.Errorf("agent '%s': embedder is required when: %s", agentName, strings.Join(reasons, ", "))
+			}
+		}
+
+		// Also check for IncludeContext without document stores, and long-term memory
+		if len(agent.DocumentStores) == 0 {
+			includeContextEnabled := agent.Prompt.IncludeContext != nil && *agent.Prompt.IncludeContext
+			longTermMemoryEnabled := agent.Memory.LongTerm.IsEnabled()
+
+			if (includeContextEnabled || longTermMemoryEnabled) && agent.Database == "" {
+				reasons := []string{}
+				if longTermMemoryEnabled {
+					reasons = append(reasons, "long-term memory is enabled")
+				}
+				if includeContextEnabled {
+					reasons = append(reasons, "IncludeContext is enabled")
+				}
+				return fmt.Errorf("agent '%s': database is required when: %s", agentName, strings.Join(reasons, ", "))
+			}
+
+			if (includeContextEnabled || longTermMemoryEnabled) && agent.Embedder == "" {
+				reasons := []string{}
+				if longTermMemoryEnabled {
+					reasons = append(reasons, "long-term memory is enabled")
+				}
+				if includeContextEnabled {
+					reasons = append(reasons, "IncludeContext is enabled")
+				}
+				return fmt.Errorf("agent '%s': embedder is required when: %s", agentName, strings.Join(reasons, ", "))
+			}
+		}
+
+		// Validate document store references
 		for _, storeName := range agent.DocumentStores {
 			if _, exists := c.DocumentStores[storeName]; !exists {
 				return fmt.Errorf("agent '%s': document store '%s' not found (available: %v)",

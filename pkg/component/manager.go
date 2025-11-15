@@ -78,12 +78,23 @@ func NewComponentManagerWithAgentRegistry(globalConfig *config.Config, agentRegi
 	usedDatabases := make(map[string]bool)
 	usedEmbedders := make(map[string]bool)
 
+	// Collect databases/embedders from agents
 	for _, agentConfig := range cm.globalConfig.Agents {
 		if agentConfig.Database != "" {
 			usedDatabases[agentConfig.Database] = true
 		}
 		if agentConfig.Embedder != "" {
 			usedEmbedders[agentConfig.Embedder] = true
+		}
+	}
+
+	// Also collect databases/embedders from document stores
+	for _, storeConfig := range cm.globalConfig.DocumentStores {
+		if storeConfig.Database != "" {
+			usedDatabases[storeConfig.Database] = true
+		}
+		if storeConfig.Embedder != "" {
+			usedEmbedders[storeConfig.Embedder] = true
 		}
 	}
 
