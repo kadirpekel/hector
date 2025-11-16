@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/config"
@@ -28,19 +29,20 @@ type SearchRequest struct {
 }
 
 type DocumentSearchResult struct {
-	DocumentID string            `json:"document_id"`
-	StoreName  string            `json:"store_name"`
-	FilePath   string            `json:"file_path"`
-	Title      string            `json:"title"`
-	Content    string            `json:"content"`
-	Type       string            `json:"type"`
-	Language   string            `json:"language"`
-	Score      float64           `json:"score"`
-	StartLine  int               `json:"start_line,omitempty"`
-	EndLine    int               `json:"end_line,omitempty"`
-	LineNumber int               `json:"line_number,omitempty"`
-	MatchType  string            `json:"match_type"`
-	Metadata   map[string]string `json:"metadata"`
+	DocumentID       string            `json:"document_id"`
+	StoreName        string            `json:"store_name"`
+	StoreDescription string            `json:"store_description,omitempty"`
+	FilePath         string            `json:"file_path"`
+	Title            string            `json:"title"`
+	Content          string            `json:"content"`
+	Type             string            `json:"type"`
+	Language         string            `json:"language"`
+	Score            float64           `json:"score"`
+	StartLine        int               `json:"start_line,omitempty"`
+	EndLine          int               `json:"end_line,omitempty"`
+	LineNumber       int               `json:"line_number,omitempty"`
+	MatchType        string            `json:"match_type"`
+	Metadata         map[string]string `json:"metadata"`
 }
 
 type SearchResponse struct {
@@ -50,6 +52,18 @@ type SearchResponse struct {
 	Duration    time.Duration          `json:"duration"`
 	StoresUsed  []string               `json:"stores_used"`
 	Suggestions []string               `json:"suggestions,omitempty"`
+}
+
+// storeSearchResult holds results from a single store search
+type storeSearchResult struct {
+	storeName string
+	results   []DocumentSearchResult
+}
+
+// collectionSearchResult holds results from a single collection search
+type collectionSearchResult struct {
+	collectionName string
+	results        []DocumentSearchResult
 }
 
 func NewSearchTool(searchConfig *config.SearchToolConfig) *SearchTool {
@@ -136,50 +150,108 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 	var storesUsed []string
 	var collectionsUsed []string
 
-	// If collections are specified, search them directly
+	// If collections are specified, search them directly in parallel
 	if len(req.Collections) > 0 {
-		// Search each collection directly
+		// Search each collection directly in parallel
 		// Try to find a document store that points to this collection to get the correct database
 		availableStores := t.getAvailableStores()
 
+		var wg sync.WaitGroup
+		resultsChan := make(chan collectionSearchResult, len(req.Collections))
+
+		// Launch parallel collection searches
 		for _, collectionName := range req.Collections {
-			var searchEngine *hectorcontext.SearchEngine
+			wg.Add(1)
+			go func(collName string) {
+				defer wg.Done()
 
-			// Try to find a document store that points to this collection
-			foundStore := false
-			for _, store := range availableStores {
-				if store.GetConfig().Collection == collectionName {
-					searchEngine = store.GetSearchEngine()
-					foundStore = true
-					break
+				// Check for context cancellation
+				select {
+				case <-ctx.Done():
+					return
+				default:
 				}
-			}
 
-			// If no store found for this collection, use first available store's search engine
-			if !foundStore && len(availableStores) > 0 {
-				for _, store := range availableStores {
-					searchEngine = store.GetSearchEngine()
-					if searchEngine != nil {
+				var searchEngine *hectorcontext.SearchEngine
+				var storeName string
+
+				// Try to find a document store that points to this collection
+				foundStore := false
+				for name, store := range availableStores {
+					if store.GetConfig().Collection == collName {
+						searchEngine = store.GetSearchEngine()
+						storeName = name
+						foundStore = true
 						break
 					}
 				}
-			}
 
-			if searchEngine == nil {
-				fmt.Printf("Warning: No search engine available for collection %s, skipping\n", collectionName)
-				continue
-			}
+				// If no store found for this collection, use first available store's search engine
+				if !foundStore && len(availableStores) > 0 {
+					for name, store := range availableStores {
+						searchEngine = store.GetSearchEngine()
+						if searchEngine != nil {
+							storeName = name
+							break
+						}
+					}
+				}
 
-			results, err := t.searchCollection(ctx, searchEngine, collectionName, req)
-			if err != nil {
-				fmt.Printf("Error: Search in collection %s failed: %v\n", collectionName, err)
-				continue
-			}
-			allResults = append(allResults, results...)
-			collectionsUsed = append(collectionsUsed, collectionName)
+				if searchEngine == nil {
+					fmt.Printf("Warning: No search engine available for collection %s, skipping\n", collName)
+					return
+				}
+
+				// Check for context cancellation before performing search
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
+				results, err := t.searchCollection(ctx, searchEngine, collName, storeName, req)
+				if err != nil {
+					fmt.Printf("Error: Search in collection %s failed: %v\n", collName, err)
+					return
+				}
+
+				// Check for context cancellation before sending results
+				select {
+				case <-ctx.Done():
+					return
+				case resultsChan <- collectionSearchResult{
+					collectionName: collName,
+					results:        results,
+				}:
+				}
+			}(collectionName)
 		}
+
+		// Wait for all searches to complete and close channel
+		go func() {
+			wg.Wait()
+			close(resultsChan)
+		}()
+
+		// Collect results from all collections (channel collection is thread-safe)
+		// Also handle context cancellation during result collection
+		for {
+			select {
+			case <-ctx.Done():
+				// Context cancelled, return partial results
+				return t.buildSearchResponse(allResults, storesUsed, collectionsUsed, req, start)
+			case result, ok := <-resultsChan:
+				if !ok {
+					// Channel closed, all results collected
+					goto doneCollections
+				}
+				allResults = append(allResults, result.results...)
+				collectionsUsed = append(collectionsUsed, result.collectionName)
+			}
+		}
+	doneCollections:
 	} else {
-		// Search document stores
+		// Search document stores in parallel
 		availableStores := t.getAvailableStores()
 		if len(availableStores) == 0 {
 			return t.createErrorResponse("No document stores available")
@@ -190,23 +262,84 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 			return t.createErrorResponse("No matching document stores found")
 		}
 
-		for _, storeName := range storesToSearch {
-			store, exists := hectorcontext.GetDocumentStoreFromRegistry(storeName)
-			if !exists {
-				fmt.Printf("Warning: Store %s not found in registry\n", storeName)
-				continue
-			}
-			results, err := t.searchInStore(ctx, store, storeName, req)
-			if err != nil {
-				fmt.Printf("Error: Search in store %s failed: %v\n", storeName, err)
-				continue
-			}
+		// Use goroutines to search all stores in parallel
+		var wg sync.WaitGroup
+		resultsChan := make(chan storeSearchResult, len(storesToSearch))
 
-			allResults = append(allResults, results...)
-			storesUsed = append(storesUsed, storeName)
+		// Launch parallel searches
+		for _, storeName := range storesToSearch {
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+
+				// Check for context cancellation
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
+				store, exists := hectorcontext.GetDocumentStoreFromRegistry(name)
+				if !exists {
+					fmt.Printf("Warning: Store %s not found in registry\n", name)
+					return
+				}
+
+				// Check for context cancellation before performing search
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
+				results, err := t.searchInStore(ctx, store, name, req)
+				if err != nil {
+					fmt.Printf("Error: Search in store %s failed: %v\n", name, err)
+					return
+				}
+
+				// Check for context cancellation before sending results
+				select {
+				case <-ctx.Done():
+					return
+				case resultsChan <- storeSearchResult{
+					storeName: name,
+					results:   results,
+				}:
+				}
+			}(storeName)
 		}
+
+		// Wait for all searches to complete and close channel
+		go func() {
+			wg.Wait()
+			close(resultsChan)
+		}()
+
+		// Collect results from all stores (channel collection is thread-safe)
+		// Also handle context cancellation during result collection
+		for {
+			select {
+			case <-ctx.Done():
+				// Context cancelled, return partial results
+				return t.buildSearchResponse(allResults, storesUsed, collectionsUsed, req, start)
+			case result, ok := <-resultsChan:
+				if !ok {
+					// Channel closed, all results collected
+					goto doneStores
+				}
+				allResults = append(allResults, result.results...)
+				storesUsed = append(storesUsed, result.storeName)
+			}
+		}
+	doneStores:
 	}
 
+	return t.buildSearchResponse(allResults, storesUsed, collectionsUsed, req, start)
+}
+
+// buildSearchResponse builds the final search response with sorting and limiting
+func (t *SearchTool) buildSearchResponse(allResults []DocumentSearchResult, storesUsed, collectionsUsed []string, req SearchRequest, start time.Time) (string, error) {
 	t.sortResultsByScore(allResults)
 
 	if len(allResults) > req.Limit {
@@ -317,19 +450,23 @@ func (t *SearchTool) searchInStore(ctx context.Context, store *hectorcontext.Doc
 			}
 		}
 
+		// Build store description
+		storeDescription := t.buildStoreDescription(storeName)
+
 		documentResult := DocumentSearchResult{
-			DocumentID: result.ID,
-			StoreName:  storeName,
-			FilePath:   filePath,
-			Title:      title,
-			Content:    content,
-			Type:       docType,
-			Language:   language,
-			Score:      float64(result.Score),
-			StartLine:  startLine,
-			EndLine:    endLine,
-			MatchType:  req.Type,
-			Metadata:   make(map[string]string),
+			DocumentID:       result.ID,
+			StoreName:        storeName,
+			StoreDescription: storeDescription,
+			FilePath:         filePath,
+			Title:            title,
+			Content:          content,
+			Type:             docType,
+			Language:         language,
+			Score:            float64(result.Score),
+			StartLine:        startLine,
+			EndLine:          endLine,
+			MatchType:        req.Type,
+			Metadata:         make(map[string]string),
 		}
 
 		if result.Metadata != nil {
@@ -347,7 +484,8 @@ func (t *SearchTool) searchInStore(ctx context.Context, store *hectorcontext.Doc
 }
 
 // searchCollection searches a collection directly using the search engine
-func (t *SearchTool) searchCollection(ctx context.Context, searchEngine *hectorcontext.SearchEngine, collectionName string, req SearchRequest) ([]DocumentSearchResult, error) {
+// storeName is the name of the document store that owns this collection (if known)
+func (t *SearchTool) searchCollection(ctx context.Context, searchEngine *hectorcontext.SearchEngine, collectionName, storeName string, req SearchRequest) ([]DocumentSearchResult, error) {
 	// Search the collection directly
 	filter := map[string]interface{}{
 		"collection": collectionName,
@@ -365,7 +503,7 @@ func (t *SearchTool) searchCollection(ctx context.Context, searchEngine *hectorc
 		filePath := ""
 		title := ""
 		docType := ""
-		storeName := collectionName // Use collection name as store name
+		resultStoreName := storeName // Default to provided store name
 
 		if result.Metadata != nil {
 			if lang, ok := result.Metadata["language"].(string); ok {
@@ -380,10 +518,14 @@ func (t *SearchTool) searchCollection(ctx context.Context, searchEngine *hectorc
 			if dt, ok := result.Metadata["type"].(string); ok {
 				docType = dt
 			}
-			// Use collection name from metadata if available, otherwise use the one we searched
+			// Prefer store_name from metadata (most accurate), fallback to provided storeName, then collection name
 			if sn, ok := result.Metadata["store_name"].(string); ok && sn != "" {
-				storeName = sn
+				resultStoreName = sn
+			} else if resultStoreName == "" {
+				resultStoreName = collectionName // Fallback to collection name if no store name available
 			}
+		} else if resultStoreName == "" {
+			resultStoreName = collectionName // Fallback to collection name if no metadata
 		}
 
 		if req.Language != "" && language != req.Language {
@@ -433,19 +575,23 @@ func (t *SearchTool) searchCollection(ctx context.Context, searchEngine *hectorc
 		// Ensure collection name is in metadata
 		metadata["collection"] = collectionName
 
+		// Build store description
+		storeDescription := t.buildStoreDescription(resultStoreName)
+
 		documentResult := DocumentSearchResult{
-			DocumentID: result.ID,
-			StoreName:  storeName,
-			FilePath:   filePath,
-			Title:      title,
-			Content:    content,
-			Type:       docType,
-			Language:   language,
-			Score:      float64(result.Score),
-			StartLine:  startLine,
-			EndLine:    endLine,
-			MatchType:  matchType,
-			Metadata:   metadata,
+			DocumentID:       result.ID,
+			StoreName:        resultStoreName,
+			StoreDescription: storeDescription,
+			FilePath:         filePath,
+			Title:            title,
+			Content:          content,
+			Type:             docType,
+			Language:         language,
+			Score:            float64(result.Score),
+			StartLine:        startLine,
+			EndLine:          endLine,
+			MatchType:        matchType,
+			Metadata:         metadata,
 		}
 
 		results = append(results, documentResult)
@@ -603,6 +749,47 @@ func (t *SearchTool) GetName() string {
 
 func (t *SearchTool) GetDescription() string {
 	return "Search across configured document stores for files, content, functions, or structs using semantic search. Results include line numbers for precise code references."
+}
+
+// buildStoreDescription builds a description for a document store from its config and status
+func (t *SearchTool) buildStoreDescription(storeName string) string {
+	if storeName == "" || storeName == "unknown" {
+		return ""
+	}
+
+	// Try to get store from registry
+	store, exists := hectorcontext.GetDocumentStoreFromRegistry(storeName)
+	if !exists {
+		return ""
+	}
+
+	// Get store config and status
+	config := store.GetConfig()
+	status := store.GetStatus()
+
+	// Build description parts
+	var descParts []string
+
+	// Add source type if available
+	if config != nil && config.Source != "" {
+		descParts = append(descParts, fmt.Sprintf("source: %s", config.Source))
+	}
+
+	// Add source path if available
+	if status != nil && status.SourcePath != "" {
+		descParts = append(descParts, fmt.Sprintf("path: %s", status.SourcePath))
+	}
+
+	// Add document count if available
+	if status != nil && status.DocumentCount > 0 {
+		descParts = append(descParts, fmt.Sprintf("%d documents", status.DocumentCount))
+	}
+
+	if len(descParts) == 0 {
+		return ""
+	}
+
+	return strings.Join(descParts, ", ")
 }
 
 func (t *SearchTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {

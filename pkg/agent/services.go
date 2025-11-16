@@ -129,7 +129,24 @@ func (s *DefaultPromptService) BuildMessages(
 				if len(content) > maxContentLen {
 					content = content[:maxContentLen] + "..."
 				}
-				contextText.WriteString(fmt.Sprintf("- %s\n", content))
+
+				// Extract store name (data source) from metadata - required
+				storeName := "unknown"
+				if doc.Metadata != nil {
+					if sn, ok := doc.Metadata["store_name"].(string); ok && sn != "" {
+						storeName = sn
+					}
+				}
+
+				// Build description from store information if available
+				description := s.buildStoreDescription(storeName)
+
+				// Format with data source name and description
+				if description != "" {
+					contextText.WriteString(fmt.Sprintf("[Data source: %s (%s)] %s\n", storeName, description, content))
+				} else {
+					contextText.WriteString(fmt.Sprintf("[Data source: %s] %s\n", storeName, content))
+				}
 			}
 			messages = append(messages, protocol.CreateTextMessage(pb.Role_ROLE_UNSPECIFIED, contextText.String()))
 		}
@@ -154,6 +171,47 @@ func (s *DefaultPromptService) BuildMessages(
 	}
 
 	return messages, nil
+}
+
+// buildStoreDescription builds a description for a document store from its config and status
+func (s *DefaultPromptService) buildStoreDescription(storeName string) string {
+	if storeName == "" || storeName == "unknown" {
+		return ""
+	}
+
+	// Try to get store from registry
+	store, exists := hectorcontext.GetDocumentStoreFromRegistry(storeName)
+	if !exists {
+		return ""
+	}
+
+	// Get store config and status
+	config := store.GetConfig()
+	status := store.GetStatus()
+
+	// Build description parts
+	var descParts []string
+
+	// Add source type if available
+	if config != nil && config.Source != "" {
+		descParts = append(descParts, fmt.Sprintf("source: %s", config.Source))
+	}
+
+	// Add source path if available
+	if status != nil && status.SourcePath != "" {
+		descParts = append(descParts, fmt.Sprintf("path: %s", status.SourcePath))
+	}
+
+	// Add document count if available
+	if status != nil && status.DocumentCount > 0 {
+		descParts = append(descParts, fmt.Sprintf("%d documents", status.DocumentCount))
+	}
+
+	if len(descParts) == 0 {
+		return ""
+	}
+
+	return strings.Join(descParts, ", ")
 }
 
 func (s *DefaultPromptService) composeSystemPromptFromSlots(slots reasoning.PromptSlots) string {
