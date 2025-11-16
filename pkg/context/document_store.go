@@ -745,24 +745,47 @@ func SearchAllStores(ctx context.Context, query string, limit int, storeNames ..
 		return []databases.SearchResult{}, nil
 	}
 
+	// Debug: Log which stores will be searched in parallel
+	if len(storesToSearch) > 1 {
+		slog.Debug("Parallel search initiated", "stores", storesToSearch, "query", query, "limit", limit)
+	}
+
 	// Build search targets
 	targets := make([]ParallelSearchTarget, 0, len(storesToSearch))
 	for _, name := range storesToSearch {
 		store, exists := GetDocumentStoreFromRegistry(name)
 		if !exists {
+			slog.Debug("Store not found in registry, skipping", "store", name)
 			continue
 		}
 		targets = append(targets, &documentStoreSearchTarget{store: store})
 	}
 
 	if len(targets) == 0 {
+		slog.Debug("No valid stores found for search")
 		return []databases.SearchResult{}, nil
 	}
+
+	// Track timing for parallel search verification
+	startTime := time.Now()
 
 	// Use shared parallel search function
 	searchFunc := func(ctx context.Context, target ParallelSearchTarget) ([]databases.SearchResult, error) {
 		storeTarget := target.(*documentStoreSearchTarget)
-		return storeTarget.store.Search(ctx, query, limit)
+		storeStart := time.Now()
+		results, err := storeTarget.store.Search(ctx, query, limit)
+		storeDuration := time.Since(storeStart)
+
+		// Debug: Log per-store search timing and results (only if multiple stores)
+		if len(targets) > 1 {
+			if err != nil {
+				slog.Debug("Store search completed with error", "store", storeTarget.store.name, "duration", storeDuration, "error", err)
+			} else {
+				slog.Debug("Store search completed", "store", storeTarget.store.name, "results", len(results), "duration", storeDuration)
+			}
+		}
+
+		return results, err
 	}
 
 	results, err := ParallelSearch(ctx, targets, searchFunc)
@@ -770,24 +793,37 @@ func SearchAllStores(ctx context.Context, query string, limit int, storeNames ..
 		return nil, err
 	}
 
+	totalDuration := time.Since(startTime)
+
 	// Aggregate results from all stores
 	var allResults []databases.SearchResult
-	seenIDs := make(map[string]bool) // Deduplicate by document ID
+	seenIDs := make(map[string]bool)          // Deduplicate by document ID
+	storeResultCounts := make(map[string]int) // Track results per store
 
 	for _, result := range results {
 		if result.Error != nil {
 			// Log error but continue with other results
-			fmt.Printf("Error: Search in store %s failed: %v\n", result.TargetID, result.Error)
+			slog.Warn("Search in store failed", "store", result.TargetID, "error", result.Error)
 			continue
 		}
 
 		storeResults := result.Results
+		storeResultCounts[result.TargetID] = len(storeResults)
 		for _, res := range storeResults {
 			if !seenIDs[res.ID] {
 				seenIDs[res.ID] = true
 				allResults = append(allResults, res)
 			}
 		}
+	}
+
+	// Debug: Log parallel search summary (only if multiple stores)
+	if len(targets) > 1 {
+		slog.Debug("Parallel search completed",
+			"total_results", len(allResults),
+			"stores_searched", len(storeResultCounts),
+			"total_duration", totalDuration,
+			"store_results", storeResultCounts)
 	}
 
 	// Sort by score (highest first) and limit to top results

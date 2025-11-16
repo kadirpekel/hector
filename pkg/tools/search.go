@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -183,15 +184,32 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 		return t.createErrorResponse("No collections found to search")
 	}
 
+	// Debug: Log which collections will be searched (grouped by stores)
+	if len(collectionsToSearch) > 1 {
+		collectionInfo := make(map[string][]string)
+		for _, coll := range collectionsToSearch {
+			collectionInfo[coll.collectionName] = coll.storeNames
+		}
+		slog.Debug("Search tool: grouping stores by collections for parallel search",
+			"stores", storesToSearch,
+			"collections", collectionInfo,
+			"query", req.Query,
+			"limit", req.Limit)
+	}
+
 	// Convert to pointers for ParallelSearch
 	collectionTargets := make([]*collectionSearchInfo, len(collectionsToSearch))
 	for i := range collectionsToSearch {
 		collectionTargets[i] = &collectionsToSearch[i]
 	}
 
+	// Track timing for parallel collection search
+	searchStartTime := time.Now()
+
 	// Use shared parallel search function
 	searchFunc := func(ctx context.Context, target hectorcontext.ParallelSearchTarget) (collectionSearchResult, error) {
 		collInfo := target.(*collectionSearchInfo)
+		collStartTime := time.Now()
 
 		// Search the collection
 		// Note: Store-specific filtering happens in result processing based on metadata
@@ -200,6 +218,25 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 		}
 
 		searchResults, err := collInfo.searchEngine.SearchWithFilter(ctx, req.Query, req.Limit, filter)
+		collDuration := time.Since(collStartTime)
+
+		// Debug: Log per-collection search timing (only if multiple collections)
+		if len(collectionTargets) > 1 {
+			if err != nil {
+				slog.Debug("Collection search completed with error",
+					"collection", collInfo.collectionName,
+					"stores", collInfo.storeNames,
+					"duration", collDuration,
+					"error", err)
+			} else {
+				slog.Debug("Collection search completed",
+					"collection", collInfo.collectionName,
+					"stores", collInfo.storeNames,
+					"results", len(searchResults),
+					"duration", collDuration)
+			}
+		}
+
 		if err != nil {
 			return collectionSearchResult{}, fmt.Errorf("search in collection %s failed: %w", collInfo.collectionName, err)
 		}
@@ -225,16 +262,20 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 		return t.buildSearchResponse(allResults, storesUsed, req, start)
 	}
 
+	searchDuration := time.Since(searchStartTime)
+
 	// Collect results from all collections
 	seenStores := make(map[string]bool)
+	collectionResultCounts := make(map[string]int) // Track results per collection
 	for _, parallelResult := range parallelResults {
 		if parallelResult.Error != nil {
 			// Log error but continue with other results
-			fmt.Printf("Error: Search in collection %s failed: %v\n", parallelResult.TargetID, parallelResult.Error)
+			slog.Warn("Search in collection failed", "collection", parallelResult.TargetID, "error", parallelResult.Error)
 			continue
 		}
 
 		result := parallelResult.Results
+		collectionResultCounts[parallelResult.TargetID] = len(result.results)
 		allResults = append(allResults, result.results...)
 		// Track unique stores used
 		for _, res := range result.results {
@@ -243,6 +284,16 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 				seenStores[res.StoreName] = true
 			}
 		}
+	}
+
+	// Debug: Log parallel collection search summary (only if multiple collections)
+	if len(collectionTargets) > 1 {
+		slog.Debug("Search tool: parallel collection search completed",
+			"total_results", len(allResults),
+			"collections_searched", len(collectionResultCounts),
+			"stores_used", storesUsed,
+			"total_duration", searchDuration,
+			"collection_results", collectionResultCounts)
 	}
 
 	return t.buildSearchResponse(allResults, storesUsed, req, start)

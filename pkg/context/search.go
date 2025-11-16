@@ -3,6 +3,7 @@ package context
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -91,6 +92,15 @@ func ParallelSearch[T ParallelSearchTarget, R any](
 	var wg sync.WaitGroup
 	resultsChan := make(chan ParallelSearchResult[R], len(targets))
 
+	// Debug: Log parallel execution start
+	if len(targets) > 1 {
+		targetIDs := make([]string, len(targets))
+		for i, t := range targets {
+			targetIDs[i] = t.GetID()
+		}
+		slog.Debug("Launching parallel searches", "targets", targetIDs, "count", len(targets))
+	}
+
 	// Launch parallel searches for all targets
 	for _, target := range targets {
 		wg.Add(1)
@@ -99,7 +109,7 @@ func ParallelSearch[T ParallelSearchTarget, R any](
 			defer func() {
 				// Recover from any panics to prevent hanging
 				if r := recover(); r != nil {
-					fmt.Printf("Error: Panic in parallel search for target %s: %v\n", t.GetID(), r)
+					slog.Error("Panic in parallel search", "target", t.GetID(), "panic", r)
 					resultsChan <- ParallelSearchResult[R]{
 						TargetID: t.GetID(),
 						Error:    fmt.Errorf("panic: %v", r),
@@ -148,6 +158,9 @@ func ParallelSearch[T ParallelSearchTarget, R any](
 	go func() {
 		wg.Wait()
 		close(resultsChan)
+		if len(targets) > 1 {
+			slog.Debug("All parallel searches completed, channel closed")
+		}
 	}()
 
 	// Collect results from all targets
@@ -156,10 +169,16 @@ func ParallelSearch[T ParallelSearchTarget, R any](
 		select {
 		case <-ctx.Done():
 			// Context cancelled or timed out, return partial results
+			if len(targets) > 1 {
+				slog.Debug("Parallel search cancelled or timed out", "results_collected", len(allResults), "error", ctx.Err())
+			}
 			return allResults, ctx.Err()
 		case result, ok := <-resultsChan:
 			if !ok {
 				// Channel closed, all results collected
+				if len(targets) > 1 {
+					slog.Debug("All parallel search results collected", "total_results", len(allResults))
+				}
 				return allResults, nil
 			}
 			allResults = append(allResults, result)
