@@ -336,7 +336,7 @@ func BuildAvailableDocumentStoresContext(state *ReasoningState) string {
 
 	// Get assigned stores from context service (nil = all stores, [] = no stores, [names...] = scoped)
 	assignedStores := contextService.GetAssignedStores()
-	
+
 	var storeNames []string
 	if assignedStores == nil {
 		// nil means access to all stores - list all from registry
@@ -364,7 +364,7 @@ func BuildAvailableDocumentStoresContext(state *ReasoningState) string {
 
 		// Use shared store description builder for consistent formatting
 		description := hectorcontext.BuildStoreDescription(store)
-		
+
 		storeEntry := fmt.Sprintf("- %s", storeName)
 		if description != "" {
 			storeEntry += fmt.Sprintf(" (%s)", description)

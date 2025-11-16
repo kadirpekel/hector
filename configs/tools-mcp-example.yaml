@@ -32,7 +32,8 @@ tools:
   search:
     type: "search"
     enabled: true
-    document_stores: ["knowledge_base"]
+    # Note: document_stores are assigned at the agent level, not tool level
+    # The search tool automatically uses the agent's assigned document stores
   todo:
     type: "todo"
     enabled: true

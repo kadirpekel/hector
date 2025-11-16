@@ -191,7 +191,7 @@ func (b *ContextServiceBuilder) Build() (reasoning.ContextService, error) {
 	for _, entry := range b.documentStores {
 		storeNames = append(storeNames, entry.name)
 	}
-	
+
 	// Create context service scoped to assigned document stores
 	// If accessAllStores is true, pass nil (means all stores)
 	// Otherwise, pass store names (scoped access)
@@ -208,7 +208,7 @@ func (b *ContextServiceBuilder) Build() (reasoning.ContextService, error) {
 		// Pass store names for scoped access
 		storesForService = storeNames
 	}
-	
+
 	return agent.NewContextServiceWithStores(defaultSearchEngine, storesForService), nil
 }
 

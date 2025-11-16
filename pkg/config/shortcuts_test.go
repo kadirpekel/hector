@@ -58,16 +58,9 @@ func TestAgentShortcuts_DocsFolder(t *testing.T) {
 	if searchTool.Type != "search" {
 		t.Errorf("Search tool type should be 'search', got '%s'", searchTool.Type)
 	}
-	found := false
-	for _, ds := range searchTool.DocumentStores {
-		if ds == storeName {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("Search tool should reference document store '%s'", storeName)
-	}
+	// Note: Document stores are now assigned at the agent level, not tool level
+	// The search tool will automatically use the agent's assigned document stores
+	// when the agent is created, so we verify the agent has the store assigned above
 }
 
 func TestAgentShortcuts_EnableTools(t *testing.T) {

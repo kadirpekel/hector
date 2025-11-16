@@ -395,7 +395,7 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 	// Determine if agent has document store access
 	// nil = omitted (access all stores), [] = explicitly empty (no access), [stores...] = scoped access
 	hasDocumentStoreAccess := agentCfg.DocumentStores == nil || len(agentCfg.DocumentStores) > 0
-	hasExplicitStores := agentCfg.DocumentStores != nil && len(agentCfg.DocumentStores) > 0
+	hasExplicitStores := len(agentCfg.DocumentStores) > 0
 
 	if hasDocumentStoreAccess {
 		// Check if all document stores have their own vector_store/embedder
