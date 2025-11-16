@@ -46,7 +46,7 @@ func NewLLMProvider(providerType string) *LLMProviderBuilder {
 		builder.model = config.DefaultGeminiModel
 	case "ollama":
 		builder.host = "http://localhost:11434"
-		builder.model = "llama3.2"
+		builder.model = "qwen3" // Default to qwen3 (currently the only fully supported model)
 	default:
 		builder.host = "https://api.openai.com/v1"
 		builder.model = config.DefaultOpenAIModel

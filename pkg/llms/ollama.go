@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -105,6 +106,16 @@ type OllamaStreamChunk struct {
 func NewOllamaProviderFromConfig(cfg *config.LLMProviderConfig) (*OllamaProvider, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
+	}
+
+	// Warn if using a model other than qwen3 (currently the only fully supported model)
+	modelLower := strings.ToLower(cfg.Model)
+	if !strings.Contains(modelLower, "qwen3") {
+		// Log a warning but don't fail - allow users to try other models
+		// Note: This is a soft warning, not a hard restriction
+		slog.Warn("Ollama provider currently only fully supports qwen3 model",
+			"model", cfg.Model,
+			"recommended", "qwen3")
 	}
 
 	baseURL := cfg.Host

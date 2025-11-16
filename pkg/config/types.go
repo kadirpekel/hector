@@ -267,7 +267,7 @@ func (c *LLMProviderConfig) SetDefaults() {
 		case "gemini":
 			c.Model = DefaultGeminiModel
 		case "ollama":
-			c.Model = "llama3.2" // Default Ollama model
+			c.Model = "qwen3" // Default Ollama model (currently the only fully supported model)
 		default:
 			c.Model = DefaultOpenAIModel
 		}

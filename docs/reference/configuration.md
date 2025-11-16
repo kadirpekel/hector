@@ -169,6 +169,27 @@ llms:
     timeout: 60
 ```
 
+### Ollama (Local Models)
+
+⚠️ **Note**: Currently, only the `qwen3` model is fully supported and tested.
+
+```yaml
+llms:
+  local-llm:
+    type: "ollama"
+    model: "qwen3"                    # Currently supported: qwen3
+    host: "http://localhost:11434"  # Default: http://localhost:11434
+    temperature: 0.7                 # Default: 0.7
+    max_tokens: 8000                  # Default: 8000
+    timeout: 600                      # Seconds, default: 600 (10 minutes)
+    # Note: Ollama doesn't require an API key for local deployments
+```
+
+**Prerequisites:**
+1. Install Ollama: [https://ollama.ai](https://ollama.ai)
+2. Pull the model: `ollama pull qwen3`
+3. Ensure Ollama service is running
+
 ### Custom LLM (Plugin)
 
 ```yaml

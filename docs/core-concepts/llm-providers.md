@@ -14,6 +14,7 @@ Hector supports multiple LLM providers out of the box. Each agent references an 
 | **OpenAI** | GPT-4o, GPT-4o-mini, GPT-4 Turbo, etc. | ✅ | ✅ |
 | **Anthropic** | Claude Sonnet 4, Claude Opus 4, etc. | ✅ | ✅ |
 | **Google Gemini** | Gemini 2.0 Flash, Gemini Pro, etc. | ✅ | ✅ |
+| **Ollama** | qwen3 (local models) | ✅ | ✅ |
 | **Custom (Plugin)** | Any model via gRPC plugin | ✅ | ✅ |
 
 ---
@@ -203,6 +204,78 @@ agents:
 
 ---
 
+## Ollama (Local Models)
+
+Ollama allows you to run LLMs locally on your machine. Hector currently supports the **qwen3** model from Ollama.
+
+### Configuration
+
+```yaml
+llms:
+  local-llm:
+    type: "ollama"
+    model: "qwen3"                    # Currently supported: qwen3
+    host: "http://localhost:11434"   # Default: http://localhost:11434
+    temperature: 0.7                 # Default: 0.7
+    max_tokens: 8000                 # Default: 8000
+    timeout: 600                      # Seconds, default: 600 (10 minutes)
+    # Note: Ollama doesn't require an API key for local deployments
+```
+
+### Supported Models
+
+| Model | Best For | Notes |
+|-------|----------|-------|
+| `qwen3` | General purpose, reasoning | Supports thinking/reasoning traces |
+
+⚠️ **Note**: Currently, only the `qwen3` model is fully supported and tested. Other Ollama models may work but are not officially supported.
+
+### Prerequisites
+
+1. **Install Ollama**: [https://ollama.ai](https://ollama.ai)
+2. **Pull the model**:
+   ```bash
+   ollama pull qwen3
+   ```
+3. **Start Ollama service** (usually runs automatically)
+
+### Example
+
+```yaml
+llms:
+  local-llm:
+    type: "ollama"
+    model: "qwen3"
+    host: "http://localhost:11434"
+    temperature: 0.7
+    timeout: 600  # Increased timeout for larger models
+
+agents:
+  assistant:
+    name: "Local Assistant"
+    llm: "local-llm"
+    prompt:
+      system_role: "You are a helpful assistant running locally."
+```
+
+### Thinking/Reasoning Support
+
+The qwen3 model supports thinking/reasoning traces. Enable it with the `--thinking` flag:
+
+```bash
+hector call "Solve this problem" --thinking
+```
+
+### Environment Variables
+
+Ollama doesn't require API keys, but you can configure the host:
+
+```bash
+export OLLAMA_HOST="http://localhost:11434"  # Optional, defaults to localhost:11434
+```
+
+---
+
 ## Custom LLM Providers (Plugins)
 
 Extend Hector with custom LLM providers via gRPC plugins.
@@ -300,8 +373,9 @@ When running without configuration, Hector uses these defaults:
 | OpenAI | `gpt-4o-mini` | `OPENAI_API_KEY` set |
 | Anthropic | `claude-sonnet-4-20250514` | `ANTHROPIC_API_KEY` set |
 | Gemini | `gemini-2.0-flash-exp` | `GEMINI_API_KEY` set |
+| Ollama | `qwen3` | Ollama running locally (no API key required) |
 
-Priority order: OpenAI → Anthropic → Gemini (first available key wins).
+Priority order: OpenAI → Anthropic → Gemini → Ollama (first available key/service wins).
 
 ```bash
 # Zero-config with OpenAI
