@@ -1,0 +1,125 @@
+# Enterprise RAG Lab Configuration (Docker Compose)
+# Multi-source RAG system for on-premise deployment
+# This config uses Docker service names for inter-container communication
+
+# Vector Database (Qdrant)
+vector_stores:
+  qdrant:
+    type: "qdrant"
+    host: "qdrant"  # Docker service name
+    port: 6334
+
+# Embedder (Ollama)
+embedders:
+  embedder:
+    type: "ollama"
+    host: "http://ollama:11434"  # Docker service name
+    model: "nomic-embed-text"
+    timeout: 30
+
+# SQL Database for Knowledge Base
+databases:
+  knowledge_db:
+    driver: "postgres"
+    host: "postgres"  # Docker service name
+    port: 5432  # Internal port (not mapped port)
+    database: "knowledge_base"
+    username: "hector"
+    password: "lab_password_123"
+    ssl_mode: "disable"
+    max_conns: 25
+    max_idle: 5
+
+# LLM Provider (Ollama - 100% local)
+llms:
+  local-llm:
+    type: "ollama"
+    host: "http://ollama:11434"  # Docker service name
+    model: "qwen3"  # Native tool calling support
+    temperature: 0.7
+    timeout: 300  # Increased timeout for qwen3
+
+# Document Stores - Multi-Source Configuration
+document_stores:
+  # Source 1: Internal Documentation (Directory)
+  internal_docs:
+    source: "directory"
+    path: "/examples/enterprise-rag/docs/internal/"  # Mounted volume path
+    include_patterns: ["*.md", "*.txt"]
+    chunk_size: 1024
+    chunk_overlap: 100
+
+  # Source 2: Knowledge Base Articles (SQL Database - PostgreSQL)
+  knowledge_base:
+    source: "sql"
+    sql:
+      driver: "postgres"
+      host: "postgres"  # Docker service name
+      port: 5432  # Internal port
+      database: "knowledge_base"
+      username: "hector"
+      password: "lab_password_123"
+      ssl_mode: "disable"
+    sql_tables:
+      - table: "knowledge_articles"
+        columns: ["title", "content"]
+        id_column: "id"
+        updated_column: "updated_at"
+        where_clause: "status = 'published'"
+        metadata_columns: ["category", "author", "created_at"]
+    chunk_size: 800
+    chunk_overlap: 50
+
+  # Source 3: Internal Wiki (REST API)
+  wiki_content:
+    source: "api"
+    api:
+      base_url: "http://wiki-api:8080"  # Docker service name + internal port
+      endpoints:
+        - path: "/api/pages"
+          method: "GET"
+          id_field: "id"
+          content_field: "title,content"
+          metadata_fields: ["author", "category", "published_at", "updated_at"]
+    chunk_size: 800
+    chunk_overlap: 50
+
+# Enterprise Knowledge Assistant Agent
+agents:
+  enterprise_assistant:
+    llm: "local-llm"
+    vector_store: "qdrant"
+    embedder: "embedder"
+    document_stores: ["internal_docs", "knowledge_base", "wiki_content"]
+    
+    tools:
+      - "search"  # Enable semantic search
+    
+    prompt:
+      include_context: false  # Use search tool explicitly
+      system_prompt: |
+        You are an enterprise knowledge assistant for an on-premise deployment.
+        You have access to:
+        - Internal documentation
+        - Knowledge base articles from the database
+        - Internal wiki content
+        
+        Always cite your sources when answering questions. If information is not
+        available in the indexed documents, say so clearly.
+        
+        Focus on providing accurate, actionable information based on the
+        enterprise knowledge base.
+    
+    search:
+      top_k: 10  # Default number of results for RAG context
+      threshold: 0.5  # Minimum similarity score (50%)
+      preserve_case: true  # Preserve case for code/documentation
+
+# Observability
+global:
+  observability:
+    enable_metrics: true
+    tracing:
+      enabled: true
+      endpoint_url: "localhost:4317"  # OTLP gRPC endpoint (host:port format, not URL)
+

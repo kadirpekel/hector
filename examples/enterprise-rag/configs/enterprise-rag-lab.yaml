@@ -1,0 +1,124 @@
+# Enterprise RAG Lab Configuration
+# Multi-source RAG system for on-premise deployment
+
+# Vector Database (Qdrant)
+vector_stores:
+  qdrant:
+    type: "qdrant"
+    host: "localhost"
+    port: 6334
+
+# Embedder (Ollama)
+embedders:
+  embedder:
+    type: "ollama"
+    host: "http://localhost:11434"
+    model: "nomic-embed-text"
+    timeout: 30
+
+# SQL Database for Knowledge Base
+databases:
+  knowledge_db:
+    driver: "postgres"
+    host: "localhost"
+    port: 5432
+    database: "knowledge_base"
+    username: "hector"
+    password: "lab_password_123"
+    ssl_mode: "disable"
+    max_conns: 25
+    max_idle: 5
+
+# LLM Provider (Temporarily using OpenAI for faster testing)
+llms:
+  local-llm:
+    type: "openai"
+    model: "gpt-4o-mini"  # Fast model for testing
+    api_key: "${OPENAI_API_KEY}"
+    temperature: 0.7
+    timeout: 60
+
+# Document Stores - Multi-Source Configuration
+document_stores:
+  # Source 1: Internal Documentation (Directory)
+  internal_docs:
+    source: "directory"
+    path: "examples/enterprise-rag/docs/internal/"
+    include_patterns: ["*.md", "*.txt"]
+    chunk_size: 1024
+    chunk_overlap: 100
+
+  # Source 2: Knowledge Base Articles (SQL Database - PostgreSQL)
+  knowledge_base:
+    source: "sql"
+    sql:
+      driver: "postgres"
+      host: "localhost"
+      port: 5433  # Docker container port (mapped from 5432)
+      database: "knowledge_base"
+      username: "hector"
+      password: "lab_password_123"
+      ssl_mode: "disable"
+    sql_tables:
+      - table: "knowledge_articles"
+        columns: ["title", "content"]
+        id_column: "id"
+        updated_column: "updated_at"
+        where_clause: "status = 'published'"
+        metadata_columns: ["category", "author", "created_at"]
+    chunk_size: 800
+    chunk_overlap: 50
+
+  # Source 3: Internal Wiki (REST API)
+  wiki_content:
+    source: "api"
+    api:
+      base_url: "http://localhost:8081"
+      endpoints:
+        - path: "/api/pages"
+          method: "GET"
+          id_field: "id"
+          content_field: "title,content"
+          metadata_fields: ["author", "category", "published_at", "updated_at"]
+    chunk_size: 800
+    chunk_overlap: 50
+
+# Enterprise Knowledge Assistant Agent
+agents:
+  enterprise_assistant:
+    llm: "local-llm"
+    vector_store: "qdrant"
+    embedder: "embedder"
+    document_stores: ["internal_docs", "knowledge_base", "wiki_content"]
+    
+    tools:
+      - "search"  # Enable semantic search
+    
+    prompt:
+      include_context: false  # Disable automatic RAG to test search tool usage
+      system_prompt: |
+        You are an enterprise knowledge assistant for an on-premise deployment.
+        You have access to:
+        - Internal documentation
+        - Knowledge base articles from the database
+        - Internal wiki content
+        
+        Always cite your sources when answering questions. If information is not
+        available in the indexed documents, say so clearly.
+        
+        Focus on providing accurate, actionable information based on the
+        enterprise knowledge base.
+    
+    search:
+      top_k: 10  # Default number of results for RAG context
+      threshold: 0.5  # Minimum similarity score (50%)
+      preserve_case: true  # Preserve case for code/documentation
+
+# Observability
+global:
+  observability:
+    enable_metrics: true
+    tracing:
+      enabled: true
+      endpoint_url: "localhost:4317"  # OTLP gRPC endpoint (host:port format, not URL)
+
