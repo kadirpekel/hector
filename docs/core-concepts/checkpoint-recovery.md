@@ -29,6 +29,7 @@ Checkpoint recovery **extends** the async HITL foundation:
 - **Unified Storage**: Both store checkpoints in session metadata (`sessions.metadata` JSON field)
 
 Think of it this way:
+
 - **Async HITL** = Checkpoint on user input events
 - **Checkpoint Recovery** = Checkpoint on events + intervals + automatic recovery
 
@@ -43,6 +44,7 @@ Hector supports three checkpoint strategies:
 #### 1. Event-Driven (Default)
 
 Checkpoints are created on specific events:
+
 - Tool approval requests (HITL pauses)
 - Errors
 - Rate limit backoffs
@@ -63,6 +65,7 @@ task:
 #### 2. Interval-Based
 
 Checkpoints are created periodically during execution:
+
 - Every N iterations
 - After tool calls (optional)
 - Before LLM calls (optional)
@@ -86,6 +89,7 @@ task:
 #### 3. Hybrid (Recommended)
 
 Combines event-driven and interval-based:
+
 - Event-driven checkpoints on HITL pauses
 - Interval-based checkpoints during normal execution
 - Best recovery coverage
@@ -544,7 +548,7 @@ recovery:
 
 ## Next Steps
 
-- **[Setup Session Persistence](../how-to/setup-session-persistence.md)** - Configure session storage for checkpoints
-- **[Making HITL Truly Asynchronous](../how-to/async-hitl.md)** - Learn about async HITL (checkpoint foundation)
+- **[Configuration Reference](../reference/configuration.md#session-store)** - Configure session storage for checkpoints
+- **[Human-in-the-Loop](human-in-the-loop.md)** - Learn about HITL (checkpoint foundation)
 - **[Tasks Guide](tasks.md)** - Complete task management documentation
 

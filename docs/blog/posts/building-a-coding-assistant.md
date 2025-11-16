@@ -171,7 +171,7 @@ Output:
 
 **Interactive Mode:**
 ```bash
-hector chat --config coder.yaml coder
+hector chat --agent coder --config coder.yaml
 ```
 
 ---
@@ -266,7 +266,7 @@ document_stores:
     source: "directory"
     path: "./frontend/src"
     chunk_size: 512           # Smaller for precision
-    watch_changes: true
+    enable_watch_changes: true
   
   backend:
     name: "backend"
@@ -408,6 +408,7 @@ hector call --config coder.yaml --agent coder \
 ```
 
 The agent will:
+
 1. Search for authentication code
 2. Analyze for common vulnerabilities
 3. Suggest fixes with code examples
@@ -420,6 +421,7 @@ hector call --config coder.yaml --agent coder \
 ```
 
 The agent will:
+
 1. Search for existing middleware patterns
 2. Implement rate limiting
 3. Update route configurations
@@ -433,6 +435,7 @@ hector call --config coder.yaml --agent coder \
 ```
 
 The agent will:
+
 1. Analyze current structure
 2. Create new architecture
 3. Migrate code incrementally
@@ -446,6 +449,7 @@ hector call --config coder.yaml --agent coder \
 ```
 
 The agent will:
+
 1. Search for payment-related code
 2. Identify edge cases
 3. Write unit and integration tests

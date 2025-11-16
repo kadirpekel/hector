@@ -556,7 +556,7 @@ hector call "Hello" --agent assistant --url http://remote:8080
 
 ### Performance & Deployment
 - **[Performance Overview](../core-concepts/performance.md)** - Resource efficiency & scaling
-- **[Deploy to Production](../how-to/deploy-production.md)** - Production setup
+- **[Configuration Reference](configuration.md)** - Production setup
 
 ---
 

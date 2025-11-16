@@ -17,6 +17,37 @@ Tools give agents capabilities beyond language generation—they can execute com
 
 ---
 
+## Tool Assignment
+
+Hector uses a **consistent assignment pattern** for tools (same pattern as document stores and sub-agents):
+
+| Configuration | Access | Behavior |
+|--------------|--------|----------|
+| `nil`/omitted | **All tools** | Permissive default - agent has access to all tools from the registry (including MCP tools, default tools, etc.) |
+| `[]` (explicitly empty) | **No tools** | Explicit restriction - agent has no access to any tools |
+| `["tool1", ...]` | **Only those tools** | Scoped access - agent can only use the explicitly listed tools |
+
+**Example:**
+```yaml
+agents:
+  # Access all tools (permissive default)
+  general_assistant:
+    # tools: not specified → accesses all tools
+  
+  # No tools (explicit restriction)
+  isolated_agent:
+    tools: []
+  
+  # Scoped access (explicit assignment)
+  file_agent:
+    tools:
+      - "read_file"
+      - "write_file"
+      - "search_replace"
+```
+
+---
+
 ## Built-In Tools
 
 !!! tip "Permissive by Default 🎯"

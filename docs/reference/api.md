@@ -375,6 +375,7 @@ curl -X POST http://localhost:8080/v1/agents/assistant/message:send \
 
 **Checkpoint Recovery:**
 Tasks with checkpoint recovery enabled can survive server crashes and restarts. Checkpoints are automatically created:
+
 - On HITL pauses (`INPUT_REQUIRED` state) - event-driven
 - Periodically during execution (`WORKING` state) - interval-based (if configured)
 - On server restart, tasks in `WORKING` or `INPUT_REQUIRED` state are automatically recovered if checkpoints exist
@@ -875,6 +876,6 @@ for {
 ## Related Topics
 
 - **[Sessions & Streaming](../core-concepts/sessions.md)** - Session management
-- **[Deploy to Production](../how-to/deploy-production.md)** - Production setup
+- **[Configuration Reference](configuration.md)** - Production setup
 - **[Architecture](architecture.md)** - System architecture
 

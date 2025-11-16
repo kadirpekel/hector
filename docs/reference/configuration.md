@@ -230,6 +230,7 @@ agents:
 - `enable_tools: true` → All local tools with safe defaults (sandboxed)
 
 ⚠️ **Mutual exclusivity:** Cannot mix shortcuts with explicit config:
+
 - `docs_folder` + `document_stores` = Error
 - `enable_tools` + `tools: [...]` = Error
 
@@ -491,21 +492,24 @@ agents:
 - When a tool with `requires_approval: true` is called, task pauses and waits
 - User responds using the same `taskId` (A2A multi-turn)
 - `hitl.mode` determines execution behavior:
+
   - `"auto"` (default): Uses async mode if `session_store` is configured, else blocking
   - `"blocking"`: Execution goroutine blocks while waiting (simple, but not persistent)
   - `"async"`: State saved to session metadata, goroutine exits (requires `session_store`)
 - See [Human-in-the-Loop](../core-concepts/human-in-the-loop.md) for details
-- See [Making HITL Truly Asynchronous](../how-to/async-hitl.md) for async mode guide
+- See [Checkpoint Recovery](../core-concepts/checkpoint-recovery.md) for async HITL implementation
 
 **Checkpoint Recovery:**
 
 - `checkpoint.enabled` enables generic checkpoint/resume functionality
 - Checkpoints are stored in session metadata (requires `session_store`)
 - Three strategies:
+
   - `"event"`: Checkpoint on HITL pauses (uses async HITL foundation)
   - `"interval"`: Background checkpointing every N iterations (task remains in `WORKING`)
   - `"hybrid"`: Combines event-driven and interval-based checkpointing
 - Recovery settings:
+
   - `auto_resume`: Automatically resume tasks on server startup
   - `auto_resume_hitl`: Auto-resume INPUT_REQUIRED tasks (use with caution)
   - `resume_timeout`: Maximum age of checkpoint to resume (prevents stale recovery)
@@ -777,7 +781,7 @@ databases:
 
 ---
 
-## Session Stores
+## Session Stores {#session-store}
 
 Session stores provide persistent storage for conversation history and session metadata. When configured, agents can resume conversations after server restarts.
 
@@ -932,7 +936,7 @@ agents:
     session_store: "dev-db"     # Separate database
 ```
 
-**See:** [Setup Session Persistence](../how-to/setup-session-persistence.md) for full guide.
+**See:** [Sessions](../core-concepts/sessions.md) for full guide.
 
 ---
 
@@ -1005,12 +1009,21 @@ agents:
     document_stores: []       # Explicitly empty = no access
 ```
 
-**Access Rules**:
+**Access Rules** (consistent pattern across tools, document stores, and sub-agents):
+
 - **`nil`/omitted**: Agent has access to **ALL** registered document stores
 - **`[]` (explicitly empty)**: Agent has **NO access** to any document stores
 - **`["store1", ...]`**: Agent can **ONLY access** the explicitly listed stores
 
-The search tool is automatically created and scoped to the agent's assigned stores. See [Search Architecture](../core-concepts/search-architecture.md) for details.
+The search tool is automatically created and scoped to the agent's assigned stores. See [Search Architecture](architecture/search-architecture.md) for details.
+
+!!! note "Consistent Assignment Pattern"
+    This same pattern applies to:
+    - **Tools** (`agent.tools`) - See [Tools](../core-concepts/tools.md#tool-assignment)
+    - **Document Stores** (`agent.document_stores`) - See above
+    - **Sub-Agents** (`agent.sub_agents`) - See [Multi-Agent](../core-concepts/multi-agent.md#sub-agent-assignment)
+    
+    The consistent pattern makes configuration intuitive and predictable.
 
 ### Directory Source
 
@@ -1068,6 +1081,7 @@ document_stores:
 **Default Exclusions:**
 
 By default, Hector excludes 115 patterns covering:
+
 - **VCS**: `.git`, `.svn`, `.hg`, `.bzr`
 - **Dependencies**: `node_modules`, `venv`, `*-env`, `*_env`, `site-packages`, `dist-packages`, `vendor`
 - **Build artifacts**: `dist`, `build`, `target`, `bin`, `obj`, `.gradle`
@@ -1090,6 +1104,7 @@ See [types.go:865-923](https://github.com/kadirpekel/hector/blob/main/pkg/config
 **Progress Tracking:**
 
 When indexing large directories, Hector shows:
+
 - Animated progress bar with percentage
 - Files/second processing rate
 - ETA (estimated time remaining)
@@ -1676,5 +1691,5 @@ agents:
 
 - **[Getting Started](../getting-started/installation.md)** - Installation
 - **[Agent Overview](../core-concepts/overview.md)** - Agent basics
-- **[Deployment](../how-to/deploy-production.md)** - Production configuration
+- **[Architecture](../reference/architecture.md)** - System design and deployment
 

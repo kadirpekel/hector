@@ -60,6 +60,7 @@ hector call "What are password requirements?" \
 **Note:** Defaults used automatically: `--model qwen3`, `--embedder-model nomic-embed-text`, `--vectordb http://localhost:6334`
 
 **🎉 Done!** You have a working RAG system. Hector automatically:
+
 - ✅ Created a document store from your folder
 - ✅ Enabled file watching (auto-reindex on changes)
 - ✅ Set up vector database and embeddings
@@ -452,6 +453,7 @@ hector serve --config config.yaml --config-watch
 ```
 
 This starts:
+
 - **A2A API** on port 8080 (for programmatic access)
 - **Web UI** on port 8080 (like ChatGPT interface)
 - **File watching** (if `--config-watch` is used, reloads config automatically)
@@ -464,6 +466,7 @@ http://localhost:8080
 ```
 
 You'll see a web interface where you can:
+
 - Select any agent from the dropdown
 - Chat with the agent in real-time
 - See the agent's reasoning process
@@ -548,6 +551,7 @@ curl http://localhost:8080/metrics
 ```
 
 You'll see metrics like:
+
 - Query latency
 - Token usage
 - Error rates
@@ -860,7 +864,7 @@ What you've learned:
 
 **Resources:**
 
-- [RAG Architecture Guide](../../core-concepts/search-architecture.md) - Deep dive
+- [RAG Architecture Guide](../../reference/architecture/search-architecture.md) - Deep dive
 - [Configuration Reference](../../reference/configuration.md) - All options
 - [Web UI Guide](../../core-concepts/ag-ui.md) - Web interface features
 

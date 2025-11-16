@@ -266,6 +266,7 @@ hector call --config research-system.yaml --agent research_coordinator \
    ```
 
 3. **Researcher** gathers information:
+
    - Searches for relevant data
    - Compiles findings
    - Returns structured research
@@ -276,6 +277,7 @@ hector call --config research-system.yaml --agent research_coordinator \
    ```
 
 5. **Analyst** analyzes:
+
    - Identifies key trends
    - Draws conclusions
    - Provides insights
@@ -286,6 +288,7 @@ hector call --config research-system.yaml --agent research_coordinator \
    ```
 
 7. **Writer** creates report:
+
    - Structures content
    - Writes clearly
    - Saves to file
@@ -300,6 +303,7 @@ hector call --config research-system.yaml --agent research_coordinator \
 ```
 
 The coordinator automatically:
+
 - Breaks down into sub-tasks
 - Delegates to appropriate specialists
 - Ensures quality at each step
@@ -470,7 +474,7 @@ llms:
   
   smart:
     type: "anthropic"
-    model: "claude-opus-4"  # Smart, expensive
+    model: "claude-opus-4-20250514"  # Smart, expensive
 
 agents:
   coordinator:

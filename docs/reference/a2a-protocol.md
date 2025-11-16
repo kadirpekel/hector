@@ -768,8 +768,7 @@ curl -X POST http://localhost:8080/v1/agents/assistant/tasks/task_abc123:cancel
 - **[Tasks Documentation](../core-concepts/tasks.md)** - Complete task management guide
 - **[API Reference](api.md)** - Detailed API documentation
 - **[Architecture](architecture.md)** - System architecture
-- **[External Agents](../how-to/integrate-external-agents.md)** - Connect to A2A agents
-- **[Multi-Agent](../core-concepts/multi-agent.md)** - Multi-agent orchestration
+- **[Multi-Agent](../core-concepts/multi-agent.md)** - Multi-agent orchestration and A2A integration
 
 ---
 
@@ -778,5 +777,5 @@ curl -X POST http://localhost:8080/v1/agents/assistant/tasks/task_abc123:cancel
 - **[Tasks](../core-concepts/tasks.md)** - Task lifecycle and management
 - **[Security](../core-concepts/security.md)** - Authentication setup
 - **[Sessions](../core-concepts/sessions.md)** - Session management
-- **[Deploy to Production](../how-to/deploy-production.md)** - Production deployment
+- **[Configuration Reference](configuration.md)** - Production deployment
 

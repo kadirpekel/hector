@@ -13,6 +13,7 @@ Traditional search: "Find files containing 'authentication'"
 Semantic search: "Find code related to user login"
 
 RAG allows agents to:
+
 - Search codebases by meaning
 - Find relevant documentation
 - Discover similar patterns

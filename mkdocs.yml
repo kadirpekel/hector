@@ -60,33 +60,33 @@ nav:
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quick-start.md
   - Core Concepts:
+    # Getting Started
     - Overview: core-concepts/overview.md
     - Programmatic API: core-concepts/programmatic-api.md
-    - Extending Hector: how-to/extend-hector.md
-    - Observability: core-concepts/observability.md
-    - Security: core-concepts/security.md
+    # Core Agent Features
+    - Prompts: core-concepts/prompts.md
+    - Reasoning: core-concepts/reasoning.md
+    - Tools: core-concepts/tools.md
+    - Memory: core-concepts/memory.md
+    # RAG & Search
+    - RAG & Search: core-concepts/rag.md
+    # Multi-Agent Systems
+    - Multi-Agent: core-concepts/multi-agent.md
     - A2A Protocol: reference/a2a-protocol.md
     - AG-UI Protocol: core-concepts/ag-ui.md
-    - LLM Providers: core-concepts/llm-providers.md
-    - Prompts: core-concepts/prompts.md
-    - Memory: core-concepts/memory.md
-    - Tools: core-concepts/tools.md
-    - RAG & Search: core-concepts/rag.md
-    - Search Architecture: core-concepts/search-architecture.md
-    - Assignment Strategy: core-concepts/assignment-strategy.md
-    - Reasoning: core-concepts/reasoning.md
+    # Advanced Features
     - Tasks: core-concepts/tasks.md
     - Checkpoint Recovery: core-concepts/checkpoint-recovery.md
-    - Multi-Agent: core-concepts/multi-agent.md
     - Human-in-the-Loop: core-concepts/human-in-the-loop.md
-    - Async HITL Implementation: how-to/async-hitl.md
     - Structured Output: core-concepts/structured-output.md
     - Sessions: core-concepts/sessions.md
-    - Session Persistence: how-to/setup-session-persistence.md
     - Streaming: core-concepts/streaming.md
+    # Infrastructure & Operations
+    - LLM Providers: core-concepts/llm-providers.md
+    - Observability: core-concepts/observability.md
+    - Security: core-concepts/security.md
     - Performance: core-concepts/performance.md
     - Rate Limiting: core-concepts/rate-limiting.md
-    - External Agent Integration: how-to/integrate-external-agents.md
   - Blog:
     - Overview: blog/index.md
     - Building Enterprise RAG Systems: blog/posts/building-enterprise-rag-systems.md
@@ -100,10 +100,9 @@ nav:
     - Programmatic API Reference: reference/programmatic-api.md
     - Distributed Configuration: reference/distributed-configuration.md
     - API Reference: reference/api.md
-    - Deployment: how-to/deploy-production.md
-    - Plugin Development: how-to/plugins.md
     - Architecture:
       - System Design: reference/architecture.md
+      - Search Architecture: reference/architecture/search-architecture.md
       - Session & Memory: reference/architecture/session-memory.md
       - Agent Lifecycle: reference/architecture/agent-lifecycle.md
 

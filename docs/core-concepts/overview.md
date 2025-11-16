@@ -213,6 +213,7 @@ hector call "Hello"  # No config file needed!
 ```
 
 Behind the scenes, Hector creates:
+
 - Default agent named "assistant"
 - OpenAI GPT-4o mini LLM
 - Basic prompt

@@ -311,6 +311,7 @@ hector call --config config.yaml --agent automation \
 ```
 
 Agent automatically:
+
 1. Creates GitHub issue
 2. Sends Slack notification
 3. Returns confirmation

@@ -179,6 +179,7 @@ curl -N http://localhost:8080/v1/agents/assistant/message:stream \
 ```
 
 Supported Accept values:
+
 - `application/x-agui-events` ⭐ (recommended)
 - `application/agui+json`
 
@@ -377,6 +378,7 @@ The `required: false` indicates that AG-UI is optional - clients can use A2A or 
 **No configuration required!** AG-UI is enabled by default as an optional output format.
 
 Every agent automatically supports both A2A and AG-UI with these default output modes:
+
 - `text/plain`
 - `application/json`
 - `application/x-agui-events` ✨
@@ -971,6 +973,7 @@ The full AG-UI specification includes features beyond streaming events:
 - ❌ **Client-Defined Tools**: Front-end defines tools for agent to call
 
 These features are future considerations and would require:
+
 1. Extended A2A protocol support
 2. Bidirectional WebSocket transport
 3. State synchronization mechanisms
@@ -986,6 +989,7 @@ We implement **AG-UI Streaming Events** - the event format layer that enables co
 4. **Standardization**: Common format across agent platforms
 
 For full AG-UI spec features, consider:
+
 - Using A2A protocol directly (bidirectional, state management)
 - MCP for client-defined tools
 - A2A multi-agent collaboration features

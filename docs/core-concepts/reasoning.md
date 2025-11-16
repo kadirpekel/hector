@@ -499,6 +499,7 @@ reasoning:
 ```
 
 If hitting the limit frequently:
+
 - Task may be too complex for the agent
 - Agent may be stuck in a loop
 - May need better prompting

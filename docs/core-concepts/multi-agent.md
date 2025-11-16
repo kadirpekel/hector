@@ -127,6 +127,43 @@ agents:
 - **Clear role** - Precise system prompt
 - **Appropriate tools** - Only what's needed for the role
 
+---
+
+## Sub-Agent Assignment
+
+Hector uses a **consistent assignment pattern** for sub-agents (same pattern as tools and document stores):
+
+| Configuration | Access | Behavior |
+|--------------|--------|----------|
+| `nil`/omitted | **All agents** | Permissive default - agent can call all available agents (honoring visibility - excludes "internal" agents by default) |
+| `[]` (explicitly empty) | **No agents** | Explicit restriction - agent cannot call any agents |
+| `["agent1", ...]` | **Only those agents** | Scoped access - agent can only call the explicitly listed agents |
+
+**Auto-creation**: The `agent_call` tool is automatically created if the agent has sub-agent access.
+
+**Example:**
+```yaml
+agents:
+  # Access all agents (permissive default)
+  coordinator:
+    # sub_agents: not specified → can call all agents (honoring visibility)
+  
+  # No agents (explicit restriction)
+  isolated_agent:
+    sub_agents: []               # Explicitly empty = cannot call any agents
+  
+  # Scoped access (explicit assignment)
+  research_coordinator:
+    sub_agents:
+      - "researcher"
+      - "analyst"
+      - "writer"
+```
+
+**Visibility**: When `nil` (all agents), agents with `visibility: "internal"` are excluded by default.
+
+---
+
 ### 3. agent_call Tool
 
 Bridges agents together:
@@ -316,7 +353,7 @@ agents:
       password: "${PASSWORD}"
 ```
 
-See [How to Integrate External Agents](../how-to/integrate-external-agents.md) for details.
+See [A2A Protocol](../reference/a2a-protocol.md) for details on integrating external agents.
 
 ---
 
@@ -697,7 +734,7 @@ See the [API Reference](../reference/api.md) for detailed examples.
 ## Next Steps
 
 - **[Building a Multi-Agent Research System](../blog/posts/building-a-multi-agent-research-system.md)** - Complete tutorial
-- **[How to Integrate External Agents](../how-to/integrate-external-agents.md)** - A2A integration
+- **[A2A Protocol](../reference/a2a-protocol.md)** - A2A integration
 - **[Reasoning Strategies](reasoning.md)** - Supervisor strategy details
 - **[Tools](tools.md)** - agent_call tool
 - **[API Reference](../reference/api.md)** - API documentation including agent selection

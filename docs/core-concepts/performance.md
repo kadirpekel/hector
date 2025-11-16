@@ -254,7 +254,7 @@ Hector's efficiency advantages:
 - [Agent Lifecycle & Scalability](../reference/architecture/agent-lifecycle.md)
 
 ### Deployment Guides
-- [Deploy to Production](../how-to/deploy-production.md)
+- [Configuration Reference](../reference/configuration.md)
 - [Configuration Reference](../reference/configuration.md)
 
 ---

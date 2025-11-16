@@ -71,6 +71,7 @@ JSON is supported as a fallback for all providers. The system automatically dete
 ```
 
 **Format Detection**: The loader tries YAML first (since YAML is a superset of JSON), then falls back to JSON if YAML parsing fails. This means:
+
 - ✅ YAML configs work with all providers (recommended)
 - ✅ JSON configs work with all providers (fallback)
 - ✅ No format conversion needed between providers
@@ -209,6 +210,7 @@ When `--config-watch` is enabled, Hector automatically reloads configuration whe
 3. **Validation**: Configuration is validated (schema, required fields, etc.)
 4. **If validation fails**: Current configuration remains active, error logged
 5. **If successful**:
+
    - Graceful shutdown initiated (30s timeout for in-flight requests)
    - All components cleaned up (runtime, agents, LLMs, memory, observability)
    - Server restarts with new configuration
@@ -265,6 +267,7 @@ hector serve --config /hector/production --config-type zookeeper \
 ```
 
 **Benefits**:
+
 - High availability (survives node failures)
 - Consistent configuration across all Hector instances
 - Dynamic updates without restarts
@@ -418,6 +421,7 @@ agents:
 ```
 
 When configuration changes:
+
 1. New agent added to configuration
 2. Configuration reloaded on all instances
 3. Agents immediately available for A2A calls
@@ -451,6 +455,7 @@ curl http://localhost:8080/v1/agents | jq '.agents | length'
 ### Metrics
 
 Key metrics to monitor:
+
 - `config_reload_count` - Number of successful reloads
 - `config_reload_errors` - Number of failed reloads
 - `config_validation_errors` - Invalid configurations rejected
@@ -463,6 +468,7 @@ Key metrics to monitor:
 **Symptoms**: "failed to load config from consul/etcd/zookeeper"
 
 **Solutions**:
+
 1. Verify backend is accessible:
    ```bash
    curl http://consul-host:8500/v1/status/leader  # Consul
@@ -486,6 +492,7 @@ Key metrics to monitor:
 **Symptoms**: Configuration changes not detected
 
 **Solutions**:
+
 1. Verify `--config-watch` flag is set
 2. Check network connectivity to backend
 3. Review logs for watch errors:
@@ -498,6 +505,7 @@ Key metrics to monitor:
 **Symptoms**: "config validation failed"
 
 **Solutions**:
+
 1. Check logs for specific validation error
 2. Validate YAML syntax:
    ```bash
@@ -513,6 +521,7 @@ Key metrics to monitor:
 ### Step 1: Choose Backend
 
 Select based on existing infrastructure:
+
 - Have Consul? → Use Consul
 - Have Kubernetes? → Use Etcd
 - Have Hadoop/Kafka? → Use ZooKeeper

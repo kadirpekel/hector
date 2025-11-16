@@ -438,7 +438,7 @@ LLM API latency dominates performance, not the framework. Hector's efficiency ma
 Ready to deploy production-ready agents?
 
 [Quick Start Guide →](getting-started/quick-start.md){ .md-button .md-button--primary }
-[Production Deployment →](how-to/deploy-production.md){ .md-button }
+[Configuration Reference →](reference/configuration.md){ .md-button }
 
 ## Next Steps
 

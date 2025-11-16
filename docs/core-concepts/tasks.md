@@ -61,6 +61,7 @@ All A2A-specified task states are supported:
 ### What is a Task?
 
 A **Task** is a unit of work submitted to an agent that can be:
+
 - **Tracked** - Query status and progress at any time
 - **Asynchronous** - Submit and disconnect, check back later
 - **Persistent** - Survives server restarts (with SQL backend)
@@ -466,6 +467,7 @@ task:
 ### Monitoring
 
 Track task metrics:
+
 - Task completion rate
 - Average task duration
 - Failed task percentage

@@ -751,7 +751,7 @@ See **[Checkpoint Recovery](checkpoint-recovery.md)** for complete architecture 
 
 3. Restart server - existing blocking tasks will complete, new tasks use async mode
 
-**See:** [Making HITL Truly Asynchronous](../how-to/async-hitl.md) for complete implementation guide.
+**See:** [Checkpoint Recovery](checkpoint-recovery.md) for async HITL implementation.
 
 ---
 
@@ -760,5 +760,5 @@ See **[Checkpoint Recovery](checkpoint-recovery.md)** for complete architecture 
 - **[Checkpoint Recovery](checkpoint-recovery.md)** - Generic checkpoint/resume system (extends async HITL)
 - **[Tasks](tasks.md)** - Task lifecycle and management
 - **[Sessions](sessions.md)** - Session persistence (checkpoint storage)
-- **[Making HITL Truly Asynchronous](../how-to/async-hitl.md)** - Implementation guide
+- **[Checkpoint Recovery](checkpoint-recovery.md)** - Async HITL implementation
 

@@ -88,6 +88,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 2. Provider issues JWT token
 3. User includes token in request: `Authorization: Bearer <token>`
 4. Hector validates token:
+
    - Fetches JWKS from provider (cached)
    - Verifies signature
    - Checks expiration
@@ -399,7 +400,7 @@ export WRITER_USER="username"
 export WRITER_PASS="password"
 ```
 
-See [How to Integrate External Agents](../how-to/integrate-external-agents.md) for details.
+See [A2A Protocol](../reference/a2a-protocol.md) for details on integrating external agents.
 
 ---
 
@@ -619,8 +620,8 @@ curl https://your-provider.com/.well-known/jwks.json
 
 ## Next Steps
 
-- **[How to Deploy to Production](../how-to/deploy-production.md)** - Production security setup
-- **[How to Integrate External Agents](../how-to/integrate-external-agents.md)** - External agent authentication
+- **[Configuration Reference](../reference/configuration.md)** - Production security setup
+- **[A2A Protocol](../reference/a2a-protocol.md)** - External agent authentication
 - **[API Reference](../reference/api.md)** - Authentication headers and responses
 - **[Configuration Reference](../reference/configuration.md)** - All security options
 

@@ -27,6 +27,7 @@ system_role: "You are an AI assistant helping users solve problems and accomplis
 
 #### 2. Instructions (HOW)
 Contains all behavioral guidance:
+
 - Execution principles
 - Workflow patterns
 - Tool usage guidelines

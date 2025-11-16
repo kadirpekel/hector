@@ -45,7 +45,7 @@ Hector uses a **three-layer memory system**:
 - **Layer 2 (Working Memory)**: Manages active conversation (always present)
 - **Layer 3 (Long-Term Memory)**: Provides semantic search (optional enhancement)
 
-See [Setup Session Persistence](../how-to/setup-session-persistence.md) to enable Layer 1.
+See [Configuration Reference](../reference/configuration.md#session-store) to enable Layer 1.
 
 ---
 
@@ -151,6 +151,7 @@ Long-term memory provides persistent, semantically searchable storage across ses
 ### Prerequisites
 
 Long-term memory requires:
+
 - **Vector Database** (Qdrant)
 - **Embedder** (Ollama with nomic-embed-text)
 

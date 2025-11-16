@@ -622,7 +622,7 @@ hector call "When is the meeting?" --agent assistant --config config.yaml --sess
 **Key Points:**
 - Same `--session` ID = same conversation context
 - Works with `call`, `chat`, and `task` commands
-- Requires session persistence configured (see [Setup Session Persistence](../how-to/setup-session-persistence.md))
+- Requires session persistence configured (see [Configuration Reference](configuration.md#session-store))
 
 ### Session IDs
 
@@ -693,7 +693,7 @@ agents:
 
 Without `session_store` configured, sessions work within a single CLI command but don't persist.
 
-See [Setup Session Persistence](../how-to/setup-session-persistence.md) for full configuration guide.
+See [Configuration Reference](configuration.md#session-store) for full configuration guide.
 
 ---
 
@@ -1013,6 +1013,6 @@ hector call "task" --role "You are a security analyst" --instruction "Prioritize
 ## Related Topics
 
 - **[Agent Overview](../core-concepts/overview.md)** - Understanding agents
-- **[Deployment](../how-to/deploy-production.md)** - Production deployment
+- **[Configuration Reference](configuration.md)** - Production deployment
 - **[Architecture](architecture.md)** - How Hector works
 

@@ -159,9 +159,10 @@ agents:
 - `all` - Global memory across all users
 - `summaries_only` - Only summarized content
 
-**Session persistence:** See [Setup Session Persistence](../how-to/setup-session-persistence.md) guide.
+**Session persistence:** See [Configuration Reference](../reference/configuration.md#session-store) for setup.
 
 **Note:** Session metadata is also used by:
+
 - **Async Human-in-the-Loop (HITL)**: Persists execution state when tasks pause for user approval
 - **Checkpoint Recovery**: Stores execution checkpoints for crash recovery and long-running tasks
 
@@ -335,7 +336,7 @@ try {
 
 ## Next Steps
 
-- **[Setup Session Persistence](../how-to/setup-session-persistence.md)** - Configure persistent session storage
+- **[Configuration Reference](../reference/configuration.md#session-store)** - Configure persistent session storage
 - **[Streaming](streaming.md)** - Real-time response delivery
 - **[Memory](memory.md)** - Session-scoped memory configuration
 - **[API Reference](../reference/api.md)** - Complete API documentation

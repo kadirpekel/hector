@@ -124,6 +124,7 @@ docker-compose -f docker-compose.observability.yaml up -d
 ```
 
 This starts:
+
 - **Jaeger** on port 16686 (UI) and 4317 (OTLP gRPC)
 - **Prometheus** on port 9090
 - **Grafana** on port 3000 (login: admin/Dev12345)
@@ -222,6 +223,7 @@ rate(hector_agent_errors_total[5m])
 2. Select Service: **hector**
 3. Click "Find Traces"
 4. Click any trace to see:
+
    - Request timeline
    - Duration breakdown
    - Agent attributes (name, LLM, input)
@@ -309,6 +311,6 @@ curl http://localhost:4317
 ## See Also
 
 - [Configuration Reference](../reference/configuration.md)
-- [Deployment Guide](../how-to/deploy-production.md)
+- [Configuration Reference](../reference/configuration.md) - Production configuration
 - [Example Configurations](https://github.com/kadirpekel/hector/tree/main/configs)
 

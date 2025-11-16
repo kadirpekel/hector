@@ -18,6 +18,7 @@ Enable monitoring and tracing in development with a single flag - no config file
 ## The --observe Flag
 
 The `--observe` flag automatically configures:
+
 - ✅ **Metrics** - Prometheus metrics at `/metrics` endpoint
 - ✅ **Tracing** - OpenTelemetry traces to `localhost:4317`
 - ✅ **Full instrumentation** - Agent calls, LLM requests, tool execution
@@ -212,6 +213,7 @@ docker ps | grep jaeger
 ### Grafana dashboards empty
 
 1. **Check** Prometheus datasource is configured:
+
    - Go to **Configuration** → **Data Sources**
    - Prometheus should be listed and marked as default
 
@@ -224,12 +226,13 @@ docker ps | grep jaeger
 ## Production Use
 
 For production, use a config file with:
+
 - Lower sampling rates (e.g., 0.1 for 10%)
 - External collectors (Datadog, Honeycomb, etc.)
 - Secure endpoints
 - Authentication
 
-See: [Observability Guide](../../core-concepts/observability.md) | [Deploy to Production](../../how-to/deploy-production.md)
+See: [Observability Guide](../../core-concepts/observability.md) | [Configuration Reference](../../reference/configuration.md)
 
 ---
 
@@ -246,7 +249,7 @@ See: [Observability Guide](../../core-concepts/observability.md) | [Deploy to Pr
 
 - [Observability Concepts](../../core-concepts/observability.md) - Deep dive into metrics & tracing
 - [Configuration Reference](../../reference/configuration.md#globalobservability) - All observability options
-- [Production Deployment](../../how-to/deploy-production.md) - Deploy with monitoring
+- [Configuration Reference](../../reference/configuration.md) - Deploy with monitoring
 
 ---
 

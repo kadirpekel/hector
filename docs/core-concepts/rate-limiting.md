@@ -7,11 +7,13 @@ Control API usage and costs with flexible, multi-layer rate limiting.
 ## Overview
 
 Rate limiting protects your system from:
+
 - **Cost overruns** - Limit token usage for LLM APIs
 - **Abuse** - Prevent spam and excessive requests
 - **Resource exhaustion** - Control load on your system
 
 Hector's rate limiting supports:
+
 - ✅ Multi-layer time windows (minute → month)
 - ✅ Dual tracking (tokens + request counts)
 - ✅ Per-session or per-user scoping
@@ -272,6 +274,7 @@ Limit: 60 requests/minute
 2. **Monitor usage** - Track actual patterns
 3. **Use multiple windows** - Combine minute + day limits
 4. **Choose right scope**:
+
    - `session` for spam prevention
    - `user` for cost control
 5. **Use SQL in production** - For persistence
@@ -315,6 +318,6 @@ CREATE TABLE rate_limits (
 
 - [Configuration Reference](../reference/configuration.md#rate-limiting)
 - [Sessions](sessions.md)
-- [Session Persistence](../how-to/setup-session-persistence.md)
+- [Configuration Reference](../reference/configuration.md#session-store)
 
 

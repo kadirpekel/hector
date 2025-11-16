@@ -77,6 +77,7 @@ LLM uses results in reasoning
 ```
 
 **Characteristics**:
+
 - **Trigger**: LLM explicitly calls the `search` tool
 - **Control**: LLM decides when and what to search
 - **Output**: Structured JSON with results, metadata, suggestions
@@ -117,6 +118,7 @@ LLM receives context automatically
 ```
 
 **Characteristics**:
+
 - **Trigger**: Automatic during prompt building if `IncludeContext: true`
 - **Control**: System-controlled, happens every iteration
 - **Output**: Formatted text context appended to messages
@@ -151,6 +153,7 @@ agents:
 | `preserve_case` | `bool` | `true` | If `true`, query text is not lowercased before embedding. Important for code search (e.g., `HTTP`, `API`). Whitespace is always normalized. |
 
 **Where It's Used**:
+
 - `SearchEngine` uses `TopK` as default limit when `limit <= 0`
 - `SearchEngine` filters results by `Threshold` after vector search
 - `SearchEngine` uses `PreserveCase` during query processing
@@ -184,11 +187,13 @@ tools:
 | `max_limit` | `int` | `50` | Maximum number of results allowed per search. This is a tool-level safety limit (must be <= `SearchEngine.MaxTopK` = 100). |
 
 **Important Notes**:
+
 - **No `default_limit`**: The default limit comes from `SearchConfig.TopK`, not tool config
 - **No `enabled_search_types`**: Search type filtering was removed (type is now informational only)
 - **Document stores**: The search tool automatically uses the agent's assigned document stores (see Document Store Access Rules below)
 
 **Where It's Used**:
+
 - `SearchTool` enforces `MaxLimit` when user/LLM requests more results
 - Default limit (when `limit` is 0) comes from `SearchConfig.TopK` via the search engine
 
@@ -223,6 +228,7 @@ agents:
 | `include_context_max_length` | `int` | `500` | Maximum content length per document in characters. Longer content is truncated with "..." |
 
 **Where It's Used**:
+
 - `PromptService.BuildMessages()` checks `IncludeContext` flag
 - If enabled, calls `ContextService.SearchContext()` automatically
 - Results are formatted and injected as text context before user query
@@ -264,18 +270,21 @@ agents:
 **Detailed Behavior**:
 
 1. **`document_stores` is `nil` or omitted**:
+
    - Agent has access to **ALL** registered document stores
    - Search tool is auto-created with empty `availableStores` (searches all stores)
    - Context service is created with `nil` assigned stores (searches all stores)
    - Prompt context shows all available stores
 
 2. **`document_stores` is `[]` (explicitly empty)**:
+
    - Agent has **NO access** to any document stores
    - Search tool is **NOT** created
    - Context service is **NOT** created (returns `NoOpContextService`)
    - Prompt context is empty
 
 3. **`document_stores` is `["store1", "store2", ...]`**:
+
    - Agent can **ONLY access** the explicitly listed stores
    - Search tool is created and scoped to those stores
    - Context service is created and scoped to those stores
@@ -300,6 +309,7 @@ agents:
 ```
 
 **Important Notes**:
+
 - The search tool is **automatically created** if the agent has document store access
 - The search tool is **implicitly scoped** to the agent's assigned stores (no config needed)
 - Document stores come from agent assignment, **not** from tool config
@@ -497,21 +507,25 @@ agents:
 Document store scoping ensures agents only search stores they're assigned to:
 
 1. **Agent Assignment** (`agent.document_stores`):
+
    - `nil` = all stores
    - `[]` = no stores
    - `["store1", ...]` = only those stores
 
 2. **Context Service Scoping**:
+
    - `ContextService.assignedStores` is set based on agent assignment
    - `SearchContext()` passes `assignedStores` to `SearchAllStores()`
    - `SearchAllStores()` only searches assigned stores
 
 3. **Search Tool Scoping**:
+
    - `SearchTool.availableStores` is set based on agent assignment
    - `performSearch()` only searches assigned stores
    - Empty `availableStores` means search all stores
 
 4. **Prompt Context Scoping**:
+
    - `BuildAvailableDocumentStoresContext()` queries `ContextService.GetAssignedStores()`
    - Only shows stores the agent can actually access
    - Prevents misleading instructions
@@ -569,6 +583,7 @@ ParallelSearch[T ParallelSearchTarget, R any](
 ```
 
 **Features**:
+
 - **Parallel Execution**: All targets searched concurrently in goroutines
 - **Error Recovery**: Panics are caught and reported as errors
 - **Context Cancellation**: Respects context cancellation/timeout
@@ -576,6 +591,7 @@ ParallelSearch[T ParallelSearchTarget, R any](
 - **Deduplication**: Results deduplicated by document ID across stores
 
 **Used By**:
+
 - **Search Tool**: Searches collections in parallel
 - **IncludeContext**: Searches document stores in parallel
 
@@ -632,6 +648,7 @@ document_stores:
 ```
 
 **Behavior**:
+
 - Agent can search all stores (knowledge_base, wiki_content)
 - Every query automatically includes up to 10 relevant documents
 - Search tool is auto-created and can search all stores
@@ -671,6 +688,7 @@ document_stores:
 ```
 
 **Behavior**:
+
 - Agent can **only** search security_policies and compliance_docs
 - Agent **cannot** search public_docs
 - Higher threshold (0.7) = more precise, fewer false positives
@@ -701,6 +719,7 @@ tools:
 ```
 
 **Behavior**:
+
 - Agent can search research_papers and academic_docs
 - **No automatic context injection** - agent must explicitly call search tool
 - Search tool is auto-created and available
@@ -723,6 +742,7 @@ agents:
 ```
 
 **Behavior**:
+
 - Agent has **no access** to any document stores
 - Search tool is **not** created
 - Context service is **not** created
@@ -767,6 +787,7 @@ agents:
 ### Issue: No search results returned
 
 **Possible Causes**:
+
 1. **Threshold too high**: Lower `search.threshold` (try 0.3-0.4)
 2. **No matching content**: Check if documents are indexed
 3. **Query too specific**: Try broader queries
@@ -785,6 +806,7 @@ agents:
 ### Issue: Too many irrelevant results
 
 **Possible Causes**:
+
 1. **Threshold too low**: Increase `search.threshold` (try 0.6-0.7)
 2. **Query too broad**: Use more specific queries
 3. **TopK too high**: Reduce `search.top_k`
@@ -803,6 +825,7 @@ agents:
 ### Issue: Agent can't access document stores
 
 **Possible Causes**:
+
 1. **`document_stores` is `[]`**: Explicitly empty = no access
 2. **Stores not registered**: Check if stores are initialized
 3. **Store names don't match**: Verify exact store names in config
@@ -824,6 +847,7 @@ agents:
 ### Issue: IncludeContext not working
 
 **Possible Causes**:
+
 1. **`include_context: false`**: Check prompt config
 2. **No document stores assigned**: Check `document_stores`
 3. **Context service not created**: Check vector_store/embedder config
@@ -888,6 +912,7 @@ Hector's search foundation provides:
 6. **Consistent Behavior**: Same search logic regardless of path
 
 The configuration is designed to be intuitive:
+
 - **Search config** controls core search behavior
 - **Tool config** controls tool-level limits
 - **Prompt config** controls context injection

@@ -833,6 +833,7 @@ type Agent struct {
 ```
 
 **Analysis:** All fields are either:
+
 - Immutable (strings, config)
 - Thread-safe (services, channels)
 
