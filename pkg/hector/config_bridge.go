@@ -431,9 +431,6 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 		if agentCfg.Search.PreserveCase != nil {
 			contextBuilder = contextBuilder.PreserveCase(*agentCfg.Search.PreserveCase)
 		}
-		for _, model := range agentCfg.Search.Models {
-			contextBuilder = contextBuilder.WithSearchModel(model)
-		}
 
 		// Add document stores
 		var documentStoreNames []string

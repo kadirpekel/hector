@@ -346,14 +346,6 @@ func TestAgentConfig_Validate(t *testing.T) {
 					MaxIterations: 10,
 				},
 				Search: SearchConfig{
-					Models: []SearchModel{
-						{
-							Name:        "documents",
-							Collection:  "docs",
-							DefaultTopK: 5,
-							MaxTopK:     20,
-						},
-					},
 					TopK:      5,
 					Threshold: 0.7,
 				},
@@ -385,14 +377,6 @@ func TestAgentConfig_Validate(t *testing.T) {
 					MaxIterations: 10,
 				},
 				Search: SearchConfig{
-					Models: []SearchModel{
-						{
-							Name:        "documents",
-							Collection:  "docs",
-							DefaultTopK: 5,
-							MaxTopK:     20,
-						},
-					},
 					TopK:      5,
 					Threshold: 0.7,
 				},

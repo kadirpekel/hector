@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/config"
@@ -59,6 +58,11 @@ type collectionSearchInfo struct {
 	collectionName string                      // The collection name to search
 	searchEngine   *hectorcontext.SearchEngine // The search engine to use
 	storeNames     []string                    // Store names that use this collection (for filtering/attribution)
+}
+
+// GetID implements ParallelSearchTarget interface
+func (c *collectionSearchInfo) GetID() string {
+	return c.collectionName
 }
 
 // collectionSearchResult holds results from a single collection search
@@ -172,97 +176,67 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 		return t.createErrorResponse("No collections found to search")
 	}
 
-	// Parallel search across all collections
-	var wg sync.WaitGroup
-	resultsChan := make(chan collectionSearchResult, len(collectionsToSearch))
-
-	// Launch parallel searches for all collections
-	for _, collInfo := range collectionsToSearch {
-		wg.Add(1)
-		go func(info collectionSearchInfo) {
-			defer wg.Done()
-			defer func() {
-				// Recover from any panics to prevent hanging
-				if r := recover(); r != nil {
-					fmt.Printf("Error: Panic in search for collection %s: %v\n", info.collectionName, r)
-				}
-			}()
-
-			// Check for context cancellation
-			select {
-			case <-searchCtx.Done():
-				return
-			default:
-			}
-
-			// Search the collection
-			// If specific stores are requested, filter by store_name; otherwise search entire collection
-			var filter map[string]interface{}
-			if len(req.Stores) > 0 && len(info.storeNames) > 0 {
-				// Filter by store_name for specific stores
-				// Note: We search the collection but filter results to only include requested stores
-				// The actual filtering happens in result processing based on metadata
-				filter = map[string]interface{}{
-					"collection": info.collectionName,
-				}
-			} else {
-				// Search entire collection
-				filter = map[string]interface{}{
-					"collection": info.collectionName,
-				}
-			}
-
-			searchResults, err := info.searchEngine.SearchWithFilter(searchCtx, req.Query, req.Limit, filter)
-			if err != nil {
-				fmt.Printf("Error: Search in collection %s failed: %v\n", info.collectionName, err)
-				return
-			}
-
-			// Convert search results to document search results
-			results := t.convertSearchResults(searchResults, info.storeNames, req)
-
-			// Check for context cancellation before sending results
-			select {
-			case <-searchCtx.Done():
-				return
-			case resultsChan <- collectionSearchResult{
-				collectionName: info.collectionName,
-				results:        results,
-			}:
-			}
-		}(collInfo)
+	// Convert to pointers for ParallelSearch
+	collectionTargets := make([]*collectionSearchInfo, len(collectionsToSearch))
+	for i := range collectionsToSearch {
+		collectionTargets[i] = &collectionsToSearch[i]
 	}
 
-	// Wait for all searches to complete and close channel
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
+	// Use shared parallel search function
+	searchFunc := func(ctx context.Context, target hectorcontext.ParallelSearchTarget) (collectionSearchResult, error) {
+		collInfo := target.(*collectionSearchInfo)
 
-	// Collect results from all collections (channel collection is thread-safe)
-	// Also handle context cancellation during result collection
+		// Search the collection
+		// Note: Store-specific filtering happens in result processing based on metadata
+		filter := map[string]interface{}{
+			"collection": collInfo.collectionName,
+		}
+
+		searchResults, err := collInfo.searchEngine.SearchWithFilter(ctx, req.Query, req.Limit, filter)
+		if err != nil {
+			return collectionSearchResult{}, fmt.Errorf("search in collection %s failed: %w", collInfo.collectionName, err)
+		}
+
+		// Convert search results to document search results
+		results := t.convertSearchResults(searchResults, collInfo.storeNames, req)
+
+		return collectionSearchResult{
+			collectionName: collInfo.collectionName,
+			results:        results,
+		}, nil
+	}
+
+	// Convert collectionSearchInfo to ParallelSearchTarget slice
+	targets := make([]hectorcontext.ParallelSearchTarget, len(collectionTargets))
+	for i, target := range collectionTargets {
+		targets[i] = target
+	}
+
+	parallelResults, err := hectorcontext.ParallelSearch(searchCtx, targets, searchFunc)
+	if err != nil {
+		// Return partial results if context was cancelled
+		return t.buildSearchResponse(allResults, storesUsed, req, start)
+	}
+
+	// Collect results from all collections
 	seenStores := make(map[string]bool)
-	for {
-		select {
-		case <-searchCtx.Done():
-			// Context cancelled or timed out, return partial results
-			return t.buildSearchResponse(allResults, storesUsed, req, start)
-		case result, ok := <-resultsChan:
-			if !ok {
-				// Channel closed, all results collected
-				goto doneSearch
-			}
-			allResults = append(allResults, result.results...)
-			// Track unique stores used
-			for _, res := range result.results {
-				if res.StoreName != "" && !seenStores[res.StoreName] {
-					storesUsed = append(storesUsed, res.StoreName)
-					seenStores[res.StoreName] = true
-				}
+	for _, parallelResult := range parallelResults {
+		if parallelResult.Error != nil {
+			// Log error but continue with other results
+			fmt.Printf("Error: Search in collection %s failed: %v\n", parallelResult.TargetID, parallelResult.Error)
+			continue
+		}
+
+		result := parallelResult.Results
+		allResults = append(allResults, result.results...)
+		// Track unique stores used
+		for _, res := range result.results {
+			if res.StoreName != "" && !seenStores[res.StoreName] {
+				storesUsed = append(storesUsed, res.StoreName)
+				seenStores[res.StoreName] = true
 			}
 		}
 	}
-doneSearch:
 
 	return t.buildSearchResponse(allResults, storesUsed, req, start)
 }

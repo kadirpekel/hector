@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -682,6 +683,80 @@ func (ds *DocumentStore) GetDocument(id string) (databases.SearchResult, bool) {
 	}
 
 	return results[0], true
+}
+
+// documentStoreSearchTarget wraps DocumentStore to implement ParallelSearchTarget
+type documentStoreSearchTarget struct {
+	store *DocumentStore
+}
+
+func (t *documentStoreSearchTarget) GetID() string {
+	return t.store.name
+}
+
+// SearchAllStores searches all registered document stores in parallel
+// This is the unified parallel search function used by both SearchTool and SearchContext
+func SearchAllStores(ctx context.Context, query string, limit int) ([]databases.SearchResult, error) {
+	storeNames := ListDocumentStoresFromRegistry()
+	if len(storeNames) == 0 {
+		return []databases.SearchResult{}, nil
+	}
+
+	// Build search targets
+	targets := make([]ParallelSearchTarget, 0, len(storeNames))
+	for _, name := range storeNames {
+		store, exists := GetDocumentStoreFromRegistry(name)
+		if !exists {
+			continue
+		}
+		targets = append(targets, &documentStoreSearchTarget{store: store})
+	}
+
+	if len(targets) == 0 {
+		return []databases.SearchResult{}, nil
+	}
+
+	// Use shared parallel search function
+	searchFunc := func(ctx context.Context, target ParallelSearchTarget) ([]databases.SearchResult, error) {
+		storeTarget := target.(*documentStoreSearchTarget)
+		return storeTarget.store.Search(ctx, query, limit)
+	}
+
+	results, err := ParallelSearch(ctx, targets, searchFunc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Aggregate results from all stores
+	var allResults []databases.SearchResult
+	seenIDs := make(map[string]bool) // Deduplicate by document ID
+
+	for _, result := range results {
+		if result.Error != nil {
+			// Log error but continue with other results
+			fmt.Printf("Error: Search in store %s failed: %v\n", result.TargetID, result.Error)
+			continue
+		}
+
+		storeResults := result.Results
+		for _, res := range storeResults {
+			if !seenIDs[res.ID] {
+				seenIDs[res.ID] = true
+				allResults = append(allResults, res)
+			}
+		}
+	}
+
+	// Sort by score (highest first) and limit to top results
+	sort.Slice(allResults, func(i, j int) bool {
+		return allResults[i].Score > allResults[j].Score
+	})
+
+	if len(allResults) > limit {
+		allResults = allResults[:limit]
+	}
+
+	return allResults, nil
 }
 
 func (ds *DocumentStore) shouldExclude(path string) bool {

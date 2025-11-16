@@ -241,7 +241,6 @@ builder := hector.NewContextService()
 ```go
 WithDatabase(db databases.DatabaseProvider) *ContextServiceBuilder
 WithEmbedder(embedder embedders.EmbedderProvider) *ContextServiceBuilder
-WithSearchModel(model string) *ContextServiceBuilder
 TopK(k int) *ContextServiceBuilder
 Threshold(threshold float64) *ContextServiceBuilder
 PreserveCase(preserve bool) *ContextServiceBuilder

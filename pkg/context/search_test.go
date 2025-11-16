@@ -86,20 +86,11 @@ func TestNewSearchEngine(t *testing.T) {
 		wantError    bool
 	}{
 		{
-			name:     "valid_configuration",
-			db:       &mockDatabaseProvider{},
-			embedder: &mockEmbedderProvider{},
-			searchConfig: config.SearchConfig{
-				Models: []config.SearchModel{
-					{
-						Name:        "test-model",
-						Collection:  "test-collection",
-						DefaultTopK: 10,
-						MaxTopK:     100,
-					},
-				},
-			},
-			wantError: false,
+			name:         "valid_configuration",
+			db:           &mockDatabaseProvider{},
+			embedder:     &mockEmbedderProvider{},
+			searchConfig: config.SearchConfig{},
+			wantError:    false,
 		},
 		{
 			name:         "nil_database_provider",
@@ -109,86 +100,11 @@ func TestNewSearchEngine(t *testing.T) {
 			wantError:    true,
 		},
 		{
-			name:     "nil_embedder_provider",
-			db:       &mockDatabaseProvider{},
-			embedder: nil,
-			searchConfig: config.SearchConfig{
-				Models: []config.SearchModel{
-					{
-						Name:       "test-model",
-						Collection: "test-collection",
-					},
-				},
-			},
-			wantError: true,
-		},
-		{
-			name:     "no_search_models",
-			db:       &mockDatabaseProvider{},
-			embedder: &mockEmbedderProvider{},
-			searchConfig: config.SearchConfig{
-				Models: []config.SearchModel{},
-			},
-			wantError: true,
-		},
-		{
-			name:     "invalid_model_name",
-			db:       &mockDatabaseProvider{},
-			embedder: &mockEmbedderProvider{},
-			searchConfig: config.SearchConfig{
-				Models: []config.SearchModel{
-					{
-						Name:       "",
-						Collection: "test-collection",
-					},
-				},
-			},
-			wantError: true,
-		},
-		{
-			name:     "invalid_model_collection",
-			db:       &mockDatabaseProvider{},
-			embedder: &mockEmbedderProvider{},
-			searchConfig: config.SearchConfig{
-				Models: []config.SearchModel{
-					{
-						Name:       "test-model",
-						Collection: "",
-					},
-				},
-			},
-			wantError: true,
-		},
-		{
-			name:     "invalid_default_top_k",
-			db:       &mockDatabaseProvider{},
-			embedder: &mockEmbedderProvider{},
-			searchConfig: config.SearchConfig{
-				Models: []config.SearchModel{
-					{
-						Name:        "test-model",
-						Collection:  "test-collection",
-						DefaultTopK: -1,
-					},
-				},
-			},
-			wantError: true,
-		},
-		{
-			name:     "invalid_max_top_k",
-			db:       &mockDatabaseProvider{},
-			embedder: &mockEmbedderProvider{},
-			searchConfig: config.SearchConfig{
-				Models: []config.SearchModel{
-					{
-						Name:        "test-model",
-						Collection:  "test-collection",
-						DefaultTopK: 10,
-						MaxTopK:     5,
-					},
-				},
-			},
-			wantError: true,
+			name:         "nil_embedder_provider",
+			db:           &mockDatabaseProvider{},
+			embedder:     nil,
+			searchConfig: config.SearchConfig{},
+			wantError:    true,
 		},
 	}
 
@@ -239,14 +155,7 @@ func TestSearchEngine_IngestDocument(t *testing.T) {
 		},
 	}
 
-	searchConfig := config.SearchConfig{
-		Models: []config.SearchModel{
-			{
-				Name:       "test-model",
-				Collection: "test-collection",
-			},
-		},
-	}
+	searchConfig := config.SearchConfig{}
 
 	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig)
 	if err != nil {
@@ -264,7 +173,7 @@ func TestSearchEngine_IngestDocument(t *testing.T) {
 			name:      "valid_document",
 			docID:     "doc-123",
 			content:   "This is test content",
-			metadata:  map[string]interface{}{"source": "test"},
+			metadata:  map[string]interface{}{"source": "test", "store_name": "test-store"},
 			wantError: false,
 		},
 		{
@@ -309,8 +218,9 @@ func TestSearchEngine_IngestDocument(t *testing.T) {
 				if !upsertCalled {
 					t.Error("IngestDocument() should call upsert on success")
 				}
-				if upsertCollection != "test-collection" {
-					t.Errorf("IngestDocument() collection = %v, want test-collection", upsertCollection)
+				// Collection comes from metadata store_name or collection field
+				if upsertCollection == "" {
+					t.Error("IngestDocument() collection should not be empty")
 				}
 				if upsertID != tt.docID {
 					t.Errorf("IngestDocument() ID = %v, want %v", upsertID, tt.docID)
@@ -352,14 +262,7 @@ func TestSearchEngine_Search(t *testing.T) {
 		},
 	}
 
-	searchConfig := config.SearchConfig{
-		Models: []config.SearchModel{
-			{
-				Name:       "test-model",
-				Collection: "test-collection",
-			},
-		},
-	}
+	searchConfig := config.SearchConfig{}
 
 	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig)
 	if err != nil {
@@ -424,153 +327,39 @@ func TestSearchEngine_Search(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			results, err := engine.Search(ctx, tt.query, tt.limit)
+			// Search requires a collection in filter
+			filter := map[string]interface{}{
+				"collection": "test-collection",
+			}
+			results, err := engine.SearchWithFilter(ctx, tt.query, tt.limit, filter)
 
 			if tt.wantError {
 				if err == nil {
-					t.Error("Search() expected error, got nil")
+					t.Error("SearchWithFilter() expected error, got nil")
 				}
 				if results != nil {
-					t.Error("Search() expected nil results on error")
+					t.Error("SearchWithFilter() expected nil results on error")
 				}
 			} else {
 				if err != nil {
-					t.Errorf("Search() error = %v, want nil", err)
+					t.Errorf("SearchWithFilter() error = %v, want nil", err)
 				}
 				if results == nil {
-					t.Error("Search() returned nil results")
+					t.Error("SearchWithFilter() returned nil results")
 				}
 				if len(results) != tt.expectedCount {
-					t.Errorf("Search() results length = %v, want %v", len(results), tt.expectedCount)
+					t.Errorf("SearchWithFilter() results length = %v, want %v", len(results), tt.expectedCount)
 				}
 			}
 		})
 	}
 }
 
-func TestSearchEngine_SearchModels(t *testing.T) {
-
-	mockDB := &mockDatabaseProvider{
-		searchFunc: func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error) {
-			results := make([]databases.SearchResult, limit)
-			for i := 0; i < limit; i++ {
-				results[i] = databases.SearchResult{
-					ID:      collection + "-result-" + string(rune('0'+i)),
-					Score:   0.9 - float32(i)*0.1,
-					Content: "Test content from " + collection,
-					Vector:  []float32{0.1, 0.2, 0.3},
-					Metadata: map[string]interface{}{
-						"source": collection,
-					},
-				}
-			}
-			return results, nil
-		},
-	}
-
-	mockEmbedder := &mockEmbedderProvider{
-		embedFunc: func(text string) ([]float32, error) {
-			return []float32{0.1, 0.2, 0.3}, nil
-		},
-	}
-
-	searchConfig := config.SearchConfig{
-		Models: []config.SearchModel{
-			{
-				Name:       "model1",
-				Collection: "collection1",
-			},
-			{
-				Name:       "model2",
-				Collection: "collection2",
-			},
-		},
-	}
-
-	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig)
-	if err != nil {
-		t.Fatalf("NewSearchEngine() error = %v", err)
-	}
-
-	tests := []struct {
-		name           string
-		query          string
-		topKPerModel   int
-		modelNames     []string
-		wantError      bool
-		expectedModels int
-	}{
-		{
-			name:           "search_all_models",
-			query:          "test query",
-			topKPerModel:   3,
-			modelNames:     []string{},
-			wantError:      false,
-			expectedModels: 2,
-		},
-		{
-			name:           "search_specific_models",
-			query:          "test query",
-			topKPerModel:   3,
-			modelNames:     []string{"model1"},
-			wantError:      false,
-			expectedModels: 1,
-		},
-		{
-			name:         "search_nonexistent_model",
-			query:        "test query",
-			topKPerModel: 3,
-			modelNames:   []string{"nonexistent"},
-			wantError:    true,
-		},
-		{
-			name:         "empty_query",
-			query:        "",
-			topKPerModel: 3,
-			modelNames:   []string{},
-			wantError:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			results, err := engine.SearchModels(ctx, tt.query, tt.topKPerModel, tt.modelNames...)
-
-			if tt.wantError {
-				if err == nil {
-					t.Error("SearchModels() expected error, got nil")
-				}
-				if results != nil {
-					t.Error("SearchModels() expected nil results on error")
-				}
-			} else {
-				if err != nil {
-					t.Errorf("SearchModels() error = %v, want nil", err)
-				}
-				if results == nil {
-					t.Error("SearchModels() returned nil results")
-				}
-				if len(results) != tt.expectedModels {
-					t.Errorf("SearchModels() results length = %v, want %v", len(results), tt.expectedModels)
-				}
-			}
-		})
-	}
-}
 
 func TestSearchEngine_GetStatus(t *testing.T) {
 	searchConfig := config.SearchConfig{
-		Models: []config.SearchModel{
-			{
-				Name:       "model1",
-				Collection: "collection1",
-			},
-			{
-				Name:       "model2",
-				Collection: "collection2",
-			},
-		},
+		TopK:      10,
+		Threshold: 0.7,
 	}
 
 	engine, err := NewSearchEngine(&mockDatabaseProvider{}, &mockEmbedderProvider{}, searchConfig)
@@ -584,40 +373,17 @@ func TestSearchEngine_GetStatus(t *testing.T) {
 		t.Fatal("GetStatus() returned nil status")
 	}
 
-	models, ok := status["models"].([]string)
-	if !ok {
-		t.Error("GetStatus() models should be []string")
-	}
-	if len(models) != 2 {
-		t.Errorf("GetStatus() models length = %v, want 2", len(models))
-	}
-
-	modelCount, ok := status["model_count"].(int)
-	if !ok {
-		t.Error("GetStatus() model_count should be int")
-	}
-	if modelCount != 2 {
-		t.Errorf("GetStatus() model_count = %v, want 2", modelCount)
-	}
-
 	config, ok := status["config"].(config.SearchConfig)
 	if !ok {
 		t.Error("GetStatus() config should be config.SearchConfig")
 	}
-	if len(config.Models) != 2 {
-		t.Errorf("GetStatus() config models length = %v, want 2", len(config.Models))
+	if config.TopK != 10 {
+		t.Errorf("GetStatus() config TopK = %v, want 10", config.TopK)
 	}
 }
 
 func TestSearchEngine_QueryValidation(t *testing.T) {
-	searchConfig := config.SearchConfig{
-		Models: []config.SearchModel{
-			{
-				Name:       "test-model",
-				Collection: "test-collection",
-			},
-		},
-	}
+	searchConfig := config.SearchConfig{}
 
 	engine, err := NewSearchEngine(&mockDatabaseProvider{}, &mockEmbedderProvider{}, searchConfig)
 	if err != nil {
@@ -659,15 +425,19 @@ func TestSearchEngine_QueryValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			_, err := engine.Search(ctx, tt.query, 5)
+			// Search requires a collection in filter
+			filter := map[string]interface{}{
+				"collection": "test-collection",
+			}
+			_, err := engine.SearchWithFilter(ctx, tt.query, 5, filter)
 
 			if tt.wantError {
 				if err == nil {
-					t.Error("Search() expected error, got nil")
+					t.Error("SearchWithFilter() expected error, got nil")
 				}
 			} else {
 				if err != nil {
-					t.Errorf("Search() error = %v, want nil", err)
+					t.Errorf("SearchWithFilter() error = %v, want nil", err)
 				}
 			}
 		})
@@ -675,14 +445,7 @@ func TestSearchEngine_QueryValidation(t *testing.T) {
 }
 
 func TestSearchEngine_QueryProcessing(t *testing.T) {
-	searchConfig := config.SearchConfig{
-		Models: []config.SearchModel{
-			{
-				Name:       "test-model",
-				Collection: "test-collection",
-			},
-		},
-	}
+	searchConfig := config.SearchConfig{}
 
 	engine, err := NewSearchEngine(&mockDatabaseProvider{}, &mockEmbedderProvider{}, searchConfig)
 	if err != nil {
@@ -718,26 +481,21 @@ func TestSearchEngine_QueryProcessing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			ctx := context.Background()
-			_, err := engine.Search(ctx, tt.query, 5)
-			if err != nil {
-				t.Errorf("Search() error = %v, want nil", err)
+			// Search requires a collection in filter
+			filter := map[string]interface{}{
+				"collection": "test-collection",
 			}
-
+			_, err := engine.SearchWithFilter(ctx, tt.query, 5, filter)
+			if err != nil {
+				t.Errorf("SearchWithFilter() error = %v, want nil", err)
+			}
 		})
 	}
 }
 
 func TestSearchEngine_Concurrency(t *testing.T) {
-	searchConfig := config.SearchConfig{
-		Models: []config.SearchModel{
-			{
-				Name:       "test-model",
-				Collection: "test-collection",
-			},
-		},
-	}
+	searchConfig := config.SearchConfig{}
 
 	engine, err := NewSearchEngine(&mockDatabaseProvider{}, &mockEmbedderProvider{}, searchConfig)
 	if err != nil {
@@ -749,9 +507,12 @@ func TestSearchEngine_Concurrency(t *testing.T) {
 	go func() {
 		for i := 0; i < 5; i++ {
 			ctx := context.Background()
-			_, err := engine.Search(ctx, "test query", 5)
+			filter := map[string]interface{}{
+				"collection": "test-collection",
+			}
+			_, err := engine.SearchWithFilter(ctx, "test query", 5, filter)
 			if err != nil {
-				t.Errorf("Search() error = %v", err)
+				t.Errorf("SearchWithFilter() error = %v", err)
 			}
 		}
 		done <- true
@@ -760,7 +521,10 @@ func TestSearchEngine_Concurrency(t *testing.T) {
 	go func() {
 		for i := 0; i < 5; i++ {
 			ctx := context.Background()
-			err := engine.IngestDocument(ctx, "doc-"+string(rune('0'+i)), "content", nil)
+			metadata := map[string]interface{}{
+				"store_name": "test-store",
+			}
+			err := engine.IngestDocument(ctx, "doc-"+string(rune('0'+i)), "content", metadata)
 			if err != nil {
 				t.Errorf("IngestDocument() error = %v", err)
 			}

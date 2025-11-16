@@ -60,14 +60,6 @@ func (b *ContextServiceBuilder) WithSearchConfig(cfg config.SearchConfig) *Conte
 	return b
 }
 
-// WithSearchModel adds a search model
-func (b *ContextServiceBuilder) WithSearchModel(model config.SearchModel) *ContextServiceBuilder {
-	if len(b.searchConfig.Models) == 0 {
-		b.searchConfig.Models = make([]config.SearchModel, 0)
-	}
-	b.searchConfig.Models = append(b.searchConfig.Models, model)
-	return b
-}
 
 // TopK sets the default top K results
 func (b *ContextServiceBuilder) TopK(k int) *ContextServiceBuilder {

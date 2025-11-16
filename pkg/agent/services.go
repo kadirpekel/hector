@@ -47,11 +47,9 @@ func NewContextService(searchEngine *hectorcontext.SearchEngine) reasoning.Conte
 }
 
 func (s *DefaultContextService) SearchContext(ctx context.Context, query string) ([]databases.SearchResult, error) {
-	if s.searchEngine == nil {
-		return []databases.SearchResult{}, nil
-	}
-
-	return s.searchEngine.Search(ctx, query, 5)
+	// Use shared parallel search function for all document stores
+	limit := 5 // Default limit for included context
+	return hectorcontext.SearchAllStores(ctx, query, limit)
 }
 
 func (s *DefaultContextService) ExtractSources(context []databases.SearchResult) []string {

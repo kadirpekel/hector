@@ -2012,21 +2012,12 @@ func (c *ReasoningConfig) SetDefaults() {
 }
 
 type SearchConfig struct {
-	Models       []SearchModel `yaml:"models"`
-	TopK         int           `yaml:"top_k"`         // Default number of results to return
-	Threshold    float32       `yaml:"threshold"`     // Minimum similarity score (0.0-1.0)
-	PreserveCase *bool         `yaml:"preserve_case"` // Don't lowercase queries (default: true for code search)
+	TopK         int     `yaml:"top_k"`         // Default number of results to return
+	Threshold    float32 `yaml:"threshold"`     // Minimum similarity score (0.0-1.0)
+	PreserveCase *bool   `yaml:"preserve_case"` // Don't lowercase queries (default: true for code search)
 }
 
 func (c *SearchConfig) Validate() error {
-	if len(c.Models) == 0 {
-		return fmt.Errorf("at least one search model is required")
-	}
-	for i, model := range c.Models {
-		if err := model.Validate(); err != nil {
-			return fmt.Errorf("search model %d validation failed: %w", i, err)
-		}
-	}
 	if c.TopK < 0 {
 		return fmt.Errorf("top_k must be non-negative")
 	}
@@ -2037,17 +2028,6 @@ func (c *SearchConfig) Validate() error {
 }
 
 func (c *SearchConfig) SetDefaults() {
-
-	if len(c.Models) == 0 {
-		c.Models = []SearchModel{
-			{
-				Name:        "documents",
-				Collection:  "docs",
-				DefaultTopK: 5,
-				MaxTopK:     20,
-			},
-		}
-	}
 	if c.TopK == 0 {
 		c.TopK = 5
 	}
@@ -2062,45 +2042,6 @@ func (c *SearchConfig) SetDefaults() {
 	// Query processing defaults - optimized for code search
 	// PreserveCase defaults to true (important for code identifiers like HTTP, API, etc.)
 	// Whitespace is always normalized for query consistency
-
-	for i := range c.Models {
-		c.Models[i].SetDefaults()
-	}
-}
-
-type SearchModel struct {
-	Name        string `yaml:"name"`
-	Collection  string `yaml:"collection"`
-	DefaultTopK int    `yaml:"default_top_k"`
-	MaxTopK     int    `yaml:"max_top_k"`
-}
-
-func (c *SearchModel) Validate() error {
-	if c.Name == "" {
-		return fmt.Errorf("name is required")
-	}
-	if c.Collection == "" {
-		return fmt.Errorf("collection is required")
-	}
-	if c.DefaultTopK <= 0 {
-		return fmt.Errorf("default_top_k must be positive")
-	}
-	if c.MaxTopK <= 0 {
-		return fmt.Errorf("max_top_k must be positive")
-	}
-	if c.DefaultTopK > c.MaxTopK {
-		return fmt.Errorf("default_top_k cannot be greater than max_top_k")
-	}
-	return nil
-}
-
-func (c *SearchModel) SetDefaults() {
-	if c.DefaultTopK == 0 {
-		c.DefaultTopK = 10
-	}
-	if c.MaxTopK == 0 {
-		c.MaxTopK = 100
-	}
 }
 
 // PerformanceConfig controls performance-related settings.
