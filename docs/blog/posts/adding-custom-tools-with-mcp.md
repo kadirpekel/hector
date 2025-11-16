@@ -1,9 +1,15 @@
 ---
-title: Add Custom Tools
+title: Adding Custom Tools with MCP
 description: Extend agents with custom tools using MCP servers in 10 minutes
+date: 2025-01-16
+tags:
+  - Tools
+  - MCP
+  - Extensibility
+  - Tutorial
 ---
 
-# How to Add Custom Tools
+# Adding Custom Tools with MCP
 
 Extend your agents with custom tools using the Model Context Protocol (MCP). Build a custom tool in minutes, not hours.
 
@@ -126,7 +132,6 @@ Create `config.yaml`:
 tools:
   weather_server:
     type: "mcp"
-    
     server_url: "http://localhost:3000"
     description: "Weather information tools"
 
@@ -159,7 +164,8 @@ llms:
 hector serve --config config.yaml
 
 # In another terminal
-hector call "What's the weather in San Francisco?" --agent weather_assistant --config config.yaml
+hector call --config config.yaml --agent weather_assistant \
+  "What's the weather in San Francisco?"
 ```
 
 Agent response:
@@ -181,6 +187,7 @@ Create a tool that queries a database:
 #!/usr/bin/env python3
 from mcp.server import Server
 import sqlite3
+import json
 
 server = Server("database-server")
 
@@ -274,7 +281,6 @@ composio server start --port 3000
 tools:
   composio:
     type: "mcp"
-    
     server_url: "http://localhost:3000"
     description: "Composio - 150+ app integrations"
     # Authentication handled by Composio server
@@ -300,7 +306,7 @@ agents:
 ### Step 3: Use the Tools
 
 ```bash
-hector call --config config.yaml automation \
+hector call --config config.yaml --agent automation \
   "Create a GitHub issue for the authentication bug and notify the team on Slack"
 ```
 
@@ -441,7 +447,6 @@ In Hector config:
 tools:
   custom_mcp:
     type: "mcp"
-    
     server_url: "http://localhost:3000"
     description: "Custom MCP tools"
     # Add authentication in MCP server if needed
@@ -473,37 +478,13 @@ tools:
 
 ---
 
-## Debugging MCP Tools
+## Why This Matters
 
-### Test MCP Server Directly
+**Rapid Development** means you can prototype tools in minutes instead of hours. MCP's standardized interface eliminates boilerplate and lets you focus on your tool's logic.
 
-```bash
-# List available tools
-curl http://localhost:3000/tools
+**Ecosystem Access** through Composio gives you 150+ pre-built integrations. Instead of building a GitHub tool from scratch, you can use Composio's GitHub MCP server.
 
-# Call tool directly
-curl -X POST http://localhost:3000/call \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tool": "get_weather",
-    "arguments": {"city": "San Francisco"}
-  }'
-```
-
-### Enable Debug in Hector
-
-```yaml
-agents:
-  debug_agent:
-    reasoning:
-```
-
-### Check MCP Server Logs
-
-```bash
-# MCP servers log to stdout
-python weather_server.py 2>&1 | tee mcp.log
-```
+**Language Flexibility** means your team can build tools in their preferred language—Python for data tools, JavaScript for web integrations, Go for performance-critical tools.
 
 ---
 
@@ -566,16 +547,36 @@ def my_tool(arg: str) -> str:
 
 ## Next Steps
 
-- **[Tools](../core-concepts/tools.md)** - Understand the tool system
-- **[Build a Coding Assistant](build-coding-assistant.md)** - Use tools in practice
-- **[Architecture](../reference/architecture.md)** - gRPC plugin development
-- **[MCP Documentation](https://modelcontextprotocol.org)** - Official MCP docs
+**Enhance your tools:**
+
+- **Add more tools**: Build a suite of related tools
+- **Use Composio**: Leverage 150+ pre-built integrations
+- **Deploy to production**: Docker, Kubernetes, monitoring
+- **Add authentication**: Secure your tools properly
+
+**Resources:**
+
+- [Tools](../../core-concepts/tools.md) - Understand the tool system
+- [Building a Coding Assistant](building-a-coding-assistant.md) - Use tools in practice
+- [Architecture](../../reference/architecture.md) - gRPC plugin development
+- [MCP Documentation](https://modelcontextprotocol.org) - Official MCP docs
 
 ---
 
-## Related Topics
+## Conclusion
 
-- **[Agent Overview](../core-concepts/overview.md)** - Understanding agents
-- **[Configuration Reference](../reference/configuration.md)** - Tool configuration
-- **[Multi-Agent Orchestration](../core-concepts/multi-agent.md)** - Tools in multi-agent systems
+You've learned how to:
+
+- ✅ Create custom MCP tools in minutes
+- ✅ Connect MCP servers to Hector
+- ✅ Use tools in your agents
+- ✅ Follow best practices for tool development
+
+**The best part?** MCP's standardized interface means your tools work with any MCP-compliant agent, not just Hector.
+
+**Ready to build your own?** Start with a simple tool, then add more as you need them. The Composio ecosystem provides 150+ integrations to get you started.
+
+---
+
+**About Hector**: Hector is a production-grade A2A-native agent platform designed for enterprise deployments. Learn more at [gohector.dev](https://gohector.dev).
 

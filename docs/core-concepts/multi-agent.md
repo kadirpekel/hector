@@ -690,17 +690,17 @@ POST /?agent=researcher
 }
 ```
 
-See the [API Reference](../reference/api.md#agent-selection) for detailed examples.
+See the [API Reference](../reference/api.md) for detailed examples.
 
 ---
 
 ## Next Steps
 
-- **[How to Build a Research System](../how-to/build-research-system.md)** - Complete tutorial
+- **[Building a Multi-Agent Research System](../blog/posts/building-a-multi-agent-research-system.md)** - Complete tutorial
 - **[How to Integrate External Agents](../how-to/integrate-external-agents.md)** - A2A integration
 - **[Reasoning Strategies](reasoning.md)** - Supervisor strategy details
 - **[Tools](tools.md)** - agent_call tool
-- **[API Reference](../reference/api.md#agent-selection)** - Agent selection in API calls
+- **[API Reference](../reference/api.md)** - API documentation including agent selection
 
 ---
 

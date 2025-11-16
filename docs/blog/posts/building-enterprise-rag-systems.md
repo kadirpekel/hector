@@ -86,7 +86,7 @@ By the end of this guide, you'll have a RAG system that:
 You'll need:
 
 - ✅ **Docker** installed (for Qdrant and Ollama)
-- ✅ **Hector** installed ([Installation Guide](../getting-started/installation.md))
+- ✅ **Hector** installed ([Installation Guide](../../getting-started/installation.md))
 - ✅ **4GB+ free disk space** (for models)
 - ✅ **Basic understanding** of YAML
 
@@ -860,10 +860,9 @@ What you've learned:
 
 **Resources:**
 
-- [Complete Example](../../examples/enterprise-rag/README.md) - Full working example
-- [RAG Architecture Guide](../core-concepts/search-architecture.md) - Deep dive
-- [Configuration Reference](../reference/configuration.md) - All options
-- [Web UI Guide](../core-concepts/ag-ui.md) - Web interface features
+- [RAG Architecture Guide](../../core-concepts/search-architecture.md) - Deep dive
+- [Configuration Reference](../../reference/configuration.md) - All options
+- [Web UI Guide](../../core-concepts/ag-ui.md) - Web interface features
 
 ---
 

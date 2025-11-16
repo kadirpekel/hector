@@ -727,6 +727,6 @@ docker exec hector ping qdrant
 ## Related Topics
 
 - **[Agent Overview](../core-concepts/overview.md)** - Understanding agents
-- **[Build a Coding Assistant](build-coding-assistant.md)** - Complete example
-- **[Set Up RAG](setup-rag.md)** - Production RAG setup
+- **[Building a Coding Assistant](../blog/posts/building-a-coding-assistant.md)** - Complete example
+- **[Building Enterprise RAG Systems](../blog/posts/building-enterprise-rag-systems.md)** - Production RAG setup
 

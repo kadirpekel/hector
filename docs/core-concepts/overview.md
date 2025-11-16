@@ -295,6 +295,6 @@ Learn about the core components of agents:
 ## Related Topics
 
 - **[Quick Start](../getting-started/quick-start.md)** - Run your first agent
-- **[Build a Coding Assistant](../how-to/build-coding-assistant.md)** - Complete tutorial
+- **[Building a Coding Assistant](../blog/posts/building-a-coding-assistant.md)** - Complete tutorial
 - **[Configuration Reference](../reference/configuration.md)** - All configuration options
 

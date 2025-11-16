@@ -809,7 +809,7 @@ hector call "task" --agent researcher
 
 - **[Multi-Agent Orchestration](../core-concepts/multi-agent.md)** - Understand orchestration
 - **[Authentication & Security](../core-concepts/security.md)** - Secure external connections
-- **[Build a Research System](build-research-system.md)** - Multi-agent example
+- **[Building a Multi-Agent Research System](../blog/posts/building-a-multi-agent-research-system.md)** - Multi-agent example
 - **[A2A Protocol](../reference/a2a-protocol.md)** - Protocol details
 
 ---

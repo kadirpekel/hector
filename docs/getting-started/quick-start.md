@@ -171,7 +171,7 @@ hector call "Hello" --agent assistant --url http://remote:8080 --token "your-jwt
 Now that you have Hector running, learn more:
 
 - **[Core Concepts](../core-concepts/overview.md)** - Understand how agents work
-- **[Build a Coding Assistant](../how-to/build-coding-assistant.md)** - Complete tutorial with semantic search
+- **[Building a Coding Assistant](../blog/posts/building-a-coding-assistant.md)** - Complete tutorial with semantic search
 - **[Configuration Reference](../reference/configuration.md)** - All configuration options
 - **[CLI Reference](../reference/cli.md)** - All command-line options
 

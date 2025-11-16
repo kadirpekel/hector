@@ -573,7 +573,7 @@ agents:
 - **[Multi-Agent Orchestration](multi-agent.md)** - Build multi-agent systems
 - **[Tools](tools.md)** - agent_call and other tools
 - **[Prompts](prompts.md)** - Optimize reasoning with better prompts
-- **[How to Build a Research System](../how-to/build-research-system.md)** - Complete tutorial
+- **[Building a Multi-Agent Research System](../blog/posts/building-a-multi-agent-research-system.md)** - Complete tutorial
 
 ---
 
@@ -581,7 +581,7 @@ agents:
 
 - **[Agent Overview](overview.md)** - Understanding agents
 - **[Configuration Reference](../reference/configuration.md)** - All reasoning options
-- **[Build a Coding Assistant](../how-to/build-coding-assistant.md)** - Chain-of-thought example
+- **[Building a Coding Assistant](../blog/posts/building-a-coding-assistant.md)** - Chain-of-thought example
 
 
 ---

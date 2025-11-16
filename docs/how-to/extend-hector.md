@@ -909,7 +909,7 @@ Hector's programmatic API enables you to:
 
 - **[Programmatic API Reference](../reference/programmatic-api.md)** - Complete API documentation
 - **[Programmatic API Guide](../core-concepts/programmatic-api.md)** - Core concepts and patterns
-- **[Add Custom Tools](add-custom-tools.md)** - MCP-based tool development
+- **[Adding Custom Tools with MCP](../blog/posts/adding-custom-tools-with-mcp.md)** - MCP-based tool development
 - **[Plugin Development](plugins.md)** - gRPC plugins for advanced extensions
 
 ---

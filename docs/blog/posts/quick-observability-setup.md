@@ -1,6 +1,12 @@
 ---
 title: Quick Observability Setup
 description: Enable metrics and tracing with a single flag
+date: 2025-01-16
+tags:
+  - Observability
+  - Monitoring
+  - Metrics
+  - Tracing
 ---
 
 # Quick Observability Setup
@@ -160,6 +166,16 @@ hector serve --config my-config.yaml
 
 ---
 
+## Why This Matters
+
+**Zero-Config Observability** means you can start monitoring immediately without writing configuration files. Perfect for development and quick debugging.
+
+**Full Instrumentation** gives you visibility into every layer—from HTTP requests down to individual tool executions. You can see exactly where time is spent and where errors occur.
+
+**Production-Ready** metrics and traces work with standard observability tools (Prometheus, Grafana, Jaeger), so you can use the same setup from development to production.
+
+---
+
 ## Troubleshooting
 
 ### No metrics showing up
@@ -213,13 +229,41 @@ For production, use a config file with:
 - Secure endpoints
 - Authentication
 
-See: [Observability Guide](../core-concepts/observability.md) | [Deploy to Production](./deploy-production.md)
+See: [Observability Guide](../../core-concepts/observability.md) | [Deploy to Production](../../how-to/deploy-production.md)
 
 ---
 
 ## Next Steps
 
-- **[Observability Concepts](../core-concepts/observability.md)** - Deep dive into metrics & tracing
-- **[Configuration Reference](../reference/configuration.md#globalobservability)** - All observability options
-- **[Production Deployment](./deploy-production.md)** - Deploy with monitoring
+**Enhance your observability:**
+
+- **Add custom metrics**: Track business-specific metrics
+- **Set up alerts**: Configure Prometheus alerting rules
+- **Export to external services**: Datadog, Honeycomb, New Relic
+- **Production deployment**: Secure endpoints, authentication
+
+**Resources:**
+
+- [Observability Concepts](../../core-concepts/observability.md) - Deep dive into metrics & tracing
+- [Configuration Reference](../../reference/configuration.md#globalobservability) - All observability options
+- [Production Deployment](../../how-to/deploy-production.md) - Deploy with monitoring
+
+---
+
+## Conclusion
+
+You've enabled full observability with a single flag:
+
+- ✅ Metrics at `/metrics` endpoint
+- ✅ Traces to OpenTelemetry collector
+- ✅ Pre-built Grafana dashboards
+- ✅ Zero configuration required
+
+**The best part?** You can use the same observability setup from development to production, just by adjusting sampling rates and endpoints.
+
+**Ready to monitor your agents?** Start with `--observe`, then customize with a config file as you scale to production.
+
+---
+
+**About Hector**: Hector is a production-grade A2A-native agent platform designed for enterprise deployments. Learn more at [gohector.dev](https://gohector.dev).
 

@@ -559,7 +559,7 @@ agents:
 - **[RAG & Semantic Search](rag.md)** - Set up vector databases and embedders
 - **[Tools](tools.md)** - Give agents capabilities
 - **[Reasoning Strategies](reasoning.md)** - How agents think
-- **[How to Set Up RAG](../how-to/setup-rag.md)** - Complete RAG setup guide
+- **[Building Enterprise RAG Systems](../blog/posts/building-enterprise-rag-systems.md)** - Complete RAG setup guide
 
 ---
 

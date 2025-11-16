@@ -572,7 +572,7 @@ agents:
     tools: ["fetch_weather"]
 ```
 
-See [How to Add Custom Tools](../how-to/add-custom-tools.md) for a complete guide.
+See [Adding Custom Tools with MCP](../blog/posts/adding-custom-tools-with-mcp.md) for a complete guide.
 
 ---
 
@@ -820,7 +820,7 @@ agents:
 - **[RAG & Semantic Search](rag.md)** - Set up semantic code search
 - **[Reasoning Strategies](reasoning.md)** - How agents use tools
 - **[Multi-Agent Orchestration](multi-agent.md)** - Use agent_call
-- **[How to Add Custom Tools](../how-to/add-custom-tools.md)** - Complete MCP guide
+- **[Adding Custom Tools with MCP](../blog/posts/adding-custom-tools-with-mcp.md)** - Complete MCP guide
 
 ---
 
@@ -828,5 +828,5 @@ agents:
 
 - **[Agent Overview](overview.md)** - Understanding agents
 - **[Configuration Reference](../reference/configuration.md)** - All tool options
-- **[Build a Coding Assistant](../how-to/build-coding-assistant.md)** - Complete tutorial
+- **[Building a Coding Assistant](../blog/posts/building-a-coding-assistant.md)** - Complete tutorial
 

@@ -1,9 +1,15 @@
 ---
-title: Build a Cursor-like AI Coding Assistant
+title: Building a Cursor-like AI Coding Assistant with Hector
 description: Create a production-ready coding assistant with semantic search and tool execution in 30 minutes—using only YAML
+date: 2025-01-16
+tags:
+  - Coding Assistant
+  - Semantic Search
+  - Tools
+  - Tutorial
 ---
 
-# Build a Cursor-like AI Coding Assistant
+# Building a Cursor-like AI Coding Assistant with Hector
 
 Create a **production-ready AI coding assistant** with semantic code search, intelligent reasoning, and powerful file operations—all through declarative YAML configuration. No code required.
 
@@ -13,7 +19,7 @@ Create a **production-ready AI coding assistant** with semantic code search, int
 
 ---
 
-## 🎯 What You'll Build
+## What You'll Build
 
 By the end of this guide, you'll have a coding assistant that:
 
@@ -41,10 +47,6 @@ I'll implement input validation for the login API...
 🔧 search_replace: routes/auth.py ✅
 🔧 execute_command: pytest tests/test_auth.py ✅
 
-[Thinking: Iteration 1: Analyzing results]
-[Thinking: ✅ Succeeded: search, write_file, search_replace, execute_command]
-[Thinking: Confidence: 95% - Continue]
-
 ✅ Added input validation with email format check, password strength requirements
 ✅ Updated login route to use new validators
 ✅ All tests passing
@@ -52,11 +54,11 @@ I'll implement input validation for the login API...
 
 ---
 
-## 📋 Prerequisites
+## Prerequisites
 
 ### Required
 
-- ✅ **Hector installed** - [Installation Guide](../getting-started/installation.md)
+- ✅ **Hector installed** - [Installation Guide](../../getting-started/installation.md)
 - ✅ **API Key** - Anthropic Claude or OpenAI GPT-4
 
 ### Optional (for Semantic Search)
@@ -68,7 +70,7 @@ I'll implement input validation for the login API...
 
 ---
 
-## 🚀 Quick Start (5 Minutes)
+## Quick Start (5 Minutes)
 
 ### 1. Set Up Dependencies
 
@@ -197,14 +199,14 @@ hector chat --config coder.yaml coder
 
 **API Mode:**
 ```bash
-curl -X POST http://localhost:8080/agents/coder/tasks \
+curl -X POST http://localhost:8080/v1/agents/coder/message:send \
   -H "Content-Type: application/json" \
-  -d '{"task": "Add input validation to all API routes"}'
+  -d '{"message":{"role":"user","parts":[{"text":"Add input validation to all API routes"}]}}'
 ```
 
 ---
 
-## ⚙️ Fine-Tuning Your Configuration
+## Fine-Tuning Your Configuration
 
 ### Option A: Shortcuts (Recommended for Beginners)
 
@@ -276,12 +278,10 @@ document_stores:
 tools:
   search:
     type: "search"
-    document_stores: ["frontend", "backend"]
   
   write_file:
     type: "write_file"
     max_file_size: 1048576    # 1MB limit
-    # All file types allowed by default
   
   search_replace:
     type: "search_replace"
@@ -291,7 +291,6 @@ tools:
     type: "command"
     enable_sandboxing: true
     max_execution_time: "30s"
-    # All commands allowed (sandboxed)
   
   todo_write:
     type: "todo"
@@ -336,7 +335,7 @@ agents:
 
 ---
 
-## 🎨 Customization Examples
+## Customization Examples
 
 ### Multiple Specialized Agents
 
@@ -399,12 +398,12 @@ tools:
 
 ---
 
-## 📚 Example Use Cases
+## Example Use Cases
 
 ### 1. Code Review
 
 ```bash
-hector call --config coder.yaml coder \
+hector call --config coder.yaml --agent coder \
   "Review the authentication module for security issues"
 ```
 
@@ -416,7 +415,7 @@ The agent will:
 ### 2. Feature Implementation
 
 ```bash
-hector call --config coder.yaml coder \
+hector call --config coder.yaml --agent coder \
   "Add rate limiting middleware to all API endpoints"
 ```
 
@@ -429,7 +428,7 @@ The agent will:
 ### 3. Refactoring
 
 ```bash
-hector call --config coder.yaml coder \
+hector call --config coder.yaml --agent coder \
   "Refactor the user service to follow clean architecture"
 ```
 
@@ -442,7 +441,7 @@ The agent will:
 ### 4. Testing
 
 ```bash
-hector call --config coder.yaml coder \
+hector call --config coder.yaml --agent coder \
   "Generate comprehensive tests for the payment module"
 ```
 
@@ -454,49 +453,49 @@ The agent will:
 
 ---
 
-## 🔗 Complete Example
+## Why This Matters
 
-See the full production-ready configuration: [`configs/coding.yaml`](https://github.com/kadirpekel/hector/blob/main/configs/coding.yaml)
+**Semantic Search** transforms how AI understands your codebase. Instead of keyword matching, the assistant finds code by meaning—"authentication logic" finds login handlers, session management, and token validation, even if they don't share keywords.
 
-For maximum control: [`configs/coding-advanced.yaml`](https://github.com/kadirpekel/hector/blob/main/configs/coding-advanced.yaml)
+**Tool Execution** enables the assistant to actually implement changes, not just suggest them. Combined with reasoning visibility, you see exactly how the AI thinks through problems.
 
----
-
-## 🎓 Next Steps
-
-Ready to level up? Check out these guides:
-
-- **[Setup RAG & Semantic Search](setup-rag.md)** - Deep dive into semantic code search
-- **[Build a Research System](build-research-system.md)** - Multi-agent orchestration
-- **[Deploy to Production](deploy-production.md)** - Docker, Kubernetes, monitoring
-- **[Add Custom Tools](add-custom-tools.md)** - Extend with MCP integrations
+**Multi-Agent Support** lets you create specialized assistants for different parts of your codebase, each optimized for their domain.
 
 ---
 
-## 📖 Learn More
+## Next Steps
 
-**Core Concepts:**
+**Enhance your assistant:**
 
-- [Tools](../core-concepts/tools.md) - Understanding the tool system
-- [RAG & Semantic Search](../core-concepts/rag.md) - How semantic search works
-- [Reasoning Strategies](../core-concepts/reasoning.md) - Chain-of-thought reasoning
-- [Memory](../core-concepts/memory.md) - Context management
-- [Prompts](../core-concepts/prompts.md) - Prompt engineering
+- **Add more sources**: Connect to documentation, APIs, databases
+- **Enable observability**: Monitor performance with `--observe` flag
+- **Scale up**: Deploy to production with Docker/Kubernetes
+- **Customize tools**: Add MCP integrations for external services
 
-**Reference:**
+**Resources:**
 
-- [Configuration Reference](../reference/configuration.md) - Complete config options
-- [CLI Reference](../reference/cli.md) - All CLI commands
-- [API Reference](../reference/api.md) - HTTP API documentation
-
----
-
-## 💬 Community & Support
-
-- **GitHub:** [github.com/kadirpekel/hector](https://github.com/kadirpekel/hector)
-- **Issues:** [Report bugs or request features](https://github.com/kadirpekel/hector/issues)
-- **Discussions:** [Ask questions & share ideas](https://github.com/kadirpekel/hector/discussions)
+- [Building Enterprise RAG Systems](building-enterprise-rag-systems.md) - Deep dive into semantic search
+- [Tools](../../core-concepts/tools.md) - Understanding the tool system
+- [RAG & Semantic Search](../../core-concepts/rag.md) - How semantic search works
+- [Configuration Reference](../../reference/configuration.md) - Complete config options
 
 ---
 
-**Built with Hector?** Share your experience! Tag us on social media with **#HectorAI** 🚀
+## Conclusion
+
+You've built a production-ready coding assistant that:
+
+- ✅ Understands your codebase semantically
+- ✅ Implements changes intelligently
+- ✅ Shows its reasoning process
+- ✅ Executes commands safely
+- ✅ Requires zero code (pure YAML)
+
+**The best part?** You can test it locally with `hector call`, then deploy it as a server with a web UI using `hector serve`.
+
+**Ready to build your own?** Start with one tool, then add more as you go. The complete example in `configs/coding.yaml` shows you everything working together.
+
+---
+
+**About Hector**: Hector is a production-grade A2A-native agent platform designed for enterprise deployments. Learn more at [gohector.dev](https://gohector.dev).
+

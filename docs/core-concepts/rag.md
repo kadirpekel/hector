@@ -830,10 +830,10 @@ document_stores:
 
 ## Next Steps
 
-- **[How to Set Up RAG](../how-to/setup-rag.md)** - Complete setup guide
+- **[Building Enterprise RAG Systems](../blog/posts/building-enterprise-rag-systems.md)** - Complete step-by-step guide
 - **[Tools](tools.md)** - Using the search tool
 - **[Memory](memory.md)** - Long-term memory with vectors
-- **[Build a Coding Assistant](../how-to/build-coding-assistant.md)** - Full tutorial
+- **[Building a Coding Assistant](../blog/posts/building-a-coding-assistant.md)** - Full tutorial
 
 ---
 

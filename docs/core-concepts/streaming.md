@@ -340,7 +340,7 @@ eventSource.onmessage = (event) => {
 - **[Sessions](sessions.md)** - Combine streaming with sessions
 - **[API Reference](../reference/api.md)** - Complete API documentation
 - **[Memory](memory.md)** - Configure memory strategies
-- **[Build a Chat Application](../how-to/build-coding-assistant.md)** - Complete tutorial
+- **[Building a Coding Assistant](../blog/posts/building-a-coding-assistant.md)** - Complete tutorial
 
 ---
 

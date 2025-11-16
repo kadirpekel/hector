@@ -44,6 +44,8 @@ theme:
     - content.tabs.link
     - content.code.annotation
     - content.code.copy
+    - content.action.edit
+    - content.action.view
   language: en
   logo: assets/letter-h.png
   favicon: assets/letter-h.png
@@ -60,6 +62,7 @@ nav:
   - Core Concepts:
     - Overview: core-concepts/overview.md
     - Programmatic API: core-concepts/programmatic-api.md
+    - Extending Hector: how-to/extend-hector.md
     - Observability: core-concepts/observability.md
     - Security: core-concepts/security.md
     - A2A Protocol: reference/a2a-protocol.md
@@ -69,34 +72,36 @@ nav:
     - Memory: core-concepts/memory.md
     - Tools: core-concepts/tools.md
     - RAG & Search: core-concepts/rag.md
+    - Search Architecture: core-concepts/search-architecture.md
+    - Assignment Strategy: core-concepts/assignment-strategy.md
     - Reasoning: core-concepts/reasoning.md
     - Tasks: core-concepts/tasks.md
     - Checkpoint Recovery: core-concepts/checkpoint-recovery.md
     - Multi-Agent: core-concepts/multi-agent.md
     - Human-in-the-Loop: core-concepts/human-in-the-loop.md
+    - Async HITL Implementation: how-to/async-hitl.md
     - Structured Output: core-concepts/structured-output.md
     - Sessions: core-concepts/sessions.md
+    - Session Persistence: how-to/setup-session-persistence.md
     - Streaming: core-concepts/streaming.md
     - Performance: core-concepts/performance.md
     - Rate Limiting: core-concepts/rate-limiting.md
-  - How-To Guides:
-    - Build Coding Assistant: how-to/build-coding-assistant.md
-    - Build Research System: how-to/build-research-system.md
-    - Add Custom Tools: how-to/add-custom-tools.md
-    - Extend Hector: how-to/extend-hector.md
-    - Setup RAG: how-to/setup-rag.md
-    - Setup Session Persistence: how-to/setup-session-persistence.md
-    - Making HITL Truly Asynchronous: how-to/async-hitl.md
-    - Quick Observability: how-to/quick-observability.md
-    - Deploy to Production: how-to/deploy-production.md
-    - Integrate External Agents: how-to/integrate-external-agents.md
-    - Plugin Development: how-to/plugins.md
+    - External Agent Integration: how-to/integrate-external-agents.md
+  - Blog:
+    - Overview: blog/index.md
+    - Building Enterprise RAG Systems: blog/posts/building-enterprise-rag-systems.md
+    - Building a Coding Assistant: blog/posts/building-a-coding-assistant.md
+    - Multi-Agent Research System: blog/posts/building-a-multi-agent-research-system.md
+    - Adding Custom Tools with MCP: blog/posts/adding-custom-tools-with-mcp.md
+    - Quick Observability Setup: blog/posts/quick-observability-setup.md
   - Reference:
     - CLI Reference: reference/cli.md
     - Configuration: reference/configuration.md
     - Programmatic API Reference: reference/programmatic-api.md
     - Distributed Configuration: reference/distributed-configuration.md
     - API Reference: reference/api.md
+    - Deployment: how-to/deploy-production.md
+    - Plugin Development: how-to/plugins.md
     - Architecture:
       - System Design: reference/architecture.md
       - Session & Memory: reference/architecture/session-memory.md

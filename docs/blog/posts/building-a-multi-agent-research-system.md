@@ -1,9 +1,15 @@
 ---
-title: Build a Multi-Agent Research System
+title: Building a Multi-Agent Research System with Hector
 description: Create an automated research assistant with specialized agents in 45 minutes
+date: 2025-01-16
+tags:
+  - Multi-Agent
+  - Research
+  - Orchestration
+  - Tutorial
 ---
 
-# How to Build a Multi-Agent Research System
+# Building a Multi-Agent Research System with Hector
 
 Build an automated research assistant that coordinates multiple specialized agents to research topics, analyze findings, and write comprehensive reports.
 
@@ -38,8 +44,8 @@ User Query → Coordinator
 
 ## Prerequisites
 
-✅ Hector installed ([Installation Guide](../getting-started/installation.md))  
-✅ Understanding of [Multi-Agent Orchestration](../core-concepts/multi-agent.md)  
+✅ Hector installed ([Installation Guide](../../getting-started/installation.md))  
+✅ Understanding of [Multi-Agent Orchestration](../../core-concepts/multi-agent.md)  
 ✅ API keys for LLM providers
 
 ---
@@ -241,7 +247,8 @@ Agent registered: writer
 ### Simple Research Task
 
 ```bash
-hector call --config research-system.yaml research_coordinator "Research the impact of AI on healthcare"
+hector call --config research-system.yaml --agent research_coordinator \
+  "Research the impact of AI on healthcare"
 ```
 
 **What happens:**
@@ -288,7 +295,7 @@ hector call --config research-system.yaml research_coordinator "Research the imp
 ### Complex Research Task
 
 ```bash
-hector call --config research-system.yaml research_coordinator \
+hector call --config research-system.yaml --agent research_coordinator \
   "Research quantum computing developments in 2024, analyze market trends, and create an investment report"
 ```
 
@@ -346,7 +353,7 @@ researcher:
     - "search"
     - "write_file"
     - "execute_command"  # For API calls
-  
+
 # Allow calling external APIs
 tools:
   execute_command:
@@ -366,7 +373,6 @@ agents:
     embedder: "embedder"
     memory:
       longterm:
-        
         storage_scope: "session"
 ```
 
@@ -442,40 +448,13 @@ agents:
 
 ---
 
-## Monitoring & Debugging
+## Why This Matters
 
-### See Agent Coordination
+**Specialization** enables each agent to excel at their specific task. A researcher focused only on gathering information will do it better than a generalist trying to research, analyze, and write simultaneously.
 
-```yaml
-agents:
-  research_coordinator:
-    reasoning:
-```
+**Orchestration** through the supervisor pattern ensures tasks are broken down correctly and delegated to the right specialists at the right time.
 
-Output shows:
-```
-[Coordinator] Breaking task into sub-tasks...
-[Coordinator] TODO: Research healthcare AI
-[Coordinator] TODO: Analyze findings
-[Coordinator] TODO: Write report
-[Coordinator] Calling researcher...
-[Tool] agent_call("researcher", "Research healthcare AI")
-[Researcher] Searching for information...
-[Researcher] Found 5 relevant sources...
-[Tool Result] Research complete
-[Coordinator] Calling analyst...
-...
-```
-
-### Track Performance
-
-```bash
-# Enable JSON logging
-hector serve --config research-system.yaml --log-format json
-
-# Monitor agent calls
-grep "agent_call" logs/hector.log | jq
-```
+**Scalability** means you can add more specialists (fact-checkers, editors, domain experts) without rewriting the entire system—just add them to the coordinator's team.
 
 ---
 
@@ -538,21 +517,21 @@ agents:
 ### Academic Research
 
 ```bash
-hector call --config research-system.yaml research_coordinator \
+hector call --config research-system.yaml --agent research_coordinator \
   "Research machine learning interpretability, analyze recent papers, and write a literature review"
 ```
 
 ### Market Analysis
 
 ```bash
-hector call --config research-system.yaml research_coordinator \
+hector call --config research-system.yaml --agent research_coordinator \
   "Research electric vehicle market, analyze competitors, and create market entry strategy"
 ```
 
 ### Technical Investigation
 
 ```bash
-hector call --config research-system.yaml research_coordinator \
+hector call --config research-system.yaml --agent research_coordinator \
   "Research microservices architectures, analyze trade-offs, and recommend approach for our system"
 ```
 
@@ -594,22 +573,37 @@ agents:
 
 ## Next Steps
 
-- **[Multi-Agent Orchestration](../core-concepts/multi-agent.md)** - Understand the concepts
-- **[Reasoning Strategies](../core-concepts/reasoning.md)** - Supervisor strategy details
-- **[Integrate External Agents](integrate-external-agents.md)** - Add external A2A agents
-- **[Deploy to Production](deploy-production.md)** - Production deployment
+**Enhance your system:**
+
+- **Add more specialists**: Fact-checkers, editors, domain experts
+- **Enable RAG**: Connect to knowledge bases for better research
+- **Add external tools**: Integrate with APIs for real-time data
+- **Scale up**: Deploy to production with monitoring
+
+**Resources:**
+
+- [Multi-Agent Orchestration](../../core-concepts/multi-agent.md) - Understand the concepts
+- [Reasoning Strategies](../../core-concepts/reasoning.md) - Supervisor strategy details
+- [Building Enterprise RAG Systems](building-enterprise-rag-systems.md) - Add RAG capabilities
+- [Configuration Reference](../../reference/configuration.md) - All orchestration options
 
 ---
 
-## Related Topics
+## Conclusion
 
-- **[Agent Overview](../core-concepts/overview.md)** - Understanding agents
-- **[Tools](../core-concepts/tools.md)** - agent_call tool
-- **[Configuration Reference](../reference/configuration.md)** - All orchestration options
+You've built a multi-agent research system that:
+
+- ✅ Coordinates specialized agents effectively
+- ✅ Breaks down complex tasks automatically
+- ✅ Ensures quality at each step
+- ✅ Scales by adding more specialists
+- ✅ Requires zero code (pure YAML)
+
+**The best part?** Each agent focuses on what they do best, resulting in higher-quality output than a single generalist agent.
+
+**Ready to build your own?** Start with the coordinator and one specialist, then add more as you need them. The complete example in `configs/orchestrator-example.yaml` shows you everything working together.
 
 ---
 
-## Complete Example
-
-See `configs/orchestrator-example.yaml` in the Hector repository for a complete multi-agent configuration.
+**About Hector**: Hector is a production-grade A2A-native agent platform designed for enterprise deployments. Learn more at [gohector.dev](https://gohector.dev).
 
