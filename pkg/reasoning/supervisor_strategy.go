@@ -22,23 +22,34 @@ func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningSta
 
 	if iteration == 1 && state.GetServices() != nil && state.ShowThinking() {
 		// Get available agents from registry for goal extraction
-		// Respect sub_agents configuration (same logic as GetAgentContextOptions)
+		// Logic: If sub_agents configured, use them; otherwise show all (honoring visibility)
 		var availableAgents []string
 		if registry := state.GetServices().Registry(); registry != nil {
+			currentAgentName := state.AgentName()
 			subAgents := state.SubAgents()
 			if len(subAgents) > 0 {
-				// Use configured sub-agents
+				// Honor sub_agents config: only use configured sub-agents
 				agentEntries := registry.FilterAgents(subAgents)
-				availableAgents = make([]string, len(agentEntries))
-				for i, entry := range agentEntries {
-					availableAgents[i] = entry.ID
+				availableAgents = make([]string, 0, len(agentEntries))
+				for _, entry := range agentEntries {
+					// Always exclude current agent - agents shouldn't delegate to themselves
+					if entry.ID != currentAgentName {
+						availableAgents = append(availableAgents, entry.ID)
+					}
 				}
 			} else {
-				// No sub-agents configured, use all available agents
+				// No sub_agents configured: show all agents, honoring visibility (exclude internal)
 				agentEntries := registry.ListAgents()
-				availableAgents = make([]string, len(agentEntries))
-				for i, entry := range agentEntries {
-					availableAgents[i] = entry.ID
+				availableAgents = make([]string, 0, len(agentEntries))
+				for _, entry := range agentEntries {
+					// Exclude internal agents by default (honor visibility)
+					if entry.Visibility == "internal" {
+						continue
+					}
+					// Always exclude current agent - agents shouldn't delegate to themselves
+					if entry.ID != currentAgentName {
+						availableAgents = append(availableAgents, entry.ID)
+					}
 				}
 			}
 		}

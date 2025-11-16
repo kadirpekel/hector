@@ -28,98 +28,54 @@ const (
 	maxContextContentLength = 500
 )
 
-// AgentContextOptions controls how agent context is built
-type AgentContextOptions struct {
-	// OnlySubAgents: if true, only list sub-agents from config; if false, list all available agents
-	OnlySubAgents bool
-	// ExcludeCurrentAgent: if true, exclude the current agent from the list
-	ExcludeCurrentAgent bool
-	// IncludeInternal: if true, include agents with "internal" visibility
-	IncludeInternal bool
-	// MessageStyle: "supervisor" (strict) or "assistant" (helpful)
-	MessageStyle string
-}
-
-// GetAgentContextOptions determines agent context options from state/config
-// This provides unified, config-driven behavior across all strategies
-// - If sub_agents configured, use them (respect user intent)
-// - If empty, show all agents (reasonable default)
-// - All strategies get the same foundation
-func GetAgentContextOptions(state *ReasoningState) AgentContextOptions {
-	if state == nil {
-		return AgentContextOptions{
-			OnlySubAgents:       false,
-			ExcludeCurrentAgent: false,
-			IncludeInternal:     false,
-			MessageStyle:        "assistant",
-		}
-	}
-
-	subAgents := state.SubAgents()
-
-	// Unified logic: respect sub_agents config if provided
-	// If sub_agents is empty, show all agents (consistent across strategies)
-	onlySubAgents := len(subAgents) > 0
-
-	return AgentContextOptions{
-		OnlySubAgents:       onlySubAgents,
-		ExcludeCurrentAgent: false,       // Default: include self
-		IncludeInternal:     false,       // Default: exclude internal
-		MessageStyle:        "assistant", // Default: helpful tone
-	}
-}
-
 // BuildAvailableAgentsContext builds context string listing available agents
 // This is a shared helper that can be used by any reasoning strategy
-func BuildAvailableAgentsContext(state *ReasoningState, opts AgentContextOptions) string {
+// Logic:
+//   - If sub_agents configured: only show those agents (honor user intent)
+//   - If sub_agents NOT configured: show all agents, honoring visibility (exclude internal by default)
+//   - Always exclude current agent (prevents infinite loops)
+func BuildAvailableAgentsContext(state *ReasoningState) string {
 	if state == nil || state.GetServices() == nil || state.GetServices().Registry() == nil {
 		return ""
 	}
 
 	registry := state.GetServices().Registry()
+	subAgents := state.SubAgents()
+	currentAgentName := state.AgentName()
+
 	var agentEntries []AgentRegistryEntry
 
-	if opts.OnlySubAgents {
-		// Only list sub-agents from config
-		subAgents := state.SubAgents()
-		if len(subAgents) == 0 {
-			return ""
-		}
+	if len(subAgents) > 0 {
+		// Honor sub_agents config: only show configured sub-agents
 		agentEntries = registry.FilterAgents(subAgents)
 	} else {
-		// List all available agents (supervisor mode)
+		// No sub_agents configured: show all available agents, honoring visibility
 		allAgents := registry.ListAgents()
 		agentEntries = make([]AgentRegistryEntry, 0, len(allAgents))
-
 		for _, entry := range allAgents {
-			// Filter by visibility
-			if !opts.IncludeInternal && entry.Visibility == "internal" {
-				continue
-			}
-			// Exclude current agent if requested
-			if opts.ExcludeCurrentAgent && entry.ID == state.AgentName() {
+			// Exclude internal agents by default (honor visibility)
+			if entry.Visibility == "internal" {
 				continue
 			}
 			agentEntries = append(agentEntries, entry)
 		}
 	}
 
+	// Always exclude current agent - agents should never call themselves (prevents infinite loops)
+	filteredEntries := make([]AgentRegistryEntry, 0, len(agentEntries))
+	for _, entry := range agentEntries {
+		if entry.ID != currentAgentName {
+			filteredEntries = append(filteredEntries, entry)
+		}
+	}
+	agentEntries = filteredEntries
+
 	if len(agentEntries) == 0 {
 		return ""
 	}
 
-	// Build unified context message (same content for both styles, with optional tone adjustment)
-	var header string
-	var criticalPrefix string
-	if opts.MessageStyle == "supervisor" {
-		header = "AVAILABLE AGENTS (THESE ARE THE ONLY AGENTS YOU CAN CALL):\n"
-		criticalPrefix = "CRITICAL"
-	} else {
-		header = "AVAILABLE AGENTS (you can call these using the agent_call tool):\n"
-		criticalPrefix = "IMPORTANT"
-	}
-
-	context := header
+	// Build context message
+	context := "AVAILABLE AGENTS (you can call these using the agent_call tool):\n"
 	for _, entry := range agentEntries {
 		description := entry.Card.Description
 		if description == "" {
@@ -128,18 +84,14 @@ func BuildAvailableAgentsContext(state *ReasoningState, opts AgentContextOptions
 		context += fmt.Sprintf("- %s: %s\n", entry.ID, description)
 	}
 
-	// Unified instructions (same for both styles - all important information)
-	context += fmt.Sprintf("\n%s: You MUST use the exact agent IDs listed above (e.g., agent='weather_assistant').\n", criticalPrefix)
+	// Instructions
+	context += "\nIMPORTANT: You MUST use the exact agent IDs listed above (e.g., agent='weather_assistant').\n"
 	context += "DO NOT invent or assume other agent names exist.\n"
 	context += "DO NOT abbreviate agent names (e.g., use 'weather_assistant' not 'weather').\n"
 	context += "\nTo call an agent, use the agent_call tool with:\n"
 	context += "  - agent: the exact agent ID from the list above\n"
 	context += "  - task: your request or question for that agent\n"
 	context += "\nWhen the user's request relates to information or capabilities that an available agent provides, you MUST call that agent first before responding. For example, if asked about weather, activities, or plans, call the weather_assistant agent to get current weather conditions."
-
-	if opts.MessageStyle == "supervisor" {
-		context += "\n\nIf a task needs a different type of agent, use the closest match from the list."
-	}
 
 	return context
 }
@@ -351,8 +303,7 @@ func BuildCommonContext(state *ReasoningState) string {
 	}
 
 	// Agent context (unified multi-agent foundation - available to all)
-	agentOptions := GetAgentContextOptions(state)
-	agentsList := BuildAvailableAgentsContext(state, agentOptions)
+	agentsList := BuildAvailableAgentsContext(state)
 	if agentsList != "" {
 		contextParts = append(contextParts, agentsList)
 	}
