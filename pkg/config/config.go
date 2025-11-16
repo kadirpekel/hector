@@ -81,7 +81,6 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 	storeName := generateStoreNameFromPath(agent.DocsFolder)
 
 	docStoreConfig := &DocumentStoreConfig{
-		Name:                      storeName,
 		Source:                    "directory",
 		Path:                      agent.DocsFolder,
 		EnableWatchChanges:        BoolPtr(true),

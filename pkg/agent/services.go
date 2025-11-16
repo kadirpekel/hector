@@ -181,7 +181,7 @@ func (s *DefaultPromptService) buildStoreDescription(storeName string) string {
 
 	// Try to get store from registry
 	store, exists := hectorcontext.GetDocumentStoreFromRegistry(storeName)
-	if !exists {
+	if !exists || store == nil {
 		return ""
 	}
 

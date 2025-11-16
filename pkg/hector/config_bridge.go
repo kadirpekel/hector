@@ -436,15 +436,17 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 		}
 
 		// Add document stores
+		var documentStoreNames []string
 		var documentStoreConfigs []*config.DocumentStoreConfig
 		for _, storeName := range agentCfg.DocumentStores {
 			storeConfig, exists := b.config.DocumentStores[storeName]
 			if !exists {
 				return nil, fmt.Errorf("document store '%s' not found", storeName)
 			}
+			documentStoreNames = append(documentStoreNames, storeName)
 			documentStoreConfigs = append(documentStoreConfigs, storeConfig)
 		}
-		contextBuilder = contextBuilder.WithDocumentStores(documentStoreConfigs)
+		contextBuilder = contextBuilder.WithDocumentStores(documentStoreNames, documentStoreConfigs)
 
 		// Set IncludeContext from prompt config
 		if agentCfg.Prompt.IncludeContext != nil {

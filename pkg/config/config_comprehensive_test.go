@@ -266,8 +266,8 @@ func TestConfig_HelperMethods(t *testing.T) {
 			"agent2": {Name: "Agent 2", LLM: "llm2"},
 		},
 		DocumentStores: map[string]*DocumentStoreConfig{
-			"store1": {Name: "Store 1", Source: "directory", Path: "./docs"},
-			"store2": {Name: "Store 2", Source: "directory", Path: "./data"},
+			"store1": {Source: "directory", Path: "./docs"},
+			"store2": {Source: "directory", Path: "./data"},
 		},
 	}
 
@@ -293,8 +293,8 @@ func TestConfig_HelperMethods(t *testing.T) {
 		if !exists {
 			t.Error("GetDocumentStore() should return true for existing store")
 		}
-		if store.Name != "Store 1" {
-			t.Errorf("GetDocumentStore() name = %v, want %v", store.Name, "Store 1")
+		if store == nil {
+			t.Error("GetDocumentStore() store should not be nil")
 		}
 
 		_, exists = config.GetDocumentStore("non-existing")

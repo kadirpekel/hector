@@ -164,6 +164,8 @@ func (se *SearchEngine) IngestDocument(ctx context.Context, docID, content strin
 		return NewSearchError("SearchEngine", "IngestDocument", "content cannot be empty", docID, nil)
 	}
 
+	// Get collection name from metadata (store_name field)
+	// This should always be set by DocumentStore when indexing
 	collection := se.getCollectionFromMetadata(metadata)
 	if collection == "" {
 		var err error
@@ -343,6 +345,12 @@ func (se *SearchEngine) getCollectionFromMetadata(metadata map[string]interface{
 		return ""
 	}
 
+	// Prefer explicit collection name in metadata
+	if collection, ok := metadata["collection"].(string); ok && collection != "" {
+		return collection
+	}
+
+	// Fallback to store_name for backward compatibility
 	if storeName, ok := metadata["store_name"].(string); ok && storeName != "" {
 		return storeName
 	}

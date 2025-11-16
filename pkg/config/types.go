@@ -1214,13 +1214,12 @@ func (c *ToolConfig) SetDefaults() {
 }
 
 type DocumentStoreConfig struct {
-	Name                      string   `yaml:"name"`
-	Collection                string   `yaml:"collection"`   // Optional: points to existing Qdrant collection (no indexing)
-	VectorStore               string   `yaml:"vector_store"` // Optional: vector store to use (defaults to agent's vector_store)
-	SQLDatabase               string   `yaml:"sql_database"` // Optional: SQL database reference (for SQL source)
-	Embedder                  string   `yaml:"embedder"`     // Optional: embedder to use (defaults to agent's embedder)
-	Source                    string   `yaml:"source"`       // "directory", "sql", "api" (required if collection not set)
-	Path                      string   `yaml:"path"`         // Required for directory source
+	Collection                string   `yaml:"collection,omitempty"` // Optional: override collection name (defaults to map key/store name)
+	VectorStore               string   `yaml:"vector_store"`         // Optional: vector store to use (defaults to agent's vector_store)
+	SQLDatabase               string   `yaml:"sql_database"`         // Optional: SQL database reference (for SQL source)
+	Embedder                  string   `yaml:"embedder"`             // Optional: embedder to use (defaults to agent's embedder)
+	Source                    string   `yaml:"source"`               // "directory", "sql", "api" (required if collection points to existing collection)
+	Path                      string   `yaml:"path"`                 // Required for directory source
 	IncludePatterns           []string `yaml:"include_patterns"`
 	ExcludePatterns           []string `yaml:"exclude_patterns"`            // If set, replaces defaults entirely
 	AdditionalExcludes        []string `yaml:"additional_exclude_patterns"` // Extends default exclusions
@@ -1313,12 +1312,8 @@ type DocumentStoreAPIPaginationConfig struct {
 }
 
 func (c *DocumentStoreConfig) Validate() error {
-	if c.Name == "" {
-		return fmt.Errorf("name is required")
-	}
-
-	// If collection is set, this is a collection-only store (points to existing collection)
-	if c.Collection != "" {
+	// If collection is set and source is not set, this is a collection-only store (points to existing collection)
+	if c.Collection != "" && c.Source == "" {
 		// Collection-only stores don't need source or path
 		return nil
 	}
@@ -1364,10 +1359,6 @@ func (c *DocumentStoreConfig) Validate() error {
 }
 
 func (c *DocumentStoreConfig) SetDefaults() {
-
-	if c.Name == "" {
-		c.Name = "default-docs"
-	}
 	if c.Source == "" {
 		c.Source = "directory"
 	}

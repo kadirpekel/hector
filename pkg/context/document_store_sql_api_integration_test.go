@@ -83,7 +83,6 @@ func TestDocumentStore_SQLSource_Integration(t *testing.T) {
 	searchEngine := createMockSearchEngine()
 
 	storeConfig := &config.DocumentStoreConfig{
-		Name:   "sql-test-store",
 		Source: "sql",
 		SQL: &config.DocumentStoreSQLConfig{
 			Driver:   "sqlite3",
@@ -103,7 +102,7 @@ func TestDocumentStore_SQLSource_Integration(t *testing.T) {
 		ChunkStrategy: "simple",
 	}
 
-	store, err := NewDocumentStore(storeConfig, searchEngine)
+	store, err := NewDocumentStore("sql-test-store", storeConfig, searchEngine)
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
@@ -165,7 +164,6 @@ func TestDocumentStore_APISource_Integration(t *testing.T) {
 	searchEngine := createMockSearchEngine()
 
 	storeConfig := &config.DocumentStoreConfig{
-		Name:   "api-test-store",
 		Source: "api",
 		API: &config.DocumentStoreAPIConfig{
 			BaseURL: server.URL,
@@ -184,7 +182,7 @@ func TestDocumentStore_APISource_Integration(t *testing.T) {
 		ChunkStrategy: "simple",
 	}
 
-	store, err := NewDocumentStore(storeConfig, searchEngine)
+	store, err := NewDocumentStore("sql-test-store", storeConfig, searchEngine)
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
@@ -244,7 +242,6 @@ func TestDocumentStore_SQLSource_ReadDocument(t *testing.T) {
 	searchEngine := createMockSearchEngine()
 
 	storeConfig := &config.DocumentStoreConfig{
-		Name:   "sql-test-store",
 		Source: "sql",
 		SQL: &config.DocumentStoreSQLConfig{
 			Driver:   "sqlite3",
@@ -261,7 +258,7 @@ func TestDocumentStore_SQLSource_ReadDocument(t *testing.T) {
 		},
 	}
 
-	store, err := NewDocumentStore(storeConfig, searchEngine)
+	store, err := NewDocumentStore("sql-test-store", storeConfig, searchEngine)
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
@@ -301,7 +298,6 @@ func TestDocumentStore_SQLSource_IncrementalIndexing(t *testing.T) {
 	searchEngine := createMockSearchEngine()
 
 	storeConfig := &config.DocumentStoreConfig{
-		Name:   "sql-test-store",
 		Source: "sql",
 		SQL: &config.DocumentStoreSQLConfig{
 			Driver:   "sqlite3",
@@ -318,7 +314,7 @@ func TestDocumentStore_SQLSource_IncrementalIndexing(t *testing.T) {
 		EnableIncrementalIndexing: config.BoolPtr(true),
 	}
 
-	store, err := NewDocumentStore(storeConfig, searchEngine)
+	store, err := NewDocumentStore("sql-test-store", storeConfig, searchEngine)
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
@@ -337,7 +333,6 @@ func TestDocumentStore_APISource_IncrementalIndexing(t *testing.T) {
 	searchEngine := createMockSearchEngine()
 
 	storeConfig := &config.DocumentStoreConfig{
-		Name:   "api-test-store",
 		Source: "api",
 		API: &config.DocumentStoreAPIConfig{
 			BaseURL: server.URL,
@@ -354,7 +349,7 @@ func TestDocumentStore_APISource_IncrementalIndexing(t *testing.T) {
 		EnableIncrementalIndexing: config.BoolPtr(true),
 	}
 
-	store, err := NewDocumentStore(storeConfig, searchEngine)
+	store, err := NewDocumentStore("sql-test-store", storeConfig, searchEngine)
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
@@ -371,7 +366,6 @@ func TestDocumentStore_SQLSource_GetLastModified(t *testing.T) {
 	searchEngine := createMockSearchEngine()
 
 	storeConfig := &config.DocumentStoreConfig{
-		Name:   "sql-test-store",
 		Source: "sql",
 		SQL: &config.DocumentStoreSQLConfig{
 			Driver:   "sqlite3",
@@ -387,7 +381,7 @@ func TestDocumentStore_SQLSource_GetLastModified(t *testing.T) {
 		},
 	}
 
-	store, err := NewDocumentStore(storeConfig, searchEngine)
+	store, err := NewDocumentStore("sql-test-store", storeConfig, searchEngine)
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
@@ -411,7 +405,6 @@ func TestDocumentStore_DataSourceFactory_SQL(t *testing.T) {
 	factory := indexing.NewDataSourceFactory()
 
 	storeConfig := &config.DocumentStoreConfig{
-		Name:   "sql-test-store",
 		Source: "sql",
 		SQL: &config.DocumentStoreSQLConfig{
 			Driver:   "sqlite3",
@@ -444,7 +437,6 @@ func TestDocumentStore_DataSourceFactory_API(t *testing.T) {
 	factory := indexing.NewDataSourceFactory()
 
 	storeConfig := &config.DocumentStoreConfig{
-		Name:   "api-test-store",
 		Source: "api",
 		API: &config.DocumentStoreAPIConfig{
 			BaseURL: server.URL,
@@ -482,7 +474,6 @@ func TestDocumentStore_DataSourceFactory_InvalidConfig(t *testing.T) {
 		{
 			name: "sql_without_config",
 			config: &config.DocumentStoreConfig{
-				Name:   "test",
 				Source: "sql",
 			},
 			wantError:   true,
@@ -491,7 +482,6 @@ func TestDocumentStore_DataSourceFactory_InvalidConfig(t *testing.T) {
 		{
 			name: "api_without_config",
 			config: &config.DocumentStoreConfig{
-				Name:   "test",
 				Source: "api",
 			},
 			wantError:   true,
@@ -500,7 +490,6 @@ func TestDocumentStore_DataSourceFactory_InvalidConfig(t *testing.T) {
 		{
 			name: "sql_without_driver",
 			config: &config.DocumentStoreConfig{
-				Name:   "test",
 				Source: "sql",
 				SQL: &config.DocumentStoreSQLConfig{
 					Database: "test.db",
@@ -512,7 +501,6 @@ func TestDocumentStore_DataSourceFactory_InvalidConfig(t *testing.T) {
 		{
 			name: "api_without_baseurl",
 			config: &config.DocumentStoreConfig{
-				Name:   "test",
 				Source: "api",
 				API: &config.DocumentStoreAPIConfig{
 					Endpoints: []config.DocumentStoreAPIEndpointConfig{
@@ -526,7 +514,6 @@ func TestDocumentStore_DataSourceFactory_InvalidConfig(t *testing.T) {
 		{
 			name: "api_without_endpoints",
 			config: &config.DocumentStoreConfig{
-				Name:   "test",
 				Source: "api",
 				API: &config.DocumentStoreAPIConfig{
 					BaseURL: "http://example.com",

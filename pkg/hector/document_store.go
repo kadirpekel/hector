@@ -13,10 +13,8 @@ type DocumentStoreBuilder struct {
 
 // NewDocumentStore creates a new document store builder
 // source must be one of: "directory", "sql", "api"
-func NewDocumentStore(name, source string) *DocumentStoreBuilder {
-	if name == "" {
-		panic("document store name is required")
-	}
+// Note: The store name comes from the map key when used in config, or passed to WithDocumentStoreBuilder
+func NewDocumentStore(source string) *DocumentStoreBuilder {
 	if source == "" {
 		panic("document store source is required")
 	}
@@ -26,7 +24,6 @@ func NewDocumentStore(name, source string) *DocumentStoreBuilder {
 
 	return &DocumentStoreBuilder{
 		config: &config.DocumentStoreConfig{
-			Name:   name,
 			Source: source,
 		},
 	}

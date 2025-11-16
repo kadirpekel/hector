@@ -12,12 +12,18 @@ import (
 	"github.com/kadirpekel/hector/pkg/reasoning"
 )
 
+// documentStoreEntry holds a store name and its config
+type documentStoreEntry struct {
+	name   string
+	config *config.DocumentStoreConfig
+}
+
 // ContextServiceBuilder provides a fluent API for building context services (RAG)
 type ContextServiceBuilder struct {
 	database         databases.DatabaseProvider
 	embedder         embedders.EmbedderProvider
 	searchConfig     config.SearchConfig
-	documentStores   []*config.DocumentStoreConfig
+	documentStores   []documentStoreEntry
 	includeContext   *bool
 	componentManager *component.ComponentManager // For creating search engines with different databases
 }
@@ -25,7 +31,7 @@ type ContextServiceBuilder struct {
 // NewContextService creates a new context service builder
 func NewContextService() *ContextServiceBuilder {
 	return &ContextServiceBuilder{
-		documentStores: make([]*config.DocumentStoreConfig, 0),
+		documentStores: make([]documentStoreEntry, 0),
 		includeContext: boolPtr(true),
 	}
 }
@@ -82,27 +88,42 @@ func (b *ContextServiceBuilder) PreserveCase(preserve bool) *ContextServiceBuild
 }
 
 // WithDocumentStore adds a document store configuration
-func (b *ContextServiceBuilder) WithDocumentStore(store *config.DocumentStoreConfig) *ContextServiceBuilder {
+// storeName is the name from the config map key (used as collection name unless overridden)
+func (b *ContextServiceBuilder) WithDocumentStore(storeName string, store *config.DocumentStoreConfig) *ContextServiceBuilder {
+	if storeName == "" {
+		panic("document store name cannot be empty")
+	}
 	if store == nil {
 		panic("document store cannot be nil")
 	}
-	b.documentStores = append(b.documentStores, store)
+	b.documentStores = append(b.documentStores, documentStoreEntry{name: storeName, config: store})
 	return b
 }
 
 // WithDocumentStores adds multiple document store configurations
-func (b *ContextServiceBuilder) WithDocumentStores(stores []*config.DocumentStoreConfig) *ContextServiceBuilder {
-	for _, store := range stores {
+// storeNames is a slice of store names (map keys) corresponding to stores
+func (b *ContextServiceBuilder) WithDocumentStores(storeNames []string, stores []*config.DocumentStoreConfig) *ContextServiceBuilder {
+	if len(storeNames) != len(stores) {
+		panic("storeNames and stores must have the same length")
+	}
+	for i, store := range stores {
+		if storeNames[i] == "" {
+			panic("document store name cannot be empty")
+		}
 		if store == nil {
 			panic("document store cannot be nil")
 		}
-		b.documentStores = append(b.documentStores, store)
+		b.documentStores = append(b.documentStores, documentStoreEntry{name: storeNames[i], config: store})
 	}
 	return b
 }
 
 // WithDocumentStoreBuilder adds a document store using a builder
-func (b *ContextServiceBuilder) WithDocumentStoreBuilder(storeBuilder *DocumentStoreBuilder) *ContextServiceBuilder {
+// storeName is the name from the config map key (used as collection name unless overridden)
+func (b *ContextServiceBuilder) WithDocumentStoreBuilder(storeName string, storeBuilder *DocumentStoreBuilder) *ContextServiceBuilder {
+	if storeName == "" {
+		panic("document store name cannot be empty")
+	}
 	if storeBuilder == nil {
 		panic("document store builder cannot be nil")
 	}
@@ -110,16 +131,23 @@ func (b *ContextServiceBuilder) WithDocumentStoreBuilder(storeBuilder *DocumentS
 	if err != nil {
 		panic(fmt.Sprintf("failed to build document store: %v", err))
 	}
-	return b.WithDocumentStore(store)
+	return b.WithDocumentStore(storeName, store)
 }
 
 // WithDocumentStoreBuilders adds multiple document stores using builders
-func (b *ContextServiceBuilder) WithDocumentStoreBuilders(storeBuilders []*DocumentStoreBuilder) *ContextServiceBuilder {
-	for _, storeBuilder := range storeBuilders {
+// storeNames is a slice of store names (map keys) corresponding to builders
+func (b *ContextServiceBuilder) WithDocumentStoreBuilders(storeNames []string, storeBuilders []*DocumentStoreBuilder) *ContextServiceBuilder {
+	if len(storeNames) != len(storeBuilders) {
+		panic("storeNames and storeBuilders must have the same length")
+	}
+	for i, storeBuilder := range storeBuilders {
+		if storeNames[i] == "" {
+			panic("document store name cannot be empty")
+		}
 		if storeBuilder == nil {
 			panic("document store builder cannot be nil")
 		}
-		b.WithDocumentStoreBuilder(storeBuilder)
+		b.WithDocumentStoreBuilder(storeNames[i], storeBuilder)
 	}
 	return b
 }
@@ -166,13 +194,15 @@ func (b *ContextServiceBuilder) Build() (reasoning.ContextService, error) {
 // initializeDocumentStoresWithDatabases initializes document stores, creating separate search engines
 // for stores that specify their own database/embedder
 func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSearchEngine *context.SearchEngine) error {
-	for _, storeConfig := range b.documentStores {
+	for _, entry := range b.documentStores {
+		storeName := entry.name
+		storeConfig := entry.config
 		var searchEngine *context.SearchEngine
 
 		// If store specifies its own vector_store/embedder, create a separate search engine
 		if storeConfig.VectorStore != "" || storeConfig.Embedder != "" {
 			if b.componentManager == nil {
-				return fmt.Errorf("component manager required for document store '%s' with custom vector_store/embedder", storeConfig.Name)
+				return fmt.Errorf("component manager required for document store '%s' with custom vector_store/embedder", storeName)
 			}
 
 			// Get vector store (use store's vector_store or default)
@@ -181,7 +211,7 @@ func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSea
 				var err error
 				db, err = b.componentManager.GetDatabase(storeConfig.VectorStore)
 				if err != nil {
-					return fmt.Errorf("failed to get vector store '%s' for document store '%s': %w", storeConfig.VectorStore, storeConfig.Name, err)
+					return fmt.Errorf("failed to get vector store '%s' for document store '%s': %w", storeConfig.VectorStore, storeName, err)
 				}
 			}
 
@@ -191,7 +221,7 @@ func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSea
 				var err error
 				embedder, err = b.componentManager.GetEmbedder(storeConfig.Embedder)
 				if err != nil {
-					return fmt.Errorf("failed to get embedder '%s' for document store '%s': %w", storeConfig.Embedder, storeConfig.Name, err)
+					return fmt.Errorf("failed to get embedder '%s' for document store '%s': %w", storeConfig.Embedder, storeName, err)
 				}
 			}
 
@@ -199,7 +229,7 @@ func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSea
 			var err error
 			searchEngine, err = context.NewSearchEngine(db, embedder, b.searchConfig)
 			if err != nil {
-				return fmt.Errorf("failed to create search engine for document store '%s': %w", storeConfig.Name, err)
+				return fmt.Errorf("failed to create search engine for document store '%s': %w", storeName, err)
 			}
 		} else {
 			// Use default search engine
@@ -207,16 +237,16 @@ func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSea
 		}
 
 		// Create and register document store
-		store, err := context.NewDocumentStore(storeConfig, searchEngine)
+		store, err := context.NewDocumentStore(storeName, storeConfig, searchEngine)
 		if err != nil {
-			return fmt.Errorf("failed to create document store '%s': %w", storeConfig.Name, err)
+			return fmt.Errorf("failed to create document store '%s': %w", storeName, err)
 		}
 
 		context.RegisterDocumentStore(store)
 
 		// Start indexing (will skip for collection-only stores)
 		if err := store.StartIndexing(); err != nil {
-			return fmt.Errorf("failed to index document store '%s': %w", storeConfig.Name, err)
+			return fmt.Errorf("failed to index document store '%s': %w", storeName, err)
 		}
 
 		// Start watching if enabled
@@ -225,7 +255,7 @@ func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSea
 				if err := s.StartWatching(); err != nil {
 					fmt.Printf("Warning: Failed to start file watching for %s: %v\n", name, err)
 				}
-			}(store, storeConfig.Name)
+			}(store, storeName)
 		}
 	}
 

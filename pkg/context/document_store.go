@@ -146,12 +146,17 @@ type DocumentStore struct {
 	indexingSemaphore chan struct{}
 }
 
-func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *SearchEngine) (*DocumentStore, error) {
+// NewDocumentStore creates a new document store.
+// storeName is the name from the config map key (used as collection name unless overridden by Collection).
+func NewDocumentStore(storeName string, storeConfig *config.DocumentStoreConfig, searchEngine *SearchEngine) (*DocumentStore, error) {
+	if storeName == "" {
+		return nil, NewDocumentStoreError("", "NewDocumentStore", "store name is required", "", nil)
+	}
 	if storeConfig == nil {
-		return nil, NewDocumentStoreError("", "NewDocumentStore", "store config is required", "", nil)
+		return nil, NewDocumentStoreError(storeName, "NewDocumentStore", "store config is required", "", nil)
 	}
 	if searchEngine == nil {
-		return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "search engine is required", "", nil)
+		return nil, NewDocumentStoreError(storeName, "NewDocumentStore", "search engine is required", "", nil)
 	}
 
 	// Set defaults for config
@@ -164,7 +169,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 	dataSource, err := factory.CreateDataSource(storeConfig)
 	if err != nil {
 		cancel()
-		return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "failed to create data source", "", err)
+		return nil, NewDocumentStoreError(storeName, "NewDocumentStore", "failed to create data source", "", err)
 	}
 
 	// Determine source path for status/checkpoints
@@ -202,7 +207,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 	chunker, err := chunking.NewChunker(chunkerConfig)
 	if err != nil {
 		cancel()
-		return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "failed to create chunker", "", err)
+		return nil, NewDocumentStoreError(storeName, "NewDocumentStore", "failed to create chunker", "", err)
 	}
 
 	// Determine concurrency limit
@@ -218,10 +223,10 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 
 	// Initialize checkpoint manager using pointer value (defaults already set in SetDefaults)
 	enableCheckpoints := storeConfig.EnableCheckpoints != nil && *storeConfig.EnableCheckpoints
-	checkpointManager := NewCheckpointManager(storeConfig.Name, sourcePath, enableCheckpoints)
+	checkpointManager := NewCheckpointManager(storeName, sourcePath, enableCheckpoints)
 
 	store := &DocumentStore{
-		name:               storeConfig.Name,
+		name:               storeName,
 		config:             storeConfig,
 		searchEngine:       searchEngine,
 		sourcePath:         sourcePath,
@@ -236,7 +241,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 		cancel:             cancel,
 		indexingSemaphore:  make(chan struct{}, maxConcurrent),
 		status: &DocumentStoreStatus{
-			Name:        storeConfig.Name,
+			Name:        storeName,
 			SourcePath:  sourcePath,
 			Storage:     "vector_database",
 			LastIndexed: time.Time{},
@@ -249,7 +254,7 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 	if storeConfig.EnableWatchChanges != nil && *storeConfig.EnableWatchChanges && dataSource.Type() == "directory" {
 		if err := store.initializeWatcher(); err != nil {
 			cancel()
-			return nil, NewDocumentStoreError(storeConfig.Name, "NewDocumentStore", "failed to initialize watcher", "", err)
+			return nil, NewDocumentStoreError(storeName, "NewDocumentStore", "failed to initialize watcher", "", err)
 		}
 	}
 
@@ -257,13 +262,15 @@ func NewDocumentStore(storeConfig *config.DocumentStoreConfig, searchEngine *Sea
 }
 
 func (ds *DocumentStore) StartIndexing() error {
-	// Collection-only stores don't need indexing
-	if ds.config.Collection != "" {
+	// Stores with collection override pointing to existing collection don't need indexing
+	// (if source is not set, it means it's a read-only reference to existing collection)
+	if ds.config.Collection != "" && ds.config.Source == "" {
 		ds.mu.Lock()
 		ds.status.IsIndexing = false
 		ds.status.LastIndexed = time.Now()
 		ds.mu.Unlock()
-		fmt.Printf("Collection-only store '%s' (collection: %s) - skipping indexing\n", ds.name, ds.config.Collection)
+		collectionName := ds.getCollectionName()
+		fmt.Printf("Collection-only store '%s' (collection: %s) - skipping indexing\n", ds.name, collectionName)
 		return nil
 	}
 
@@ -390,6 +397,9 @@ func (ds *DocumentStore) indexDocument(doc *indexing.Document) error {
 	baseMetadata["size"] = doc.Size
 	baseMetadata["last_modified"] = doc.LastModified.Unix()
 	baseMetadata["store_name"] = ds.name
+	// Set collection name in metadata so IngestDocument knows which collection to use
+	// This uses the collection override if set, otherwise the store name
+	baseMetadata["collection"] = ds.getCollectionName()
 	baseMetadata["source_type"] = ds.dataSource.Type()
 	baseMetadata["indexed_at"] = time.Now().Unix()
 
@@ -629,27 +639,29 @@ func (ds *DocumentStore) GetConfig() *config.DocumentStoreConfig {
 	return ds.config
 }
 
+// GetCollectionName returns the collection name for this store.
+// Uses Collection override if set, otherwise uses store name.
+func (ds *DocumentStore) GetCollectionName() string {
+	if ds.config.Collection != "" {
+		return ds.config.Collection
+	}
+	return ds.name
+}
+
+// getCollectionName is an internal alias for GetCollectionName
+func (ds *DocumentStore) getCollectionName() string {
+	return ds.GetCollectionName()
+}
+
 func (ds *DocumentStore) Search(ctx context.Context, query string, limit int) ([]databases.SearchResult, error) {
 	if ds.searchEngine == nil {
 		return nil, NewDocumentStoreError(ds.name, "Search", "search engine not available", "", nil)
 	}
 
-	// If this is a collection-only store, search the collection directly
-	if ds.config.Collection != "" {
-		// Use collection name in filter so search engine knows which collection to search
-		filter := map[string]interface{}{
-			"collection": ds.config.Collection,
-		}
-		results, err := ds.searchEngine.SearchWithFilter(ctx, query, limit, filter)
-		if err != nil {
-			return nil, NewDocumentStoreError(ds.name, "Search", "vector search failed", "", err)
-		}
-		return results, nil
-	}
-
-	// For regular stores, filter by store_name
+	// Always search by collection name (store name or override)
+	collectionName := ds.getCollectionName()
 	filter := map[string]interface{}{
-		"store_name": ds.name,
+		"collection": collectionName,
 	}
 
 	results, err := ds.searchEngine.SearchWithFilter(ctx, query, limit, filter)
@@ -1167,22 +1179,29 @@ func UnregisterDocumentStore(name string) {
 	}
 }
 
-func InitializeDocumentStoresFromConfig(configs []*config.DocumentStoreConfig, searchEngine *SearchEngine) error {
+// InitializeDocumentStoresFromConfig initializes document stores from configs.
+// storeNames is a slice of store names (map keys) corresponding to configs.
+// This function is deprecated - use ContextServiceBuilder instead.
+func InitializeDocumentStoresFromConfig(storeNames []string, configs []*config.DocumentStoreConfig, searchEngine *SearchEngine) error {
+	if len(storeNames) != len(configs) {
+		return fmt.Errorf("storeNames and configs must have the same length")
+	}
 	if len(configs) == 0 {
 		return nil
 	}
 
-	for _, config := range configs {
-		store, err := NewDocumentStore(config, searchEngine)
+	for i, config := range configs {
+		storeName := storeNames[i]
+		store, err := NewDocumentStore(storeName, config, searchEngine)
 		if err != nil {
-			fmt.Printf("Warning: Failed to create document store %s: %v\n", config.Name, err)
+			fmt.Printf("Warning: Failed to create document store %s: %v\n", storeName, err)
 			continue
 		}
 
 		RegisterDocumentStore(store)
 
 		if err := store.StartIndexing(); err != nil {
-			fmt.Printf("Warning: Failed to index document store %s: %v\n", config.Name, err)
+			fmt.Printf("Warning: Failed to index document store %s: %v\n", storeName, err)
 			continue
 		}
 
@@ -1191,7 +1210,7 @@ func InitializeDocumentStoresFromConfig(configs []*config.DocumentStoreConfig, s
 				if err := s.StartWatching(); err != nil {
 					fmt.Printf("Warning: Failed to start file watching for %s: %v\n", name, err)
 				}
-			}(store, config.Name)
+			}(store, storeName)
 		}
 	}
 

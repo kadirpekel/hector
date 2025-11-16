@@ -43,14 +43,15 @@ func TestNewDocumentStore(t *testing.T) {
 
 	tests := []struct {
 		name         string
+		storeName    string
 		storeConfig  *config.DocumentStoreConfig
 		searchEngine *SearchEngine
 		wantError    bool
 	}{
 		{
-			name: "valid_configuration",
+			name:      "valid_configuration",
+			storeName: "test-store",
 			storeConfig: &config.DocumentStoreConfig{
-				Name:               "test-store",
 				Path:               tempDir,
 				Source:             "directory",
 				MaxFileSize:        1024 * 1024,
@@ -63,41 +64,42 @@ func TestNewDocumentStore(t *testing.T) {
 		},
 		{
 			name:         "nil_store_config",
+			storeName:    "test-store",
 			storeConfig:  nil,
 			searchEngine: &SearchEngine{},
 			wantError:    true,
 		},
 		{
-			name: "nil_search_engine",
+			name:      "nil_search_engine",
+			storeName: "test-store",
 			storeConfig: &config.DocumentStoreConfig{
-				Name: "test-store",
 				Path: tempDir,
 			},
 			searchEngine: nil,
 			wantError:    true,
 		},
 		{
-			name: "empty_store_name",
+			name:      "empty_store_name",
+			storeName: "",
 			storeConfig: &config.DocumentStoreConfig{
-				Name: "",
 				Path: tempDir,
 			},
 			searchEngine: &SearchEngine{},
-			wantError:    false,
+			wantError:    true, // Empty store name should error
 		},
 		{
-			name: "empty_source_path",
+			name:      "empty_source_path",
+			storeName: "test-store",
 			storeConfig: &config.DocumentStoreConfig{
-				Name: "test-store",
 				Path: "",
 			},
 			searchEngine: &SearchEngine{},
 			wantError:    false, // SetDefaults will set it to "./" which is valid
 		},
 		{
-			name: "nonexistent_source_path",
+			name:      "nonexistent_source_path",
+			storeName: "test-store",
 			storeConfig: &config.DocumentStoreConfig{
-				Name: "test-store",
 				Path: "/nonexistent/path",
 			},
 			searchEngine: &SearchEngine{},
@@ -107,7 +109,7 @@ func TestNewDocumentStore(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store, err := NewDocumentStore(tt.storeConfig, tt.searchEngine)
+			store, err := NewDocumentStore(tt.storeName, tt.storeConfig, tt.searchEngine)
 
 			if tt.wantError {
 				if err == nil {
@@ -124,8 +126,8 @@ func TestNewDocumentStore(t *testing.T) {
 					t.Error("NewDocumentStore() returned nil store")
 				}
 				if store != nil {
-					if store.name != tt.storeConfig.Name {
-						t.Errorf("NewDocumentStore() name = %v, want %v", store.name, tt.storeConfig.Name)
+					if store.name != tt.storeName {
+						t.Errorf("NewDocumentStore() name = %v, want %v", store.name, tt.storeName)
 					}
 					if store.sourcePath != tt.storeConfig.Path {
 						t.Errorf("NewDocumentStore() sourcePath = %v, want %v", store.sourcePath, tt.storeConfig.Path)
@@ -162,7 +164,6 @@ func TestDocumentStore_StartIndexing(t *testing.T) {
 	}
 
 	storeConfig := &config.DocumentStoreConfig{
-		Name:               "test-store",
 		Path:               tempDir,
 		Source:             "directory",
 		MaxFileSize:        1024 * 1024,
@@ -171,7 +172,7 @@ func TestDocumentStore_StartIndexing(t *testing.T) {
 		EnableWatchChanges: config.BoolPtr(false),
 	}
 
-	store, err := NewDocumentStore(storeConfig, &SearchEngine{})
+	store, err := NewDocumentStore("test-store", storeConfig, &SearchEngine{})
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
@@ -230,11 +231,10 @@ func TestDocumentStore_GetDocument(t *testing.T) {
 
 func TestDocumentStore_GetStatus(t *testing.T) {
 	storeConfig := &config.DocumentStoreConfig{
-		Name: "test-store",
 		Path: "/tmp",
 	}
 
-	store, err := NewDocumentStore(storeConfig, &SearchEngine{})
+	store, err := NewDocumentStore("test-store", storeConfig, &SearchEngine{})
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
@@ -264,13 +264,12 @@ func TestDocumentStore_GetStatus(t *testing.T) {
 
 func TestDocumentStore_FileFiltering(t *testing.T) {
 	storeConfig := &config.DocumentStoreConfig{
-		Name:            "test-store",
 		Path:            "/tmp",
 		IncludePatterns: []string{"*.txt", "*.md"},
 		ExcludePatterns: []string{".tmp", "temp"},
 	}
 
-	store, err := NewDocumentStore(storeConfig, &SearchEngine{})
+	store, err := NewDocumentStore("test-store", storeConfig, &SearchEngine{})
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
@@ -330,11 +329,10 @@ func TestDocumentStore_FileFiltering(t *testing.T) {
 
 func TestDocumentStore_TypeDetection(t *testing.T) {
 	storeConfig := &config.DocumentStoreConfig{
-		Name: "test-store",
 		Path: "/tmp",
 	}
 
-	store, err := NewDocumentStore(storeConfig, &SearchEngine{})
+	store, err := NewDocumentStore("test-store", storeConfig, &SearchEngine{})
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
@@ -417,13 +415,12 @@ func TestDocumentStore_TypeDetection(t *testing.T) {
 
 func TestDocumentStore_ContentChunking(t *testing.T) {
 	storeConfig := &config.DocumentStoreConfig{
-		Name:          "test-store",
 		Path:          "/tmp",
 		ChunkSize:     100,
 		ChunkStrategy: "simple",
 	}
 
-	store, err := NewDocumentStore(storeConfig, &SearchEngine{})
+	store, err := NewDocumentStore("test-store", storeConfig, &SearchEngine{})
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
@@ -483,11 +480,10 @@ func TestDocumentStore_ContentChunking(t *testing.T) {
 
 func TestDocumentStore_Close(t *testing.T) {
 	storeConfig := &config.DocumentStoreConfig{
-		Name: "test-store",
 		Path: "/tmp",
 	}
 
-	store, err := NewDocumentStore(storeConfig, &SearchEngine{})
+	store, err := NewDocumentStore("test-store", storeConfig, &SearchEngine{})
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
@@ -501,11 +497,10 @@ func TestDocumentStore_Close(t *testing.T) {
 func TestDocumentStoreRegistry(t *testing.T) {
 
 	storeConfig := &config.DocumentStoreConfig{
-		Name: "test-store",
 		Path: "/tmp",
 	}
 
-	store, err := NewDocumentStore(storeConfig, &SearchEngine{})
+	store, err := NewDocumentStore("test-store", storeConfig, &SearchEngine{})
 	if err != nil {
 		t.Fatalf("NewDocumentStore() error = %v", err)
 	}
