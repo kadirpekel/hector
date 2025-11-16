@@ -30,9 +30,10 @@ const (
 
 // BuildAvailableAgentsContext builds context string listing available agents
 // This is a shared helper that can be used by any reasoning strategy
-// Logic:
-//   - If sub_agents configured: only show those agents (honor user intent)
-//   - If sub_agents NOT configured: show all agents, honoring visibility (exclude internal by default)
+// Consistent assignment pattern (matches Tools and DocumentStores):
+//   - nil/omitted: show all agents, honoring visibility (permissive default)
+//   - [] (explicitly empty): show no agents (explicit restriction)
+//   - [agents...]: only show those specific agents (scoped access)
 //   - Always exclude current agent (prevents infinite loops)
 func BuildAvailableAgentsContext(state *ReasoningState) string {
 	if state == nil || state.GetServices() == nil || state.GetServices().Registry() == nil {
@@ -45,11 +46,10 @@ func BuildAvailableAgentsContext(state *ReasoningState) string {
 
 	var agentEntries []AgentRegistryEntry
 
-	if len(subAgents) > 0 {
-		// Honor sub_agents config: only show configured sub-agents
-		agentEntries = registry.FilterAgents(subAgents)
-	} else {
-		// No sub_agents configured: show all available agents, honoring visibility
+	// Consistent assignment pattern: nil = all, [] = none, [agents...] = scoped
+	// This matches the pattern used for Tools and DocumentStores
+	if subAgents == nil {
+		// nil = show all available agents (permissive default), honoring visibility
 		allAgents := registry.ListAgents()
 		agentEntries = make([]AgentRegistryEntry, 0, len(allAgents))
 		for _, entry := range allAgents {
@@ -59,6 +59,12 @@ func BuildAvailableAgentsContext(state *ReasoningState) string {
 			}
 			agentEntries = append(agentEntries, entry)
 		}
+	} else if len(subAgents) == 0 {
+		// [] = explicitly empty = no agents available (explicit restriction)
+		agentEntries = []AgentRegistryEntry{}
+	} else {
+		// [agents...] = scoped: only show configured sub-agents
+		agentEntries = registry.FilterAgents(subAgents)
 	}
 
 	// Always exclude current agent - agents should never call themselves (prevents infinite loops)
@@ -317,13 +323,32 @@ func BuildCommonContext(state *ReasoningState) string {
 
 // BuildAvailableDocumentStoresContext builds context string listing available document stores
 // This is a shared helper that can be used by any reasoning strategy
+// Only shows stores that the agent can actually access (from ContextService)
 func BuildAvailableDocumentStoresContext(state *ReasoningState) string {
-	if state == nil {
+	if state == nil || state.GetServices() == nil {
 		return ""
 	}
 
-	// Get document stores from registry
-	storeNames := hectorcontext.ListDocumentStoresFromRegistry()
+	contextService := state.GetServices().Context()
+	if contextService == nil {
+		return ""
+	}
+
+	// Get assigned stores from context service (nil = all stores, [] = no stores, [names...] = scoped)
+	assignedStores := contextService.GetAssignedStores()
+	
+	var storeNames []string
+	if assignedStores == nil {
+		// nil means access to all stores - list all from registry
+		storeNames = hectorcontext.ListDocumentStoresFromRegistry()
+	} else if len(assignedStores) == 0 {
+		// Empty slice means no access - return empty
+		return ""
+	} else {
+		// Has specific stores - only show those
+		storeNames = assignedStores
+	}
+
 	if len(storeNames) == 0 {
 		return ""
 	}
@@ -337,23 +362,15 @@ func BuildAvailableDocumentStoresContext(state *ReasoningState) string {
 			continue
 		}
 
-		status := store.GetStatus()
-
-		// Build description with metadata
-		var descParts []string
-		if status.SourcePath != "" {
-			descParts = append(descParts, fmt.Sprintf("source: %s", status.SourcePath))
-		}
-		if status.DocumentCount > 0 {
-			descParts = append(descParts, fmt.Sprintf("%d documents", status.DocumentCount))
+		// Use shared store description builder for consistent formatting
+		description := hectorcontext.BuildStoreDescription(store)
+		
+		storeEntry := fmt.Sprintf("- %s", storeName)
+		if description != "" {
+			storeEntry += fmt.Sprintf(" (%s)", description)
 		}
 
-		description := storeName
-		if len(descParts) > 0 {
-			description += fmt.Sprintf(" (%s)", strings.Join(descParts, ", "))
-		}
-
-		storeEntries = append(storeEntries, fmt.Sprintf("- %s", description))
+		storeEntries = append(storeEntries, storeEntry)
 	}
 
 	if len(storeEntries) == 0 {
@@ -361,9 +378,16 @@ func BuildAvailableDocumentStoresContext(state *ReasoningState) string {
 	}
 
 	context += strings.Join(storeEntries, "\n")
-	context += "\n\nIMPORTANT: When using the search tool, you can specify which stores to search using the 'stores' parameter.\n"
-	context += "If you omit 'stores', all available stores will be searched.\n"
-	context += "Use specific store names when you know which store contains the information you need."
+	context += "\n\nCRITICAL INSTRUCTIONS:\n"
+	context += "- When the user asks about information, policies, requirements, or any content that might be in these document stores, you MUST use the 'search' tool to find it.\n"
+	context += "- Do NOT respond that you don't have access to information without first using the search tool.\n"
+	context += "- The search tool performs semantic search across all document stores to find relevant information.\n"
+	if assignedStores == nil {
+		context += "- You can search all stores by omitting the 'stores' parameter, or specify specific stores.\n"
+	} else {
+		context += fmt.Sprintf("- You can search all your assigned stores by omitting the 'stores' parameter, or specify specific stores like: %v\n", storeNames)
+	}
+	context += "- Always call the search tool first when answering questions about documentation, policies, procedures, or knowledge base content."
 
 	return context
 }

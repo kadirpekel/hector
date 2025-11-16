@@ -201,9 +201,10 @@ func (se *SearchEngine) processQuery(query string) string {
 	// Trim whitespace
 	processed := strings.TrimSpace(query)
 
-	// Lowercase query only if explicitly disabled (default: preserve for code search)
+	// Determine if case should be preserved (default: true for code search)
 	// Preserving case is important for code identifiers like HTTP, API, etc.
-	if se.config.PreserveCase == nil || !*se.config.PreserveCase {
+	preserveCase := se.config.PreserveCase == nil || *se.config.PreserveCase
+	if !preserveCase {
 		processed = strings.ToLower(processed)
 	}
 

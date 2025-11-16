@@ -26,6 +26,7 @@ type ContextServiceBuilder struct {
 	documentStores   []documentStoreEntry
 	includeContext   *bool
 	componentManager *component.ComponentManager // For creating search engines with different databases
+	accessAllStores  bool                        // If true, agent has access to all stores (DocumentStores was nil)
 }
 
 // NewContextService creates a new context service builder
@@ -60,7 +61,6 @@ func (b *ContextServiceBuilder) WithSearchConfig(cfg config.SearchConfig) *Conte
 	return b
 }
 
-
 // TopK sets the default top K results
 func (b *ContextServiceBuilder) TopK(k int) *ContextServiceBuilder {
 	b.searchConfig.TopK = k
@@ -94,6 +94,7 @@ func (b *ContextServiceBuilder) WithDocumentStore(storeName string, store *confi
 
 // WithDocumentStores adds multiple document store configurations
 // storeNames is a slice of store names (map keys) corresponding to stores
+// accessAllStores indicates if agent has access to all stores (DocumentStores was nil)
 func (b *ContextServiceBuilder) WithDocumentStores(storeNames []string, stores []*config.DocumentStoreConfig) *ContextServiceBuilder {
 	if len(storeNames) != len(stores) {
 		panic("storeNames and stores must have the same length")
@@ -107,6 +108,12 @@ func (b *ContextServiceBuilder) WithDocumentStores(storeNames []string, stores [
 		}
 		b.documentStores = append(b.documentStores, documentStoreEntry{name: storeNames[i], config: store})
 	}
+	return b
+}
+
+// WithAccessAllStores marks that the agent has access to all stores (DocumentStores was nil)
+func (b *ContextServiceBuilder) WithAccessAllStores(accessAll bool) *ContextServiceBuilder {
+	b.accessAllStores = accessAll
 	return b
 }
 
@@ -179,8 +186,30 @@ func (b *ContextServiceBuilder) Build() (reasoning.ContextService, error) {
 		return nil, fmt.Errorf("failed to initialize document stores: %w", err)
 	}
 
-	// Create context service (use default search engine for context service)
-	return agent.NewContextService(defaultSearchEngine), nil
+	// Extract store names for scoping the context service
+	storeNames := make([]string, 0, len(b.documentStores))
+	for _, entry := range b.documentStores {
+		storeNames = append(storeNames, entry.name)
+	}
+	
+	// Create context service scoped to assigned document stores
+	// If accessAllStores is true, pass nil (means all stores)
+	// Otherwise, pass store names (scoped access)
+	// Note: Empty slice [] means no stores, nil means all stores
+	var storesForService []string
+	if len(storeNames) == 0 {
+		// This shouldn't happen if Build() is called, but handle gracefully
+		return agent.NewNoOpContextService(), nil
+	}
+	if b.accessAllStores {
+		// Pass nil to indicate "all stores" access
+		storesForService = nil
+	} else {
+		// Pass store names for scoped access
+		storesForService = storeNames
+	}
+	
+	return agent.NewContextServiceWithStores(defaultSearchEngine, storesForService), nil
 }
 
 // initializeDocumentStoresWithDatabases initializes document stores, creating separate search engines

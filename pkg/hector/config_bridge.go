@@ -197,9 +197,15 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 	}
 
 	// Convert sub-agents
-	if len(agentCfg.SubAgents) > 0 {
+	// Consistent assignment pattern: nil = all, [] = none, [agents...] = scoped
+	// This matches the pattern used for Tools and DocumentStores
+	if agentCfg.SubAgents != nil {
+		// If explicitly set (even if empty), use it
+		// Empty slice means no sub-agents (explicit restriction)
+		// Non-empty slice means scoped to those agents
 		builder = builder.WithSubAgents(agentCfg.SubAgents)
 	}
+	// If nil, don't set sub-agents (agent can see all agents via agent_call tool)
 
 	// Convert tools
 	toolRegistry := b.componentManager.GetToolRegistry()
@@ -246,6 +252,14 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 					createdTool, createErr = tools.NewApplyPatchToolWithConfig(toolName, defaultConfig)
 				case "grep_search":
 					createdTool, createErr = tools.NewGrepSearchToolWithConfig(toolName, defaultConfig)
+				case "search":
+					// Search tool requires agent's document stores (empty = all stores)
+					// If agent has document stores, use them; otherwise empty means all stores
+					agentStores := []string{}
+					if agentCfg.DocumentStores != nil {
+						agentStores = agentCfg.DocumentStores
+					}
+					createdTool, createErr = tools.NewSearchToolWithConfig(toolName, defaultConfig, agentStores)
 				case "web_request":
 					createdTool, createErr = tools.NewWebRequestToolWithConfig(toolName, defaultConfig)
 				case "todo":
@@ -273,9 +287,11 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 		builder = builder.WithTool(tool)
 	}
 
-	// Auto-add agent_call tool if sub-agents are present but tool wasn't explicitly added
+	// Auto-add agent_call tool if sub-agents are accessible but tool wasn't explicitly added
 	// This ensures sub-agents can be called even if agent_call wasn't in the tools list
-	if len(agentCfg.SubAgents) > 0 && b.agentRegistry != nil {
+	// Consistent with document stores: nil = all (auto-add), [] = none (don't add), [agents...] = scoped (auto-add)
+	hasSubAgentsAccess := agentCfg.SubAgents == nil || len(agentCfg.SubAgents) > 0
+	if hasSubAgentsAccess && b.agentRegistry != nil {
 		// Check if agent_call was already added (either in tools list or registry)
 		hasAgentCall := false
 		for _, toolName := range toolsToAdd {
@@ -291,6 +307,54 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 				if defaultConfig, ok := defaultToolConfigs["agent_call"]; ok && defaultConfig.Type == "agent_call" {
 					agentCallTool := tools.NewAgentCallTool(b.agentRegistry)
 					builder = builder.WithTool(agentCallTool)
+				}
+			}
+		}
+	}
+
+	// Auto-add search tool if document stores are accessible but tool wasn't explicitly added
+	// This ensures agents can search their document stores even if search wasn't in the tools list
+	// Rationale: If an agent has access to document stores, it should be able to search them.
+	// This matches the pattern of auto-adding agent_call for sub-agents.
+	// IMPORTANT: The search tool is implicitly scoped to the agent's assigned document stores.
+	// Rules (Option B - Permissive Default):
+	// - If document_stores is nil/omitted: agent can access ALL stores (search tool with empty availableStores searches all)
+	// - If document_stores is [] (explicitly empty): agent cannot access any stores (search tool not created)
+	// - If document_stores is ["store1", "store2"]: agent can only access those stores (search tool scoped to them)
+	// Distinguish: nil = omitted (access all), [] = explicitly empty (no access)
+	hasDocumentStoreAccessForTool := agentCfg.DocumentStores == nil || len(agentCfg.DocumentStores) > 0
+	if hasDocumentStoreAccessForTool {
+		// Check if search was already added (either in tools list or registry)
+		hasSearch := false
+		for _, toolName := range toolsToAdd {
+			if toolName == "search" {
+				hasSearch = true
+				break
+			}
+		}
+		// Also check if it's in the registry
+		if !hasSearch {
+			if _, err := toolRegistry.GetTool("search"); err != nil {
+				// Not in registry either, create it with agent's document stores
+				// The search tool will be implicitly scoped to only the agent's assigned stores
+				if defaultConfig, ok := defaultToolConfigs["search"]; ok && defaultConfig.Type == "search" {
+					// Create tool config (without document_stores - that comes from agent assignment)
+					// Default limit comes from SearchConfig.TopK, not tool config
+					searchToolConfig := &config.ToolConfig{
+						Type:     "search",
+						MaxLimit: defaultConfig.MaxLimit,
+					}
+					// Pass agent's document stores directly (not through config)
+					// nil = access all stores (empty slice to search tool searches all)
+					// non-nil = scoped to those stores
+					storesForTool := agentCfg.DocumentStores
+					if agentCfg.DocumentStores == nil {
+						storesForTool = []string{} // Empty slice means search all stores
+					}
+					searchTool, createErr := tools.NewSearchToolWithConfig("search", searchToolConfig, storesForTool)
+					if createErr == nil && searchTool != nil {
+						builder = builder.WithTool(searchTool)
+					}
 				}
 			}
 		}
@@ -328,12 +392,27 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 	// Check if IncludeContext is enabled (requires vector_store/embedder for RAG)
 	includeContextEnabled := agentCfg.Prompt.IncludeContext != nil && *agentCfg.Prompt.IncludeContext
 
-	if len(agentCfg.DocumentStores) > 0 {
+	// Determine if agent has document store access
+	// nil = omitted (access all stores), [] = explicitly empty (no access), [stores...] = scoped access
+	hasDocumentStoreAccess := agentCfg.DocumentStores == nil || len(agentCfg.DocumentStores) > 0
+	hasExplicitStores := agentCfg.DocumentStores != nil && len(agentCfg.DocumentStores) > 0
+
+	if hasDocumentStoreAccess {
 		// Check if all document stores have their own vector_store/embedder
 		allStoresHaveVectorStore := true
 		allStoresHaveEmbedder := true
 
-		for _, storeName := range agentCfg.DocumentStores {
+		// Check stores: if nil, check all stores; if has values, check only those
+		storesToCheck := agentCfg.DocumentStores
+		if agentCfg.DocumentStores == nil {
+			// nil means access all stores - check all configured stores
+			storesToCheck = make([]string, 0, len(b.config.DocumentStores))
+			for storeName := range b.config.DocumentStores {
+				storesToCheck = append(storesToCheck, storeName)
+			}
+		}
+
+		for _, storeName := range storesToCheck {
 			storeConfig, exists := b.config.DocumentStores[storeName]
 			if !exists {
 				return nil, fmt.Errorf("document store '%s' not found", storeName)
@@ -365,8 +444,12 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 		return nil, fmt.Errorf("embedder is required when: IncludeContext is enabled, or document stores are configured and at least one doesn't specify its own embedder")
 	}
 
-	// Only create context service if document stores are configured
-	if len(agentCfg.DocumentStores) > 0 {
+	// Create context service if agent has document store access
+	// Rules (Option B - Permissive Default):
+	// - If document_stores is nil/omitted: context service created with access to ALL stores
+	// - If document_stores is [] (explicitly empty): no context service created (agent has no access)
+	// - If document_stores has values: context service created and scoped to those stores
+	if hasDocumentStoreAccess {
 		var db databases.DatabaseProvider
 		var embedder embedders.EmbedderProvider
 		var err error
@@ -390,7 +473,7 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 		// If vector_store/embedder not needed (all stores have their own and IncludeContext disabled),
 		// we still need them for the context builder (it requires vector_store/embedder instances).
 		// Use first store's vector_store/embedder since all stores should have their own at this point.
-		if !needsAgentVectorStore {
+		if !needsAgentVectorStore && hasExplicitStores {
 			// All stores have their own vector_store - use first one for context builder
 			firstStoreName := agentCfg.DocumentStores[0]
 			firstStoreConfig := b.config.DocumentStores[firstStoreName]
@@ -403,7 +486,7 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 			}
 		}
 
-		if !needsAgentEmbedder {
+		if !needsAgentEmbedder && hasExplicitStores {
 			// All stores have their own embedder - use first one for context builder
 			firstStoreName := agentCfg.DocumentStores[0]
 			firstStoreConfig := b.config.DocumentStores[firstStoreName]
@@ -433,17 +516,34 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 		}
 
 		// Add document stores
+		// If nil, add all stores; if has values, add only those
 		var documentStoreNames []string
 		var documentStoreConfigs []*config.DocumentStoreConfig
-		for _, storeName := range agentCfg.DocumentStores {
-			storeConfig, exists := b.config.DocumentStores[storeName]
-			if !exists {
-				return nil, fmt.Errorf("document store '%s' not found", storeName)
+		if agentCfg.DocumentStores == nil {
+			// nil means access all stores - add all configured stores
+			for storeName, storeConfig := range b.config.DocumentStores {
+				documentStoreNames = append(documentStoreNames, storeName)
+				documentStoreConfigs = append(documentStoreConfigs, storeConfig)
 			}
-			documentStoreNames = append(documentStoreNames, storeName)
-			documentStoreConfigs = append(documentStoreConfigs, storeConfig)
+		} else {
+			// Explicit list - add only those stores
+			for _, storeName := range agentCfg.DocumentStores {
+				storeConfig, exists := b.config.DocumentStores[storeName]
+				if !exists {
+					return nil, fmt.Errorf("document store '%s' not found", storeName)
+				}
+				documentStoreNames = append(documentStoreNames, storeName)
+				documentStoreConfigs = append(documentStoreConfigs, storeConfig)
+			}
 		}
 		contextBuilder = contextBuilder.WithDocumentStores(documentStoreNames, documentStoreConfigs)
+
+		// Mark if this represents "all stores" access (when DocumentStores was nil)
+		if agentCfg.DocumentStores == nil {
+			contextBuilder = contextBuilder.WithAccessAllStores(true)
+		} else {
+			contextBuilder = contextBuilder.WithAccessAllStores(false)
+		}
 
 		// Set IncludeContext from prompt config
 		if agentCfg.Prompt.IncludeContext != nil {

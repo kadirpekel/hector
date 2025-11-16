@@ -310,55 +310,8 @@ func TestSearchTool_CreateErrorResponse(t *testing.T) {
 	}
 }
 
-func TestSearchTool_IsSearchTypeEnabled(t *testing.T) {
-	tool := NewSearchToolForTesting()
-
-	tests := []struct {
-		name       string
-		searchType string
-		expected   bool
-	}{
-		{
-			name:       "enabled search type - content",
-			searchType: "content",
-			expected:   true,
-		},
-		{
-			name:       "enabled search type - file",
-			searchType: "file",
-			expected:   true,
-		},
-		{
-			name:       "enabled search type - function",
-			searchType: "function",
-			expected:   true,
-		},
-		{
-			name:       "enabled search type - struct",
-			searchType: "struct",
-			expected:   true,
-		},
-		{
-			name:       "disabled search type",
-			searchType: "disabled",
-			expected:   false,
-		},
-		{
-			name:       "empty search type",
-			searchType: "",
-			expected:   false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tool.isSearchTypeEnabled(tt.searchType)
-			if result != tt.expected {
-				t.Errorf("isSearchTypeEnabled(%q) = %v, want %v", tt.searchType, result, tt.expected)
-			}
-		})
-	}
-}
+// TestSearchTool_IsSearchTypeEnabled removed: EnabledSearchTypes was removed
+// Search type is now informational only and doesn't filter results
 
 func TestSearchTool_GetStoresToSearch(t *testing.T) {
 	tool := NewSearchToolForTesting()
@@ -532,13 +485,11 @@ func TestSearchTool_MinInt(t *testing.T) {
 func TestSearchTool_WithCustomConfig(t *testing.T) {
 
 	config := &config.SearchToolConfig{
-		DocumentStores:     []string{"custom-store"},
-		DefaultLimit:       3,
-		MaxLimit:           5,
-		EnabledSearchTypes: []string{"content", "file"},
+		MaxLimit: 5, // Tool-level safety limit
 	}
 
-	tool := NewSearchTool(config)
+	// Pass document stores directly (not through config)
+	tool := NewSearchTool(config, []string{"custom-store"})
 
 	if tool == nil {
 		t.Fatal("NewSearchTool() returned nil")
@@ -548,7 +499,8 @@ func TestSearchTool_WithCustomConfig(t *testing.T) {
 		t.Errorf("GetName() = %v, want 'search'", tool.GetName())
 	}
 
-	toolWithDefaults := NewSearchTool(nil)
+	// Pass empty document stores (will search all stores)
+	toolWithDefaults := NewSearchTool(nil, []string{})
 	if toolWithDefaults == nil {
 		t.Fatal("NewSearchTool(nil) returned nil")
 	}
@@ -561,13 +513,11 @@ func TestSearchTool_WithCustomConfig(t *testing.T) {
 func TestSearchTool_WithConfig(t *testing.T) {
 
 	toolConfig := &config.ToolConfig{
-		DocumentStores:     []string{"config-store"},
-		DefaultLimit:       2,
-		MaxLimit:           4,
-		EnabledSearchTypes: []string{"content"},
+		MaxLimit: 4, // Tool-level safety limit
 	}
 
-	tool, err := NewSearchToolWithConfig("test-search", toolConfig)
+	// Document stores passed directly, not through config
+	tool, err := NewSearchToolWithConfig("test-search", toolConfig, []string{"test-store"})
 	if err != nil {
 		t.Fatalf("NewSearchToolWithConfig() error = %v", err)
 	}

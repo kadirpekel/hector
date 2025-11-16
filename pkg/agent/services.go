@@ -31,25 +31,72 @@ func (s *NoOpContextService) ExtractSources(context []databases.SearchResult) []
 	return []string{}
 }
 
+// GetAssignedStores returns nil (no stores) for NoOpContextService
+func (s *NoOpContextService) GetAssignedStores() []string {
+	return []string{} // Empty slice means no stores (explicitly empty)
+}
+
 type ContextOptions struct {
 	MaxResults int
 	MinScore   float64
 }
 
 type DefaultContextService struct {
-	searchEngine *hectorcontext.SearchEngine
+	searchEngine   *hectorcontext.SearchEngine
+	assignedStores []string // Document stores assigned to this agent (nil/empty = all stores)
 }
 
 func NewContextService(searchEngine *hectorcontext.SearchEngine) reasoning.ContextService {
 	return &DefaultContextService{
-		searchEngine: searchEngine,
+		searchEngine:   searchEngine,
+		assignedStores: nil, // nil means all stores (backward compatible)
+	}
+}
+
+func NewContextServiceWithStores(searchEngine *hectorcontext.SearchEngine, assignedStores []string) reasoning.ContextService {
+	return &DefaultContextService{
+		searchEngine:   searchEngine,
+		assignedStores: assignedStores,
 	}
 }
 
 func (s *DefaultContextService) SearchContext(ctx context.Context, query string) ([]databases.SearchResult, error) {
-	// Use shared parallel search function for all document stores
-	limit := 5 // Default limit for included context
-	return hectorcontext.SearchAllStores(ctx, query, limit)
+	// Use shared parallel search function, scoped to agent's assigned stores
+	// Limit determined by search config TopK (default: 5)
+	limit := 5 // Default limit
+	if s.searchEngine != nil {
+		status := s.searchEngine.GetStatus()
+		if cfg, ok := status["config"].(config.SearchConfig); ok && cfg.TopK > 0 {
+			limit = cfg.TopK
+		}
+	}
+	// Pass assigned stores to scope the search (nil/empty = all stores)
+	return hectorcontext.SearchAllStores(ctx, query, limit, s.assignedStores)
+}
+
+// GetSearchConfig returns the search config from the search engine
+func (s *DefaultContextService) GetSearchConfig() config.SearchConfig {
+	if s.searchEngine == nil {
+		return config.SearchConfig{}
+	}
+	status := s.searchEngine.GetStatus()
+	if cfg, ok := status["config"].(config.SearchConfig); ok {
+		return cfg
+	}
+	return config.SearchConfig{}
+}
+
+// GetAssignedStores returns the document stores assigned to this agent
+// Returns nil if agent has access to all stores, or a list of store names if scoped
+// Note: Empty slices are never passed to DefaultContextService (NoOpContextService is used instead)
+func (s *DefaultContextService) GetAssignedStores() []string {
+	if s.assignedStores == nil {
+		return nil // nil means all stores
+	}
+	// Return a copy to prevent modification
+	result := make([]string, len(s.assignedStores))
+	copy(result, s.assignedStores)
+	return result
 }
 
 func (s *DefaultContextService) ExtractSources(context []databases.SearchResult) []string {
@@ -71,17 +118,20 @@ func (s *DefaultContextService) ExtractSources(context []databases.SearchResult)
 
 type DefaultPromptService struct {
 	promptConfig   config.PromptConfig
+	searchConfig   config.SearchConfig
 	contextService reasoning.ContextService
 	historyService reasoning.HistoryService
 }
 
 func NewPromptService(
 	promptConfig config.PromptConfig,
+	searchConfig config.SearchConfig,
 	contextService reasoning.ContextService,
 	historyService reasoning.HistoryService,
 ) reasoning.PromptService {
 	return &DefaultPromptService{
 		promptConfig:   promptConfig,
+		searchConfig:   searchConfig,
 		contextService: contextService,
 		historyService: historyService,
 	}
@@ -117,8 +167,24 @@ func (s *DefaultPromptService) BuildMessages(
 		if err == nil && len(contextResults) > 0 {
 			var contextText strings.Builder
 			contextText.WriteString("Relevant context from documents:\n")
-			maxDocs := 5 // TODO: Make this configurable
+
+			// Determine max documents: use include_context_limit if set, otherwise use search.top_k
+			maxDocs := len(contextResults) // Default: use all retrieved results
+			if s.promptConfig.IncludeContextLimit != nil && *s.promptConfig.IncludeContextLimit > 0 {
+				maxDocs = *s.promptConfig.IncludeContextLimit
+			} else if s.searchConfig.TopK > 0 {
+				maxDocs = s.searchConfig.TopK
+			}
+			if maxDocs > len(contextResults) {
+				maxDocs = len(contextResults)
+			}
+
+			// Determine max content length: use include_context_max_length if set, otherwise default 500
 			maxContentLen := 500
+			if s.promptConfig.IncludeContextMaxLength != nil && *s.promptConfig.IncludeContextMaxLength > 0 {
+				maxContentLen = *s.promptConfig.IncludeContextMaxLength
+			}
+
 			for i, doc := range contextResults {
 				if i >= maxDocs {
 					break
@@ -183,33 +249,8 @@ func (s *DefaultPromptService) buildStoreDescription(storeName string) string {
 		return ""
 	}
 
-	// Get store config and status
-	config := store.GetConfig()
-	status := store.GetStatus()
-
-	// Build description parts
-	var descParts []string
-
-	// Add source type if available
-	if config != nil && config.Source != "" {
-		descParts = append(descParts, fmt.Sprintf("source: %s", config.Source))
-	}
-
-	// Add source path if available
-	if status != nil && status.SourcePath != "" {
-		descParts = append(descParts, fmt.Sprintf("path: %s", status.SourcePath))
-	}
-
-	// Add document count if available
-	if status != nil && status.DocumentCount > 0 {
-		descParts = append(descParts, fmt.Sprintf("%d documents", status.DocumentCount))
-	}
-
-	if len(descParts) == 0 {
-		return ""
-	}
-
-	return strings.Join(descParts, ", ")
+	// Use shared store description builder
+	return hectorcontext.BuildStoreDescription(store)
 }
 
 func (s *DefaultPromptService) composeSystemPromptFromSlots(slots reasoning.PromptSlots) string {

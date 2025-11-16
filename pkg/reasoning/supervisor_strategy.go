@@ -22,23 +22,13 @@ func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningSta
 
 	if iteration == 1 && state.GetServices() != nil && state.ShowThinking() {
 		// Get available agents from registry for goal extraction
-		// Logic: If sub_agents configured, use them; otherwise show all (honoring visibility)
+		// Consistent assignment pattern: nil = all, [] = none, [agents...] = scoped
 		var availableAgents []string
 		if registry := state.GetServices().Registry(); registry != nil {
 			currentAgentName := state.AgentName()
 			subAgents := state.SubAgents()
-			if len(subAgents) > 0 {
-				// Honor sub_agents config: only use configured sub-agents
-				agentEntries := registry.FilterAgents(subAgents)
-				availableAgents = make([]string, 0, len(agentEntries))
-				for _, entry := range agentEntries {
-					// Always exclude current agent - agents shouldn't delegate to themselves
-					if entry.ID != currentAgentName {
-						availableAgents = append(availableAgents, entry.ID)
-					}
-				}
-			} else {
-				// No sub_agents configured: show all agents, honoring visibility (exclude internal)
+			if subAgents == nil {
+				// nil = show all agents (permissive default), honoring visibility
 				agentEntries := registry.ListAgents()
 				availableAgents = make([]string, 0, len(agentEntries))
 				for _, entry := range agentEntries {
@@ -46,6 +36,19 @@ func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningSta
 					if entry.Visibility == "internal" {
 						continue
 					}
+					// Always exclude current agent - agents shouldn't delegate to themselves
+					if entry.ID != currentAgentName {
+						availableAgents = append(availableAgents, entry.ID)
+					}
+				}
+			} else if len(subAgents) == 0 {
+				// [] = explicitly empty = no agents available (explicit restriction)
+				availableAgents = []string{}
+			} else {
+				// [agents...] = scoped: only use configured sub-agents
+				agentEntries := registry.FilterAgents(subAgents)
+				availableAgents = make([]string, 0, len(agentEntries))
+				for _, entry := range agentEntries {
 					// Always exclude current agent - agents shouldn't delegate to themselves
 					if entry.ID != currentAgentName {
 						availableAgents = append(availableAgents, entry.ID)

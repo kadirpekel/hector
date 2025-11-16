@@ -342,9 +342,10 @@ agents:
       max_iterations: 20               # Fewer iterations for delegation
       enable_goal_extraction: true     # Extract goals from tasks
       
-      # Agent selection
-      sub_agents: []                   # Empty = all agents available
-      # sub_agents: ["agent1", "agent2"]  # Or specific agents only
+      # Agent selection (consistent with Tools and DocumentStores)
+      # sub_agents: not specified → all agents available (permissive default)
+      # sub_agents: []              # Explicitly empty = no agents (explicit restriction)
+      # sub_agents: ["agent1", "agent2"]  # Specific agents only (scoped access)
       
       # Display (inherited from chain-of-thought)
       enable_streaming: true

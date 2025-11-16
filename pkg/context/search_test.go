@@ -355,7 +355,6 @@ func TestSearchEngine_Search(t *testing.T) {
 	}
 }
 
-
 func TestSearchEngine_GetStatus(t *testing.T) {
 	searchConfig := config.SearchConfig{
 		TopK:      10,

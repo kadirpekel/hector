@@ -15,7 +15,7 @@ import (
 
 type SearchTool struct {
 	config          *config.SearchToolConfig
-	availableStores []string
+	availableStores []string // Document stores from agent assignment (empty = all stores)
 }
 
 type SearchRequest struct {
@@ -71,48 +71,42 @@ type collectionSearchResult struct {
 	results        []DocumentSearchResult
 }
 
-func NewSearchTool(searchConfig *config.SearchToolConfig) *SearchTool {
+// NewSearchTool creates a search tool with the given config and document stores.
+// documentStores should come from the agent's document_stores assignment.
+// If documentStores is empty, the tool will search all registered stores.
+// The default limit (when limit is 0) comes from SearchConfig.TopK, not this config.
+func NewSearchTool(searchConfig *config.SearchToolConfig, documentStores []string) *SearchTool {
 	if searchConfig == nil {
-
 		searchConfig = &config.SearchToolConfig{
-			DocumentStores:     []string{},
-			DefaultLimit:       10,
-			MaxLimit:           50,
-			EnabledSearchTypes: []string{"content", "file", "function", "struct"},
+			MaxLimit: 50, // Tool-level safety limit (must be <= SearchEngine.MaxTopK = 100)
 		}
 	}
 
-	if searchConfig.DefaultLimit == 0 {
-		searchConfig.DefaultLimit = 10
-	}
 	if searchConfig.MaxLimit == 0 {
-		searchConfig.MaxLimit = 50
-	}
-	if len(searchConfig.EnabledSearchTypes) == 0 {
-		searchConfig.EnabledSearchTypes = []string{"content", "file", "function", "struct"}
+		searchConfig.MaxLimit = 50 // Tool-level safety limit (must be <= SearchEngine.MaxTopK = 100)
 	}
 
 	return &SearchTool{
 		config:          searchConfig,
-		availableStores: searchConfig.DocumentStores,
+		availableStores: documentStores, // Stores come from agent assignment, not config
 	}
 }
 
-func NewSearchToolWithConfig(name string, toolConfig *config.ToolConfig) (*SearchTool, error) {
+// NewSearchToolWithConfig creates a search tool from tool config.
+// documentStores should come from the agent's document_stores assignment.
+// If documentStores is empty, the tool will search all registered stores.
+func NewSearchToolWithConfig(name string, toolConfig *config.ToolConfig, documentStores []string) (*SearchTool, error) {
 	if toolConfig == nil {
 		return nil, fmt.Errorf("tool config is required")
 	}
 
 	searchConfig := &config.SearchToolConfig{
-		DocumentStores:     toolConfig.DocumentStores,
-		DefaultLimit:       toolConfig.DefaultLimit,
-		MaxLimit:           toolConfig.MaxLimit,
-		EnabledSearchTypes: toolConfig.EnabledSearchTypes,
+		MaxLimit: toolConfig.MaxLimit,
 	}
 
 	searchConfig.SetDefaults()
 
-	return NewSearchTool(searchConfig), nil
+	return NewSearchTool(searchConfig, documentStores), nil
 }
 
 func (t *SearchTool) getAvailableStores() map[string]*hectorcontext.DocumentStore {
@@ -144,25 +138,38 @@ func (t *SearchTool) performSearch(ctx context.Context, req SearchRequest) (stri
 	searchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	if req.Limit == 0 {
-		req.Limit = t.config.DefaultLimit
-	}
-	if req.Limit > t.config.MaxLimit {
-		req.Limit = t.config.MaxLimit
-	}
-
-	if !t.isSearchTypeEnabled(req.Type) {
-		return t.createErrorResponse(fmt.Sprintf("Search type '%s' is not enabled", req.Type))
-	}
-
-	var allResults []DocumentSearchResult
-	var storesUsed []string
-
-	// Get available stores
+	// Get available stores first (needed to get TopK from search engine)
 	availableStores := t.getAvailableStores()
 	if len(availableStores) == 0 {
 		return t.createErrorResponse("No document stores available")
 	}
+
+	// If limit is 0, get default from SearchConfig.TopK (via first store's search engine)
+	if req.Limit == 0 {
+		// Get TopK from the first available store's search engine
+		for _, store := range availableStores {
+			searchEngine := store.GetSearchEngine()
+			if searchEngine != nil {
+				status := searchEngine.GetStatus()
+				if cfg, ok := status["config"].(config.SearchConfig); ok && cfg.TopK > 0 {
+					req.Limit = cfg.TopK
+					break
+				}
+			}
+		}
+		// Fallback if no search engine found or TopK is 0
+		if req.Limit == 0 {
+			req.Limit = 10 // Fallback to SearchEngine.DefaultTopK
+		}
+	}
+
+	// Enforce tool-level max limit
+	if req.Limit > t.config.MaxLimit {
+		req.Limit = t.config.MaxLimit
+	}
+
+	var allResults []DocumentSearchResult
+	var storesUsed []string
 
 	// Determine which stores to search (if specified)
 	storesToSearch := t.getStoresToSearch(req.Stores, availableStores)
@@ -444,15 +451,6 @@ func (t *SearchTool) buildSearchResponse(allResults []DocumentSearchResult, stor
 	return string(responseJSON), nil
 }
 
-func (t *SearchTool) isSearchTypeEnabled(searchType string) bool {
-	for _, enabled := range t.config.EnabledSearchTypes {
-		if enabled == searchType {
-			return true
-		}
-	}
-	return false
-}
-
 func (t *SearchTool) getStoresToSearch(requestedStores []string, availableStores map[string]*hectorcontext.DocumentStore) []string {
 	if len(requestedStores) == 0 {
 
@@ -528,9 +526,11 @@ func (t *SearchTool) GetInfo() ToolInfo {
 	// Get available stores to include in description
 	storeNames := hectorcontext.ListDocumentStoresFromRegistry()
 
-	description := "Search across configured document stores for files, content, functions, or structs"
+	description := "Search across configured document stores for files, content, functions, or structs using semantic search. "
+	description += "Use this tool when you need to find information from documentation, knowledge bases, or any indexed content. "
 	if len(storeNames) > 0 {
-		description += fmt.Sprintf(". Available stores: %s", strings.Join(storeNames, ", "))
+		description += fmt.Sprintf("Available document stores: %s. ", strings.Join(storeNames, ", "))
+		description += "You can search all stores by omitting the 'stores' parameter, or specify specific stores to search."
 	}
 
 	return ToolInfo{
@@ -583,43 +583,22 @@ func (t *SearchTool) GetName() string {
 }
 
 func (t *SearchTool) GetDescription() string {
-	return "Search across configured document stores for files, content, functions, or structs using semantic search. Results include line numbers for precise code references."
+	// Get available stores to include in description
+	storeNames := hectorcontext.ListDocumentStoresFromRegistry()
+
+	description := "Search across configured document stores for files, content, functions, or structs using semantic search. Results include line numbers for precise code references."
+	if len(storeNames) > 0 {
+		description += fmt.Sprintf(" Available document stores: %s.", strings.Join(storeNames, ", "))
+		description += " Use the 'stores' parameter to search specific stores, or omit it to search all stores."
+	}
+	return description
 }
 
-// buildStoreDescriptionFromStore builds a description from an existing store reference
-// This is more efficient when you already have the store object
+// buildStoreDescriptionFromStore builds a description for a document store.
+// This is more efficient when you already have the store object.
 func (t *SearchTool) buildStoreDescriptionFromStore(store *hectorcontext.DocumentStore, storeName string) string {
-	if store == nil {
-		return ""
-	}
-
-	// Get store config and status
-	config := store.GetConfig()
-	status := store.GetStatus()
-
-	// Build description parts
-	var descParts []string
-
-	// Add source type if available
-	if config != nil && config.Source != "" {
-		descParts = append(descParts, fmt.Sprintf("source: %s", config.Source))
-	}
-
-	// Add source path if available
-	if status != nil && status.SourcePath != "" {
-		descParts = append(descParts, fmt.Sprintf("path: %s", status.SourcePath))
-	}
-
-	// Add document count if available
-	if status != nil && status.DocumentCount > 0 {
-		descParts = append(descParts, fmt.Sprintf("%d documents", status.DocumentCount))
-	}
-
-	if len(descParts) == 0 {
-		return ""
-	}
-
-	return strings.Join(descParts, ", ")
+	// Use shared store description builder
+	return hectorcontext.BuildStoreDescription(store)
 }
 
 // buildStoreDescriptionFromStoreSafe is a safe version that recovers from panics
@@ -649,7 +628,7 @@ func (t *SearchTool) Execute(ctx context.Context, args map[string]interface{}) (
 	req := SearchRequest{
 		Query: query,
 		Type:  getStringWithDefault(args, "type", "content"),
-		Limit: getIntWithDefault(args, "limit", 10),
+		Limit: getIntWithDefault(args, "limit", 0), // 0 means use SearchConfig.TopK
 	}
 
 	if stores, ok := args["stores"]; ok {

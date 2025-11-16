@@ -115,13 +115,8 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 	if c.Tools == nil {
 		c.Tools = make(map[string]*ToolConfig)
 	}
-	if _, exists := c.Tools["search"]; !exists {
-		c.Tools["search"] = &ToolConfig{
-			Type:           "search",
-			DocumentStores: []string{storeName},
-		}
-		fmt.Printf("   - tool: 'search' (auto-configured)\n")
-	}
+	// Note: search tool no longer needs document_stores config - it uses agent's assigned stores
+	// We don't auto-create search tool config here anymore since it's handled by agent assignment
 	fmt.Printf("💡 To customize these, define them explicitly in your configuration.\n")
 }
 
@@ -530,19 +525,13 @@ func (c *Config) validateReferences() error {
 		}
 	}
 
-	for toolName, tool := range c.Tools {
+	// Tool validation: Search tool no longer has document_stores field
+	// Document stores come from agent assignment, not tool config
+	for _, tool := range c.Tools {
 		if tool == nil {
 			continue
 		}
-
-		if tool.Type == "search" {
-			for _, storeName := range tool.DocumentStores {
-				if _, exists := c.DocumentStores[storeName]; !exists {
-					return fmt.Errorf("tool '%s': document store '%s' not found (available: %v)",
-						toolName, storeName, mapKeys(c.DocumentStores))
-				}
-			}
-		}
+		// No validation needed for search tool document_stores (removed from config)
 	}
 
 	// Validate task database references

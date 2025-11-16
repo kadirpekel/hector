@@ -270,7 +270,7 @@ func (ds *DocumentStore) StartIndexing() error {
 		ds.status.IsIndexing = false
 		ds.status.LastIndexed = time.Now()
 		ds.mu.Unlock()
-		collectionName := ds.getCollectionName()
+		collectionName := ds.GetCollectionName()
 		fmt.Printf("Collection-only store '%s' (collection: %s) - skipping indexing\n", ds.name, collectionName)
 		return nil
 	}
@@ -400,7 +400,7 @@ func (ds *DocumentStore) indexDocument(doc *indexing.Document) error {
 	baseMetadata["store_name"] = ds.name
 	// Set collection name in metadata so IngestDocument knows which collection to use
 	// This uses the collection override if set, otherwise the store name
-	baseMetadata["collection"] = ds.getCollectionName()
+	baseMetadata["collection"] = ds.GetCollectionName()
 	baseMetadata["source_type"] = ds.dataSource.Type()
 	baseMetadata["indexed_at"] = time.Now().Unix()
 
@@ -649,9 +649,40 @@ func (ds *DocumentStore) GetCollectionName() string {
 	return ds.name
 }
 
-// getCollectionName is an internal alias for GetCollectionName
-func (ds *DocumentStore) getCollectionName() string {
-	return ds.GetCollectionName()
+// BuildStoreDescription creates a human-readable description from store config and status.
+// This is used by both SearchTool and PromptService for consistent store descriptions.
+func BuildStoreDescription(store *DocumentStore) string {
+	if store == nil {
+		return ""
+	}
+
+	// Get store config and status
+	config := store.GetConfig()
+	status := store.GetStatus()
+
+	// Build description parts
+	var descParts []string
+
+	// Add source type if available
+	if config != nil && config.Source != "" {
+		descParts = append(descParts, fmt.Sprintf("source: %s", config.Source))
+	}
+
+	// Add source path if available
+	if status != nil && status.SourcePath != "" {
+		descParts = append(descParts, fmt.Sprintf("path: %s", status.SourcePath))
+	}
+
+	// Add document count if available
+	if status != nil && status.DocumentCount > 0 {
+		descParts = append(descParts, fmt.Sprintf("%d documents", status.DocumentCount))
+	}
+
+	if len(descParts) == 0 {
+		return ""
+	}
+
+	return strings.Join(descParts, ", ")
 }
 
 func (ds *DocumentStore) Search(ctx context.Context, query string, limit int) ([]databases.SearchResult, error) {
@@ -660,7 +691,7 @@ func (ds *DocumentStore) Search(ctx context.Context, query string, limit int) ([
 	}
 
 	// Always search by collection name (store name or override)
-	collectionName := ds.getCollectionName()
+	collectionName := ds.GetCollectionName()
 	filter := map[string]interface{}{
 		"collection": collectionName,
 	}
@@ -696,15 +727,27 @@ func (t *documentStoreSearchTarget) GetID() string {
 
 // SearchAllStores searches all registered document stores in parallel
 // This is the unified parallel search function used by both SearchTool and SearchContext
-func SearchAllStores(ctx context.Context, query string, limit int) ([]databases.SearchResult, error) {
-	storeNames := ListDocumentStoresFromRegistry()
-	if len(storeNames) == 0 {
+// If storeNames is provided and non-empty, only those stores are searched (scoped search).
+// If storeNames is nil or empty, all registered stores are searched (global search).
+func SearchAllStores(ctx context.Context, query string, limit int, storeNames ...[]string) ([]databases.SearchResult, error) {
+	var storesToSearch []string
+
+	// Determine which stores to search
+	if len(storeNames) > 0 && len(storeNames[0]) > 0 {
+		// Scoped search: only search specified stores
+		storesToSearch = storeNames[0]
+	} else {
+		// Global search: search all registered stores
+		storesToSearch = ListDocumentStoresFromRegistry()
+	}
+
+	if len(storesToSearch) == 0 {
 		return []databases.SearchResult{}, nil
 	}
 
 	// Build search targets
-	targets := make([]ParallelSearchTarget, 0, len(storeNames))
-	for _, name := range storeNames {
+	targets := make([]ParallelSearchTarget, 0, len(storesToSearch))
+	for _, name := range storesToSearch {
 		store, exists := GetDocumentStoreFromRegistry(name)
 		if !exists {
 			continue

@@ -414,14 +414,14 @@ agents:
         recall_limit: 5
         collection: "agent_memory"
     
-    # Document Stores (RAG)
+    # Document Stores (RAG) - Assign stores by name
+    # nil/omitted = access all stores, [] = no access, [names...] = scoped access
     document_stores:
-      - name: "codebase"
-        paths: ["./src/"]
-        include_patterns: ["*.go", "*.py"]
-        exclude_patterns: ["*_test.go"]
-        chunk_size: 512
-        chunk_overlap: 50
+      - "codebase"           # Reference to document_stores.codebase (defined globally)
+      - "docs"               # Reference to document_stores.docs
+    
+    # Note: Document stores are defined globally in the document_stores: section
+    # This agent assignment controls which stores this agent can access
     
     # Security
     security:
@@ -551,7 +551,8 @@ agents:
     tools:
       - "agent_call"
       - "todo_write"
-    sub_agents:                   # Optional: restrict to specific agents
+    sub_agents:                   # Optional: agent assignment (consistent with tools/document_stores)
+                                  # nil/omitted = all agents, [] = no agents, [agents...] = scoped
       - "researcher"
       - "analyst"
 ```
@@ -619,9 +620,8 @@ tools:
     working_directory: "./"
   
   search:
-    
-    default_limit: 10
-    max_limit: 50
+    type: search
+    max_limit: 50            # Maximum results allowed (default limit comes from agent.search.top_k)
   
   todo_write:
     
@@ -975,6 +975,42 @@ Document stores enable RAG (Retrieval-Augmented Generation) by indexing document
 - **`directory`** - Index files from local filesystem directories
 - **`sql`** - Index data from SQL databases (PostgreSQL, MySQL, SQLite)
 - **`api`** - Index data from REST API endpoints
+
+### Agent Assignment
+
+Agents can be assigned to specific document stores to control access:
+
+```yaml
+document_stores:
+  knowledge_base:
+    source: sql
+    # ... config ...
+  internal_docs:
+    source: directory
+    # ... config ...
+
+agents:
+  # Access all stores (permissive default)
+  general_assistant:
+    # document_stores: not specified → accesses all stores
+  
+  # Scoped access (explicit assignment)
+  security_agent:
+    document_stores:
+      - "knowledge_base"      # Only these stores
+      - "internal_docs"
+  
+  # No access (explicit restriction)
+  isolated_agent:
+    document_stores: []       # Explicitly empty = no access
+```
+
+**Access Rules**:
+- **`nil`/omitted**: Agent has access to **ALL** registered document stores
+- **`[]` (explicitly empty)**: Agent has **NO access** to any document stores
+- **`["store1", ...]`**: Agent can **ONLY access** the explicitly listed stores
+
+The search tool is automatically created and scoped to the agent's assigned stores. See [Search Architecture](../core-concepts/search-architecture.md) for details.
 
 ### Directory Source
 

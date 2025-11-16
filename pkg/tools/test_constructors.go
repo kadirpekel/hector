@@ -51,11 +51,8 @@ func NewSearchReplaceToolForTesting() *SearchReplaceTool {
 
 func NewSearchToolForTesting() *SearchTool {
 	return NewSearchTool(&config.SearchToolConfig{
-		DocumentStores:     []string{"test-store"},
-		DefaultLimit:       5,
-		MaxLimit:           10,
-		EnabledSearchTypes: []string{"content", "file", "function", "struct"},
-	})
+		MaxLimit: 10, // Tool-level safety limit
+	}, []string{"test-store"}) // Document stores passed directly, not through config
 }
 
 func NewMCPToolSourceForTesting(name, url string) *MCPToolSource {

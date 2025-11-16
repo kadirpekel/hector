@@ -47,6 +47,9 @@ type ToolService interface {
 type ContextService interface {
 	SearchContext(ctx context.Context, query string) ([]databases.SearchResult, error)
 	ExtractSources(context []databases.SearchResult) []string
+	// GetAssignedStores returns the document stores assigned to this agent
+	// Returns nil if agent has access to all stores, or a list of store names if scoped
+	GetAssignedStores() []string
 }
 
 type PromptService interface {

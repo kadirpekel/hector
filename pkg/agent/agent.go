@@ -321,6 +321,37 @@ func (a *Agent) execute(
 				return
 			}
 
+			// Debug: Print final prompt sent to LLM
+			slog.Debug("=== FINAL PROMPT SENT TO LLM ===")
+			slog.Debug("Messages count", "count", len(messages))
+			for i, msg := range messages {
+				role := "UNKNOWN"
+				switch msg.Role {
+				case pb.Role_ROLE_USER:
+					role = "USER"
+				case pb.Role_ROLE_AGENT:
+					role = "AGENT"
+				case pb.Role_ROLE_UNSPECIFIED:
+					role = "SYSTEM/CONTEXT"
+				}
+				text := protocol.ExtractTextFromMessage(msg)
+				slog.Debug(fmt.Sprintf("Message %d [%s]", i+1, role), "content", text)
+			}
+			slog.Debug("Tool definitions count", "count", len(toolDefs))
+			for i, toolDef := range toolDefs {
+				slog.Debug(fmt.Sprintf("Tool %d: %s", i+1, toolDef.Name), "description", toolDef.Description)
+				if toolDef.Parameters != nil {
+					if props, ok := toolDef.Parameters["properties"].(map[string]interface{}); ok {
+						paramNames := make([]string, 0, len(props))
+						for name := range props {
+							paramNames = append(paramNames, name)
+						}
+						slog.Debug(fmt.Sprintf("  Parameters: %s", strings.Join(paramNames, ", ")))
+					}
+				}
+			}
+			slog.Debug("=== END FINAL PROMPT ===")
+
 			// Call LLM with retry logic for rate limits
 			text, toolCalls, tokens, err := a.callLLMWithRetry(spanCtx, messages, toolDefs, outputCh, cfg, span)
 			if err != nil {

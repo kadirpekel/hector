@@ -47,7 +47,9 @@ func NewLocalToolSourceWithConfigAndAgentRegistry(toolConfigs map[string]*config
 		case "command":
 			tool, err = NewCommandToolWithConfig(toolName, toolConfig)
 		case "search":
-			tool, err = NewSearchToolWithConfig(toolName, toolConfig)
+			// Search tool: document stores come from agent assignment, not config
+			// When created from global tool config (not agent context), use empty slice = search all stores
+			tool, err = NewSearchToolWithConfig(toolName, toolConfig, []string{})
 		case "write_file":
 			tool, err = NewFileWriterToolWithConfig(toolName, toolConfig)
 		case "search_replace":

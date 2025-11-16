@@ -799,28 +799,22 @@ func (c *CommandToolsConfig) SetDefaults() {
 }
 
 type SearchToolConfig struct {
-	DocumentStores     []string `yaml:"document_stores"`
-	DefaultLimit       int      `yaml:"default_limit"`
-	MaxLimit           int      `yaml:"max_limit"`
-	EnabledSearchTypes []string `yaml:"enabled_search_types"`
+	// MaxLimit is the maximum number of results allowed per search (tool-level safety limit)
+	// This must be <= SearchEngine.MaxTopK (100). Default: 50
+	// The default limit (when limit is 0) comes from SearchConfig.TopK, not this config.
+	MaxLimit int `yaml:"max_limit"`
 }
 
 func (c *SearchToolConfig) Validate() error {
-	if c.DefaultLimit <= 0 {
-		return fmt.Errorf("default_limit must be positive")
+	if c.MaxLimit < 0 {
+		return fmt.Errorf("max_limit must be non-negative")
 	}
 	return nil
 }
 
 func (c *SearchToolConfig) SetDefaults() {
-	if c.DefaultLimit == 0 {
-		c.DefaultLimit = 10
-	}
 	if c.MaxLimit == 0 {
-		c.MaxLimit = 50
-	}
-	if len(c.EnabledSearchTypes) == 0 {
-		c.EnabledSearchTypes = []string{"content", "file", "function", "struct"}
+		c.MaxLimit = 50 // Tool-level safety limit (must be <= SearchEngine.MaxTopK = 100)
 	}
 }
 
@@ -1014,6 +1008,10 @@ func GetDefaultToolConfigs() map[string]*ToolConfig {
 			WorkingDirectory: "./",
 			ContextLines:     2,
 		},
+		"search": {
+			Type:     "search",
+			MaxLimit: 50, // Tool-level safety limit (default limit comes from SearchConfig.TopK)
+		},
 		"web_request": {
 			Type:            "web_request",
 			Timeout:         "30s",
@@ -1084,10 +1082,9 @@ type ToolConfig struct {
 	ContextLines int `yaml:"context_lines,omitempty"`
 	MaxResults   int `yaml:"max_results,omitempty"`
 
-	DocumentStores     []string `yaml:"document_stores,omitempty"`
-	DefaultLimit       int      `yaml:"default_limit,omitempty"`
-	MaxLimit           int      `yaml:"max_limit,omitempty"`
-	EnabledSearchTypes []string `yaml:"enabled_search_types,omitempty"`
+	// Search tool settings (document_stores comes from agent assignment, not config)
+	// Default limit comes from SearchConfig.TopK, not tool config
+	MaxLimit int `yaml:"max_limit,omitempty"` // Tool-level safety limit (must be <= SearchEngine.MaxTopK = 100)
 
 	// web_request tool settings
 	Timeout            string   `yaml:"timeout,omitempty"`
@@ -1127,9 +1124,8 @@ func (c *ToolConfig) Validate() error {
 	case "search_replace":
 
 	case "search":
-		if len(c.DocumentStores) == 0 {
-			return fmt.Errorf("document_stores is required for search tool")
-		}
+		// document_stores is no longer required - search tool uses agent's assigned stores implicitly
+		// If document_stores is provided in config, it will be ignored (agent assignment takes precedence)
 	case "todo":
 
 	case "web_request":
@@ -1171,11 +1167,9 @@ func (c *ToolConfig) SetDefaults() {
 			c.WorkingDirectory = "./"
 		}
 	case "search":
-		if c.DefaultLimit == 0 {
-			c.DefaultLimit = 10
-		}
+		// Default limit comes from SearchConfig.TopK, not tool config
 		if c.MaxLimit == 0 {
-			c.MaxLimit = 50
+			c.MaxLimit = 50 // Tool-level safety limit (must be <= SearchEngine.MaxTopK = 100)
 		}
 	case "web_request":
 		// Liberal defaults - allow everything unless explicitly restricted
@@ -1904,6 +1898,11 @@ type PromptConfig struct {
 
 	// Enable RAG context injection from document stores
 	IncludeContext *bool `yaml:"include_context"`
+
+	// RAG context injection limits (only used when include_context is true)
+	// If not set, uses search.top_k from agent's search config
+	IncludeContextLimit     *int `yaml:"include_context_limit,omitempty"`      // Max number of documents to include (default: uses search.top_k)
+	IncludeContextMaxLength *int `yaml:"include_context_max_length,omitempty"` // Max content length per document in chars (default: 500)
 }
 
 // PromptSlotsConfig defines typed prompt slots for composable prompt engineering
@@ -1968,6 +1967,11 @@ func (c *PromptConfig) SetDefaults() {
 	if c.IncludeContext == nil {
 		c.IncludeContext = BoolPtr(false)
 	}
+	// Default content truncation length (if not specified)
+	if c.IncludeContextMaxLength == nil {
+		defaultMaxLength := 500
+		c.IncludeContextMaxLength = &defaultMaxLength
+	}
 }
 
 type ReasoningConfig struct {
@@ -2029,7 +2033,7 @@ func (c *SearchConfig) Validate() error {
 
 func (c *SearchConfig) SetDefaults() {
 	if c.TopK == 0 {
-		c.TopK = 5
+		c.TopK = 10 // Default number of results
 	}
 	if c.Threshold == 0 {
 		c.Threshold = 0.5 // Default 50% similarity threshold (balanced precision/recall for RAG)

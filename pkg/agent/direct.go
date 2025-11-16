@@ -194,7 +194,14 @@ func buildAgentServicesDirect(opts AgentBuilderOptions, promptConfig config.Prom
 	)
 
 	// Prompt Service (reuse promptConfig built earlier)
-	promptService := NewPromptService(promptConfig, contextService, historyService)
+	// Get search config from context service if available
+	searchConfig := config.SearchConfig{}
+	if defaultContextService, ok := contextService.(*DefaultContextService); ok {
+		searchConfig = defaultContextService.GetSearchConfig()
+	}
+	// Apply defaults if not set
+	searchConfig.SetDefaults()
+	promptService := NewPromptService(promptConfig, searchConfig, contextService, historyService)
 
 	// Registry Service
 	var registryService reasoning.AgentRegistryService
