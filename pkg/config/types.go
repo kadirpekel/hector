@@ -2007,7 +2007,7 @@ func (c *ReasoningConfig) SetDefaults() {
 		c.EnableToolDisplay = BoolPtr(true)
 	}
 	if c.EnableThinkingDisplay == nil {
-		c.EnableThinkingDisplay = BoolPtr(true)
+		c.EnableThinkingDisplay = BoolPtr(false)
 	}
 }
 

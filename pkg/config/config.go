@@ -760,8 +760,11 @@ func CreateZeroConfig(source interface{}) *Config {
 		agentConfig.Tools = []string{}
 	}
 
-	// Set thinking flag (disabled by default, enabled when --thinking is provided)
-	agentConfig.Reasoning.EnableThinkingDisplay = BoolPtr(thinking)
+	// Set thinking flag only if explicitly enabled via --thinking
+	// If not set, it will follow the normal default (false) via SetDefaults()
+	if thinking {
+		agentConfig.Reasoning.EnableThinkingDisplay = BoolPtr(true)
+	}
 
 	cfg.Agents = map[string]*AgentConfig{
 		agentName: &agentConfig,
