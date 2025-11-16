@@ -567,40 +567,40 @@ Hector's RAG system is built on a unified search foundation that handles multipl
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    User Query                                │
+│                    User Query                               │
 │            "What are our password requirements?"            │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    Agent Reasoning                           │
-│  ┌────────────────────┐  ┌────────────────────┐            │
-│  │  Path 1: Search    │  │  Path 2: Include   │            │
-│  │  Tool (Explicit)  │  │  Context (Auto)    │            │
-│  └────────┬──────────┘  └────────┬───────────┘            │
+│                    Agent Reasoning                          │
+│  ┌────────────────────┐  ┌────────────────────┐             │
+│  │  Path 1: Search    │  │  Path 2: Include   │             │
+│  │  Tool (Explicit)  │  │  Context (Auto)    │              │
+│  └────────┬──────────┘  └────────┬───────────┘              │
 │           │                      │                          │
 │           └──────────┬───────────┘                          │
-│                      ▼                                       │
+│                      ▼                                      │
 │         ┌───────────────────────┐                           │
 │         │  Parallel Search      │                           │
-│         │  (All Sources)         │                           │
+│         │  (All Sources)         │                          │
 │         └───────────┬───────────┘                           │
-└─────────────────────┼──────────────────────────────────────┘
+└─────────────────────┼───────────────────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              Document Stores (Data Sources)                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │  Directory    │  │    SQL       │  │     API       │     │
-│  │  (Files)      │  │  (Database)  │  │  (REST API)  │     │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
+│              Document Stores (Data Sources)                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │  Directory   │  │    SQL       │  │     API      │       │
+│  │  (Files)     │  │  (Database)  │  │  (REST API)  │       │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘       │
 │         │                 │                 │               │
-│         └─────────┬────────┴─────────┬───────┘             │
+│         └─────────┬───────┴─────────┬───────┘               │
 │                  ▼                  ▼                       │
 │         ┌──────────────────────────────────┐                │
 │         │    SearchEngine (Unified)        │                │
 │         │  - Query Processing              │                │
-│         │  - Embedding Generation         │                │
+│         │  - Embedding Generation          │                │
 │         │  - Vector Search                 │                │
 │         │  - Result Ranking                │                │
 │         └──────────────┬───────────────────┘                │
@@ -614,16 +614,16 @@ Hector's RAG system is built on a unified search foundation that handles multipl
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    Ranked Results                            │
-│  - Aggregated from all sources                               │
-│  - Sorted by relevance score                                 │
-│  - Limited to top K results                                  │
+│                    Ranked Results                           │
+│  - Aggregated from all sources                              │
+│  - Sorted by relevance score                                │
+│  - Limited to top K results                                 │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    LLM Response                              │
-│  (With cited sources from document stores)                   │
+│                    LLM Response                             │
+│  (With cited sources from document stores)                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
