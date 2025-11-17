@@ -1246,6 +1246,17 @@ type DocumentStoreConfig struct {
 	EnableVerboseProgress *bool `yaml:"enable_verbose_progress"` // Default: false - show current file
 	EnableCheckpoints     *bool `yaml:"enable_checkpoints"`      // Default: true - enable resume capability
 	EnableQuietMode       *bool `yaml:"enable_quiet_mode"`       // Default: true - suppress per-file warnings
+
+	// MCP parser configuration
+	MCPParsers *DocumentStoreMCPParserConfig `yaml:"mcp_parsers,omitempty"` // Optional: use MCP tools for document parsing
+}
+
+// DocumentStoreMCPParserConfig configures MCP-based document parsing
+type DocumentStoreMCPParserConfig struct {
+	ToolNames    []string `yaml:"tool_names"`     // MCP tool names to use for parsing (e.g., ["parse_document", "docling_parse"])
+	Extensions   []string `yaml:"extensions"`     // File extensions to handle (empty = all binary files)
+	Priority     *int     `yaml:"priority"`       // Extractor priority (default: 8, higher than native parsers)
+	PreferNative *bool    `yaml:"prefer_native"`  // If true, only use MCP when native parsers fail (default: false)
 }
 
 // DocumentStoreSQLConfig defines SQL database connection for document store

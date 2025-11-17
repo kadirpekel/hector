@@ -102,6 +102,18 @@ Document stores define what gets indexed for search. Hector supports three sourc
 - **SQL** - Index data from SQL databases (PostgreSQL, MySQL, SQLite)
 - **API** - Index data from REST API endpoints
 
+### Document Parsing
+
+Hector includes **native parsers** for common formats:
+- ✅ **PDF** - Basic text extraction
+- ✅ **DOCX** - Word document parsing
+- ✅ **XLSX** - Excel spreadsheet parsing
+
+For advanced parsing needs, you can use **MCP (Model Context Protocol) tools** (e.g., Docling) for:
+- Better PDF parsing (layout detection, table extraction, OCR)
+- Additional formats (PPTX, HTML, audio, images)
+- Enhanced metadata extraction
+
 ### Basic Configuration (Directory Source)
 
 ```yaml
@@ -549,6 +561,84 @@ agents:
 - Only reranks top N results (configurable via `max_results`)
 
 See [Search Architecture](search-architecture.md) for complete documentation on all search features.
+
+### MCP Document Parsing
+
+Use MCP (Model Context Protocol) tools for advanced document parsing. This allows you to use services like Docling for better parsing quality or additional formats.
+
+**Prerequisites:**
+1. Configure MCP tools in your `tools` section
+2. Start your MCP server (e.g., Docling MCP server)
+
+**Basic Configuration:**
+
+```yaml
+tools:
+  mcp_tools:
+    - server:
+        url: "http://localhost:3000"
+        protocol: "mcp"
+      tools:
+        - "parse_document"
+
+document_stores:
+  knowledge_base:
+    path: "./documents"
+    mcp_parsers:
+      tool_names: ["parse_document"]
+```
+
+**Advanced Configuration:**
+
+```yaml
+document_stores:
+  research_papers:
+    path: "./papers"
+    mcp_parsers:
+      tool_names: ["parse_document", "docling_parse"]  # Try tools in order
+      extensions: [".pdf", ".pptx", ".html"]            # Only these formats
+      priority: 10                                       # Override native parsers
+      prefer_native: false                               # Use MCP first
+```
+
+**Configuration Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `tool_names` | `[]string` | Required | MCP tool names to try (in order) |
+| `extensions` | `[]string` | `[]` (all) | File extensions to handle (empty = all binary files) |
+| `priority` | `int` | `8` | Extractor priority (higher = preferred) |
+| `prefer_native` | `bool` | `false` | Use native parsers first, MCP as fallback |
+
+**Use Cases:**
+
+1. **Override Native Parsers** (better quality):
+```yaml
+mcp_parsers:
+  tool_names: ["parse_document"]
+  priority: 10  # Higher than native (5)
+```
+
+2. **Use as Fallback** (when native fails):
+```yaml
+mcp_parsers:
+  tool_names: ["parse_document"]
+  prefer_native: true
+  priority: 4  # Lower than native (5)
+```
+
+3. **Format-Specific** (unsupported formats):
+```yaml
+mcp_parsers:
+  tool_names: ["parse_document"]
+  extensions: [".pptx", ".html"]  # Formats not supported natively
+```
+
+**Benefits:**
+- ✅ Better PDF parsing (layout, tables, OCR)
+- ✅ Additional formats (PPTX, HTML, audio, images)
+- ✅ Enhanced metadata extraction
+- ✅ Works with any MCP service (not just Docling)
 
 ### Custom Parsers
 

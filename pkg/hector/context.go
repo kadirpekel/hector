@@ -1,16 +1,72 @@
 package hector
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
-	"github.com/kadirpekel/hector/pkg/context"
+	hectorcontext "github.com/kadirpekel/hector/pkg/context"
+	"github.com/kadirpekel/hector/pkg/context/extraction"
 	"github.com/kadirpekel/hector/pkg/databases"
 	"github.com/kadirpekel/hector/pkg/embedders"
 	"github.com/kadirpekel/hector/pkg/reasoning"
+	"github.com/kadirpekel/hector/pkg/tools"
 )
+
+// toolRegistryAdapter bridges tools.ToolRegistry to extraction.ToolCaller
+// This avoids import cycles by keeping the adapter in the hector package
+type toolRegistryAdapter struct {
+	registry *tools.ToolRegistry
+}
+
+func (a *toolRegistryAdapter) GetTool(name string) (extraction.Tool, error) {
+	tool, err := a.registry.GetTool(name)
+	if err != nil {
+		return nil, err
+	}
+	return &toolAdapter{tool: tool}, nil
+}
+
+// toolAdapter bridges tools.Tool to extraction.Tool
+type toolAdapter struct {
+	tool tools.Tool
+}
+
+func (a *toolAdapter) GetInfo() extraction.ToolInfo {
+	info := a.tool.GetInfo()
+	params := make([]extraction.ToolParameter, len(info.Parameters))
+	for i, p := range info.Parameters {
+		params[i] = extraction.ToolParameter{
+			Name:        p.Name,
+			Type:        p.Type,
+			Description: p.Description,
+			Required:    p.Required,
+		}
+	}
+	return extraction.ToolInfo{
+		Name:        info.Name,
+		Description: info.Description,
+		Parameters:  params,
+	}
+}
+
+func (a *toolAdapter) Execute(ctx context.Context, args map[string]interface{}) (extraction.ToolResult, error) {
+	result, err := a.tool.Execute(ctx, args)
+	if err != nil {
+		return extraction.ToolResult{
+			Success: false,
+			Error:   err.Error(),
+		}, err
+	}
+	return extraction.ToolResult{
+		Success:  result.Success,
+		Content:  result.Content,
+		Error:    result.Error,
+		Metadata: result.Metadata,
+	}, nil
+}
 
 // documentStoreEntry holds a store name and its config
 type documentStoreEntry struct {
@@ -177,11 +233,11 @@ func (b *ContextServiceBuilder) Build() (reasoning.ContextService, error) {
 
 	// Create default search engine (for stores that don't specify their own database)
 	// Pass LLM registry if component manager is available (for reranking)
-	var llmRegistry context.LLMRegistryForReranking
+	var llmRegistry hectorcontext.LLMRegistryForReranking
 	if b.componentManager != nil {
 		llmRegistry = b.componentManager.GetLLMRegistry()
 	}
-	defaultSearchEngine, err := context.NewSearchEngine(b.database, b.embedder, b.searchConfig, llmRegistry)
+	defaultSearchEngine, err := hectorcontext.NewSearchEngine(b.database, b.embedder, b.searchConfig, llmRegistry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create default search engine: %w", err)
 	}
@@ -221,11 +277,11 @@ func (b *ContextServiceBuilder) Build() (reasoning.ContextService, error) {
 
 // initializeDocumentStoresWithDatabases initializes document stores, creating separate search engines
 // for stores that specify their own database/embedder
-func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSearchEngine *context.SearchEngine) error {
+func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSearchEngine *hectorcontext.SearchEngine) error {
 	for _, entry := range b.documentStores {
 		storeName := entry.name
 		storeConfig := entry.config
-		var searchEngine *context.SearchEngine
+		var searchEngine *hectorcontext.SearchEngine
 
 		// If store specifies its own vector_store/embedder, create a separate search engine
 		if storeConfig.VectorStore != "" || storeConfig.Embedder != "" {
@@ -255,12 +311,12 @@ func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSea
 
 			// Create search engine for this store
 			// Pass LLM registry if component manager is available (for reranking)
-			var llmRegistry context.LLMRegistryForReranking
+			var llmRegistry hectorcontext.LLMRegistryForReranking
 			if b.componentManager != nil {
 				llmRegistry = b.componentManager.GetLLMRegistry()
 			}
 			var err error
-			searchEngine, err = context.NewSearchEngine(db, embedder, b.searchConfig, llmRegistry)
+			searchEngine, err = hectorcontext.NewSearchEngine(db, embedder, b.searchConfig, llmRegistry)
 			if err != nil {
 				return fmt.Errorf("failed to create search engine for document store '%s': %w", storeName, err)
 			}
@@ -269,13 +325,23 @@ func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSea
 			searchEngine = defaultSearchEngine
 		}
 
+		// Get tool registry if available (for MCP parsers)
+		var toolCaller extraction.ToolCaller
+		if b.componentManager != nil {
+			toolReg := b.componentManager.GetToolRegistry()
+			if toolReg != nil {
+				// Create adapter to bridge tools.ToolRegistry to extraction.ToolCaller
+				toolCaller = &toolRegistryAdapter{registry: toolReg}
+			}
+		}
+
 		// Create and register document store
-		store, err := context.NewDocumentStore(storeName, storeConfig, searchEngine)
+		store, err := hectorcontext.NewDocumentStoreWithToolRegistry(storeName, storeConfig, searchEngine, toolCaller)
 		if err != nil {
 			return fmt.Errorf("failed to create document store '%s' (source: %s): %w", storeName, storeConfig.Source, err)
 		}
 
-		context.RegisterDocumentStore(store)
+		hectorcontext.RegisterDocumentStore(store)
 
 		// Start indexing (will skip for collection-only stores)
 		if err := store.StartIndexing(); err != nil {
@@ -284,7 +350,7 @@ func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSea
 
 		// Start watching if enabled
 		if storeConfig.EnableWatchChanges != nil && *storeConfig.EnableWatchChanges {
-			go func(s *context.DocumentStore, name string) {
+			go func(s *hectorcontext.DocumentStore, name string) {
 				if err := s.StartWatching(); err != nil {
 					fmt.Printf("Warning: Failed to start file watching for %s: %v\n", name, err)
 				}

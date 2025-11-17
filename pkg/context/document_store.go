@@ -149,7 +149,13 @@ type DocumentStore struct {
 
 // NewDocumentStore creates a new document store.
 // storeName is the name from the config map key (used as collection name unless overridden by Collection).
+// toolRegistry is optional - if provided and MCP parsers are configured, MCP extractors will be registered.
 func NewDocumentStore(storeName string, storeConfig *config.DocumentStoreConfig, searchEngine *SearchEngine) (*DocumentStore, error) {
+	return NewDocumentStoreWithToolRegistry(storeName, storeConfig, searchEngine, nil)
+}
+
+// NewDocumentStoreWithToolRegistry creates a new document store with optional tool registry for MCP parsers.
+func NewDocumentStoreWithToolRegistry(storeName string, storeConfig *config.DocumentStoreConfig, searchEngine *SearchEngine, toolRegistry extraction.ToolCaller) (*DocumentStore, error) {
 	if storeName == "" {
 		return nil, NewDocumentStoreError("", "NewDocumentStore", "store name is required", "", nil)
 	}
@@ -187,6 +193,32 @@ func NewDocumentStore(storeName string, storeConfig *config.DocumentStoreConfig,
 	nativeParserAdapter := newNativeParserAdapter(nativeParsers)
 	contentExtractors.Register(extraction.NewBinaryExtractor(nativeParserAdapter))
 	// Plugin extractors can be added here if needed
+
+		// Register MCP extractors if configured
+		if toolRegistry != nil && storeConfig.MCPParsers != nil && storeConfig.MCPParsers.ToolNames != nil && len(storeConfig.MCPParsers.ToolNames) > 0 {
+			mcpConfig := extraction.MCPExtractorConfig{
+				ToolCaller:      toolRegistry,
+				ParserToolNames: storeConfig.MCPParsers.ToolNames,
+				SupportedExts:   storeConfig.MCPParsers.Extensions,
+			}
+		if storeConfig.MCPParsers.Priority != nil {
+			mcpConfig.Priority = *storeConfig.MCPParsers.Priority
+		}
+		mcpExtractor, err := extraction.NewMCPExtractor(mcpConfig)
+		if err != nil {
+			// Log warning but don't fail - MCP parser is optional
+			fmt.Printf("Warning: Failed to create MCP extractor for document store '%s': %v\n", storeName, err)
+		} else {
+			// If prefer_native is true, set lower priority so native parsers are tried first
+			if storeConfig.MCPParsers.PreferNative != nil && *storeConfig.MCPParsers.PreferNative {
+				// Set priority lower than BinaryExtractor (5)
+				mcpConfig.Priority = 4
+				mcpExtractor, _ = extraction.NewMCPExtractor(mcpConfig)
+			}
+			contentExtractors.Register(mcpExtractor)
+			fmt.Printf("✓ Registered MCP extractor for document store '%s' (tools: %v)\n", storeName, storeConfig.MCPParsers.ToolNames)
+		}
+	}
 
 	// Initialize metadata extractors
 	metadataExtractors := metadata.NewExtractorRegistry()

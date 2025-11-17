@@ -1113,6 +1113,74 @@ The search tool is automatically created and scoped to the agent's assigned stor
     
     The consistent pattern makes configuration intuitive and predictable.
 
+### MCP Document Parsing
+
+Use MCP (Model Context Protocol) tools for advanced document parsing. This allows using services like Docling for better parsing quality or additional formats.
+
+**Prerequisites:**
+1. Configure MCP tools in your `tools` section
+2. Start your MCP server (e.g., Docling MCP server)
+
+**Configuration:**
+
+```yaml
+tools:
+  mcp_tools:
+    - server:
+        url: "http://localhost:3000"
+        protocol: "mcp"
+      tools:
+        - "parse_document"
+
+document_stores:
+  knowledge_base:
+    path: "./documents"
+    mcp_parsers:
+      tool_names: ["parse_document"]  # Required: MCP tool names
+      extensions: [".pdf", ".pptx"]    # Optional: Specific formats
+      priority: 8                      # Optional: Extractor priority (default: 8)
+      prefer_native: false            # Optional: Use native first (default: false)
+```
+
+**Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `tool_names` | `[]string` | Required | MCP tool names to try (in order) |
+| `extensions` | `[]string` | `[]` (all) | File extensions to handle (empty = all binary files) |
+| `priority` | `int` | `8` | Extractor priority (higher = preferred, native = 5) |
+| `prefer_native` | `bool` | `false` | Use native parsers first, MCP as fallback |
+
+**Use Cases:**
+
+1. **Override native parsers** (better quality):
+```yaml
+mcp_parsers:
+  tool_names: ["parse_document"]
+  priority: 10  # Higher than native (5)
+```
+
+2. **Use as fallback** (when native fails):
+```yaml
+mcp_parsers:
+  tool_names: ["parse_document"]
+  prefer_native: true
+  priority: 4  # Lower than native (5)
+```
+
+3. **Format-specific** (unsupported formats):
+```yaml
+mcp_parsers:
+  tool_names: ["parse_document"]
+  extensions: [".pptx", ".html"]  # Formats not supported natively
+```
+
+**Benefits:**
+- ✅ Better PDF parsing (layout detection, table extraction, OCR)
+- ✅ Additional formats (PPTX, HTML, audio, images)
+- ✅ Enhanced metadata extraction
+- ✅ Works with any MCP service (not just Docling)
+
 ### Directory Source
 
 Index files from local directories:
@@ -1164,6 +1232,18 @@ document_stores:
     metadata_languages:           # Languages for metadata extraction
       - "go"
       - "python"
+
+    # MCP document parsing (optional)
+    mcp_parsers:                  # Use MCP tools for document parsing
+      tool_names:                 # Required: MCP tool names to use (tried in order)
+        - "parse_document"
+        - "docling_parse"
+      extensions:                 # Optional: File extensions to handle (empty = all binary files)
+        - ".pdf"
+        - ".pptx"
+        - ".html"
+      priority: 8                 # Optional: Extractor priority (default: 8, higher = preferred)
+      prefer_native: false        # Optional: Use native parsers first, MCP as fallback (default: false)
 ```
 
 **Default Exclusions:**
@@ -1483,6 +1563,18 @@ document_stores:
     chunk_overlap: 0              # Default: 0 characters overlap
     chunk_strategy: "simple"      # Options: "simple", "overlapping", "semantic"
     
+    # MCP document parsing (optional)
+    mcp_parsers:                  # Use MCP tools for document parsing
+      tool_names:                 # Required: MCP tool names to use (tried in order)
+        - "parse_document"
+        - "docling_parse"
+      extensions:                 # Optional: File extensions to handle (empty = all binary files)
+        - ".pdf"
+        - ".pptx"
+        - ".html"
+      priority: 8                 # Optional: Extractor priority (default: 8, higher = preferred)
+      prefer_native: false        # Optional: Use native parsers first, MCP as fallback (default: false)
+    
     # Incremental indexing (SQL and API sources)
     incremental_indexing: true    # Default: true - Only reindex changed documents
     
@@ -1513,6 +1605,25 @@ document_stores:
     chunk_overlap: 200
     watch_changes: true
     verbose_progress: true
+```
+
+**Example - With MCP Parsing:**
+```yaml
+tools:
+  mcp_tools:
+    - server:
+        url: "http://localhost:3000"
+        protocol: "mcp"
+      tools:
+        - "parse_document"
+
+document_stores:
+  knowledge_base:
+    path: "./documents"
+    mcp_parsers:
+      tool_names: ["parse_document"]
+      extensions: [".pdf", ".pptx"]  # Only these formats
+      priority: 10                     # Override native parsers
 ```
 
 ---
