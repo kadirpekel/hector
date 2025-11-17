@@ -83,6 +83,7 @@ nav:
     - LLM Providers: core-concepts/llm-providers.md
     - Observability: core-concepts/observability.md
     - Security: core-concepts/security.md
+    - TLS/HTTPS Configuration: core-concepts/tls-https.md
     - Performance: core-concepts/performance.md
     - Rate Limiting: core-concepts/rate-limiting.md
   - Blog:

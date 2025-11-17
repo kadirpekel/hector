@@ -129,6 +129,10 @@ llms:
     max_retries: 5
     retry_delay: 2               # Seconds
     
+    # TLS configuration (for HTTPS connections with self-signed or custom CA certificates)
+    insecure_skip_verify: false  # Skip certificate verification (dev/test only)
+    ca_certificate: ""          # Path to custom CA certificate file
+    
     # Optional: Structured output
     structured_output:
       format: "json"             # json|xml|enum
@@ -137,6 +141,21 @@ llms:
         properties:
           field: 
             type: "string"
+```
+
+**TLS Configuration for Self-Hosted LLMs:**
+- `insecure_skip_verify: true` - Skip TLS certificate verification (⚠️ dev/test only, shows warning)
+- `ca_certificate: "/path/to/ca.pem"` - Use custom CA certificate for internal/private certificates
+
+**Example with self-signed certificate:**
+```yaml
+llms:
+  internal_openai:
+    type: "openai"
+    model: "gpt-4"
+    host: "https://internal-llm.company.com"
+    api_key: "${INTERNAL_API_KEY}"
+    insecure_skip_verify: true  # For self-signed certificates
 ```
 
 ### Anthropic (Claude)
@@ -153,7 +172,13 @@ llms:
     timeout: 120
     max_retries: 5
     retry_delay: 2
+    
+    # TLS configuration (for HTTPS connections with self-signed or custom CA certificates)
+    insecure_skip_verify: false  # Skip certificate verification (dev/test only)
+    ca_certificate: ""          # Path to custom CA certificate file
 ```
+
+**TLS Configuration:** Same as OpenAI (see above for examples)
 
 ### Google Gemini
 
@@ -167,7 +192,13 @@ llms:
     temperature: 0.7
     max_tokens: 4096
     timeout: 60
+    
+    # TLS configuration (for HTTPS connections with self-signed or custom CA certificates)
+    insecure_skip_verify: false  # Skip certificate verification (dev/test only)
+    ca_certificate: ""          # Path to custom CA certificate file
 ```
+
+**TLS Configuration:** Same as OpenAI (see above for examples)
 
 ### Ollama (Local Models)
 
@@ -178,11 +209,27 @@ llms:
   local-llm:
     type: "ollama"
     model: "qwen3"                    # Currently supported: qwen3
-    host: "http://localhost:11434"  # Default: http://localhost:11434
+    host: "http://localhost:11434"  # Default: http://localhost:11434 (use https:// for HTTPS)
     temperature: 0.7                 # Default: 0.7
     max_tokens: 8000                  # Default: 8000
     timeout: 600                      # Seconds, default: 600 (10 minutes)
     # Note: Ollama doesn't require an API key for local deployments
+    
+    # TLS configuration (for HTTPS connections with self-signed or custom CA certificates)
+    insecure_skip_verify: false  # Skip certificate verification (dev/test only)
+    ca_certificate: ""          # Path to custom CA certificate file
+```
+
+**TLS Configuration:** Same as OpenAI (see above for examples)
+
+**Example with HTTPS Ollama:**
+```yaml
+llms:
+  remote-ollama:
+    type: "ollama"
+    model: "qwen3"
+    host: "https://ollama.company.com"  # HTTPS URL
+    insecure_skip_verify: true  # For self-signed certificates
 ```
 
 **Prerequisites:**
@@ -559,16 +606,48 @@ agents:
       type: "bearer"              # bearer|api_key|basic
       token: "${EXTERNAL_TOKEN}"
       # OR
-      # key: "${API_KEY}"
-      # header: "X-API-Key"
+      # type: "api_key"
+      # api_key: "${API_KEY}"
+      # api_key_header: "X-API-Key"
       # OR
+      # type: "basic"
       # username: "${USERNAME}"
       # password: "${PASSWORD}"
     
-    tls:
-      verify: true
-      ca_cert: "/path/to/ca.crt"
+    # TLS configuration (for HTTPS connections)
+    insecure_skip_verify: false  # Skip certificate verification (dev/test only)
+    ca_certificate: ""          # Path to custom CA certificate file
 ```
+
+**TLS Configuration:**
+- `insecure_skip_verify: true` - Skip TLS certificate verification (⚠️ dev/test only, shows warning)
+- `ca_certificate: "/path/to/ca.pem"` - Use custom CA certificate for internal/private certificates
+
+**Example with self-signed certificate:**
+```yaml
+agents:
+  internal_agent:
+    type: "a2a"
+    url: "https://internal-agent.company.com"
+    insecure_skip_verify: true  # For self-signed certificates
+    credentials:
+      type: "bearer"
+      token: "${INTERNAL_TOKEN}"
+```
+
+**Example with custom CA:**
+```yaml
+agents:
+  internal_agent:
+    type: "a2a"
+    url: "https://internal-agent.company.com"
+    ca_certificate: "/etc/ssl/certs/company-ca.pem"
+    credentials:
+      type: "bearer"
+      token: "${INTERNAL_TOKEN}"
+```
+
+**See:** [TLS/HTTPS Configuration](../core-concepts/tls-https.md) for complete guide.
 
 ### Supervisor Agent (Multi-Agent)
 
@@ -707,6 +786,45 @@ tools:
         - "slack_send_message"
 ```
 
+**MCP Tool with TLS Configuration:**
+
+```yaml
+tools:
+  docling:
+    type: "mcp"
+    enabled: true
+    server_url: "https://docling.example.com/mcp"  # HTTPS URL
+    description: "Docling - Document parsing"
+    
+    # TLS configuration (for HTTPS connections)
+    insecure_skip_verify: false  # Skip certificate verification (dev/test only)
+    ca_certificate: ""          # Path to custom CA certificate file
+```
+
+**TLS Options:**
+- `insecure_skip_verify: true` - Skip TLS certificate verification (⚠️ dev/test only, shows warning)
+- `ca_certificate: "/path/to/ca.pem"` - Use custom CA certificate for internal/private certificates
+
+**Example with self-signed certificate:**
+```yaml
+tools:
+  internal_mcp:
+    type: "mcp"
+    server_url: "https://internal-mcp.company.com/mcp"
+    insecure_skip_verify: true  # For self-signed certificates
+```
+
+**Example with custom CA:**
+```yaml
+tools:
+  internal_mcp:
+    type: "mcp"
+    server_url: "https://internal-mcp.company.com/mcp"
+    ca_certificate: "/etc/ssl/certs/company-ca.pem"
+```
+
+**See:** [TLS/HTTPS Configuration](../core-concepts/tls-https.md) for complete guide.
+
 ---
 
 ## Vector Stores
@@ -754,7 +872,38 @@ vector_stores:
     host: "localhost"
     port: 8080           # Default Weaviate port
     api_key: ""          # Optional API key
-    enable_tls: false
+    enable_tls: false    # Enable HTTPS (default: false)
+    
+    # TLS configuration (for HTTPS connections)
+    insecure_skip_verify: false  # Skip certificate verification (dev/test only)
+    ca_certificate: ""          # Path to custom CA certificate file
+```
+
+**TLS Configuration:**
+- `enable_tls: true` - Use HTTPS instead of HTTP
+- `insecure_skip_verify: true` - Skip TLS certificate verification (⚠️ dev/test only, shows warning)
+- `ca_certificate: "/path/to/ca.pem"` - Use custom CA certificate for internal/private certificates
+
+**Example with self-signed certificate:**
+```yaml
+vector_stores:
+  weaviate:
+    type: "weaviate"
+    host: "internal-weaviate.company.com"
+    port: 443
+    enable_tls: true
+    insecure_skip_verify: true  # For self-signed certificates
+```
+
+**Example with custom CA:**
+```yaml
+vector_stores:
+  weaviate:
+    type: "weaviate"
+    host: "internal-weaviate.company.com"
+    port: 443
+    enable_tls: true
+    ca_certificate: "/etc/ssl/certs/company-ca.pem"
 ```
 
 **Features:**
@@ -771,8 +920,14 @@ vector_stores:
     host: "localhost"
     port: 19530          # Default Milvus port
     api_key: ""          # Optional
-    enable_tls: false
+    enable_tls: false    # Enable HTTPS (default: false)
+    
+    # TLS configuration (for HTTPS connections)
+    insecure_skip_verify: false  # Skip certificate verification (dev/test only)
+    ca_certificate: ""          # Path to custom CA certificate file
 ```
+
+**TLS Configuration:** Same as Weaviate (see above for examples)
 
 **Features:**
 - Optimized for large-scale deployments
@@ -788,8 +943,14 @@ vector_stores:
     host: "localhost"
     port: 8000           # Default Chroma port
     api_key: ""          # Optional
-    enable_tls: false
+    enable_tls: false    # Enable HTTPS (default: false)
+    
+    # TLS configuration (for HTTPS connections)
+    insecure_skip_verify: false  # Skip certificate verification (dev/test only)
+    ca_certificate: ""          # Path to custom CA certificate file
 ```
+
+**TLS Configuration:** Same as Weaviate (see above for examples)
 
 **Features:**
 - Simple and lightweight

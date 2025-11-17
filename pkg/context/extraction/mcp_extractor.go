@@ -56,7 +56,7 @@ type MCPExtractor struct {
 type MCPExtractorConfig struct {
 	ToolCaller      ToolCaller
 	ParserToolNames []string // Tool names to try (e.g., ["parse_document", "docling_parse"])
-	SupportedExts   []string  // File extensions this extractor handles (empty = all)
+	SupportedExts   []string // File extensions this extractor handles (empty = all)
 	Priority        int      // Priority (higher = preferred)
 }
 
@@ -135,7 +135,7 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 		// Prepare arguments for the MCP tool
 		// Common MCP document parser tools expect: file_path, file_path, or path
 		args := make(map[string]interface{})
-		
+
 		// Try common parameter names
 		if toolInfo := tool.GetInfo(); len(toolInfo.Parameters) > 0 {
 			// Use the first required parameter name, or common names
@@ -147,7 +147,7 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 			}
 			// If no required param found, try common names
 			if len(args) == 0 {
-				commonNames := []string{"file_path", "file_path", "path", "input", "document"}
+				commonNames := []string{"file_path", "path", "input", "document"}
 				for _, name := range commonNames {
 					for _, param := range toolInfo.Parameters {
 						if param.Name == name {
@@ -239,11 +239,10 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 	}
 
 	// All tools failed
-	return nil, fmt.Errorf("all MCP parser tools failed for file: %s", path)
+	return nil, fmt.Errorf("all MCP parser tools failed for file %s (tried tools: %v)", path, e.parserToolNames)
 }
 
 // Priority returns the extractor priority
 func (e *MCPExtractor) Priority() int {
 	return e.priority
 }
-

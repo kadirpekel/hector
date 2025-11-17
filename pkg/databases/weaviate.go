@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/httpclient"
 )
 
 func NewWeaviateDatabaseProviderFromConfig(config *config.VectorStoreConfig) (DatabaseProvider, error) {
@@ -30,8 +31,26 @@ func NewWeaviateDatabaseProviderFromConfig(config *config.VectorStoreConfig) (Da
 
 	baseURL := fmt.Sprintf("%s://%s:%d", scheme, config.Host, port)
 
+	// Configure TLS if needed
+	var transport *http.Transport
+	if scheme == "https" && (config.InsecureSkipVerify != nil && *config.InsecureSkipVerify || config.CACertificate != "") {
+		tlsConfig := &httpclient.TLSConfig{
+			InsecureSkipVerify: config.InsecureSkipVerify != nil && *config.InsecureSkipVerify,
+			CACertificate:      config.CACertificate,
+		}
+		var err error
+		transport, err = httpclient.ConfigureTLS(tlsConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to configure TLS: %w", err)
+		}
+		if tlsConfig.InsecureSkipVerify {
+			fmt.Printf("Warning: TLS certificate verification disabled for Weaviate (insecure_skip_verify=true)\n")
+		}
+	}
+
 	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout:   30 * time.Second,
+		Transport: transport, // nil is fine, uses default transport
 	}
 
 	return &weaviateDatabaseProvider{

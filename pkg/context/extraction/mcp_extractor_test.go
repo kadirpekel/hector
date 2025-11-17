@@ -162,7 +162,7 @@ func TestMCPExtractor_Name(t *testing.T) {
 
 func TestMCPExtractor_CanExtract(t *testing.T) {
 	caller := newMockToolCaller()
-	
+
 	// Add a tool to the caller
 	tool := &mockTool{name: "parse_document"}
 	caller.addTool("parse_document", tool)
@@ -379,7 +379,7 @@ func TestMCPExtractor_Extract(t *testing.T) {
 							Content: "", // Empty content
 							Metadata: map[string]interface{}{
 								"content": "Content from metadata",
-								"text":     "Alternative text",
+								"text":    "Alternative text",
 							},
 						}, nil
 					},
@@ -548,7 +548,7 @@ func TestMCPExtractor_hasParserTool(t *testing.T) {
 func TestMCPExtractor_Extract_FileMetadata(t *testing.T) {
 	ctx := context.Background()
 	caller := newMockToolCaller()
-	
+
 	tool := &mockTool{
 		name: "parse_document",
 		executeFunc: func(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
@@ -596,4 +596,3 @@ func TestMCPExtractor_Extract_FileMetadata(t *testing.T) {
 		t.Errorf("Title = %v, want %v", result.Title, expectedTitle)
 	}
 }
-

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"github.com/kadirpekel/hector/pkg/httpclient"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -22,12 +23,40 @@ type HTTPClient struct {
 }
 
 func NewHTTPClient(baseURL, token string) A2AClient {
+	return NewHTTPClientWithTLS(baseURL, token, nil)
+}
+
+// NewHTTPClientWithTLS creates an HTTP client with optional TLS configuration
+func NewHTTPClientWithTLS(baseURL, token string, tlsConfig *httpclient.TLSConfig) A2AClient {
+	var httpClient *http.Client
+
+	if tlsConfig != nil && (tlsConfig.InsecureSkipVerify || tlsConfig.CACertificate != "") {
+		transport, err := httpclient.ConfigureTLS(tlsConfig)
+		if err != nil {
+			// Log warning but use default client
+			fmt.Printf("Warning: Failed to configure TLS for A2A HTTP client: %v\n", err)
+			httpClient = &http.Client{
+				Timeout: 300 * time.Second,
+			}
+		} else {
+			if tlsConfig.InsecureSkipVerify {
+				fmt.Printf("Warning: TLS certificate verification disabled for A2A HTTP client (insecure_skip_verify=true)\n")
+			}
+			httpClient = &http.Client{
+				Timeout:   300 * time.Second,
+				Transport: transport,
+			}
+		}
+	} else {
+		httpClient = &http.Client{
+			Timeout: 300 * time.Second,
+		}
+	}
+
 	return &HTTPClient{
 		baseURL: strings.TrimSuffix(baseURL, "/"),
 		token:   token,
-		client: &http.Client{
-			Timeout: 300 * time.Second,
-		},
+		client:  httpClient,
 	}
 }
 

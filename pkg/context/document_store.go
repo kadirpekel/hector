@@ -194,13 +194,13 @@ func NewDocumentStoreWithToolRegistry(storeName string, storeConfig *config.Docu
 	contentExtractors.Register(extraction.NewBinaryExtractor(nativeParserAdapter))
 	// Plugin extractors can be added here if needed
 
-		// Register MCP extractors if configured
-		if toolRegistry != nil && storeConfig.MCPParsers != nil && storeConfig.MCPParsers.ToolNames != nil && len(storeConfig.MCPParsers.ToolNames) > 0 {
-			mcpConfig := extraction.MCPExtractorConfig{
-				ToolCaller:      toolRegistry,
-				ParserToolNames: storeConfig.MCPParsers.ToolNames,
-				SupportedExts:   storeConfig.MCPParsers.Extensions,
-			}
+	// Register MCP extractors if configured
+	if toolRegistry != nil && storeConfig.MCPParsers != nil && storeConfig.MCPParsers.ToolNames != nil && len(storeConfig.MCPParsers.ToolNames) > 0 {
+		mcpConfig := extraction.MCPExtractorConfig{
+			ToolCaller:      toolRegistry,
+			ParserToolNames: storeConfig.MCPParsers.ToolNames,
+			SupportedExts:   storeConfig.MCPParsers.Extensions,
+		}
 		if storeConfig.MCPParsers.Priority != nil {
 			mcpConfig.Priority = *storeConfig.MCPParsers.Priority
 		}

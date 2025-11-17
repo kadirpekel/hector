@@ -22,13 +22,31 @@ import (
 )
 
 func createHTTPClient(cfg *config.LLMProviderConfig) *httpclient.Client {
-	return httpclient.New(
+	// Configure TLS if needed
+	var tlsConfig *httpclient.TLSConfig
+	if cfg.InsecureSkipVerify != nil && *cfg.InsecureSkipVerify || cfg.CACertificate != "" {
+		tlsConfig = &httpclient.TLSConfig{
+			InsecureSkipVerify: cfg.InsecureSkipVerify != nil && *cfg.InsecureSkipVerify,
+			CACertificate:      cfg.CACertificate,
+		}
+		if tlsConfig.InsecureSkipVerify {
+			fmt.Printf("Warning: TLS certificate verification disabled for LLM provider %s (insecure_skip_verify=true)\n", cfg.Type)
+		}
+	}
+
+	opts := []httpclient.Option{
 		httpclient.WithHTTPClient(&http.Client{
 			Timeout: time.Duration(cfg.Timeout) * time.Second,
 		}),
 		httpclient.WithMaxRetries(cfg.MaxRetries),
-		httpclient.WithBaseDelay(time.Duration(cfg.RetryDelay)*time.Second),
-	)
+		httpclient.WithBaseDelay(time.Duration(cfg.RetryDelay) * time.Second),
+	}
+
+	if tlsConfig != nil {
+		opts = append(opts, httpclient.WithTLSConfig(tlsConfig))
+	}
+
+	return httpclient.New(opts...)
 }
 
 type OpenAIProvider struct {
@@ -563,6 +581,20 @@ func parseToolCalls(openaiToolCalls []OpenAIToolCall) ([]*protocol.ToolCall, err
 	return result, nil
 }
 
+// parseErrorResponse extracts error information from OpenAI API error responses
+func parseErrorResponse(body []byte) *Error {
+	if len(body) == 0 {
+		return nil
+	}
+	var errorResp struct {
+		Error Error `json:"error"`
+	}
+	if err := json.Unmarshal(body, &errorResp); err == nil && errorResp.Error.Message != "" {
+		return &errorResp.Error
+	}
+	return nil
+}
+
 func (p *OpenAIProvider) makeRequest(ctx context.Context, request OpenAIRequest) (*OpenAIResponse, error) {
 	requestBody, err := json.Marshal(request)
 	if err != nil {
@@ -585,25 +617,32 @@ func (p *OpenAIProvider) makeRequest(ctx context.Context, request OpenAIRequest)
 	}
 
 	resp, err := p.httpClient.Do(req)
+	// HTTP client may return both response and error for non-2xx status codes
+	// We need to check the response body even if there's an error
 	if resp != nil {
 		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, readErr := io.ReadAll(resp.Body)
+			errorBody := string(body)
+			if readErr != nil {
+				errorBody = fmt.Sprintf("(failed to read error body: %v)", readErr)
+			}
+			if apiErr := parseErrorResponse(body); apiErr != nil {
+				return nil, fmt.Errorf("API request failed with status %d: %s (type: %s, code: %s)",
+					resp.StatusCode, apiErr.Message, apiErr.Type, apiErr.Code)
+			}
+			return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, errorBody)
+		}
 	}
 
 	if err != nil {
+		// If we have a response body, try to extract error details
 		if resp != nil && resp.Body != nil {
 			body, readErr := io.ReadAll(resp.Body)
 			if readErr == nil && len(body) > 0 {
-
-				var errorResp struct {
-					Error struct {
-						Message string `json:"message"`
-						Type    string `json:"type"`
-						Code    string `json:"code"`
-					} `json:"error"`
-				}
-				if json.Unmarshal(body, &errorResp) == nil && errorResp.Error.Message != "" {
+				if apiErr := parseErrorResponse(body); apiErr != nil {
 					return nil, fmt.Errorf("HTTP request failed: %s (type: %s, code: %s)",
-						errorResp.Error.Message, errorResp.Error.Type, errorResp.Error.Code)
+						apiErr.Message, apiErr.Type, apiErr.Code)
 				}
 				return nil, fmt.Errorf("HTTP request failed: %w - Response: %s", err, string(body))
 			}
@@ -611,25 +650,13 @@ func (p *OpenAIProvider) makeRequest(ctx context.Context, request OpenAIRequest)
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 
+	if resp == nil {
+		return nil, fmt.Errorf("HTTP request failed: no response received")
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-
-		var errorResp struct {
-			Error struct {
-				Message string `json:"message"`
-				Type    string `json:"type"`
-				Code    string `json:"code"`
-			} `json:"error"`
-		}
-		if err := json.Unmarshal(body, &errorResp); err == nil && errorResp.Error.Message != "" {
-			return nil, fmt.Errorf("API request failed with status %d: %s (type: %s, code: %s)",
-				resp.StatusCode, errorResp.Error.Message, errorResp.Error.Type, errorResp.Error.Code)
-		}
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var response OpenAIResponse
@@ -662,14 +689,41 @@ func (p *OpenAIProvider) makeStreamingRequest(ctx context.Context, request OpenA
 	}
 
 	resp, err := p.httpClient.Do(req)
+	// HTTP client may return both response and error for non-2xx status codes
+	// We need to check the response body even if there's an error
+	if resp != nil {
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, readErr := io.ReadAll(resp.Body)
+			errorBody := string(body)
+			if readErr != nil {
+				errorBody = fmt.Sprintf("(failed to read error body: %v)", readErr)
+			}
+			if apiErr := parseErrorResponse(body); apiErr != nil {
+				return fmt.Errorf("API request failed with status %d: %s (type: %s, code: %s)",
+					resp.StatusCode, apiErr.Message, apiErr.Type, apiErr.Code)
+			}
+			return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, errorBody)
+		}
+	}
+
 	if err != nil {
+		// If we have a response body, try to extract error details
+		if resp != nil && resp.Body != nil {
+			body, readErr := io.ReadAll(resp.Body)
+			if readErr == nil && len(body) > 0 {
+				if apiErr := parseErrorResponse(body); apiErr != nil {
+					return fmt.Errorf("HTTP request failed: %s (type: %s, code: %s)",
+						apiErr.Message, apiErr.Type, apiErr.Code)
+				}
+				return fmt.Errorf("HTTP request failed: %w - Response: %s", err, string(body))
+			}
+		}
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	if resp == nil {
+		return fmt.Errorf("HTTP request failed: no response received")
 	}
 
 	reader := bufio.NewReader(resp.Body)

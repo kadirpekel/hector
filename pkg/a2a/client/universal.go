@@ -2,15 +2,20 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"github.com/kadirpekel/hector/pkg/httpclient"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 )
@@ -27,7 +32,8 @@ type UniversalA2AClient struct {
 	httpClient *http.Client
 	grpcClient pb.A2AServiceClient
 	grpcConn   *grpc.ClientConn
-	transport  string // "grpc", "rest", or "jsonrpc"
+	transport  string                // "grpc", "rest", or "jsonrpc"
+	tlsConfig  *httpclient.TLSConfig // TLS configuration for HTTPS/gRPC
 }
 
 // NewUniversalA2AClient creates a client that auto-discovers the agent and chooses transport
@@ -35,14 +41,34 @@ type UniversalA2AClient struct {
 // - Agent card URL: https://service.com/v1/agents/assistant/.well-known/agent-card.json
 // - Agent-specific base URL: https://service.com/v1/agents/assistant
 // - Service base URL: https://service.com (will discover agents)
-func NewUniversalA2AClient(url, agentID, token string) (*UniversalA2AClient, error) {
-	client := &UniversalA2AClient{
-		baseURL: strings.TrimSuffix(url, "/"),
-		agentID: agentID,
-		token:   token,
-		httpClient: &http.Client{
+// tlsConfig is optional TLS configuration for HTTPS connections
+func NewUniversalA2AClient(url, agentID, token string, tlsConfig *httpclient.TLSConfig) (*UniversalA2AClient, error) {
+	// Create HTTP client with TLS configuration
+	var httpClient *http.Client
+	if tlsConfig != nil && (tlsConfig.InsecureSkipVerify || tlsConfig.CACertificate != "") {
+		transport, err := httpclient.ConfigureTLS(tlsConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to configure TLS: %w", err)
+		}
+		if tlsConfig.InsecureSkipVerify {
+			fmt.Printf("Warning: TLS certificate verification disabled for A2A agent %s (insecure_skip_verify=true)\n", agentID)
+		}
+		httpClient = &http.Client{
+			Timeout:   300 * time.Second,
+			Transport: transport,
+		}
+	} else {
+		httpClient = &http.Client{
 			Timeout: 300 * time.Second,
-		},
+		}
+	}
+
+	client := &UniversalA2AClient{
+		baseURL:    strings.TrimSuffix(url, "/"),
+		agentID:    agentID,
+		token:      token,
+		httpClient: httpClient,
+		tlsConfig:  tlsConfig,
 	}
 
 	// Discover agent card
@@ -168,26 +194,80 @@ func (c *UniversalA2AClient) initializeTransport() error {
 
 	switch preferredTransport {
 	case "grpc":
+		if c.tlsConfig != nil {
+			return c.initGRPCWithTLS(serviceURL, c.tlsConfig)
+		}
 		return c.initGRPC(serviceURL)
 	case "rest", "http", "https":
-		// Already have HTTP client
+		// Already have HTTP client with TLS config
 		return nil
 	case "jsonrpc", "json-rpc":
-		// Use HTTP client with JSON-RPC
+		// Use HTTP client with JSON-RPC (TLS config already applied)
 		return nil
 	default:
 		// Fallback to gRPC
+		if c.tlsConfig != nil {
+			return c.initGRPCWithTLS(serviceURL, c.tlsConfig)
+		}
 		return c.initGRPC(serviceURL)
 	}
 }
 
 // initGRPC initializes gRPC transport
+// Note: TLS configuration is passed via the client's httpClient transport
+// For gRPC, we use insecure credentials by default (gRPC TLS would require server cert)
 func (c *UniversalA2AClient) initGRPC(serviceURL string) error {
 	// Extract host:port from URL
 	grpcAddr := extractGRPCAddress(serviceURL)
 
+	// For now, use insecure credentials
+	// TODO: Support gRPC TLS with proper certificate handling
 	dialOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+
+	conn, err := grpc.NewClient(grpcAddr, dialOpts...)
+	if err != nil {
+		return fmt.Errorf("failed to connect via gRPC: %w", err)
+	}
+
+	c.grpcConn = conn
+	c.grpcClient = pb.NewA2AServiceClient(conn)
+	return nil
+}
+
+// initGRPCWithTLS initializes gRPC transport with TLS support
+func (c *UniversalA2AClient) initGRPCWithTLS(serviceURL string, tlsConfig *httpclient.TLSConfig) error {
+	grpcAddr := extractGRPCAddress(serviceURL)
+
+	var creds credentials.TransportCredentials
+
+	if tlsConfig != nil && tlsConfig.InsecureSkipVerify {
+		// Insecure mode (dev/test only)
+		creds = insecure.NewCredentials()
+		fmt.Printf("Warning: Using insecure gRPC connection for A2A agent %s\n", c.agentID)
+	} else if tlsConfig != nil && tlsConfig.CACertificate != "" {
+		// Custom CA certificate
+		caCert, err := os.ReadFile(tlsConfig.CACertificate)
+		if err != nil {
+			return fmt.Errorf("failed to read CA certificate: %w", err)
+		}
+
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM(caCert) {
+			return fmt.Errorf("failed to parse CA certificate")
+		}
+
+		creds = credentials.NewTLS(&tls.Config{
+			RootCAs: caCertPool,
+		})
+	} else {
+		// Use system CA certificates (default)
+		creds = credentials.NewTLS(&tls.Config{})
+	}
+
+	dialOpts := []grpc.DialOption{
+		grpc.WithTransportCredentials(creds),
 	}
 
 	conn, err := grpc.NewClient(grpcAddr, dialOpts...)
@@ -230,8 +310,8 @@ func (c *UniversalA2AClient) sendMessageGRPC(ctx context.Context, agentID string
 
 // sendMessageREST sends via REST
 func (c *UniversalA2AClient) sendMessageREST(ctx context.Context, agentID string, message *pb.Message) (*pb.SendMessageResponse, error) {
-	// Use HTTP client from http.go
-	httpClient := NewHTTPClient(c.baseURL, c.token)
+	// Use HTTP client from http.go with TLS config
+	httpClient := NewHTTPClientWithTLS(c.baseURL, c.token, c.tlsConfig)
 	return httpClient.SendMessage(ctx, agentID, message)
 }
 
@@ -244,14 +324,14 @@ func (c *UniversalA2AClient) sendMessageJSONRPC(ctx context.Context, agentID str
 
 // StreamMessage streams messages using the appropriate transport
 func (c *UniversalA2AClient) StreamMessage(ctx context.Context, agentID string, message *pb.Message) (<-chan *pb.StreamResponse, error) {
-	// Use HTTP client for streaming (SSE)
-	httpClient := NewHTTPClient(c.baseURL, c.token)
+	// Use HTTP client for streaming (SSE) with TLS config
+	httpClient := NewHTTPClientWithTLS(c.baseURL, c.token, c.tlsConfig)
 	return httpClient.StreamMessage(ctx, agentID, message)
 }
 
 // ListAgents lists available agents
 func (c *UniversalA2AClient) ListAgents(ctx context.Context) ([]*pb.AgentCard, error) {
-	httpClient := NewHTTPClient(c.baseURL, c.token)
+	httpClient := NewHTTPClientWithTLS(c.baseURL, c.token, c.tlsConfig)
 	return httpClient.ListAgents(ctx)
 }
 
@@ -260,19 +340,19 @@ func (c *UniversalA2AClient) GetAgentCard(ctx context.Context, agentID string) (
 	if c.agentCard != nil && (agentID == "" || agentID == c.agentID) {
 		return c.agentCard, nil
 	}
-	httpClient := NewHTTPClient(c.baseURL, c.token)
+	httpClient := NewHTTPClientWithTLS(c.baseURL, c.token, c.tlsConfig)
 	return httpClient.GetAgentCard(ctx, agentID)
 }
 
 // GetTask gets task status
 func (c *UniversalA2AClient) GetTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
-	httpClient := NewHTTPClient(c.baseURL, c.token)
+	httpClient := NewHTTPClientWithTLS(c.baseURL, c.token, c.tlsConfig)
 	return httpClient.GetTask(ctx, agentID, taskID)
 }
 
 // CancelTask cancels a task
 func (c *UniversalA2AClient) CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
-	httpClient := NewHTTPClient(c.baseURL, c.token)
+	httpClient := NewHTTPClientWithTLS(c.baseURL, c.token, c.tlsConfig)
 	return httpClient.CancelTask(ctx, agentID, taskID)
 }
 

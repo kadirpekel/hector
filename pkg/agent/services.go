@@ -430,6 +430,63 @@ func (s *DefaultToolService) GetTool(name string) (interface{}, error) {
 	return s.toolRegistry.GetTool(name)
 }
 
+// cleanSchema recursively cleans a schema map to remove empty strings and ensure validity
+func cleanSchema(schema map[string]interface{}) map[string]interface{} {
+	if schema == nil {
+		return nil
+	}
+
+	cleaned := make(map[string]interface{})
+	for key, value := range schema {
+		switch v := value.(type) {
+		case string:
+			// Skip empty strings
+			if v != "" {
+				cleaned[key] = v
+			}
+		case map[string]interface{}:
+			// Recursively clean nested schemas
+			if cleanedNested := cleanSchema(v); cleanedNested != nil && len(cleanedNested) > 0 {
+				cleaned[key] = cleanedNested
+			}
+		case []interface{}:
+			// Clean arrays by filtering out empty strings
+			cleanedArray := make([]interface{}, 0, len(v))
+			for _, item := range v {
+				if str, ok := item.(string); ok {
+					if str != "" {
+						cleanedArray = append(cleanedArray, str)
+					}
+				} else if nestedMap, ok := item.(map[string]interface{}); ok {
+					if cleanedNested := cleanSchema(nestedMap); cleanedNested != nil && len(cleanedNested) > 0 {
+						cleanedArray = append(cleanedArray, cleanedNested)
+					}
+				} else {
+					cleanedArray = append(cleanedArray, item)
+				}
+			}
+			if len(cleanedArray) > 0 {
+				cleaned[key] = cleanedArray
+			}
+		default:
+			// Keep other types as-is
+			cleaned[key] = value
+		}
+	}
+
+	// If type is missing or empty, return nil to indicate invalid schema
+	typeVal, hasType := schema["type"].(string)
+	if !hasType || typeVal == "" {
+		return nil
+	}
+	// Ensure type is in cleaned result
+	if _, exists := cleaned["type"]; !exists {
+		cleaned["type"] = typeVal
+	}
+
+	return cleaned
+}
+
 func convertToolInfoToToolDefinition(info tools.ToolInfo) llms.ToolDefinition {
 
 	schema := map[string]interface{}{
@@ -442,13 +499,37 @@ func convertToolInfoToToolDefinition(info tools.ToolInfo) llms.ToolDefinition {
 	required := []string{}
 
 	for _, param := range info.Parameters {
-		propSchema := map[string]interface{}{
-			"type":        param.Type,
-			"description": param.Description,
+		// Skip parameters with empty type (shouldn't happen, but be defensive)
+		if param.Type == "" {
+			continue
 		}
 
-		if param.Type == "array" && param.Items != nil {
-			propSchema["items"] = param.Items
+		propSchema := map[string]interface{}{
+			"type": param.Type,
+		}
+
+		// Only add description if it's not empty
+		if param.Description != "" {
+			propSchema["description"] = param.Description
+		}
+
+		if param.Type == "array" {
+			if param.Items != nil {
+				// Clean up items schema to ensure no empty strings
+				if itemsSchema := cleanSchema(param.Items); itemsSchema != nil {
+					propSchema["items"] = itemsSchema
+				} else {
+					// Invalid items schema (missing type), default to string
+					propSchema["items"] = map[string]interface{}{
+						"type": "string",
+					}
+				}
+			} else {
+				// Items not provided - OpenAI requires it for arrays, default to string
+				propSchema["items"] = map[string]interface{}{
+					"type": "string",
+				}
+			}
 		}
 
 		properties[param.Name] = propSchema
@@ -457,8 +538,17 @@ func convertToolInfoToToolDefinition(info tools.ToolInfo) llms.ToolDefinition {
 			required = append(required, param.Name)
 		}
 
+		// Filter out empty enum values
 		if len(param.Enum) > 0 {
-			propSchema["enum"] = param.Enum
+			filteredEnum := make([]string, 0, len(param.Enum))
+			for _, val := range param.Enum {
+				if val != "" {
+					filteredEnum = append(filteredEnum, val)
+				}
+			}
+			if len(filteredEnum) > 0 {
+				propSchema["enum"] = filteredEnum
+			}
 		}
 
 		if param.Default != nil {

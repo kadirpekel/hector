@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/kadirpekel/hector/pkg/config"
 )
 
 func TestNewMCPToolSource(t *testing.T) {
@@ -33,8 +35,10 @@ func TestNewMCPToolSource_WithEmptyName(t *testing.T) {
 }
 
 func TestNewMCPToolSourceWithConfig(t *testing.T) {
-
-	source, err := NewMCPToolSourceWithConfig("http://localhost:8080")
+	toolConfig := &config.ToolConfig{
+		ServerURL: "http://localhost:8080",
+	}
+	source, err := NewMCPToolSourceWithConfig(toolConfig)
 	if err != nil {
 		t.Fatalf("NewMCPToolSourceWithConfig() error = %v", err)
 	}
@@ -52,8 +56,10 @@ func TestNewMCPToolSourceWithConfig(t *testing.T) {
 }
 
 func TestNewMCPToolSourceWithConfig_EmptyURL(t *testing.T) {
-
-	_, err := NewMCPToolSourceWithConfig("")
+	toolConfig := &config.ToolConfig{
+		ServerURL: "",
+	}
+	_, err := NewMCPToolSourceWithConfig(toolConfig)
 	if err == nil {
 		t.Error("Expected error when URL is empty")
 	}
@@ -314,8 +320,10 @@ func TestMCPToolSource_Concurrency(t *testing.T) {
 }
 
 func TestMCPToolSource_WithConfig_InvalidURL(t *testing.T) {
-
-	_, err := NewMCPToolSourceWithConfig("not-a-valid-url")
+	toolConfig := &config.ToolConfig{
+		ServerURL: "not-a-valid-url",
+	}
+	_, err := NewMCPToolSourceWithConfig(toolConfig)
 	if err != nil {
 		t.Errorf("NewMCPToolSourceWithConfig() should not error on invalid URL format, got: %v", err)
 	}

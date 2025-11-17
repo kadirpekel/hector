@@ -8,6 +8,7 @@ import (
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/auth"
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/httpclient"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -76,9 +77,18 @@ func NewExternalA2AAgent(agentID string, agentConfig *config.AgentConfig) (*Exte
 		targetAgentID = agentID
 	}
 
+	// Create TLS configuration if provided
+	var tlsConfig *httpclient.TLSConfig
+	if agentConfig.InsecureSkipVerify != nil && *agentConfig.InsecureSkipVerify || agentConfig.CACertificate != "" {
+		tlsConfig = &httpclient.TLSConfig{
+			InsecureSkipVerify: agentConfig.InsecureSkipVerify != nil && *agentConfig.InsecureSkipVerify,
+			CACertificate:      agentConfig.CACertificate,
+		}
+	}
+
 	// Create universal A2A client (auto-discovers agent and chooses transport)
 	// Use targetAgentID for discovery and calls
-	a2aClient, err := client.NewUniversalA2AClient(agentConfig.URL, targetAgentID, token)
+	a2aClient, err := client.NewUniversalA2AClient(agentConfig.URL, targetAgentID, token, tlsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create A2A client for %s: %w", agentConfig.URL, err)
 	}

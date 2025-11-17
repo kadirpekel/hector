@@ -117,16 +117,31 @@ func NewAnthropicProviderFromConfig(cfg *config.LLMProviderConfig) (*AnthropicPr
 		cfg.Host = "https://api.anthropic.com"
 	}
 
+	// Create HTTP client with TLS support and Anthropic-specific rate limit header parser
+	opts := []httpclient.Option{
+		httpclient.WithHTTPClient(&http.Client{
+			Timeout: time.Duration(cfg.Timeout) * time.Second,
+		}),
+		httpclient.WithMaxRetries(cfg.MaxRetries),
+		httpclient.WithBaseDelay(time.Duration(cfg.RetryDelay) * time.Second),
+		httpclient.WithHeaderParser(httpclient.ParseAnthropicRateLimitHeaders),
+	}
+
+	// Add TLS config if needed
+	if cfg.InsecureSkipVerify != nil && *cfg.InsecureSkipVerify || cfg.CACertificate != "" {
+		tlsConfig := &httpclient.TLSConfig{
+			InsecureSkipVerify: cfg.InsecureSkipVerify != nil && *cfg.InsecureSkipVerify,
+			CACertificate:      cfg.CACertificate,
+		}
+		if tlsConfig.InsecureSkipVerify {
+			fmt.Printf("Warning: TLS certificate verification disabled for Anthropic (insecure_skip_verify=true)\n")
+		}
+		opts = append(opts, httpclient.WithTLSConfig(tlsConfig))
+	}
+
 	return &AnthropicProvider{
-		config: cfg,
-		httpClient: httpclient.New(
-			httpclient.WithHTTPClient(&http.Client{
-				Timeout: time.Duration(cfg.Timeout) * time.Second,
-			}),
-			httpclient.WithMaxRetries(cfg.MaxRetries),
-			httpclient.WithBaseDelay(time.Duration(cfg.RetryDelay)*time.Second),
-			httpclient.WithHeaderParser(httpclient.ParseAnthropicRateLimitHeaders),
-		),
+		config:     cfg,
+		httpClient: httpclient.New(opts...),
 	}, nil
 }
 

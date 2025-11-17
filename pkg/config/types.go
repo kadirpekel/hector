@@ -198,6 +198,10 @@ type LLMProviderConfig struct {
 	RetryDelay  int      `yaml:"retry_delay"`
 
 	StructuredOutput *StructuredOutputConfig `yaml:"structured_output,omitempty"`
+
+	// TLS configuration for HTTPS connections (useful for self-hosted LLMs)
+	InsecureSkipVerify *bool  `yaml:"insecure_skip_verify,omitempty"` // Skip TLS certificate verification (dev/test only)
+	CACertificate      string `yaml:"ca_certificate,omitempty"`       // Path to custom CA certificate file
 }
 
 type StructuredOutputConfig struct {
@@ -316,6 +320,11 @@ func (c *LLMProviderConfig) SetDefaults() {
 			c.APIKey = key
 		}
 	}
+
+	// Set TLS defaults
+	if c.InsecureSkipVerify == nil {
+		c.InsecureSkipVerify = BoolPtr(false)
+	}
 }
 
 // VectorStoreConfig holds configuration for vector database connections (Qdrant, Pinecone, etc.)
@@ -326,6 +335,10 @@ type VectorStoreConfig struct {
 	Port      int    `yaml:"port"`
 	APIKey    string `yaml:"api_key"`
 	EnableTLS *bool  `yaml:"enable_tls"`
+
+	// TLS configuration for HTTPS connections
+	InsecureSkipVerify *bool  `yaml:"insecure_skip_verify,omitempty"` // Skip TLS certificate verification (dev/test only)
+	CACertificate      string `yaml:"ca_certificate,omitempty"`       // Path to custom CA certificate file
 }
 
 func (c *VectorStoreConfig) Validate() error {
@@ -353,6 +366,10 @@ func (c *VectorStoreConfig) SetDefaults() {
 	}
 	if c.EnableTLS == nil {
 		c.EnableTLS = BoolPtr(false)
+	}
+	// Default to secure (verify certificates) unless explicitly set
+	if c.InsecureSkipVerify == nil {
+		c.InsecureSkipVerify = BoolPtr(false)
 	}
 }
 
@@ -566,6 +583,10 @@ type AgentConfig struct {
 	TargetAgentID string            `yaml:"target_agent_id,omitempty"` // Remote agent ID (if different from local config key)
 	Credentials   *AgentCredentials `yaml:"credentials,omitempty"`
 
+	// TLS configuration for HTTPS connections
+	InsecureSkipVerify *bool  `yaml:"insecure_skip_verify,omitempty"` // Skip TLS certificate verification (dev/test only)
+	CACertificate      string `yaml:"ca_certificate,omitempty"`       // Path to custom CA certificate file
+
 	// Provider references - support both string references and inline configs
 	LLM               string                  `yaml:"llm,omitempty"`                 // String reference (existing)
 	LLMInline         *LLMProviderConfig      `yaml:"llm_config,omitempty"`          // Inline LLM config (new - alternative to llm)
@@ -763,6 +784,11 @@ func (c *AgentConfig) SetDefaults() {
 
 		if c.Credentials != nil {
 			c.Credentials.SetDefaults()
+		}
+
+		// Set TLS defaults
+		if c.InsecureSkipVerify == nil {
+			c.InsecureSkipVerify = BoolPtr(false)
 		}
 	}
 }
@@ -1102,6 +1128,10 @@ type ToolConfig struct {
 
 	ServerURL string `yaml:"server_url,omitempty"`
 
+	// MCP tool TLS configuration
+	InsecureSkipVerify *bool  `yaml:"insecure_skip_verify,omitempty"` // Skip TLS certificate verification (dev/test only)
+	CACertificate      string `yaml:"ca_certificate,omitempty"`       // Path to custom CA certificate file
+
 	Config map[string]interface{} `yaml:"config,omitempty"`
 }
 
@@ -1203,6 +1233,10 @@ func (c *ToolConfig) SetDefaults() {
 		// No defaults for AllowedDomains, DeniedDomains, AllowedMethods
 		// Omitted = allow all (liberal default)
 	case "mcp":
+		// Default to secure (verify certificates) unless explicitly set
+		if c.InsecureSkipVerify == nil {
+			c.InsecureSkipVerify = BoolPtr(false)
+		}
 
 	}
 }
@@ -1253,10 +1287,10 @@ type DocumentStoreConfig struct {
 
 // DocumentStoreMCPParserConfig configures MCP-based document parsing
 type DocumentStoreMCPParserConfig struct {
-	ToolNames    []string `yaml:"tool_names"`     // MCP tool names to use for parsing (e.g., ["parse_document", "docling_parse"])
-	Extensions   []string `yaml:"extensions"`     // File extensions to handle (empty = all binary files)
-	Priority     *int     `yaml:"priority"`       // Extractor priority (default: 8, higher than native parsers)
-	PreferNative *bool    `yaml:"prefer_native"`  // If true, only use MCP when native parsers fail (default: false)
+	ToolNames    []string `yaml:"tool_names"`    // MCP tool names to use for parsing (e.g., ["parse_document", "docling_parse"])
+	Extensions   []string `yaml:"extensions"`    // File extensions to handle (empty = all binary files)
+	Priority     *int     `yaml:"priority"`      // Extractor priority (default: 8, higher than native parsers)
+	PreferNative *bool    `yaml:"prefer_native"` // If true, only use MCP when native parsers fail (default: false)
 }
 
 // DocumentStoreSQLConfig defines SQL database connection for document store

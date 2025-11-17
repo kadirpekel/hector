@@ -185,7 +185,7 @@ func (r *ToolRegistry) initializeFromConfigWithAgentRegistry(toolConfig map[stri
 			continue
 		}
 
-		mcpSource := NewMCPToolSource(toolName, serverURL, toolConfig.Description)
+		mcpSource := NewMCPToolSourceWithTLS(toolName, serverURL, toolConfig.Description, toolConfig.InsecureSkipVerify, toolConfig.CACertificate)
 
 		if err := r.RegisterSource(mcpSource); err != nil {
 			fmt.Printf("Warning: Failed to register MCP source '%s': %v\n", toolName, err)

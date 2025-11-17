@@ -38,7 +38,7 @@ func InfoCommand(args *InfoCmd, cfg *config.Config, mode CLIMode) error {
 			return fmt.Errorf("--url is required in client mode (agent card URL or service base URL)")
 		}
 
-		a2aClient, err := client.NewUniversalA2AClient(url, args.Agent, args.Token)
+		a2aClient, err := client.NewUniversalA2AClient(url, args.Agent, args.Token, nil)
 		if err != nil {
 			return fmt.Errorf("failed to create A2A client: %w", err)
 		}
@@ -324,7 +324,7 @@ func createClient[T ClientArgs](args T, cfg *config.Config, mode CLIMode) (clien
 		token := args.GetToken()
 
 		// Create universal A2A client (discovers agent and chooses transport)
-		a2aClient, err := client.NewUniversalA2AClient(url, agentID, token)
+		a2aClient, err := client.NewUniversalA2AClient(url, agentID, token, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create A2A client: %w", err)
 		}

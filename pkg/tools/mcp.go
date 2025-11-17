@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
 )
 
@@ -20,6 +22,8 @@ type MCPToolSource struct {
 	httpClient  *httpclient.Client
 	tools       map[string]Tool
 	mu          sync.RWMutex
+	sessionID   string       // Session ID for streamable-http transport
+	sessionMu   sync.RWMutex // Separate mutex for sessionID to avoid deadlock
 }
 
 type MCPTool struct {
@@ -52,8 +56,38 @@ type CallParams struct {
 }
 
 func NewMCPToolSource(name, url, description string) *MCPToolSource {
+	return NewMCPToolSourceWithTLS(name, url, description, nil, "")
+}
+
+func NewMCPToolSourceWithTLS(name, url, description string, insecureSkipVerify *bool, caCertificate string) *MCPToolSource {
 	if name == "" {
 		name = "mcp"
+	}
+
+	// Configure TLS using centralized function
+	tlsConfig := &httpclient.TLSConfig{}
+	if insecureSkipVerify != nil {
+		tlsConfig.InsecureSkipVerify = *insecureSkipVerify
+	}
+	if caCertificate != "" {
+		tlsConfig.CACertificate = caCertificate
+	}
+
+	transport, err := httpclient.ConfigureTLS(tlsConfig)
+	if err != nil {
+		fmt.Printf("Warning: Failed to configure TLS for MCP server %s: %v\n", name, err)
+		// Fallback to default transport
+		transport = &http.Transport{}
+	}
+
+	// Show warning if insecure skip verify is enabled
+	if insecureSkipVerify != nil && *insecureSkipVerify {
+		fmt.Printf("Warning: TLS certificate verification disabled for MCP server %s (insecure_skip_verify=true)\n", name)
+	}
+
+	httpClient := &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: transport,
 	}
 
 	return &MCPToolSource{
@@ -61,9 +95,7 @@ func NewMCPToolSource(name, url, description string) *MCPToolSource {
 		url:         url,
 		description: description,
 		httpClient: httpclient.New(
-			httpclient.WithHTTPClient(&http.Client{
-				Timeout: 30 * time.Second,
-			}),
+			httpclient.WithHTTPClient(httpClient),
 			httpclient.WithMaxRetries(3),
 			httpclient.WithBaseDelay(2*time.Second),
 		),
@@ -71,24 +103,18 @@ func NewMCPToolSource(name, url, description string) *MCPToolSource {
 	}
 }
 
-func NewMCPToolSourceWithConfig(url string) (*MCPToolSource, error) {
-	if url == "" {
-		return nil, fmt.Errorf("URL is required for MCP source")
+func NewMCPToolSourceWithConfig(toolConfig *config.ToolConfig) (*MCPToolSource, error) {
+	if toolConfig.ServerURL == "" {
+		return nil, fmt.Errorf("server_url is required for MCP source")
 	}
 
-	return &MCPToolSource{
-		name:        "mcp",
-		url:         url,
-		description: "",
-		httpClient: httpclient.New(
-			httpclient.WithHTTPClient(&http.Client{
-				Timeout: 30 * time.Second,
-			}),
-			httpclient.WithMaxRetries(3),
-			httpclient.WithBaseDelay(2*time.Second),
-		),
-		tools: make(map[string]Tool),
-	}, nil
+	return NewMCPToolSourceWithTLS(
+		"mcp",
+		toolConfig.ServerURL,
+		toolConfig.Description,
+		toolConfig.InsecureSkipVerify,
+		toolConfig.CACertificate,
+	), nil
 }
 
 func (r *MCPToolSource) GetName() string {
@@ -152,6 +178,17 @@ func (r *MCPToolSource) GetTool(name string) (Tool, bool) {
 }
 
 func (r *MCPToolSource) discoverToolsFromServer(ctx context.Context) ([]ToolInfo, error) {
+	// First, try to initialize the session if needed
+	// Some MCP servers require initialization before other calls
+	_, _ = r.makeRequest(ctx, "initialize", map[string]interface{}{
+		"protocolVersion": "2024-11-05",
+		"capabilities":    map[string]interface{}{},
+		"clientInfo": map[string]interface{}{
+			"name":    "hector",
+			"version": "1.0.0",
+		},
+	})
+
 	response, err := r.makeRequest(ctx, "tools/list", map[string]interface{}{})
 	if err != nil {
 		return nil, err
@@ -176,16 +213,22 @@ func (r *MCPToolSource) discoverToolsFromServer(ctx context.Context) ([]ToolInfo
 						if properties, ok := params["properties"].(map[string]interface{}); ok {
 							for paramName, paramData := range properties {
 								if param, ok := paramData.(map[string]interface{}); ok {
+									paramType := getString(param, "type")
+									// Skip parameters without a valid type
+									if paramType == "" {
+										continue
+									}
+
 									toolParam := ToolParameter{
 										Name:        paramName,
-										Type:        getString(param, "type"),
+										Type:        paramType,
 										Description: getString(param, "description"),
 										Required:    isRequired(params, paramName),
 									}
 
 									if enum, ok := param["enum"].([]interface{}); ok {
 										for _, val := range enum {
-											if strVal, ok := val.(string); ok {
+											if strVal, ok := val.(string); ok && strVal != "" {
 												toolParam.Enum = append(toolParam.Enum, strVal)
 											}
 										}
@@ -211,6 +254,39 @@ func (r *MCPToolSource) discoverToolsFromServer(ctx context.Context) ([]ToolInfo
 
 									if pattern := getString(param, "pattern"); pattern != "" {
 										toolParam.Description += fmt.Sprintf(" (pattern: %s)", pattern)
+									}
+
+									// Extract items schema for array types (required by OpenAI)
+									if toolParam.Type == "array" {
+										if items, ok := param["items"]; ok && items != nil {
+											// items can be a map (object schema) or a simple type string
+											if itemsMap, ok := items.(map[string]interface{}); ok {
+												// Validate that the schema has a type
+												if itemType := getString(itemsMap, "type"); itemType != "" {
+													toolParam.Items = itemsMap
+												} else {
+													// Invalid schema without type, default to string
+													toolParam.Items = map[string]interface{}{
+														"type": "string",
+													}
+												}
+											} else if itemTypeStr, ok := items.(string); ok && itemTypeStr != "" {
+												// If items is a simple type string, wrap it in a schema
+												toolParam.Items = map[string]interface{}{
+													"type": itemTypeStr,
+												}
+											} else {
+												// Invalid items value, default to string
+												toolParam.Items = map[string]interface{}{
+													"type": "string",
+												}
+											}
+										} else {
+											// Items not specified - OpenAI requires it, so default to string array
+											toolParam.Items = map[string]interface{}{
+												"type": "string",
+											}
+										}
 									}
 
 									toolInfo.Parameters = append(toolInfo.Parameters, toolParam)
@@ -250,16 +326,102 @@ func (r *MCPToolSource) makeRequest(ctx context.Context, method string, params i
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 
+	// Add session ID if we have one (for streamable-http transport)
+	r.sessionMu.RLock()
+	sessionID := r.sessionID
+	r.sessionMu.RUnlock()
+	if sessionID != "" {
+		req.Header.Set("mcp-session-id", sessionID)
+	}
+
 	httpResp, err := r.httpClient.Do(req)
+
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %v", err)
 	}
 	defer httpResp.Body.Close()
 
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP error %d: %s", httpResp.StatusCode, httpResp.Status)
+	// Extract session ID from response header (for streamable-http transport)
+	if sessionID := httpResp.Header.Get("mcp-session-id"); sessionID != "" {
+		r.sessionMu.Lock()
+		r.sessionID = sessionID
+		r.sessionMu.Unlock()
 	}
 
+	if httpResp.StatusCode != http.StatusOK {
+		// Try to read error response body for better error message
+		responseBody, _ := io.ReadAll(httpResp.Body)
+		return nil, fmt.Errorf("HTTP error %d: %s (response: %s)", httpResp.StatusCode, httpResp.Status, string(responseBody))
+	}
+
+	// Check if response is SSE (Server-Sent Events)
+	contentType := httpResp.Header.Get("Content-Type")
+
+	if strings.Contains(contentType, "text/event-stream") {
+		// Read SSE stream until we get first complete message
+		// Server may wait up to 30s (batchTimeout) before closing, so we use timeout
+		type result struct {
+			response *Response
+			err      error
+		}
+		resultChan := make(chan result, 1)
+
+		go func() {
+			defer httpResp.Body.Close()
+
+			scanner := bufio.NewScanner(httpResp.Body)
+			var currentData strings.Builder
+
+			for scanner.Scan() {
+				line := scanner.Text()
+
+				// Empty line signals end of event
+				if line == "" {
+					if currentData.Len() > 0 {
+						jsonData := currentData.String()
+
+						var mcpResp Response
+						if parseErr := json.Unmarshal([]byte(jsonData), &mcpResp); parseErr == nil {
+							resultChan <- result{response: &mcpResp}
+							return
+						}
+
+						// Reset for next event
+						currentData.Reset()
+					}
+					continue
+				}
+
+				// Parse SSE field - we only care about data lines
+				if strings.HasPrefix(line, "data:") {
+					data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+					currentData.WriteString(data)
+				}
+				// Ignore event type lines and other SSE fields
+			}
+
+			if err := scanner.Err(); err != nil {
+				resultChan <- result{err: fmt.Errorf("failed to read SSE: %v", err)}
+				return
+			}
+
+			// If we exit the loop without finding data, it's an error
+			resultChan <- result{err: fmt.Errorf("SSE stream ended without complete message")}
+		}()
+
+		// Wait for result with timeout
+		select {
+		case res := <-resultChan:
+			if res.err != nil {
+				return nil, res.err
+			}
+			return res.response, nil
+		case <-time.After(10 * time.Second):
+			return nil, fmt.Errorf("timeout reading SSE response")
+		}
+	}
+
+	// Regular JSON response
 	responseBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %v", err)
@@ -270,18 +432,7 @@ func (r *MCPToolSource) makeRequest(ctx context.Context, method string, params i
 		return &mcpResp, nil
 	}
 
-	responseStr := string(responseBody)
-	lines := strings.Split(responseStr, "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "data: ") {
-			jsonData := strings.TrimPrefix(line, "data: ")
-			if err := json.Unmarshal([]byte(jsonData), &mcpResp); err == nil {
-				return &mcpResp, nil
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("failed to parse response as JSON or SSE")
+	return nil, fmt.Errorf("failed to parse response as JSON")
 }
 
 func (t *MCPTool) GetInfo() ToolInfo {
@@ -298,6 +449,22 @@ func (t *MCPTool) GetDescription() string {
 
 func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
 	start := time.Now()
+
+	// Validate required parameters
+	if err := t.validateParameters(args); err != nil {
+		return ToolResult{
+			Content:       "",
+			Success:       false,
+			Error:         err.Error(),
+			ToolName:      t.toolInfo.Name,
+			ExecutionTime: time.Since(start),
+			Metadata: map[string]interface{}{
+				"source":     t.source.name,
+				"tool_type":  "remote",
+				"server_url": t.source.url,
+			},
+		}, err
+	}
 
 	params := CallParams{
 		Name:      t.toolInfo.Name,
@@ -338,19 +505,51 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 
 	content := t.extractContent(response.Result)
 
+	// Extract metadata from response if available
+	metadata := map[string]interface{}{
+		"source":     t.source.name,
+		"tool_type":  "remote",
+		"server_url": t.source.url,
+	}
+
+	// Merge metadata from response if it exists
+	if resultMap, ok := response.Result.(map[string]interface{}); ok {
+		if responseMetadata, ok := resultMap["metadata"].(map[string]interface{}); ok {
+			// Merge response metadata into our metadata
+			for k, v := range responseMetadata {
+				metadata[k] = v
+			}
+		}
+	}
+
 	result := ToolResult{
 		Content:       strings.TrimSpace(content),
 		Success:       true,
 		ToolName:      t.toolInfo.Name,
 		ExecutionTime: time.Since(start),
-		Metadata: map[string]interface{}{
-			"source":     t.source.name,
-			"tool_type":  "remote",
-			"server_url": t.source.url,
-		},
+		Metadata:      metadata,
 	}
 
 	return result, nil
+}
+
+// validateParameters checks if all required parameters are provided
+func (t *MCPTool) validateParameters(args map[string]interface{}) error {
+	// Get required parameters from tool info
+	var missingParams []string
+	for _, param := range t.toolInfo.Parameters {
+		if param.Required {
+			if _, exists := args[param.Name]; !exists {
+				missingParams = append(missingParams, param.Name)
+			}
+		}
+	}
+
+	if len(missingParams) > 0 {
+		return fmt.Errorf("missing required parameters: %v", missingParams)
+	}
+
+	return nil
 }
 
 func (t *MCPTool) extractContent(result interface{}) string {
