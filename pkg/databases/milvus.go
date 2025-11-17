@@ -423,4 +423,3 @@ func (db *milvusDatabaseProvider) DeleteCollection(ctx context.Context, collecti
 func (db *milvusDatabaseProvider) Close() error {
 	return nil
 }
-

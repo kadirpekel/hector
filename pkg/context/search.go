@@ -61,9 +61,9 @@ type SearchEngine struct {
 	db            databases.DatabaseProvider
 	embedder      embedders.EmbedderProvider
 	config        config.SearchConfig
-	reranker      reranking.Reranker        // Optional reranker for re-ranking results
-	queryExpander QueryExpander            // Optional query expander for multi-query
-	llmRegistry   LLMRegistryForReranking  // Optional LLM registry for HyDE and other LLM-based features
+	reranker      reranking.Reranker      // Optional reranker for re-ranking results
+	queryExpander QueryExpander           // Optional query expander for multi-query
+	llmRegistry   LLMRegistryForReranking // Optional LLM registry for HyDE and other LLM-based features
 }
 
 // ParallelSearchTarget represents a single target to search in parallel
@@ -218,17 +218,17 @@ func NewSearchEngine(db databases.DatabaseProvider, embedder embedders.EmbedderP
 		if searchConfig.Rerank.LLM == "" {
 			return nil, NewSearchError("SearchEngine", "NewSearchEngine", "rerank.llm is required when reranking is enabled", "", nil)
 		}
-		
+
 		// Get LLM provider from registry - this is required, not optional
 		if llmRegistry == nil {
 			return nil, NewSearchError("SearchEngine", "NewSearchEngine", "LLM registry is required when reranking is enabled", "", nil)
 		}
-		
+
 		llmProvider, err := llmRegistry.GetLLM(searchConfig.Rerank.LLM)
 		if err != nil {
 			return nil, NewSearchError("SearchEngine", "NewSearchEngine", fmt.Sprintf("failed to get reranker LLM '%s' from registry: %v", searchConfig.Rerank.LLM, err), "", err)
 		}
-		
+
 		// Create reranker with LLM provider
 		maxResults := searchConfig.Rerank.MaxResults
 		if maxResults == 0 {

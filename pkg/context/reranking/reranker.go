@@ -59,11 +59,11 @@
 //
 // # Best Practices
 //
-//   1. Use hybrid or multi-query search first to get good candidates
-//   2. Set maxResults to 10-20 (balance between quality and cost)
-//   3. Apply threshold AFTER reranking, not before
-//   4. Consider caching reranked results for identical queries
-//   5. Use a fast LLM model (e.g., gpt-4o-mini) for reranking
+//  1. Use hybrid or multi-query search first to get good candidates
+//  2. Set maxResults to 10-20 (balance between quality and cost)
+//  3. Apply threshold AFTER reranking, not before
+//  4. Consider caching reranked results for identical queries
+//  5. Use a fast LLM model (e.g., gpt-4o-mini) for reranking
 //
 // # Example Usage
 //
@@ -401,4 +401,3 @@ func sanitizeInput(input string) string {
 
 	return sanitized
 }
-

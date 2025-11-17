@@ -181,7 +181,7 @@ func extractUnknownFieldsImproved(errMsg string, rawMap map[string]interface{}, 
 		// Extract the parent path (what comes before "has invalid keys:")
 		beforeKeys := errMsg[:idx]
 		parentPath := ""
-		
+
 		// Try multiple patterns to extract parent path
 		// Pattern 1: "...'search' has invalid keys: ..."
 		// Pattern 2: "...'agents[enterprise_assistant].search' has invalid keys: ..."
@@ -195,9 +195,9 @@ func extractUnknownFieldsImproved(errMsg string, rawMap map[string]interface{}, 
 					break
 				}
 			}
-			
+
 			if openingQuote != -1 && openingQuote < lastQuote {
-				parentPath = beforeKeys[openingQuote+1:lastQuote]
+				parentPath = beforeKeys[openingQuote+1 : lastQuote]
 				// Clean up path (remove array notation like [enterprise_assistant])
 				if bracketIdx := strings.Index(parentPath, "["); bracketIdx != -1 {
 					parentPath = parentPath[:bracketIdx]
@@ -206,7 +206,7 @@ func extractUnknownFieldsImproved(errMsg string, rawMap map[string]interface{}, 
 				parentPath = strings.TrimPrefix(parentPath, "agents.")
 			}
 		}
-		
+
 		keysStr := errMsg[idx+len("has invalid keys:"):]
 		keysStr = strings.TrimSpace(keysStr)
 
@@ -249,7 +249,7 @@ func extractUnknownFieldsImproved(errMsg string, rawMap map[string]interface{}, 
 			// - "agents.search.search_mode"
 			// - "agents.<agent-name>.search.search_mode"
 			fieldExists := false
-			
+
 			for _, validField := range validFields {
 				// Match exact path
 				if validField == fullPath {
@@ -262,9 +262,9 @@ func extractUnknownFieldsImproved(errMsg string, rawMap map[string]interface{}, 
 					break
 				}
 				// Match nested paths (e.g., "agents.search.search_mode")
-				if strings.HasSuffix(validField, ".search."+key) || 
-				   strings.Contains(validField, ".search."+key+".") ||
-				   strings.Contains(validField, "search."+key) {
+				if strings.HasSuffix(validField, ".search."+key) ||
+					strings.Contains(validField, ".search."+key+".") ||
+					strings.Contains(validField, "search."+key) {
 					fieldExists = true
 					break
 				}

@@ -88,16 +88,13 @@ func (se *SearchEngine) searchWithMultiQuery(ctx context.Context, embedCtx conte
 			continue
 		}
 
-		// Merge results, avoiding duplicates and boosting scores
+		// Merge results, avoiding duplicates and using max score
 		for _, result := range res.Results {
 			if idx, exists := seenIDs[result.ID]; exists {
-				// Result already seen - boost its score using max instead of average
-				// This preserves higher scores better than averaging
+				// Result already seen - use max score (order-independent)
+				// If a document appears in multiple query results, keep the highest score
 				if result.Score > allResults[idx].Score {
 					allResults[idx].Score = result.Score
-				} else {
-					// Weighted average: 60% max + 40% average (preserves high scores)
-					allResults[idx].Score = 0.6*allResults[idx].Score + 0.4*result.Score
 				}
 			} else {
 				// New result - add it

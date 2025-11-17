@@ -69,9 +69,12 @@ func (se *SearchEngine) searchWithHyDE(ctx context.Context, embedCtx context.Con
 // generateHypotheticalDocument generates a hypothetical document that would answer the query
 // This is the core of HyDE: instead of searching with the query, we search with a hypothetical answer
 func generateHypotheticalDocument(ctx context.Context, llmProvider llms.LLMProvider, query string) (string, error) {
+	// Sanitize query to prevent prompt injection
+	sanitizedQuery := sanitizeInput(query)
+
 	prompt := fmt.Sprintf(`Write a concise, hypothetical document that would be highly relevant to answer the following query: "%s"
 
-The document should be brief and directly address the core of the query.`, query)
+The document should be brief and directly address the core of the query.`, sanitizedQuery)
 
 	messages := []*pb.Message{
 		{
@@ -103,4 +106,3 @@ The document should be brief and directly address the core of the query.`, query
 
 	return response, nil
 }
-

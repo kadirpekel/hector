@@ -5,14 +5,18 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/databases"
 	"github.com/kadirpekel/hector/pkg/embedders"
+	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
 type mockDatabaseProvider struct {
-	upsertFunc func(ctx context.Context, collection string, id string, vector []float32, metadata map[string]interface{}) error
-	searchFunc func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error)
+	upsertFunc       func(ctx context.Context, collection string, id string, vector []float32, metadata map[string]interface{}) error
+	searchFunc       func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error)
+	hybridSearchFunc func(ctx context.Context, collection string, query string, vector []float32, topK int, filter map[string]interface{}, alpha float32) ([]databases.SearchResult, error)
 }
 
 func (m *mockDatabaseProvider) Upsert(ctx context.Context, collection string, id string, vector []float32, metadata map[string]interface{}) error {
@@ -51,7 +55,10 @@ func (m *mockDatabaseProvider) DeleteCollection(ctx context.Context, collection 
 }
 
 func (m *mockDatabaseProvider) HybridSearch(ctx context.Context, collection string, query string, vector []float32, topK int, filter map[string]interface{}, alpha float32) ([]databases.SearchResult, error) {
-	// Mock hybrid search - just use regular search
+	if m.hybridSearchFunc != nil {
+		return m.hybridSearchFunc(ctx, collection, query, vector, topK, filter, alpha)
+	}
+	// Default: just use regular search
 	return m.SearchWithFilter(ctx, collection, vector, topK, filter)
 }
 
@@ -624,4 +631,661 @@ func TestNewSearchError(t *testing.T) {
 	if searchErr.Err != err {
 		t.Errorf("NewSearchError() Err = %v, want %v", searchErr.Err, err)
 	}
+}
+
+func TestSearchWithFilter_HybridMode(t *testing.T) {
+	var usedHybridSearch bool
+	var capturedAlpha float32
+
+	mockDB := &mockDatabaseProvider{
+		hybridSearchFunc: func(ctx context.Context, collection string, query string, vector []float32, topK int, filter map[string]interface{}, alpha float32) ([]databases.SearchResult, error) {
+			usedHybridSearch = true
+			capturedAlpha = alpha
+			return []databases.SearchResult{
+				{ID: "doc1", Score: 0.9, Content: "hybrid result"},
+			}, nil
+		},
+	}
+
+	mockEmbedder := &mockEmbedderProvider{}
+
+	searchConfig := config.SearchConfig{
+		TopK:        10,
+		SearchMode:  "hybrid",
+		HybridAlpha: 0.6,
+	}
+
+	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig, nil)
+	if err != nil {
+		t.Fatalf("NewSearchEngine() error = %v", err)
+	}
+
+	ctx := context.Background()
+	filter := map[string]interface{}{"collection": "test"}
+
+	results, err := engine.SearchWithFilter(ctx, "test query", 10, filter)
+
+	if err != nil {
+		t.Fatalf("SearchWithFilter() error = %v", err)
+	}
+
+	if !usedHybridSearch {
+		t.Error("Expected hybrid search to be used when search_mode=hybrid")
+	}
+
+	if capturedAlpha != 0.6 {
+		t.Errorf("Expected alpha=0.6, got %v", capturedAlpha)
+	}
+
+	if len(results) == 0 {
+		t.Error("Expected results from hybrid search")
+	}
+}
+
+func TestSearchWithFilter_VectorMode(t *testing.T) {
+	var usedVectorSearch bool
+
+	mockDB := &mockDatabaseProvider{
+		searchFunc: func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error) {
+			usedVectorSearch = true
+			return []databases.SearchResult{
+				{ID: "doc1", Score: 0.8, Content: "vector result"},
+			}, nil
+		},
+	}
+
+	mockEmbedder := &mockEmbedderProvider{}
+
+	searchConfig := config.SearchConfig{
+		TopK:       10,
+		SearchMode: "vector",
+	}
+
+	engine, _ := NewSearchEngine(mockDB, mockEmbedder, searchConfig, nil)
+
+	ctx := context.Background()
+	filter := map[string]interface{}{"collection": "test"}
+
+	_, err := engine.SearchWithFilter(ctx, "test query", 10, filter)
+
+	if err != nil {
+		t.Fatalf("SearchWithFilter() error = %v", err)
+	}
+
+	if !usedVectorSearch {
+		t.Error("Expected vector search to be used when search_mode=vector")
+	}
+}
+
+func TestSearchWithFilter_DefaultMode(t *testing.T) {
+	var usedVectorSearch bool
+
+	mockDB := &mockDatabaseProvider{
+		searchFunc: func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error) {
+			usedVectorSearch = true
+			return []databases.SearchResult{{ID: "doc1", Score: 0.8}}, nil
+		},
+	}
+
+	mockEmbedder := &mockEmbedderProvider{}
+
+	searchConfig := config.SearchConfig{
+		TopK:       10,
+		SearchMode: "", // Empty - should default to vector
+	}
+
+	engine, _ := NewSearchEngine(mockDB, mockEmbedder, searchConfig, nil)
+
+	ctx := context.Background()
+	filter := map[string]interface{}{"collection": "test"}
+
+	_, err := engine.SearchWithFilter(ctx, "test query", 10, filter)
+
+	if err != nil {
+		t.Fatalf("SearchWithFilter() error = %v", err)
+	}
+
+	if !usedVectorSearch {
+		t.Error("Expected vector search to be used as default")
+	}
+}
+
+func TestSearchWithFilter_HybridDefaultAlpha(t *testing.T) {
+	var capturedAlpha float32
+
+	mockDB := &mockDatabaseProvider{
+		hybridSearchFunc: func(ctx context.Context, collection string, query string, vector []float32, topK int, filter map[string]interface{}, alpha float32) ([]databases.SearchResult, error) {
+			capturedAlpha = alpha
+			return []databases.SearchResult{{ID: "doc1", Score: 0.9}}, nil
+		},
+	}
+
+	mockEmbedder := &mockEmbedderProvider{}
+
+	searchConfig := config.SearchConfig{
+		TopK:        10,
+		SearchMode:  "hybrid",
+		HybridAlpha: 0, // Not set - should default to 0.5
+	}
+
+	engine, _ := NewSearchEngine(mockDB, mockEmbedder, searchConfig, nil)
+
+	ctx := context.Background()
+	filter := map[string]interface{}{"collection": "test"}
+
+	_, _ = engine.SearchWithFilter(ctx, "test query", 10, filter)
+
+	if capturedAlpha != 0.5 {
+		t.Errorf("Expected default alpha=0.5, got %v", capturedAlpha)
+	}
+}
+
+// Mock reranker for testing
+type mockReranker struct {
+	rerankFunc func(ctx context.Context, query string, results []databases.SearchResult, limit int) ([]databases.SearchResult, error)
+}
+
+func (m *mockReranker) Rerank(ctx context.Context, query string, results []databases.SearchResult, limit int) ([]databases.SearchResult, error) {
+	if m.rerankFunc != nil {
+		return m.rerankFunc(ctx, query, results, limit)
+	}
+	// Default: return results in reverse order
+	reranked := make([]databases.SearchResult, len(results))
+	for i := range results {
+		reranked[len(results)-1-i] = results[i]
+	}
+	return reranked, nil
+}
+
+// Mock LLM registry for testing
+type mockLLMRegistry struct {
+	getLLMFunc func(name string) (llms.LLMProvider, error)
+}
+
+func (m *mockLLMRegistry) GetLLM(name string) (llms.LLMProvider, error) {
+	if m.getLLMFunc != nil {
+		return m.getLLMFunc(name)
+	}
+	return nil, fmt.Errorf("LLM '%s' not found", name)
+}
+
+// Mock LLM provider for reranking tests
+type mockLLMProviderForReranking struct{}
+
+func (m *mockLLMProviderForReranking) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+	return "", nil, 0, nil
+}
+
+func (m *mockLLMProviderForReranking) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
+	ch := make(chan llms.StreamChunk, 1)
+	close(ch)
+	return ch, nil
+}
+
+func (m *mockLLMProviderForReranking) GetModelName() string {
+	return "test-model"
+}
+
+func (m *mockLLMProviderForReranking) GetMaxTokens() int {
+	return 4096
+}
+
+func (m *mockLLMProviderForReranking) GetTemperature() float64 {
+	return 0.7
+}
+
+func (m *mockLLMProviderForReranking) Close() error {
+	return nil
+}
+
+func TestSearchWithFilter_Reranking(t *testing.T) {
+	var rerankerCalled bool
+	var rerankerQuery string
+
+	mockReranker := &mockReranker{
+		rerankFunc: func(ctx context.Context, query string, results []databases.SearchResult, limit int) ([]databases.SearchResult, error) {
+			rerankerCalled = true
+			rerankerQuery = query
+			// Return reranked results (reverse order for testing)
+			reranked := make([]databases.SearchResult, len(results))
+			for i := range results {
+				reranked[len(results)-1-i] = results[i]
+				reranked[len(results)-1-i].Score = float32(len(results)-i) * 0.1 // Update scores
+			}
+			return reranked, nil
+		},
+	}
+
+	mockDB := &mockDatabaseProvider{
+		searchFunc: func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error) {
+			return []databases.SearchResult{
+				{ID: "doc1", Score: 0.5, Content: "result 1"},
+				{ID: "doc2", Score: 0.4, Content: "result 2"},
+				{ID: "doc3", Score: 0.3, Content: "result 3"},
+			}, nil
+		},
+	}
+
+	mockEmbedder := &mockEmbedderProvider{}
+
+	// Create a mock LLM registry that returns a mock LLM provider
+	mockLLMProvider := &mockLLMProviderForReranking{}
+	mockRegistry := &mockLLMRegistry{
+		getLLMFunc: func(name string) (llms.LLMProvider, error) {
+			if name == "test-llm" {
+				return mockLLMProvider, nil
+			}
+			return nil, fmt.Errorf("LLM '%s' not found", name)
+		},
+	}
+
+	searchConfig := config.SearchConfig{
+		TopK: 10,
+		Rerank: &config.RerankConfig{
+			Enabled:    boolPtr(true),
+			LLM:        "test-llm",
+			MaxResults: 20,
+		},
+	}
+
+	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig, mockRegistry)
+	if err != nil {
+		t.Fatalf("NewSearchEngine() error = %v", err)
+	}
+
+	// Manually set the reranker to use our mock for testing
+	engine.reranker = mockReranker
+
+	ctx := context.Background()
+	filter := map[string]interface{}{"collection": "test"}
+
+	results, err := engine.SearchWithFilter(ctx, "test query", 10, filter)
+
+	if err != nil {
+		t.Fatalf("SearchWithFilter() error = %v", err)
+	}
+
+	if !rerankerCalled {
+		t.Error("Expected reranker to be called")
+	}
+
+	if rerankerQuery != "test query" {
+		t.Errorf("Expected reranker query='test query', got '%s'", rerankerQuery)
+	}
+
+	if len(results) != 3 {
+		t.Errorf("Expected 3 results, got %d", len(results))
+	}
+
+	// Verify results are reranked (should be in reverse order)
+	if results[0].ID != "doc3" {
+		t.Errorf("Expected first result to be doc3 (reranked), got %s", results[0].ID)
+	}
+}
+
+func TestSearchWithFilter_RerankingBeforeThreshold(t *testing.T) {
+	// Test that reranking happens BEFORE threshold filtering
+	// This is critical: low vector scores should be reranked first, then filtered
+
+	var rerankerCalled bool
+	var rerankerReceivedResults int
+
+	mockReranker := &mockReranker{
+		rerankFunc: func(ctx context.Context, query string, results []databases.SearchResult, limit int) ([]databases.SearchResult, error) {
+			rerankerCalled = true
+			rerankerReceivedResults = len(results)
+			// Reranker assigns high scores to all results (position-based)
+			reranked := make([]databases.SearchResult, len(results))
+			for i := range results {
+				reranked[i] = results[i]
+				// Assign high scores (1.0, 0.95, 0.90, ...) so they pass threshold
+				reranked[i].Score = 1.0 - (float32(i) * 0.05)
+			}
+			return reranked, nil
+		},
+	}
+
+	mockDB := &mockDatabaseProvider{
+		searchFunc: func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error) {
+			// Return results with LOW scores (below threshold)
+			// These should still be reranked before filtering
+			return []databases.SearchResult{
+				{ID: "doc1", Score: 0.2, Content: "result 1"}, // Below 0.5 threshold
+				{ID: "doc2", Score: 0.3, Content: "result 2"}, // Below 0.5 threshold
+				{ID: "doc3", Score: 0.4, Content: "result 3"}, // Below 0.5 threshold
+			}, nil
+		},
+	}
+
+	mockEmbedder := &mockEmbedderProvider{}
+	mockLLMProvider := &mockLLMProviderForReranking{}
+	mockRegistry := &mockLLMRegistry{
+		getLLMFunc: func(name string) (llms.LLMProvider, error) {
+			if name == "test-llm" {
+				return mockLLMProvider, nil
+			}
+			return nil, fmt.Errorf("LLM '%s' not found", name)
+		},
+	}
+
+	searchConfig := config.SearchConfig{
+		TopK:      10,
+		Threshold: 0.5, // Threshold that would filter out low scores
+		Rerank: &config.RerankConfig{
+			Enabled:    boolPtr(true),
+			LLM:        "test-llm",
+			MaxResults: 20,
+		},
+	}
+
+	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig, mockRegistry)
+	if err != nil {
+		t.Fatalf("NewSearchEngine() error = %v", err)
+	}
+
+	// Use mock reranker
+	engine.reranker = mockReranker
+
+	ctx := context.Background()
+	filter := map[string]interface{}{"collection": "test"}
+
+	results, err := engine.SearchWithFilter(ctx, "test query", 10, filter)
+
+	if err != nil {
+		t.Fatalf("SearchWithFilter() error = %v", err)
+	}
+
+	// Verify reranker was called
+	if !rerankerCalled {
+		t.Error("Expected reranker to be called before threshold filtering")
+	}
+
+	// Verify reranker received all 3 results (not filtered before reranking)
+	if rerankerReceivedResults != 3 {
+		t.Errorf("Expected reranker to receive 3 results, got %d", rerankerReceivedResults)
+	}
+
+	// Verify results passed threshold after reranking (all should have scores >= 0.5)
+	if len(results) == 0 {
+		t.Error("Expected results after reranking (should pass threshold with high reranked scores)")
+	}
+
+	for _, result := range results {
+		if result.Score < 0.5 {
+			t.Errorf("Result %s has score %.2f below threshold 0.5 (should have been filtered)", result.ID, result.Score)
+		}
+	}
+}
+
+func TestSearchWithFilter_RerankerScoreAssignment(t *testing.T) {
+	// Test that reranker assigns position-based scores correctly
+
+	mockReranker := &mockReranker{
+		rerankFunc: func(ctx context.Context, query string, results []databases.SearchResult, limit int) ([]databases.SearchResult, error) {
+			// Assign position-based scores: 1.0, 0.95, 0.90, ...
+			reranked := make([]databases.SearchResult, len(results))
+			for i := range results {
+				reranked[i] = results[i]
+				reranked[i].Score = 1.0 - (float32(i) * 0.05)
+				if reranked[i].Score < 0.1 {
+					reranked[i].Score = 0.1
+				}
+			}
+			return reranked, nil
+		},
+	}
+
+	mockDB := &mockDatabaseProvider{
+		searchFunc: func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error) {
+			return []databases.SearchResult{
+				{ID: "doc1", Score: 0.5, Content: "result 1"},
+				{ID: "doc2", Score: 0.4, Content: "result 2"},
+				{ID: "doc3", Score: 0.3, Content: "result 3"},
+			}, nil
+		},
+	}
+
+	mockEmbedder := &mockEmbedderProvider{}
+	mockLLMProvider := &mockLLMProviderForReranking{}
+	mockRegistry := &mockLLMRegistry{
+		getLLMFunc: func(name string) (llms.LLMProvider, error) {
+			if name == "test-llm" {
+				return mockLLMProvider, nil
+			}
+			return nil, fmt.Errorf("LLM '%s' not found", name)
+		},
+	}
+
+	searchConfig := config.SearchConfig{
+		TopK: 10,
+		Rerank: &config.RerankConfig{
+			Enabled:    boolPtr(true),
+			LLM:        "test-llm",
+			MaxResults: 20,
+		},
+	}
+
+	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig, mockRegistry)
+	if err != nil {
+		t.Fatalf("NewSearchEngine() error = %v", err)
+	}
+
+	engine.reranker = mockReranker
+
+	ctx := context.Background()
+	filter := map[string]interface{}{"collection": "test"}
+
+	results, err := engine.SearchWithFilter(ctx, "test query", 10, filter)
+
+	if err != nil {
+		t.Fatalf("SearchWithFilter() error = %v", err)
+	}
+
+	// Verify scores are position-based
+	expectedScores := []float32{1.0, 0.95, 0.90}
+	if len(results) != len(expectedScores) {
+		t.Fatalf("Expected %d results, got %d", len(expectedScores), len(results))
+	}
+
+	for i, result := range results {
+		if result.Score != expectedScores[i] {
+			t.Errorf("Result %d: expected score %.2f, got %.2f", i, expectedScores[i], result.Score)
+		}
+	}
+}
+
+func TestSearchWithFilter_RerankerErrorHandling(t *testing.T) {
+	// Test that reranker errors don't break search - should continue with original results
+
+	mockReranker := &mockReranker{
+		rerankFunc: func(ctx context.Context, query string, results []databases.SearchResult, limit int) ([]databases.SearchResult, error) {
+			return nil, fmt.Errorf("reranker error")
+		},
+	}
+
+	mockDB := &mockDatabaseProvider{
+		searchFunc: func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error) {
+			return []databases.SearchResult{
+				{ID: "doc1", Score: 0.8, Content: "result 1"},
+				{ID: "doc2", Score: 0.7, Content: "result 2"},
+			}, nil
+		},
+	}
+
+	mockEmbedder := &mockEmbedderProvider{}
+	mockLLMProvider := &mockLLMProviderForReranking{}
+	mockRegistry := &mockLLMRegistry{
+		getLLMFunc: func(name string) (llms.LLMProvider, error) {
+			if name == "test-llm" {
+				return mockLLMProvider, nil
+			}
+			return nil, fmt.Errorf("LLM '%s' not found", name)
+		},
+	}
+
+	searchConfig := config.SearchConfig{
+		TopK: 10,
+		Rerank: &config.RerankConfig{
+			Enabled:    boolPtr(true),
+			LLM:        "test-llm",
+			MaxResults: 20,
+		},
+	}
+
+	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig, mockRegistry)
+	if err != nil {
+		t.Fatalf("NewSearchEngine() error = %v", err)
+	}
+
+	engine.reranker = mockReranker
+
+	ctx := context.Background()
+	filter := map[string]interface{}{"collection": "test"}
+
+	// Should not error - should continue with original results
+	results, err := engine.SearchWithFilter(ctx, "test query", 10, filter)
+
+	if err != nil {
+		t.Fatalf("SearchWithFilter() should not error on reranker failure, got: %v", err)
+	}
+
+	// Should still return original results
+	if len(results) != 2 {
+		t.Errorf("Expected 2 results (original), got %d", len(results))
+	}
+
+	// Verify original scores are preserved
+	if results[0].Score != 0.8 {
+		t.Errorf("Expected first result score 0.8, got %.2f", results[0].Score)
+	}
+}
+
+func TestSearchWithFilter_ThresholdAfterReranking(t *testing.T) {
+	// Test that threshold filtering happens AFTER reranking
+
+	mockReranker := &mockReranker{
+		rerankFunc: func(ctx context.Context, query string, results []databases.SearchResult, limit int) ([]databases.SearchResult, error) {
+			// Assign scores: some above threshold, some below
+			reranked := make([]databases.SearchResult, len(results))
+			for i := range results {
+				reranked[i] = results[i]
+				// Assign scores: 0.9, 0.6, 0.4, 0.3
+				reranked[i].Score = 0.9 - (float32(i) * 0.3)
+				if reranked[i].Score < 0.1 {
+					reranked[i].Score = 0.1
+				}
+			}
+			return reranked, nil
+		},
+	}
+
+	mockDB := &mockDatabaseProvider{
+		searchFunc: func(ctx context.Context, collection string, vector []float32, limit int) ([]databases.SearchResult, error) {
+			return []databases.SearchResult{
+				{ID: "doc1", Score: 0.2, Content: "result 1"},
+				{ID: "doc2", Score: 0.2, Content: "result 2"},
+				{ID: "doc3", Score: 0.2, Content: "result 3"},
+				{ID: "doc4", Score: 0.2, Content: "result 4"},
+			}, nil
+		},
+	}
+
+	mockEmbedder := &mockEmbedderProvider{}
+	mockLLMProvider := &mockLLMProviderForReranking{}
+	mockRegistry := &mockLLMRegistry{
+		getLLMFunc: func(name string) (llms.LLMProvider, error) {
+			if name == "test-llm" {
+				return mockLLMProvider, nil
+			}
+			return nil, fmt.Errorf("LLM '%s' not found", name)
+		},
+	}
+
+	searchConfig := config.SearchConfig{
+		TopK:      10,
+		Threshold: 0.5, // Should filter out results with score < 0.5
+		Rerank: &config.RerankConfig{
+			Enabled:    boolPtr(true),
+			LLM:        "test-llm",
+			MaxResults: 20,
+		},
+	}
+
+	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig, mockRegistry)
+	if err != nil {
+		t.Fatalf("NewSearchEngine() error = %v", err)
+	}
+
+	engine.reranker = mockReranker
+
+	ctx := context.Background()
+	filter := map[string]interface{}{"collection": "test"}
+
+	results, err := engine.SearchWithFilter(ctx, "test query", 10, filter)
+
+	if err != nil {
+		t.Fatalf("SearchWithFilter() error = %v", err)
+	}
+
+	// After reranking: scores are 0.9, 0.6, 0.4, 0.3
+	// After threshold 0.5: should keep only 0.9 and 0.6
+	if len(results) != 2 {
+		t.Errorf("Expected 2 results after threshold filtering (scores 0.9 and 0.6), got %d", len(results))
+	}
+
+	// Verify all results pass threshold
+	for _, result := range results {
+		if result.Score < 0.5 {
+			t.Errorf("Result %s has score %.2f below threshold 0.5", result.ID, result.Score)
+		}
+	}
+
+	// Verify correct results are kept (use approximate comparison for floating point)
+	if results[0].Score < 0.89 || results[0].Score > 0.91 {
+		t.Errorf("Expected first result score ~0.9, got %.2f", results[0].Score)
+	}
+	if results[1].Score < 0.59 || results[1].Score > 0.61 {
+		t.Errorf("Expected second result score ~0.6, got %.2f", results[1].Score)
+	}
+}
+
+func TestNewSearchEngine_RerankingRequired(t *testing.T) {
+	mockDB := &mockDatabaseProvider{}
+	mockEmbedder := &mockEmbedderProvider{}
+
+	searchConfig := config.SearchConfig{
+		Rerank: &config.RerankConfig{
+			Enabled: boolPtr(true),
+			LLM:     "test-llm",
+		},
+	}
+
+	// Test: reranking enabled but no LLM registry provided
+	_, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig, nil)
+	if err == nil {
+		t.Error("Expected error when reranking enabled but no LLM registry provided")
+	}
+
+	// Test: reranking enabled but rerank.llm is empty
+	searchConfig.Rerank.LLM = ""
+	_, err = NewSearchEngine(mockDB, mockEmbedder, searchConfig, nil)
+	if err == nil {
+		t.Error("Expected error when reranking enabled but rerank.llm is empty")
+	}
+
+	// Test: reranking enabled but LLM not found in registry
+	searchConfig.Rerank.LLM = "nonexistent-llm"
+	mockRegistry := &mockLLMRegistry{
+		getLLMFunc: func(name string) (llms.LLMProvider, error) {
+			return nil, fmt.Errorf("LLM '%s' not found", name)
+		},
+	}
+	_, err = NewSearchEngine(mockDB, mockEmbedder, searchConfig, mockRegistry)
+	if err == nil {
+		t.Error("Expected error when reranking enabled but LLM not found in registry")
+	}
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }

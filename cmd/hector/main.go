@@ -109,16 +109,19 @@ func main() {
 	mode := determineMode(command, isClientMode, hasConfigFile)
 
 	// Configure logging using standard library log/slog
-	// In client/local mode, suppress INFO/DEBUG logs unless --debug is enabled
-	// This keeps program output clean while still showing important warnings/errors
+	// TEMPORARILY: Always show DEBUG logs in local mode for validation
+	// TODO: Revert to original filtering after validation
 	var logLevel slog.Level
 	if mode == cli.ModeClient || mode == cli.ModeLocalConfig || mode == cli.ModeLocalZeroConfig {
-		if cli.CLI.Debug {
-			logLevel = slog.LevelDebug
-		} else {
-			// Show only warnings and errors in client/local mode
-			logLevel = slog.LevelWarn
-		}
+		// TEMPORARY: Always show DEBUG in local mode for validation
+		logLevel = slog.LevelDebug
+		// Original code (commented for validation):
+		// if cli.CLI.Debug {
+		// 	logLevel = slog.LevelDebug
+		// } else {
+		// 	// Show only warnings and errors in client/local mode
+		// 	logLevel = slog.LevelWarn
+		// }
 	} else {
 		// Server mode: show info level by default, or debug if flag is set
 		if cli.CLI.Debug {

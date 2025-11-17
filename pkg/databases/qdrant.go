@@ -356,24 +356,24 @@ func (db *qdrantDatabaseProvider) HybridSearch(ctx context.Context, collection s
 		slog.Debug("Hybrid search: using pure vector (alpha >= 1.0)")
 		return db.SearchWithFilter(ctx, collection, vector, topK, filter)
 	}
-	
+
 	// For hybrid search, we'll do parallel searches and fuse results
 	// This is a simplified implementation - full hybrid would use Qdrant's QueryPoints with sparse vectors
-	
+
 	// Get vector results
 	vectorResults, err := db.SearchWithFilter(ctx, collection, vector, topK*2, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform vector search: %w", err)
 	}
-	
+
 	// For keyword search, we'll use a simple text matching approach
 	// In a full implementation, this would use BM25 or Qdrant's sparse vector search
 	// For now, we'll filter vector results by keyword presence as a fallback
 	keywordResults := filterByKeywords(vectorResults, query, topK*2)
-	
+
 	// Fuse results using Reciprocal Rank Fusion (RRF)
 	fusedResults := reciprocalRankFusion(vectorResults, keywordResults, alpha, topK)
-	
+
 	return fusedResults, nil
 }
 
@@ -381,7 +381,7 @@ func (db *qdrantDatabaseProvider) HybridSearch(ctx context.Context, collection s
 func filterByKeywords(results []SearchResult, query string, limit int) []SearchResult {
 	queryLower := strings.ToLower(query)
 	keywords := strings.Fields(queryLower)
-	
+
 	filtered := make([]SearchResult, 0, len(results))
 	for _, result := range results {
 		contentLower := strings.ToLower(result.Content)
@@ -399,16 +399,16 @@ func filterByKeywords(results []SearchResult, query string, limit int) []SearchR
 			filtered = append(filtered, result)
 		}
 	}
-	
+
 	// Sort by keyword score
 	sort.Slice(filtered, func(i, j int) bool {
 		return filtered[i].Score > filtered[j].Score
 	})
-	
+
 	if len(filtered) > limit {
 		filtered = filtered[:limit]
 	}
-	
+
 	return filtered
 }
 
@@ -417,14 +417,14 @@ func reciprocalRankFusion(vectorResults, keywordResults []SearchResult, alpha fl
 	// Create maps for quick lookup
 	vectorRankMap := make(map[string]int)
 	keywordRankMap := make(map[string]int)
-	
+
 	for i, result := range vectorResults {
 		vectorRankMap[result.ID] = i + 1 // RRF uses 1-based ranking
 	}
 	for i, result := range keywordResults {
 		keywordRankMap[result.ID] = i + 1
 	}
-	
+
 	// Collect all unique document IDs
 	allIDs := make(map[string]bool)
 	for _, result := range vectorResults {
@@ -433,20 +433,20 @@ func reciprocalRankFusion(vectorResults, keywordResults []SearchResult, alpha fl
 	for _, result := range keywordResults {
 		allIDs[result.ID] = true
 	}
-	
+
 	// Calculate RRF scores
 	type scoredDoc struct {
 		result SearchResult
 		score  float32
 	}
 	scoredDocs := make([]scoredDoc, 0, len(allIDs))
-	
+
 	const rrfK = 60 // RRF constant (standard value)
-	
+
 	for id := range allIDs {
 		var result SearchResult
 		var vectorScore float32
-		
+
 		// Find the result from either list
 		found := false
 		for _, r := range vectorResults {
@@ -465,37 +465,37 @@ func reciprocalRankFusion(vectorResults, keywordResults []SearchResult, alpha fl
 				}
 			}
 		}
-		
+
 		// Calculate RRF scores
 		vectorRRF := float32(0)
 		if rank, exists := vectorRankMap[id]; exists {
 			vectorRRF = 1.0 / float32(rrfK+rank)
 		}
-		
+
 		keywordRRF := float32(0)
 		if rank, exists := keywordRankMap[id]; exists {
 			keywordRRF = 1.0 / float32(rrfK+rank)
 		}
-		
+
 		// Blend scores: alpha * vector + (1-alpha) * keyword
 		// For RRF, we blend the RRF scores, then optionally weight by original scores
 		blendedRRF := alpha*vectorRRF + (1-alpha)*keywordRRF
-		
+
 		// Also consider original similarity scores
 		blendedScore := alpha*vectorScore + (1-alpha)*result.Score
-		
+
 		// Final score: weighted combination of RRF and original scores
 		finalScore := 0.7*blendedRRF + 0.3*blendedScore
-		
+
 		result.Score = finalScore
 		scoredDocs = append(scoredDocs, scoredDoc{result: result, score: finalScore})
 	}
-	
+
 	// Sort by final score
 	sort.Slice(scoredDocs, func(i, j int) bool {
 		return scoredDocs[i].score > scoredDocs[j].score
 	})
-	
+
 	// Return top K
 	results := make([]SearchResult, 0, topK)
 	for i, sd := range scoredDocs {
@@ -504,7 +504,7 @@ func reciprocalRankFusion(vectorResults, keywordResults []SearchResult, alpha fl
 		}
 		results = append(results, sd.result)
 	}
-	
+
 	return results
 }
 

@@ -36,12 +36,12 @@ type EvaluationMetrics struct {
 
 // EvaluationResult contains the full evaluation result
 type EvaluationResult struct {
-	Query           string                 `json:"query"`
+	Query           string                   `json:"query"`
 	RetrievedDocs   []databases.SearchResult `json:"retrieved_docs"`
-	GeneratedAnswer string                 `json:"generated_answer"`
-	GroundTruth     string                 `json:"ground_truth,omitempty"` // Optional ground truth answer
-	Metrics         EvaluationMetrics      `json:"metrics"`
-	Timestamp       string                 `json:"timestamp"`
+	GeneratedAnswer string                   `json:"generated_answer"`
+	GroundTruth     string                   `json:"ground_truth,omitempty"` // Optional ground truth answer
+	Metrics         EvaluationMetrics        `json:"metrics"`
+	Timestamp       string                   `json:"timestamp"`
 }
 
 // Evaluator interface for evaluating RAG systems
@@ -55,9 +55,9 @@ type Evaluator interface {
 
 // TestCase represents a single test case for evaluation
 type TestCase struct {
-	Query         string   `json:"query"`
-	GroundTruth   string   `json:"ground_truth,omitempty"`
-	ExpectedDocs  []string `json:"expected_docs,omitempty"` // Optional: expected document IDs
+	Query        string   `json:"query"`
+	GroundTruth  string   `json:"ground_truth,omitempty"`
+	ExpectedDocs []string `json:"expected_docs,omitempty"` // Optional: expected document IDs
 }
 
 // LLMEvaluator uses an LLM to evaluate RAG results
@@ -236,7 +236,7 @@ func (e *LLMEvaluator) scoreWithLLM(ctx context.Context, prompt string) (float64
 func parseScoreFromResponse(response string) (float64, error) {
 	// Look for number patterns in the response
 	response = strings.TrimSpace(response)
-	
+
 	// Try to find a float between 0.0 and 1.0
 	// Simple regex-like parsing
 	var score float64
@@ -267,4 +267,3 @@ func parseScoreFromResponse(response string) (float64, error) {
 
 	return score, nil
 }
-

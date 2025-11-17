@@ -308,24 +308,24 @@ func (db *pineconeDatabaseProvider) DeleteCollection(ctx context.Context, collec
 func (db *pineconeDatabaseProvider) HybridSearch(ctx context.Context, collection string, query string, vector []float32, topK int, filter map[string]interface{}, alpha float32) ([]SearchResult, error) {
 	// Pinecone doesn't natively support hybrid search, so we implement a fallback:
 	// Perform vector search and filter by keywords, then fuse results
-	
+
 	if alpha >= 1.0 {
 		// Pure vector search
 		return db.SearchWithFilter(ctx, collection, vector, topK, filter)
 	}
-	
+
 	// Get vector results
 	vectorResults, err := db.SearchWithFilter(ctx, collection, vector, topK*2, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform vector search: %w", err)
 	}
-	
+
 	// Filter by keywords (simple text matching)
 	keywordResults := filterByKeywordsPinecone(vectorResults, query, topK*2)
-	
+
 	// Fuse results using Reciprocal Rank Fusion
 	fusedResults := reciprocalRankFusionPinecone(vectorResults, keywordResults, alpha, topK)
-	
+
 	return fusedResults, nil
 }
 
@@ -333,7 +333,7 @@ func (db *pineconeDatabaseProvider) HybridSearch(ctx context.Context, collection
 func filterByKeywordsPinecone(results []SearchResult, query string, limit int) []SearchResult {
 	queryLower := strings.ToLower(query)
 	keywords := strings.Fields(queryLower)
-	
+
 	filtered := make([]SearchResult, 0, len(results))
 	for _, result := range results {
 		contentLower := strings.ToLower(result.Content)
@@ -349,16 +349,16 @@ func filterByKeywordsPinecone(results []SearchResult, query string, limit int) [
 			filtered = append(filtered, result)
 		}
 	}
-	
+
 	// Sort by keyword score
 	sort.Slice(filtered, func(i, j int) bool {
 		return filtered[i].Score > filtered[j].Score
 	})
-	
+
 	if len(filtered) > limit {
 		filtered = filtered[:limit]
 	}
-	
+
 	return filtered
 }
 
@@ -366,14 +366,14 @@ func filterByKeywordsPinecone(results []SearchResult, query string, limit int) [
 func reciprocalRankFusionPinecone(vectorResults, keywordResults []SearchResult, alpha float32, topK int) []SearchResult {
 	vectorRankMap := make(map[string]int)
 	keywordRankMap := make(map[string]int)
-	
+
 	for i, result := range vectorResults {
 		vectorRankMap[result.ID] = i + 1
 	}
 	for i, result := range keywordResults {
 		keywordRankMap[result.ID] = i + 1
 	}
-	
+
 	allIDs := make(map[string]bool)
 	for _, result := range vectorResults {
 		allIDs[result.ID] = true
@@ -381,19 +381,19 @@ func reciprocalRankFusionPinecone(vectorResults, keywordResults []SearchResult, 
 	for _, result := range keywordResults {
 		allIDs[result.ID] = true
 	}
-	
+
 	type scoredDoc struct {
 		result SearchResult
 		score  float32
 	}
 	scoredDocs := make([]scoredDoc, 0, len(allIDs))
-	
+
 	const rrfK = 60
-	
+
 	for id := range allIDs {
 		var result SearchResult
 		var vectorScore float32
-		
+
 		found := false
 		for _, r := range vectorResults {
 			if r.ID == id {
@@ -411,29 +411,29 @@ func reciprocalRankFusionPinecone(vectorResults, keywordResults []SearchResult, 
 				}
 			}
 		}
-		
+
 		vectorRRF := float32(0)
 		if rank, exists := vectorRankMap[id]; exists {
 			vectorRRF = 1.0 / float32(rrfK+rank)
 		}
-		
+
 		keywordRRF := float32(0)
 		if rank, exists := keywordRankMap[id]; exists {
 			keywordRRF = 1.0 / float32(rrfK+rank)
 		}
-		
+
 		blendedRRF := alpha*vectorRRF + (1-alpha)*keywordRRF
 		blendedScore := alpha*vectorScore + (1-alpha)*result.Score
 		finalScore := 0.7*blendedRRF + 0.3*blendedScore
-		
+
 		result.Score = finalScore
 		scoredDocs = append(scoredDocs, scoredDoc{result: result, score: finalScore})
 	}
-	
+
 	sort.Slice(scoredDocs, func(i, j int) bool {
 		return scoredDocs[i].score > scoredDocs[j].score
 	})
-	
+
 	results := make([]SearchResult, 0, topK)
 	for i, sd := range scoredDocs {
 		if i >= topK {
@@ -441,7 +441,7 @@ func reciprocalRankFusionPinecone(vectorResults, keywordResults []SearchResult, 
 		}
 		results = append(results, sd.result)
 	}
-	
+
 	return results
 }
 

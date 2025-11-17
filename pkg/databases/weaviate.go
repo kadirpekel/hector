@@ -253,8 +253,8 @@ func buildWeaviateWhereClause(filter map[string]interface{}) map[string]interfac
 	var conditions []map[string]interface{}
 	for key, value := range filter {
 		conditions = append(conditions, map[string]interface{}{
-			"path":  []string{key},
-			"operator": "Equal",
+			"path":        []string{key},
+			"operator":    "Equal",
 			"valueString": fmt.Sprintf("%v", value),
 		})
 	}
@@ -507,4 +507,3 @@ func (db *weaviateDatabaseProvider) Close() error {
 	// Weaviate client doesn't have explicit close
 	return nil
 }
-

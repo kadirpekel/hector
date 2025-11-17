@@ -2016,31 +2016,31 @@ func (c *ReasoningConfig) SetDefaults() {
 }
 
 type SearchConfig struct {
-	TopK         int     `yaml:"top_k"`         // Default number of results to return
-	Threshold    float32 `yaml:"threshold"`     // Minimum similarity score (0.0-1.0)
-	PreserveCase *bool   `yaml:"preserve_case"` // Don't lowercase queries (default: true for code search)
-	SearchMode   string  `yaml:"search_mode"`   // "vector", "hybrid", "keyword", "multi_query", or "hyde" (default: "vector")
-	HybridAlpha  float32 `yaml:"hybrid_alpha"`  // Blending factor for hybrid search (0.0-1.0, default: 0.5)
-	Rerank       *RerankConfig `yaml:"rerank,omitempty"` // Re-ranking configuration
+	TopK         int               `yaml:"top_k"`                 // Default number of results to return
+	Threshold    float32           `yaml:"threshold"`             // Minimum similarity score (0.0-1.0)
+	PreserveCase *bool             `yaml:"preserve_case"`         // Don't lowercase queries (default: true for code search)
+	SearchMode   string            `yaml:"search_mode"`           // "vector", "hybrid", "keyword", "multi_query", or "hyde" (default: "vector")
+	HybridAlpha  float32           `yaml:"hybrid_alpha"`          // Blending factor for hybrid search (0.0-1.0, default: 0.5)
+	Rerank       *RerankConfig     `yaml:"rerank,omitempty"`      // Re-ranking configuration
 	MultiQuery   *MultiQueryConfig `yaml:"multi_query,omitempty"` // Multi-query expansion configuration
-	HyDE         *HyDEConfig `yaml:"hyde,omitempty"` // HyDE (Hypothetical Document Embeddings) configuration
+	HyDE         *HyDEConfig       `yaml:"hyde,omitempty"`        // HyDE (Hypothetical Document Embeddings) configuration
 }
 
 type MultiQueryConfig struct {
-	Enabled      *bool  `yaml:"enabled"`       // Enable multi-query expansion (default: false)
-	LLM          string `yaml:"llm"`            // LLM provider name to use for query expansion (required if enabled)
-	NumVariations int   `yaml:"num_variations"` // Number of query variations to generate (default: 3)
+	Enabled       *bool  `yaml:"enabled"`        // Enable multi-query expansion (default: false)
+	LLM           string `yaml:"llm"`            // LLM provider name to use for query expansion (required if enabled)
+	NumVariations int    `yaml:"num_variations"` // Number of query variations to generate (default: 3)
 }
 
 type HyDEConfig struct {
 	Enabled *bool  `yaml:"enabled"` // Enable HyDE search (default: false)
-	LLM     string `yaml:"llm"`      // LLM provider name to use for generating hypothetical documents (required if enabled)
+	LLM     string `yaml:"llm"`     // LLM provider name to use for generating hypothetical documents (required if enabled)
 }
 
 type RerankConfig struct {
-	Enabled   *bool  `yaml:"enabled"`   // Enable re-ranking (default: false)
-	LLM       string `yaml:"llm"`        // LLM provider name to use for reranking (required if enabled)
-	MaxResults int   `yaml:"max_results"` // Maximum results to send to LLM for reranking (default: 20)
+	Enabled    *bool  `yaml:"enabled"`     // Enable re-ranking (default: false)
+	LLM        string `yaml:"llm"`         // LLM provider name to use for reranking (required if enabled)
+	MaxResults int    `yaml:"max_results"` // Maximum results to send to LLM for reranking (default: 20)
 }
 
 func (c *SearchConfig) Validate() error {

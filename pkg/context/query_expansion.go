@@ -36,6 +36,9 @@ func (e *LLMQueryExpander) Expand(ctx context.Context, query string, numVariatio
 		numVariations = 5 // Cap at 5 variations to avoid too many API calls
 	}
 
+	// Sanitize query to prevent prompt injection
+	sanitizedQuery := sanitizeInput(query)
+
 	prompt := fmt.Sprintf(`Generate %d different query variations for the following search query. Each variation should:
 1. Use different wording or phrasing
 2. Focus on different aspects or perspectives
@@ -45,7 +48,7 @@ func (e *LLMQueryExpander) Expand(ctx context.Context, query string, numVariatio
 Original query: %s
 
 Return only a JSON array of query strings, one per line, without any additional text or explanation.
-Example format: ["query 1", "query 2", "query 3"]`, numVariations, query)
+Example format: ["query 1", "query 2", "query 3"]`, numVariations, sanitizedQuery)
 
 	messages := []*pb.Message{
 		{
@@ -116,7 +119,7 @@ func parseQueryArray(response string) ([]string, error) {
 	// Simple JSON parsing for string array
 	// Remove brackets and quotes
 	jsonStr = jsonStr[1 : len(jsonStr)-1] // Remove [ and ]
-	
+
 	var queries []string
 	var current strings.Builder
 	inQuotes := false
@@ -160,7 +163,7 @@ func parseQueryArray(response string) ([]string, error) {
 func extractQueriesFromText(response string) []string {
 	var queries []string
 	lines := strings.Split(response, "\n")
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		// Look for quoted strings
@@ -182,4 +185,3 @@ func extractQueriesFromText(response string) []string {
 
 	return queries
 }
-

@@ -344,8 +344,8 @@ func (db *chromaDatabaseProvider) CreateCollection(ctx context.Context, collecti
 
 	// Create collection
 	payload := map[string]interface{}{
-		"name":      collection,
-		"metadata":  map[string]interface{}{},
+		"name":          collection,
+		"metadata":      map[string]interface{}{},
 		"get_or_create": true,
 	}
 
@@ -407,4 +407,3 @@ func (db *chromaDatabaseProvider) DeleteCollection(ctx context.Context, collecti
 func (db *chromaDatabaseProvider) Close() error {
 	return nil
 }
-
