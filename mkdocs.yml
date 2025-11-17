@@ -54,6 +54,7 @@ theme:
 
 # Navigation
 nav:
+  - Home: index.md
   - Why Hector?: why-hector.md
   - Getting Started:
     - Installation: getting-started/installation.md
