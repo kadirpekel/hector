@@ -158,10 +158,15 @@ agents:
       #   llm: "reranker"
       
       # LLM-based Re-ranking (improves result quality)
+      # NOTE: Reranking changes score semantics!
+      # - Before reranking: scores are vector similarity (0.0-1.0)
+      # - After reranking: scores are ranking positions (1.0, 0.95, 0.90, ...)
+      # - Threshold (0.5) is applied AFTER reranking, meaning "top 11 results or better"
+      # - Adds 100-500ms latency + LLM API cost per search
       rerank:
         enabled: true
-        llm: "reranker"  # Use fast model for re-ranking
-        max_results: 20  # Re-rank top 20 results
+        llm: "reranker"  # Use fast model for re-ranking (gpt-4o-mini)
+        max_results: 20  # Re-rank top 20 results (balance quality vs cost)
 
 # Observability
 global:

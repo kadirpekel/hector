@@ -272,9 +272,49 @@ This provides better recall for enterprise documentation with specific technical
 
 ### LLM-based Re-ranking
 Enabled with `rerank.enabled: true`:
-- Re-ranks top 20 results using LLM understanding
-- Improves relevance of final results
-- Uses fast/cheap LLM model (qwen3) for cost efficiency
+- Re-ranks top results using LLM semantic understanding
+- Improves relevance beyond simple vector similarity
+- Uses fast/cheap LLM model (qwen3 or gpt-4o-mini) for cost efficiency
+
+**How It Works:**
+1. Initial search (vector/hybrid/keyword) retrieves candidate results
+2. Reranker sends query + results to LLM for semantic evaluation
+3. LLM ranks results by actual usefulness (not just vector similarity)
+4. Scores are replaced with position-based values (1.0, 0.95, 0.90, ...)
+5. Threshold filtering is applied AFTER reranking
+
+**Score Semantics (Important):**
+- **Before reranking**: Scores represent vector similarity (0.0-1.0, e.g., 0.8 = "80% similar")
+- **After reranking**: Scores represent ranking position (1.0 = "ranked first by LLM")
+- Original vector scores are **replaced**, not preserved
+- Threshold semantics change: `threshold: 0.5` after reranking means "keep top 11 results or better"
+
+**When to Use:**
+- Vector search returns low similarity scores but may include relevant results
+- Query requires deep semantic understanding
+- Results need ordering by actual usefulness, not just vector distance
+
+**When to Skip:**
+- Vector search already returns high-quality results (saves latency and cost)
+- Latency is critical (adds 100-500ms per search)
+- Simple keyword matching is sufficient
+- Cost constraints are strict (each search incurs LLM API cost)
+
+**Performance:**
+- Latency: +100-500ms per search (depends on LLM speed)
+- Cost: ~$0.001-0.01 per search (for gpt-4o-mini)
+- Token usage: ~500 chars per result × max_results
+
+**Configuration Tips:**
+```yaml
+search:
+  top_k: 10           # Final results to return
+  threshold: 0.5      # Applied AFTER reranking (keeps top 11 or better)
+  rerank:
+    enabled: true
+    llm: "reranker"   # Use fast model (gpt-4o-mini, qwen3)
+    max_results: 20   # Only rerank top 20 (balance quality vs cost)
+```
 
 ### Multi-Query Expansion
 Available via `search_mode: "multi_query"`:
