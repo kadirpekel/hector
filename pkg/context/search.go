@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/config"
+	"github.com/kadirpekel/hector/pkg/context/reranking"
 	"github.com/kadirpekel/hector/pkg/databases"
 	"github.com/kadirpekel/hector/pkg/embedders"
+	"github.com/kadirpekel/hector/pkg/llms"
 )
 
 const (
@@ -55,10 +57,13 @@ func NewSearchError(component, operation, message, query string, err error) *Sea
 }
 
 type SearchEngine struct {
-	mu       sync.RWMutex
-	db       databases.DatabaseProvider
-	embedder embedders.EmbedderProvider
-	config   config.SearchConfig
+	mu            sync.RWMutex
+	db            databases.DatabaseProvider
+	embedder      embedders.EmbedderProvider
+	config        config.SearchConfig
+	reranker      reranking.Reranker        // Optional reranker for re-ranking results
+	queryExpander QueryExpander            // Optional query expander for multi-query
+	llmRegistry   LLMRegistryForReranking  // Optional LLM registry for HyDE and other LLM-based features
 }
 
 // ParallelSearchTarget represents a single target to search in parallel
@@ -186,7 +191,14 @@ func ParallelSearch[T ParallelSearchTarget, R any](
 	}
 }
 
-func NewSearchEngine(db databases.DatabaseProvider, embedder embedders.EmbedderProvider, searchConfig config.SearchConfig) (*SearchEngine, error) {
+// LLMRegistryForReranking is an interface for getting LLM providers
+type LLMRegistryForReranking interface {
+	GetLLM(name string) (llms.LLMProvider, error)
+}
+
+// NewSearchEngine creates a new search engine
+// llmRegistry is optional - only needed if reranking is enabled
+func NewSearchEngine(db databases.DatabaseProvider, embedder embedders.EmbedderProvider, searchConfig config.SearchConfig, llmRegistry LLMRegistryForReranking) (*SearchEngine, error) {
 	if db == nil {
 		return nil, NewSearchError("SearchEngine", "NewSearchEngine", "database provider is required", "", nil)
 	}
@@ -195,9 +207,51 @@ func NewSearchEngine(db databases.DatabaseProvider, embedder embedders.EmbedderP
 	}
 
 	engine := &SearchEngine{
-		db:       db,
-		embedder: embedder,
-		config:   searchConfig,
+		db:          db,
+		embedder:    embedder,
+		config:      searchConfig,
+		llmRegistry: llmRegistry,
+	}
+
+	// Initialize reranker if configured
+	if searchConfig.Rerank != nil && searchConfig.Rerank.Enabled != nil && *searchConfig.Rerank.Enabled {
+		if searchConfig.Rerank.LLM == "" {
+			return nil, NewSearchError("SearchEngine", "NewSearchEngine", "rerank.llm is required when reranking is enabled", "", nil)
+		}
+
+		// Get LLM provider from registry if available
+		if llmRegistry != nil {
+			llmProvider, err := llmRegistry.GetLLM(searchConfig.Rerank.LLM)
+			if err != nil {
+				return nil, NewSearchError("SearchEngine", "NewSearchEngine", fmt.Sprintf("failed to get LLM '%s' for reranking: %v", searchConfig.Rerank.LLM, err), "", err)
+			}
+
+			// Create reranker with LLM provider
+			maxResults := searchConfig.Rerank.MaxResults
+			if maxResults == 0 {
+				maxResults = 20
+			}
+			engine.reranker = reranking.NewLLMReranker(llmProvider, maxResults)
+		} else {
+			// If reranking is enabled but no LLM registry provided, use no-op
+			engine.reranker = reranking.NewNoOpReranker()
+		}
+	}
+
+	// Initialize query expander if multi-query is enabled
+	if searchConfig.MultiQuery != nil && searchConfig.MultiQuery.Enabled != nil && *searchConfig.MultiQuery.Enabled {
+		if searchConfig.MultiQuery.LLM == "" {
+			return nil, NewSearchError("SearchEngine", "NewSearchEngine", "multi_query.llm is required when multi-query is enabled", "", nil)
+		}
+
+		// Get LLM provider from registry if available
+		if llmRegistry != nil {
+			llmProvider, err := llmRegistry.GetLLM(searchConfig.MultiQuery.LLM)
+			if err != nil {
+				return nil, NewSearchError("SearchEngine", "NewSearchEngine", fmt.Sprintf("failed to get LLM '%s' for multi-query: %v", searchConfig.MultiQuery.LLM, err), "", err)
+			}
+			engine.queryExpander = NewLLMQueryExpander(llmProvider)
+		}
 	}
 
 	return engine, nil
@@ -296,20 +350,78 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 	embedCtx, cancel := context.WithTimeout(ctx, DefaultSearchTimeout)
 	defer cancel()
 
-	vector, err := se.embedder.Embed(processedQuery)
-	if err != nil {
-		return nil, NewSearchError("SearchEngine", "SearchWithFilter", "failed to generate embedding", processedQuery, err)
-	}
-
 	// Get collection from filter (required)
 	collection := se.getCollectionFromMap(filter)
 	if collection == "" {
 		return nil, NewSearchError("SearchEngine", "SearchWithFilter", "collection must be specified in filter", processedQuery, nil)
 	}
 
-	results, err := se.db.SearchWithFilter(embedCtx, collection, vector, limit, filter)
-	if err != nil {
-		return nil, NewSearchError("SearchEngine", "SearchWithFilter", "database search failed", processedQuery, err)
+	// Check search mode and route to appropriate search method
+	searchMode := se.config.SearchMode
+	if searchMode == "" {
+		searchMode = "vector" // Default
+	}
+
+	var results []databases.SearchResult
+	var err error
+
+	switch searchMode {
+	case "multi_query":
+		// Multi-query expansion: generate multiple query variations and merge results
+		results, err = se.searchWithMultiQuery(ctx, embedCtx, processedQuery, collection, limit, filter)
+		if err != nil {
+			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "multi-query search failed", processedQuery, err)
+		}
+
+	case "hyde":
+		// HyDE: generate hypothetical document and search with its embedding
+		results, err = se.searchWithHyDE(ctx, embedCtx, processedQuery, collection, limit, filter)
+		if err != nil {
+			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "HyDE search failed", processedQuery, err)
+		}
+
+	case "hybrid":
+		// Generate embedding for vector search
+		vector, embedErr := se.embedder.Embed(processedQuery)
+		if embedErr != nil {
+			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "failed to generate embedding", processedQuery, embedErr)
+		}
+
+		// Use hybrid alpha from config (default 0.5 if not set)
+		alpha := se.config.HybridAlpha
+		if alpha == 0 {
+			alpha = 0.5 // Default balanced hybrid
+		}
+
+		results, err = se.db.HybridSearch(embedCtx, collection, processedQuery, vector, limit, filter, alpha)
+		if err != nil {
+			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "hybrid search failed", processedQuery, err)
+		}
+
+	case "keyword":
+		// Pure keyword search (not fully implemented yet, fallback to hybrid with alpha=0)
+		// For now, use hybrid with very low alpha to favor keywords
+		vector, embedErr := se.embedder.Embed(processedQuery)
+		if embedErr != nil {
+			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "failed to generate embedding", processedQuery, embedErr)
+		}
+
+		results, err = se.db.HybridSearch(embedCtx, collection, processedQuery, vector, limit, filter, 0.1)
+		if err != nil {
+			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "keyword search failed", processedQuery, err)
+		}
+
+	default: // "vector" or empty
+		// Standard vector search
+		vector, embedErr := se.embedder.Embed(processedQuery)
+		if embedErr != nil {
+			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "failed to generate embedding", processedQuery, embedErr)
+		}
+
+		results, err = se.db.SearchWithFilter(embedCtx, collection, vector, limit, filter)
+		if err != nil {
+			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "database search failed", processedQuery, err)
+		}
 	}
 
 	// Filter results by similarity threshold from config
@@ -321,6 +433,17 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 			}
 		}
 		results = filtered
+	}
+
+	// Apply reranking if enabled and reranker is available
+	if se.reranker != nil && len(results) > 0 {
+		reranked, err := se.reranker.Rerank(ctx, processedQuery, results, limit)
+		if err != nil {
+			// Log error but return original results
+			slog.Warn("Reranking failed, returning original results", "error", err)
+			return results, nil
+		}
+		results = reranked
 	}
 
 	return results, nil

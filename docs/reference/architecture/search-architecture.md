@@ -142,6 +142,19 @@ agents:
       top_k: 10              # Default number of results (used when limit is 0)
       threshold: 0.5          # Minimum similarity score (0.0-1.0)
       preserve_case: true    # Don't lowercase queries (default: true for code search)
+      search_mode: "vector"   # "vector", "hybrid", "keyword", "multi_query", or "hyde"
+      hybrid_alpha: 0.5       # Blending factor for hybrid search (0.0-1.0)
+      rerank:                 # Optional: LLM-based re-ranking
+        enabled: false
+        llm: "gpt-4o-mini"
+        max_results: 20
+      multi_query:            # Optional: Multi-query expansion
+        enabled: false
+        llm: "gpt-4o-mini"
+        num_variations: 3
+      hyde:                   # Optional: HyDE
+        enabled: false
+        llm: "gpt-4o-mini"
 ```
 
 **Configuration Details**:
@@ -151,6 +164,11 @@ agents:
 | `top_k` | `int` | `10` | Default number of results returned when limit is not specified. Used by both search tool and include context. |
 | `threshold` | `float32` | `0.5` | Minimum similarity score (0.0-1.0). Results below this threshold are filtered out. Higher = more precise, lower = more recall. |
 | `preserve_case` | `bool` | `true` | If `true`, query text is not lowercased before embedding. Important for code search (e.g., `HTTP`, `API`). Whitespace is always normalized. |
+| `search_mode` | `string` | `"vector"` | Search mode: `"vector"` (pure vector search), `"hybrid"` (keyword + vector), `"keyword"` (keyword-focused), `"multi_query"` (query expansion), or `"hyde"` (hypothetical documents). |
+| `hybrid_alpha` | `float32` | `0.5` | Blending factor for hybrid search (0.0-1.0). 0.0 = pure keyword, 1.0 = pure vector, 0.5 = balanced. |
+| `rerank` | `object` | `null` | Optional LLM-based re-ranking configuration. |
+| `multi_query` | `object` | `null` | Optional multi-query expansion configuration. |
+| `hyde` | `object` | `null` | Optional HyDE configuration. |
 
 **Where It's Used**:
 

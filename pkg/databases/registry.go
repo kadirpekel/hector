@@ -15,6 +15,15 @@ type DatabaseProvider interface {
 
 	SearchWithFilter(ctx context.Context, collection string, vector []float32, topK int, filter map[string]interface{}) ([]SearchResult, error)
 
+	// HybridSearch performs a hybrid search combining keyword (BM25) and vector similarity
+	// query: the text query for keyword search
+	// vector: the dense vector for semantic search
+	// topK: maximum number of results to return
+	// filter: optional metadata filters
+	// alpha: blending factor (0.0 = pure keyword, 1.0 = pure vector, 0.5 = balanced)
+	// Returns combined and ranked results
+	HybridSearch(ctx context.Context, collection string, query string, vector []float32, topK int, filter map[string]interface{}, alpha float32) ([]SearchResult, error)
+
 	Delete(ctx context.Context, collection string, id string) error
 
 	DeleteByFilter(ctx context.Context, collection string, filter map[string]interface{}) error
@@ -71,6 +80,12 @@ func (r *DatabaseRegistry) CreateDatabaseFromConfig(name string, config *config.
 		provider, err = NewQdrantDatabaseProviderFromConfig(config)
 	case "pinecone":
 		provider, err = NewPineconeDatabaseProviderFromConfig(config)
+	case "weaviate":
+		provider, err = NewWeaviateDatabaseProviderFromConfig(config)
+	case "milvus":
+		provider, err = NewMilvusDatabaseProviderFromConfig(config)
+	case "chroma":
+		provider, err = NewChromaDatabaseProviderFromConfig(config)
 	default:
 		return nil, fmt.Errorf("unsupported database type: %s", config.Type)
 	}

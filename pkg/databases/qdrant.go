@@ -3,6 +3,7 @@ package databases
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/kadirpekel/hector/pkg/config"
@@ -311,6 +312,171 @@ func (db *qdrantDatabaseProvider) DeleteByFilter(ctx context.Context, collection
 		return fmt.Errorf("failed to delete points by filter from collection %s: %w", collection, err)
 	}
 	return nil
+}
+
+func (db *qdrantDatabaseProvider) HybridSearch(ctx context.Context, collection string, query string, vector []float32, topK int, filter map[string]interface{}, alpha float32) ([]SearchResult, error) {
+	// Qdrant supports hybrid search via QueryPoints API with sparse + dense vectors
+	// For now, we'll use a fallback approach: parallel vector + keyword search with RRF fusion
+	// This works even if Qdrant's native hybrid search isn't available in the Go client
+	
+	// If alpha is 0.0, pure keyword search (not supported yet, fallback to vector)
+	// If alpha is 1.0, pure vector search
+	// If alpha is 0.5, balanced hybrid
+	
+	if alpha >= 1.0 {
+		// Pure vector search
+		return db.SearchWithFilter(ctx, collection, vector, topK, filter)
+	}
+	
+	// For hybrid search, we'll do parallel searches and fuse results
+	// This is a simplified implementation - full hybrid would use Qdrant's QueryPoints with sparse vectors
+	
+	// Get vector results
+	vectorResults, err := db.SearchWithFilter(ctx, collection, vector, topK*2, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform vector search: %w", err)
+	}
+	
+	// For keyword search, we'll use a simple text matching approach
+	// In a full implementation, this would use BM25 or Qdrant's sparse vector search
+	// For now, we'll filter vector results by keyword presence as a fallback
+	keywordResults := filterByKeywords(vectorResults, query, topK*2)
+	
+	// Fuse results using Reciprocal Rank Fusion (RRF)
+	fusedResults := reciprocalRankFusion(vectorResults, keywordResults, alpha, topK)
+	
+	return fusedResults, nil
+}
+
+// filterByKeywords filters results that contain query keywords
+func filterByKeywords(results []SearchResult, query string, limit int) []SearchResult {
+	queryLower := strings.ToLower(query)
+	keywords := strings.Fields(queryLower)
+	
+	filtered := make([]SearchResult, 0, len(results))
+	for _, result := range results {
+		contentLower := strings.ToLower(result.Content)
+		matches := 0
+		for _, keyword := range keywords {
+			if strings.Contains(contentLower, keyword) {
+				matches++
+			}
+		}
+		// If at least one keyword matches, include the result
+		if matches > 0 {
+			// Score based on keyword match ratio
+			keywordScore := float32(matches) / float32(len(keywords))
+			result.Score = keywordScore
+			filtered = append(filtered, result)
+		}
+	}
+	
+	// Sort by keyword score
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].Score > filtered[j].Score
+	})
+	
+	if len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+	
+	return filtered
+}
+
+// reciprocalRankFusion combines results from vector and keyword searches using RRF
+func reciprocalRankFusion(vectorResults, keywordResults []SearchResult, alpha float32, topK int) []SearchResult {
+	// Create maps for quick lookup
+	vectorRankMap := make(map[string]int)
+	keywordRankMap := make(map[string]int)
+	
+	for i, result := range vectorResults {
+		vectorRankMap[result.ID] = i + 1 // RRF uses 1-based ranking
+	}
+	for i, result := range keywordResults {
+		keywordRankMap[result.ID] = i + 1
+	}
+	
+	// Collect all unique document IDs
+	allIDs := make(map[string]bool)
+	for _, result := range vectorResults {
+		allIDs[result.ID] = true
+	}
+	for _, result := range keywordResults {
+		allIDs[result.ID] = true
+	}
+	
+	// Calculate RRF scores
+	type scoredDoc struct {
+		result SearchResult
+		score  float32
+	}
+	scoredDocs := make([]scoredDoc, 0, len(allIDs))
+	
+	const rrfK = 60 // RRF constant (standard value)
+	
+	for id := range allIDs {
+		var result SearchResult
+		var vectorScore float32
+		
+		// Find the result from either list
+		found := false
+		for _, r := range vectorResults {
+			if r.ID == id {
+				result = r
+				found = true
+				vectorScore = r.Score
+				break
+			}
+		}
+		if !found {
+			for _, r := range keywordResults {
+				if r.ID == id {
+					result = r
+					break
+				}
+			}
+		}
+		
+		// Calculate RRF scores
+		vectorRRF := float32(0)
+		if rank, exists := vectorRankMap[id]; exists {
+			vectorRRF = 1.0 / float32(rrfK+rank)
+		}
+		
+		keywordRRF := float32(0)
+		if rank, exists := keywordRankMap[id]; exists {
+			keywordRRF = 1.0 / float32(rrfK+rank)
+		}
+		
+		// Blend scores: alpha * vector + (1-alpha) * keyword
+		// For RRF, we blend the RRF scores, then optionally weight by original scores
+		blendedRRF := alpha*vectorRRF + (1-alpha)*keywordRRF
+		
+		// Also consider original similarity scores
+		blendedScore := alpha*vectorScore + (1-alpha)*result.Score
+		
+		// Final score: weighted combination of RRF and original scores
+		finalScore := 0.7*blendedRRF + 0.3*blendedScore
+		
+		result.Score = finalScore
+		scoredDocs = append(scoredDocs, scoredDoc{result: result, score: finalScore})
+	}
+	
+	// Sort by final score
+	sort.Slice(scoredDocs, func(i, j int) bool {
+		return scoredDocs[i].score > scoredDocs[j].score
+	})
+	
+	// Return top K
+	results := make([]SearchResult, 0, topK)
+	for i, sd := range scoredDocs {
+		if i >= topK {
+			break
+		}
+		results = append(results, sd.result)
+	}
+	
+	return results
 }
 
 func (db *qdrantDatabaseProvider) DeleteCollection(ctx context.Context, collection string) error {

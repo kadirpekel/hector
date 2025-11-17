@@ -373,6 +373,33 @@ agents:
       
       # RAG toggle: Include document context in prompts
       include_context: true  # Default: false
+      include_context_limit: 10      # Max documents to include (default: uses search.top_k)
+      include_context_max_length: 500 # Max content length per document (default: 500)
+    
+    # Search Configuration (RAG)
+    search:
+      top_k: 10              # Default number of results (used when limit is 0)
+      threshold: 0.5          # Minimum similarity score (0.0-1.0)
+      preserve_case: true    # Don't lowercase queries (default: true for code search)
+      search_mode: "vector"   # "vector", "hybrid", "keyword", "multi_query", or "hyde" (default: "vector")
+      hybrid_alpha: 0.5      # Blending factor for hybrid search (0.0-1.0, default: 0.5)
+      
+      # Optional: LLM-based re-ranking
+      rerank:
+        enabled: false        # Enable re-ranking (default: false)
+        llm: "gpt-4o-mini"    # LLM provider name for reranking (required if enabled)
+        max_results: 20       # Maximum results to rerank (default: 20)
+      
+      # Optional: Multi-query expansion
+      multi_query:
+        enabled: false       # Enable multi-query expansion (default: false)
+        llm: "gpt-4o-mini"   # LLM provider name for query expansion (required if enabled)
+        num_variations: 3    # Number of query variations to generate (default: 3)
+      
+      # Optional: HyDE (Hypothetical Document Embeddings)
+      hyde:
+        enabled: false       # Enable HyDE search (default: false)
+        llm: "gpt-4o-mini"   # LLM provider name for generating hypothetical documents (required if enabled)
     
     # Reasoning Configuration
     reasoning:
@@ -686,6 +713,16 @@ tools:
 
 Vector stores are used for storing embeddings and performing similarity search. They are required for RAG (document stores) and long-term memory.
 
+Hector supports multiple vector databases:
+
+| Database | Type | Hybrid Search | Best For |
+|----------|------|--------------|----------|
+| **Qdrant** | Self-hosted | ✅ (RRF) | Production, self-hosted |
+| **Pinecone** | Managed | ✅ (RRF) | Managed cloud service |
+| **Weaviate** | Self-hosted | ✅ (Native) | Native hybrid search, GraphQL |
+| **Milvus** | Self-hosted | ✅ (RRF) | Large-scale, high-performance |
+| **Chroma** | Self-hosted | ✅ (RRF) | Simple, lightweight |
+
 ### Qdrant
 
 ```yaml
@@ -705,8 +742,59 @@ vector_stores:
   pinecone:
     type: "pinecone"
     api_key: "${PINECONE_API_KEY}"
-    environment: "us-east-1"
+    environment: "us-east-1"  # Your Pinecone environment
 ```
+
+### Weaviate
+
+```yaml
+vector_stores:
+  weaviate:
+    type: "weaviate"
+    host: "localhost"
+    port: 8080           # Default Weaviate port
+    api_key: ""          # Optional API key
+    enable_tls: false
+```
+
+**Features:**
+- Native hybrid search support (no fallback needed)
+- GraphQL API
+- Built-in vectorization options
+
+### Milvus
+
+```yaml
+vector_stores:
+  milvus:
+    type: "milvus"
+    host: "localhost"
+    port: 19530          # Default Milvus port
+    api_key: ""          # Optional
+    enable_tls: false
+```
+
+**Features:**
+- Optimized for large-scale deployments
+- High-performance vector search
+- Supports distributed deployments
+
+### Chroma
+
+```yaml
+vector_stores:
+  chroma:
+    type: "chroma"
+    host: "localhost"
+    port: 8000           # Default Chroma port
+    api_key: ""          # Optional
+    enable_tls: false
+```
+
+**Features:**
+- Simple and lightweight
+- Good for development and small deployments
+- Easy to set up
 
 ### Custom Vector Store (Plugin)
 

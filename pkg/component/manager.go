@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
@@ -686,6 +688,91 @@ func (b *databasePluginBridge) SearchWithFilter(ctx context.Context, collection 
 	}
 
 	return results, nil
+}
+
+func (b *databasePluginBridge) HybridSearch(ctx context.Context, collection string, query string, vector []float32, topK int, filter map[string]interface{}, alpha float32) ([]databases.SearchResult, error) {
+	// Plugin adapters may not support hybrid search natively
+	// Fallback to vector search with keyword filtering (similar to other implementations)
+	if alpha >= 1.0 {
+		// Pure vector search
+		return b.SearchWithFilter(ctx, collection, vector, topK, filter)
+	}
+
+	// Get vector results
+	vectorResults, err := b.SearchWithFilter(ctx, collection, vector, topK*2, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform vector search: %w", err)
+	}
+
+	// Simple keyword filtering (fallback - plugins don't support BM25)
+	keywordResults := make([]databases.SearchResult, 0)
+	queryLower := strings.ToLower(query)
+	queryWords := strings.Fields(queryLower)
+
+	for _, result := range vectorResults {
+		contentLower := strings.ToLower(result.Content)
+		matches := 0
+		for _, word := range queryWords {
+			if strings.Contains(contentLower, word) {
+				matches++
+			}
+		}
+		// If at least 50% of query words match, include in keyword results
+		if len(queryWords) > 0 && float64(matches)/float64(len(queryWords)) >= 0.5 {
+			keywordResults = append(keywordResults, result)
+		}
+	}
+
+	// Simple RRF fusion
+	fusedScores := make(map[string]float64)
+	k := 60.0
+
+	// Add vector results
+	for rank, result := range vectorResults {
+		score := 1.0 / (k + float64(rank+1))
+		fusedScores[result.ID] += score * float64(alpha)
+	}
+
+	// Add keyword results
+	for rank, result := range keywordResults {
+		score := 1.0 / (k + float64(rank+1))
+		fusedScores[result.ID] += score * (1.0 - float64(alpha))
+	}
+
+	// Create result map for lookup
+	resultMap := make(map[string]databases.SearchResult)
+	for _, result := range vectorResults {
+		resultMap[result.ID] = result
+	}
+
+	// Build final results sorted by fused score
+	type scoredResult struct {
+		result databases.SearchResult
+		score  float64
+	}
+	scoredResults := make([]scoredResult, 0, len(fusedScores))
+	for id, score := range fusedScores {
+		if result, ok := resultMap[id]; ok {
+			result.Score = float32(score)
+			scoredResults = append(scoredResults, scoredResult{result: result, score: score})
+		}
+	}
+
+	// Sort by score
+	sort.Slice(scoredResults, func(i, j int) bool {
+		return scoredResults[i].score > scoredResults[j].score
+	})
+
+	// Convert to SearchResult slice
+	finalResults := make([]databases.SearchResult, 0, len(scoredResults))
+	for _, sr := range scoredResults {
+		finalResults = append(finalResults, sr.result)
+		if len(finalResults) >= topK {
+			break
+		}
+	}
+
+	return finalResults, nil
 }
 
 func (b *databasePluginBridge) Delete(ctx context.Context, collection string, id string) error {

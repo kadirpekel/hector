@@ -93,7 +93,14 @@ agents:
         You are an expert software engineer. Provide clear,
         concise code examples with explanations. Always test
         your code and consider edge cases.
-    tools: ["execute_command", "write_file", "search_replace"]
+    tools: ["execute_command", "write_file", "search_replace", "search"]
+    # Optional: Advanced search configuration
+    # search:
+    #   search_mode: "hybrid"  # Hybrid search for better results
+    #   hybrid_alpha: 0.6
+    #   rerank:
+    #     enabled: true
+    #     llm: "gpt-4o-mini"
 ```
 
 ### 2. Use Your Configured Agent

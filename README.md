@@ -133,7 +133,7 @@ agents:
         max_tokens: 4000
       long_term:
         type: vector
-        database: production-qdrant
+        vector_store: production-qdrant
         
   researcher:
     llm: claude-3-5-sonnet
@@ -152,7 +152,7 @@ llms:
     model: claude-3-5-sonnet-20241022
     api_key: ${ANTHROPIC_API_KEY}
 
-databases:
+vector_stores:
   production-qdrant:
     type: qdrant
     host: qdrant.internal
@@ -406,7 +406,9 @@ agents:
 - Vector-based semantic memory with RAG
 - Automatic document indexing
 - Semantic search across knowledge bases
-- Multiple vector database support (Qdrant)
+- Multiple vector database support (Qdrant, Pinecone, Weaviate, Milvus, Chroma)
+- Advanced search modes: hybrid, multi-query, HyDE
+- LLM-based re-ranking for improved relevance
 
 **Session Persistence:**
 - SQL-based session storage

@@ -60,7 +60,7 @@ agents:
 
     You can opt-in to whitelist (`allowed_*`) or blacklist (`denied_*`) specific extensions/commands as needed.
 
-Hector includes 9 ready-to-use tools:
+Hector includes 10 ready-to-use tools:
 
 ### 1. execute_command
 
@@ -274,10 +274,10 @@ Agent: Found 12 TODO comments across 8 files...
 
 ### 7. search
 
-Semantic code search (requires Qdrant + Ollama):
+Semantic code search (requires vector store + embedder):
 
 ```yaml
-databases:
+vector_stores:
   qdrant:
     type: "qdrant"
     host: "localhost"
@@ -298,20 +298,67 @@ agents:
         paths: ["./src/"]
 ```
 
-**Use cases:** Finding relevant code, understanding codebases, discovering patterns
+**Use cases:** Finding code by meaning, discovering similar patterns, answering questions from codebase
 
-**Example:**
-```
-User: How does authentication work?
-Agent: search("authentication implementation")
-Agent: Found authentication in src/auth.go...
-```
+**Advanced search modes:**
+- `search_mode: "hybrid"` - Combines keyword and vector search
+- `search_mode: "multi_query"` - Expands query into multiple variations
+- `search_mode: "hyde"` - Uses hypothetical document embeddings
+- `rerank.enabled: true` - LLM-based re-ranking for better results
 
-See [RAG & Semantic Search](rag.md) for setup.
+See [RAG & Semantic Search](rag.md) and [Search Architecture](search-architecture.md) for details.
 
 ---
 
-### 8. todo_write
+### 8. evaluate_rag
+
+Evaluate RAG system performance by analyzing query, retrieved documents, and generated answer:
+
+```yaml
+agents:
+  evaluator:
+    llm: "gpt-4o-mini"  # LLM for evaluation
+    tools: ["evaluate_rag"]
+```
+
+**Metrics calculated:**
+- **Context Precision**: Proportion of retrieved contexts that are relevant
+- **Context Recall**: Proportion of relevant contexts retrieved
+- **Answer Relevance**: How relevant the answer is to the query
+- **Faithfulness**: How faithful the answer is to retrieved contexts
+- **Answer Correctness**: Overall correctness score (average of relevance and faithfulness)
+
+**Use cases:** Measuring RAG quality, benchmarking search improvements, validating system performance
+
+**Example:**
+```json
+{
+  "name": "evaluate_rag",
+  "parameters": {
+    "query": "How does authentication work?",
+    "retrieved_docs": [
+      {
+        "id": "doc1",
+        "content": "Authentication uses JWT tokens...",
+        "score": 0.85
+      }
+    ],
+    "generated_answer": "Authentication uses JWT tokens for secure access...",
+    "ground_truth": "Optional: Expected answer for comparison"
+  }
+}
+```
+
+**Returns:**
+- Metrics scores (0.0-1.0)
+- Latency measurement
+- Full evaluation result with details
+
+See [Search Architecture](search-architecture.md#evaluation-tools) for complete documentation.
+
+---
+
+### 9. todo_write
 
 Task tracking for agents:
 
@@ -338,7 +385,7 @@ Agent: I'll start with the user model...
 
 ---
 
-### 9. agent_call
+### 10. agent_call
 
 Call other agents:
 
@@ -370,7 +417,7 @@ See [Multi-Agent Orchestration](multi-agent.md) for details.
 
 ---
 
-### 10. web_request
+### 11. web_request
 
 Make HTTP requests to external APIs and web services:
 

@@ -1,0 +1,66 @@
+# Test config: All document stores have their own database/embedder
+# Agent database/embedder should NOT be required (unless IncludeContext is enabled)
+
+# LLM configuration
+llms:
+  default-llm:
+    type: "ollama"
+    model: "llama3.1:8b"
+    host: "http://localhost:11434"
+
+# Embedder configuration
+embedders:
+  default-embedder:
+    type: "ollama"
+    model: "nomic-embed-text"
+    host: "http://localhost:11434"
+
+# Vector database configuration
+vector_stores:
+  qdrant-primary:
+    type: "qdrant"
+    host: "localhost"
+    port: 6334
+
+# Document stores - ALL have their own database/embedder
+document_stores:
+  cooking_docs:
+    name: "cooking_docs"
+    collection: "cooking_docs"
+    vector_store: "qdrant-primary"  # Store has its own database
+    embedder: "default-embedder"  # Store has its own embedder
+
+  programming_docs:
+    name: "programming_docs"
+    collection: "programming_docs"
+    vector_store: "qdrant-primary"  # Store has its own database
+    embedder: "default-embedder"  # Store has its own embedder
+
+# Agent configuration - database/embedder NOT required (all stores have their own)
+agents:
+  test-agent:
+    name: "Test Search Agent"
+    description: "Agent with stores that have their own database/embedder"
+    llm: "default-llm"
+    # database: "qdrant-primary"  # NOT required - all stores have their own
+    # embedder: "default-embedder"  # NOT required - all stores have their own
+    document_stores:
+      - "cooking_docs"
+      - "programming_docs"
+    tools:
+      - "search"
+    prompt:
+      include_context: false  # Disabled - so no RAG requirement
+      system_prompt: |
+        You are a helpful assistant that can search through documents.
+
+# Search tool configuration
+tools:
+  search:
+    type: "search"
+    document_stores:
+      - "cooking_docs"
+      - "programming_docs"
+    default_limit: 10
+    max_limit: 50
+

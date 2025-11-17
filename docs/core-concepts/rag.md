@@ -263,7 +263,7 @@ document_stores:
 
 2. Query embedded: [0.25, -0.43, 0.69, ...]
 
-3. Qdrant finds similar chunks (cosine similarity)
+3. Vector database finds similar chunks (cosine similarity)
    ├─ auth.go chunk (similarity: 0.92)
    ├─ user.go chunk (similarity: 0.85)
    └─ db.go chunk (similarity: 0.78)
@@ -277,17 +277,26 @@ document_stores:
 
 ## Vector Databases
 
-### Qdrant (Recommended)
+Hector supports multiple vector databases. Choose based on your needs:
+
+| Database | Hybrid Search | Best For |
+|----------|--------------|----------|
+| **Qdrant** | ✅ (RRF) | Self-hosted, production-ready |
+| **Pinecone** | ✅ (RRF) | Managed cloud service |
+| **Weaviate** | ✅ (Native) | Native hybrid search, GraphQL API |
+| **Milvus** | ✅ (RRF) | Large-scale, high-performance |
+| **Chroma** | ✅ (RRF) | Simple, lightweight, embedded |
+
+### Qdrant (Recommended for Self-Hosted)
 
 ```yaml
-databases:
+vector_stores:
   qdrant:
     type: "qdrant"
     host: "localhost"
     port: 6334           # gRPC port (default: 6334)
-    grpc_port: 6334      # REST dashboard port (default: 6334)
     api_key: ""          # Optional for Qdrant Cloud
-    use_https: false     # Enable for cloud
+    enable_tls: false   # Enable for cloud
 ```
 
 **Docker:**
@@ -295,21 +304,114 @@ databases:
 docker run -d \
   --name qdrant \
   -p 6334:6334 \
-  -p 6334:6334 \
   -v qdrant_data:/qdrant/storage \
   qdrant/qdrant
 ```
 
 **Qdrant Cloud:**
 ```yaml
-databases:
+vector_stores:
   qdrant_cloud:
     type: "qdrant"
     host: "your-cluster.qdrant.io"
     port: 6334
     api_key: "${QDRANT_API_KEY}"
-    use_https: true
+    enable_tls: true
 ```
+
+### Pinecone (Managed Cloud)
+
+```yaml
+vector_stores:
+  pinecone:
+    type: "pinecone"
+    api_key: "${PINECONE_API_KEY}"
+    environment: "us-east-1"  # Your Pinecone environment
+```
+
+**Setup:**
+1. Create account at [pinecone.io](https://pinecone.io)
+2. Create an index
+3. Get your API key and environment
+4. Configure in Hector
+
+### Weaviate (Native Hybrid Search)
+
+```yaml
+vector_stores:
+  weaviate:
+    type: "weaviate"
+    host: "localhost"
+    port: 8080           # Default Weaviate port
+    api_key: ""          # Optional API key
+    enable_tls: false
+```
+
+**Docker:**
+```bash
+docker run -d \
+  --name weaviate \
+  -p 8080:8080 \
+  -e PERSISTENCE_DATA_PATH=/var/lib/weaviate \
+  -v weaviate_data:/var/lib/weaviate \
+  semitechnologies/weaviate:latest
+```
+
+**Features:**
+- Native hybrid search support (no fallback needed)
+- GraphQL API
+- Built-in vectorization options
+
+### Milvus (High-Performance)
+
+```yaml
+vector_stores:
+  milvus:
+    type: "milvus"
+    host: "localhost"
+    port: 19530          # Default Milvus port
+    api_key: ""          # Optional
+    enable_tls: false
+```
+
+**Docker (Standalone):**
+```bash
+docker run -d \
+  --name milvus-standalone \
+  -p 19530:19530 \
+  -p 9091:9091 \
+  milvusdb/milvus:latest
+```
+
+**Features:**
+- Optimized for large-scale deployments
+- High-performance vector search
+- Supports distributed deployments
+
+### Chroma (Lightweight)
+
+```yaml
+vector_stores:
+  chroma:
+    type: "chroma"
+    host: "localhost"
+    port: 8000           # Default Chroma port
+    api_key: ""          # Optional
+    enable_tls: false
+```
+
+**Docker:**
+```bash
+docker run -d \
+  --name chroma \
+  -p 8000:8000 \
+  chromadb/chroma:latest
+```
+
+**Features:**
+- Simple and lightweight
+- Good for development and small deployments
+- Easy to set up
 
 ### Custom Vector Databases (Plugins)
 
@@ -320,7 +422,7 @@ plugins:
       protocol: "grpc"
       path: "/path/to/plugin"
 
-databases:
+vector_stores:
   custom:
     type: "plugin:my-vector-db"
     # Custom configuration
@@ -409,16 +511,44 @@ agents:
     document_stores:
       - name: "docs"
         paths: ["./"]
-        search_config:
-          top_k: 5              # Return top 5 results (default: 5)
-          threshold: 0.7        # Minimum similarity score 0.0-1.0 (default: none)
-          preserve_case: true   # Don't lowercase queries (default: true)
+    search:
+      top_k: 10              # Default number of results (default: 10)
+      threshold: 0.5          # Minimum similarity score 0.0-1.0 (default: 0.5)
+      preserve_case: true    # Don't lowercase queries (default: true)
+      search_mode: "hybrid"  # "vector", "hybrid", "keyword", "multi_query", or "hyde"
+      hybrid_alpha: 0.5      # Blending factor for hybrid search (0.0-1.0)
+      
+      # Optional: LLM-based re-ranking
+      rerank:
+        enabled: true
+        llm: "gpt-4o-mini"
+        max_results: 20
+      
+      # Optional: Multi-query expansion
+      multi_query:
+        enabled: false
+        llm: "gpt-4o-mini"
+        num_variations: 3
 ```
 
-**Parameters:**
-- `top_k`: Maximum number of results to return (default: 5)
+**Basic Parameters:**
+- `top_k`: Maximum number of results to return (default: 10)
 - `threshold`: Minimum cosine similarity score (0.0-1.0). Results below this are filtered out.
 - `preserve_case`: Whether to preserve query case (useful for code search)
+
+**Advanced Search Modes:**
+- `search_mode: "vector"` - Pure semantic search (default, fastest)
+- `search_mode: "hybrid"` - Combines keyword and vector search (better recall)
+- `search_mode: "keyword"` - Keyword-focused search
+- `search_mode: "multi_query"` - Expands query into multiple variations (improves recall)
+- `search_mode: "hyde"` - Uses hypothetical document embeddings
+
+**Re-ranking:**
+- `rerank.enabled: true` - Enable LLM-based re-ranking for better result quality
+- Requires an LLM provider configured
+- Only reranks top N results (configurable via `max_results`)
+
+See [Search Architecture](search-architecture.md) for complete documentation on all search features.
 
 ### Custom Parsers
 
@@ -476,13 +606,12 @@ embedders:
     timeout: 30
     batch_size: 32  # Embed 32 chunks at once
 
-# Qdrant configuration
-databases:
+# Vector store configuration
+vector_stores:
   qdrant:
     type: "qdrant"
     host: "localhost"
     port: 6334
-    connection_pool_size: 10  # Connection pooling
 ```
 
 ---
@@ -497,6 +626,10 @@ agents:
     vector_store: "qdrant"
     embedder: "embedder"
     tools: ["search", "write_file"]
+    search:
+      search_mode: "hybrid"  # Better for code with specific terms
+      hybrid_alpha: 0.6      # Favor vector but include keywords
+      preserve_case: true    # Important for code identifiers
     document_stores:
       - name: "codebase"
         paths: ["./src/", "./lib/"]

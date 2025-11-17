@@ -50,6 +50,11 @@ func (m *mockDatabaseProvider) DeleteCollection(ctx context.Context, collection 
 	return nil
 }
 
+func (m *mockDatabaseProvider) HybridSearch(ctx context.Context, collection string, query string, vector []float32, topK int, filter map[string]interface{}, alpha float32) ([]databases.SearchResult, error) {
+	// Mock hybrid search - just use regular search
+	return m.SearchWithFilter(ctx, collection, vector, topK, filter)
+}
+
 func (m *mockDatabaseProvider) Close() error {
 	return nil
 }
@@ -110,7 +115,7 @@ func TestNewSearchEngine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine, err := NewSearchEngine(tt.db, tt.embedder, tt.searchConfig)
+			engine, err := NewSearchEngine(tt.db, tt.embedder, tt.searchConfig, nil)
 
 			if tt.wantError {
 				if err == nil {
@@ -157,7 +162,7 @@ func TestSearchEngine_IngestDocument(t *testing.T) {
 
 	searchConfig := config.SearchConfig{}
 
-	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig)
+	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig, nil)
 	if err != nil {
 		t.Fatalf("NewSearchEngine() error = %v", err)
 	}
@@ -264,7 +269,7 @@ func TestSearchEngine_Search(t *testing.T) {
 
 	searchConfig := config.SearchConfig{}
 
-	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig)
+	engine, err := NewSearchEngine(mockDB, mockEmbedder, searchConfig, nil)
 	if err != nil {
 		t.Fatalf("NewSearchEngine() error = %v", err)
 	}
@@ -361,7 +366,7 @@ func TestSearchEngine_GetStatus(t *testing.T) {
 		Threshold: 0.7,
 	}
 
-	engine, err := NewSearchEngine(&mockDatabaseProvider{}, &mockEmbedderProvider{}, searchConfig)
+	engine, err := NewSearchEngine(&mockDatabaseProvider{}, &mockEmbedderProvider{}, searchConfig, nil)
 	if err != nil {
 		t.Fatalf("NewSearchEngine() error = %v", err)
 	}
@@ -384,7 +389,7 @@ func TestSearchEngine_GetStatus(t *testing.T) {
 func TestSearchEngine_QueryValidation(t *testing.T) {
 	searchConfig := config.SearchConfig{}
 
-	engine, err := NewSearchEngine(&mockDatabaseProvider{}, &mockEmbedderProvider{}, searchConfig)
+	engine, err := NewSearchEngine(&mockDatabaseProvider{}, &mockEmbedderProvider{}, searchConfig, nil)
 	if err != nil {
 		t.Fatalf("NewSearchEngine() error = %v", err)
 	}
@@ -446,7 +451,7 @@ func TestSearchEngine_QueryValidation(t *testing.T) {
 func TestSearchEngine_QueryProcessing(t *testing.T) {
 	searchConfig := config.SearchConfig{}
 
-	engine, err := NewSearchEngine(&mockDatabaseProvider{}, &mockEmbedderProvider{}, searchConfig)
+	engine, err := NewSearchEngine(&mockDatabaseProvider{}, &mockEmbedderProvider{}, searchConfig, nil)
 	if err != nil {
 		t.Fatalf("NewSearchEngine() error = %v", err)
 	}
@@ -496,7 +501,7 @@ func TestSearchEngine_QueryProcessing(t *testing.T) {
 func TestSearchEngine_Concurrency(t *testing.T) {
 	searchConfig := config.SearchConfig{}
 
-	engine, err := NewSearchEngine(&mockDatabaseProvider{}, &mockEmbedderProvider{}, searchConfig)
+	engine, err := NewSearchEngine(&mockDatabaseProvider{}, &mockEmbedderProvider{}, searchConfig, nil)
 	if err != nil {
 		t.Fatalf("NewSearchEngine() error = %v", err)
 	}

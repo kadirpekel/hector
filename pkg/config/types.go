@@ -2019,6 +2019,28 @@ type SearchConfig struct {
 	TopK         int     `yaml:"top_k"`         // Default number of results to return
 	Threshold    float32 `yaml:"threshold"`     // Minimum similarity score (0.0-1.0)
 	PreserveCase *bool   `yaml:"preserve_case"` // Don't lowercase queries (default: true for code search)
+	SearchMode   string  `yaml:"search_mode"`   // "vector", "hybrid", "keyword", "multi_query", or "hyde" (default: "vector")
+	HybridAlpha  float32 `yaml:"hybrid_alpha"`  // Blending factor for hybrid search (0.0-1.0, default: 0.5)
+	Rerank       *RerankConfig `yaml:"rerank,omitempty"` // Re-ranking configuration
+	MultiQuery   *MultiQueryConfig `yaml:"multi_query,omitempty"` // Multi-query expansion configuration
+	HyDE         *HyDEConfig `yaml:"hyde,omitempty"` // HyDE (Hypothetical Document Embeddings) configuration
+}
+
+type MultiQueryConfig struct {
+	Enabled      *bool  `yaml:"enabled"`       // Enable multi-query expansion (default: false)
+	LLM          string `yaml:"llm"`            // LLM provider name to use for query expansion (required if enabled)
+	NumVariations int   `yaml:"num_variations"` // Number of query variations to generate (default: 3)
+}
+
+type HyDEConfig struct {
+	Enabled *bool  `yaml:"enabled"` // Enable HyDE search (default: false)
+	LLM     string `yaml:"llm"`      // LLM provider name to use for generating hypothetical documents (required if enabled)
+}
+
+type RerankConfig struct {
+	Enabled   *bool  `yaml:"enabled"`   // Enable re-ranking (default: false)
+	LLM       string `yaml:"llm"`        // LLM provider name to use for reranking (required if enabled)
+	MaxResults int   `yaml:"max_results"` // Maximum results to send to LLM for reranking (default: 20)
 }
 
 func (c *SearchConfig) Validate() error {
@@ -2027,6 +2049,29 @@ func (c *SearchConfig) Validate() error {
 	}
 	if c.Threshold < 0 || c.Threshold > 1 {
 		return fmt.Errorf("threshold must be between 0 and 1")
+	}
+	if c.SearchMode != "" && c.SearchMode != "vector" && c.SearchMode != "hybrid" && c.SearchMode != "keyword" && c.SearchMode != "multi_query" && c.SearchMode != "hyde" {
+		return fmt.Errorf("search_mode must be 'vector', 'hybrid', 'keyword', 'multi_query', or 'hyde'")
+	}
+	if c.HybridAlpha < 0 || c.HybridAlpha > 1 {
+		return fmt.Errorf("hybrid_alpha must be between 0.0 and 1.0")
+	}
+	if c.Rerank != nil {
+		if err := c.Rerank.Validate(); err != nil {
+			return fmt.Errorf("rerank config validation failed: %w", err)
+		}
+	}
+	return nil
+}
+
+func (c *RerankConfig) Validate() error {
+	if c.Enabled != nil && *c.Enabled {
+		if c.LLM == "" {
+			return fmt.Errorf("llm is required when rerank is enabled")
+		}
+		if c.MaxResults < 0 {
+			return fmt.Errorf("max_results must be non-negative")
+		}
 	}
 	return nil
 }
@@ -2038,9 +2083,49 @@ func (c *SearchConfig) SetDefaults() {
 	if c.Threshold == 0 {
 		c.Threshold = 0.5 // Default 50% similarity threshold (balanced precision/recall for RAG)
 	}
+	if c.SearchMode == "" {
+		c.SearchMode = "vector" // Default to vector-only search
+	}
+	if c.HybridAlpha == 0 {
+		c.HybridAlpha = 0.5 // Default balanced hybrid search (50% vector, 50% keyword)
+	}
 
 	if c.PreserveCase == nil {
 		c.PreserveCase = BoolPtr(true) // Default to true for code search
+	}
+
+	if c.Rerank != nil {
+		c.Rerank.SetDefaults()
+	}
+	if c.MultiQuery != nil {
+		c.MultiQuery.SetDefaults()
+	}
+	if c.HyDE != nil {
+		c.HyDE.SetDefaults()
+	}
+}
+
+func (c *MultiQueryConfig) SetDefaults() {
+	if c.Enabled == nil {
+		c.Enabled = BoolPtr(false) // Default: multi-query disabled
+	}
+	if c.NumVariations == 0 {
+		c.NumVariations = 3 // Default: generate 3 query variations
+	}
+}
+
+func (c *HyDEConfig) SetDefaults() {
+	if c.Enabled == nil {
+		c.Enabled = BoolPtr(false) // Default: HyDE disabled
+	}
+}
+
+func (c *RerankConfig) SetDefaults() {
+	if c.Enabled == nil {
+		c.Enabled = BoolPtr(false) // Default: reranking disabled
+	}
+	if c.MaxResults == 0 {
+		c.MaxResults = 20 // Default: rerank up to 20 results
 	}
 
 	// Query processing defaults - optimized for code search

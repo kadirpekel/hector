@@ -176,7 +176,12 @@ func (b *ContextServiceBuilder) Build() (reasoning.ContextService, error) {
 	b.searchConfig.SetDefaults()
 
 	// Create default search engine (for stores that don't specify their own database)
-	defaultSearchEngine, err := context.NewSearchEngine(b.database, b.embedder, b.searchConfig)
+	// Pass LLM registry if component manager is available (for reranking)
+	var llmRegistry context.LLMRegistryForReranking
+	if b.componentManager != nil {
+		llmRegistry = b.componentManager.GetLLMRegistry()
+	}
+	defaultSearchEngine, err := context.NewSearchEngine(b.database, b.embedder, b.searchConfig, llmRegistry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create default search engine: %w", err)
 	}
@@ -247,8 +252,13 @@ func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSea
 			}
 
 			// Create search engine for this store
+			// Pass LLM registry if component manager is available (for reranking)
+			var llmRegistry context.LLMRegistryForReranking
+			if b.componentManager != nil {
+				llmRegistry = b.componentManager.GetLLMRegistry()
+			}
 			var err error
-			searchEngine, err = context.NewSearchEngine(db, embedder, b.searchConfig)
+			searchEngine, err = context.NewSearchEngine(db, embedder, b.searchConfig, llmRegistry)
 			if err != nil {
 				return fmt.Errorf("failed to create search engine for document store '%s': %w", storeName, err)
 			}
