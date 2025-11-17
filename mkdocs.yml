@@ -44,8 +44,6 @@ theme:
     - content.tabs.link
     - content.code.annotation
     - content.code.copy
-    - content.action.edit
-    - content.action.view
   language: en
   logo: assets/letter-h.png
   favicon: assets/letter-h.png
