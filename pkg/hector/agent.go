@@ -188,7 +188,22 @@ func (b *AgentBuilder) WithContext(builder *ContextServiceBuilder) *AgentBuilder
 	}
 	service, err := builder.Build()
 	if err != nil {
-		panic(fmt.Sprintf("failed to build context service: %v", err))
+		// Provide a helpful error message instead of just panicking
+		panic(fmt.Sprintf("\n❌ Failed to build context service:\n\n%v\n\n"+
+			"💡 Common causes and solutions:\n"+
+			"   • Database connection issues:\n"+
+			"     - Ensure PostgreSQL/Qdrant/other databases are running\n"+
+			"     - Check connection settings (host, port, credentials)\n"+
+			"     - For Docker: verify containers are running (docker ps)\n"+
+			"   • Missing required services:\n"+
+			"     - Vector database (Qdrant, Pinecone, etc.)\n"+
+			"     - Embedding service (Ollama, OpenAI, etc.)\n"+
+			"     - SQL database for document stores\n"+
+			"   • Configuration errors:\n"+
+			"     - Verify all required config fields are set\n"+
+			"     - Check file paths exist for directory sources\n"+
+			"     - Validate API endpoints for API sources\n\n"+
+			"   See the error details above for specific connection information.", err))
 	}
 	b.contextService = service
 	// Set IncludeContext from builder

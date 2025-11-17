@@ -188,7 +188,9 @@ func (b *ContextServiceBuilder) Build() (reasoning.ContextService, error) {
 
 	// Initialize document stores - create separate search engines for stores with their own database
 	if err := b.initializeDocumentStoresWithDatabases(defaultSearchEngine); err != nil {
-		return nil, fmt.Errorf("failed to initialize document stores: %w", err)
+		return nil, fmt.Errorf("failed to initialize document stores: %w\n"+
+			"  💡 This usually indicates a connection issue with required services.\n"+
+			"     Check the error details above for specific service connection problems.", err)
 	}
 
 	// Extract store names for scoping the context service
@@ -270,7 +272,7 @@ func (b *ContextServiceBuilder) initializeDocumentStoresWithDatabases(defaultSea
 		// Create and register document store
 		store, err := context.NewDocumentStore(storeName, storeConfig, searchEngine)
 		if err != nil {
-			return fmt.Errorf("failed to create document store '%s': %w", storeName, err)
+			return fmt.Errorf("failed to create document store '%s' (source: %s): %w", storeName, storeConfig.Source, err)
 		}
 
 		context.RegisterDocumentStore(store)

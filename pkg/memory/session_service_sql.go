@@ -130,7 +130,14 @@ func NewSQLSessionServiceFromConfig(cfg *config.SessionSQLConfig, agentID string
 
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		return nil, fmt.Errorf("failed to connect to %s database '%s' at %s:%d: %w\n"+
+			"  💡 Troubleshooting:\n"+
+			"     - Ensure the database server is running\n"+
+			"     - Check that the host and port are correct\n"+
+			"     - Verify network connectivity\n"+
+			"     - Confirm database credentials are correct\n"+
+			"     - For Docker: ensure the container is running (docker ps)",
+			cfg.Driver, cfg.Database, cfg.Host, cfg.Port, err)
 	}
 
 	return NewSQLSessionService(db, cfg.Driver, agentID)

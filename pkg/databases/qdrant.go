@@ -34,7 +34,12 @@ func NewQdrantDatabaseProviderFromConfig(config *config.VectorStoreConfig) (Data
 		UseTLS: useTLS,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Qdrant client: %w", err)
+		return nil, fmt.Errorf("failed to create Qdrant client for %s:%d: %w\n"+
+			"  💡 Troubleshooting:\n"+
+			"     - Ensure Qdrant is running\n"+
+			"     - Verify host and port configuration\n"+
+			"     - For Docker: start Qdrant container (docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant)",
+			config.Host, config.Port, err)
 	}
 
 	return &qdrantDatabaseProvider{
@@ -52,7 +57,15 @@ func (db *qdrantDatabaseProvider) Upsert(ctx context.Context, collection string,
 
 	exists, err := db.client.CollectionExists(ctx, collection)
 	if err != nil {
-		return fmt.Errorf("failed to check if collection exists: %w", err)
+		return fmt.Errorf("failed to connect to Qdrant at %s:%d (collection: %s): %w\n"+
+			"  💡 Troubleshooting:\n"+
+			"     - Ensure Qdrant is running (check: curl http://%s:%d/)\n"+
+			"     - Verify the host and port are correct\n"+
+			"     - Check network connectivity\n"+
+			"     - For Docker: ensure container is running (docker ps | grep qdrant)\n"+
+			"     - Check Qdrant logs for errors",
+			db.config.Host, db.config.Port, collection, err,
+			db.config.Host, db.config.Port)
 	}
 
 	if !exists {
@@ -252,7 +265,15 @@ func (db *qdrantDatabaseProvider) CreateCollection(ctx context.Context, collecti
 
 	exists, err := db.client.CollectionExists(ctx, collection)
 	if err != nil {
-		return fmt.Errorf("failed to check if collection exists: %w", err)
+		return fmt.Errorf("failed to connect to Qdrant at %s:%d (collection: %s): %w\n"+
+			"  💡 Troubleshooting:\n"+
+			"     - Ensure Qdrant is running (check: curl http://%s:%d/)\n"+
+			"     - Verify the host and port are correct\n"+
+			"     - Check network connectivity\n"+
+			"     - For Docker: ensure container is running (docker ps | grep qdrant)\n"+
+			"     - Check Qdrant logs for errors",
+			db.config.Host, db.config.Port, collection, err,
+			db.config.Host, db.config.Port)
 	}
 
 	if exists {

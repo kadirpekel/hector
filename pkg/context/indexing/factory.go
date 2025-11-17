@@ -103,7 +103,16 @@ func (f *DataSourceFactory) createSQLSource(cfg *config.DocumentStoreConfig) (Da
 	ctx := context.Background()
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		// Provide helpful error message with connection details and troubleshooting
+		return nil, fmt.Errorf("failed to connect to %s database '%s' at %s:%d: %w\n"+
+			"  💡 Troubleshooting:\n"+
+			"     - Ensure the database server is running\n"+
+			"     - Check that the host and port are correct\n"+
+			"     - Verify network connectivity (try: telnet %s %d)\n"+
+			"     - Confirm database credentials are correct\n"+
+			"     - For Docker: ensure the container is running (docker ps)",
+			sqlConfig.Driver, sqlConfig.Database, sqlConfig.Host, sqlConfig.Port, err,
+			sqlConfig.Host, sqlConfig.Port)
 	}
 
 	// Convert table configs
