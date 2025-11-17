@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -48,10 +49,13 @@ func (r *LLMReranker) Rerank(ctx context.Context, query string, results []databa
 		return results, nil
 	}
 
+	slog.Debug("LLM reranking started", "query", query, "total_results", len(results), "max_results", r.maxResults)
+
 	// Limit the number of results to rerank (for efficiency and token limits)
 	resultsToRerank := results
 	if len(resultsToRerank) > r.maxResults {
 		resultsToRerank = resultsToRerank[:r.maxResults]
+		slog.Debug("Limiting results for reranking", "original", len(results), "limited", len(resultsToRerank))
 	}
 
 	// Build prompt for LLM reranking
@@ -105,12 +109,25 @@ func (r *LLMReranker) Rerank(ctx context.Context, query string, results []databa
 	reranked := make([]databases.SearchResult, 0, len(rerankedIDs))
 	seen := make(map[string]bool)
 
-	// Add reranked results in LLM order
-	for _, id := range rerankedIDs {
+	// Add reranked results in LLM order with new relevance-based scores
+	// The LLM has already ranked them, so we assign scores based on position
+	for i, id := range rerankedIDs {
 		if result, exists := resultMap[id]; exists && !seen[id] {
-			// Boost score slightly for reranked results (they're more relevant)
-			result.Score = result.Score * 1.1
-			reranked = append(reranked, result)
+			// Assign score based on ranking position (1.0 for first, decreasing by 0.05 per position)
+			// This ensures highly ranked results get high scores that pass reasonable thresholds
+			newScore := 1.0 - (float32(i) * 0.05)
+			if newScore < 0.1 {
+				newScore = 0.1 // Minimum score for reranked results
+			}
+
+			// Create new result with all fields from original but updated score
+			rerankedResult := databases.SearchResult{
+				ID:       result.ID,
+				Score:    newScore,
+				Content:  result.Content,
+				Metadata: result.Metadata,
+			}
+			reranked = append(reranked, rerankedResult)
 			seen[id] = true
 		}
 	}
@@ -130,6 +147,8 @@ func (r *LLMReranker) Rerank(ctx context.Context, query string, results []databa
 	if len(reranked) > topK {
 		reranked = reranked[:topK]
 	}
+
+	slog.Debug("LLM reranking completed", "original_count", len(results), "reranked_count", len(reranked))
 
 	return reranked, nil
 }

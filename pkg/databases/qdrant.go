@@ -3,6 +3,7 @@ package databases
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -339,13 +340,20 @@ func (db *qdrantDatabaseProvider) HybridSearch(ctx context.Context, collection s
 	// Qdrant supports hybrid search via QueryPoints API with sparse + dense vectors
 	// For now, we'll use a fallback approach: parallel vector + keyword search with RRF fusion
 	// This works even if Qdrant's native hybrid search isn't available in the Go client
-	
+
 	// If alpha is 0.0, pure keyword search (not supported yet, fallback to vector)
 	// If alpha is 1.0, pure vector search
 	// If alpha is 0.5, balanced hybrid
-	
+
+	queryPreview := query
+	if len(query) > 50 {
+		queryPreview = query[:50] + "..."
+	}
+	slog.Debug("Qdrant hybrid search", "collection", collection, "alpha", alpha, "query", queryPreview)
+
 	if alpha >= 1.0 {
 		// Pure vector search
+		slog.Debug("Hybrid search: using pure vector (alpha >= 1.0)")
 		return db.SearchWithFilter(ctx, collection, vector, topK, filter)
 	}
 	

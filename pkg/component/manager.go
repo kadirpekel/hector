@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -71,10 +72,15 @@ func NewComponentManagerWithAgentRegistry(globalConfig *config.Config, agentRegi
 	}
 
 	for name, llmConfig := range cm.globalConfig.LLMs {
+		slog.Debug("Initializing LLM from config", "name", name, "type", llmConfig.Type, "model", llmConfig.Model)
 		_, err := cm.llmRegistry.CreateLLMFromConfig(name, llmConfig)
 		if err != nil {
+			// Log the error for debugging
+			slog.Error("Failed to initialize LLM", "name", name, "type", llmConfig.Type, "error", err)
 			return nil, fmt.Errorf("failed to initialize LLM '%s': %w", name, err)
 		}
+		// Debug: Log successful initialization
+		slog.Debug("Successfully initialized LLM", "name", name, "type", llmConfig.Type, "model", llmConfig.Model)
 	}
 
 	usedEmbedders := make(map[string]bool)

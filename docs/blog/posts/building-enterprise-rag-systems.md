@@ -77,6 +77,10 @@ By the end of this guide, you'll have a RAG system that:
 - ✅ Searches across multiple data sources (directory, SQL database, API)
 - ✅ Works 100% on-premise (no external APIs)
 - ✅ Searches all sources in parallel (fast!)
+- ✅ Advanced search modes: hybrid, multi-query, HyDE
+- ✅ LLM-based re-ranking for improved relevance
+- ✅ Multiple vector database options (Qdrant, Weaviate, Milvus, Chroma)
+- ✅ Built-in RAG evaluation tools
 - ✅ Provides enterprise observability (metrics, health checks)
 - ✅ Requires zero code (pure YAML configuration)
 
@@ -184,10 +188,25 @@ agents:
     document_stores: ["internal_docs"]
     tools:
       - "search"
+      - "evaluate_rag"  # Enable evaluation tool
     prompt:
       system_prompt: |
         You are an enterprise knowledge assistant.
         Always cite your sources when answering questions.
+    search:
+      top_k: 10
+      threshold: 0.5
+      preserve_case: true
+      
+      # Advanced search: Hybrid mode (keyword + vector)
+      search_mode: "hybrid"
+      hybrid_alpha: 0.6  # 60% vector, 40% keyword
+      
+      # Optional: Enable re-ranking for better results
+      # rerank:
+      #   enabled: true
+      #   llm: "reranker"
+      #   max_results: 20
 ```
 
 ### 1.4 Test It (Local Mode)
@@ -524,9 +543,136 @@ document_stores:
 
 ## Step 5: Add Enterprise Features
 
-Let's add production-ready features.
+Let's add production-ready features including advanced search capabilities.
 
-### 5.1 Enable Observability
+### 5.1 Enable Advanced Search Modes
+
+Hector supports multiple search strategies optimized for different use cases:
+
+**Hybrid Search (Recommended for Enterprise)**
+Combines keyword and semantic search for better recall:
+
+```yaml
+agents:
+  assistant:
+    search:
+      search_mode: "hybrid"
+      hybrid_alpha: 0.6  # 60% vector, 40% keyword
+      rerank:
+        enabled: true
+        llm: "gpt-4o-mini"
+        max_results: 20
+```
+
+**Multi-Query Expansion**
+Generates multiple query variations to improve recall:
+
+```yaml
+agents:
+  assistant:
+    search:
+      search_mode: "multi_query"
+      multi_query:
+        enabled: true
+        llm: "gpt-4o-mini"
+        num_variations: 3  # Generate 3 query variations
+```
+
+**HyDE (Hypothetical Document Embeddings)**
+Searches using an ideal answer document:
+
+```yaml
+agents:
+  assistant:
+    search:
+      search_mode: "hyde"
+      hyde:
+        enabled: true
+        llm: "gpt-4o-mini"
+```
+
+**Complete Advanced Configuration:**
+
+```yaml
+agents:
+  assistant:
+    search:
+      top_k: 10
+      threshold: 0.5
+      preserve_case: true
+      
+      # Hybrid search (best for enterprise documentation)
+      search_mode: "hybrid"
+      hybrid_alpha: 0.6
+      
+      # LLM-based re-ranking for better results
+      rerank:
+        enabled: true
+        llm: "gpt-4o-mini"
+        max_results: 20
+```
+
+### 5.2 Choose Your Vector Database
+
+Hector supports multiple vector databases. Choose based on your needs:
+
+**Qdrant (Default - Self-Hosted)**
+```yaml
+vector_stores:
+  qdrant:
+    type: "qdrant"
+    host: "localhost"
+    port: 6334
+```
+
+**Weaviate (Native Hybrid Search)**
+```yaml
+vector_stores:
+  weaviate:
+    type: "weaviate"
+    host: "localhost"
+    port: 8080
+```
+
+**Milvus (High-Performance)**
+```yaml
+vector_stores:
+  milvus:
+    type: "milvus"
+    host: "localhost"
+    port: 19530
+```
+
+**Chroma (Lightweight)**
+```yaml
+vector_stores:
+  chroma:
+    type: "chroma"
+    host: "localhost"
+    port: 8000
+```
+
+### 5.3 Enable RAG Evaluation
+
+Add the evaluation tool to measure search quality:
+
+```yaml
+agents:
+  assistant:
+    tools:
+      - "search"
+      - "evaluate_rag"  # Enable evaluation tool
+```
+
+The agent can now evaluate its own search results:
+
+```bash
+hector call "Evaluate the search results for: What are our password requirements?" \
+  --agent assistant \
+  --config config.yaml
+```
+
+### 5.4 Enable Observability
 
 Add to your `config.yaml`:
 
@@ -544,7 +690,7 @@ global:
 - **Health checks**: `http://localhost:8080/health`
 - **OpenTelemetry traces**: Distributed tracing support
 
-### 5.2 View Metrics
+### 5.5 View Metrics
 
 ```bash
 curl http://localhost:8080/metrics
@@ -556,6 +702,7 @@ You'll see metrics like:
 - Token usage
 - Error rates
 - Request counts
+- Search performance (hybrid vs vector)
 
 ---
 
@@ -857,6 +1004,10 @@ What you've learned:
 
 **Enhance your system:**
 
+- **Try different search modes**: Test hybrid, multi-query, and HyDE to see which works best for your data
+- **Enable re-ranking**: Improve result quality with LLM-based re-ranking
+- **Switch vector databases**: Try Weaviate for native hybrid search or Milvus for scale
+- **Evaluate performance**: Use the `evaluate_rag` tool to measure search quality
 - **Add more sources**: Connect to your actual databases and APIs
 - **Enable security**: Add JWT authentication, RBAC
 - **Scale up**: Deploy to Kubernetes for high availability
@@ -876,6 +1027,10 @@ You've built a complete enterprise RAG system that:
 
 - ✅ Works 100% on-premise (no external APIs)
 - ✅ Searches multiple data sources in parallel
+- ✅ Advanced search capabilities (hybrid, multi-query, HyDE)
+- ✅ LLM-based re-ranking for improved relevance
+- ✅ Multiple vector database options
+- ✅ Built-in evaluation tools
 - ✅ Provides enterprise observability
 - ✅ Requires zero code (pure YAML)
 

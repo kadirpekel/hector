@@ -197,7 +197,7 @@ type LLMRegistryForReranking interface {
 }
 
 // NewSearchEngine creates a new search engine
-// llmRegistry is optional - only needed if reranking is enabled
+// llmRegistry is required if reranking is enabled
 func NewSearchEngine(db databases.DatabaseProvider, embedder embedders.EmbedderProvider, searchConfig config.SearchConfig, llmRegistry LLMRegistryForReranking) (*SearchEngine, error) {
 	if db == nil {
 		return nil, NewSearchError("SearchEngine", "NewSearchEngine", "database provider is required", "", nil)
@@ -218,24 +218,24 @@ func NewSearchEngine(db databases.DatabaseProvider, embedder embedders.EmbedderP
 		if searchConfig.Rerank.LLM == "" {
 			return nil, NewSearchError("SearchEngine", "NewSearchEngine", "rerank.llm is required when reranking is enabled", "", nil)
 		}
-
-		// Get LLM provider from registry if available
-		if llmRegistry != nil {
-			llmProvider, err := llmRegistry.GetLLM(searchConfig.Rerank.LLM)
-			if err != nil {
-				return nil, NewSearchError("SearchEngine", "NewSearchEngine", fmt.Sprintf("failed to get LLM '%s' for reranking: %v", searchConfig.Rerank.LLM, err), "", err)
-			}
-
-			// Create reranker with LLM provider
-			maxResults := searchConfig.Rerank.MaxResults
-			if maxResults == 0 {
-				maxResults = 20
-			}
-			engine.reranker = reranking.NewLLMReranker(llmProvider, maxResults)
-		} else {
-			// If reranking is enabled but no LLM registry provided, use no-op
-			engine.reranker = reranking.NewNoOpReranker()
+		
+		// Get LLM provider from registry - this is required, not optional
+		if llmRegistry == nil {
+			return nil, NewSearchError("SearchEngine", "NewSearchEngine", "LLM registry is required when reranking is enabled", "", nil)
 		}
+		
+		llmProvider, err := llmRegistry.GetLLM(searchConfig.Rerank.LLM)
+		if err != nil {
+			return nil, NewSearchError("SearchEngine", "NewSearchEngine", fmt.Sprintf("failed to get reranker LLM '%s' from registry: %v", searchConfig.Rerank.LLM, err), "", err)
+		}
+		
+		// Create reranker with LLM provider
+		maxResults := searchConfig.Rerank.MaxResults
+		if maxResults == 0 {
+			maxResults = 20
+		}
+		engine.reranker = reranking.NewLLMReranker(llmProvider, maxResults)
+		slog.Debug("Reranker initialized successfully", "llm", searchConfig.Rerank.LLM, "max_results", maxResults)
 	}
 
 	// Initialize query expander if multi-query is enabled
@@ -362,12 +362,15 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 		searchMode = "vector" // Default
 	}
 
+	slog.Debug("Search mode selected", "mode", searchMode, "query", processedQuery, "collection", collection)
+
 	var results []databases.SearchResult
 	var err error
 
 	switch searchMode {
 	case "multi_query":
 		// Multi-query expansion: generate multiple query variations and merge results
+		slog.Debug("Using multi-query expansion", "query", processedQuery)
 		results, err = se.searchWithMultiQuery(ctx, embedCtx, processedQuery, collection, limit, filter)
 		if err != nil {
 			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "multi-query search failed", processedQuery, err)
@@ -375,6 +378,7 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 
 	case "hyde":
 		// HyDE: generate hypothetical document and search with its embedding
+		slog.Debug("Using HyDE search", "query", processedQuery)
 		results, err = se.searchWithHyDE(ctx, embedCtx, processedQuery, collection, limit, filter)
 		if err != nil {
 			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "HyDE search failed", processedQuery, err)
@@ -382,6 +386,7 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 
 	case "hybrid":
 		// Generate embedding for vector search
+		slog.Debug("Using hybrid search", "query", processedQuery, "alpha", se.config.HybridAlpha)
 		vector, embedErr := se.embedder.Embed(processedQuery)
 		if embedErr != nil {
 			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "failed to generate embedding", processedQuery, embedErr)
@@ -393,10 +398,12 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 			alpha = 0.5 // Default balanced hybrid
 		}
 
+		slog.Debug("Executing hybrid search", "alpha", alpha, "vector_dim", len(vector))
 		results, err = se.db.HybridSearch(embedCtx, collection, processedQuery, vector, limit, filter, alpha)
 		if err != nil {
 			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "hybrid search failed", processedQuery, err)
 		}
+		slog.Debug("Hybrid search completed", "results", len(results))
 
 	case "keyword":
 		// Pure keyword search (not fully implemented yet, fallback to hybrid with alpha=0)
@@ -413,6 +420,7 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 
 	default: // "vector" or empty
 		// Standard vector search
+		slog.Debug("Using vector search", "query", processedQuery)
 		vector, embedErr := se.embedder.Embed(processedQuery)
 		if embedErr != nil {
 			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "failed to generate embedding", processedQuery, embedErr)
@@ -422,9 +430,27 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 		if err != nil {
 			return nil, NewSearchError("SearchEngine", "SearchWithFilter", "database search failed", processedQuery, err)
 		}
+		slog.Debug("Vector search completed", "results", len(results))
 	}
 
-	// Filter results by similarity threshold from config
+	// Apply reranking BEFORE threshold filtering
+	// This is important because:
+	// 1. Initial vector search scores might be low
+	// 2. LLM reranking can identify truly relevant results
+	// 3. Threshold should be applied to reranked scores, not raw vector scores
+	if se.reranker != nil && len(results) > 0 {
+		slog.Debug("Applying LLM-based reranking", "results_before", len(results), "max_results", se.config.Rerank.MaxResults)
+		reranked, err := se.reranker.Rerank(ctx, processedQuery, results, limit)
+		if err != nil {
+			// Log error but continue with original results
+			slog.Warn("Reranking failed, continuing with original results", "error", err)
+		} else {
+			slog.Debug("Reranking completed", "results_after", len(reranked))
+			results = reranked
+		}
+	}
+
+	// Filter results by similarity threshold from config (after reranking)
 	if se.config.Threshold > 0 {
 		filtered := make([]databases.SearchResult, 0, len(results))
 		for _, result := range results {
@@ -433,17 +459,6 @@ func (se *SearchEngine) SearchWithFilter(ctx context.Context, query string, limi
 			}
 		}
 		results = filtered
-	}
-
-	// Apply reranking if enabled and reranker is available
-	if se.reranker != nil && len(results) > 0 {
-		reranked, err := se.reranker.Rerank(ctx, processedQuery, results, limit)
-		if err != nil {
-			// Log error but return original results
-			slog.Warn("Reranking failed, returning original results", "error", err)
-			return results, nil
-		}
-		results = reranked
 	}
 
 	return results, nil

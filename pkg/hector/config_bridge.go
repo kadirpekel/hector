@@ -502,18 +502,8 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 		contextBuilder := NewContextService().
 			WithDatabase(db).
 			WithEmbedder(embedder).
-			WithComponentManager(b.componentManager)
-
-		// Set search config
-		if agentCfg.Search.TopK > 0 {
-			contextBuilder = contextBuilder.TopK(agentCfg.Search.TopK)
-		}
-		if agentCfg.Search.Threshold > 0 {
-			contextBuilder = contextBuilder.Threshold(agentCfg.Search.Threshold)
-		}
-		if agentCfg.Search.PreserveCase != nil {
-			contextBuilder = contextBuilder.PreserveCase(*agentCfg.Search.PreserveCase)
-		}
+			WithComponentManager(b.componentManager).
+			WithSearchConfig(agentCfg.Search) // Pass full search config including rerank settings
 
 		// Add document stores
 		// If nil, add all stores; if has values, add only those

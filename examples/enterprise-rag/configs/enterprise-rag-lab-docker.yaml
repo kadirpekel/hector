@@ -1,8 +1,10 @@
 # Enterprise RAG Lab Configuration (Docker Compose)
 # Multi-source RAG system for on-premise deployment
 # This config uses Docker service names for inter-container communication
+# Showcases advanced search features: hybrid search, re-ranking, multi-query
 
-# Vector Database (Qdrant)
+# Vector Database Options
+# Qdrant is used by default, but you can switch to Weaviate, Milvus, or Chroma
 vector_stores:
   qdrant:
     type: "qdrant"
@@ -30,7 +32,8 @@ databases:
     max_conns: 25
     max_idle: 5
 
-# LLM Provider (Ollama - 100% local)
+# LLM Providers
+# Using Ollama for 100% on-premise deployment
 llms:
   local-llm:
     type: "ollama"
@@ -38,6 +41,16 @@ llms:
     model: "qwen3"  # Native tool calling support
     temperature: 0.7
     timeout: 300  # Increased timeout for qwen3
+  
+  # For re-ranking and advanced search features
+  # Note: In production, use a fast/cheap LLM for re-ranking
+  # For this example, we'll use the same LLM (qwen3) for simplicity
+  reranker:
+    type: "ollama"
+    host: "http://ollama:11434"
+    model: "qwen3"
+    temperature: 0.0  # Deterministic for ranking
+    timeout: 60
 
 # Document Stores - Multi-Source Configuration
 document_stores:
@@ -94,6 +107,7 @@ agents:
     
     tools:
       - "search"  # Enable semantic search
+      - "evaluate_rag"  # Enable RAG evaluation tool
     
     prompt:
       include_context: false  # Use search tool explicitly
@@ -114,6 +128,31 @@ agents:
       top_k: 10  # Default number of results for RAG context
       threshold: 0.5  # Minimum similarity score (50%)
       preserve_case: true  # Preserve case for code/documentation
+      
+      # Advanced Search Configuration
+      # Option 1: Hybrid Search (keyword + vector) - Recommended for enterprise
+      search_mode: "hybrid"  # "vector", "hybrid", "keyword", "multi_query", or "hyde"
+      hybrid_alpha: 0.6  # 60% vector, 40% keyword (balanced for enterprise docs)
+      
+      # Option 2: Multi-Query Expansion (improves recall for ambiguous queries)
+      # search_mode: "multi_query"
+      # multi_query:
+      #   enabled: true
+      #   llm: "reranker"
+      #   num_variations: 3
+      
+      # Option 3: HyDE (Hypothetical Document Embeddings)
+      # search_mode: "hyde"
+      # hyde:
+      #   enabled: true
+      #   llm: "reranker"
+      
+      # LLM-based Re-ranking (improves result quality)
+      # Note: Re-ranking requires an LLM. For production, use a fast/cheap model.
+      rerank:
+        enabled: true
+        llm: "reranker"  # Use dedicated re-ranking LLM
+        max_results: 20  # Re-rank top 20 results
 
 # Observability
 global:

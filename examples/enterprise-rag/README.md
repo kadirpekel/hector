@@ -19,6 +19,12 @@ This example demonstrates a complete, production-ready enterprise on-premise RAG
 │  │  (Mock)  │  │(Metrics)  │  │  Server  │            │
 │  └──────────┘  └──────────┘  └──────────┘            │
 │                                                          │
+│  Advanced Features:                                      │
+│  • Hybrid Search (keyword + vector)                     │
+│  • LLM-based Re-ranking                                  │
+│  • Multi-Query Expansion                                 │
+│  • RAG Evaluation Tools                                  │
+│                                                          │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -139,7 +145,7 @@ curl -X POST http://localhost:8080/v1/agents/enterprise_assistant/call \
 
 ## Example Queries
 
-Try these queries to test multi-source RAG:
+Try these queries to test multi-source RAG and advanced search features:
 
 1. **Security Questions:**
    - "What are our password requirements?"
@@ -159,6 +165,11 @@ Try these queries to test multi-source RAG:
 4. **Cross-Source Questions:**
    - "What security measures are in place for deployments?"
    - "How does our architecture support compliance?"
+
+5. **Testing Advanced Search:**
+   - Compare results with `search_mode: "vector"` vs `search_mode: "hybrid"`
+   - Test ambiguous queries with `search_mode: "multi_query"`
+   - Evaluate search quality using the `evaluate_rag` tool
 
 ## Service URLs
 
@@ -247,15 +258,57 @@ docker-compose down -v
 docker-compose down -v --rmi all
 ```
 
+## Advanced Features
+
+This example showcases Hector's advanced RAG capabilities:
+
+### Hybrid Search
+The configuration uses `search_mode: "hybrid"` which combines:
+- **Vector search**: Semantic similarity matching
+- **Keyword search**: Exact term matching
+- **Result fusion**: Reciprocal Rank Fusion (RRF) to combine results
+
+This provides better recall for enterprise documentation with specific technical terms.
+
+### LLM-based Re-ranking
+Enabled with `rerank.enabled: true`:
+- Re-ranks top 20 results using LLM understanding
+- Improves relevance of final results
+- Uses fast/cheap LLM model (qwen3) for cost efficiency
+
+### Multi-Query Expansion
+Available via `search_mode: "multi_query"`:
+- Generates multiple query variations
+- Searches each variation in parallel
+- Merges results with score boosting
+
+### RAG Evaluation
+The `evaluate_rag` tool allows agents to:
+- Measure search quality metrics
+- Evaluate context precision and recall
+- Assess answer relevance and faithfulness
+- Compare different search configurations
+
+### Vector Database Options
+While this example uses Qdrant, you can switch to:
+- **Weaviate**: Native hybrid search support
+- **Milvus**: High-performance, large-scale
+- **Chroma**: Lightweight, embedded
+- **Pinecone**: Managed cloud service
+
 ## Next Steps
 
 1. ✅ Verify all three sources index correctly
 2. ✅ Test semantic search across all sources
-3. ✅ Verify metadata filtering works
-4. ✅ Test incremental indexing (SQL)
-5. ✅ Validate security features
-6. ✅ Check observability metrics
-7. ✅ Document any issues or limitations
+3. ✅ Compare search modes: vector vs hybrid vs multi-query
+4. ✅ Test re-ranking impact on result quality
+5. ✅ Use `evaluate_rag` tool to measure performance
+6. ✅ Verify metadata filtering works
+7. ✅ Test incremental indexing (SQL)
+8. ✅ Try different vector databases
+9. ✅ Validate security features
+10. ✅ Check observability metrics
+11. ✅ Document any issues or limitations
 
 ## Lab Validation Checklist
 

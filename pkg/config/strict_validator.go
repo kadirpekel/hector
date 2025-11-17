@@ -145,8 +145,8 @@ func collectValidationErrors(err error, rawMap map[string]interface{}, result *S
 
 	// Try to extract structured error information
 	if strings.Contains(errStr, "has invalid keys:") {
-		// Parse unknown fields
-		unknownFields := extractUnknownFieldsImproved(errStr, rawMap)
+		// Parse unknown fields - pass the full error string for better context
+		unknownFields := extractUnknownFieldsImproved(errStr, rawMap, errStr)
 		result.UnknownFields = append(result.UnknownFields, unknownFields...)
 	} else if strings.Contains(errStr, "'") && (strings.Contains(errStr, "expected") || strings.Contains(errStr, "cannot unmarshal") || strings.Contains(errStr, "cannot decode")) {
 		// Type error
@@ -171,11 +171,42 @@ func collectValidationErrors(err error, rawMap map[string]interface{}, result *S
 }
 
 // extractUnknownFieldsImproved parses mapstructure error messages and provides suggestions
-func extractUnknownFieldsImproved(errMsg string, rawMap map[string]interface{}) []FieldError {
+func extractUnknownFieldsImproved(errMsg string, rawMap map[string]interface{}, fullErrMsg string) []FieldError {
 	var fieldErrors []FieldError
 
-	// mapstructure error format: "...has invalid keys: key1, key2, key3"
+	// mapstructure error format for nested structs:
+	// "1 error(s) decoding:\n\n* 'agents[enterprise_assistant].search' has invalid keys: search_mode, hybrid_alpha, rerank"
+	// or simpler: "...'search' has invalid keys: key1, key2, key3"
 	if idx := strings.Index(errMsg, "has invalid keys:"); idx != -1 {
+		// Extract the parent path (what comes before "has invalid keys:")
+		beforeKeys := errMsg[:idx]
+		parentPath := ""
+		
+		// Try multiple patterns to extract parent path
+		// Pattern 1: "...'search' has invalid keys: ..."
+		// Pattern 2: "...'agents[enterprise_assistant].search' has invalid keys: ..."
+		if lastQuote := strings.LastIndex(beforeKeys, "'"); lastQuote != -1 && lastQuote > 0 {
+			// Find the opening quote for this field
+			// Look backwards from lastQuote to find matching opening quote
+			openingQuote := -1
+			for i := lastQuote - 1; i >= 0; i-- {
+				if beforeKeys[i] == '\'' {
+					openingQuote = i
+					break
+				}
+			}
+			
+			if openingQuote != -1 && openingQuote < lastQuote {
+				parentPath = beforeKeys[openingQuote+1:lastQuote]
+				// Clean up path (remove array notation like [enterprise_assistant])
+				if bracketIdx := strings.Index(parentPath, "["); bracketIdx != -1 {
+					parentPath = parentPath[:bracketIdx]
+				}
+				// Remove any remaining path separators at the start
+				parentPath = strings.TrimPrefix(parentPath, "agents.")
+			}
+		}
+		
 		keysStr := errMsg[idx+len("has invalid keys:"):]
 		keysStr = strings.TrimSpace(keysStr)
 
@@ -188,17 +219,75 @@ func extractUnknownFieldsImproved(errMsg string, rawMap map[string]interface{}) 
 				continue
 			}
 
-			// Find suggestions using fuzzy matching
-			suggestions := findSimilarFields(key, validFields, 2)
-
-			fieldError := FieldError{
-				Field:       key,
-				Message:     "field is not recognized in configuration structure",
-				Suggestions: suggestions,
-				Severity:    SeverityError,
-				Context:     "This field does not exist in the configuration schema",
+			// Build full field path
+			// parentPath could be "search" or "agents[enterprise_assistant].search"
+			// We need to normalize it to just "search" for matching
+			normalizedParent := parentPath
+			if strings.Contains(parentPath, "[") {
+				// Extract just the last component after the last dot or bracket
+				parts := strings.Split(parentPath, ".")
+				if len(parts) > 0 {
+					lastPart := parts[len(parts)-1]
+					if bracketIdx := strings.Index(lastPart, "["); bracketIdx != -1 {
+						lastPart = lastPart[:bracketIdx]
+					}
+					normalizedParent = lastPart
+				}
 			}
-			fieldErrors = append(fieldErrors, fieldError)
+			// Remove "agents." prefix if present
+			normalizedParent = strings.TrimPrefix(normalizedParent, "agents.")
+
+			// Build full field path for matching
+			fullPath := key
+			if normalizedParent != "" {
+				fullPath = normalizedParent + "." + key
+			}
+
+			// Check if this field actually exists in the schema
+			// validFields contains patterns like:
+			// - "search.search_mode"
+			// - "agents.search.search_mode"
+			// - "agents.<agent-name>.search.search_mode"
+			fieldExists := false
+			
+			for _, validField := range validFields {
+				// Match exact path
+				if validField == fullPath {
+					fieldExists = true
+					break
+				}
+				// Match with "search." prefix (e.g., "search.search_mode")
+				if normalizedParent == "search" && validField == "search."+key {
+					fieldExists = true
+					break
+				}
+				// Match nested paths (e.g., "agents.search.search_mode")
+				if strings.HasSuffix(validField, ".search."+key) || 
+				   strings.Contains(validField, ".search."+key+".") ||
+				   strings.Contains(validField, "search."+key) {
+					fieldExists = true
+					break
+				}
+			}
+
+			// Only report as error if field doesn't exist
+			if !fieldExists {
+				// Find suggestions using fuzzy matching (try both with and without prefix)
+				suggestions := findSimilarFields(fullPath, validFields, 2)
+				if len(suggestions) == 0 {
+					// Also try without prefix for better suggestions
+					suggestions = findSimilarFields(key, validFields, 2)
+				}
+
+				fieldError := FieldError{
+					Field:       fullPath,
+					Message:     "field is not recognized in configuration structure",
+					Suggestions: suggestions,
+					Severity:    SeverityError,
+					Context:     "This field does not exist in the configuration schema",
+				}
+				fieldErrors = append(fieldErrors, fieldError)
+			}
 		}
 	}
 
@@ -243,6 +332,11 @@ func getValidFieldNames(t reflect.Type) []string {
 		t = t.Elem()
 	}
 
+	if t.Kind() == reflect.Map {
+		// For maps, recurse into the value type
+		return getValidFieldNames(t.Elem())
+	}
+
 	if t.Kind() != reflect.Struct {
 		return nil
 	}
@@ -270,7 +364,20 @@ func getValidFieldNames(t reflect.Type) []string {
 				fieldType = fieldType.Elem()
 			}
 
-			if fieldType.Kind() == reflect.Struct {
+			// Handle maps (e.g., agents map[string]*AgentConfig)
+			if fieldType.Kind() == reflect.Map {
+				// Recurse into map value type with prefix
+				mapValueType := fieldType.Elem()
+				if mapValueType.Kind() == reflect.Ptr {
+					mapValueType = mapValueType.Elem()
+				}
+				nestedFields := getValidFieldNames(mapValueType)
+				for _, nf := range nestedFields {
+					fields = append(fields, fieldName+".<agent-name>."+nf)
+					// Also add without agent name for direct matching
+					fields = append(fields, fieldName+"."+nf)
+				}
+			} else if fieldType.Kind() == reflect.Struct {
 				// Add nested fields with prefix
 				nestedFields := getValidFieldNames(fieldType)
 				for _, nf := range nestedFields {
