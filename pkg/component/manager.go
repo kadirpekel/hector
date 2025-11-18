@@ -45,7 +45,10 @@ func NewComponentManager(globalConfig *config.Config) (*ComponentManager, error)
 func NewComponentManagerWithAgentRegistry(globalConfig *config.Config, agentRegistry interface{}) (*ComponentManager, error) {
 	ctx := context.Background()
 
-	toolRegistry, err := tools.NewToolRegistryWithConfigAndAgentRegistry(globalConfig.Tools, agentRegistry)
+	toolRegistry, err := tools.NewToolRegistryBuilder().
+		WithConfig(globalConfig.Tools).
+		WithAgentRegistry(agentRegistry).
+		Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool registry: %w", err)
 	}

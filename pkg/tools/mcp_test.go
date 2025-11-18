@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewMCPToolSource(t *testing.T) {
-	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server")
+	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server").Build()
 	if source == nil {
 		t.Fatal("NewMCPToolSource() returned nil")
 	}
@@ -24,7 +24,7 @@ func TestNewMCPToolSource(t *testing.T) {
 }
 
 func TestNewMCPToolSource_WithEmptyName(t *testing.T) {
-	source := NewMCPToolSource("", "http://localhost:8080", "Test MCP server")
+	source := NewMCPToolSource("", "http://localhost:8080", "Test MCP server").Build()
 	if source == nil {
 		t.Fatal("NewMCPToolSource() returned nil")
 	}
@@ -90,7 +90,7 @@ func TestMCPToolSource_GetName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			source := NewMCPToolSource(tt.sourceName, "http://localhost:8080", "Test")
+			source := NewMCPToolSource(tt.sourceName, "http://localhost:8080", "Test").Build()
 			result := source.GetName()
 			if result != tt.expected {
 				t.Errorf("GetName() = %v, want %v", result, tt.expected)
@@ -100,7 +100,7 @@ func TestMCPToolSource_GetName(t *testing.T) {
 }
 
 func TestMCPToolSource_GetType(t *testing.T) {
-	source := NewMCPToolSource("test", "http://localhost:8080", "Test")
+	source := NewMCPToolSource("test", "http://localhost:8080", "Test").Build()
 	result := source.GetType()
 	if result != "mcp" {
 		t.Errorf("GetType() = %v, want 'mcp'", result)
@@ -108,7 +108,7 @@ func TestMCPToolSource_GetType(t *testing.T) {
 }
 
 func TestMCPToolSource_ListTools(t *testing.T) {
-	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server")
+	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server").Build()
 
 	tools := source.ListTools()
 	if len(tools) != 0 {
@@ -117,7 +117,7 @@ func TestMCPToolSource_ListTools(t *testing.T) {
 }
 
 func TestMCPToolSource_GetTool(t *testing.T) {
-	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server")
+	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server").Build()
 
 	_, exists := source.GetTool("non-existent")
 	if exists {
@@ -126,7 +126,7 @@ func TestMCPToolSource_GetTool(t *testing.T) {
 }
 
 func TestMCPToolSource_DiscoverTools_WithoutURL(t *testing.T) {
-	source := NewMCPToolSource("test-mcp", "", "Test MCP server")
+	source := NewMCPToolSource("test-mcp", "", "Test MCP server").Build()
 
 	ctx := context.Background()
 	err := source.DiscoverTools(ctx)
@@ -136,7 +136,7 @@ func TestMCPToolSource_DiscoverTools_WithoutURL(t *testing.T) {
 }
 
 func TestMCPToolSource_DiscoverTools_WithInvalidURL(t *testing.T) {
-	source := NewMCPToolSource("test-mcp", "http://invalid-url-that-does-not-exist:9999", "Test MCP server")
+	source := NewMCPToolSource("test-mcp", "http://invalid-url-that-does-not-exist:9999", "Test MCP server").Build()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -234,7 +234,7 @@ func TestMCPToolSource_CallParams(t *testing.T) {
 
 func TestMCPToolSource_MCPTool(t *testing.T) {
 
-	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server")
+	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server").Build()
 
 	toolInfo := ToolInfo{
 		Name:        "test_tool",
@@ -266,7 +266,7 @@ func TestMCPToolSource_MCPTool(t *testing.T) {
 }
 
 func TestMCPToolSource_MCPTool_Execute(t *testing.T) {
-	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server")
+	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server").Build()
 
 	toolInfo := ToolInfo{
 		Name:        "test_tool",
@@ -300,7 +300,7 @@ func TestMCPToolSource_MCPTool_Execute(t *testing.T) {
 }
 
 func TestMCPToolSource_Concurrency(t *testing.T) {
-	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server")
+	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server").Build()
 
 	done := make(chan bool, 2)
 
@@ -330,7 +330,7 @@ func TestMCPToolSource_WithConfig_InvalidURL(t *testing.T) {
 }
 
 func TestMCPToolSource_HTTPClient(t *testing.T) {
-	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server")
+	source := NewMCPToolSource("test-mcp", "http://localhost:8080", "Test MCP server").Build()
 
 	if source.httpClient == nil {
 		t.Error("Expected HTTP client to be initialized")

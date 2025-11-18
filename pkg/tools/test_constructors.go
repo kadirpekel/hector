@@ -2,11 +2,9 @@ package tools
 
 import (
 	"context"
-	"net/http"
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/config"
-	"github.com/kadirpekel/hector/pkg/httpclient"
 )
 
 func NewCommandToolForTesting() *CommandTool {
@@ -56,19 +54,9 @@ func NewSearchToolForTesting() *SearchTool {
 }
 
 func NewMCPToolSourceForTesting(name, url string) *MCPToolSource {
-	return &MCPToolSource{
-		name:        name,
-		url:         url,
-		description: "Test MCP source",
-		httpClient: httpclient.New(
-			httpclient.WithHTTPClient(&http.Client{
-				Timeout: 1 * time.Second,
-			}),
-			httpclient.WithMaxRetries(1),
-		),
-		tools:     make(map[string]Tool),
-		ssTimeout: DefaultMCPSSEResponseTimeout,
-	}
+	return NewMCPToolSource(name, url, "Test MCP source").
+		WithTimeout(1 * time.Second).
+		Build()
 }
 
 func NewLocalToolSourceForTesting() *LocalToolSource {

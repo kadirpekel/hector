@@ -20,6 +20,7 @@ type ToolEntry struct {
 	Source     ToolSource `json:"source"`
 	SourceType string     `json:"source_type"`
 	Name       string     `json:"name"`
+	Internal   bool       `json:"internal"` // If true, tool is not visible to agents (used only for document parsing, etc.)
 }
 
 type ToolRegistryError struct {
@@ -55,22 +56,55 @@ func NewToolRegistry() *ToolRegistry {
 	}
 }
 
-func NewToolRegistryWithConfig(toolConfig map[string]*config.ToolConfig) (*ToolRegistry, error) {
-	return NewToolRegistryWithConfigAndAgentRegistry(toolConfig, nil)
+// ToolRegistryBuilder provides a fluent API for building tool registries
+type ToolRegistryBuilder struct {
+	toolConfig    map[string]*config.ToolConfig
+	agentRegistry interface{}
 }
 
-func NewToolRegistryWithConfigAndAgentRegistry(toolConfig map[string]*config.ToolConfig, agentRegistry interface{}) (*ToolRegistry, error) {
+// NewToolRegistryBuilder creates a new tool registry builder
+func NewToolRegistryBuilder() *ToolRegistryBuilder {
+	return &ToolRegistryBuilder{}
+}
+
+// WithConfig sets the tool configuration
+func (b *ToolRegistryBuilder) WithConfig(toolConfig map[string]*config.ToolConfig) *ToolRegistryBuilder {
+	b.toolConfig = toolConfig
+	return b
+}
+
+// WithAgentRegistry sets the agent registry (for agent_call tool)
+func (b *ToolRegistryBuilder) WithAgentRegistry(agentRegistry interface{}) *ToolRegistryBuilder {
+	b.agentRegistry = agentRegistry
+	return b
+}
+
+// Build creates the ToolRegistry
+func (b *ToolRegistryBuilder) Build() (*ToolRegistry, error) {
 	registry := &ToolRegistry{
 		BaseRegistry: registry.NewBaseRegistry[ToolEntry](),
 	}
 
-	if toolConfig != nil {
-		if err := registry.initializeFromConfigWithAgentRegistry(toolConfig, agentRegistry); err != nil {
+	if b.toolConfig != nil {
+		if err := registry.initializeFromConfigWithAgentRegistry(b.toolConfig, b.agentRegistry); err != nil {
 			return nil, fmt.Errorf("failed to initialize tool registry from config: %w", err)
 		}
 	}
 
 	return registry, nil
+}
+
+// Deprecated: Use NewToolRegistryBuilder().WithConfig(toolConfig).Build() instead
+func NewToolRegistryWithConfig(toolConfig map[string]*config.ToolConfig) (*ToolRegistry, error) {
+	return NewToolRegistryBuilder().WithConfig(toolConfig).Build()
+}
+
+// Deprecated: Use NewToolRegistryBuilder().WithConfig(toolConfig).WithAgentRegistry(agentRegistry).Build() instead
+func NewToolRegistryWithConfigAndAgentRegistry(toolConfig map[string]*config.ToolConfig, agentRegistry interface{}) (*ToolRegistry, error) {
+	return NewToolRegistryBuilder().
+		WithConfig(toolConfig).
+		WithAgentRegistry(agentRegistry).
+		Build()
 }
 
 func (r *ToolRegistry) RegisterSource(source ToolSource) error {
@@ -90,11 +124,18 @@ func (r *ToolRegistry) RegisterSource(source ToolSource) error {
 			continue
 		}
 
+		// Check if MCP source is internal
+		isInternal := false
+		if mcpSource, ok := source.(*MCPToolSource); ok {
+			isInternal = mcpSource.internal
+		}
+
 		entry := ToolEntry{
 			Tool:       tool,
 			Source:     source,
 			SourceType: source.GetType(),
 			Name:       toolInfo.Name,
+			Internal:   isInternal,
 		}
 
 		if err := r.Register(toolInfo.Name, entry); err != nil {
@@ -133,11 +174,18 @@ func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 				continue
 			}
 
+			// Check if MCP source is internal
+			isInternal := false
+			if mcpSource, ok := repo.(*MCPToolSource); ok {
+				isInternal = mcpSource.internal
+			}
+
 			entry := ToolEntry{
 				Tool:       tool,
 				Source:     repo,
 				SourceType: repo.GetType(),
 				Name:       toolInfo.Name,
+				Internal:   isInternal,
 			}
 
 			if err := r.Register(toolInfo.Name, entry); err != nil {
@@ -172,6 +220,18 @@ func (r *ToolRegistry) initializeFromConfigWithAgentRegistry(toolConfig map[stri
 
 		if err := r.RegisterSource(repo); err != nil {
 			return fmt.Errorf("failed to register local source: %w", err)
+		}
+
+		// Mark local tools as internal based on their config
+		for toolName, toolConfig := range localTools {
+			if toolConfig != nil && toolConfig.Internal != nil && *toolConfig.Internal {
+				if entry, exists := r.Get(toolName); exists {
+					entry.Internal = true
+					if err := r.Register(toolName, entry); err != nil {
+						return fmt.Errorf("failed to mark tool %s as internal: %w", toolName, err)
+					}
+				}
+			}
 		}
 	}
 
@@ -225,8 +285,19 @@ func (r *ToolRegistry) GetTool(name string) (Tool, error) {
 }
 
 func (r *ToolRegistry) ListTools() []ToolInfo {
+	return r.ListToolsWithFilter(false)
+}
+
+// ListToolsWithFilter returns tools, optionally filtering out internal tools
+// If excludeInternal is true, only non-internal tools are returned
+func (r *ToolRegistry) ListToolsWithFilter(excludeInternal bool) []ToolInfo {
 	var tools []ToolInfo
 	for _, entry := range r.List() {
+		// Skip internal tools if filtering is enabled
+		if excludeInternal && entry.Internal {
+			continue
+		}
+
 		info := entry.Tool.GetInfo()
 
 		info.ServerURL = entry.Source.GetName()

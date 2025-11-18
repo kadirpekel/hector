@@ -394,10 +394,12 @@ func (s *DefaultToolService) GetAvailableTools() []llms.ToolDefinition {
 		return []llms.ToolDefinition{}
 	}
 
-	allToolInfos := s.toolRegistry.ListTools()
+	// Always exclude internal tools (they're only for document parsing, not agent use)
+	allToolInfos := s.toolRegistry.ListToolsWithFilter(true)
 	result := make([]llms.ToolDefinition, 0, len(allToolInfos))
 
 	if s.allowedTools == nil {
+		// nil means all non-internal tools
 		for _, toolInfo := range allToolInfos {
 			result = append(result, convertToolInfoToToolDefinition(toolInfo))
 		}

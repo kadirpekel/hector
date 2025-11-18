@@ -795,6 +795,8 @@ func CreateZeroConfig(source interface{}) *Config {
 			Type:      "mcp",
 			Enabled:   BoolPtr(true),
 			ServerURL: mcpURL,
+			// Note: Internal flag not set here - by default MCP tools are visible to agents
+			// Users can use a config file with internal: true if they want to hide them
 		}
 	}
 

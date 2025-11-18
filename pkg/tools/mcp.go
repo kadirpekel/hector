@@ -32,6 +32,7 @@ type MCPToolSource struct {
 	sessionID   string        // Session ID for streamable-http transport
 	sessionMu   sync.RWMutex  // Separate mutex for sessionID to avoid deadlock
 	ssTimeout   time.Duration // Timeout for SSE response reading
+	internal    bool          // If true, tools from this source are not visible to agents
 }
 
 type MCPTool struct {
@@ -63,43 +64,82 @@ type CallParams struct {
 	Arguments map[string]interface{} `json:"arguments"`
 }
 
-func NewMCPToolSource(name, url, description string) *MCPToolSource {
-	return NewMCPToolSourceWithTLS(name, url, description, nil, "")
+// MCPToolSourceBuilder provides a fluent API for building MCP tool sources
+type MCPToolSourceBuilder struct {
+	name               string
+	url                string
+	description        string
+	insecureSkipVerify *bool
+	caCertificate      string
+	ssTimeout          time.Duration
+	internal           bool
 }
 
-func NewMCPToolSourceWithTLS(name, url, description string, insecureSkipVerify *bool, caCertificate string) *MCPToolSource {
-	return NewMCPToolSourceWithTLSAndTimeout(name, url, description, insecureSkipVerify, caCertificate, DefaultMCPSSEResponseTimeout)
-}
-
-func NewMCPToolSourceWithTLSAndTimeout(name, url, description string, insecureSkipVerify *bool, caCertificate string, ssTimeout time.Duration) *MCPToolSource {
+// NewMCPToolSource creates a new MCP tool source builder
+func NewMCPToolSource(name, url, description string) *MCPToolSourceBuilder {
 	if name == "" {
 		name = "mcp"
 	}
+	return &MCPToolSourceBuilder{
+		name:        name,
+		url:         url,
+		description: description,
+		ssTimeout:   DefaultMCPSSEResponseTimeout,
+		internal:    false,
+	}
+}
 
+// WithInsecureSkipVerify sets TLS certificate verification
+func (b *MCPToolSourceBuilder) WithInsecureSkipVerify(skip bool) *MCPToolSourceBuilder {
+	b.insecureSkipVerify = &skip
+	return b
+}
+
+// WithCACertificate sets the CA certificate path
+func (b *MCPToolSourceBuilder) WithCACertificate(path string) *MCPToolSourceBuilder {
+	b.caCertificate = path
+	return b
+}
+
+// WithTimeout sets the SSE response timeout
+func (b *MCPToolSourceBuilder) WithTimeout(timeout time.Duration) *MCPToolSourceBuilder {
+	b.ssTimeout = timeout
+	return b
+}
+
+// WithInternal marks the source as internal (not visible to agents)
+func (b *MCPToolSourceBuilder) WithInternal(internal bool) *MCPToolSourceBuilder {
+	b.internal = internal
+	return b
+}
+
+// Build creates the MCPToolSource
+func (b *MCPToolSourceBuilder) Build() *MCPToolSource {
 	// Use default timeout if not specified
+	ssTimeout := b.ssTimeout
 	if ssTimeout == 0 {
 		ssTimeout = DefaultMCPSSEResponseTimeout
 	}
 
 	// Configure TLS using centralized function
 	tlsConfig := &httpclient.TLSConfig{}
-	if insecureSkipVerify != nil {
-		tlsConfig.InsecureSkipVerify = *insecureSkipVerify
+	if b.insecureSkipVerify != nil {
+		tlsConfig.InsecureSkipVerify = *b.insecureSkipVerify
 	}
-	if caCertificate != "" {
-		tlsConfig.CACertificate = caCertificate
+	if b.caCertificate != "" {
+		tlsConfig.CACertificate = b.caCertificate
 	}
 
 	transport, err := httpclient.ConfigureTLS(tlsConfig)
 	if err != nil {
-		fmt.Printf("Warning: Failed to configure TLS for MCP server %s: %v\n", name, err)
+		fmt.Printf("Warning: Failed to configure TLS for MCP server %s: %v\n", b.name, err)
 		// Fallback to default transport
 		transport = &http.Transport{}
 	}
 
 	// Show warning if insecure skip verify is enabled
-	if insecureSkipVerify != nil && *insecureSkipVerify {
-		fmt.Printf("Warning: TLS certificate verification disabled for MCP server %s (insecure_skip_verify=true)\n", name)
+	if b.insecureSkipVerify != nil && *b.insecureSkipVerify {
+		fmt.Printf("Warning: TLS certificate verification disabled for MCP server %s (insecure_skip_verify=true)\n", b.name)
 	}
 
 	httpClient := &http.Client{
@@ -108,9 +148,9 @@ func NewMCPToolSourceWithTLSAndTimeout(name, url, description string, insecureSk
 	}
 
 	return &MCPToolSource{
-		name:        name,
-		url:         url,
-		description: description,
+		name:        b.name,
+		url:         b.url,
+		description: b.description,
 		httpClient: httpclient.New(
 			httpclient.WithHTTPClient(httpClient),
 			httpclient.WithMaxRetries(3),
@@ -118,6 +158,7 @@ func NewMCPToolSourceWithTLSAndTimeout(name, url, description string, insecureSk
 		),
 		tools:     make(map[string]Tool),
 		ssTimeout: ssTimeout,
+		internal:  b.internal,
 	}
 }
 
@@ -136,14 +177,22 @@ func NewMCPToolSourceWithConfig(toolConfig *config.ToolConfig) (*MCPToolSource, 
 		ssTimeout = parsedTimeout
 	}
 
-	return NewMCPToolSourceWithTLSAndTimeout(
-		"mcp",
-		toolConfig.ServerURL,
-		toolConfig.Description,
-		toolConfig.InsecureSkipVerify,
-		toolConfig.CACertificate,
-		ssTimeout,
-	), nil
+	// Check if source is marked as internal
+	internal := false
+	if toolConfig.Internal != nil {
+		internal = *toolConfig.Internal
+	}
+
+	builder := NewMCPToolSource("mcp", toolConfig.ServerURL, toolConfig.Description)
+	if toolConfig.InsecureSkipVerify != nil {
+		builder = builder.WithInsecureSkipVerify(*toolConfig.InsecureSkipVerify)
+	}
+	if toolConfig.CACertificate != "" {
+		builder = builder.WithCACertificate(toolConfig.CACertificate)
+	}
+	builder = builder.WithTimeout(ssTimeout)
+	builder = builder.WithInternal(internal)
+	return builder.Build(), nil
 }
 
 func (r *MCPToolSource) GetName() string {
