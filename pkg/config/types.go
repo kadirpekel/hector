@@ -1088,6 +1088,7 @@ type ToolConfig struct {
 	Type        string `yaml:"type"`
 	Enabled     *bool  `yaml:"enabled,omitempty"`
 	Description string `yaml:"description,omitempty"`
+	Internal    *bool  `yaml:"internal,omitempty"` // If true, tool is not visible to agents (used only for document parsing, etc.)
 
 	AllowedCommands  []string `yaml:"allowed_commands,omitempty"`
 	WorkingDirectory string   `yaml:"working_directory,omitempty"`

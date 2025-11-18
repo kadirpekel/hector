@@ -219,11 +219,25 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 	// - If Tools is empty slice: no tools are added (explicit empty list)
 	// - If Tools has items: only those specific tools are added
 	var toolsToAdd []string
+	var filteredCount int
 	if agentCfg.Tools == nil {
 		// Use all tools from registry (includes MCP tools, default tools from EnableTools, etc.)
 		allTools := toolRegistry.ListTools()
 		for _, toolInfo := range allTools {
+			// Check visibility: MCP tools use source name (ServerURL), native tools use tool name
+			configKey := toolInfo.Name
+			if toolInfo.ServerURL != "" {
+				configKey = toolInfo.ServerURL
+			}
+
+			if toolCfg, exists := b.config.Tools[configKey]; exists && toolCfg != nil && toolCfg.Internal != nil && *toolCfg.Internal {
+				filteredCount++
+				continue
+			}
 			toolsToAdd = append(toolsToAdd, toolInfo.Name)
+		}
+		if filteredCount > 0 {
+			fmt.Printf("✓ Filtered %d internal tool(s) from agent '%s' (not visible to agents)\n", filteredCount, agentCfg.Name)
 		}
 	} else {
 		// Use explicitly listed tools

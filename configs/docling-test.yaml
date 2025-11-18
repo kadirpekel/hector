@@ -28,6 +28,7 @@ tools:
   docling:
     type: "mcp"
     enabled: true
+    internal: true  # Not visible to agents (used only for document parsing)
     server_url: "http://localhost:3000/mcp"  # MCP endpoint
     description: "Docling - Advanced document parsing and conversion"
     # insecure_skip_verify: true  # Only for dev/test with self-signed certificates
