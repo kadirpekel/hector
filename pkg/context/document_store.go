@@ -1184,49 +1184,6 @@ func (ds *DocumentStore) saveIndexState(files map[string]FileIndexInfo, totalChu
 	return nil
 }
 
-func (ds *DocumentStore) shouldReindexFile(path string, currentModTime time.Time, existingDocs map[string]FileIndexInfo) bool {
-	if ds.config.EnableIncrementalIndexing == nil || !*ds.config.EnableIncrementalIndexing {
-		return true
-	}
-
-	if len(existingDocs) == 0 {
-		return true
-	}
-
-	relPath, err := filepath.Rel(ds.sourcePath, path)
-	if err != nil {
-		return true
-	}
-
-	storedInfo, exists := existingDocs[relPath]
-	if !exists {
-		// New file
-		return true
-	}
-
-	// Check file size first (fastest)
-	info, err := os.Stat(path)
-	if err != nil {
-		return true
-	}
-	if info.Size() != storedInfo.Size {
-		return true
-	}
-
-	// Check modification time
-	currentUnix := currentModTime.Unix()
-	if currentUnix > storedInfo.ModTime {
-		// File modified - verify with hash if available
-		if storedInfo.Hash != "" {
-			currentHash := ds.computeFileHash(path)
-			return currentHash != storedInfo.Hash
-		}
-		return true
-	}
-
-	return false
-}
-
 func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs map[string]FileIndexInfo, foundFiles map[string]bool) ([]string, map[string]bool, error) {
 	// Skip cleanup if no existing docs
 	if len(existingDocs) == 0 {

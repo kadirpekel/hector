@@ -446,7 +446,7 @@ func cleanSchema(schema map[string]interface{}) map[string]interface{} {
 			}
 		case map[string]interface{}:
 			// Recursively clean nested schemas
-			if cleanedNested := cleanSchema(v); cleanedNested != nil && len(cleanedNested) > 0 {
+			if cleanedNested := cleanSchema(v); len(cleanedNested) > 0 {
 				cleaned[key] = cleanedNested
 			}
 		case []interface{}:
@@ -458,7 +458,7 @@ func cleanSchema(schema map[string]interface{}) map[string]interface{} {
 						cleanedArray = append(cleanedArray, str)
 					}
 				} else if nestedMap, ok := item.(map[string]interface{}); ok {
-					if cleanedNested := cleanSchema(nestedMap); cleanedNested != nil && len(cleanedNested) > 0 {
+					if cleanedNested := cleanSchema(nestedMap); len(cleanedNested) > 0 {
 						cleanedArray = append(cleanedArray, cleanedNested)
 					}
 				} else {
