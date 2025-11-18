@@ -302,7 +302,11 @@ func (ds *DocumentStore) indexFromDataSource() error {
 					failedDocs = append(failedDocs, fmt.Sprintf("%s: %v", d.ID, err))
 					failedDocsMu.Unlock()
 
-					// Don't log errors during indexing to avoid breaking progress bar display
+					// Log error details for debugging (at debug level to avoid breaking progress bar)
+					slog.Debug("Document indexing failed",
+						"document_id", d.ID,
+						"error", err.Error(),
+						"extractor", extractorName)
 					// Errors will be shown in the final summary
 				} else {
 					ds.progressTracker.IncrementIndexed()

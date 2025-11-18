@@ -186,7 +186,11 @@ func (r *ToolRegistry) initializeFromConfigWithAgentRegistry(toolConfig map[stri
 			continue
 		}
 
-		mcpSource := NewMCPToolSourceWithTLS(toolName, serverURL, toolConfig.Description, toolConfig.InsecureSkipVerify, toolConfig.CACertificate)
+		mcpSource, err := NewMCPToolSourceWithConfig(toolConfig)
+		if err != nil {
+			slog.Warn("Failed to create MCP source", "source", toolName, "error", err)
+			continue
+		}
 
 		if err := r.RegisterSource(mcpSource); err != nil {
 			slog.Warn("Failed to register MCP source", "source", toolName, "error", err)
@@ -195,6 +199,20 @@ func (r *ToolRegistry) initializeFromConfigWithAgentRegistry(toolConfig map[stri
 	}
 
 	return nil
+}
+
+// ListMCPToolNames returns a list of all available MCP tool names from all MCP sources
+// This is used for debugging when tools are not found
+func (r *ToolRegistry) ListMCPToolNames() []string {
+	var toolNames []string
+	for _, entry := range r.List() {
+		if entry.SourceType == "mcp" {
+			if mcpSource, ok := entry.Source.(interface{ ListMCPToolNames() []string }); ok {
+				toolNames = append(toolNames, mcpSource.ListMCPToolNames()...)
+			}
+		}
+	}
+	return toolNames
 }
 
 func (r *ToolRegistry) GetTool(name string) (Tool, error) {

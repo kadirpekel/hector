@@ -199,7 +199,8 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 			slog.Debug("MCP tool returned failure, trying next tool",
 				"tool", toolName,
 				"path", path,
-				"error", result.Error)
+				"error", result.Error,
+				"content_length", len(result.Content))
 			continue
 		}
 
@@ -240,7 +241,9 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 		if content == "" {
 			slog.Debug("MCP tool returned empty content, trying next tool",
 				"tool", toolName,
-				"path", path)
+				"path", path,
+				"result_success", result.Success,
+				"result_error", result.Error)
 			continue
 		}
 

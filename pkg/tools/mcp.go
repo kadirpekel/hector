@@ -16,6 +16,12 @@ import (
 	"github.com/kadirpekel/hector/pkg/httpclient"
 )
 
+const (
+	// DefaultMCPSSEResponseTimeout is the default timeout for reading SSE responses from MCP servers
+	// Set to 5 minutes to accommodate long-running operations like document parsing with OCR
+	DefaultMCPSSEResponseTimeout = 5 * time.Minute
+)
+
 type MCPToolSource struct {
 	name        string
 	url         string
@@ -23,8 +29,9 @@ type MCPToolSource struct {
 	httpClient  *httpclient.Client
 	tools       map[string]Tool
 	mu          sync.RWMutex
-	sessionID   string       // Session ID for streamable-http transport
-	sessionMu   sync.RWMutex // Separate mutex for sessionID to avoid deadlock
+	sessionID   string        // Session ID for streamable-http transport
+	sessionMu   sync.RWMutex  // Separate mutex for sessionID to avoid deadlock
+	ssTimeout   time.Duration // Timeout for SSE response reading
 }
 
 type MCPTool struct {
@@ -61,8 +68,17 @@ func NewMCPToolSource(name, url, description string) *MCPToolSource {
 }
 
 func NewMCPToolSourceWithTLS(name, url, description string, insecureSkipVerify *bool, caCertificate string) *MCPToolSource {
+	return NewMCPToolSourceWithTLSAndTimeout(name, url, description, insecureSkipVerify, caCertificate, DefaultMCPSSEResponseTimeout)
+}
+
+func NewMCPToolSourceWithTLSAndTimeout(name, url, description string, insecureSkipVerify *bool, caCertificate string, ssTimeout time.Duration) *MCPToolSource {
 	if name == "" {
 		name = "mcp"
+	}
+
+	// Use default timeout if not specified
+	if ssTimeout == 0 {
+		ssTimeout = DefaultMCPSSEResponseTimeout
 	}
 
 	// Configure TLS using centralized function
@@ -100,7 +116,8 @@ func NewMCPToolSourceWithTLS(name, url, description string, insecureSkipVerify *
 			httpclient.WithMaxRetries(3),
 			httpclient.WithBaseDelay(2*time.Second),
 		),
-		tools: make(map[string]Tool),
+		tools:     make(map[string]Tool),
+		ssTimeout: ssTimeout,
 	}
 }
 
@@ -109,12 +126,23 @@ func NewMCPToolSourceWithConfig(toolConfig *config.ToolConfig) (*MCPToolSource, 
 		return nil, fmt.Errorf("server_url is required for MCP source")
 	}
 
-	return NewMCPToolSourceWithTLS(
+	// Parse timeout from config if provided
+	ssTimeout := DefaultMCPSSEResponseTimeout
+	if toolConfig.Timeout != "" {
+		parsedTimeout, err := time.ParseDuration(toolConfig.Timeout)
+		if err != nil {
+			return nil, fmt.Errorf("invalid timeout for MCP source: %w", err)
+		}
+		ssTimeout = parsedTimeout
+	}
+
+	return NewMCPToolSourceWithTLSAndTimeout(
 		"mcp",
 		toolConfig.ServerURL,
 		toolConfig.Description,
 		toolConfig.InsecureSkipVerify,
 		toolConfig.CACertificate,
+		ssTimeout,
 	), nil
 }
 
@@ -151,7 +179,18 @@ func (r *MCPToolSource) DiscoverTools(ctx context.Context) error {
 		r.tools[toolInfo.Name] = tool
 	}
 
-	slog.Info("MCP source discovered tools", "source", r.name, "count", len(r.tools))
+	var toolNames []string
+	for name := range r.tools {
+		toolNames = append(toolNames, name)
+	}
+	if len(toolNames) > 0 {
+		slog.Info("MCP source discovered tools",
+			"source", r.name,
+			"count", len(r.tools),
+			"tools", toolNames)
+	} else {
+		slog.Warn("MCP source discovered 0 tools", "source", r.name)
+	}
 	return nil
 }
 
@@ -170,6 +209,19 @@ func (r *MCPToolSource) ListTools() []ToolInfo {
 	return tools
 }
 
+// ListMCPToolNames returns a list of available MCP tool names
+// This is used for debugging when tools are not found
+func (r *MCPToolSource) ListMCPToolNames() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var toolNames []string
+	for name := range r.tools {
+		toolNames = append(toolNames, name)
+	}
+	return toolNames
+}
+
 func (r *MCPToolSource) GetTool(name string) (Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -181,7 +233,7 @@ func (r *MCPToolSource) GetTool(name string) (Tool, bool) {
 func (r *MCPToolSource) discoverToolsFromServer(ctx context.Context) ([]ToolInfo, error) {
 	// First, try to initialize the session if needed
 	// Some MCP servers require initialization before other calls
-	_, _ = r.makeRequest(ctx, "initialize", map[string]interface{}{
+	initResponse, initErr := r.makeRequest(ctx, "initialize", map[string]interface{}{
 		"protocolVersion": "2024-11-05",
 		"capabilities":    map[string]interface{}{},
 		"clientInfo": map[string]interface{}{
@@ -189,14 +241,38 @@ func (r *MCPToolSource) discoverToolsFromServer(ctx context.Context) ([]ToolInfo
 			"version": "1.0.0",
 		},
 	})
+	if initErr != nil {
+		slog.Debug("MCP initialize failed (non-fatal)", "source", r.name, "error", initErr.Error())
+	} else if initResponse != nil && initResponse.Error != nil {
+		slog.Debug("MCP initialize returned error (non-fatal)", "source", r.name, "error", initResponse.Error.Message)
+	}
 
 	response, err := r.makeRequest(ctx, "tools/list", map[string]interface{}{})
 	if err != nil {
+		slog.Debug("MCP tools/list request failed", "source", r.name, "error", err.Error())
 		return nil, err
 	}
 
 	if response.Error != nil {
+		slog.Debug("MCP tools/list returned error", "source", r.name, "error_code", response.Error.Code, "error_message", response.Error.Message)
 		return nil, fmt.Errorf("MCP error: %s", response.Error.Message)
+	}
+
+	// Debug: log the response structure
+	if resultMap, ok := response.Result.(map[string]interface{}); ok {
+		if toolsArray, ok := resultMap["tools"].([]interface{}); ok {
+			var toolNames []string
+			for _, toolItem := range toolsArray {
+				if tool, ok := toolItem.(map[string]interface{}); ok {
+					if name, ok := tool["name"].(string); ok {
+						toolNames = append(toolNames, name)
+					}
+				}
+			}
+			slog.Debug("MCP tools/list response", "source", r.name, "tool_count", len(toolNames), "tools", toolNames)
+		} else {
+			slog.Debug("MCP tools/list response structure", "source", r.name, "result_keys", getMapKeys(resultMap))
+		}
 	}
 
 	var tools []ToolInfo
@@ -392,11 +468,24 @@ func (r *MCPToolSource) makeRequest(ctx context.Context, method string, params i
 				if line == "" {
 					if currentData.Len() > 0 {
 						jsonData := currentData.String()
+						dataPreview := jsonData
+						if len(dataPreview) > 200 {
+							dataPreview = dataPreview[:200] + "..."
+						}
+						slog.Debug("MCP SSE data received",
+							"source", r.name,
+							"data_length", len(jsonData),
+							"data_preview", dataPreview)
 
 						var mcpResp Response
 						if parseErr := json.Unmarshal([]byte(jsonData), &mcpResp); parseErr == nil {
 							resultChan <- result{response: &mcpResp}
 							return
+						} else {
+							slog.Debug("MCP SSE JSON parse failed",
+								"source", r.name,
+								"error", parseErr.Error(),
+								"data_preview", dataPreview)
 						}
 
 						// Reset for next event
@@ -423,14 +512,19 @@ func (r *MCPToolSource) makeRequest(ctx context.Context, method string, params i
 		}()
 
 		// Wait for result with timeout
+		// Use configurable timeout (default 5 minutes for document parsing operations)
+		timeout := r.ssTimeout
+		if timeout == 0 {
+			timeout = DefaultMCPSSEResponseTimeout
+		}
 		select {
 		case res := <-resultChan:
 			if res.err != nil {
 				return nil, res.err
 			}
 			return res.response, nil
-		case <-time.After(10 * time.Second):
-			return nil, fmt.Errorf("timeout reading SSE response")
+		case <-time.After(timeout):
+			return nil, fmt.Errorf("timeout reading SSE response after %v", timeout)
 		}
 	}
 
@@ -503,6 +597,13 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 			"error_code", response.Error.Code,
 			"error_message", errorMsg)
 		return buildMCPErrorResult(t.toolInfo.Name, err.Error(), time.Since(start), t.source.name, t.source.url), err
+	}
+
+	// Debug: log the raw response result structure
+	if resultMap, ok := response.Result.(map[string]interface{}); ok {
+		slog.Debug("MCP tool response result structure",
+			"tool", t.toolInfo.Name,
+			"keys", getMapKeys(resultMap))
 	}
 
 	content := t.extractContent(response.Result)
@@ -614,6 +715,8 @@ func (t *MCPTool) extractContent(result interface{}) string {
 	var content strings.Builder
 
 	if resultMap, ok := result.(map[string]interface{}); ok {
+		// Try multiple content extraction strategies
+		// Strategy 1: content array with text items (standard MCP format)
 		if contentArray, ok := resultMap["content"].([]interface{}); ok {
 			for _, item := range contentArray {
 				if contentItem, ok := item.(map[string]interface{}); ok {
@@ -621,12 +724,43 @@ func (t *MCPTool) extractContent(result interface{}) string {
 						content.WriteString(text)
 						content.WriteString("\n")
 					}
+				} else if text, ok := item.(string); ok {
+					// Handle case where content array contains strings directly
+					content.WriteString(text)
+					content.WriteString("\n")
 				}
 			}
 		}
+		// Strategy 2: direct text/content field
+		if content.String() == "" {
+			if text, ok := resultMap["text"].(string); ok {
+				content.WriteString(text)
+			} else if text, ok := resultMap["content"].(string); ok {
+				content.WriteString(text)
+			}
+		}
+		// Strategy 3: isError field indicates failure
+		if isError, ok := resultMap["isError"].(bool); ok && isError {
+			slog.Debug("MCP tool response indicates error via isError field",
+				"tool", t.toolInfo.Name)
+		}
 	}
 
-	return content.String()
+	extractedContent := content.String()
+	if extractedContent == "" {
+		slog.Debug("MCP tool extractContent returned empty string",
+			"tool", t.toolInfo.Name,
+			"result_type", fmt.Sprintf("%T", result))
+	}
+	return extractedContent
+}
+
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func getString(m map[string]interface{}, key string) string {

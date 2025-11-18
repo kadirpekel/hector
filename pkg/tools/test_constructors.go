@@ -66,7 +66,8 @@ func NewMCPToolSourceForTesting(name, url string) *MCPToolSource {
 			}),
 			httpclient.WithMaxRetries(1),
 		),
-		tools: make(map[string]Tool),
+		tools:     make(map[string]Tool),
+		ssTimeout: DefaultMCPSSEResponseTimeout,
 	}
 }
 

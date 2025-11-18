@@ -1247,6 +1247,10 @@ func (c *ToolConfig) SetDefaults() {
 		if c.InsecureSkipVerify == nil {
 			c.InsecureSkipVerify = BoolPtr(false)
 		}
+		// Default timeout for SSE responses (5 minutes for document parsing)
+		if c.Timeout == "" {
+			c.Timeout = "5m"
+		}
 
 	}
 }
