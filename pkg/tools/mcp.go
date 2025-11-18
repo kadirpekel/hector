@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -135,7 +136,7 @@ func (r *MCPToolSource) DiscoverTools(ctx context.Context) error {
 		return fmt.Errorf("MCP server URL not configured for source %s", r.name)
 	}
 
-	fmt.Printf("Discovering tools from MCP server: %s (%s)\n", r.name, r.url)
+	slog.Info("Discovering tools from MCP server", "source", r.name, "url", r.url)
 
 	tools, err := r.discoverToolsFromServer(ctx)
 	if err != nil {
@@ -150,7 +151,7 @@ func (r *MCPToolSource) DiscoverTools(ctx context.Context) error {
 		r.tools[toolInfo.Name] = tool
 	}
 
-	fmt.Printf("MCP source %s discovered %d tools\n", r.name, len(r.tools))
+	slog.Info("MCP source discovered tools", "source", r.name, "count", len(r.tools))
 	return nil
 }
 

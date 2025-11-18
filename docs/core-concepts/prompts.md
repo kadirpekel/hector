@@ -322,10 +322,10 @@ prompt_slots:
 
 ### View Composed Prompt
 
-Enable debug mode to see the final prompt:
+Enable debug logging to see the final prompt:
 
 ```bash
-hector call "query" --debug -c config.yaml --agent myagent
+hector call "query" --log-level debug -c config.yaml --agent myagent
 ```
 
 

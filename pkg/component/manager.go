@@ -283,7 +283,7 @@ func (cm *ComponentManager) getOrCreateSQLDatabase(dbName string, cfg *config.Da
 
 	cm.sessionStoreDBs[dbName] = db
 
-	fmt.Printf("SUCCESS: SQL database '%s' connected (driver: %s, database: %s)\n", dbName, cfg.Driver, cfg.Database)
+	slog.Info("SQL database connected", "database", dbName, "driver", cfg.Driver, "db_name", cfg.Database)
 
 	return db, nil
 }
@@ -322,7 +322,7 @@ func (cm *ComponentManager) loadConfiguredPlugins(ctx context.Context, pluginCon
 		}
 		if cfg != nil {
 			if err := cm.loadAndRegisterPlugin(ctx, name, cfg, plugins.PluginTypeLLM); err != nil {
-				fmt.Printf("Warning: Failed to load LLM plugin '%s': %v\n", name, err)
+				slog.Warn("Failed to load LLM plugin", "plugin", name, "error", err)
 			}
 		}
 	}
@@ -333,7 +333,7 @@ func (cm *ComponentManager) loadConfiguredPlugins(ctx context.Context, pluginCon
 		}
 		if cfg != nil {
 			if err := cm.loadAndRegisterPlugin(ctx, name, cfg, plugins.PluginTypeDatabase); err != nil {
-				fmt.Printf("Warning: Failed to load Database plugin '%s': %v\n", name, err)
+				slog.Warn("Failed to load Database plugin", "plugin", name, "error", err)
 			}
 		}
 	}
@@ -344,7 +344,7 @@ func (cm *ComponentManager) loadConfiguredPlugins(ctx context.Context, pluginCon
 		}
 		if cfg != nil {
 			if err := cm.loadAndRegisterPlugin(ctx, name, cfg, plugins.PluginTypeEmbedder); err != nil {
-				fmt.Printf("Warning: Failed to load Embedder plugin '%s': %v\n", name, err)
+				slog.Warn("Failed to load Embedder plugin", "plugin", name, "error", err)
 			}
 		}
 	}
@@ -369,7 +369,7 @@ func (cm *ComponentManager) loadDiscoveredPlugins(ctx context.Context, discovere
 		}
 
 		if err := cm.loadAndRegisterPlugin(ctx, dp.Name, cfg, dp.Manifest.Type); err != nil {
-			fmt.Printf("Warning: Failed to load discovered plugin '%s': %v\n", dp.Name, err)
+			slog.Warn("Failed to load discovered plugin", "plugin", dp.Name, "error", err)
 		}
 	}
 
@@ -432,7 +432,7 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 		if err := cm.llmRegistry.RegisterLLM(name, llmBridge); err != nil {
 			return fmt.Errorf("failed to register LLM plugin: %w", err)
 		}
-		fmt.Printf("OK: Registered LLM plugin: %s\n", name)
+		slog.Info("Registered LLM plugin", "plugin", name)
 
 	case plugins.PluginTypeDatabase:
 		dbAdapter, ok := plugin.(*plugingrpc.DatabasePluginAdapter)
@@ -444,7 +444,7 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 		if err := cm.dbRegistry.RegisterDatabase(name, dbBridge); err != nil {
 			return fmt.Errorf("failed to register Database plugin: %w", err)
 		}
-		fmt.Printf("OK: Registered Database plugin: %s\n", name)
+		slog.Info("Registered Database plugin", "plugin", name)
 
 	case plugins.PluginTypeEmbedder:
 		embedderAdapter, ok := plugin.(*plugingrpc.EmbedderPluginAdapter)
@@ -456,7 +456,7 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 		if err := cm.embedderRegistry.RegisterEmbedder(name, embedderBridge); err != nil {
 			return fmt.Errorf("failed to register Embedder plugin: %w", err)
 		}
-		fmt.Printf("OK: Registered Embedder plugin: %s\n", name)
+		slog.Info("Registered Embedder plugin", "plugin", name)
 	}
 
 	return nil

@@ -16,7 +16,6 @@ func ServeCommand(args *ServeCmd, cfg *config.Config, configLoader *config.Loade
 		Host:         args.Host,
 		Port:         args.Port,
 		BaseURL:      args.A2ABaseURL,
-		Debug:        CLI.Debug,
 	})
 	if err != nil {
 		return fmt.Errorf("server creation failed: %w", err)

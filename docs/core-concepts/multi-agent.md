@@ -612,7 +612,7 @@ agents:
 Look for agent_call tool usage:
 
 ```bash
-hector call coordinator "Complex task" --debug
+hector call coordinator "Complex task" --log-level debug
 ```
 
 ### Monitor Performance

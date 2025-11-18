@@ -264,7 +264,7 @@ func TestSearchReplaceTool_GenerateDiff(t *testing.T) {
 			name:   "simple replacement",
 			oldStr: "old text",
 			newStr: "new text",
-			expected: "📝 Changes:\n" +
+			expected: "CHANGES:\n" +
 				"------------------------------------------------------------\n" +
 				"- old text\n" +
 				"+ new text\n" +
@@ -274,7 +274,7 @@ func TestSearchReplaceTool_GenerateDiff(t *testing.T) {
 			name:   "multiline replacement",
 			oldStr: "line 1\nline 2",
 			newStr: "updated line 1\nupdated line 2",
-			expected: "📝 Changes:\n" +
+			expected: "CHANGES:\n" +
 				"------------------------------------------------------------\n" +
 				"- line 1\n" +
 				"- line 2\n" +
@@ -286,7 +286,7 @@ func TestSearchReplaceTool_GenerateDiff(t *testing.T) {
 			name:   "empty lines ignored",
 			oldStr: "text\n\nmore text",
 			newStr: "new text\n\nnew more text",
-			expected: "📝 Changes:\n" +
+			expected: "CHANGES:\n" +
 				"------------------------------------------------------------\n" +
 				"- text\n" +
 				"- more text\n" +

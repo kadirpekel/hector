@@ -49,7 +49,7 @@ type CLIArgs struct {
 	Input      string
 	Token      string
 	Stream     bool
-	Debug      bool
+	LogLevel   string
 	Port       int
 	SessionID  string
 

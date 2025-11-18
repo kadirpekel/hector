@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -68,14 +69,13 @@ func InfoCommand(args *InfoCmd, cfg *config.Config, mode CLIMode) error {
 			return fmt.Errorf("agent '%s' not found. In zero-config mode, only 'assistant' is available", args.Agent)
 		}
 
-		fmt.Printf("\nINFO: Agent Information\n")
+		fmt.Printf("\nAgent Information\n")
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 		fmt.Printf("Name:        assistant\n")
 		fmt.Printf("Version:     v1.0.0\n")
 		fmt.Printf("Description: Zero-config AI assistant\n")
 		fmt.Printf("URL:         local://assistant\n")
 		fmt.Printf("Streaming:   OK\n")
-		fmt.Printf("\nTIP: Use 'hector call \"message\"' to interact with this agent\n")
 		return nil
 
 	default:
@@ -119,9 +119,9 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 	sessionID := args.SessionID
 	if sessionID == "" {
 		sessionID = fmt.Sprintf("cli-call-%d", time.Now().Unix())
-		fmt.Printf("SESSION: Session ID: %s (resume with --session=%s)\n", sessionID, sessionID)
+		slog.Info("Session started", "session_id", sessionID)
 	} else {
-		fmt.Printf("SESSION: Resuming session: %s\n", sessionID)
+		slog.Info("Resuming session", "session_id", sessionID)
 	}
 
 	msg := &pb.Message{
@@ -209,13 +209,10 @@ func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streamin
 	if sessionID == "" {
 
 		sessionID = fmt.Sprintf("cli-chat-%d", time.Now().Unix())
-		fmt.Printf("\nCHAT: Chat with %s (%s)\n", agentID, mode)
-		fmt.Printf("SESSION: Session ID: %s\n", sessionID)
-		fmt.Printf("   Resume later with: --session=%s\n", sessionID)
+		slog.Info("Chat started", "agent", agentID, "mode", mode, "session_id", sessionID)
 		fmt.Println("   Type 'exit' to quit")
 	} else {
-		fmt.Printf("\nCHAT: Chat with %s (%s)\n", agentID, mode)
-		fmt.Printf("SESSION: Resuming session: %s\n", sessionID)
+		slog.Info("Resuming chat", "agent", agentID, "mode", mode, "session_id", sessionID)
 		fmt.Println("   Type 'exit' to quit")
 	}
 
@@ -258,7 +255,7 @@ func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streamin
 
 			streamChan, err := a2aClient.StreamMessage(ctx, agentID, msg)
 			if err != nil {
-				fmt.Printf("ERROR: %v\n\n", err)
+				slog.Error("Chat error", "error", err)
 				continue
 			}
 
@@ -272,7 +269,7 @@ func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streamin
 
 			resp, err := a2aClient.SendMessage(ctx, agentID, msg)
 			if err != nil {
-				fmt.Printf("ERROR: %v\n\n", err)
+				slog.Error("Chat error", "error", err)
 				continue
 			}
 

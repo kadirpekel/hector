@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -323,7 +324,7 @@ func (pt *ProgressTracker) printFinalSummary() {
 	}
 
 	if stats.FailedFiles > 0 {
-		fmt.Printf("   ERROR: Failed: %d files\n", stats.FailedFiles)
+		slog.Error("Failed to index files", "count", stats.FailedFiles)
 	}
 
 	elapsed := stats.ElapsedTime

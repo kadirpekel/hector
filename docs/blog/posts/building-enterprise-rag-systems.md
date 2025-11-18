@@ -686,7 +686,7 @@ Hector's RAG system uses a unified search engine that handles multiple data sour
 
 ## Understanding Parallel Search
 
-Hector automatically searches all your sources **in parallel**, not sequentially. With 3 sources, all are searched simultaneously, so total time equals the slowest source (not the sum), making it 3x faster. You can verify this with `--debug` flag to see parallel execution in the logs.
+Hector automatically searches all your sources **in parallel**, not sequentially. With 3 sources, all are searched simultaneously, so total time equals the slowest source (not the sum), making it 3x faster. You can verify this with `--log-level debug` flag to see parallel execution in the logs.
 
 ---
 

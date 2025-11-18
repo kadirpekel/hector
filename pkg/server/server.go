@@ -45,7 +45,6 @@ type Options struct {
 	Host    string
 	Port    int
 	BaseURL string
-	Debug   bool
 }
 
 func New(opts Options) (*Server, error) {
@@ -135,9 +134,7 @@ func (s *Server) initialize() error {
 	cfg := s.config
 	s.mu.RUnlock()
 
-	if s.opts.Debug {
-		slog.Info("Initializing runtime and agents...")
-	}
+	slog.Info("Initializing runtime and agents")
 
 	// Resolve base URL before creating runtime so agents can use it
 	addresses := s.resolveAddresses()
@@ -503,17 +500,13 @@ func (s *Server) logStartup() {
 	addresses := s.resolveAddresses()
 	agentCount := len(s.runtime.Registry().ListAgents())
 
-	slog.Info("Server started", "agents", agentCount)
-	slog.Info("HTTP server", "address", fmt.Sprintf("http://%s", addresses.HTTP))
-	slog.Info("gRPC server", "address", addresses.GRPC)
+	slog.Info("HTTP server started", "address", addresses.HTTP)
+	slog.Info("gRPC server started", "address", addresses.GRPC)
+	slog.Info("Web UI available", "url", fmt.Sprintf("http://%s/", addresses.HTTP))
+	slog.Info("JSON-RPC endpoint", "url", fmt.Sprintf("http://%s/", addresses.HTTP))
+	slog.Info("REST API endpoint", "url", fmt.Sprintf("http://%s/v1/", addresses.HTTP))
 
-	if s.opts.Debug {
-		slog.Info("Web UI", "url", fmt.Sprintf("http://%s/", addresses.HTTP))
-		slog.Info("JSON-RPC", "url", fmt.Sprintf("http://%s/", addresses.HTTP))
-		slog.Info("REST API", "url", fmt.Sprintf("http://%s/v1/", addresses.HTTP))
-	}
-
-	slog.Info("Press Ctrl+C to stop")
+	fmt.Printf("Server started (agents: %d) 🍻\n", agentCount)
 }
 
 type ServerAddresses struct {

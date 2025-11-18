@@ -225,7 +225,7 @@ When `--config-watch` is enabled, Hector automatically reloads configuration whe
 **Pattern**: File-based with auto-reload
 
 ```bash
-hector serve --config configs/dev.yaml --config-watch --debug
+hector serve --config configs/dev.yaml --config-watch --log-level debug
 ```
 
 **Benefits**: Fast iteration, no infrastructure dependencies

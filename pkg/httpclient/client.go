@@ -2,6 +2,7 @@ package httpclient
 
 import (
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"time"
@@ -212,13 +213,11 @@ func (c *Client) logRetry(strategy RetryStrategy, delay time.Duration, attempt i
 
 	switch strategy {
 	case SmartRetry:
-		fmt.Printf("RATE_LIMIT: Rate limited (HTTP %d). Retrying in %v (attempt %d/%d)\n",
-			statusCode, delay, attempt+1, maxAttempts)
+		slog.Info("Rate limited, retrying", "status_code", statusCode, "delay", delay, "attempt", attempt+1, "max_attempts", maxAttempts)
 	case ConservativeRetry:
 
 		if attempt == maxAttempts-1 {
-			fmt.Printf("WARN: Server error (HTTP %d). Quick retry in %v (attempt %d/%d)\n",
-				statusCode, delay, attempt+1, maxAttempts)
+			slog.Warn("Server error, retrying", "status_code", statusCode, "delay", delay, "attempt", attempt+1, "max_attempts", maxAttempts)
 		}
 	}
 }

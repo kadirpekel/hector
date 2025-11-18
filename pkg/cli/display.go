@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -465,7 +466,9 @@ func DisplayTask(task *pb.Task) {
 }
 
 func DisplayError(err error) {
-	fmt.Printf("ERROR: %v\n", err)
+	if err != nil {
+		slog.Error(err.Error())
+	}
 }
 
 func DisplayStreamingStart(agentID, mode string) {

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -93,13 +94,13 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 	agent.DocsFolder = ""
 
 	// Inform about auto-created components
-	fmt.Printf("INFO: Auto-created from docs_folder shortcut:\n")
-	fmt.Printf("   - document_store: '%s' (path: %s)\n", storeName, docStoreConfig.Path)
+	slog.Info("Auto-created from docs_folder shortcut",
+		"document_store", storeName,
+		"path", docStoreConfig.Path)
 
 	if agent.VectorStore == "" {
 		if _, exists := c.VectorStores["default-vector-store"]; !exists {
 			c.VectorStores["default-vector-store"] = &VectorStoreConfig{}
-			fmt.Printf("   - vector_store: 'default-vector-store' (using defaults)\n")
 		}
 		agent.VectorStore = "default-vector-store"
 	}
@@ -107,7 +108,6 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 	if agent.Embedder == "" {
 		if _, exists := c.Embedders["default-embedder"]; !exists {
 			c.Embedders["default-embedder"] = &EmbedderProviderConfig{}
-			fmt.Printf("   - embedder: 'default-embedder' (using defaults)\n")
 		}
 		agent.Embedder = "default-embedder"
 	}
@@ -139,19 +139,11 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 			Priority:     IntPtr(8), // Higher than native parsers (5)
 			PreferNative: BoolPtr(false),
 		}
-		if len(toolNames) == 1 {
-			fmt.Printf("   - mcp_parsers: auto-configured (using specified tool: %s)\n", toolNames[0])
-		} else {
-			fmt.Printf("   - mcp_parsers: auto-configured (using specified tools: %s)\n", strings.Join(toolNames, ", "))
-		}
+		slog.Info("Auto-configured MCP parsers", "tools", toolNames)
 	}
 
 	// Clear temporary zero-config fields after expansion
 	agent.MCPParserTool = ""
-
-	// Note: search tool no longer needs document_stores config - it uses agent's assigned stores
-	// We don't auto-create search tool config here anymore since it's handled by agent assignment
-	fmt.Printf("TIP: To customize these, define them explicitly in your configuration.\n")
 }
 
 func (c *Config) expandEnableTools() {
@@ -168,11 +160,7 @@ func (c *Config) expandEnableTools() {
 	}
 
 	if len(createdTools) > 0 {
-		fmt.Printf("INFO: Auto-created tools from enable_tools shortcut:\n")
-		for _, toolName := range createdTools {
-			fmt.Printf("   - tool: '%s' (using defaults)\n", toolName)
-		}
-		fmt.Printf("TIP: To customize these, define them explicitly in your configuration.\n")
+		slog.Info("Auto-created tools from enable_tools shortcut", "tools", createdTools)
 	}
 }
 

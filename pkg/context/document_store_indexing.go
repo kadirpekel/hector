@@ -48,19 +48,18 @@ func (ds *DocumentStore) indexFromDataSource() error {
 				checkpoint = nil
 			} else {
 				// Incomplete checkpoint - resume from where we left off
-				fmt.Println("RESUME: " + ds.checkpointManager.FormatCheckpointInfo(checkpoint))
-				fmt.Println("   Resuming from checkpoint...")
+				slog.Info("Resuming from checkpoint", "info", ds.checkpointManager.FormatCheckpointInfo(checkpoint))
 			}
 		}
 	}
 
 	if len(existingDocs) > 0 && useIncrementalIndexing {
-		fmt.Printf("STATS: Incremental indexing enabled: Found %d existing document(s) in index (unchanged files will be skipped)\n", len(existingDocs))
+		slog.Info("Incremental indexing enabled", "existing_documents", len(existingDocs))
 	} else if len(existingDocs) > 0 {
 		// existingDocs > 0 but useIncrementalIndexing is false
-		fmt.Printf("STATS: Found %d existing document(s) in index, but incremental indexing is disabled (will be reindexed)\n", len(existingDocs))
+		slog.Info("Found existing documents but incremental indexing is disabled", "existing_documents", len(existingDocs))
 	} else {
-		fmt.Printf("STATS: First indexing or full reindex mode\n")
+		slog.Info("First indexing or full reindex mode")
 	}
 
 	// Discover documents from data source
@@ -111,7 +110,7 @@ func (ds *DocumentStore) indexFromDataSource() error {
 						slog.Warn("Cleanup of deleted files failed", "error", err)
 					}
 					if len(deletedDocs) > 0 {
-						fmt.Printf("CLEANUP: Cleaned up %d deleted document(s) from index '%s'\n", len(deletedDocs), ds.name)
+						slog.Info("Cleaned up deleted documents from index", "count", len(deletedDocs), "index", ds.name)
 					}
 
 					// Save index state
@@ -168,14 +167,14 @@ func (ds *DocumentStore) indexFromDataSource() error {
 				// Print summary
 				if len(failedDocs) > 0 {
 					maxShow := 10
-					fmt.Println("\nWARN: Failed Documents:")
+					slog.Warn("Failed Documents", "count", len(failedDocs))
 					for i, docID := range failedDocs {
 						if i >= maxShow {
 							remaining := len(failedDocs) - maxShow
 							fmt.Printf("   ... and %d more documents (check logs for details)\n", remaining)
 							break
 						}
-						fmt.Printf("   ERROR: %s\n", docID)
+						slog.Error("Failed to index document", "document_id", docID)
 					}
 				}
 

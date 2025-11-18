@@ -32,7 +32,9 @@ Available for all commands:
 | `--config-type TYPE` | string | Configuration backend (`file`, `consul`, `etcd`, `zookeeper`) | `file` |
 | `--config-watch` | bool | Watch for configuration changes and auto-reload | `false` |
 | `--config-endpoints ENDPOINTS` | string | Comma-separated backend endpoints | Backend-specific defaults |
-| `--debug` | bool | Enable debug logging | `false` |
+| `--log-level LEVEL` | string | Set log level (`debug`, `info`, `warn`, `error`). Overrides config file setting. | `info` |
+| `--log-file PATH` | string | Path to log file (empty = stderr). Overrides config file setting. Auto-enabled for client/local modes. | Auto (`hector.log` for client/local, `stderr` for server) |
+| `--log-format FORMAT` | string | Set log format (`simple`, `verbose`, or custom). Overrides config file setting. | `simple` |
 | `--help` | bool | Show help | - |
 
 **Configuration Backends:**
@@ -798,6 +800,8 @@ Hector recognizes these environment variables:
 | `QDRANT_HOST` | Qdrant host | `localhost` |
 | `OLLAMA_HOST` | Ollama host | `http://localhost:11434` |
 | `LOG_LEVEL` | Default log level | `info` |
+| `LOG_FILE` | Path to log file (empty = stderr) | Auto (`hector.log` for client/local, `stderr` for server) |
+| `LOG_FORMAT` | Log format (`simple`, `verbose`, or custom) | `simple` |
 
 ---
 
@@ -868,7 +872,6 @@ hector chat --agent assistant --config dev-config.yaml
 hector serve \
   --config prod-config.yaml \
   --port 8080 \
-  --log-format json \
   --log-level info
 ```
 

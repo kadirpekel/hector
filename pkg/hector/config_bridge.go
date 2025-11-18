@@ -2,6 +2,7 @@ package hector
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/agent"
@@ -237,7 +238,7 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 			toolsToAdd = append(toolsToAdd, toolInfo.Name)
 		}
 		if filteredCount > 0 {
-			fmt.Printf("OK: Filtered %d internal tool(s) from agent '%s' (not visible to agents)\n", filteredCount, agentCfg.Name)
+			slog.Info("Filtered internal tools from agent", "count", filteredCount, "agent", agentCfg.Name)
 		}
 	} else {
 		// Use explicitly listed tools

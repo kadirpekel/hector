@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 )
 
@@ -55,7 +56,7 @@ func (c *Config) expandInlineConfigs(agent *AgentConfig) {
 		c.LLMs[inlineName] = agent.LLMInline
 		agent.LLM = inlineName
 		agent.LLMInline = nil // Clear inline config after expansion
-		fmt.Printf("INFO: Expanded inline LLM config for agent '%s' to top-level provider '%s'\n", agent.Name, inlineName)
+		slog.Info("Expanded inline LLM config", "agent", agent.Name, "provider", inlineName)
 	}
 
 	// Expand inline vector store config
@@ -68,7 +69,7 @@ func (c *Config) expandInlineConfigs(agent *AgentConfig) {
 		c.VectorStores[inlineName] = agent.VectorStoreInline
 		agent.VectorStore = inlineName
 		agent.VectorStoreInline = nil
-		fmt.Printf("INFO: Expanded inline vector store config for agent '%s' to top-level provider '%s'\n", agent.Name, inlineName)
+		slog.Info("Expanded inline vector store config", "agent", agent.Name, "provider", inlineName)
 	}
 
 	// Expand inline embedder config
@@ -81,7 +82,7 @@ func (c *Config) expandInlineConfigs(agent *AgentConfig) {
 		c.Embedders[inlineName] = agent.EmbedderInline
 		agent.Embedder = inlineName
 		agent.EmbedderInline = nil
-		fmt.Printf("INFO: Expanded inline embedder config for agent '%s' to top-level provider '%s'\n", agent.Name, inlineName)
+		slog.Info("Expanded inline embedder config", "agent", agent.Name, "provider", inlineName)
 	}
 }
 

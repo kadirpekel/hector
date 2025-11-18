@@ -2271,6 +2271,9 @@ func (c *AuthConfig) SetDefaults() {
 type ObservabilityConfig struct {
 	Tracing       TracingConfig `yaml:"tracing,omitempty"`
 	EnableMetrics *bool         `yaml:"enable_metrics,omitempty"`
+	LogLevel      string        `yaml:"log_level,omitempty"`  // debug, info, warn, error
+	LogFile       string        `yaml:"log_file,omitempty"`   // Path to log file (empty = stderr)
+	LogFormat     string        `yaml:"log_format,omitempty"` // simple, verbose (default: simple)
 }
 
 type TracingConfig struct {
@@ -2284,6 +2287,17 @@ type TracingConfig struct {
 func (c *ObservabilityConfig) Validate() error {
 	if err := c.Tracing.Validate(); err != nil {
 		return fmt.Errorf("tracing config validation failed: %w", err)
+	}
+	if c.LogLevel != "" {
+		validLevels := map[string]bool{
+			"debug": true,
+			"info":  true,
+			"warn":  true,
+			"error": true,
+		}
+		if !validLevels[c.LogLevel] {
+			return fmt.Errorf("invalid log_level '%s' (must be: debug, info, warn, error)", c.LogLevel)
+		}
 	}
 	return nil
 }

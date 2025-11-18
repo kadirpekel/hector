@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"time"
 
@@ -116,19 +117,19 @@ func (r *ToolRegistry) DiscoverAllTools(ctx context.Context) error {
 
 	for repoName, repo := range repositories {
 		if err := repo.DiscoverTools(ctx); err != nil {
-			fmt.Printf("Warning: Failed to discover tools from %s: %v\n", repoName, err)
+			slog.Warn("Failed to discover tools from source", "source", repoName, "error", err)
 			continue
 		}
 
 		for _, toolInfo := range repo.ListTools() {
 			tool, exists := repo.GetTool(toolInfo.Name)
 			if !exists {
-				fmt.Printf("Warning: Tool %s listed but not available in %s\n", toolInfo.Name, repoName)
+				slog.Warn("Tool listed but not available", "tool", toolInfo.Name, "source", repoName)
 				continue
 			}
 
 			if _, exists := r.Get(toolInfo.Name); exists {
-				fmt.Printf("Warning: Tool name conflict: %s already exists (skipping)\n", toolInfo.Name)
+				slog.Warn("Tool name conflict, skipping", "tool", toolInfo.Name)
 				continue
 			}
 
@@ -181,14 +182,14 @@ func (r *ToolRegistry) initializeFromConfigWithAgentRegistry(toolConfig map[stri
 
 		serverURL := toolConfig.ServerURL
 		if serverURL == "" {
-			fmt.Printf("Warning: MCP tool '%s' missing server_url, skipping\n", toolName)
+			slog.Warn("MCP tool missing server_url, skipping", "tool", toolName)
 			continue
 		}
 
 		mcpSource := NewMCPToolSourceWithTLS(toolName, serverURL, toolConfig.Description, toolConfig.InsecureSkipVerify, toolConfig.CACertificate)
 
 		if err := r.RegisterSource(mcpSource); err != nil {
-			fmt.Printf("Warning: Failed to register MCP source '%s': %v\n", toolName, err)
+			slog.Warn("Failed to register MCP source", "source", toolName, "error", err)
 			continue
 		}
 	}

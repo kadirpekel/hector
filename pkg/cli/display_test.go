@@ -3,11 +3,13 @@ package cli
 import (
 	"bytes"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"github.com/kadirpekel/hector/pkg/logger"
 )
 
 func captureOutput(f func()) string {
@@ -187,17 +189,31 @@ func TestDisplayTask(t *testing.T) {
 }
 
 func TestDisplayError(t *testing.T) {
-	err := &testError{msg: "test error message"}
+	// Initialize logger for test - use a temporary file to capture output
+	tmpFile, err := os.CreateTemp("", "test-log-*.txt")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
 
-	output := captureOutput(func() {
-		DisplayError(err)
-	})
+	logger.Init(slog.LevelDebug, tmpFile, "simple")
+
+	testErr := &testError{msg: "test error message"}
+
+	DisplayError(testErr)
+
+	// Read the log output
+	_, _ = tmpFile.Seek(0, 0)
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, tmpFile)
+	output := buf.String()
 
 	if !strings.Contains(output, "test error message") {
-		t.Error("Output should contain error message")
+		t.Errorf("Output should contain error message, got: %q", output)
 	}
-	if !strings.Contains(output, "❌") {
-		t.Error("Output should contain error icon")
+	if !strings.Contains(output, "ERROR") {
+		t.Errorf("Output should contain ERROR level, got: %q", output)
 	}
 }
 

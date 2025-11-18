@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/kadirpekel/hector/pkg/config"
 )
@@ -35,7 +36,7 @@ func TaskCancelCommand(args *TaskCancelCmd, cfg *config.Config, mode CLIMode) er
 		return fmt.Errorf("failed to cancel task: %w", err)
 	}
 
-	fmt.Printf("SUCCESS: Task cancelled successfully\n\n")
+	slog.Info("Task cancelled successfully")
 	DisplayTask(task)
 	return nil
 }

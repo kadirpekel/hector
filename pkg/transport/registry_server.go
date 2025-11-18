@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -201,7 +202,7 @@ func ServeAgent(agent *agent.Agent, address string) (*Server, error) {
 
 	go func() {
 		if err := server.Start(); err != nil {
-			fmt.Printf("ERROR: Server error: %v\n", err)
+			slog.Error("Server error", "error", err)
 		}
 	}()
 
