@@ -37,7 +37,7 @@ func (a *Agent) filterToolCallsWithApproval(
 
 	// Safety check: if toolConfigs is nil, allow all tools (no approval configured)
 	if toolConfigs == nil {
-		slog.Debug("toolConfigs is nil, allowing all tools without approval check")
+		slog.Info("toolConfigs is nil, allowing all tools without approval check")
 		result.ApprovedCalls = toolCalls
 		return result, nil
 	}
@@ -53,7 +53,7 @@ func (a *Agent) filterToolCallsWithApproval(
 		toolConfig, exists := toolConfigs[call.Name]
 		if !exists {
 			// Tool not in config, allow by default
-			slog.Debug("Tool not found in config map, allowing without approval", "tool", call.Name, "available_keys", getConfigKeys(toolConfigs))
+			slog.Info("Tool not found in config map, allowing without approval", "tool", call.Name, "available_keys", getConfigKeys(toolConfigs))
 			result.ApprovedCalls = append(result.ApprovedCalls, call)
 			continue
 		}

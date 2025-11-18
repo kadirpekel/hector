@@ -165,3 +165,4 @@ func (b *A2ASkillBuilder) AddExample(example string) *A2ASkillBuilder {
 func (b *A2ASkillBuilder) Build() *config.A2ASkillConfig {
 	return b.skill
 }
+

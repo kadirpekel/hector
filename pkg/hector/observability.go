@@ -117,3 +117,4 @@ func (b *TracingBuilder) Build() (observability.TracerConfig, error) {
 
 	return cfg, nil
 }
+

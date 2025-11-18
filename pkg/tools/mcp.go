@@ -115,7 +115,8 @@ func (b *MCPToolSourceBuilder) WithInternal(internal bool) *MCPToolSourceBuilder
 
 // Build creates the MCPToolSource
 func (b *MCPToolSourceBuilder) Build() *MCPToolSource {
-	// Use default timeout if not specified
+	// Builder sets default timeout in NewMCPToolSource, so ssTimeout should never be 0
+	// But we keep this check for safety in case builder is modified in the future
 	ssTimeout := b.ssTimeout
 	if ssTimeout == 0 {
 		ssTimeout = DefaultMCPSSEResponseTimeout
@@ -562,6 +563,7 @@ func (r *MCPToolSource) makeRequest(ctx context.Context, method string, params i
 
 		// Wait for result with timeout
 		// Use configurable timeout (default 5 minutes for document parsing operations)
+		// Builder ensures timeout is set, but check for safety if source created directly
 		timeout := r.ssTimeout
 		if timeout == 0 {
 			timeout = DefaultMCPSSEResponseTimeout
@@ -648,8 +650,9 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 		return buildMCPErrorResult(t.toolInfo.Name, err.Error(), time.Since(start), t.source.name, t.source.url), err
 	}
 
-	// Debug: log the raw response result structure
-	if resultMap, ok := response.Result.(map[string]interface{}); ok {
+	// Extract result map once and reuse
+	resultMap, isMap := response.Result.(map[string]interface{})
+	if isMap {
 		slog.Debug("MCP tool response result structure",
 			"tool", t.toolInfo.Name,
 			"keys", getMapKeys(resultMap))
@@ -659,7 +662,7 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 
 	// Extract metadata from response if available
 	var responseMetadata map[string]interface{}
-	if resultMap, ok := response.Result.(map[string]interface{}); ok {
+	if isMap {
 		if metadata, ok := resultMap["metadata"].(map[string]interface{}); ok {
 			responseMetadata = metadata
 		}
@@ -670,7 +673,7 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 	errorMsg := ""
 
 	// Check for errors in response
-	if resultMap, ok := response.Result.(map[string]interface{}); ok {
+	if isMap {
 		// Check for error in metadata
 		if responseMetadata != nil {
 			if errStr, ok := responseMetadata["error"].(string); ok && errStr != "" {
@@ -696,15 +699,10 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 
 	// Check if content itself is an error message
 	contentTrimmed := strings.TrimSpace(content)
-	if contentTrimmed != "" {
-		contentLower := strings.ToLower(contentTrimmed)
-		if strings.HasPrefix(contentLower, "error executing tool") ||
-			strings.HasPrefix(contentLower, "error:") ||
-			strings.HasPrefix(contentLower, "tool error:") {
-			hasError = true
-			if errorMsg == "" {
-				errorMsg = contentTrimmed
-			}
+	if isErrorContent(contentTrimmed) {
+		hasError = true
+		if errorMsg == "" {
+			errorMsg = contentTrimmed
 		}
 	}
 
@@ -817,6 +815,18 @@ func getString(m map[string]interface{}, key string) string {
 		return val
 	}
 	return ""
+}
+
+// isErrorContent checks if content matches common error message patterns
+// This is used to detect errors that might be returned as content strings
+func isErrorContent(content string) bool {
+	if content == "" {
+		return false
+	}
+	contentLower := strings.ToLower(strings.TrimSpace(content))
+	return strings.HasPrefix(contentLower, "error executing tool") ||
+		strings.HasPrefix(contentLower, "error:") ||
+		strings.HasPrefix(contentLower, "tool error:")
 }
 
 func isRequired(schema map[string]interface{}, paramName string) bool {

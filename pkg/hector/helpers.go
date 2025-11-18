@@ -14,3 +14,4 @@ func boolValue(b *bool, defaultValue bool) bool {
 	}
 	return *b
 }
+

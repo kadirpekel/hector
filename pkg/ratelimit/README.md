@@ -395,6 +395,3 @@ All components are thread-safe and can be used concurrently across multiple goro
 
 See main Hector license.
 
-
-
-

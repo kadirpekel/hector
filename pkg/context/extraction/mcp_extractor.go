@@ -183,8 +183,7 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 		if len(contentPreview) > 100 {
 			contentPreview = contentPreview[:100] + "..."
 		}
-		slog.Debug(fmt.Sprintf("MCP tool %s result for %s: success=%v, error=%q, content_length=%d, content_preview=%q, has_metadata=%v",
-			toolName, path, result.Success, result.Error, contentLength, contentPreview, result.Metadata != nil),
+		slog.Debug("MCP tool result",
 			"tool", toolName,
 			"path", path,
 			"success", result.Success,
@@ -219,23 +218,6 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 
 		// Trim whitespace
 		content = strings.TrimSpace(content)
-
-		// Defense in depth: Check if content itself is an error message
-		// This handles edge cases where MCP tool layer might have missed an error pattern
-		// (though it should be rare now that MCP tool properly detects errors)
-		if content != "" {
-			contentLower := strings.ToLower(content)
-			// Check for MCP tool error message patterns
-			if strings.HasPrefix(contentLower, "error executing tool") ||
-				strings.HasPrefix(contentLower, "error:") ||
-				strings.HasPrefix(contentLower, "tool error:") {
-				slog.Debug("MCP tool returned error message in content (defense in depth check), failing extraction",
-					"tool", toolName,
-					"path", path,
-					"error_content", content)
-				return nil, fmt.Errorf("MCP tool %s failed: %s", toolName, content)
-			}
-		}
 
 		// If content is empty, try next tool
 		if content == "" {

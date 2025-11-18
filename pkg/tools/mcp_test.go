@@ -344,3 +344,54 @@ func TestMCPToolSource_ForTesting_HTTPClient(t *testing.T) {
 		t.Error("Expected HTTP client to be initialized")
 	}
 }
+
+func TestMCPToolSource_WithTimeout(t *testing.T) {
+	customTimeout := 10 * time.Second
+	source := NewMCPToolSource("test", "http://localhost:8080", "Test").
+		WithTimeout(customTimeout).
+		Build()
+
+	if source.ssTimeout != customTimeout {
+		t.Errorf("Expected timeout %v, got %v", customTimeout, source.ssTimeout)
+	}
+}
+
+func TestMCPToolSource_WithTimeout_Zero(t *testing.T) {
+	// Zero timeout should use default
+	source := NewMCPToolSource("test", "http://localhost:8080", "Test").
+		WithTimeout(0).
+		Build()
+
+	if source.ssTimeout != DefaultMCPSSEResponseTimeout {
+		t.Errorf("Expected default timeout %v, got %v", DefaultMCPSSEResponseTimeout, source.ssTimeout)
+	}
+}
+
+func TestMCPToolSource_WithInternal(t *testing.T) {
+	source := NewMCPToolSource("test", "http://localhost:8080", "Test").
+		WithInternal(true).
+		Build()
+
+	if !source.internal {
+		t.Error("Expected internal to be true")
+	}
+}
+
+func TestMCPToolSource_WithInternal_False(t *testing.T) {
+	source := NewMCPToolSource("test", "http://localhost:8080", "Test").
+		WithInternal(false).
+		Build()
+
+	if source.internal {
+		t.Error("Expected internal to be false")
+	}
+}
+
+func TestMCPToolSource_DefaultInternal(t *testing.T) {
+	// Default should be false
+	source := NewMCPToolSource("test", "http://localhost:8080", "Test").Build()
+
+	if source.internal {
+		t.Error("Expected default internal to be false")
+	}
+}

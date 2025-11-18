@@ -182,3 +182,4 @@ func (s *MemoryStore) Dump() map[string]interface{} {
 	}
 	return result
 }
+
