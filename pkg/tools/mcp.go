@@ -338,9 +338,21 @@ func (r *MCPToolSource) makeRequest(ctx context.Context, method string, params i
 	httpResp, err := r.httpClient.Do(req)
 
 	if err != nil {
+		slog.Debug("MCP HTTP request failed",
+			"source", r.name,
+			"url", r.url,
+			"method", method,
+			"error", err.Error())
 		return nil, fmt.Errorf("request failed: %v", err)
 	}
 	defer httpResp.Body.Close()
+
+	slog.Debug("MCP HTTP request completed",
+		"source", r.name,
+		"url", r.url,
+		"method", method,
+		"status_code", httpResp.StatusCode,
+		"content_type", httpResp.Header.Get("Content-Type"))
 
 	// Extract session ID from response header (for streamable-http transport)
 	if sessionID := httpResp.Header.Get("mcp-session-id"); sessionID != "" {
@@ -451,20 +463,18 @@ func (t *MCPTool) GetDescription() string {
 func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
 	start := time.Now()
 
+	// Log tool execution start
+	slog.Debug("MCP tool execution started",
+		"tool", t.toolInfo.Name,
+		"source", t.source.name,
+		"server_url", t.source.url)
+
 	// Validate required parameters
 	if err := t.validateParameters(args); err != nil {
-		return ToolResult{
-			Content:       "",
-			Success:       false,
-			Error:         err.Error(),
-			ToolName:      t.toolInfo.Name,
-			ExecutionTime: time.Since(start),
-			Metadata: map[string]interface{}{
-				"source":     t.source.name,
-				"tool_type":  "remote",
-				"server_url": t.source.url,
-			},
-		}, err
+		slog.Debug("MCP tool parameter validation failed",
+			"tool", t.toolInfo.Name,
+			"error", err.Error())
+		return buildMCPErrorResult(t.toolInfo.Name, err.Error(), time.Since(start), t.source.name, t.source.url), err
 	}
 
 	params := CallParams{
@@ -474,64 +484,111 @@ func (t *MCPTool) Execute(ctx context.Context, args map[string]interface{}) (Too
 
 	response, err := t.source.makeRequest(ctx, "tools/call", params)
 	if err != nil {
-		return ToolResult{
-			Content:       "",
-			Success:       false,
-			Error:         err.Error(),
-			ToolName:      t.toolInfo.Name,
-			ExecutionTime: time.Since(start),
-			Metadata: map[string]interface{}{
-				"source":     t.source.name,
-				"tool_type":  "remote",
-				"server_url": t.source.url,
-			},
-		}, err
+		slog.Debug("MCP tool request failed",
+			"tool", t.toolInfo.Name,
+			"source", t.source.name,
+			"error", err.Error())
+		return buildMCPErrorResult(t.toolInfo.Name, err.Error(), time.Since(start), t.source.name, t.source.url), err
 	}
 
 	if response.Error != nil {
-		err := fmt.Errorf("MCP error: %s", response.Error.Message)
-		return ToolResult{
-			Content:       "",
-			Success:       false,
-			Error:         err.Error(),
-			ToolName:      t.toolInfo.Name,
-			ExecutionTime: time.Since(start),
-			Metadata: map[string]interface{}{
-				"source":     t.source.name,
-				"tool_type":  "remote",
-				"server_url": t.source.url,
-			},
-		}, err
+		errorMsg := response.Error.Message
+		if errorMsg == "" {
+			errorMsg = fmt.Sprintf("MCP protocol error (code: %d)", response.Error.Code)
+		}
+		err := fmt.Errorf("MCP error: %s", errorMsg)
+		slog.Debug("MCP tool protocol error",
+			"tool", t.toolInfo.Name,
+			"source", t.source.name,
+			"error_code", response.Error.Code,
+			"error_message", errorMsg)
+		return buildMCPErrorResult(t.toolInfo.Name, err.Error(), time.Since(start), t.source.name, t.source.url), err
 	}
 
 	content := t.extractContent(response.Result)
 
 	// Extract metadata from response if available
-	metadata := map[string]interface{}{
-		"source":     t.source.name,
-		"tool_type":  "remote",
-		"server_url": t.source.url,
+	var responseMetadata map[string]interface{}
+	if resultMap, ok := response.Result.(map[string]interface{}); ok {
+		if metadata, ok := resultMap["metadata"].(map[string]interface{}); ok {
+			responseMetadata = metadata
+		}
 	}
 
-	// Merge metadata from response if it exists
+	// Check if result contains error indicators
+	hasError := false
+	errorMsg := ""
+
+	// Check for errors in response
 	if resultMap, ok := response.Result.(map[string]interface{}); ok {
-		if responseMetadata, ok := resultMap["metadata"].(map[string]interface{}); ok {
-			// Merge response metadata into our metadata
-			for k, v := range responseMetadata {
-				metadata[k] = v
+		// Check for error in metadata
+		if responseMetadata != nil {
+			if errStr, ok := responseMetadata["error"].(string); ok && errStr != "" {
+				hasError = true
+				errorMsg = errStr
+			}
+		}
+		// Check for error field at top level
+		if errStr, ok := resultMap["error"].(string); ok && errStr != "" {
+			hasError = true
+			if errorMsg == "" {
+				errorMsg = errStr
+			}
+		}
+		// Check for isError flag
+		if isErr, ok := resultMap["isError"].(bool); ok && isErr {
+			hasError = true
+			if errorMsg == "" {
+				errorMsg = "tool reported error"
 			}
 		}
 	}
 
-	result := ToolResult{
-		Content:       strings.TrimSpace(content),
-		Success:       true,
-		ToolName:      t.toolInfo.Name,
-		ExecutionTime: time.Since(start),
-		Metadata:      metadata,
+	// Check if content itself is an error message
+	contentTrimmed := strings.TrimSpace(content)
+	if contentTrimmed != "" {
+		contentLower := strings.ToLower(contentTrimmed)
+		if strings.HasPrefix(contentLower, "error executing tool") ||
+			strings.HasPrefix(contentLower, "error:") ||
+			strings.HasPrefix(contentLower, "tool error:") {
+			hasError = true
+			if errorMsg == "" {
+				errorMsg = contentTrimmed
+			}
+		}
 	}
 
-	return result, nil
+	// If error detected, return failure
+	if hasError {
+		// Ensure we have a non-empty error message
+		if errorMsg == "" {
+			errorMsg = "tool reported error"
+		}
+		err := fmt.Errorf("MCP tool error: %s", errorMsg)
+		contentPreview := contentTrimmed
+		if len(contentPreview) > 100 {
+			contentPreview = contentPreview[:100] + "..."
+		}
+		duration := time.Since(start)
+		slog.Debug("MCP tool execution failed",
+			"tool", t.toolInfo.Name,
+			"source", t.source.name,
+			"error", errorMsg,
+			"duration_ms", duration.Milliseconds(),
+			"content_preview", contentPreview)
+		return buildMCPErrorResult(t.toolInfo.Name, err.Error(), duration, t.source.name, t.source.url), err
+	}
+
+	// Success - build result with metadata
+	duration := time.Since(start)
+	contentLength := len(contentTrimmed)
+	slog.Debug("MCP tool execution succeeded",
+		"tool", t.toolInfo.Name,
+		"source", t.source.name,
+		"duration_ms", duration.Milliseconds(),
+		"content_length", contentLength,
+		"has_metadata", len(responseMetadata) > 0)
+	return buildMCPSuccessResult(t.toolInfo.Name, contentTrimmed, duration, t.source.name, t.source.url, responseMetadata), nil
 }
 
 // validateParameters checks if all required parameters are provided

@@ -3,6 +3,7 @@ package extraction
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
@@ -168,12 +169,37 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 		// Execute the MCP tool
 		result, err := tool.Execute(ctx, args)
 		if err != nil {
+			slog.Debug("MCP tool execution error",
+				"tool", toolName,
+				"path", path,
+				"error", err.Error())
 			// Tool execution failed, try next tool
 			continue
 		}
 
+		// Debug log: show what the MCP tool returned
+		contentLength := len(result.Content)
+		contentPreview := result.Content
+		if len(contentPreview) > 100 {
+			contentPreview = contentPreview[:100] + "..."
+		}
+		slog.Debug(fmt.Sprintf("MCP tool %s result for %s: success=%v, error=%q, content_length=%d, content_preview=%q, has_metadata=%v",
+			toolName, path, result.Success, result.Error, contentLength, contentPreview, result.Metadata != nil),
+			"tool", toolName,
+			"path", path,
+			"success", result.Success,
+			"error", result.Error,
+			"content_length", contentLength,
+			"content_preview", contentPreview,
+			"has_metadata", result.Metadata != nil)
+
 		if !result.Success {
 			// Tool returned failure, try next tool
+			// MCP tool layer already detected and reported the error
+			slog.Debug("MCP tool returned failure, trying next tool",
+				"tool", toolName,
+				"path", path,
+				"error", result.Error)
 			continue
 		}
 
@@ -190,8 +216,31 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 			}
 		}
 
+		// Trim whitespace
+		content = strings.TrimSpace(content)
+
+		// Defense in depth: Check if content itself is an error message
+		// This handles edge cases where MCP tool layer might have missed an error pattern
+		// (though it should be rare now that MCP tool properly detects errors)
+		if content != "" {
+			contentLower := strings.ToLower(content)
+			// Check for MCP tool error message patterns
+			if strings.HasPrefix(contentLower, "error executing tool") ||
+				strings.HasPrefix(contentLower, "error:") ||
+				strings.HasPrefix(contentLower, "tool error:") {
+				slog.Debug("MCP tool returned error message in content (defense in depth check), failing extraction",
+					"tool", toolName,
+					"path", path,
+					"error_content", content)
+				return nil, fmt.Errorf("MCP tool %s failed: %s", toolName, content)
+			}
+		}
+
+		// If content is empty, try next tool
 		if content == "" {
-			// No content extracted, try next tool
+			slog.Debug("MCP tool returned empty content, trying next tool",
+				"tool", toolName,
+				"path", path)
 			continue
 		}
 
