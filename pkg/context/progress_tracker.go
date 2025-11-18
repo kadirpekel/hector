@@ -3,6 +3,8 @@ package context
 import (
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +19,10 @@ type ProgressTracker struct {
 	skippedFiles   int64
 	failedFiles    int64
 	deletedFiles   int64
+
+	// Extractor usage tracking
+	extractorCounts map[string]int64
+	extractorMu     sync.Mutex
 
 	// Current state
 	currentFile   string
@@ -50,6 +56,7 @@ func NewProgressTracker(enabled bool, verbose bool) *ProgressTracker {
 		stopChan:        make(chan struct{}),
 		doneChan:        make(chan struct{}),
 		running:         0,
+		extractorCounts: make(map[string]int64),
 	}
 }
 
@@ -139,6 +146,28 @@ func (pt *ProgressTracker) IncrementFailed() {
 // IncrementDeleted increments the deleted files counter
 func (pt *ProgressTracker) IncrementDeleted() {
 	atomic.AddInt64(&pt.deletedFiles, 1)
+}
+
+// RecordExtractorUsage records which extractor was used for a document
+func (pt *ProgressTracker) RecordExtractorUsage(extractorName string) {
+	if extractorName == "" {
+		return
+	}
+	pt.extractorMu.Lock()
+	defer pt.extractorMu.Unlock()
+	pt.extractorCounts[extractorName]++
+}
+
+// GetExtractorStats returns extractor usage statistics
+func (pt *ProgressTracker) GetExtractorStats() map[string]int64 {
+	pt.extractorMu.Lock()
+	defer pt.extractorMu.Unlock()
+	// Return a copy to avoid race conditions
+	result := make(map[string]int64)
+	for k, v := range pt.extractorCounts {
+		result[k] = v
+	}
+	return result
 }
 
 // GetStats returns current statistics
@@ -304,6 +333,41 @@ func (pt *ProgressTracker) printFinalSummary() {
 		filesPerSec := float64(stats.ProcessedFiles) / elapsed.Seconds()
 		fmt.Printf("   Speed:   %.1f files/s\n", filesPerSec)
 	}
+
+	// Show extractor usage statistics
+	extractorStats := pt.GetExtractorStats()
+	if len(extractorStats) > 0 {
+		fmt.Println()
+		fmt.Println("   Extractors used:")
+		// Sort extractors by count (descending) for better readability
+		type extractorStat struct {
+			name  string
+			count int64
+		}
+		extractors := make([]extractorStat, 0, len(extractorStats))
+		for name, count := range extractorStats {
+			extractors = append(extractors, extractorStat{name: name, count: count})
+		}
+		// Sort by count (descending) using standard library
+		sort.Slice(extractors, func(i, j int) bool {
+			return extractors[i].count > extractors[j].count
+		})
+		for _, stat := range extractors {
+			extractorLabel := stat.name
+			if stat.name == "none" {
+				extractorLabel = "none (text files)"
+			} else if stat.name == "BinaryExtractor" {
+				extractorLabel = "Native parser"
+			} else if strings.HasPrefix(stat.name, "MCPExtractor:") {
+				toolName := strings.TrimPrefix(stat.name, "MCPExtractor:")
+				extractorLabel = fmt.Sprintf("MCP parser (%s)", toolName)
+			} else if stat.name == "TextExtractor" {
+				extractorLabel = "Text extractor"
+			}
+			fmt.Printf("      - %s: %d files\n", extractorLabel, stat.count)
+		}
+	}
+
 	fmt.Println()
 }
 

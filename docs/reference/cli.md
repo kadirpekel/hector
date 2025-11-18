@@ -292,6 +292,9 @@ hector serve --role "You are a code reviewer" --instruction "Be strict about err
 # With RAG
 hector serve coder --model gpt-4o --tools --docs-folder ./knowledge
 
+# With RAG and MCP parsing (Docling example)
+hector serve coder --model gpt-4o --docs-folder ./knowledge --mcp-parser-tool "convert_document_into_docling_document"
+
 # Custom port
 hector serve --config config.yaml --port 9000
 
@@ -391,6 +394,7 @@ hector call MESSAGE [flags]
 | `--instruction TEXT` | string | Add user guidance (WHAT, highest priority) | - |
 | `--tools` | bool | Enable built-in tools | `false` |
 | `--mcp-url URL` | string | MCP server URL | - |
+| `--mcp-parser-tool TOOL_NAME` | string | MCP parser tool name(s) for document parsing (comma-separated for fallback chain, e.g., `convert_document_into_docling_document`). Requires `--docs-folder`. Check available tools if you see a warning. | - |
 | `--docs-folder PATH` | string | Documents folder for RAG | - |
 
 **Examples:**
@@ -453,6 +457,7 @@ hector chat [flags]
 | `--instruction TEXT` | string | Add user guidance (WHAT, highest priority) | - |
 | `--tools` | bool | Enable built-in tools | `false` |
 | `--mcp-url URL` | string | MCP server URL | - |
+| `--mcp-parser-tool TOOL_NAME` | string | MCP parser tool name(s) for document parsing (comma-separated for fallback chain, e.g., `convert_document_into_docling_document`). Requires `--docs-folder`. Check available tools if you see a warning. | - |
 | `--docs-folder PATH` | string | Documents folder for RAG | - |
 
 **Examples:**

@@ -294,7 +294,9 @@ func (ds *DocumentStore) indexFromDataSource() error {
 					ds.progressTracker.SetCurrentFile(relPath)
 				}
 
-				if err := ds.indexDocument(&d); err != nil {
+				// Index document and track extractor usage
+				extractorName, err := ds.indexDocument(&d)
+				if err != nil {
 					ds.progressTracker.IncrementFailed()
 					ds.progressTracker.IncrementProcessed()
 					failedDocsMu.Lock()
@@ -306,6 +308,8 @@ func (ds *DocumentStore) indexFromDataSource() error {
 				} else {
 					ds.progressTracker.IncrementIndexed()
 					ds.progressTracker.IncrementProcessed()
+					// Track extractor usage for statistics
+					ds.progressTracker.RecordExtractorUsage(extractorName)
 
 					if ds.dataSource.Type() == "directory" {
 						relPath := ds.getRelPath(&d)

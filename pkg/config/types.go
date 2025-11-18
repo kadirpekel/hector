@@ -16,6 +16,11 @@ func BoolPtr(b bool) *bool {
 	return &b
 }
 
+// IntPtr returns a pointer to the given int value
+func IntPtr(i int) *int {
+	return &i
+}
+
 // Float64Ptr returns a pointer to the given float64 value
 func Float64Ptr(f float64) *float64 {
 	return &f
@@ -606,8 +611,9 @@ type AgentConfig struct {
 	Security          *SecurityConfig         `yaml:"security,omitempty"`
 	StructuredOutput  *StructuredOutputConfig `yaml:"structured_output,omitempty"`
 
-	DocsFolder  string `yaml:"docs_folder,omitempty"`
-	EnableTools *bool  `yaml:"enable_tools,omitempty"`
+	DocsFolder    string `yaml:"docs_folder,omitempty"`
+	MCPParserTool string `yaml:"mcp_parser_tool,omitempty"` // Shortcut: Explicitly specified MCP parser tool name (required for auto-config)
+	EnableTools   *bool  `yaml:"enable_tools,omitempty"`
 
 	A2A *A2ACardConfig `yaml:"a2a,omitempty"`
 }
@@ -690,6 +696,9 @@ func (c *AgentConfig) Validate() error {
 
 		if c.DocsFolder != "" && len(c.DocumentStores) > 0 {
 			return fmt.Errorf("docs_folder shortcut and document_stores are mutually exclusive (use one or the other)")
+		}
+		if c.MCPParserTool != "" && c.DocsFolder == "" {
+			return fmt.Errorf("mcp_parser_tool shortcut requires docs_folder shortcut (mcp_parser_tool can only be used with docs_folder)")
 		}
 		if c.EnableTools != nil && *c.EnableTools && len(c.Tools) > 0 {
 			return fmt.Errorf("enable_tools shortcut and explicit tools list are mutually exclusive (use one or the other)")

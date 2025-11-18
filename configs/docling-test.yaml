@@ -41,9 +41,7 @@ document_stores:
     # Configure MCP parsers to use Docling for document parsing
     mcp_parsers:
       tool_names: 
-        - "parse_document"  # Common Docling tool name
-        - "docling_parse"   # Alternative name
-        - "convert_document" # Another possible name
+        - "convert_document_into_docling_document"  # Docling tool name for parsing documents
       extensions: 
         - ".pdf"
         - ".docx"

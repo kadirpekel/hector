@@ -216,7 +216,40 @@ func NewDocumentStoreWithToolRegistry(storeName string, storeConfig *config.Docu
 				mcpExtractor, _ = extraction.NewMCPExtractor(mcpConfig)
 			}
 			contentExtractors.Register(mcpExtractor)
-			fmt.Printf("✓ Registered MCP extractor for document store '%s' (tools: %v)\n", storeName, storeConfig.MCPParsers.ToolNames)
+			// Check if tools are actually available (MCP server might not be running)
+			hasAvailableTools := false
+			var availableToolNames []string
+			var missingToolNames []string
+			for _, toolName := range storeConfig.MCPParsers.ToolNames {
+				if _, err := toolRegistry.GetTool(toolName); err == nil {
+					hasAvailableTools = true
+					availableToolNames = append(availableToolNames, toolName)
+				} else {
+					missingToolNames = append(missingToolNames, toolName)
+				}
+			}
+			if hasAvailableTools {
+				if len(missingToolNames) > 0 {
+					fmt.Printf("✓ Registered MCP extractor for document store '%s' (available: %v, missing: %v)\n", storeName, availableToolNames, missingToolNames)
+				} else {
+					fmt.Printf("✓ Registered MCP extractor for document store '%s' (tools: %v)\n", storeName, storeConfig.MCPParsers.ToolNames)
+				}
+			} else {
+				// Try to get available MCP tool names for debugging
+				if adapter, ok := toolRegistry.(interface{ ListMCPToolNames() []string }); ok {
+					mcpToolNames := adapter.ListMCPToolNames()
+					if len(mcpToolNames) > 0 {
+						fmt.Printf("⚠️  Registered MCP extractor for document store '%s' (tools: %v), but specified tools are not available\n", storeName, storeConfig.MCPParsers.ToolNames)
+						fmt.Printf("   💡 Available MCP tools: %v\n", mcpToolNames)
+						fmt.Printf("   💡 Tip: Use one of the available tool names in --mcp-parser-tool\n")
+					} else {
+						fmt.Printf("⚠️  Registered MCP extractor for document store '%s' (tools: %v), but MCP tools are not available - will fallback to native parsers\n", storeName, storeConfig.MCPParsers.ToolNames)
+					}
+				} else {
+					fmt.Printf("⚠️  Registered MCP extractor for document store '%s' (tools: %v), but MCP tools are not available - will fallback to native parsers\n", storeName, storeConfig.MCPParsers.ToolNames)
+					fmt.Printf("   💡 Tip: Check available tool names from your MCP server (19 tools discovered)\n")
+				}
+			}
 		}
 	}
 
@@ -335,7 +368,8 @@ func (ds *DocumentStore) StartIndexing() error {
 }
 
 // indexDocument indexes a single document from any source
-func (ds *DocumentStore) indexDocument(doc *indexing.Document) error {
+// Returns the extractor name used (if any) for tracking purposes
+func (ds *DocumentStore) indexDocument(doc *indexing.Document) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultIndexingTimeout)
 	defer cancel()
 
@@ -359,25 +393,30 @@ func (ds *DocumentStore) indexDocument(doc *indexing.Document) error {
 	author := ""
 	extractedMetadata := make(map[string]string)
 
+	var extractorName string
 	if ds.dataSource.Type() == "directory" {
 		// For file sources, check if we need binary extraction
 		path := doc.ID
 		mimeType := ds.detectMIMEType(path)
 
-		// Try to extract using content extractors (for binary files like PDFs)
+		// Try to extract using content extractors (for binary files like PDFs, or text files via TextExtractor)
 		extracted, err := ds.contentExtractors.ExtractContent(ctx, path, mimeType, doc.Size)
 		if err == nil && extracted != nil && extracted.Content != "" {
-			// Binary extraction succeeded, use extracted content
+			// Extraction succeeded (MCP, Binary, or Text extractor), use extracted content
 			content = extracted.Content
 			title = extracted.Title
 			author = extracted.Author
 			extractedMetadata = extracted.Metadata
+			extractorName = extracted.ExtractorName
+		} else {
+			// Extraction failed or returned empty - use Document.Content (already read from file)
+			// This happens when no extractor matches or extraction fails
+			extractorName = "none"
 		}
-		// If extraction failed or returned empty, use Document.Content (already read from file)
 	}
 
 	if content == "" {
-		return nil // Skip empty content
+		return extractorName, nil // Skip empty content
 	}
 
 	// Step 2: Detect type and language
@@ -399,7 +438,7 @@ func (ds *DocumentStore) indexDocument(doc *indexing.Document) error {
 	// Step 4: Chunk content using the chunker
 	chunks, err := ds.chunker.Chunk(content, meta)
 	if err != nil {
-		return NewDocumentStoreError(ds.name, "indexDocument", "failed to chunk content", doc.ID, err)
+		return extractorName, NewDocumentStoreError(ds.name, "indexDocument", "failed to chunk content", doc.ID, err)
 	}
 
 	// Step 5: Prepare base metadata for all chunks
@@ -435,6 +474,15 @@ func (ds *DocumentStore) indexDocument(doc *indexing.Document) error {
 	baseMetadata["collection"] = ds.GetCollectionName()
 	baseMetadata["source_type"] = ds.dataSource.Type()
 	baseMetadata["indexed_at"] = time.Now().Unix()
+
+	// Add extractor information
+	if extractorName != "" {
+		baseMetadata["extractor"] = extractorName
+		// Also check if MCP tool info is in metadata
+		if toolName, ok := extractedMetadata["tool"]; ok {
+			baseMetadata["extractor_tool"] = toolName
+		}
+	}
 
 	// Add extracted metadata
 	if author != "" {
@@ -492,12 +540,12 @@ func (ds *DocumentStore) indexDocument(doc *indexing.Document) error {
 			}
 
 			if err := ds.searchEngine.IngestDocument(ctx, chunkID, chunk.Content, chunkMetadata); err != nil {
-				return NewDocumentStoreError(ds.name, "indexDocument", "failed to ingest chunk", doc.ID, err)
+				return extractorName, NewDocumentStoreError(ds.name, "indexDocument", "failed to ingest chunk", doc.ID, err)
 			}
 		}
 	}
 
-	return nil
+	return extractorName, nil
 }
 
 // isSearchEngineReady checks if the search engine is properly initialized
@@ -1019,7 +1067,7 @@ func (ds *DocumentStore) handleFileEvent(event fsnotify.Event) {
 		if _, err := os.Stat(event.Name); err == nil {
 			// Read document from data source
 			if doc, err := ds.dataSource.ReadDocument(ds.ctx, event.Name); err == nil {
-				_ = ds.indexDocument(doc)
+				_, _ = ds.indexDocument(doc)
 			}
 		}
 	case event.Op&fsnotify.Write == fsnotify.Write:
@@ -1027,7 +1075,7 @@ func (ds *DocumentStore) handleFileEvent(event fsnotify.Event) {
 		if _, err := os.Stat(event.Name); err == nil {
 			// Read document from data source
 			if doc, err := ds.dataSource.ReadDocument(ds.ctx, event.Name); err == nil {
-				_ = ds.indexDocument(doc)
+				_, _ = ds.indexDocument(doc)
 			}
 		}
 	case event.Op&fsnotify.Remove == fsnotify.Remove:
@@ -1095,7 +1143,8 @@ func (ds *DocumentStore) RefreshDocument(relativePath string) error {
 	if err != nil {
 		return err
 	}
-	return ds.indexDocument(doc)
+	_, err = ds.indexDocument(doc)
+	return err
 }
 
 type IndexedFileInfo struct {

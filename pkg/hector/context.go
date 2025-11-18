@@ -29,6 +29,19 @@ func (a *toolRegistryAdapter) GetTool(name string) (extraction.Tool, error) {
 	return &toolAdapter{tool: tool}, nil
 }
 
+// ListMCPToolNames returns names of all MCP tools for debugging
+func (a *toolRegistryAdapter) ListMCPToolNames() []string {
+	allTools := a.registry.ListTools()
+	var mcpToolNames []string
+	for _, toolInfo := range allTools {
+		// Only include MCP tools (check source type)
+		if toolInfo.ServerURL != "" {
+			mcpToolNames = append(mcpToolNames, toolInfo.Name)
+		}
+	}
+	return mcpToolNames
+}
+
 // toolAdapter bridges tools.Tool to extraction.Tool
 type toolAdapter struct {
 	tool tools.Tool

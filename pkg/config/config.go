@@ -115,6 +115,40 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 	if c.Tools == nil {
 		c.Tools = make(map[string]*ToolConfig)
 	}
+
+	// Auto-configure MCP parsers ONLY if user explicitly specified a parser tool name
+	// Explicit is better than implicit - parser must be explicitly defined to be active
+	if agent.MCPParserTool != "" && docStoreConfig.MCPParsers == nil {
+		// User explicitly specified parser tool name(s) via --mcp-parser-tool
+		// Support comma-separated tool names for fallback chain (e.g., "parse_document,docling_parse,convert_document")
+		toolNames := strings.Split(agent.MCPParserTool, ",")
+		// Trim whitespace from each tool name
+		for i, name := range toolNames {
+			toolNames[i] = strings.TrimSpace(name)
+		}
+		// Runtime will validate that tools exist when actually used
+		docStoreConfig.MCPParsers = &DocumentStoreMCPParserConfig{
+			ToolNames: toolNames,
+			Extensions: []string{
+				".pdf",
+				".docx",
+				".pptx",
+				".xlsx",
+				".html",
+			},
+			Priority:     IntPtr(8), // Higher than native parsers (5)
+			PreferNative: BoolPtr(false),
+		}
+		if len(toolNames) == 1 {
+			fmt.Printf("   - mcp_parsers: auto-configured (using specified tool: %s)\n", toolNames[0])
+		} else {
+			fmt.Printf("   - mcp_parsers: auto-configured (using specified tools: %s)\n", strings.Join(toolNames, ", "))
+		}
+	}
+
+	// Clear temporary zero-config fields after expansion
+	agent.MCPParserTool = ""
+
 	// Note: search tool no longer needs document_stores config - it uses agent's assigned stores
 	// We don't auto-create search tool config here anymore since it's handled by agent assignment
 	fmt.Printf("💡 To customize these, define them explicitly in your configuration.\n")
@@ -637,6 +671,7 @@ func CreateZeroConfig(source interface{}) *Config {
 	enableTools := extractBoolField(source, "Tools")
 	thinking := extractBoolField(source, "Thinking")
 	mcpURL := extractStringField(source, "MCPURL")
+	mcpParserTool := extractStringField(source, "MCPParserTool")
 	docsFolder := extractStringField(source, "DocsFolder")
 	embedderModel := extractStringField(source, "EmbedderModel")
 	agentName := extractStringField(source, "AgentName")
@@ -734,12 +769,17 @@ func CreateZeroConfig(source interface{}) *Config {
 
 	if docsFolder != "" {
 		agentConfig.DocsFolder = docsFolder
+		if mcpParserTool != "" {
+			agentConfig.MCPParserTool = mcpParserTool
+		}
 		if embedderModel != "" {
 			cfg.Embedders["default-embedder"] = &EmbedderProviderConfig{
 				Model: embedderModel,
 			}
 		}
 	}
+	// Note: If mcpParserTool is set without docsFolder, validation in AgentConfig.Validate() will catch it
+	// We don't set MCPParserTool here if docsFolder is empty, so it will be caught during validation
 
 	if enableTools {
 		agentConfig.EnableTools = BoolPtr(true)

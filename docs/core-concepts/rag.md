@@ -570,7 +570,25 @@ Use MCP (Model Context Protocol) tools for advanced document parsing. This allow
 1. Configure MCP tools in your `tools` section
 2. Start your MCP server (e.g., Docling MCP server)
 
-**Basic Configuration:**
+**Quick Start (Shortcut):**
+
+Use the `mcp_parser_tool` shortcut with `docs_folder` to auto-configure MCP parsers:
+
+```yaml
+agents:
+  assistant:
+    docs_folder: "./documents"
+    mcp_parser_tool: "convert_document_into_docling_document"  # Docling tool name
+```
+
+Or via CLI:
+```bash
+hector serve --docs-folder ./documents --mcp-parser-tool "convert_document_into_docling_document"
+```
+
+**Note:** Tool names vary by MCP server. For Docling, use `convert_document_into_docling_document`. Check available tools if you see a warning message.
+
+**Basic Configuration (Explicit):**
 
 ```yaml
 tools:
@@ -579,13 +597,13 @@ tools:
         url: "http://localhost:3000"
         protocol: "mcp"
       tools:
-        - "parse_document"
+        - "convert_document_into_docling_document"
 
 document_stores:
   knowledge_base:
     path: "./documents"
     mcp_parsers:
-      tool_names: ["parse_document"]
+      tool_names: ["convert_document_into_docling_document"]
 ```
 
 **Advanced Configuration:**
@@ -595,7 +613,7 @@ document_stores:
   research_papers:
     path: "./papers"
     mcp_parsers:
-      tool_names: ["parse_document", "docling_parse"]  # Try tools in order
+      tool_names: ["convert_document_into_docling_document"]  # Docling tool name
       extensions: [".pdf", ".pptx", ".html"]            # Only these formats
       priority: 10                                       # Override native parsers
       prefer_native: false                               # Use MCP first

@@ -28,6 +28,7 @@ type ZeroConfigFlags struct {
 	Tools         bool    `help:"Enable built-in tools"`
 	Thinking      bool    `help:"Show thinking blocks from LLM (disabled by default, use --thinking to enable)" negatable:""`
 	MCPURL        string  `name:"mcp-url" help:"MCP server URL for external tools" env:"MCP_URL" placeholder:"URL"`
+	MCPParserTool string  `name:"mcp-parser-tool" help:"MCP parser tool name(s) to use for document parsing (comma-separated for fallback chain, e.g., parse_document,docling_parse,convert_document)" placeholder:"TOOL_NAME"`
 	DocsFolder    string  `name:"docs-folder" help:"Folder containing documents for RAG" type:"path" placeholder:"PATH"`
 	EmbedderModel string  `name:"embedder-model" help:"Embedder model for document store" default:"nomic-embed-text"`
 	VectorDB      string  `name:"vectordb" help:"Vector database connection string" default:"http://localhost:6334" placeholder:"URL"`

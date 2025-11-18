@@ -269,16 +269,19 @@ agents:
     
     # 🎯 Quick config shortcuts (mutually exclusive with explicit config)
     docs_folder: "./"         # Auto-creates document store + search tool + db + embedder
+    mcp_parser_tool: "convert_document_into_docling_document"  # Auto-configures MCP parsers (requires docs_folder)
     enable_tools: true        # Auto-enables all local tools (execute_command, write_file, etc.)
 ```
 
 **What gets auto-created:**
 - `docs_folder: "./"` → Document store + Qdrant database + Ollama embedder + search tool
+- `mcp_parser_tool: "convert_document_into_docling_document"` → Auto-configures MCP parsers for the document store (tool name varies by MCP server)
 - `enable_tools: true` → All local tools with safe defaults (sandboxed)
 
 ⚠️ **Mutual exclusivity:** Cannot mix shortcuts with explicit config:
 
 - `docs_folder` + `document_stores` = Error
+- `mcp_parser_tool` without `docs_folder` = Error (mcp_parser_tool requires docs_folder)
 - `enable_tools` + `tools: [...]` = Error
 
 **Comparison:**
@@ -1340,7 +1343,18 @@ Use MCP (Model Context Protocol) tools for advanced document parsing. This allow
 1. Configure MCP tools in your `tools` section
 2. Start your MCP server (e.g., Docling MCP server)
 
-**Configuration:**
+**Quick Start (Shortcut):**
+
+Use the `mcp_parser_tool` shortcut with `docs_folder` to auto-configure MCP parsers:
+
+```yaml
+agents:
+  assistant:
+    docs_folder: "./documents"
+    mcp_parser_tool: "convert_document_into_docling_document"  # Docling tool name (check available tools if unsure)
+```
+
+**Configuration (Explicit):**
 
 ```yaml
 tools:
@@ -1349,13 +1363,13 @@ tools:
         url: "http://localhost:3000"
         protocol: "mcp"
       tools:
-        - "parse_document"
+        - "convert_document_into_docling_document"
 
 document_stores:
   knowledge_base:
     path: "./documents"
     mcp_parsers:
-      tool_names: ["parse_document"]  # Required: MCP tool names
+      tool_names: ["convert_document_into_docling_document"]  # Required: MCP tool names (check your MCP server for actual names)
       extensions: [".pdf", ".pptx"]    # Optional: Specific formats
       priority: 8                      # Optional: Extractor priority (default: 8)
       prefer_native: false            # Optional: Use native first (default: false)
@@ -1826,7 +1840,15 @@ document_stores:
     verbose_progress: true
 ```
 
-**Example - With MCP Parsing:**
+**Example - With MCP Parsing (Shortcut):**
+```yaml
+agents:
+  assistant:
+    docs_folder: "./documents"
+    mcp_parser_tool: "convert_document_into_docling_document"  # Docling tool name
+```
+
+**Example - With MCP Parsing (Explicit):**
 ```yaml
 tools:
   mcp_tools:
@@ -1834,13 +1856,13 @@ tools:
         url: "http://localhost:3000"
         protocol: "mcp"
       tools:
-        - "parse_document"
+        - "convert_document_into_docling_document"
 
 document_stores:
   knowledge_base:
     path: "./documents"
     mcp_parsers:
-      tool_names: ["parse_document"]
+      tool_names: ["convert_document_into_docling_document"]
       extensions: [".pdf", ".pptx"]  # Only these formats
       priority: 10                     # Override native parsers
 ```
