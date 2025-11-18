@@ -190,7 +190,20 @@ func (pt *ProgressTracker) printProgress() {
 		return
 	}
 
-	percentage := float64(stats.ProcessedFiles) / float64(stats.TotalFiles) * 100
+	// Calculate percentage with proper clamping to prevent >100% or <0%
+	// Handle edge cases: division by zero is already prevented by TotalFiles == 0 check above
+	var percentage float64
+	if stats.TotalFiles > 0 {
+		percentage = float64(stats.ProcessedFiles) / float64(stats.TotalFiles) * 100
+		// Clamp percentage to valid range [0, 100]
+		// This prevents >100% when ProcessedFiles exceeds TotalFiles due to dynamic updates
+		if percentage > 100 {
+			percentage = 100
+		}
+		if percentage < 0 {
+			percentage = 0
+		}
+	}
 	elapsed := stats.ElapsedTime
 
 	// Calculate ETA
@@ -199,14 +212,25 @@ func (pt *ProgressTracker) printProgress() {
 	if stats.ProcessedFiles > 0 && elapsed.Seconds() > 0 {
 		filesPerSec = float64(stats.ProcessedFiles) / elapsed.Seconds()
 		remaining := stats.TotalFiles - stats.ProcessedFiles
-		if filesPerSec > 0 {
+		// Clamp remaining to non-negative to prevent negative ETA
+		if remaining < 0 {
+			remaining = 0
+		}
+		if filesPerSec > 0 && remaining > 0 {
 			eta = time.Duration(float64(remaining)/filesPerSec) * time.Second
 		}
 	}
 
-	// Build progress bar
+	// Build progress bar with clamped width to prevent overflow
 	barWidth := 30
 	filled := int(percentage / 100 * float64(barWidth))
+	// Clamp filled to valid range [0, barWidth] to prevent bar overflow
+	if filled > barWidth {
+		filled = barWidth
+	}
+	if filled < 0 {
+		filled = 0
+	}
 	bar := ""
 	for i := 0; i < barWidth; i++ {
 		if i < filled {

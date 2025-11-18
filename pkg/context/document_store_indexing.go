@@ -183,16 +183,13 @@ func (ds *DocumentStore) indexFromDataSource() error {
 			}
 
 			// Update total count as documents are discovered (for accurate progress tracking)
-			// This ensures total matches exactly what gets processed
-			// Get stats once to avoid race conditions
+			// Increment total immediately when a document is discovered, not when it's processed
+			// This ensures TotalFiles accurately reflects the number of documents to process
 			stats := ds.progressTracker.GetStats()
-			if stats.ProcessedFiles >= stats.TotalFiles {
-				// Increment total to accommodate this new document
-				newTotal := stats.TotalFiles + 1
-				ds.progressTracker.SetTotalFiles(newTotal)
-				if ds.dataSource.Type() == "directory" {
-					ds.checkpointManager.SetTotalFiles(int(newTotal))
-				}
+			newTotal := stats.TotalFiles + 1
+			ds.progressTracker.SetTotalFiles(newTotal)
+			if ds.dataSource.Type() == "directory" {
+				ds.checkpointManager.SetTotalFiles(int(newTotal))
 			}
 
 			if !doc.ShouldIndex {
@@ -212,19 +209,26 @@ func (ds *DocumentStore) indexFromDataSource() error {
 						storedModTime := docInfo.ModTime
 						// Also check size to be sure (fast check)
 						if currentModTime <= storedModTime && doc.Size == docInfo.Size {
-							// File hasn't changed - skip it but mark it as found
-							// so it's preserved in the index state
-							// Also record it in checkpoint so checkpoint stays in sync
-							docsMu.Lock()
-							foundDocs[relPath] = true
-							foundDocs[doc.ID] = true
-							docsMu.Unlock()
-							ds.progressTracker.IncrementSkipped()
-							ds.progressTracker.IncrementProcessed() // Count skipped files as processed too
-							// Record skipped file in checkpoint to keep it in sync
-							ds.checkpointManager.RecordFile(relPath, doc.Size, doc.LastModified, "skipped")
-							_ = ds.checkpointManager.SaveCheckpoint()
-							continue
+							// File hasn't changed, but check if extractors are still available
+							// If extractors are not available (e.g., MCP server is down), don't skip
+							// so that indexing errors are visible to the user
+							mimeType := ds.detectMIMEType(doc.ID)
+							if ds.contentExtractors.HasExtractorForFile(doc.ID, mimeType) {
+								// File hasn't changed and extractors are available - skip it but mark it as found
+								// so it's preserved in the index state
+								// Also record it in checkpoint so checkpoint stays in sync
+								docsMu.Lock()
+								foundDocs[relPath] = true
+								foundDocs[doc.ID] = true
+								docsMu.Unlock()
+								ds.progressTracker.IncrementSkipped()
+								ds.progressTracker.IncrementProcessed() // Count skipped files as processed too
+								// Record skipped file in checkpoint to keep it in sync
+								ds.checkpointManager.RecordFile(relPath, doc.Size, doc.LastModified, "skipped")
+								_ = ds.checkpointManager.SaveCheckpoint()
+								continue
+							}
+							// Extractors not available - don't skip, let indexing attempt so errors are visible
 						}
 					}
 				}

@@ -76,3 +76,14 @@ func (r *ExtractorRegistry) ExtractContent(ctx context.Context, path string, mim
 func (r *ExtractorRegistry) GetExtractors() []ContentExtractor {
 	return r.extractors
 }
+
+// HasExtractorForFile checks if any extractor can handle the given file
+// This is useful for determining if a file can be indexed before attempting extraction
+func (r *ExtractorRegistry) HasExtractorForFile(path string, mimeType string) bool {
+	for _, extractor := range r.extractors {
+		if extractor.CanExtract(path, mimeType) {
+			return true
+		}
+	}
+	return false
+}
