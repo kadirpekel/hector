@@ -671,6 +671,38 @@ agents:
 
 ## Tool Configuration
 
+### Tool Visibility
+
+Tools can be marked as `internal` to hide them from agents while still allowing document stores and other system components to use them:
+
+```yaml
+tools:
+  docling:
+    type: "mcp"
+    enabled: true
+    internal: true  # Not visible to agents (used only for document parsing)
+    server_url: "http://localhost:3000/mcp"
+```
+
+**When `internal: true`:**
+- ✅ Tool is available in the tool registry
+- ✅ Document stores can use it for parsing (via MCP extractors)
+- ❌ Tool is **not** visible to agents (filtered out during agent creation)
+- ❌ Agent cannot call this tool directly
+
+**Use cases:**
+- MCP tools used only for document parsing (e.g., Docling)
+- System-level tools that shouldn't be exposed to agents
+- Tools reserved for internal processing only
+
+**Default behavior:** If `internal` is omitted or `false`, the tool is visible to agents (normal behavior).
+
+!!! tip "Tool Assignment Still Applies"
+    Even with `internal: false`, agents still respect the `tools: []` assignment pattern:
+    - `tools: nil` → Gets all non-internal tools
+    - `tools: []` → Gets no tools (explicit empty list)
+    - `tools: ["tool1"]` → Gets only explicitly listed tools (visibility ignored for explicit lists)
+
 ### Built-in Tools
 
 ```yaml
@@ -796,10 +828,36 @@ tools:
     server_url: "https://docling.example.com/mcp"  # HTTPS URL
     description: "Docling - Document parsing"
     
+    # Visibility: Hide from agents (used only for document parsing)
+    internal: true  # Not visible to agents, but available for document stores
+    
     # TLS configuration (for HTTPS connections)
     insecure_skip_verify: false  # Skip certificate verification (dev/test only)
     ca_certificate: ""          # Path to custom CA certificate file
 ```
+
+**Internal MCP Tools for Document Parsing:**
+
+When using MCP tools exclusively for document parsing (not for agent use), mark them as `internal: true`:
+
+```yaml
+tools:
+  docling:
+    type: "mcp"
+    enabled: true
+    internal: true  # Hide from agents, but document stores can use it
+    server_url: "http://localhost:3000/mcp"
+    description: "Docling - Advanced document parsing"
+
+document_stores:
+  knowledge_base:
+    path: "./documents"
+    mcp_parsers:
+      tool_names: ["parse_document", "docling_parse"]  # Uses internal tools
+      extensions: [".pdf", ".docx", ".pptx"]
+```
+
+This prevents MCP tools from polluting agent tool lists while still allowing document stores to use them for parsing.
 
 **TLS Options:**
 - `insecure_skip_verify: true` - Skip TLS certificate verification (⚠️ dev/test only, shows warning)

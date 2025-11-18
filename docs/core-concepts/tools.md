@@ -23,9 +23,12 @@ Hector uses a **consistent assignment pattern** for tools (same pattern as docum
 
 | Configuration | Access | Behavior |
 |--------------|--------|----------|
-| `nil`/omitted | **All tools** | Permissive default - agent has access to all tools from the registry (including MCP tools, default tools, etc.) |
+| `nil`/omitted | **All tools** | Permissive default - agent has access to all tools from the registry (excluding `internal: true` tools) |
 | `[]` (explicitly empty) | **No tools** | Explicit restriction - agent has no access to any tools |
-| `["tool1", ...]` | **Only those tools** | Scoped access - agent can only use the explicitly listed tools |
+| `["tool1", ...]` | **Only those tools** | Scoped access - agent can only use the explicitly listed tools (visibility ignored for explicit lists) |
+
+!!! note "Internal Tools"
+    Tools marked with `internal: true` are **never** visible to agents, even when `tools` is omitted. They remain available for document stores and other system components. See [Tool Visibility](#tool-visibility) below.
 
 **Example:**
 ```yaml
@@ -45,6 +48,49 @@ agents:
       - "write_file"
       - "search_replace"
 ```
+
+---
+
+## Tool Visibility
+
+Tools can be marked as `internal` to hide them from agents while still allowing document stores and other system components to use them.
+
+### Internal Tools
+
+Mark tools as `internal: true` when they should be available for system use (like document parsing) but not exposed to agents:
+
+```yaml
+tools:
+  docling:
+    type: "mcp"
+    enabled: true
+    internal: true  # Not visible to agents (used only for document parsing)
+    server_url: "http://localhost:3000/mcp"
+    description: "Docling - Advanced document parsing"
+
+document_stores:
+  knowledge_base:
+    path: "./documents"
+    mcp_parsers:
+      tool_names: ["parse_document", "docling_parse"]  # Uses internal tools
+      extensions: [".pdf", ".docx", ".pptx"]
+```
+
+**Behavior:**
+- ✅ **Available in tool registry** - Tool is registered and discoverable
+- ✅ **Document stores can use it** - MCP extractors can access internal tools for parsing
+- ❌ **Hidden from agents** - Filtered out when `tools` is `nil` (auto-discovery mode)
+- ❌ **Agent cannot call directly** - Even if explicitly listed, internal tools are system-only
+
+**Use cases:**
+- **MCP tools for document parsing** - Use Docling, Unstructured, etc. for parsing without exposing to agents
+- **System-level tools** - Tools reserved for internal processing
+- **Prevent tool pollution** - Keep agent tool lists clean when tools are only for parsing
+
+**Default:** If `internal` is omitted or `false`, the tool is visible to agents (normal behavior).
+
+!!! tip "Explicit Tool Lists Override Visibility"
+    When agents explicitly list tools (`tools: ["tool1", "tool2"]`), visibility is ignored. However, internal tools are still filtered out even in explicit lists to prevent accidental exposure.
 
 ---
 
@@ -712,6 +758,19 @@ tools:
 
 ```yaml
 tools:
+  # Internal MCP tool (for document parsing only)
+  docling:
+    type: "mcp"
+    enabled: true
+    internal: true  # Hide from agents, available for document stores
+    server_url: "http://localhost:3000/mcp"
+    description: "Docling - Document parsing"
+    
+    # TLS configuration (optional)
+    insecure_skip_verify: false  # Skip certificate verification (dev/test only)
+    ca_certificate: ""          # Path to custom CA certificate file
+
+  # Regular MCP tools (visible to agents)
   mcp_tools:
     - server:
         url: "http://localhost:3000"
@@ -725,6 +784,28 @@ tools:
         - "github_create_issue"
         - "slack_send_message"
 ```
+
+**Internal MCP Tools for Document Parsing:**
+
+When MCP tools are used exclusively for document parsing (not for agent use), mark them as `internal: true`:
+
+```yaml
+tools:
+  docling:
+    type: "mcp"
+    enabled: true
+    internal: true  # Prevents agent tool list pollution
+    server_url: "http://localhost:3000/mcp"
+
+document_stores:
+  knowledge_base:
+    path: "./documents"
+    mcp_parsers:
+      tool_names: ["parse_document", "docling_parse"]
+      extensions: [".pdf", ".docx", ".pptx"]
+```
+
+This keeps agent tool lists clean while allowing document stores to use MCP tools for advanced parsing.
 
 ---
 

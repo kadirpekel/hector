@@ -1,14 +1,11 @@
 package context
 
 import (
-	"context"
 	"crypto/md5"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/kadirpekel/hector/pkg/context/indexing"
 )
@@ -40,9 +37,13 @@ func (ds *DocumentStore) indexFromDataSource() error {
 		if checkpoint != nil && err == nil {
 			processedCount := len(checkpoint.ProcessedFiles)
 			// Only clear checkpoint if it's truly complete (all files processed)
+			// Completed checkpoints are cleared because index state (saved after successful indexing)
+			// serves as the persistent record for subsequent runs. Checkpoints are only for
+			// resuming interrupted indexing runs, not for skipping files on subsequent runs.
 			if processedCount > 0 && checkpoint.TotalFiles > 0 && processedCount >= checkpoint.TotalFiles {
 				// Checkpoint is complete - previous indexing finished successfully
-				// Clear it and rely on incremental indexing (if enabled) for this run
+				// Clear it since index state should be available for incremental indexing
+				// If index state is missing, incremental indexing will handle it gracefully
 				_ = ds.checkpointManager.ClearCheckpoint()
 				checkpoint = nil
 			} else {
@@ -54,9 +55,10 @@ func (ds *DocumentStore) indexFromDataSource() error {
 	}
 
 	if len(existingDocs) > 0 && useIncrementalIndexing {
-		fmt.Printf("📊 Incremental indexing: Found %d existing document(s) in index\n", len(existingDocs))
+		fmt.Printf("📊 Incremental indexing enabled: Found %d existing document(s) in index (unchanged files will be skipped)\n", len(existingDocs))
 	} else if len(existingDocs) > 0 {
-		fmt.Printf("📊 Found %d existing document(s) in index (will be reindexed)\n", len(existingDocs))
+		// existingDocs > 0 but useIncrementalIndexing is false
+		fmt.Printf("📊 Found %d existing document(s) in index, but incremental indexing is disabled (will be reindexed)\n", len(existingDocs))
 	} else {
 		fmt.Printf("📊 First indexing or full reindex mode\n")
 	}
@@ -64,29 +66,12 @@ func (ds *DocumentStore) indexFromDataSource() error {
 	// Discover documents from data source
 	docChan, errChan := ds.dataSource.DiscoverDocuments(ctx)
 
-	// Count total documents first (for progress tracking)
-	// For directory sources, we can count files; for others, we'll estimate
-	var totalDocs int64
+	// Count total documents dynamically as they're discovered (for accurate progress tracking)
+	// Pre-counting is inaccurate because files might be filtered out during discovery
+	// (e.g., maxFileSize, read errors, etc.), so we count as documents arrive
+	ds.progressTracker.SetTotalFiles(0)
 	if ds.dataSource.Type() == "directory" {
-		// When resuming from checkpoint OR using incremental indexing, count ALL files
-		// that will be discovered (including unchanged files that will be skipped).
-		// This ensures the progress percentage is accurate.
-		// Otherwise, count only files that need processing.
-		if checkpoint != nil || useIncrementalIndexing {
-			totalDocs = ds.countAllDirectoryFiles(ctx)
-		} else {
-			totalDocs = ds.countDirectoryFiles(ctx, existingDocs, checkpoint, useIncrementalIndexing)
-		}
-	} else {
-		// For SQL/API, we'll count as we process
-		totalDocs = 0
-	}
-
-	// Set up progress tracking
-	// When using checkpoint or incremental indexing, totalDocs already includes all files
-	ds.progressTracker.SetTotalFiles(totalDocs)
-	if ds.dataSource.Type() == "directory" {
-		ds.checkpointManager.SetTotalFiles(int(totalDocs))
+		ds.checkpointManager.SetTotalFiles(0) // Will be updated as we discover files
 	}
 
 	ds.progressTracker.Start()
@@ -141,14 +126,37 @@ func (ds *DocumentStore) indexFromDataSource() error {
 					for path, info := range indexedDocs {
 						finalState[path] = info
 					}
+					indexStateSaved := false
 					if err := ds.saveIndexState(finalState, len(finalState)*3); err != nil {
 						slog.Warn("Failed to save index state", "error", err)
+					} else {
+						indexStateSaved = true
 					}
 
-					// Don't clear checkpoint after successful indexing - keep it temporarily
-					// On next restart, we detect that previous indexing completed successfully
-					// and clear it before using incremental indexing (if enabled)
-					// _ = ds.checkpointManager.ClearCheckpoint()
+					// Clear checkpoint after successful indexing if index state was saved
+					// Only clear if checkpoint is complete (all files processed) or if incremental indexing
+					// is enabled and working (index state contains all files)
+					// This ensures we don't lose checkpoint information for incomplete runs
+					if indexStateSaved {
+						shouldClear := false
+						if checkpoint != nil {
+							processedCount := len(checkpoint.ProcessedFiles)
+							// Clear if checkpoint is complete OR if incremental indexing is enabled
+							// (in which case index state is the source of truth)
+							if processedCount > 0 && checkpoint.TotalFiles > 0 && processedCount >= checkpoint.TotalFiles {
+								shouldClear = true // Checkpoint is complete
+							} else if useIncrementalIndexing && len(finalState) > 0 {
+								shouldClear = true // Incremental indexing working, index state is source of truth
+							}
+							// Otherwise keep checkpoint for resume capability
+						} else if useIncrementalIndexing && len(finalState) > 0 {
+							// Checkpoint was cleared earlier, but ensure any remaining file is cleared
+							shouldClear = true
+						}
+						if shouldClear {
+							_ = ds.checkpointManager.ClearCheckpoint()
+						}
+					}
 				}
 
 				// Update status
@@ -174,35 +182,48 @@ func (ds *DocumentStore) indexFromDataSource() error {
 				return nil
 			}
 
+			// Update total count as documents are discovered (for accurate progress tracking)
+			// This ensures total matches exactly what gets processed
+			// Get stats once to avoid race conditions
+			stats := ds.progressTracker.GetStats()
+			if stats.ProcessedFiles >= stats.TotalFiles {
+				// Increment total to accommodate this new document
+				newTotal := stats.TotalFiles + 1
+				ds.progressTracker.SetTotalFiles(newTotal)
+				if ds.dataSource.Type() == "directory" {
+					ds.checkpointManager.SetTotalFiles(int(newTotal))
+				}
+			}
+
 			if !doc.ShouldIndex {
 				ds.progressTracker.IncrementSkipped()
+				ds.progressTracker.IncrementProcessed() // Count skipped files as processed too
 				continue
 			}
 
 			// Check incremental indexing for directory sources
 			if ds.dataSource.Type() == "directory" && useIncrementalIndexing {
-				// Use relative path for consistency with existingDocs
-				relPath := doc.SourcePath
-				if relPath == "" {
-					if pathVal, ok := doc.Metadata["rel_path"].(string); ok {
-						relPath = pathVal
-					} else {
-						// Fallback: compute relative path from absolute path
-						if rel, err := filepath.Rel(ds.sourcePath, doc.ID); err == nil {
-							relPath = rel
-						}
-					}
-				}
+				relPath := ds.getRelPath(&doc)
 				if relPath != "" {
 					if docInfo, exists := existingDocs[relPath]; exists {
-						if doc.LastModified.Before(time.Unix(docInfo.ModTime, 0)) || doc.LastModified.Equal(time.Unix(docInfo.ModTime, 0)) {
+						// Compare Unix timestamps (seconds) to avoid precision issues
+						// File mod times are stored as Unix timestamps in index state
+						currentModTime := doc.LastModified.Unix()
+						storedModTime := docInfo.ModTime
+						// Also check size to be sure (fast check)
+						if currentModTime <= storedModTime && doc.Size == docInfo.Size {
 							// File hasn't changed - skip it but mark it as found
 							// so it's preserved in the index state
+							// Also record it in checkpoint so checkpoint stays in sync
 							docsMu.Lock()
 							foundDocs[relPath] = true
 							foundDocs[doc.ID] = true
 							docsMu.Unlock()
 							ds.progressTracker.IncrementSkipped()
+							ds.progressTracker.IncrementProcessed() // Count skipped files as processed too
+							// Record skipped file in checkpoint to keep it in sync
+							ds.checkpointManager.RecordFile(relPath, doc.Size, doc.LastModified, "skipped")
+							_ = ds.checkpointManager.SaveCheckpoint()
 							continue
 						}
 					}
@@ -211,24 +232,15 @@ func (ds *DocumentStore) indexFromDataSource() error {
 
 			// Check checkpoint for directory sources
 			if ds.dataSource.Type() == "directory" && checkpoint != nil {
-				relPath := doc.SourcePath
-				if relPath == "" {
-					if pathVal, ok := doc.Metadata["rel_path"].(string); ok {
-						relPath = pathVal
-					} else {
-						// Fallback: compute relative path from absolute path
-						if rel, err := filepath.Rel(ds.sourcePath, doc.ID); err == nil {
-							relPath = rel
-						}
-					}
-				}
+				relPath := ds.getRelPath(&doc)
 				if relPath != "" && !ds.checkpointManager.ShouldProcessFile(relPath, doc.Size, doc.LastModified) {
 					// File was already processed in checkpoint and hasn't changed
-					// Count it as processed (it's already done) and mark it as found
+					// Count it as processed and skipped (it's already done) and mark it as found
 					docsMu.Lock()
 					foundDocs[relPath] = true
 					foundDocs[doc.ID] = true
 					docsMu.Unlock()
+					ds.progressTracker.IncrementSkipped()
 					ds.progressTracker.IncrementProcessed()
 					continue
 				}
@@ -236,29 +248,17 @@ func (ds *DocumentStore) indexFromDataSource() error {
 				// This is correct because we'll replace the old checkpoint entry
 			}
 
-			// Update document count for non-directory sources
+			// Update document count for non-directory sources (count dynamically)
 			if ds.dataSource.Type() != "directory" {
 				docCountMu.Lock()
 				docCount++
-				if totalDocs == 0 {
-					ds.progressTracker.SetTotalFiles(docCount)
-				}
+				ds.progressTracker.SetTotalFiles(docCount)
 				docCountMu.Unlock()
 			}
 
 			docsMu.Lock()
 			// Use relative path for foundDocs to match existingDocs keys
-			relPath := doc.SourcePath
-			if relPath == "" {
-				if pathVal, ok := doc.Metadata["rel_path"].(string); ok {
-					relPath = pathVal
-				} else if ds.dataSource.Type() == "directory" {
-					// Fallback: compute relative path from absolute path
-					if rel, err := filepath.Rel(ds.sourcePath, doc.ID); err == nil {
-						relPath = rel
-					}
-				}
-			}
+			relPath := ds.getRelPath(&doc)
 			if relPath != "" {
 				foundDocs[relPath] = true
 			}
@@ -286,12 +286,7 @@ func (ds *DocumentStore) indexFromDataSource() error {
 
 				// Update current file in progress tracker
 				if ds.dataSource.Type() == "directory" {
-					relPath := d.SourcePath
-					if relPath == "" {
-						if pathVal, ok := d.Metadata["rel_path"].(string); ok {
-							relPath = pathVal
-						}
-					}
+					relPath := ds.getRelPath(&d)
 					ds.progressTracker.SetCurrentFile(relPath)
 				}
 
@@ -309,21 +304,18 @@ func (ds *DocumentStore) indexFromDataSource() error {
 					ds.progressTracker.IncrementProcessed()
 
 					if ds.dataSource.Type() == "directory" {
-						relPath := d.SourcePath
-						if relPath == "" {
-							if pathVal, ok := d.Metadata["rel_path"].(string); ok {
-								relPath = pathVal
+						relPath := ds.getRelPath(&d)
+						if relPath != "" {
+							docsMu.Lock()
+							indexedDocs[relPath] = FileIndexInfo{
+								ModTime: d.LastModified.Unix(),
+								Size:    d.Size,
+								Hash:    ds.computeDocumentHash(&d),
 							}
+							docsMu.Unlock()
+							ds.checkpointManager.RecordFile(relPath, d.Size, d.LastModified, "indexed")
+							_ = ds.checkpointManager.SaveCheckpoint()
 						}
-						docsMu.Lock()
-						indexedDocs[relPath] = FileIndexInfo{
-							ModTime: d.LastModified.Unix(),
-							Size:    d.Size,
-							Hash:    ds.computeDocumentHash(&d),
-						}
-						docsMu.Unlock()
-						ds.checkpointManager.RecordFile(relPath, d.Size, d.LastModified, "indexed")
-						_ = ds.checkpointManager.SaveCheckpoint()
 					}
 				}
 			}(doc)
@@ -332,6 +324,9 @@ func (ds *DocumentStore) indexFromDataSource() error {
 			if !ok {
 				continue
 			}
+			// Discovery errors: files that couldn't be read/discovered
+			// These don't count toward processed since they never made it to the processing loop
+			// We track them as failed for visibility but don't increment processed
 			ds.progressTracker.IncrementFailed()
 			// Don't log discovery errors during indexing to avoid breaking progress bar display
 			// These are typically non-fatal and don't need immediate attention
@@ -340,69 +335,20 @@ func (ds *DocumentStore) indexFromDataSource() error {
 	}
 }
 
-// countAllDirectoryFiles counts ALL files that will be discovered (for progress tracking)
-// This includes files that will be skipped due to checkpoint or incremental indexing
-// It uses the same filters as DirectorySource.DiscoverDocuments to ensure accurate counting
-func (ds *DocumentStore) countAllDirectoryFiles(ctx context.Context) int64 {
-	var count int64
-
-	// Note: We don't filter by maxFileSize here because we want to count all files
-	// that will be discovered, even if some will be filtered out later by maxFileSize.
-	// Files that exceed maxFileSize will be skipped during discovery and won't increment
-	// processed, so the total should include them for accurate progress tracking.
-
-	err := filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		if info.Size() == 0 {
-			return nil
-		}
-		// Apply same filters as DiscoverDocuments
-		if ds.shouldExclude(path) || !ds.shouldInclude(path) {
-			return nil
-		}
-		// Count all files that match filters - they will all be discovered
-		// Some will be skipped due to checkpoint/incremental indexing/maxFileSize, but they still count toward total
-		count++
-		return nil
-	})
-	if err != nil {
-		return 0
+// getRelPath extracts the relative path from a document, with fallbacks
+func (ds *DocumentStore) getRelPath(doc *indexing.Document) string {
+	if doc.SourcePath != "" {
+		return doc.SourcePath
 	}
-	return count
-}
-
-// countDirectoryFiles counts files for directory sources (for progress tracking)
-func (ds *DocumentStore) countDirectoryFiles(ctx context.Context, existingDocs map[string]FileIndexInfo, checkpoint *IndexCheckpoint, useIncremental bool) int64 {
-	var count int64
-	err := filepath.Walk(ds.sourcePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		if info.Size() == 0 {
-			return nil
-		}
-		if ds.shouldExclude(path) || !ds.shouldInclude(path) {
-			return nil
-		}
-
-		relPath, _ := filepath.Rel(ds.sourcePath, path)
-		if checkpoint != nil && !ds.checkpointManager.ShouldProcessFile(relPath, info.Size(), info.ModTime()) {
-			return nil
-		}
-
-		if useIncremental && !ds.shouldReindexFile(path, info.ModTime(), existingDocs) {
-			return nil
-		}
-
-		count++
-		return nil
-	})
-	if err != nil {
-		return 0
+	if pathVal, ok := doc.Metadata["rel_path"].(string); ok {
+		return pathVal
 	}
-	return count
+	if ds.dataSource.Type() == "directory" {
+		if rel, err := filepath.Rel(ds.sourcePath, doc.ID); err == nil {
+			return rel
+		}
+	}
+	return ""
 }
 
 // computeDocumentHash computes a hash for a document (for change detection)
