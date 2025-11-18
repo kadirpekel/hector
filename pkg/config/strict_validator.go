@@ -52,18 +52,18 @@ func (r *StrictValidationResult) FormatErrors() string {
 
 	hasErrors := !r.Valid()
 	if hasErrors {
-		sb.WriteString("❌ Configuration validation errors:\n\n")
+		sb.WriteString("ERROR: Configuration validation errors:\n\n")
 	}
 
 	if len(r.UnknownFields) > 0 {
-		sb.WriteString("📝 Unknown/Typo Fields (not recognized):\n")
+		sb.WriteString("UNKNOWN: Unknown/Typo Fields (not recognized):\n")
 		for _, field := range r.UnknownFields {
 			sb.WriteString(fmt.Sprintf("   • %s: %s\n", field.Field, field.Message))
 			if len(field.Suggestions) > 0 {
-				sb.WriteString(fmt.Sprintf("     💡 Did you mean: %s?\n", strings.Join(field.Suggestions, ", ")))
+				sb.WriteString(fmt.Sprintf("     TIP: Did you mean: %s?\n", strings.Join(field.Suggestions, ", ")))
 			}
 			if field.Context != "" {
-				sb.WriteString(fmt.Sprintf("     ℹ️  %s\n", field.Context))
+				sb.WriteString(fmt.Sprintf("     INFO: %s\n", field.Context))
 			}
 		}
 		sb.WriteString("\n")
@@ -75,29 +75,29 @@ func (r *StrictValidationResult) FormatErrors() string {
 	}
 
 	if len(r.TypeErrors) > 0 {
-		sb.WriteString("🔧 Type Errors:\n")
+		sb.WriteString("TYPE_ERROR: Type Errors:\n")
 		for _, err := range r.TypeErrors {
 			sb.WriteString(fmt.Sprintf("   • %s: %s\n", err.Field, err.Message))
 			if err.Context != "" {
-				sb.WriteString(fmt.Sprintf("     ℹ️  %s\n", err.Context))
+				sb.WriteString(fmt.Sprintf("     INFO: %s\n", err.Context))
 			}
 		}
 		sb.WriteString("\n")
 	}
 
 	if len(r.Warnings) > 0 {
-		sb.WriteString("⚠️  Warnings (non-fatal):\n")
+		sb.WriteString("WARN: Warnings (non-fatal):\n")
 		for _, warn := range r.Warnings {
 			sb.WriteString(fmt.Sprintf("   • %s: %s\n", warn.Field, warn.Message))
 			if warn.Context != "" {
-				sb.WriteString(fmt.Sprintf("     ℹ️  %s\n", warn.Context))
+				sb.WriteString(fmt.Sprintf("     INFO: %s\n", warn.Context))
 			}
 		}
 		sb.WriteString("\n")
 	}
 
 	if hasErrors {
-		sb.WriteString("💡 Hints:\n")
+		sb.WriteString("TIP: Hints:\n")
 		sb.WriteString("   • Check field names against: docs/reference/configuration.md\n")
 		sb.WriteString("   • Verify correct nesting (e.g., 'agents.my-agent.llm' not 'agents.llm')\n")
 		sb.WriteString("   • Use 'hector validate <file> --print-config' to see expanded config\n")

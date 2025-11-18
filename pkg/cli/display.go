@@ -11,7 +11,7 @@ import (
 )
 
 // currentThinkingBlockID tracks the active thinking block across multiple DisplayMessage calls
-// This ensures the 💭 prefix is only shown once per thinking block, even when chunks arrive separately
+// This ensures the THINKING prefix is only shown once per thinking block, even when chunks arrive separately
 var currentThinkingBlockID string
 
 // thinkingPrefixPrinted tracks whether we've already printed the prefix for the current thinking block
@@ -154,7 +154,7 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool) {
 
 					// Print prefix only if we haven't printed it for this block yet
 					if !thinkingPrefixPrinted {
-						fmt.Print("\033[90m\033[2m💭 ")
+						fmt.Print("\033[90m\033[2mTHINKING: ")
 						thinkingPrefixPrinted = true
 					}
 
@@ -189,7 +189,7 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool) {
 					if toolName != "" {
 						// Display tool call with better formatting
 						fmt.Print("\033[36m") // Cyan color for tool calls
-						fmt.Printf("🔧 %s", toolName)
+						fmt.Printf("TOOL: %s", toolName)
 						fmt.Print("\033[0m ")
 						os.Stdout.Sync()
 					}
@@ -214,7 +214,7 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool) {
 							}
 						}
 					} else {
-						fmt.Print("\033[32m✓\033[0m\n") // Green for success
+						fmt.Print("\033[32mOK\033[0m\n") // Green for success
 					}
 					os.Stdout.Sync()
 					continue
@@ -295,8 +295,8 @@ func displayTodosCLI(data *structpb.Struct) {
 		return
 	}
 
-	fmt.Print("\033[90m\033[2m💭 ")
-	fmt.Println("📋 Current Tasks:")
+	fmt.Print("\033[90m\033[2mTHINKING: ")
+	fmt.Println("TASKS: Current Tasks:")
 
 	for i, todoValue := range todosList.Values {
 		todoStruct := todoValue.GetStructValue()
@@ -340,23 +340,23 @@ func displayTodosCLI(data *structpb.Struct) {
 
 // displayGoalCLI renders goal decomposition from structured data
 func displayGoalCLI(data *structpb.Struct) {
-	fmt.Print("\033[90m\033[2m💭 ")
+	fmt.Print("\033[90m\033[2mTHINKING: ")
 
 	// Display main goal
 	if mainGoal, ok := data.Fields["main_goal"]; ok {
-		fmt.Printf("🎯 Goal: %s\n", mainGoal.GetStringValue())
+		fmt.Printf("GOAL: %s\n", mainGoal.GetStringValue())
 	}
 
 	// Display strategy
 	if strategy, ok := data.Fields["strategy"]; ok {
-		fmt.Printf("📋 Strategy: %s\n", strategy.GetStringValue())
+		fmt.Printf("STRATEGY: %s\n", strategy.GetStringValue())
 	}
 
 	// Display subtasks if present
 	if subtasksField, ok := data.Fields["subtasks"]; ok {
 		subtasksList := subtasksField.GetListValue()
 		if subtasksList != nil && len(subtasksList.Values) > 0 {
-			fmt.Println("📝 Subtasks:")
+			fmt.Println("SUBTASKS:")
 
 			for i, subtaskValue := range subtasksList.Values {
 				subtaskStruct := subtaskValue.GetStructValue()
@@ -465,7 +465,7 @@ func DisplayTask(task *pb.Task) {
 }
 
 func DisplayError(err error) {
-	fmt.Printf("❌ Error: %v\n", err)
+	fmt.Printf("ERROR: %v\n", err)
 }
 
 func DisplayStreamingStart(agentID, mode string) {

@@ -237,7 +237,7 @@ func (b *ConfigAgentBuilder) BuildAgent(agentID string) (pb.A2AServiceServer, er
 			toolsToAdd = append(toolsToAdd, toolInfo.Name)
 		}
 		if filteredCount > 0 {
-			fmt.Printf("✓ Filtered %d internal tool(s) from agent '%s' (not visible to agents)\n", filteredCount, agentCfg.Name)
+			fmt.Printf("OK: Filtered %d internal tool(s) from agent '%s' (not visible to agents)\n", filteredCount, agentCfg.Name)
 		}
 	} else {
 		// Use explicitly listed tools

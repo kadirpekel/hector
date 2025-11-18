@@ -95,7 +95,7 @@ func printSuccess(format, file string) {
 		fmt.Fprintf(os.Stdout, "Configuration Validation Successful\n")
 		fmt.Fprintf(os.Stdout, "===================================\n\n")
 		fmt.Fprintf(os.Stdout, "File:   %s\n", file)
-		fmt.Fprintf(os.Stdout, "Status: ✓ Valid\n")
+		fmt.Fprintf(os.Stdout, "Status: OK Valid\n")
 	default:
 		fmt.Fprintf(os.Stdout, "%s: valid\n", file)
 	}

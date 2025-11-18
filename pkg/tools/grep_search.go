@@ -240,9 +240,9 @@ func (t *GrepSearchTool) Execute(ctx context.Context, args map[string]interface{
 	}
 
 	var output strings.Builder
-	output.WriteString(fmt.Sprintf("🔍 Pattern: %s\n", pattern))
-	output.WriteString(fmt.Sprintf("📁 Search path: %s\n", searchPath))
-	output.WriteString(fmt.Sprintf("📊 Found %d matches in %d files\n", totalMatches, len(results)))
+	output.WriteString(fmt.Sprintf("PATTERN: %s\n", pattern))
+	output.WriteString(fmt.Sprintf("SEARCH_PATH: %s\n", searchPath))
+	output.WriteString(fmt.Sprintf("STATS: Found %d matches in %d files\n", totalMatches, len(results)))
 	output.WriteString(strings.Repeat("─", 60) + "\n")
 
 	if len(results) == 0 {
@@ -259,7 +259,7 @@ func (t *GrepSearchTool) Execute(ctx context.Context, args map[string]interface{
 				if currentFile != "" {
 					output.WriteString("\n")
 				}
-				output.WriteString(fmt.Sprintf("\n📄 %s\n", file))
+				output.WriteString(fmt.Sprintf("\nFILE: %s\n", file))
 				currentFile = file
 			}
 
@@ -274,7 +274,7 @@ func (t *GrepSearchTool) Execute(ctx context.Context, args map[string]interface{
 	}
 
 	if totalMatches >= maxResults {
-		output.WriteString(fmt.Sprintf("\n⚠️  Results limited to %d matches\n", maxResults))
+		output.WriteString(fmt.Sprintf("\nWARN: Results limited to %d matches\n", maxResults))
 	}
 
 	return ToolResult{

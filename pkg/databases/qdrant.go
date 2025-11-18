@@ -36,7 +36,7 @@ func NewQdrantDatabaseProviderFromConfig(config *config.VectorStoreConfig) (Data
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Qdrant client for %s:%d: %w\n"+
-			"  💡 Troubleshooting:\n"+
+			"  TIP: Troubleshooting:\n"+
 			"     - Ensure Qdrant is running\n"+
 			"     - Verify host and port configuration\n"+
 			"     - For Docker: start Qdrant container (docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant)",
@@ -59,7 +59,7 @@ func (db *qdrantDatabaseProvider) Upsert(ctx context.Context, collection string,
 	exists, err := db.client.CollectionExists(ctx, collection)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Qdrant at %s:%d (collection: %s): %w\n"+
-			"  💡 Troubleshooting:\n"+
+			"  TIP: Troubleshooting:\n"+
 			"     - Ensure Qdrant is running (check: curl http://%s:%d/)\n"+
 			"     - Verify the host and port are correct\n"+
 			"     - Check network connectivity\n"+
@@ -267,7 +267,7 @@ func (db *qdrantDatabaseProvider) CreateCollection(ctx context.Context, collecti
 	exists, err := db.client.CollectionExists(ctx, collection)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Qdrant at %s:%d (collection: %s): %w\n"+
-			"  💡 Troubleshooting:\n"+
+			"  TIP: Troubleshooting:\n"+
 			"     - Ensure Qdrant is running (check: curl http://%s:%d/)\n"+
 			"     - Verify the host and port are correct\n"+
 			"     - Check network connectivity\n"+

@@ -73,12 +73,12 @@ func (s *SupervisorStrategy) PrepareIteration(iteration int, state *ReasoningSta
 func (s *SupervisorStrategy) displayTaskDecomposition(decomposition *TaskDecomposition, outputCh chan<- *pb.Part) {
 	// Build text fallback for simple clients
 	var textBuilder strings.Builder
-	textBuilder.WriteString(fmt.Sprintf("🎯 Goal: %s\n", decomposition.MainGoal))
-	textBuilder.WriteString(fmt.Sprintf("📋 Strategy: %s\n", decomposition.Strategy))
-	textBuilder.WriteString(fmt.Sprintf("🔄 Execution: %s\n", decomposition.ExecutionOrder))
+	textBuilder.WriteString(fmt.Sprintf("GOAL: %s\n", decomposition.MainGoal))
+	textBuilder.WriteString(fmt.Sprintf("STRATEGY: %s\n", decomposition.Strategy))
+	textBuilder.WriteString(fmt.Sprintf("EXECUTION: %s\n", decomposition.ExecutionOrder))
 
 	if len(decomposition.Subtasks) > 0 {
-		textBuilder.WriteString("📝 Subtasks:\n")
+		textBuilder.WriteString("SUBTASKS:\n")
 		for i, task := range decomposition.Subtasks {
 			deps := "none"
 			if len(task.DependsOn) > 0 {

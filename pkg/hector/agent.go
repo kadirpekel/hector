@@ -189,8 +189,8 @@ func (b *AgentBuilder) WithContext(builder *ContextServiceBuilder) *AgentBuilder
 	service, err := builder.Build()
 	if err != nil {
 		// Provide a helpful error message instead of just panicking
-		panic(fmt.Sprintf("\n❌ Failed to build context service:\n\n%v\n\n"+
-			"💡 Common causes and solutions:\n"+
+		panic(fmt.Sprintf("\nERROR: Failed to build context service:\n\n%v\n\n"+
+			"TIP: Common causes and solutions:\n"+
 			"   • Database connection issues:\n"+
 			"     - Ensure PostgreSQL/Qdrant/other databases are running\n"+
 			"     - Check connection settings (host, port, credentials)\n"+

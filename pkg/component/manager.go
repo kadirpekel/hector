@@ -272,7 +272,7 @@ func (cm *ComponentManager) getOrCreateSQLDatabase(dbName string, cfg *config.Da
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to connect to %s database '%s' at %s:%d: %w\n"+
-			"  💡 Troubleshooting:\n"+
+			"  TIP: Troubleshooting:\n"+
 			"     - Ensure the database server is running\n"+
 			"     - Check that the host and port are correct\n"+
 			"     - Verify network connectivity\n"+
@@ -283,7 +283,7 @@ func (cm *ComponentManager) getOrCreateSQLDatabase(dbName string, cfg *config.Da
 
 	cm.sessionStoreDBs[dbName] = db
 
-	fmt.Printf("✅ SQL database '%s' connected (driver: %s, database: %s)\n", dbName, cfg.Driver, cfg.Database)
+	fmt.Printf("SUCCESS: SQL database '%s' connected (driver: %s, database: %s)\n", dbName, cfg.Driver, cfg.Database)
 
 	return db, nil
 }
@@ -432,7 +432,7 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 		if err := cm.llmRegistry.RegisterLLM(name, llmBridge); err != nil {
 			return fmt.Errorf("failed to register LLM plugin: %w", err)
 		}
-		fmt.Printf("✓ Registered LLM plugin: %s\n", name)
+		fmt.Printf("OK: Registered LLM plugin: %s\n", name)
 
 	case plugins.PluginTypeDatabase:
 		dbAdapter, ok := plugin.(*plugingrpc.DatabasePluginAdapter)
@@ -444,7 +444,7 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 		if err := cm.dbRegistry.RegisterDatabase(name, dbBridge); err != nil {
 			return fmt.Errorf("failed to register Database plugin: %w", err)
 		}
-		fmt.Printf("✓ Registered Database plugin: %s\n", name)
+		fmt.Printf("OK: Registered Database plugin: %s\n", name)
 
 	case plugins.PluginTypeEmbedder:
 		embedderAdapter, ok := plugin.(*plugingrpc.EmbedderPluginAdapter)
@@ -456,7 +456,7 @@ func (cm *ComponentManager) loadAndRegisterPlugin(ctx context.Context, name stri
 		if err := cm.embedderRegistry.RegisterEmbedder(name, embedderBridge); err != nil {
 			return fmt.Errorf("failed to register Embedder plugin: %w", err)
 		}
-		fmt.Printf("✓ Registered Embedder plugin: %s\n", name)
+		fmt.Printf("OK: Registered Embedder plugin: %s\n", name)
 	}
 
 	return nil

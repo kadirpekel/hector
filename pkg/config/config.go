@@ -92,8 +92,8 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 	agent.DocumentStores = []string{storeName}
 	agent.DocsFolder = ""
 
-	// Warn about auto-created components
-	fmt.Printf("⚠️  Auto-created from docs_folder shortcut:\n")
+	// Inform about auto-created components
+	fmt.Printf("INFO: Auto-created from docs_folder shortcut:\n")
 	fmt.Printf("   - document_store: '%s' (path: %s)\n", storeName, docStoreConfig.Path)
 
 	if agent.VectorStore == "" {
@@ -151,7 +151,7 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 
 	// Note: search tool no longer needs document_stores config - it uses agent's assigned stores
 	// We don't auto-create search tool config here anymore since it's handled by agent assignment
-	fmt.Printf("💡 To customize these, define them explicitly in your configuration.\n")
+	fmt.Printf("TIP: To customize these, define them explicitly in your configuration.\n")
 }
 
 func (c *Config) expandEnableTools() {
@@ -168,11 +168,11 @@ func (c *Config) expandEnableTools() {
 	}
 
 	if len(createdTools) > 0 {
-		fmt.Printf("⚠️  Auto-created tools from enable_tools shortcut:\n")
+		fmt.Printf("INFO: Auto-created tools from enable_tools shortcut:\n")
 		for _, toolName := range createdTools {
 			fmt.Printf("   - tool: '%s' (using defaults)\n", toolName)
 		}
-		fmt.Printf("💡 To customize these, define them explicitly in your configuration.\n")
+		fmt.Printf("TIP: To customize these, define them explicitly in your configuration.\n")
 	}
 }
 

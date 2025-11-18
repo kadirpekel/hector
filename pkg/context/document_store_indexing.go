@@ -48,19 +48,19 @@ func (ds *DocumentStore) indexFromDataSource() error {
 				checkpoint = nil
 			} else {
 				// Incomplete checkpoint - resume from where we left off
-				fmt.Println("🔄 " + ds.checkpointManager.FormatCheckpointInfo(checkpoint))
+				fmt.Println("RESUME: " + ds.checkpointManager.FormatCheckpointInfo(checkpoint))
 				fmt.Println("   Resuming from checkpoint...")
 			}
 		}
 	}
 
 	if len(existingDocs) > 0 && useIncrementalIndexing {
-		fmt.Printf("📊 Incremental indexing enabled: Found %d existing document(s) in index (unchanged files will be skipped)\n", len(existingDocs))
+		fmt.Printf("STATS: Incremental indexing enabled: Found %d existing document(s) in index (unchanged files will be skipped)\n", len(existingDocs))
 	} else if len(existingDocs) > 0 {
 		// existingDocs > 0 but useIncrementalIndexing is false
-		fmt.Printf("📊 Found %d existing document(s) in index, but incremental indexing is disabled (will be reindexed)\n", len(existingDocs))
+		fmt.Printf("STATS: Found %d existing document(s) in index, but incremental indexing is disabled (will be reindexed)\n", len(existingDocs))
 	} else {
-		fmt.Printf("📊 First indexing or full reindex mode\n")
+		fmt.Printf("STATS: First indexing or full reindex mode\n")
 	}
 
 	// Discover documents from data source
@@ -111,7 +111,7 @@ func (ds *DocumentStore) indexFromDataSource() error {
 						slog.Warn("Cleanup of deleted files failed", "error", err)
 					}
 					if len(deletedDocs) > 0 {
-						fmt.Printf("🗑️  Cleaned up %d deleted document(s) from index '%s'\n", len(deletedDocs), ds.name)
+						fmt.Printf("CLEANUP: Cleaned up %d deleted document(s) from index '%s'\n", len(deletedDocs), ds.name)
 					}
 
 					// Save index state
@@ -168,14 +168,14 @@ func (ds *DocumentStore) indexFromDataSource() error {
 				// Print summary
 				if len(failedDocs) > 0 {
 					maxShow := 10
-					fmt.Println("\n⚠️  Failed Documents:")
+					fmt.Println("\nWARN: Failed Documents:")
 					for i, docID := range failedDocs {
 						if i >= maxShow {
 							remaining := len(failedDocs) - maxShow
 							fmt.Printf("   ... and %d more documents (check logs for details)\n", remaining)
 							break
 						}
-						fmt.Printf("   ❌ %s\n", docID)
+						fmt.Printf("   ERROR: %s\n", docID)
 					}
 				}
 

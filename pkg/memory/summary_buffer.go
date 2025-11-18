@@ -144,7 +144,7 @@ func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHis
 	slog.Info("Summarizing messages", "total", len(oldMessages), "keeping_recent", len(recentMessages))
 
 	if s.statusNotifier != nil {
-		s.statusNotifier("💭 Summarizing conversation history...")
+			s.statusNotifier("THINKING: Summarizing conversation history...")
 	}
 
 	summary, err := s.summarizer.SummarizeConversation(context.Background(), oldMessages)

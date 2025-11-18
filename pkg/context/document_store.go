@@ -230,24 +230,24 @@ func NewDocumentStoreWithToolRegistry(storeName string, storeConfig *config.Docu
 			}
 			if hasAvailableTools {
 				if len(missingToolNames) > 0 {
-					fmt.Printf("✓ Registered MCP extractor for document store '%s' (available: %v, missing: %v)\n", storeName, availableToolNames, missingToolNames)
+					fmt.Printf("OK: Registered MCP extractor for document store '%s' (available: %v, missing: %v)\n", storeName, availableToolNames, missingToolNames)
 				} else {
-					fmt.Printf("✓ Registered MCP extractor for document store '%s' (tools: %v)\n", storeName, storeConfig.MCPParsers.ToolNames)
+					fmt.Printf("OK: Registered MCP extractor for document store '%s' (tools: %v)\n", storeName, storeConfig.MCPParsers.ToolNames)
 				}
 			} else {
 				// Try to get available MCP tool names for debugging
 				if adapter, ok := toolRegistry.(interface{ ListMCPToolNames() []string }); ok {
 					mcpToolNames := adapter.ListMCPToolNames()
 					if len(mcpToolNames) > 0 {
-						fmt.Printf("⚠️  Registered MCP extractor for document store '%s' (tools: %v), but specified tools are not available\n", storeName, storeConfig.MCPParsers.ToolNames)
-						fmt.Printf("   💡 Available MCP tools: %v\n", mcpToolNames)
-						fmt.Printf("   💡 Tip: Use one of the available tool names in --mcp-parser-tool\n")
+						fmt.Printf("WARN: Registered MCP extractor for document store '%s' (tools: %v), but specified tools are not available\n", storeName, storeConfig.MCPParsers.ToolNames)
+						fmt.Printf("   TIP: Available MCP tools: %v\n", mcpToolNames)
+						fmt.Printf("   TIP: Use one of the available tool names in --mcp-parser-tool\n")
 					} else {
-						fmt.Printf("⚠️  Registered MCP extractor for document store '%s' (tools: %v), but MCP tools are not available - will fallback to native parsers\n", storeName, storeConfig.MCPParsers.ToolNames)
+						fmt.Printf("WARN: Registered MCP extractor for document store '%s' (tools: %v), but MCP tools are not available - will fallback to native parsers\n", storeName, storeConfig.MCPParsers.ToolNames)
 					}
 				} else {
-					fmt.Printf("⚠️  Registered MCP extractor for document store '%s' (tools: %v), but MCP tools are not available - will fallback to native parsers\n", storeName, storeConfig.MCPParsers.ToolNames)
-					fmt.Printf("   💡 Tip: Check available tool names from your MCP server (19 tools discovered)\n")
+					fmt.Printf("WARN: Registered MCP extractor for document store '%s' (tools: %v), but MCP tools are not available - will fallback to native parsers\n", storeName, storeConfig.MCPParsers.ToolNames)
+					fmt.Printf("   TIP: Check available tool names from your MCP server (19 tools discovered)\n")
 				}
 			}
 		}
@@ -1259,7 +1259,7 @@ func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs m
 		for _, path := range deletedFiles {
 			cleanedUpFiles[path] = true
 		}
-		fmt.Printf("🗑️  Removed %d deleted file(s) from index state\n", len(deletedFiles))
+		fmt.Printf("CLEANUP: Removed %d deleted file(s) from index state\n", len(deletedFiles))
 		return deletedFiles, cleanedUpFiles, nil
 	}
 
@@ -1280,10 +1280,10 @@ func (ds *DocumentStore) cleanupDeletedFiles(ctx context.Context, existingDocs m
 	}
 
 	if successCount > 0 {
-		fmt.Printf("🗑️  Cleaned up %d deleted file(s) from index '%s'\n", successCount, ds.name)
+		fmt.Printf("CLEANUP: Cleaned up %d deleted file(s) from index '%s'\n", successCount, ds.name)
 	}
 	if successCount < len(deletedFiles) {
-		fmt.Printf("⚠️  %d file(s) pending cleanup (will retry)\n", len(deletedFiles)-successCount)
+		fmt.Printf("WARN: %d file(s) pending cleanup (will retry)\n", len(deletedFiles)-successCount)
 	}
 
 	return deletedFiles, cleanedUpFiles, nil

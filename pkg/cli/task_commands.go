@@ -35,7 +35,7 @@ func TaskCancelCommand(args *TaskCancelCmd, cfg *config.Config, mode CLIMode) er
 		return fmt.Errorf("failed to cancel task: %w", err)
 	}
 
-	fmt.Printf("✅ Task cancelled successfully\n\n")
+	fmt.Printf("SUCCESS: Task cancelled successfully\n\n")
 	DisplayTask(task)
 	return nil
 }

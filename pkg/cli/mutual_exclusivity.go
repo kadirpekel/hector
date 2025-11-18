@@ -81,7 +81,7 @@ func ValidateConfigMutualExclusivity(args []string) error {
 func buildMutualExclusivityError(flags []string) error {
 	var sb strings.Builder
 
-	sb.WriteString("\n❌ Configuration Error: Mutually Exclusive Options\n\n")
+	sb.WriteString("\nERROR: Configuration Error: Mutually Exclusive Options\n\n")
 	sb.WriteString("You cannot use --config with zero-config flags at the same time.\n\n")
 
 	sb.WriteString("Detected zero-config flags:\n")
@@ -90,7 +90,7 @@ func buildMutualExclusivityError(flags []string) error {
 	}
 	sb.WriteString("\n")
 
-	sb.WriteString("💡 Choose one approach:\n\n")
+	sb.WriteString("TIP: Choose one approach:\n\n")
 	sb.WriteString("  1. Config file mode:\n")
 	sb.WriteString("     Remove zero-config flags and use --config only\n")
 	sb.WriteString("     Example: hector call \"message\" --config myconfig.yaml\n\n")
@@ -99,7 +99,7 @@ func buildMutualExclusivityError(flags []string) error {
 	sb.WriteString("     Remove --config and use zero-config flags\n")
 	sb.WriteString("     Example: hector call \"message\" --provider anthropic --model claude-3-5-sonnet-20241022\n\n")
 
-	sb.WriteString("ℹ️  Zero-config mode: Quick setup via CLI flags (no config file needed)\n")
+	sb.WriteString("INFO: Zero-config mode: Quick setup via CLI flags (no config file needed)\n")
 	sb.WriteString("   Config file mode: Full control with YAML configuration\n\n")
 
 	return fmt.Errorf("%s", sb.String())

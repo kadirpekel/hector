@@ -270,7 +270,7 @@ func (pt *ProgressTracker) printProgress() {
 	}
 
 	// Format output - print on new line so logs don't overwrite it
-	output := fmt.Sprintf("📊 [%s] %.1f%% | %d/%d files",
+	output := fmt.Sprintf("STATS [%s] %.1f%% | %d/%d files",
 		bar, percentage, stats.ProcessedFiles, stats.TotalFiles)
 
 	if filesPerSec > 0 {
@@ -283,7 +283,7 @@ func (pt *ProgressTracker) printProgress() {
 
 	// Show errors and failures in progress line
 	if stats.FailedFiles > 0 {
-		output += fmt.Sprintf(" | ❌ %d failed", stats.FailedFiles)
+		output += fmt.Sprintf(" | ERROR: %d failed", stats.FailedFiles)
 	}
 
 	if pt.verbose && stats.CurrentFile != "" {
@@ -293,7 +293,7 @@ func (pt *ProgressTracker) printProgress() {
 		if len(displayFile) > maxLen {
 			displayFile = "..." + displayFile[len(displayFile)-maxLen+3:]
 		}
-		output += fmt.Sprintf(" | 📄 %s", displayFile)
+		output += fmt.Sprintf(" | FILE: %s", displayFile)
 	}
 
 	// Print inline with carriage return to overwrite previous line
@@ -310,7 +310,7 @@ func (pt *ProgressTracker) printFinalSummary() {
 	stats := pt.GetStats()
 
 	fmt.Print("\r\033[K") // Clear line
-	fmt.Println("\n✅ Indexing Complete!")
+	fmt.Println("\nSUCCESS: Indexing Complete!")
 	fmt.Printf("   Total:   %d files\n", stats.TotalFiles)
 	fmt.Printf("   Indexed: %d files\n", stats.IndexedFiles)
 
@@ -319,11 +319,11 @@ func (pt *ProgressTracker) printFinalSummary() {
 	}
 
 	if stats.DeletedFiles > 0 {
-		fmt.Printf("   🗑️  Deleted: %d files\n", stats.DeletedFiles)
+		fmt.Printf("   CLEANUP: Deleted: %d files\n", stats.DeletedFiles)
 	}
 
 	if stats.FailedFiles > 0 {
-		fmt.Printf("   ❌ Failed: %d files\n", stats.FailedFiles)
+		fmt.Printf("   ERROR: Failed: %d files\n", stats.FailedFiles)
 	}
 
 	elapsed := stats.ElapsedTime

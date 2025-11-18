@@ -413,7 +413,7 @@ func (t *SearchTool) convertSearchResults(searchResults []databases.SearchResult
 				}
 
 				if startLine > 0 && endLine > 0 {
-					header := fmt.Sprintf("📄 %s (lines %d-%d)\n%s",
+					header := fmt.Sprintf("FILE: %s (lines %d-%d)\n%s",
 						filePath,
 						startLine,
 						endLine,

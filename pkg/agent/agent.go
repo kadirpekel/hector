@@ -569,7 +569,7 @@ func (a *Agent) handleToolApprovalRequest(
 	taskID := getTaskIDFromContext(ctx)
 	if taskID == "" {
 		// No taskID - can't request approval, deny the tool
-		if sendErr := safeSendPart(ctx, outputCh, createTextPart("⚠️  Tool requires approval but task tracking not enabled, denying\n")); sendErr != nil {
+		if sendErr := safeSendPart(ctx, outputCh, createTextPart("WARN: Tool requires approval but task tracking not enabled, denying\n")); sendErr != nil {
 			slog.Error("Failed to send approval denial message", "agent", a.id, "error", sendErr)
 		}
 		return ctx, false, nil
@@ -617,7 +617,7 @@ func (a *Agent) handleBlockingHITL(
 		if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
 			slog.Error("Failed to update task status after timeout", "agent", a.id, "task", taskID, "error", updateErr)
 		}
-		if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("❌ Approval timeout or cancelled: %v\n", err))); sendErr != nil {
+		if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("ERROR: Approval timeout or cancelled: %v\n", err))); sendErr != nil {
 			slog.Error("Failed to send timeout message", "agent", a.id, "error", sendErr)
 		}
 		return ctx, false, err
@@ -634,12 +634,12 @@ func (a *Agent) handleBlockingHITL(
 
 	// Send confirmation message to indicate interaction was resolved
 	if decision == DecisionApprove {
-		confirmMsg := fmt.Sprintf("✅ Approved: %s", pendingToolName)
+		confirmMsg := fmt.Sprintf("SUCCESS: Approved: %s", pendingToolName)
 		if sendErr := safeSendPart(ctx, outputCh, createTextPart(confirmMsg)); sendErr != nil {
 			slog.Error("Failed to send approval confirmation", "agent", a.id, "error", sendErr)
 		}
 	} else {
-		confirmMsg := fmt.Sprintf("🚫 Denied: %s", pendingToolName)
+		confirmMsg := fmt.Sprintf("DENIED: Denied: %s", pendingToolName)
 		if sendErr := safeSendPart(ctx, outputCh, createTextPart(confirmMsg)); sendErr != nil {
 			slog.Error("Failed to send denial confirmation", "agent", a.id, "error", sendErr)
 		}
@@ -771,7 +771,7 @@ func (a *Agent) callLLMWithRetry(
 			waitTime = defaultRetryWaitSeconds * time.Second
 		}
 
-		if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("⏳ Rate limit exceeded (HTTP %d). Waiting %v before retry %d/%d...\n",
+		if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("RATE_LIMIT: Rate limit exceeded (HTTP %d). Waiting %v before retry %d/%d...\n",
 			retryErr.StatusCode, waitTime.Round(time.Second), attempt+1, maxLLMRetries))); sendErr != nil {
 			slog.Error("Failed to send rate limit message", "agent", a.name, "error", sendErr)
 		}
@@ -783,7 +783,7 @@ func (a *Agent) callLLMWithRetry(
 		case <-time.After(waitTime):
 		}
 
-		if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("🔄 Retrying LLM call (attempt %d/%d)...\n", attempt+1, maxLLMRetries))); sendErr != nil {
+		if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("RETRY: Retrying LLM call (attempt %d/%d)...\n", attempt+1, maxLLMRetries))); sendErr != nil {
 			slog.Error("Failed to send retry message", "agent", a.name, "error", sendErr)
 		}
 	}
@@ -1096,7 +1096,7 @@ func (a *Agent) emitTodoDisplay(ctx context.Context, outputCh chan<- *pb.Part) {
 
 	// Build text fallback
 	var textBuilder strings.Builder
-	textBuilder.WriteString("📋 Current Tasks:\n")
+	textBuilder.WriteString("TASKS: Current Tasks:\n")
 	for i, todo := range todos {
 		var checkbox string
 		switch todo.Status {

@@ -175,7 +175,7 @@ func (t *SearchReplaceTool) Execute(ctx context.Context, args map[string]interfa
 	}
 
 	var response strings.Builder
-	response.WriteString(fmt.Sprintf("✅ Replaced %d occurrence(s) in %s\n", replacementCount, path))
+	response.WriteString(fmt.Sprintf("SUCCESS: Replaced %d occurrence(s) in %s\n", replacementCount, path))
 
 	if t.config.ShowDiff != nil && *t.config.ShowDiff {
 		diff := t.generateDiff(oldString, newString)
@@ -183,7 +183,7 @@ func (t *SearchReplaceTool) Execute(ctx context.Context, args map[string]interfa
 	}
 
 	if t.config.CreateBackup != nil && *t.config.CreateBackup {
-		response.WriteString(fmt.Sprintf("\n💾 Backup created: %s.bak", path))
+		response.WriteString(fmt.Sprintf("\nBACKUP: Backup created: %s.bak", path))
 	}
 
 	return ToolResult{
@@ -224,7 +224,7 @@ func (t *SearchReplaceTool) validatePath(path string) error {
 func (t *SearchReplaceTool) generateDiff(oldStr, newStr string) string {
 	var diff strings.Builder
 
-	diff.WriteString("📝 Changes:\n")
+	diff.WriteString("CHANGES:\n")
 	diff.WriteString(strings.Repeat("-", 60) + "\n")
 
 	oldLines := strings.Split(oldStr, "\n")

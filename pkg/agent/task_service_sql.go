@@ -112,7 +112,7 @@ func NewSQLTaskServiceFromConfig(cfg *config.TaskSQLConfig) (*SQLTaskService, er
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to connect to %s database '%s' at %s:%d: %w\n"+
-			"  💡 Troubleshooting:\n"+
+			"  TIP: Troubleshooting:\n"+
 			"     - Ensure the database server is running\n"+
 			"     - Check that the host and port are correct\n"+
 			"     - Verify network connectivity\n"+

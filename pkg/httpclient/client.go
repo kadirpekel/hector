@@ -212,12 +212,12 @@ func (c *Client) logRetry(strategy RetryStrategy, delay time.Duration, attempt i
 
 	switch strategy {
 	case SmartRetry:
-		fmt.Printf("⏳ Rate limited (HTTP %d). Retrying in %v (attempt %d/%d)\n",
+		fmt.Printf("RATE_LIMIT: Rate limited (HTTP %d). Retrying in %v (attempt %d/%d)\n",
 			statusCode, delay, attempt+1, maxAttempts)
 	case ConservativeRetry:
 
 		if attempt == maxAttempts-1 {
-			fmt.Printf("⚠️  Server error (HTTP %d). Quick retry in %v (attempt %d/%d)\n",
+			fmt.Printf("WARN: Server error (HTTP %d). Quick retry in %v (attempt %d/%d)\n",
 				statusCode, delay, attempt+1, maxAttempts)
 		}
 	}

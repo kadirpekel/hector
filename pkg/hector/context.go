@@ -258,7 +258,7 @@ func (b *ContextServiceBuilder) Build() (reasoning.ContextService, error) {
 	// Initialize document stores - create separate search engines for stores with their own database
 	if err := b.initializeDocumentStoresWithDatabases(defaultSearchEngine); err != nil {
 		return nil, fmt.Errorf("failed to initialize document stores: %w\n"+
-			"  💡 This usually indicates a connection issue with required services.\n"+
+			"  TIP: This usually indicates a connection issue with required services.\n"+
 			"     Check the error details above for specific service connection problems.", err)
 	}
 

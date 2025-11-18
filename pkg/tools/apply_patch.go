@@ -181,13 +181,13 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, args map[string]interface{
 	newLines := strings.Split(newString, "\n")
 
 	var response strings.Builder
-	response.WriteString(fmt.Sprintf("✅ Patch applied successfully to %s\n", path))
-	response.WriteString(fmt.Sprintf("📝 Changed %d lines\n", len(oldLines)))
+	response.WriteString(fmt.Sprintf("SUCCESS: Patch applied successfully to %s\n", path))
+	response.WriteString(fmt.Sprintf("CHANGED: Changed %d lines\n", len(oldLines)))
 	response.WriteString("\n")
 	response.WriteString(t.generateDiff(oldString, newString))
 
 	if t.config.CreateBackup != nil && *t.config.CreateBackup {
-		response.WriteString(fmt.Sprintf("\n💾 Backup created: %s.bak", path))
+		response.WriteString(fmt.Sprintf("\nBACKUP: Backup created: %s.bak", path))
 	}
 
 	return ToolResult{

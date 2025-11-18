@@ -201,7 +201,7 @@ func ServeAgent(agent *agent.Agent, address string) (*Server, error) {
 
 	go func() {
 		if err := server.Start(); err != nil {
-			fmt.Printf("❌ Server error: %v\n", err)
+			fmt.Printf("ERROR: Server error: %v\n", err)
 		}
 	}()
 

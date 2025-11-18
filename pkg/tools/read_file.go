@@ -158,8 +158,8 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]interface{})
 	}
 
 	var output strings.Builder
-	output.WriteString(fmt.Sprintf("📄 File: %s\n", path))
-	output.WriteString(fmt.Sprintf("📊 Total lines: %d", totalLines))
+	output.WriteString(fmt.Sprintf("FILE: %s\n", path))
+	output.WriteString(fmt.Sprintf("STATS: Total lines: %d", totalLines))
 
 	if startLine != 1 || endLine != totalLines {
 		output.WriteString(fmt.Sprintf(" | Showing lines %d-%d", startLine, endLine))
