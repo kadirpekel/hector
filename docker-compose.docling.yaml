@@ -1,0 +1,57 @@
+services:
+  docling:
+    image: ghcr.io/docling-project/docling-serve-cpu:latest
+    container_name: docling-mcp
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    command: /opt/app-root/bin/docling-mcp-server --transport streamable-http --host 0.0.0.0 --port 8000
+    volumes:
+      # Mount documents directory for Docling to access
+      - ./test-docs:/docs:ro
+    healthcheck:
+      # Simple check: if curl succeeds (even with non-200), server is up
+      test: ["CMD-SHELL", "curl -s http://localhost:8000/ > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - docling-network
+
+  hector:
+    image: kadirpekel/hector:latest
+    container_name: hector-docling
+    ports:
+      - "8080:8080"
+    depends_on:
+      docling:
+        condition: service_healthy
+    environment:
+      # Use Docker service name for internal communication
+      # Note: streamable-http transport uses /mcp endpoint
+      - MCP_URL=http://docling:8000/mcp
+      # Add your OpenAI API key (or other LLM provider)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Enable debug logging to see MCP responses
+      - LOG_LEVEL=debug
+    volumes:
+      # Mount documents directory for Hector
+      - ./test-docs:/documents:ro
+      # Mount config directory if you have custom configs
+      - ./configs:/app/configs:ro
+    command: >
+      /app/hector serve
+      --docs-folder /documents:/docs
+      --mcp-url http://docling:8000/mcp
+      --mcp-parser-tool convert_document_into_docling_document
+      --tools
+    # The --docs-folder syntax "local:remote" maps Hector's /documents to Docling's /docs
+    # This allows containers to have different mount points while still communicating correctly
+    networks:
+      - docling-network
+
+networks:
+  docling-network:
+    driver: bridge
+

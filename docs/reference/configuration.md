@@ -1383,6 +1383,7 @@ document_stores:
 | `extensions` | `[]string` | `[]` (all) | File extensions to handle (empty = all binary files) |
 | `priority` | `int` | `8` | Extractor priority (higher = preferred, native = 5) |
 | `prefer_native` | `bool` | `false` | Use native parsers first, MCP as fallback |
+| `path_prefix` | `string` | `""` | Remote path prefix for containerized MCP services (e.g., `/docs` when mounting `./test-docs:/docs`) |
 
 **Use Cases:**
 
@@ -1406,6 +1407,14 @@ mcp_parsers:
 mcp_parsers:
   tool_names: ["parse_document"]
   extensions: [".pptx", ".html"]  # Formats not supported natively
+```
+
+4. **Containerized MCP service** (path remapping):
+```yaml
+# When Docling runs in Docker: docker run -v ./test-docs:/docs -p 8000:8000 ...
+mcp_parsers:
+  tool_names: ["convert_document_into_docling_document"]
+  path_prefix: "/docs"  # Remap local paths to container mount point
 ```
 
 **Benefits:**

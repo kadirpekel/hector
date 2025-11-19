@@ -264,7 +264,8 @@ When using zero-config mode (no `--config` flag), use these to configure quickly
 | `--instruction TEXT` | string | Add user guidance (WHAT, highest priority) | - |
 | `--tools` | bool | Enable all built-in tools | `false` |
 | `--mcp-url URL` | string | MCP server URL | - |
-| `--docs FOLDER` | string | Documents folder for RAG | - |
+| `--mcp-parser-tool TOOL` | string | MCP parser tool name for document parsing | - |
+| `--docs-folder PATH` | string | Documents folder for RAG. Supports path mapping syntax `local:remote` for containerized MCP services (e.g., `test-docs:/docs`) | - |
 | `--vectordb URL` | string | Vector database URL | `http://localhost:6334` |
 | `--embedder-model MODEL` | string | Embedding model | `nomic-embed-text` |
 
@@ -295,7 +296,11 @@ hector serve --role "You are a code reviewer" --instruction "Be strict about err
 hector serve coder --model gpt-4o --tools --docs-folder ./knowledge
 
 # With RAG and MCP parsing (Docling example)
-hector serve coder --model gpt-4o --docs-folder ./knowledge --mcp-parser-tool "convert_document_into_docling_document"
+hector serve coder --model gpt-4o --docs-folder ./knowledge --mcp-url http://localhost:8000/mcp --mcp-parser-tool "convert_document_into_docling_document"
+
+# With RAG and containerized Docling (path mapping)
+# Mount: docker run -v $(pwd)/knowledge:/docs -p 8000:8000 ghcr.io/docling-project/docling-serve-cpu:latest
+hector serve coder --model gpt-4o --docs-folder ./knowledge:/docs --mcp-url http://localhost:8000/mcp --mcp-parser-tool "convert_document_into_docling_document"
 
 # Custom port
 hector serve --config config.yaml --port 9000
