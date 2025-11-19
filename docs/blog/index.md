@@ -1,6 +1,8 @@
 ---
 title: Blog
 description: Tutorials, guides, and insights on building production-grade AI agent systems
+hide:
+  - navigation
 ---
 
 # Hector Blog

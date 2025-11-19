@@ -352,7 +352,7 @@ agents:
 - `search_mode: "hyde"` - Uses hypothetical document embeddings
 - `rerank.enabled: true` - LLM-based re-ranking for better results
 
-See [RAG & Semantic Search](rag.md) and [Search Architecture](search-architecture.md) for details.
+See [RAG & Semantic Search](rag.md) and [Search Architecture](../reference/architecture/search-architecture.md) for details.
 
 ---
 
@@ -400,7 +400,7 @@ agents:
 - Latency measurement
 - Full evaluation result with details
 
-See [Search Architecture](search-architecture.md#evaluation-tools) for complete documentation.
+See [Search Architecture](../reference/architecture/search-architecture.md#evaluation-tools) for complete documentation.
 
 ---
 

@@ -560,7 +560,7 @@ agents:
 - Requires an LLM provider configured
 - Only reranks top N results (configurable via `max_results`)
 
-See [Search Architecture](search-architecture.md) for complete documentation on all search features.
+See [Search Architecture](../reference/architecture/search-architecture.md) for complete documentation on all search features.
 
 ### MCP Document Parsing
 

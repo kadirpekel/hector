@@ -9,7 +9,6 @@ tags:
   - Tutorial
 hide:
   - navigation
-  - toc
 ---
 
 # Building a Multi-Agent Research System with Hector

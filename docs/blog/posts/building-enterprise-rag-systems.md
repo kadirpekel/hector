@@ -13,7 +13,6 @@ tags:
   - Data Sovereignty
 hide:
   - navigation
-  - toc
 ---
 
 # Building Enterprise RAG Systems with Hector: A Step-by-Step Guide

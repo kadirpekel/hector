@@ -9,7 +9,6 @@ tags:
   - Tracing
 hide:
   - navigation
-  - toc
 ---
 
 # Quick Observability Setup

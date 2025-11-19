@@ -1,6 +1,6 @@
 ---
 title: Using Docling with Hector for Advanced Document Parsing
-description: Integrate Docling's powerful document parsing capabilities with Hector using Docker or local setup
+description: Integrate Docling's powerful document parsing capabilities with Hector
 date: 2025-11-19
 tags:
   - RAG
@@ -10,7 +10,6 @@ tags:
   - Tutorial
 hide:
   - navigation
-  - toc
 ---
 
 # Using Docling with Hector for Advanced Document Parsing
@@ -25,10 +24,9 @@ Enhance your RAG system with Docling's advanced document parsing capabilities. P
 ## What You'll Learn
 
 - Understand Hector's MCP document parsing feature
-- Set up Docling using Docker (recommended) or locally
+- Set up Docling using Docker
 - Configure Hector to use Docling for document parsing
 - Parse complex documents (PDFs, DOCX, PPTX, XLSX, HTML)
-- Use path mapping for containerized deployments
 
 ---
 
@@ -65,7 +63,7 @@ This tutorial uses **Docling** as an example, but the same pattern applies to an
 
 ---
 
-## Option 1: Docker Setup
+## Docker Setup
 
 You can run Docling's MCP server in Docker using the `docling-serve` image, which includes the `docling-mcp-server` command.
 
@@ -230,53 +228,22 @@ hector serve --config configs/docling-docker.yaml
 
 ---
 
-## Option 2: Local Setup (Recommended for Development)
+## Local Setup (Alternative)
 
-If you prefer running Docling locally without Docker, this is the simplest approach and **avoids path mapping issues** that can occur with Docker volume mounts.
-
-### Step 1: Create Virtual Environment
+For local development, you can run Docling without Docker:
 
 ```bash
-# Create virtual environment
-python3 -m venv docling-env
-
-# Activate virtual environment
-source docling-env/bin/activate  # On macOS/Linux
-# or
-docling-env\Scripts\activate  # On Windows
-```
-
-### Step 2: Install Docling
-
-```bash
-# Install docling (includes docling-mcp)
+# Install and run Docling MCP server
 pip install docling
-```
-
-### Step 3: Start Docling MCP Server
-
-```bash
-# Start the MCP server with streamable-http transport
 uvx --from docling-mcp docling-mcp-server --transport streamable-http
-```
 
-The server will start on `http://localhost:8000` by default.
-
-### Step 4: Configure Hector
-
-**Using CLI:**
-
-```bash
+# Configure Hector (no path mapping needed for local setup)
 hector serve \
   --docs-folder test-docs \
   --mcp-url http://localhost:8000/mcp \
   --mcp-parser-tool convert_document_into_docling_document \
   --tools
 ```
-
-**Using Configuration File:**
-
-Update your config file to use `server_url: "http://localhost:8000/mcp"` (include the `/mcp` path for streamable-http transport).
 
 ---
 
@@ -296,15 +263,7 @@ cp your-presentation.pptx test-docs/
 ### Step 2: Start Hector
 
 ```bash
-# Using Docker setup
 hector serve --config configs/docling-docker.yaml
-
-# Or using CLI
-hector serve \
-  --docs-folder test-docs \
-  --mcp-url http://localhost:8000/mcp \
-  --mcp-parser-tool convert_document_into_docling_document \
-  --tools
 ```
 
 ### Step 3: Test Document Parsing
@@ -374,266 +333,6 @@ Docling supports parsing:
 - **XLSX** - Excel spreadsheets
 - **HTML** - Web pages and HTML documents
 - **And more** - Check Docling documentation for full list
-
----
-
-## Docker Compose Setup
-
-For production deployments, use Docker Compose to run both Hector and Docling in containers. This ensures proper path mapping and eliminates file access issues.
-
-**`docker-compose.docling.yaml`:**
-
-```yaml
-services:
-  docling:
-    image: ghcr.io/docling-project/docling-serve-cpu:latest
-    container_name: docling-mcp
-    ports:
-      - "8000:8000"
-    restart: unless-stopped
-    command: /opt/app-root/bin/docling-mcp-server --transport streamable-http --host 0.0.0.0 --port 8000
-    volumes:
-      # Mount documents directory for Docling to access
-      - ./test-docs:/docs:ro
-    healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:8000/ > /dev/null || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-    networks:
-      - docling-network
-
-  hector:
-    image: kadirpekel/hector:latest
-    container_name: hector-docling
-    ports:
-      - "8080:8080"
-    depends_on:
-      docling:
-        condition: service_healthy
-    environment:
-      # Use Docker service name for internal communication
-      - MCP_URL=http://docling:8000/mcp
-      # Add your OpenAI API key (or other LLM provider)
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      # Enable debug logging to see MCP responses
-      - LOG_LEVEL=debug
-    volumes:
-      # Mount documents directory for Hector
-      - ./test-docs:/documents:ro
-      # Mount config directory if you have custom configs
-      - ./configs:/app/configs:ro
-    command: >
-      /app/hector serve
-      --docs-folder /documents:/docs
-      --mcp-url http://docling:8000/mcp
-      --mcp-parser-tool convert_document_into_docling_document
-      --tools
-    # The --docs-folder syntax "local:remote" maps Hector's /documents to Docling's /docs
-    # This allows containers to have different mount points while still communicating correctly
-    networks:
-      - docling-network
-
-networks:
-  docling-network:
-    driver: bridge
-```
-
-**Key Points:**
-
-1. **Path Mapping**: Hector mounts at `/documents`, Docling at `/docs`. The `--docs-folder /documents:/docs` syntax tells Hector to remap paths so Docling can find files.
-
-2. **Docker Networking**: Hector uses `http://docling:8000/mcp` (Docker service name with `/mcp` endpoint) for internal communication.
-
-3. **Health Checks**: Docling has a health check, and Hector waits for it to be healthy before starting.
-
-**Start everything:**
-
-```bash
-docker-compose -f deployments/docker-compose.docling.yaml up -d
-```
-
-**Verify it's working:**
-
-```bash
-# Check both containers are running
-docker-compose -f deployments/docker-compose.docling.yaml ps
-
-# Check Hector logs
-docker-compose -f deployments/docker-compose.docling.yaml logs hector
-
-# Check Docling logs
-docker-compose -f deployments/docker-compose.docling.yaml logs docling
-```
-
-**Using a Configuration File:**
-
-If you prefer using a config file instead of CLI flags, create `configs/docling-docker.yaml`:
-
-```yaml
-global:
-  a2a_server:
-    host: "0.0.0.0"
-    port: 8080
-
-llms:
-  gpt-4o:
-    type: "openai"
-    model: "gpt-4o-mini"
-    api_key: "${OPENAI_API_KEY}"
-
-vector_stores:
-  qdrant-db:
-    type: "qdrant"
-    host: "localhost"  # Use host.docker.internal if Qdrant runs on host
-    port: 6334
-
-document_stores:
-  docs:
-    type: "directory"
-    path: "/documents"  # Use the Docker mount point
-
-mcp:
-  sources:
-    - name: "docling"
-      url: "http://docling:8000/mcp"  # Use Docker service name with /mcp endpoint
-      parser_tools:
-        - "convert_document_into_docling_document"
-```
-
-Then update the docker-compose command:
-
-```yaml
-command: /app/hector serve --config /app/configs/docling-docker.yaml
-environment:
-  - OPENAI_API_KEY=${OPENAI_API_KEY}
-```
-
-**Note:** Make sure to set the `OPENAI_API_KEY` environment variable before starting:
-
-```bash
-export OPENAI_API_KEY=your-api-key-here
-docker-compose -f deployments/docker-compose.docling.yaml up -d
-```
-
----
-
-## Troubleshooting
-
-### Docling Not Accessible
-
-**Check if Docling is running:**
-
-```bash
-# Check Docker container
-docker ps | grep docling
-
-# Check logs
-docker logs docling-mcp
-
-# For local setup, check if process is running
-ps aux | grep docling-mcp-server
-```
-
-### MCP Connection Issues
-
-**Verify the MCP server is running:**
-
-```bash
-# Check Docker logs
-docker logs docling-mcp | tail -20
-
-# You should see:
-# INFO:     Uvicorn running on http://0.0.0.0:8000
-# INFO:     StreamableHTTP session manager started
-```
-
-**Common issues:**
-
-1. **Wrong URL format**: Use the `/mcp` endpoint (`http://localhost:8000/mcp`) for streamable-http transport
-2. **Port mismatch**: Ensure the port in Hector config matches the port Docling is running on
-3. **Server not started**: Check logs to confirm the server started successfully
-4. **File not found errors**: If you see `FileNotFoundError` in Docling logs like `FileNotFoundError: [Errno 2] No such file or directory: '/Users/.../test-docs/...'`, this means:
-   - **Root cause**: Hector is sending absolute host paths that don't exist inside the Docker container
-   - **Solution (Recommended)**: Use **path mapping** - the `local:remote` syntax in `--docs-folder`:
-     ```bash
-     # Docker mount
-     docker run -v "$(pwd)/test-docs:/docs:ro" -p 8000:8000 ...
-
-     # Hector with path mapping
-     hector serve --docs-folder test-docs:/docs --mcp-url http://localhost:8000/mcp --mcp-parser-tool convert_document_into_docling_document
-     ```
-   - **Alternative**: Use **local setup** (Option 2) - run both Hector and Docling on the host, avoiding path mapping entirely
-
-   **How path mapping works**: The `test-docs:/docs` syntax tells Hector to remap file paths before sending to Docling. Instead of `/Users/you/.../test-docs/file.pdf`, Hector sends `/docs/file.pdf`, which matches the Docker mount point.
-
-### Tool Not Found
-
-**Check available tools:**
-
-Hector will log available MCP tools on startup. Look for:
-
-```
-MCP tools available: convert_document_into_docling_document, ...
-```
-
-If the tool isn't listed, verify:
-1. Docling server is running and logs show successful startup
-2. MCP URL in config uses base URL (not `/mcp` path)
-3. Server URL in config matches actual port
-
-### Port Conflicts
-
-**Change ports if needed:**
-
-```bash
-# Docker: Map to different host port
-docker run -d \
-  --name docling-mcp \
-  -p 9000:8000 \
-  ghcr.io/docling-project/docling-serve-cpu:latest \
-  /opt/app-root/bin/docling-mcp-server \
-  --transport streamable-http \
-  --host 0.0.0.0 \
-  --port 8000
-
-# Update Hector config
-server_url: "http://localhost:9000"
-```
-
----
-
-## Performance Tips
-
-### GPU Acceleration
-
-For better performance with large documents:
-
-```bash
-# Use GPU-enabled image
-docker run -d \
-  --gpus all \
-  -p 5001:5001 \
-  ghcr.io/docling-project/docling-serve-cu128:latest
-```
-
-### Resource Limits
-
-Set Docker resource limits:
-
-```bash
-docker run -d \
-  --name docling \
-  --memory="4g" \
-  --cpus="2" \
-  -p 8000:8000 \
-  ai/granite-docling
-```
-
-### Caching
-
-Hector caches parsed documents. For frequently accessed documents, parsing happens once and results are reused.
 
 ---
 

@@ -72,17 +72,27 @@
 
 /* Light mode: Soften pure white background */
 [data-md-color-scheme="default"] {
-  --md-default-bg-color: #f5f5f5;
+  --md-default-bg-color: #d8d8d8;
 }
 
-/* Light mode: Make code blocks more visible */
+/* Light mode: Make code blocks look like dark mode */
 [data-md-color-scheme="default"] .highlight pre,
 [data-md-color-scheme="default"] pre code {
-  background-color: #e8e8e8 !important;
+  background-color: #1e1e1e !important;
+  color: #d4d4d4 !important;
 }
 
 [data-md-color-scheme="default"] .highlight {
-  background-color: #e8e8e8;
+  background-color: #1e1e1e;
+}
+
+[data-md-color-scheme="default"] .highlight code {
+  color: #d4d4d4 !important;
+}
+
+[data-md-color-scheme="default"] code {
+  background-color: #1e1e1e !important;
+  color: #d4d4d4 !important;
 }
 
 /* Header styling */
