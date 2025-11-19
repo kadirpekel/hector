@@ -11,7 +11,7 @@ Welcome to the Hector blog! Here you'll find tutorials, guides, and insights on 
 
 ### [Using Docling with Hector](posts/using-docling-with-hector.md)
 
-**Published:** January 16, 2025
+**Published:** November 19, 2025
 **Tags:** RAG, Document Parsing, MCP, Docling, Tutorial
 
 Integrate Docling's powerful document parsing capabilities with Hector using Docker or local setup. Parse PDFs, Word documents, PowerPoint presentations, and more.

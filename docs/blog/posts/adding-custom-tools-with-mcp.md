@@ -7,6 +7,9 @@ tags:
   - MCP
   - Extensibility
   - Tutorial
+hide:
+  - navigation
+  - toc
 ---
 
 # Adding Custom Tools with MCP

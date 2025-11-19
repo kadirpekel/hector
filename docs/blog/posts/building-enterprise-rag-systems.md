@@ -11,6 +11,9 @@ tags:
   - Multi-Source Search
   - Production AI
   - Data Sovereignty
+hide:
+  - navigation
+  - toc
 ---
 
 # Building Enterprise RAG Systems with Hector: A Step-by-Step Guide

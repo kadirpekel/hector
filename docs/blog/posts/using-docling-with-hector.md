@@ -1,13 +1,16 @@
 ---
 title: Using Docling with Hector for Advanced Document Parsing
 description: Integrate Docling's powerful document parsing capabilities with Hector using Docker or local setup
-date: 2025-01-16
+date: 2025-11-19
 tags:
   - RAG
   - Document Parsing
   - MCP
   - Docling
   - Tutorial
+hide:
+  - navigation
+  - toc
 ---
 
 # Using Docling with Hector for Advanced Document Parsing

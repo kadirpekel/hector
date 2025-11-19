@@ -7,6 +7,9 @@ tags:
   - Monitoring
   - Metrics
   - Tracing
+hide:
+  - navigation
+  - toc
 ---
 
 # Quick Observability Setup

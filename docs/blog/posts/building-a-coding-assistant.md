@@ -7,6 +7,9 @@ tags:
   - Semantic Search
   - Tools
   - Tutorial
+hide:
+  - navigation
+  - toc
 ---
 
 # Building a Cursor-like AI Coding Assistant with Hector
