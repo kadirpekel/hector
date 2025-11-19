@@ -109,7 +109,7 @@ Some examples require additional services:
   - MCP server running (e.g., Composio)
 
 - **Observability** (observability-example.yaml):
-  - `docker-compose -f docker-compose.observability.yaml up -d`
+  - `docker-compose -f deployments/docker-compose.observability.yaml up -d`
   - Starts Jaeger, Prometheus, and Grafana
 
 ## Documentation References

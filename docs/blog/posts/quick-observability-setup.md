@@ -27,7 +27,7 @@ The `--observe` flag automatically configures:
 
 ```bash
 # 1. Start observability stack (Prometheus, Jaeger, Grafana)
-docker-compose -f docker-compose.observability.yaml up -d
+docker-compose -f deployments/docker-compose.observability.yaml up -d
 
 # 2. Start Hector with observability enabled
 hector serve --observe

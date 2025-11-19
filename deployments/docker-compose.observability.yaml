@@ -25,6 +25,7 @@ services:
       - "9090:9090"   # Prometheus UI: http://localhost:9090
     volumes:
       - ./prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ../grafana:/grafana:ro
       - prometheus-storage:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -50,8 +51,8 @@ services:
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
     volumes:
       - grafana-storage:/var/lib/grafana
-      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ../grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ../grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
     depends_on:
       prometheus:
         condition: service_healthy

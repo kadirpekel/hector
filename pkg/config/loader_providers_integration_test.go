@@ -14,7 +14,7 @@ import (
 )
 
 // TestAllProviders_Integration tests all config providers end-to-end
-// Requires: docker-compose -f docker-compose.config-providers.yaml up -d
+// Requires: docker-compose -f deployments/docker-compose.config-providers.yaml up -d
 func TestAllProviders_Integration(t *testing.T) {
 	if os.Getenv("SKIP_INTEGRATION_TEST") == "1" {
 		t.Skip("Skipping integration tests")

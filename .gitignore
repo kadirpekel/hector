@@ -65,3 +65,19 @@ a2a-python
 .hector/
 site
 sessions.db
+
+# Python virtual environments
+mkdocs_env/
+venv/
+env/
+.venv/
+
+# Test results and artifacts
+test_results/
+test-docs-docker/
+coverage.html
+coverage.out
+
+# Build artifacts
+dist/
+*.test

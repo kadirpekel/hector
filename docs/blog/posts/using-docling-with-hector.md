@@ -448,20 +448,20 @@ networks:
 **Start everything:**
 
 ```bash
-docker-compose -f docker-compose.docling.yaml up -d
+docker-compose -f deployments/docker-compose.docling.yaml up -d
 ```
 
 **Verify it's working:**
 
 ```bash
 # Check both containers are running
-docker-compose -f docker-compose.docling.yaml ps
+docker-compose -f deployments/docker-compose.docling.yaml ps
 
 # Check Hector logs
-docker-compose -f docker-compose.docling.yaml logs hector
+docker-compose -f deployments/docker-compose.docling.yaml logs hector
 
 # Check Docling logs
-docker-compose -f docker-compose.docling.yaml logs docling
+docker-compose -f deployments/docker-compose.docling.yaml logs docling
 ```
 
 **Using a Configuration File:**
@@ -511,7 +511,7 @@ environment:
 
 ```bash
 export OPENAI_API_KEY=your-api-key-here
-docker-compose -f docker-compose.docling.yaml up -d
+docker-compose -f deployments/docker-compose.docling.yaml up -d
 ```
 
 ---

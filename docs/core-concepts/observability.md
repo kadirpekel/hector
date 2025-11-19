@@ -120,7 +120,7 @@ Span: agent.call
 Use the provided Docker Compose file:
 
 ```bash
-docker-compose -f docker-compose.observability.yaml up -d
+docker-compose -f deployments/docker-compose.observability.yaml up -d
 ```
 
 This starts:
