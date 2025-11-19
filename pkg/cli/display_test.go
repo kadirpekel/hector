@@ -108,7 +108,7 @@ func TestDisplayMessage(t *testing.T) {
 	}
 
 	output := captureOutput(func() {
-		DisplayMessage(msg, "Agent: ", false)
+		DisplayMessage(msg, "Agent: ", false, false)
 	})
 
 	if !strings.Contains(output, "Agent:") {
@@ -121,7 +121,7 @@ func TestDisplayMessage(t *testing.T) {
 
 func TestDisplayMessage_NilMessage(t *testing.T) {
 	output := captureOutput(func() {
-		DisplayMessage(nil, "Agent: ", false)
+		DisplayMessage(nil, "Agent: ", false, false)
 	})
 
 	if output != "" {
@@ -139,7 +139,7 @@ func TestDisplayMessage_NoPrefix(t *testing.T) {
 	}
 
 	output := captureOutput(func() {
-		DisplayMessage(msg, "", false)
+		DisplayMessage(msg, "", false, false)
 	})
 
 	if !strings.Contains(output, "Test") {
@@ -157,7 +157,7 @@ func TestDisplayMessageLine(t *testing.T) {
 	}
 
 	output := captureOutput(func() {
-		DisplayMessageLine(msg, "Prefix: ", false)
+		DisplayMessageLine(msg, "Prefix: ", false, false)
 	})
 
 	if !strings.Contains(output, "Prefix:") {

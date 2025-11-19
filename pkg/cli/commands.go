@@ -145,7 +145,7 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 
 		for chunk := range streamChan {
 			if msgChunk := chunk.GetMsg(); msgChunk != nil {
-				DisplayMessage(msgChunk, "", args.Thinking)
+				DisplayMessage(msgChunk, "", args.Thinking, args.ShowTools)
 			}
 		}
 		fmt.Println()
@@ -158,9 +158,16 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 		}
 
 		if respMsg := resp.GetMsg(); respMsg != nil {
-			DisplayMessageLine(respMsg, "Agent: ", args.Thinking)
+			// Clean output: no prefix, just the agent's response
+			DisplayMessageLine(respMsg, "", args.Thinking, args.ShowTools)
 		} else if task := resp.GetTask(); task != nil {
-			DisplayTask(task)
+			// Extract message from task instead of showing full task details
+			if task.Status != nil && task.Status.Update != nil {
+				DisplayMessageLine(task.Status.Update, "", args.Thinking, args.ShowTools)
+			} else {
+				// Fallback: show task details only if no message available
+				DisplayTask(task)
+			}
 		}
 		return nil
 	}
@@ -199,10 +206,10 @@ func ChatCommand(args *ChatCmd, cfg *config.Config, mode CLIMode) error {
 		}
 	}
 
-	return executeChat(client, agentID, args.SessionID, !args.NoStream, args.Thinking)
+	return executeChat(client, agentID, args.SessionID, !args.NoStream, args.Thinking, args.ShowTools)
 }
 
-func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streaming bool, showThinking bool) error {
+func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streaming bool, showThinking bool, showTools bool) error {
 
 	mode := "Client Mode"
 
@@ -261,7 +268,7 @@ func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streamin
 
 			for chunk := range streamChan {
 				if msgChunk := chunk.GetMsg(); msgChunk != nil {
-					DisplayMessage(msgChunk, "", showThinking)
+					DisplayMessage(msgChunk, "", showThinking, showTools)
 				}
 			}
 			fmt.Println()
@@ -274,9 +281,15 @@ func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streamin
 			}
 
 			if respMsg := resp.GetMsg(); respMsg != nil {
-				DisplayMessageLine(respMsg, "", showThinking)
+				DisplayMessageLine(respMsg, "", showThinking, showTools)
 			} else if task := resp.GetTask(); task != nil {
-				DisplayTask(task)
+				// Extract message from task instead of showing full task details
+				if task.Status != nil && task.Status.Update != nil {
+					DisplayMessageLine(task.Status.Update, "", showThinking, showTools)
+				} else {
+					// Fallback: show task details only if no message available
+					DisplayTask(task)
+				}
 			}
 		}
 	}

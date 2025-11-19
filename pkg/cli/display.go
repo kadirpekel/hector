@@ -87,13 +87,16 @@ func DisplayAgentCard(agentID string, card *pb.AgentCard) {
 	}
 }
 
-func DisplayMessage(msg *pb.Message, prefix string, showThinking bool) {
+func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools bool) bool {
 	if msg == nil {
-		return
+		return false
 	}
+
+	hasOutput := false
 
 	if prefix != "" {
 		fmt.Print(prefix)
+		hasOutput = true
 	}
 
 	for _, part := range msg.Parts {
@@ -161,11 +164,12 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool) {
 
 					// Display the thinking content (styling already applied)
 					displayThinkingPart(part)
+					hasOutput = true
 				}
 				continue
 			}
 
-			// Display tool call parts (AG-UI format)
+			// Display tool call parts (AG-UI format) - only if showTools is true
 			if eventType == "tool_call" {
 				// Reset thinking block state when transitioning to tool calls
 				if currentThinkingBlockID != "" {
@@ -173,6 +177,12 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool) {
 					currentThinkingBlockID = ""
 					thinkingPrefixPrinted = false
 				}
+				
+				// Skip tool calls/results if showTools is false (clean output mode)
+				if !showTools {
+					continue
+				}
+				
 				// Check if it's a tool call (no is_error) or tool result (has is_error)
 				_, hasIsError := part.Metadata.Fields["is_error"]
 
@@ -193,6 +203,7 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool) {
 						fmt.Printf("TOOL: %s", toolName)
 						fmt.Print("\033[0m ")
 						os.Stdout.Sync()
+						hasOutput = true
 					}
 					continue
 				} else {
@@ -214,8 +225,10 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool) {
 								fmt.Printf("\033[31m   Error: %s\033[0m\n", errorMsg)
 							}
 						}
+						hasOutput = true
 					} else {
 						fmt.Print("\033[32mOK\033[0m\n") // Green for success
+						hasOutput = true
 					}
 					os.Stdout.Sync()
 					continue
@@ -233,12 +246,14 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool) {
 			}
 			fmt.Print(text)
 			os.Stdout.Sync()
+			hasOutput = true
 			continue
 		}
 	}
 
 	// Don't reset thinking block state at end of message - thinking blocks can span multiple messages
 	// Only reset styling if we're not in a thinking block (already handled above)
+	return hasOutput
 }
 
 // displayThinkingPart renders thinking parts based on structured data
@@ -388,9 +403,10 @@ func displayGoalCLI(data *structpb.Struct) {
 	fmt.Print("\033[0m")
 }
 
-func DisplayMessageLine(msg *pb.Message, prefix string, showThinking bool) {
-	DisplayMessage(msg, prefix, showThinking)
-	fmt.Println()
+func DisplayMessageLine(msg *pb.Message, prefix string, showThinking bool, showTools bool) {
+	if DisplayMessage(msg, prefix, showThinking, showTools) {
+		fmt.Println()
+	}
 }
 
 func DisplayTask(task *pb.Task) {
