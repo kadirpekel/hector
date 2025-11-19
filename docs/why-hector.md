@@ -136,13 +136,6 @@ No Python. No JavaScript. No code.
 - **Deploying to resource-constrained environments** (edge, Lambda)
 - **Platform engineers** managing AI infrastructure for teams
 
-### ⚠️ Consider Alternatives When:
-
-- **Rapid prototyping** with frequent code changes
-- **Heavy Python ecosystem integration** required
-- **Custom agent behaviors** needing programmatic control
-- **Research projects** without production requirements
-
 ## Comparison: Hector vs. Traditional Frameworks
 
 | Aspect | Hector | LangChain/LlamaIndex |
