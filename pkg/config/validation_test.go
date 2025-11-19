@@ -504,7 +504,7 @@ func TestGlobalSettings_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "invalid_logging_config",
+			name:    "invalid_empty_global_settings",
 			config:  GlobalSettings{},
 			wantErr: true,
 		},

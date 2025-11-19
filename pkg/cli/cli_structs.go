@@ -5,9 +5,9 @@ var CLI struct {
 	ConfigType      string `help:"Configuration backend type" enum:"file,consul,etcd,zookeeper" default:"file"`
 	ConfigWatch     bool   `help:"Watch for configuration changes and auto-reload" default:"false"`
 	ConfigEndpoints string `help:"Comma-separated backend endpoints (e.g., localhost:8500 for consul)" placeholder:"ENDPOINTS"`
-	LogLevel        string `name:"log-level" help:"Set log level (debug, info, warn, error). Overrides config file setting."`
-	LogFile         string `name:"log-file" help:"Path to log file (empty = stderr). Overrides config file setting."`
-	LogFormat       string `name:"log-format" help:"Set log format (simple, verbose, or custom). Overrides config file setting."`
+	LogLevel        string `name:"log-level" help:"Set log level (debug, info, warn, error)" env:"LOG_LEVEL"`
+	LogFile         string `name:"log-file" help:"Path to log file (empty = stderr)" env:"LOG_FILE"`
+	LogFormat       string `name:"log-format" help:"Set log format (simple, verbose, or custom)" env:"LOG_FORMAT"`
 
 	Version  VersionCmd  `cmd:"" help:"Show Hector version information"`
 	Validate ValidateCmd `cmd:"" help:"Validate configuration file syntax and semantics"`

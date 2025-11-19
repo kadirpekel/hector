@@ -85,9 +85,6 @@ Observability configuration for metrics and distributed tracing:
 ```yaml
 global:
   observability:
-    log_level: "info"            # Log level: debug, info, warn, error (default: info)
-    log_file: "hector.log"       # Path to log file (empty = stderr). Auto-enabled for client/local modes.
-    log_format: "simple"          # Log format: simple (level + message), verbose (time + level + message + attributes), or custom (default: simple)
     tracing:
       enabled: true              # Enable distributed tracing
       exporter_type: "jaeger"    # Exporter type (jaeger, otlp)
@@ -102,9 +99,6 @@ global:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `log_level` | string | `"info"` | Log level: `debug`, `info`, `warn`, `error`. Can be overridden with `--log-level` CLI flag. |
-| `log_file` | string | Auto | Path to log file (empty = stderr). Auto-enabled for client/local modes (`hector.log`), `stderr` for server modes. Can be overridden with `--log-file` CLI flag. |
-| `log_format` | string | `"simple"` | Log format: `simple` (level + message only), `verbose` (time + level + message + attributes), or any custom value (uses default slog.TextHandler format). Can be overridden with `--log-format` CLI flag. |
 | `tracing.enabled` | boolean | `false` | Enable OpenTelemetry tracing |
 | `tracing.exporter_type` | string | `"otlp"` | Trace exporter (jaeger, otlp) |
 | `tracing.endpoint_url` | string | `"localhost:4317"` | OTLP gRPC endpoint |

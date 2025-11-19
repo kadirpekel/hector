@@ -585,7 +585,7 @@ Use standard logging tools or enable observability for auth debugging:
 
 ```bash
 # Run with verbose output
-HECTOR_LOG_LEVEL=debug hector serve --config config.yaml
+LOG_LEVEL=debug hector serve --config config.yaml
 ```
 
 ### Test Authentication

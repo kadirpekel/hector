@@ -19,6 +19,10 @@ const (
 	DefaultLogFile = "hector.log"
 	// LogFileEnvVar is the environment variable name for log file path
 	LogFileEnvVar = "LOG_FILE"
+	// LogLevelEnvVar is the environment variable name for log level
+	LogLevelEnvVar = "LOG_LEVEL"
+	// LogFormatEnvVar is the environment variable name for log format
+	LogFormatEnvVar = "LOG_FORMAT"
 	// DefaultLogFormat is the default log format
 	DefaultLogFormat = "simple"
 )
@@ -91,40 +95,41 @@ func getDefaultLogFileName() string {
 	return DefaultLogFile
 }
 
-// determineLogLevel determines the log level based on priority: CLI flag > config file > default
-func determineLogLevel(cliLogLevel string, cfg *config.Config) (slog.Level, error) {
-	if cliLogLevel != "" {
-		validLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
-		if !validLevels[cliLogLevel] {
-			return 0, fmt.Errorf("invalid log level '%s' (must be: debug, info, warn, error)", cliLogLevel)
-		}
-		return logger.ParseLevel(cliLogLevel)
+// determineLogLevel determines the log level based on priority: CLI flag > env var > default (info)
+func determineLogLevel(cliLogLevel string) (slog.Level, error) {
+	// Priority: CLI flag > env var > default
+	logLevel := cliLogLevel
+	if logLevel == "" {
+		logLevel = os.Getenv(LogLevelEnvVar)
 	}
-	if cfg != nil && cfg.Global.Observability.LogLevel != "" {
-		return logger.ParseLevel(cfg.Global.Observability.LogLevel)
+	if logLevel == "" {
+		return slog.LevelInfo, nil // default to info
 	}
-	return slog.LevelInfo, nil
+
+	validLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
+	if !validLevels[strings.ToLower(logLevel)] {
+		return 0, fmt.Errorf("invalid log level '%s' (must be: debug, info, warn, error)", logLevel)
+	}
+	return logger.ParseLevel(logLevel)
 }
 
-// determineLogFile determines the log file based on priority: CLI flag > config file > auto-enable for client/local > stderr
+// determineLogFile determines the log file based on priority: CLI flag > env var > auto-enable for client/local > stderr
 // Returns the file, cleanup function, and error
-func determineLogFile(cliLogFile string, cfg *config.Config, mode cli.CLIMode) (*os.File, func(), error) {
-	isClientOrLocalMode := mode == cli.ModeClient || mode == cli.ModeLocalConfig || mode == cli.ModeLocalZeroConfig
+func determineLogFile(cliLogFile string, isClientOrLocalMode bool) (*os.File, func(), error) {
+	// Priority: CLI flag > env var > auto-enable for client/local > stderr
+	logFile := cliLogFile
+	if logFile == "" {
+		logFile = os.Getenv(LogFileEnvVar)
+	}
 
-	if cliLogFile != "" {
-		file, cleanup, err := logger.OpenLogFile(cliLogFile)
+	if logFile != "" {
+		file, cleanup, err := logger.OpenLogFile(logFile)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to open log file: %w", err)
 		}
 		return file, cleanup, nil
 	}
-	if cfg != nil && cfg.Global.Observability.LogFile != "" {
-		file, cleanup, err := logger.OpenLogFile(cfg.Global.Observability.LogFile)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to open log file from config: %w", err)
-		}
-		return file, cleanup, nil
-	}
+
 	if isClientOrLocalMode {
 		// Auto-enable file logging for client/local modes to keep stdout clean
 		file, cleanup, err := logger.OpenLogFile(getDefaultLogFileName())
@@ -133,16 +138,18 @@ func determineLogFile(cliLogFile string, cfg *config.Config, mode cli.CLIMode) (
 		}
 		return file, cleanup, nil
 	}
+
 	return os.Stderr, nil, nil
 }
 
-// determineLogFormat determines the log format based on priority: CLI flag > config file > default
-func determineLogFormat(cliLogFormat string, cfg *config.Config) string {
+// determineLogFormat determines the log format based on priority: CLI flag > env var > default
+func determineLogFormat(cliLogFormat string) string {
+	// Priority: CLI flag > env var > default
 	if cliLogFormat != "" {
 		return cliLogFormat
 	}
-	if cfg != nil && cfg.Global.Observability.LogFormat != "" {
-		return cfg.Global.Observability.LogFormat
+	if envLogFormat := os.Getenv(LogFormatEnvVar); envLogFormat != "" {
+		return envLogFormat
 	}
 	return DefaultLogFormat
 }
@@ -181,18 +188,35 @@ func main() {
 		},
 	)
 
+	command := ctx.Command()
+	isClientMode := isClientModeCommand(command)
+	hasConfigFile := cli.CLI.Config != ""
+	mode := determineMode(command, isClientMode, hasConfigFile)
+
+	// Initialize logger EARLY - before config loading
+	// Uses only CLI args and env vars, not config file
+	isClientOrLocalMode := mode == cli.ModeClient || mode == cli.ModeLocalConfig || mode == cli.ModeLocalZeroConfig
+
+	logLevel, err := determineLogLevel(cli.CLI.LogLevel)
+	if err != nil {
+		cli.Fatalf("Invalid log level: %v", err)
+	}
+
+	logFile, cleanup, err := determineLogFile(cli.CLI.LogFile, isClientOrLocalMode)
+	if err != nil {
+		cli.Fatalf("Failed to open log file: %v", err)
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+
+	logFormat := determineLogFormat(cli.CLI.LogFormat)
+	logger.Init(logLevel, logFile, logFormat)
+
 	var cfg *config.Config
 	var configLoader *config.Loader
 
-	command := ctx.Command()
-
-	isClientMode := isClientModeCommand(command)
-
-	hasConfigFile := cli.CLI.Config != ""
-
-	// Load and process configuration
-	// Note: Config processing logs (e.g., "Auto-created tools") will use slog's default logger (stderr)
-	// until we initialize our custom logger below. This is fine - stderr is separate from stdout.
+	// Load and process configuration (after logger is initialized)
 	if !isClientMode && command != "validate <config>" {
 		if hasConfigFile {
 			configType, err := config.ParseConfigType(cli.CLI.ConfigType)
@@ -240,26 +264,6 @@ func main() {
 		}
 		os.Exit(0)
 	}
-
-	mode := determineMode(command, isClientMode, hasConfigFile)
-
-	// Initialize logger with final settings
-	logLevel, err := determineLogLevel(cli.CLI.LogLevel, cfg)
-	if err != nil {
-		cli.Fatalf("Invalid log level: %v", err)
-	}
-
-	logFile, cleanup, err := determineLogFile(cli.CLI.LogFile, cfg, mode)
-	if err != nil {
-		cli.Fatalf("Failed to open log file: %v", err)
-	}
-	if cleanup != nil {
-		defer cleanup()
-	}
-
-	logFormat := determineLogFormat(cli.CLI.LogFormat, cfg)
-
-	logger.Init(logLevel, logFile, logFormat)
 
 	if err := routeCommand(ctx, cfg, configLoader, mode); err != nil {
 		cli.Fatalf("Command failed: %v", err)

@@ -32,9 +32,9 @@ Available for all commands:
 | `--config-type TYPE` | string | Configuration backend (`file`, `consul`, `etcd`, `zookeeper`) | `file` |
 | `--config-watch` | bool | Watch for configuration changes and auto-reload | `false` |
 | `--config-endpoints ENDPOINTS` | string | Comma-separated backend endpoints | Backend-specific defaults |
-| `--log-level LEVEL` | string | Set log level (`debug`, `info`, `warn`, `error`). Overrides config file setting. | `info` |
-| `--log-file PATH` | string | Path to log file (empty = stderr). Overrides config file setting. Auto-enabled for client/local modes. | Auto (`hector.log` for client/local, `stderr` for server) |
-| `--log-format FORMAT` | string | Set log format (`simple`, `verbose`, or custom). Overrides config file setting. | `simple` |
+| `--log-level LEVEL` | string | Set log level (`debug`, `info`, `warn`, `error`). Can also be set via `LOG_LEVEL` env var. | `info` |
+| `--log-file PATH` | string | Path to log file (empty = stderr). Can also be set via `LOG_FILE` env var. Auto-enabled for client/local modes. | Auto (`hector.log` for client/local, `stderr` for server) |
+| `--log-format FORMAT` | string | Set log format (`simple`, `verbose`, or custom). Can also be set via `LOG_FORMAT` env var. | `simple` |
 | `--help` | bool | Show help | - |
 
 **Configuration Backends:**
