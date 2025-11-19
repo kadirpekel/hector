@@ -9,9 +9,20 @@ Welcome to the Hector blog! Here you'll find tutorials, guides, and insights on 
 
 ## Latest Posts
 
+### [Using Docling with Hector](posts/using-docling-with-hector.md)
+
+**Published:** January 16, 2025
+**Tags:** RAG, Document Parsing, MCP, Docling, Tutorial
+
+Integrate Docling's powerful document parsing capabilities with Hector using Docker or local setup. Parse PDFs, Word documents, PowerPoint presentations, and more.
+
+[Read more →](posts/using-docling-with-hector.md)
+
+---
+
 ### [Building Enterprise RAG Systems with Hector](posts/building-enterprise-rag-systems.md)
 
-**Published:** November 16, 2025  
+**Published:** November 16, 2025
 **Tags:** Enterprise AI, RAG, On-Premise Deployment, Multi-Source Search
 
 Learn how to build a production-grade RAG system step-by-step that works entirely on-premise, searches across multiple data sources, and provides enterprise observability—all configured in YAML.
@@ -55,7 +66,7 @@ Extend your agents with custom tools using the Model Context Protocol (MCP). Bui
 
 ### [Quick Observability Setup](posts/quick-observability-setup.md)
 
-**Published:** January 16, 2025  
+**Published:** January 16, 2025
 **Tags:** Observability, Monitoring, Metrics, Tracing
 
 Enable monitoring and tracing in development with a single flag - no config file needed!
@@ -73,10 +84,12 @@ Enable monitoring and tracing in development with a single flag - no config file
 ### RAG & Search
 - [Building Enterprise RAG Systems](posts/building-enterprise-rag-systems.md)
 - [Building a Cursor-like AI Coding Assistant](posts/building-a-coding-assistant.md)
+- [Using Docling with Hector](posts/using-docling-with-hector.md)
 
 ### Tools & Extensibility
 - [Building a Cursor-like AI Coding Assistant](posts/building-a-coding-assistant.md)
 - [Adding Custom Tools with MCP](posts/adding-custom-tools-with-mcp.md)
+- [Using Docling with Hector](posts/using-docling-with-hector.md)
 
 ### Multi-Agent Systems
 - [Building a Multi-Agent Research System](posts/building-a-multi-agent-research-system.md)

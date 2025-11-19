@@ -92,6 +92,7 @@ nav:
     - Building a Coding Assistant: blog/posts/building-a-coding-assistant.md
     - Multi-Agent Research System: blog/posts/building-a-multi-agent-research-system.md
     - Adding Custom Tools with MCP: blog/posts/adding-custom-tools-with-mcp.md
+    - Using Docling with Hector: blog/posts/using-docling-with-hector.md
     - Quick Observability Setup: blog/posts/quick-observability-setup.md
   - Reference:
     - CLI Reference: reference/cli.md
