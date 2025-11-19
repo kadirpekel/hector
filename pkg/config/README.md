@@ -200,7 +200,7 @@ go test ./pkg/config/...
 
 # Test with real providers
 docker-compose -f deployments/docker-compose.config-providers.yaml up -d
-./scripts/test-config-providers.sh consul --watch
+go test -v ./pkg/config/... -run TestAllProviders
 ```
 
 ## Files

@@ -214,16 +214,8 @@ validate-configs:
 validate-config-examples: validate-configs
 
 # A2A Protocol Compliance Verification
-.PHONY: a2a-compliance a2a-tests a2a-validate
-
-a2a-compliance:
-	@echo "🔍 Running A2A Protocol Compliance Verification..."
-	@./scripts/a2a-compliance-check.sh
+.PHONY: a2a-tests
 
 a2a-tests:
 	@echo "🧪 Running A2A compliance tests..."
 	@go test -v ./pkg/a2a -run TestCompliance
-
-a2a-validate:
-	@echo "🔬 Running external A2A validator integration..."
-	@./scripts/a2a-validator-integration.sh
