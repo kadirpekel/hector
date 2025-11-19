@@ -916,13 +916,6 @@ func (a *Agent) executeTools(
 
 	results := make([]reasoning.ToolResult, 0, len(toolCalls))
 
-	// Add newline before tools if showing them
-	if len(toolCalls) > 0 && config.BoolValue(cfg.EnableToolDisplay, true) {
-		if sendErr := safeSendPart(ctx, outputCh, createTextPart("\n")); sendErr != nil {
-			slog.Error("Failed to send newline", "agent", a.name, "error", sendErr)
-		}
-	}
-
 	for _, toolCall := range toolCalls {
 
 		select {

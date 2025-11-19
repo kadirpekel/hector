@@ -177,12 +177,12 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 					currentThinkingBlockID = ""
 					thinkingPrefixPrinted = false
 				}
-				
+
 				// Skip tool calls/results if showTools is false (clean output mode)
 				if !showTools {
 					continue
 				}
-				
+
 				// Check if it's a tool call (no is_error) or tool result (has is_error)
 				_, hasIsError := part.Metadata.Fields["is_error"]
 
