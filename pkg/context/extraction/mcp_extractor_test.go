@@ -596,3 +596,99 @@ func TestMCPExtractor_Extract_FileMetadata(t *testing.T) {
 		t.Errorf("Title = %v, want %v", result.Title, expectedTitle)
 	}
 }
+
+func TestMCPExtractor_PathRemapping(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name           string
+		localBasePath  string
+		pathPrefix     string
+		inputPath      string
+		expectedPath   string
+	}{
+		{
+			name:          "no remapping when path_prefix is empty",
+			localBasePath: "/Users/user/workspace/hector/test-docs",
+			pathPrefix:    "",
+			inputPath:     "/Users/user/workspace/hector/test-docs/pdfs/file.pdf",
+			expectedPath:  "/Users/user/workspace/hector/test-docs/pdfs/file.pdf",
+		},
+		{
+			name:          "no remapping when localBasePath is empty",
+			localBasePath: "",
+			pathPrefix:    "/docs",
+			inputPath:     "/Users/user/workspace/hector/test-docs/pdfs/file.pdf",
+			expectedPath:  "/Users/user/workspace/hector/test-docs/pdfs/file.pdf",
+		},
+		{
+			name:          "remaps path when both are set",
+			localBasePath: "/Users/user/workspace/hector/test-docs",
+			pathPrefix:    "/docs",
+			inputPath:     "/Users/user/workspace/hector/test-docs/pdfs/file.pdf",
+			expectedPath:  "/docs/pdfs/file.pdf",
+		},
+		{
+			name:          "remaps root level file",
+			localBasePath: "/Users/user/workspace/hector/test-docs",
+			pathPrefix:    "/docs",
+			inputPath:     "/Users/user/workspace/hector/test-docs/file.pdf",
+			expectedPath:  "/docs/file.pdf",
+		},
+		{
+			name:          "no remapping when path doesn't match base",
+			localBasePath: "/Users/user/workspace/hector/test-docs",
+			pathPrefix:    "/docs",
+			inputPath:     "/Users/user/other-folder/file.pdf",
+			expectedPath:  "/Users/user/other-folder/file.pdf",
+		},
+		{
+			name:          "handles nested directories",
+			localBasePath: "/Users/user/workspace/hector/test-docs",
+			pathPrefix:    "/data/documents",
+			inputPath:     "/Users/user/workspace/hector/test-docs/a/b/c/file.pdf",
+			expectedPath:  "/data/documents/a/b/c/file.pdf",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var receivedPath string
+			caller := newMockToolCaller()
+
+			tool := &mockTool{
+				name: "parse_document",
+				parameters: []ToolParameter{
+					{Name: "file_path", Type: "string", Required: true},
+				},
+				executeFunc: func(ctx context.Context, args map[string]interface{}) (ToolResult, error) {
+					receivedPath = args["file_path"].(string)
+					return ToolResult{
+						Success: true,
+						Content: "Test content",
+					}, nil
+				},
+			}
+			caller.addTool("parse_document", tool)
+
+			extractor, err := NewMCPExtractor(MCPExtractorConfig{
+				ToolCaller:      caller,
+				ParserToolNames: []string{"parse_document"},
+				LocalBasePath:   tt.localBasePath,
+				PathPrefix:      tt.pathPrefix,
+			})
+			if err != nil {
+				t.Fatalf("NewMCPExtractor() error = %v", err)
+			}
+
+			_, err = extractor.Extract(ctx, tt.inputPath, 1024)
+			if err != nil {
+				t.Fatalf("Extract() error = %v", err)
+			}
+
+			if receivedPath != tt.expectedPath {
+				t.Errorf("MCP tool received path = %v, want %v", receivedPath, tt.expectedPath)
+			}
+		})
+	}
+}

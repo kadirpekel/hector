@@ -51,6 +51,8 @@ type MCPExtractor struct {
 	parserToolNames []string // List of MCP tool names that can parse documents
 	supportedExts   map[string]bool
 	priority        int
+	localBasePath   string // Local base path of the document store (e.g., "/Users/user/workspace/hector/test-docs")
+	pathPrefix      string // Remote path prefix for containerized MCP services (e.g., "/docs")
 }
 
 // MCPExtractorConfig configures an MCP extractor
@@ -59,6 +61,8 @@ type MCPExtractorConfig struct {
 	ParserToolNames []string // Tool names to try (e.g., ["parse_document", "docling_parse"])
 	SupportedExts   []string // File extensions this extractor handles (empty = all)
 	Priority        int      // Priority (higher = preferred)
+	LocalBasePath   string   // Local base path of the document store (e.g., "/Users/user/workspace/hector/test-docs")
+	PathPrefix      string   // Remote path prefix for containerized MCP services (e.g., "/docs")
 }
 
 // NewMCPExtractor creates a new MCP-based extractor
@@ -86,6 +90,8 @@ func NewMCPExtractor(config MCPExtractorConfig) (*MCPExtractor, error) {
 		parserToolNames: config.ParserToolNames,
 		supportedExts:   extMap,
 		priority:        priority,
+		localBasePath:   config.LocalBasePath,
+		pathPrefix:      config.PathPrefix,
 	}, nil
 }
 
@@ -121,9 +127,35 @@ func (e *MCPExtractor) hasParserTool() bool {
 	return false
 }
 
+// remapPath converts a local file path to a remote path for containerized MCP services
+// Example: /Users/user/workspace/hector/test-docs/pdfs/file.pdf -> /docs/pdfs/file.pdf
+func (e *MCPExtractor) remapPath(localPath string) string {
+	if e.pathPrefix == "" || e.localBasePath == "" {
+		return localPath
+	}
+
+	// Check if the path starts with the local base path
+	if strings.HasPrefix(localPath, e.localBasePath) {
+		// Replace local base path with remote path prefix
+		relativePath := strings.TrimPrefix(localPath, e.localBasePath)
+		return e.pathPrefix + relativePath
+	}
+
+	// Path doesn't match local base path, return as-is
+	return localPath
+}
+
 // Extract uses MCP tools to extract content from files
 func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64) (*ExtractedContent, error) {
 	startTime := time.Now()
+
+	// Remap path for containerized MCP services
+	remotePath := e.remapPath(path)
+	if remotePath != path {
+		slog.Debug("Remapped path for MCP tool",
+			"local_path", path,
+			"remote_path", remotePath)
+	}
 
 	// Try each parser tool in order
 	for _, toolName := range e.parserToolNames {
@@ -142,7 +174,7 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 			// Use the first required parameter name, or common names
 			for _, param := range toolInfo.Parameters {
 				if param.Required {
-					args[param.Name] = path
+					args[param.Name] = remotePath
 					break
 				}
 			}
@@ -152,7 +184,7 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 				for _, name := range commonNames {
 					for _, param := range toolInfo.Parameters {
 						if param.Name == name {
-							args[name] = path
+							args[name] = remotePath
 							break
 						}
 					}
@@ -163,7 +195,7 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 			}
 		} else {
 			// Fallback: try common parameter names
-			args["file_path"] = path
+			args["file_path"] = remotePath
 		}
 
 		// Execute the MCP tool

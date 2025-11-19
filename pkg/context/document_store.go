@@ -196,10 +196,20 @@ func NewDocumentStoreWithToolRegistry(storeName string, storeConfig *config.Docu
 
 	// Register MCP extractors if configured
 	if toolRegistry != nil && storeConfig.MCPParsers != nil && storeConfig.MCPParsers.ToolNames != nil && len(storeConfig.MCPParsers.ToolNames) > 0 {
+		// Get absolute path for the document store base path
+		localBasePath := storeConfig.Path
+		if localBasePath != "" {
+			if absPath, err := filepath.Abs(localBasePath); err == nil {
+				localBasePath = absPath
+			}
+		}
+
 		mcpConfig := extraction.MCPExtractorConfig{
 			ToolCaller:      toolRegistry,
 			ParserToolNames: storeConfig.MCPParsers.ToolNames,
 			SupportedExts:   storeConfig.MCPParsers.Extensions,
+			LocalBasePath:   localBasePath,
+			PathPrefix:      storeConfig.MCPParsers.PathPrefix,
 		}
 		if storeConfig.MCPParsers.Priority != nil {
 			mcpConfig.Priority = *storeConfig.MCPParsers.Priority

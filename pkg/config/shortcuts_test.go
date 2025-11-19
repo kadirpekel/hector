@@ -477,3 +477,123 @@ func TestAgentShortcuts_Combined(t *testing.T) {
 	}
 
 }
+
+func TestAgentShortcuts_DocsFolder_WithPathPrefix(t *testing.T) {
+	cfg := &Config{
+		LLMs: map[string]*LLMProviderConfig{
+			"test-llm": {
+				Type:   "openai",
+				APIKey: "test-key",
+			},
+		},
+		Agents: map[string]*AgentConfig{
+			"test-agent": {
+				Name:          "Test Agent",
+				LLM:           "test-llm",
+				DocsFolder:    "./test-folder:/docs", // local:remote syntax
+				MCPParserTool: "convert_document",
+			},
+		},
+	}
+
+	processedCfg, err := ProcessConfigPipeline(cfg)
+	if err != nil {
+		t.Fatalf("ProcessConfigPipeline failed: %v", err)
+	}
+	cfg = processedCfg
+
+	agent := cfg.Agents["test-agent"]
+	if len(agent.DocumentStores) == 0 {
+		t.Fatal("DocumentStores should be auto-populated from docs_folder")
+	}
+
+	storeName := agent.DocumentStores[0]
+	store, exists := cfg.DocumentStores[storeName]
+	if !exists {
+		t.Fatal("Document store should exist in config")
+	}
+	if store.Path != "./test-folder" {
+		t.Errorf("Document store path should be './test-folder', got '%s'", store.Path)
+	}
+
+	// Verify MCP parser config has path_prefix
+	if store.MCPParsers == nil {
+		t.Fatal("MCPParsers should be configured")
+	}
+	if store.MCPParsers.PathPrefix != "/docs" {
+		t.Errorf("MCPParsers.PathPrefix should be '/docs', got '%s'", store.MCPParsers.PathPrefix)
+	}
+}
+
+func TestAgentShortcuts_DocsFolder_WithPathPrefix_NestedRemotePath(t *testing.T) {
+	cfg := &Config{
+		LLMs: map[string]*LLMProviderConfig{
+			"test-llm": {
+				Type:   "openai",
+				APIKey: "test-key",
+			},
+		},
+		Agents: map[string]*AgentConfig{
+			"test-agent": {
+				Name:          "Test Agent",
+				LLM:           "test-llm",
+				DocsFolder:    "/path/to/local/docs:/data/documents", // absolute paths
+				MCPParserTool: "parse_document",
+			},
+		},
+	}
+
+	processedCfg, err := ProcessConfigPipeline(cfg)
+	if err != nil {
+		t.Fatalf("ProcessConfigPipeline failed: %v", err)
+	}
+	cfg = processedCfg
+
+	agent := cfg.Agents["test-agent"]
+	storeName := agent.DocumentStores[0]
+	store := cfg.DocumentStores[storeName]
+
+	if store.Path != "/path/to/local/docs" {
+		t.Errorf("Document store path should be '/path/to/local/docs', got '%s'", store.Path)
+	}
+	if store.MCPParsers.PathPrefix != "/data/documents" {
+		t.Errorf("MCPParsers.PathPrefix should be '/data/documents', got '%s'", store.MCPParsers.PathPrefix)
+	}
+}
+
+func TestAgentShortcuts_DocsFolder_NoPathPrefix(t *testing.T) {
+	cfg := &Config{
+		LLMs: map[string]*LLMProviderConfig{
+			"test-llm": {
+				Type:   "openai",
+				APIKey: "test-key",
+			},
+		},
+		Agents: map[string]*AgentConfig{
+			"test-agent": {
+				Name:          "Test Agent",
+				LLM:           "test-llm",
+				DocsFolder:    "./test-folder", // No path prefix
+				MCPParserTool: "convert_document",
+			},
+		},
+	}
+
+	processedCfg, err := ProcessConfigPipeline(cfg)
+	if err != nil {
+		t.Fatalf("ProcessConfigPipeline failed: %v", err)
+	}
+	cfg = processedCfg
+
+	agent := cfg.Agents["test-agent"]
+	storeName := agent.DocumentStores[0]
+	store := cfg.DocumentStores[storeName]
+
+	if store.Path != "./test-folder" {
+		t.Errorf("Document store path should be './test-folder', got '%s'", store.Path)
+	}
+	// PathPrefix should be empty when not specified
+	if store.MCPParsers.PathPrefix != "" {
+		t.Errorf("MCPParsers.PathPrefix should be empty, got '%s'", store.MCPParsers.PathPrefix)
+	}
+}

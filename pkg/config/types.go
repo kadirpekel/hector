@@ -1305,6 +1305,7 @@ type DocumentStoreMCPParserConfig struct {
 	Extensions   []string `yaml:"extensions"`    // File extensions to handle (empty = all binary files)
 	Priority     *int     `yaml:"priority"`      // Extractor priority (default: 8, higher than native parsers)
 	PreferNative *bool    `yaml:"prefer_native"` // If true, only use MCP when native parsers fail (default: false)
+	PathPrefix   string   `yaml:"path_prefix"`   // Remote path prefix for containerized MCP services (e.g., "/docs" when mounting ./test-docs:/docs)
 }
 
 // DocumentStoreSQLConfig defines SQL database connection for document store

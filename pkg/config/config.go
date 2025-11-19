@@ -79,11 +79,26 @@ func (c *Config) initializeMaps() {
 }
 
 func (c *Config) expandDocsFolder(agent *AgentConfig) {
-	storeName := generateStoreNameFromPath(agent.DocsFolder)
+	// Parse local:remote syntax for path remapping (e.g., "test-docs:/docs")
+	// This allows containerized MCP services to access files via mounted volumes
+	localPath := agent.DocsFolder
+	remotePath := ""
+
+	if colonIdx := strings.LastIndex(agent.DocsFolder, ":"); colonIdx > 0 {
+		// Check if this looks like a path mapping (remote path starts with /)
+		potentialRemote := agent.DocsFolder[colonIdx+1:]
+		if strings.HasPrefix(potentialRemote, "/") {
+			localPath = agent.DocsFolder[:colonIdx]
+			remotePath = potentialRemote
+		}
+		// Otherwise it might be a Windows path like C:\path, so don't split
+	}
+
+	storeName := generateStoreNameFromPath(localPath)
 
 	docStoreConfig := &DocumentStoreConfig{
 		Source:                    "directory",
-		Path:                      agent.DocsFolder,
+		Path:                      localPath,
 		EnableWatchChanges:        BoolPtr(true),
 		MaxFileSize:               DefaultMaxDocumentStoreSize,
 		EnableIncrementalIndexing: BoolPtr(true),
@@ -94,9 +109,16 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 	agent.DocsFolder = ""
 
 	// Inform about auto-created components
-	slog.Info("Auto-created from docs_folder shortcut",
-		"document_store", storeName,
-		"path", docStoreConfig.Path)
+	if remotePath != "" {
+		slog.Info("Auto-created from docs_folder shortcut",
+			"document_store", storeName,
+			"path", localPath,
+			"remote_path", remotePath)
+	} else {
+		slog.Info("Auto-created from docs_folder shortcut",
+			"document_store", storeName,
+			"path", localPath)
+	}
 
 	if agent.VectorStore == "" {
 		if _, exists := c.VectorStores["default-vector-store"]; !exists {
@@ -138,8 +160,13 @@ func (c *Config) expandDocsFolder(agent *AgentConfig) {
 			},
 			Priority:     IntPtr(8), // Higher than native parsers (5)
 			PreferNative: BoolPtr(false),
+			PathPrefix:   remotePath, // For containerized MCP services
 		}
-		slog.Info("Auto-configured MCP parsers", "tools", toolNames)
+		if remotePath != "" {
+			slog.Info("Auto-configured MCP parsers", "tools", toolNames, "path_prefix", remotePath)
+		} else {
+			slog.Info("Auto-configured MCP parsers", "tools", toolNames)
+		}
 	}
 
 	// Clear temporary zero-config fields after expansion
