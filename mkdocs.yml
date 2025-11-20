@@ -120,7 +120,6 @@ nav:
 # Plugins
 plugins:
   - search
-  - mermaid2
 
 # Markdown extensions
 markdown_extensions:
@@ -133,11 +132,7 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.highlight
   - pymdownx.inlinehilite
-  - pymdownx.superfences:
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.emoji:
