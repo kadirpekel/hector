@@ -10,10 +10,12 @@ docs_dir: docs
 # Theme
 theme:
   name: material
+  custom_dir: docs/overrides
   palette:
     # Default palette (used when no system preference or auto mode)
     - scheme: default
       primary: black
+      accent: indigo
       toggle:
         icon: material/brightness-auto
         name: Switch to dark mode
@@ -21,6 +23,7 @@ theme:
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: black
+      accent: indigo
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
@@ -28,23 +31,30 @@ theme:
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: black
+      accent: teal
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
-  font: false
+  font:
+    text: Inter
+    code: JetBrains Mono
   features:
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.instant
     - navigation.instant.progress
+    - navigation.tracking
     - navigation.sections
     - navigation.indexes
     - navigation.top
     - navigation.footer
     - search.suggest
     - search.highlight
+    - search.share
     - content.tabs.link
     - content.code.annotation
     - content.code.copy
+    - content.tooltips
   language: en
   logo: assets/letter-h.png
   favicon: assets/letter-h.png
@@ -110,6 +120,7 @@ nav:
 # Plugins
 plugins:
   - search
+  - mermaid2
 
 # Markdown extensions
 markdown_extensions:
@@ -122,15 +133,26 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.highlight
   - pymdownx.inlinehilite
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
-  - pymdownx.emoji
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+  - pymdownx.tasklist:
+      custom_checkbox: true
 
 # Extra CSS
 extra_css:
   - stylesheets/extra.css
+  - stylesheets/landing.css
 
 # Extra JavaScript
 extra_javascript:
-  - javascripts/google-analytics.js
+  - javascripts/extra.js
+  - javascripts/landing.js
+  - https://unpkg.com/typewriter-effect@latest/dist/core.js
