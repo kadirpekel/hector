@@ -89,10 +89,10 @@ function initTypewriter() {
     update(mouseX, mouseY) {
         // Always update pulse first for breathing effect
         this.pulse += 0.02;
-        
+
         // CRITICAL: Update position with velocity - particles MUST move
-                this.x += this.vx;
-                this.y += this.vy;
+        this.x += this.vx;
+        this.y += this.vy;
 
         // Enhanced mouse interaction - particles move away from mouse with stronger force
         if (mouseX !== undefined && mouseY !== undefined) {
@@ -100,12 +100,12 @@ function initTypewriter() {
             const dy = this.y - mouseY;
             const dist = Math.sqrt(dx * dx + dy * dy);
             const maxDist = 200; // Larger interaction radius
-            
+
             if (dist < maxDist && dist > 0) {
                 const force = Math.pow((maxDist - dist) / maxDist, 2) * 0.3; // Stronger, smoother force
                 this.vx += (dx / dist) * force;
                 this.vy += (dy / dist) * force;
-                
+
                 // Also increase size when near mouse
                 this.size = this.baseSize + Math.sin(this.pulse) * 0.5 + (maxDist - dist) / maxDist * 1.5;
             } else {
@@ -116,54 +116,69 @@ function initTypewriter() {
             this.size = this.baseSize + Math.sin(this.pulse) * 0.5;
         }
 
+        // Apply damping BEFORE clamping to prevent velocity accumulation
+        this.vx *= 0.998;
+        this.vy *= 0.998;
+
+        // Cap maximum velocity to prevent speed-up over time
+        const maxVelocity = 2.0;
+        const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+        if (speed > maxVelocity) {
+            this.vx = (this.vx / speed) * maxVelocity;
+            this.vy = (this.vy / speed) * maxVelocity;
+        }
+
+        // Ensure minimum velocity to keep particles moving
+        const minVelocity = 0.05;
+        if (speed < minVelocity && speed > 0) {
+            this.vx = (this.vx / speed) * minVelocity;
+            this.vy = (this.vy / speed) * minVelocity;
+        } else if (speed === 0) {
+            // Restart stopped particles with random velocity
+            this.vx = (Math.random() - 0.5) * 0.3;
+            this.vy = (Math.random() - 0.5) * 0.3;
+        }
+
         // Boundary wrapping
         if (this.x < 0) this.x = canvasWidth;
         if (this.x > canvasWidth) this.x = 0;
         if (this.y < 0) this.y = canvasHeight;
         if (this.y > canvasHeight) this.y = 0;
-
-        // Ensure particles keep moving - add small boost if velocity too low
-        const minVelocity = 0.05;
-        if (Math.abs(this.vx) < minVelocity) {
-            this.vx += (Math.random() - 0.5) * 0.02;
-        }
-        if (Math.abs(this.vy) < minVelocity) {
-            this.vy += (Math.random() - 0.5) * 0.02;
-        }
-        
-        // Very light damping to keep movement smooth but continuous
-        this.vx *= 0.998;
-        this.vy *= 0.998;
-            }
+    }
 
     draw(ctx) {
-        // Sharp, bright star-like particle - no blur
+        // Sharp, bright star-like particle - optimized to prevent memory leaks
         ctx.save();
-        
-        // Small outer glow for visibility (minimal)
+
+        // Small outer glow for visibility (minimal) - use solid colors instead of gradients
         const glowSize = this.size * 1.5;
-        const glowGradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glowSize);
-        glowGradient.addColorStop(0, this.color.replace('0.9', '0.4'));
-        glowGradient.addColorStop(0.5, this.color.replace('0.9', '0.2'));
-        glowGradient.addColorStop(1, this.color.replace('0.9', '0'));
-        
+
+        // Outer glow layer (most transparent)
+        ctx.globalAlpha = 0.1;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, glowSize * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Middle glow layer
+        ctx.globalAlpha = 0.2;
         ctx.beginPath();
         ctx.arc(this.x, this.y, glowSize, 0, Math.PI * 2);
-        ctx.fillStyle = glowGradient;
         ctx.fill();
-        
+
         // Sharp, bright core - star-like
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fillStyle = this.color; // Bright, solid color
+        ctx.globalAlpha = 1.0;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
         ctx.fill();
-        
+
         // Bright white center for star effect
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size * 0.4, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 1)'; // Fully opaque white
-                ctx.fill();
-        
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+
         ctx.restore();
     }
 }
