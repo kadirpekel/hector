@@ -50,6 +50,14 @@ body .md-main__inner:has(.homepage-wrapper) {
     background: transparent;
 }
 
+/* Ensure footer is visible on homepage */
+body:has(.homepage-wrapper) .md-footer {
+    position: relative;
+    z-index: 1;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+}
+
 /* ============================================
    AMBIENT CANVAS BACKGROUND
    ============================================ */
@@ -59,7 +67,8 @@ body .md-main__inner:has(.homepage-wrapper) {
     top: 0;
     left: 0;
     width: 100%;
-    height: 100vh;
+    height: 100%;
+    min-height: 100vh;
     z-index: -1;
     background: var(--bg-dark);
     overflow: hidden;
@@ -391,23 +400,44 @@ body .md-main__inner:has(.homepage-wrapper) {
 
 .programmatic-code-block .highlight {
     margin: 0;
-    background: transparent;
+    background: transparent !important;
 }
 
 .programmatic-code-block pre {
     margin: 0;
     padding: 2rem;
-    background: transparent;
+    background: transparent !important;
     border-radius: 0;
 }
 
 .programmatic-code-block code {
     font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
     font-size: 0.875rem;
-    color: #e2e8f0;
+    color: #e2e8f0 !important;
     line-height: 1.7;
-    background: transparent;
+    background: transparent !important;
 }
+
+/* Force dark syntax highlighting on homepage code blocks */
+.homepage-wrapper .programmatic-code-block .highlight span {
+    color: inherit !important;
+}
+
+.homepage-wrapper .programmatic-code-block .highlight .nc { color: #67e8f9 !important; } /* Class names - cyan */
+.homepage-wrapper .programmatic-code-block .highlight .nf { color: #fbbf24 !important; } /* Function names - yellow */
+.homepage-wrapper .programmatic-code-block .highlight .s,
+.homepage-wrapper .programmatic-code-block .highlight .s1,
+.homepage-wrapper .programmatic-code-block .highlight .s2 { color: #10b981 !important; } /* Strings - green */
+.homepage-wrapper .programmatic-code-block .highlight .k,
+.homepage-wrapper .programmatic-code-block .highlight .kd,
+.homepage-wrapper .programmatic-code-block .highlight .kn { color: #8b5cf6 !important; } /* Keywords - purple */
+.homepage-wrapper .programmatic-code-block .highlight .c,
+.homepage-wrapper .programmatic-code-block .highlight .c1,
+.homepage-wrapper .programmatic-code-block .highlight .cm { color: #64748b !important; } /* Comments - gray */
+.homepage-wrapper .programmatic-code-block .highlight .nb,
+.homepage-wrapper .programmatic-code-block .highlight .n { color: #e2e8f0 !important; } /* Built-ins & names - light */
+.homepage-wrapper .programmatic-code-block .highlight .o { color: #f472b6 !important; } /* Operators - pink */
+.homepage-wrapper .programmatic-code-block .highlight .p { color: #94a3b8 !important; } /* Punctuation - muted */
 
 /* ============================================
    FEATURES GRID
