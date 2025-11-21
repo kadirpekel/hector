@@ -81,11 +81,23 @@ func (a *Agent) getVersion() string {
 }
 
 func (a *Agent) getInputModes() []string {
+	// If explicitly configured, use config values
 	if a.config != nil && a.config.A2A != nil && len(a.config.A2A.InputModes) > 0 {
 		return a.config.A2A.InputModes
 	}
 
-	// Default input modes including multimodal support
+	// Query LLM provider for its supported input modes
+	if a.services != nil {
+		llmService := a.services.LLM()
+		if llmService != nil {
+			modes := llmService.GetSupportedInputModes()
+			if len(modes) > 0 {
+				return modes
+			}
+		}
+	}
+
+	// Fallback to safe defaults (images only) if provider info unavailable
 	return []string{
 		"text/plain",
 		"application/json",
@@ -379,6 +391,8 @@ func (a *Agent) executeWithMessage(
 			text, toolCalls, tokens, err := a.callLLMWithRetry(spanCtx, messages, toolDefs, outputCh, cfg, span)
 			if err != nil {
 				span.RecordError(err)
+				// Log the full error details for debugging - include in message since simple format doesn't show attributes
+				slog.Error(fmt.Sprintf("LLM call failed: %v", err), "agent", a.name)
 				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error: LLM call failed: %v\n", err))); sendErr != nil {
 					slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
 				}

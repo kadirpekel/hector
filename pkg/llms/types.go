@@ -4,22 +4,7 @@ import (
 	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
-type ContentPartType string
 
-const (
-	ContentPartTypeText        ContentPartType = "text"
-	ContentPartTypeImageURL    ContentPartType = "image_url"
-	ContentPartTypeImageBase64 ContentPartType = "image_base64"
-	ContentPartTypeAudioBase64 ContentPartType = "audio_base64"
-	ContentPartTypeVideoBase64 ContentPartType = "video_base64"
-)
-
-type ContentPart struct {
-	Type      ContentPartType `json:"type"`
-	Text      string          `json:"text,omitempty"`
-	MediaType string          `json:"media_type,omitempty"`
-	Data      string          `json:"data,omitempty"`
-}
 
 type ToolDefinition struct {
 	Name        string                 `json:"name"`

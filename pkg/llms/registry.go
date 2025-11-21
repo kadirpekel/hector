@@ -21,6 +21,10 @@ type LLMProvider interface {
 
 	GetTemperature() float64
 
+	// GetSupportedInputModes returns the MIME types this provider supports for input.
+	// This is used to populate the agent card's default_input_modes field.
+	GetSupportedInputModes() []string
+
 	Close() error
 }
 

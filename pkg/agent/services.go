@@ -359,6 +359,10 @@ func (s *DefaultLLMService) SupportsStructuredOutput() bool {
 	return structProvider.SupportsStructuredOutput()
 }
 
+func (s *DefaultLLMService) GetSupportedInputModes() []string {
+	return s.llmProvider.GetSupportedInputModes()
+}
+
 type DefaultToolService struct {
 	toolRegistry *tools.ToolRegistry
 	allowedTools []string
@@ -441,6 +445,7 @@ func (s *DefaultToolService) GetTool(name string) (interface{}, error) {
 }
 
 // cleanSchema recursively cleans a schema map to remove empty strings and ensure validity
+// Special handling for "properties" maps which don't have a "type" field themselves
 func cleanSchema(schema map[string]interface{}) map[string]interface{} {
 	if schema == nil {
 		return nil
@@ -455,9 +460,27 @@ func cleanSchema(schema map[string]interface{}) map[string]interface{} {
 				cleaned[key] = v
 			}
 		case map[string]interface{}:
-			// Recursively clean nested schemas
-			if cleanedNested := cleanSchema(v); len(cleanedNested) > 0 {
-				cleaned[key] = cleanedNested
+			// Special handling for "properties" - preserve it even without "type"
+			if key == "properties" {
+				cleanedProps := make(map[string]interface{})
+				for propName, propValue := range v {
+					if propMap, ok := propValue.(map[string]interface{}); ok {
+						// Clean each property definition (they should have "type")
+						if cleanedProp := cleanSchema(propMap); len(cleanedProp) > 0 {
+							cleanedProps[propName] = cleanedProp
+						}
+					} else {
+						cleanedProps[propName] = propValue
+					}
+				}
+				if len(cleanedProps) > 0 {
+					cleaned[key] = cleanedProps
+				}
+			} else {
+				// Recursively clean nested schemas
+				if cleanedNested := cleanSchema(v); len(cleanedNested) > 0 {
+					cleaned[key] = cleanedNested
+				}
 			}
 		case []interface{}:
 			// Clean arrays by filtering out empty strings
@@ -481,6 +504,13 @@ func cleanSchema(schema map[string]interface{}) map[string]interface{} {
 		default:
 			// Keep other types as-is
 			cleaned[key] = value
+		}
+	}
+
+	// Properties containers don't require a "type" field themselves
+	if _, isProperties := schema["properties"]; isProperties {
+		if _, hasType := schema["type"]; !hasType && len(cleaned) > 0 {
+			return cleaned
 		}
 	}
 

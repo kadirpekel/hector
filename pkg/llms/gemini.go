@@ -83,7 +83,7 @@ type GeminiError struct {
 }
 
 func NewGeminiProviderFromConfig(cfg *config.LLMProviderConfig) (*GeminiProvider, error) {
-	if cfg.APIKey == "" {
+	if strings.TrimSpace(cfg.APIKey) == "" {
 		return nil, fmt.Errorf("gemini API key is required")
 	}
 
@@ -109,8 +109,10 @@ func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, t
 
 	req := p.buildRequest(messages, tools, nil)
 
-	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent?key=%s",
-		p.config.Host, p.config.Model, p.config.APIKey)
+	// Gemini API supports both query parameter and header for API key
+	// Use header method (X-goog-api-key) as it's more standard and matches curl examples
+	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent",
+		p.config.Host, p.config.Model)
 
 	reqBody, _ := json.Marshal(req)
 
@@ -129,6 +131,12 @@ func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, t
 		return "", nil, 0, reqErr
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	
+	apiKey := strings.TrimSpace(p.config.APIKey)
+	if apiKey == "" {
+		return "", nil, 0, fmt.Errorf("gemini API key is empty")
+	}
+	httpReq.Header.Set("X-goog-api-key", apiKey)
 
 	resp, err := p.httpClient.Do(httpReq)
 	_, geminiResp, err := p.handleGeminiResponse(resp, err)
@@ -195,8 +203,8 @@ func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, t
 func (p *GeminiProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, tools, nil)
 
-	url := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?key=%s&alt=sse",
-		p.config.Host, p.config.Model, p.config.APIKey)
+	url := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?alt=sse",
+		p.config.Host, p.config.Model)
 
 	chunks := make(chan StreamChunk, 10)
 
@@ -211,24 +219,43 @@ func (p *GeminiProvider) GenerateStreaming(ctx context.Context, messages []*pb.M
 		}
 
 		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("X-goog-api-key", strings.TrimSpace(p.config.APIKey))
 
 		resp, err := p.httpClient.Do(httpReq)
+		// httpclient returns both response and error for non-2xx status codes
+		// We need to check the response body even if there's an error
+		if resp != nil {
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				var errorResp GeminiResponse
+				var errMsg string
+				if json.Unmarshal(bodyBytes, &errorResp) == nil && errorResp.Error != nil {
+					errMsg = fmt.Sprintf("Gemini API error (HTTP %d): %s (code: %d, status: %s)",
+						resp.StatusCode, errorResp.Error.Message, errorResp.Error.Code, errorResp.Error.Status)
+				} else {
+					errMsg = fmt.Sprintf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+				}
+				err := fmt.Errorf("%s", errMsg)
+				slog.Error(errMsg)
+				chunks <- StreamChunk{Type: "error", Error: err}
+				return
+			}
+			// Success case - continue with streaming
+			p.parseStreamingResponse(resp.Body, chunks)
+			return
+		}
+
+		// No response received - this is a real network/connection error
 		if err != nil {
+			slog.Error(fmt.Sprintf("Gemini API request failed: %v", err))
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return
 		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-
-			bodyBytes, _ := io.ReadAll(resp.Body)
-			err := fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
-			slog.Error("Gemini API error", "error", err)
-			chunks <- StreamChunk{Type: "error", Error: err}
-			return
-		}
-
-		p.parseStreamingResponse(resp.Body, chunks)
+		slog.Error("Gemini API request failed: no response received")
+		chunks <- StreamChunk{Type: "error", Error: fmt.Errorf("no response received")}
+		return
 	}()
 
 	return chunks, nil
@@ -251,8 +278,8 @@ func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.
 
 	req := p.buildRequest(messages, tools, structConfig)
 
-	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent?key=%s",
-		p.config.Host, p.config.Model, p.config.APIKey)
+	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent",
+		p.config.Host, p.config.Model)
 
 	reqBody, _ := json.Marshal(req)
 
@@ -271,6 +298,7 @@ func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.
 		return "", nil, 0, reqErr
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("X-goog-api-key", strings.TrimSpace(p.config.APIKey))
 
 	resp, err := p.httpClient.Do(httpReq)
 	_, geminiResp, err := p.handleGeminiResponse(resp, err)
@@ -323,8 +351,8 @@ func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.
 func (p *GeminiProvider) GenerateStructuredStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, tools, structConfig)
 
-	url := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?key=%s&alt=sse",
-		p.config.Host, p.config.Model, p.config.APIKey)
+	url := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?alt=sse",
+		p.config.Host, p.config.Model)
 
 	chunks := make(chan StreamChunk, 10)
 
@@ -339,24 +367,43 @@ func (p *GeminiProvider) GenerateStructuredStreaming(ctx context.Context, messag
 		}
 
 		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("X-goog-api-key", strings.TrimSpace(p.config.APIKey))
 
 		resp, err := p.httpClient.Do(httpReq)
+		// httpclient returns both response and error for non-2xx status codes
+		// We need to check the response body even if there's an error
+		if resp != nil {
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				var errorResp GeminiResponse
+				var errMsg string
+				if json.Unmarshal(bodyBytes, &errorResp) == nil && errorResp.Error != nil {
+					errMsg = fmt.Sprintf("Gemini API error (HTTP %d): %s (code: %d, status: %s)",
+						resp.StatusCode, errorResp.Error.Message, errorResp.Error.Code, errorResp.Error.Status)
+				} else {
+					errMsg = fmt.Sprintf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+				}
+				err := fmt.Errorf("%s", errMsg)
+				slog.Error(errMsg)
+				chunks <- StreamChunk{Type: "error", Error: err}
+				return
+			}
+			// Success case - continue with streaming
+			p.parseStreamingResponse(resp.Body, chunks)
+			return
+		}
+
+		// No response received - this is a real network/connection error
 		if err != nil {
+			slog.Error(fmt.Sprintf("Gemini API request failed: %v", err))
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return
 		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-
-			bodyBytes, _ := io.ReadAll(resp.Body)
-			err := fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
-			slog.Error("Gemini API error", "error", err)
-			chunks <- StreamChunk{Type: "error", Error: err}
-			return
-		}
-
-		p.parseStreamingResponse(resp.Body, chunks)
+		slog.Error("Gemini API request failed: no response received")
+		chunks <- StreamChunk{Type: "error", Error: fmt.Errorf("no response received")}
+		return
 	}()
 
 	return chunks, nil
@@ -381,46 +428,88 @@ func (p *GeminiProvider) GetTemperature() float64 {
 	return *p.config.Temperature
 }
 
+// GetSupportedInputModes returns the MIME types supported by Gemini.
+// Gemini 1.5 Pro and Flash support comprehensive multimodal inputs including images, video, and audio.
+// Images: JPEG, PNG, WebP
+// Video: MP4, WebM, Matroska (MKV), QuickTime (MOV)
+// Audio: MP3, WAV, WebM, M4A, Opus, AAC, FLAC
+// Files can be provided via base64 data or URIs (GCS preferred for video/audio).
+func (p *GeminiProvider) GetSupportedInputModes() []string {
+	return []string{
+		"text/plain",
+		"application/json",
+		// Images
+		"image/jpeg",
+		"image/png",
+		"image/webp",
+		// Video
+		"video/mp4",
+		"video/webm",
+		"video/x-matroska", // MKV
+		"video/quicktime",  // MOV
+		// Audio
+		"audio/mpeg", // MP3
+		"audio/wav",
+		"audio/webm",
+		"audio/mp4", // M4A
+		"audio/opus",
+		"audio/aac",
+		"audio/flac",
+	}
+}
+
 func (p *GeminiProvider) Close() error {
 	return nil
 }
 
 func (p *GeminiProvider) handleGeminiResponse(resp *http.Response, err error) ([]byte, *GeminiResponse, error) {
+	// httpclient returns both response and error for non-2xx status codes
+	// Check response body even when err != nil to extract API error details
 	if resp != nil {
 		defer resp.Body.Close()
-	}
+		body, readErr := io.ReadAll(resp.Body)
 
-	if err != nil {
-		if resp != nil && resp.Body != nil {
-			body, readErr := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK {
 			if readErr == nil && len(body) > 0 {
 				var errorResp GeminiResponse
 				if json.Unmarshal(body, &errorResp) == nil && errorResp.Error != nil {
-					return nil, nil, fmt.Errorf("Gemini API error: %s (code: %d)",
-						errorResp.Error.Message, errorResp.Error.Code)
+					errMsg := fmt.Sprintf("Gemini API error (HTTP %d): %s (code: %d, status: %s)",
+						resp.StatusCode, errorResp.Error.Message, errorResp.Error.Code, errorResp.Error.Status)
+					slog.Error(errMsg)
+					return nil, nil, fmt.Errorf("%s", errMsg)
 				}
-				return nil, nil, fmt.Errorf("gemini API request failed: %w - Response: %s", err, string(body))
+				errMsg := fmt.Sprintf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(body))
+				slog.Error(errMsg)
+				return nil, nil, fmt.Errorf("%s", errMsg)
 			}
+			errMsg := fmt.Sprintf("Gemini API error (HTTP %d): no response body", resp.StatusCode)
+			slog.Error(errMsg)
+			return nil, nil, fmt.Errorf("%s", errMsg)
 		}
-		return nil, nil, fmt.Errorf("gemini API request failed: %w", err)
+
+		if readErr != nil {
+			return nil, nil, fmt.Errorf("failed to read response: %w", readErr)
+		}
+
+		var geminiResp GeminiResponse
+		if err := json.Unmarshal(body, &geminiResp); err != nil {
+			return body, nil, fmt.Errorf("failed to parse Gemini response: %w", err)
+		}
+
+		if geminiResp.Error != nil {
+			errMsg := fmt.Sprintf("Gemini API returned error (code: %d, status: %s): %s",
+				geminiResp.Error.Code, geminiResp.Error.Status, geminiResp.Error.Message)
+			slog.Error(errMsg)
+			return body, &geminiResp, fmt.Errorf("%s", errMsg)
+		}
+
+		return body, &geminiResp, nil
 	}
 
-	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, nil, fmt.Errorf("Gemini API request failed: %w", err)
 	}
-
-	var geminiResp GeminiResponse
-	if err := json.Unmarshal(respBody, &geminiResp); err != nil {
-		return respBody, nil, fmt.Errorf("failed to parse Gemini response: %w", err)
-	}
-
-	if geminiResp.Error != nil {
-		return respBody, &geminiResp, fmt.Errorf("Gemini API error: %s (code: %d, status: %s)",
-			geminiResp.Error.Message, geminiResp.Error.Code, geminiResp.Error.Status)
-	}
-
-	return respBody, &geminiResp, nil
+	return nil, nil, fmt.Errorf("Gemini API request failed: no response received")
 }
 
 func (p *GeminiProvider) buildRequest(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) *GeminiRequest {
@@ -549,7 +638,7 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 
 				if uri := file.GetFileWithUri(); uri != "" {
 					// Use fileData for URIs (assuming Google Cloud Storage URIs or similar supported by Gemini)
-					// Note: standard HTTP URLs might not work directly unless uploaded to File API
+					// For URIs, media type must be provided (can't detect from bytes)
 					if mediaType == "" {
 						mediaType = "image/jpeg"
 					}
@@ -566,20 +655,17 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 						},
 					})
 				} else if bytes := file.GetFileWithBytes(); len(bytes) > 0 {
-					// Use inlineData for bytes
 					if mediaType == "" {
-						mediaType = "image/jpeg"
+						mediaType = detectImageMediaType(bytes)
 					}
 
-					// Validate media type
 					if !strings.HasPrefix(mediaType, "image/") && !strings.HasPrefix(mediaType, "video/") && !strings.HasPrefix(mediaType, "audio/") {
-						continue // Skip unsupported media types
+						continue
 					}
 
-					// Check size limit (20MB for Gemini inline data)
 					const maxInlineDataSize = 20 * 1024 * 1024
 					if len(bytes) > maxInlineDataSize {
-						continue // Skip oversized files
+						continue
 					}
 
 					base64Data := base64.StdEncoding.EncodeToString(bytes)
@@ -636,10 +722,85 @@ func (p *GeminiProvider) convertTools(tools []ToolDefinition) []GeminiFunctionDe
 	var funcs []GeminiFunctionDeclaration
 
 	for _, tool := range tools {
-		funcs = append(funcs, (GeminiFunctionDeclaration)(tool))
+		cleanedParams := p.cleanToolParametersForGemini(tool.Parameters)
+		
+		cleanedTool := GeminiFunctionDeclaration{
+			Name:        tool.Name,
+			Description: tool.Description,
+			Parameters:  cleanedParams,
+		}
+		funcs = append(funcs, cleanedTool)
 	}
 
 	return funcs
+}
+
+// cleanToolParametersForGemini cleans and validates tool parameter schemas for Gemini
+// Gemini requires that all properties in 'required' arrays must exist in 'properties'
+func (p *GeminiProvider) cleanToolParametersForGemini(params map[string]interface{}) map[string]interface{} {
+	if params == nil {
+		return nil
+	}
+
+	// Clean the schema first (removes additionalProperties, etc.)
+	cleaned := p.cleanSchemaForGemini(params)
+	
+	// Validate required properties (ensures all required props exist)
+	// This must happen after cleaning to catch any properties that were removed
+	p.validateRequiredProperties(cleaned)
+	
+	return cleaned
+}
+
+// validateRequiredProperties ensures all properties in 'required' arrays exist in 'properties'
+// This is critical for Gemini which strictly validates JSON schemas
+func (p *GeminiProvider) validateRequiredProperties(schema map[string]interface{}) {
+	if schema == nil {
+		return
+	}
+
+	// Validate top-level required properties
+	if required, ok := schema["required"].([]interface{}); ok {
+		if properties, ok := schema["properties"].(map[string]interface{}); ok && len(properties) > 0 {
+			validRequired := make([]interface{}, 0)
+			for _, req := range required {
+				if reqStr, ok := req.(string); ok {
+					if _, exists := properties[reqStr]; exists {
+						validRequired = append(validRequired, reqStr)
+					}
+				}
+			}
+			if len(validRequired) > 0 {
+				schema["required"] = validRequired
+			} else {
+				delete(schema, "required")
+			}
+		} else {
+			// No properties defined but required array exists - remove required
+			delete(schema, "required")
+		}
+	}
+
+	// Recursively validate nested schemas (e.g., items for arrays)
+	if properties, ok := schema["properties"].(map[string]interface{}); ok {
+		for _, propValue := range properties {
+			if propMap, ok := propValue.(map[string]interface{}); ok {
+				// Check if this property has items (array type)
+				if items, ok := propMap["items"].(map[string]interface{}); ok {
+					p.validateRequiredProperties(items)
+				}
+				// Recursively validate nested objects
+				if propType, _ := propMap["type"].(string); propType == "object" {
+					p.validateRequiredProperties(propMap)
+				}
+			}
+		}
+	}
+
+	// Also check items directly (for array schemas)
+	if items, ok := schema["items"].(map[string]interface{}); ok {
+		p.validateRequiredProperties(items)
+	}
 }
 
 func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []*protocol.ToolCall, int, error) {

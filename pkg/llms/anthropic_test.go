@@ -428,6 +428,40 @@ data: {"type": "message_stop"}`,
 	}
 }
 
+func TestAnthropicProvider_Generate_ErrorOnURI(t *testing.T) {
+	provider := NewAnthropicProvider("test-key", "claude-3-opus-20240229")
+
+	messages := []*pb.Message{
+		{
+			Role: pb.Role_ROLE_USER,
+			Parts: []*pb.Part{
+				{
+					Part: &pb.Part_File{
+						File: &pb.FilePart{
+							File: &pb.FilePart_FileWithUri{
+								FileWithUri: "https://example.com/image.jpg",
+							},
+							MediaType: "image/jpeg",
+						},
+					},
+				},
+			},
+		},
+	}
+	tools := []ToolDefinition{}
+
+	_, _, _, err := provider.Generate(context.Background(), messages, tools)
+
+	if err == nil {
+		t.Error("Generate() expected error for URI input, got nil")
+	}
+
+	expectedError := "anthropic provider does not support image URLs directly"
+	if !strings.Contains(err.Error(), expectedError) {
+		t.Errorf("Generate() error = %v, want error containing %q", err, expectedError)
+	}
+}
+
 func TestAnthropicProvider_GenerateStreaming_Error(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

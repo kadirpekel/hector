@@ -1,7 +1,10 @@
 package httpclient
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -207,17 +210,43 @@ func (c *Client) logRetry(strategy RetryStrategy, delay time.Duration, attempt i
 	}
 
 	statusCode := 0
+	var errorDetails string
 	if resp != nil {
 		statusCode = resp.StatusCode
+		// Extract error message from response body for better debugging
+		if resp.Body != nil {
+			body, err := io.ReadAll(resp.Body)
+			if err == nil && len(body) > 0 {
+				// Restore body for later consumption
+				resp.Body = io.NopCloser(bytes.NewReader(body))
+
+				var errorResp struct {
+					Error struct {
+						Message string `json:"message"`
+						Status  string `json:"status"`
+						Code    int    `json:"code"`
+					} `json:"error"`
+				}
+				if json.Unmarshal(body, &errorResp) == nil && errorResp.Error.Message != "" {
+					errorDetails = fmt.Sprintf(" - %s (status: %s, code: %d)", 
+						errorResp.Error.Message, errorResp.Error.Status, errorResp.Error.Code)
+				} else {
+					bodyStr := string(body)
+					if len(bodyStr) > 200 {
+						bodyStr = bodyStr[:200] + "..."
+					}
+					errorDetails = fmt.Sprintf(" - %s", bodyStr)
+				}
+			}
+		}
 	}
 
 	switch strategy {
 	case SmartRetry:
-		slog.Info("Rate limited, retrying", "status_code", statusCode, "delay", delay, "attempt", attempt+1, "max_attempts", maxAttempts)
+		slog.Info("Rate limited, retrying", "status_code", statusCode, "delay", delay, "attempt", attempt+1, "max_attempts", maxAttempts, "error_details", errorDetails)
 	case ConservativeRetry:
-
 		if attempt == maxAttempts-1 {
-			slog.Warn("Server error, retrying", "status_code", statusCode, "delay", delay, "attempt", attempt+1, "max_attempts", maxAttempts)
+			slog.Warn("Server error, retrying", "status_code", statusCode, "delay", delay, "attempt", attempt+1, "max_attempts", maxAttempts, "error_details", errorDetails)
 		}
 	}
 }

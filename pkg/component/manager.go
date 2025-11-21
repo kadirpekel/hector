@@ -640,6 +640,20 @@ func (b *llmPluginBridge) GetTemperature() float64 {
 	return info.Temperature
 }
 
+func (b *llmPluginBridge) GetSupportedInputModes() []string {
+	// Plugin providers may have different capabilities.
+	// For now, return safe defaults (images only).
+	// In the future, plugins could expose their capabilities via the adapter.
+	return []string{
+		"text/plain",
+		"application/json",
+		"image/jpeg",
+		"image/png",
+		"image/gif",
+		"image/webp",
+	}
+}
+
 func (b *llmPluginBridge) Close() error {
 	return b.adapter.Shutdown(context.Background())
 }

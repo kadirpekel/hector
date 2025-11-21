@@ -317,6 +317,20 @@ func (p *OpenAIProvider) GetTemperature() float64 {
 	return *p.config.Temperature
 }
 
+// GetSupportedInputModes returns the MIME types supported by OpenAI.
+// OpenAI GPT-4o and GPT-4o-mini support images via base64 data URIs or HTTP/HTTPS URLs.
+// Supported formats: JPEG, PNG (WebP support may vary by model).
+// Note: Video and audio are not supported by OpenAI vision models.
+func (p *OpenAIProvider) GetSupportedInputModes() []string {
+	return []string{
+		"text/plain",
+		"application/json",
+		"image/jpeg",
+		"image/png",
+		"image/webp", // Supported by GPT-4o, may vary by model
+	}
+}
+
 func (p *OpenAIProvider) Close() error {
 	return nil
 }
@@ -531,7 +545,7 @@ func (p *OpenAIProvider) buildRequest(messages []*pb.Message, stream bool, tools
 					url = uri
 				} else if bytes := file.GetFileWithBytes(); len(bytes) > 0 {
 					if mediaType == "" {
-						mediaType = "image/jpeg"
+						mediaType = detectImageMediaType(bytes)
 					}
 
 					if !strings.HasPrefix(mediaType, "image/") {

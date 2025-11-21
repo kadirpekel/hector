@@ -352,6 +352,19 @@ func (p *OllamaProvider) GetTemperature() float64 {
 	return *p.config.Temperature
 }
 
+// GetSupportedInputModes returns the MIME types supported by Ollama.
+// Ollama supports images (JPEG, PNG, GIF, WebP) via base64 data.
+func (p *OllamaProvider) GetSupportedInputModes() []string {
+	return []string{
+		"text/plain",
+		"application/json",
+		"image/jpeg",
+		"image/png",
+		"image/gif",
+		"image/webp",
+	}
+}
+
 func (p *OllamaProvider) Close() error {
 	return nil
 }

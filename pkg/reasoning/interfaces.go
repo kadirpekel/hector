@@ -34,6 +34,10 @@ type LLMService interface {
 	GenerateStructured(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []*protocol.ToolCall, int, error)
 
 	SupportsStructuredOutput() bool
+
+	// GetSupportedInputModes returns the MIME types supported by the underlying LLM provider.
+	// This is used to populate the agent card's default_input_modes field.
+	GetSupportedInputModes() []string
 }
 
 type ToolService interface {

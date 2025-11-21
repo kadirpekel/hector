@@ -371,11 +371,23 @@ func (g *RESTGateway) handlePerAgentCard(w http.ResponseWriter, r *http.Request)
 	if card.PreferredTransport != "" {
 		response["preferred_transport"] = card.PreferredTransport
 	}
+	if len(card.DefaultInputModes) > 0 {
+		response["default_input_modes"] = card.DefaultInputModes
+	}
+	if len(card.DefaultOutputModes) > 0 {
+		response["default_output_modes"] = card.DefaultOutputModes
+	}
 	if len(card.SecuritySchemes) > 0 {
 		response["security_schemes"] = card.SecuritySchemes
 	}
 	if len(card.Security) > 0 {
 		response["security"] = card.Security
+	}
+	if card.Provider != nil {
+		response["provider"] = card.Provider
+	}
+	if len(card.Skills) > 0 {
+		response["skills"] = card.Skills
 	}
 
 	_ = json.NewEncoder(w).Encode(response)

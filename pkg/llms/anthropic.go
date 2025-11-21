@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -168,6 +169,19 @@ func (p *AnthropicProvider) GetTemperature() float64 {
 	return *p.config.Temperature
 }
 
+// GetSupportedInputModes returns the MIME types supported by Anthropic.
+// Anthropic supports images (JPEG, PNG, GIF, WebP) via base64 data only (no URLs).
+func (p *AnthropicProvider) GetSupportedInputModes() []string {
+	return []string{
+		"text/plain",
+		"application/json",
+		"image/jpeg",
+		"image/png",
+		"image/gif",
+		"image/webp",
+	}
+}
+
 func (p *AnthropicProvider) Close() error {
 	return nil
 }
@@ -186,7 +200,10 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message
 	)
 	defer span.End()
 
-	request := p.buildRequest(messages, false, tools)
+	request, err := p.buildRequest(messages, false, tools)
+	if err != nil {
+		return "", nil, 0, err
+	}
 
 	response, err := p.makeRequest(ctx, request)
 	duration := time.Since(startTime)
@@ -205,9 +222,12 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message
 	}
 
 	if response.Error != nil {
-		apiErr := fmt.Errorf("anthropic API error: %s", response.Error.Message)
+		apiErr := fmt.Errorf("anthropic API error: %s (type: %s)", response.Error.Message, response.Error.Type)
 		span.RecordError(apiErr)
 		span.SetStatus(codes.Error, response.Error.Message)
+
+		slog.Error(fmt.Sprintf("Anthropic API returned error (type: %s): %s", response.Error.Type, response.Error.Message),
+			"model", p.config.Model, "duration", duration)
 
 		// Record metrics for API error
 		metrics := observability.GetGlobalMetrics()
@@ -257,7 +277,10 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message
 }
 
 func (p *AnthropicProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
-	request := p.buildRequest(messages, true, tools)
+	request, err := p.buildRequest(messages, true, tools)
+	if err != nil {
+		return nil, err
+	}
 
 	outputCh := make(chan StreamChunk, 100)
 
@@ -275,7 +298,7 @@ func (p *AnthropicProvider) GenerateStreaming(ctx context.Context, messages []*p
 	return outputCh, nil
 }
 
-func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, tools []ToolDefinition) AnthropicRequest {
+func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, tools []ToolDefinition) (AnthropicRequest, error) {
 
 	var systemParts []string
 	anthropicMessages := make([]AnthropicMessage, 0, len(messages))
@@ -301,17 +324,16 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 						Text: text,
 					})
 				} else if file := part.GetFile(); file != nil {
-					// Handle file parts (images)
 					mediaType := file.GetMediaType()
 
-					// Anthropic Messages API doesn't support image URLs - only base64 data
+					// Anthropic only supports base64 image data, not URLs
 					if uri := file.GetFileWithUri(); uri != "" {
-						continue
+						return AnthropicRequest{}, fmt.Errorf("anthropic provider does not support image URLs directly (found URI: %s). Please download the image and send as bytes (base64)", uri)
 					}
 
 					if bytes := file.GetFileWithBytes(); len(bytes) > 0 {
 						if mediaType == "" {
-							mediaType = "image/jpeg"
+							mediaType = detectImageMediaType(bytes)
 						}
 
 						if !strings.HasPrefix(mediaType, "image/") {
@@ -336,7 +358,6 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 				}
 			}
 
-			// If no content found (e.g. empty message), skip or add empty text
 			if len(contents) == 0 {
 				contents = append(contents, AnthropicContent{Type: "text", Text: ""})
 			}
@@ -441,7 +462,7 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 		}
 		request.Tools = anthropicTools
 	}
-	return request
+	return request, nil
 }
 
 func (p *AnthropicProvider) makeRequest(ctx context.Context, request AnthropicRequest) (*AnthropicResponse, error) {
@@ -463,23 +484,38 @@ func (p *AnthropicProvider) makeRequest(ctx context.Context, request AnthropicRe
 	req.Header.Set("anthropic-version", "2023-06-01")
 
 	resp, err := p.httpClient.Do(req)
+	// httpclient returns both response and error for non-2xx status codes
+	// We need to check the response body even if there's an error
+	if resp != nil {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+
+		if resp.StatusCode != http.StatusOK {
+			var errorResp struct {
+				Error *AnthropicError `json:"error"`
+			}
+			if json.Unmarshal(body, &errorResp) == nil && errorResp.Error != nil {
+				errMsg := fmt.Sprintf("Anthropic API error (HTTP %d): %s (type: %s)",
+					resp.StatusCode, errorResp.Error.Message, errorResp.Error.Type)
+				slog.Error(errMsg)
+				return nil, fmt.Errorf("%s", errMsg)
+			}
+			errMsg := fmt.Sprintf("Anthropic API error (HTTP %d): %s", resp.StatusCode, string(body))
+			slog.Error(errMsg)
+			return nil, fmt.Errorf("%s", errMsg)
+		}
+		var response AnthropicResponse
+		if err := json.Unmarshal(body, &response); err != nil {
+			return nil, fmt.Errorf("failed to decode response: %w", err)
+		}
+		return &response, nil
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
-	defer resp.Body.Close()
+	return nil, fmt.Errorf("failed to make request: no response received")
 
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var response AnthropicResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &response, nil
 }
 
 func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request AnthropicRequest, outputCh chan<- StreamChunk) error {
@@ -501,14 +537,36 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 	req.Header.Set("anthropic-version", "2023-06-01")
 
 	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to make request: %w", err)
-	}
-	defer resp.Body.Close()
+	// httpclient returns both response and error for non-2xx status codes
+	// We need to check the response body even if there's an error
+	if resp != nil {
+		defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+		if resp.StatusCode != http.StatusOK {
+			// For errors, read the body to get error details
+			body, _ := io.ReadAll(resp.Body)
+			// Try to parse error response
+			var errorResp struct {
+				Error *AnthropicError `json:"error"`
+			}
+			if json.Unmarshal(body, &errorResp) == nil && errorResp.Error != nil {
+				errMsg := fmt.Sprintf("Anthropic API error (HTTP %d): %s (type: %s)",
+					resp.StatusCode, errorResp.Error.Message, errorResp.Error.Type)
+				slog.Error(errMsg)
+				return fmt.Errorf("%s", errMsg)
+			}
+			// Fallback to raw body if error structure not found
+			errMsg := fmt.Sprintf("Anthropic API error (HTTP %d): %s", resp.StatusCode, string(body))
+			slog.Error(errMsg)
+			return fmt.Errorf("%s", errMsg)
+		}
+		// Success case - continue with streaming (don't read body yet!)
+	} else {
+		// No response received - this is a real network/connection error
+		if err != nil {
+			return fmt.Errorf("failed to make request: %w", err)
+		}
+		return fmt.Errorf("failed to make request: no response received")
 	}
 
 	toolCalls := make(map[int]*protocol.ToolCall)
@@ -516,6 +574,7 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 	thinkingBuffers := make(map[int]string) // Track thinking content by index
 	var totalTokens int
 
+	// Stream directly from resp.Body (not consumed yet for successful responses)
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -629,7 +688,10 @@ func (p *AnthropicProvider) GenerateStructured(ctx context.Context, messages []*
 
 	systemPrompt := p.buildSystemPromptWithSchema(structConfig)
 
-	req := p.buildRequest(messages, false, tools)
+	req, err := p.buildRequest(messages, false, tools)
+	if err != nil {
+		return "", nil, 0, err
+	}
 	if systemPrompt != "" {
 		if req.System != "" {
 			req.System = req.System + "\n\n" + systemPrompt
@@ -690,7 +752,10 @@ func (p *AnthropicProvider) GenerateStructuredStreaming(ctx context.Context, mes
 
 	systemPrompt := p.buildSystemPromptWithSchema(structConfig)
 
-	req := p.buildRequest(messages, true, tools)
+	req, err := p.buildRequest(messages, true, tools)
+	if err != nil {
+		return nil, err
+	}
 	if systemPrompt != "" {
 		if req.System != "" {
 			req.System = req.System + "\n\n" + systemPrompt

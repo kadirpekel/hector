@@ -546,7 +546,7 @@
                 </div>
                 <div>
                     <label class="block text-sm mb-1">Agent</label>
-                    <select id="agent" class="w-full px-3 py-2 bg-black/50 border border-white/20 rounded text-sm">
+                    <select id="agent" @change="handleAgentChange($event)" class="w-full px-3 py-2 bg-black/50 border border-white/20 rounded text-sm">
                         <option value="">Loading...</option>
                     </select>
                 </div>
@@ -804,7 +804,7 @@
                     <input type="file"
                            x-ref="imageInput"
                            @change="handleImageSelect($event)"
-                           accept="image/jpeg,image/png,image/gif,image/webp"
+                           :accept="supportedFileTypes.join(',')"
                            multiple
                            class="hidden">
 
@@ -852,7 +852,8 @@
                 // Multimodal State
                 attachedImages: [],
                 maxImageSize: 20 * 1024 * 1024, // 20MB
-                supportedImageTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+                supportedFileTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], // Will be updated from agent card
+                agentCard: null, // Cached agent card with supported input modes
 
                 // Data State
                 sessions: {},
@@ -1250,11 +1251,109 @@
                             
                             agentSelect.value = '0';
                             this.selectedAgent = this.availableAgents[0];
+                            // Fetch agent card for the selected agent
+                            await this.fetchAgentCard(this.selectedAgent);
                         }
                     } catch (error) {
                         console.error('Failed to fetch agents:', error);
                         this.selectedAgent = null;
                     }
+                },
+
+                /**
+                 * Fetch agent card and update supported file types
+                 */
+                async fetchAgentCard(agent) {
+                    if (!agent || !agent.url) {
+                        // Reset to defaults if no agent
+                        this.supportedFileTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                        this.updateFileInputAccept();
+                        return;
+                    }
+
+                    try {
+                        // Extract agent ID from URL (format: /v1/agents/{agentId})
+                        const urlMatch = agent.url.match(/\/v1\/agents\/([^\/]+)/);
+                        if (!urlMatch) {
+                            console.warn('Could not extract agent ID from URL:', agent.url);
+                            return;
+                        }
+
+                        const agentId = urlMatch[1];
+                        const endpointInput = document.getElementById('endpoint');
+                        const endpoint = endpointInput?.value.trim() || window.location.origin;
+                        
+                        let baseUrl;
+                        try {
+                            const url = new URL(endpoint);
+                            baseUrl = `${url.protocol}//${url.host}`;
+                        } catch (e) {
+                            baseUrl = window.location.origin;
+                        }
+
+                        const cardUrl = `${baseUrl}/v1/agents/${agentId}/.well-known/agent-card.json`;
+                        const response = await fetch(cardUrl);
+                        if (!response.ok) {
+                            console.warn('Failed to fetch agent card:', response.status);
+                            return;
+                        }
+
+                        const card = await response.json();
+                        this.agentCard = card;
+
+                        // Update supported file types from agent card
+                        if (card.default_input_modes && Array.isArray(card.default_input_modes)) {
+                            // Filter to only file/media types (exclude text/plain, application/json)
+                            this.supportedFileTypes = card.default_input_modes.filter(mode => 
+                                mode.startsWith('image/') || 
+                                mode.startsWith('video/') || 
+                                mode.startsWith('audio/')
+                            );
+                            
+                            // If no file types found, fall back to image defaults
+                            if (this.supportedFileTypes.length === 0) {
+                                this.supportedFileTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                            }
+                        } else {
+                            // No input modes specified, use defaults
+                            this.supportedFileTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                        }
+
+                        // Update file input accept attribute
+                        this.updateFileInputAccept();
+                    } catch (error) {
+                        console.error('Failed to fetch agent card:', error);
+                        // Keep defaults on error
+                        this.supportedFileTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                        this.updateFileInputAccept();
+                    }
+                },
+
+                /**
+                 * Update file input accept attribute based on supported file types
+                 */
+                updateFileInputAccept() {
+                    const fileInput = this.$refs.imageInput;
+                    if (fileInput && this.supportedFileTypes.length > 0) {
+                        fileInput.accept = this.supportedFileTypes.join(',');
+                    }
+                },
+
+                /**
+                 * Handle agent selection change
+                 */
+                async handleAgentChange(event) {
+                    const agentIndex = parseInt(event.target.value);
+                    if (isNaN(agentIndex) || agentIndex < 0 || agentIndex >= this.availableAgents.length) {
+                        this.selectedAgent = null;
+                        this.supportedFileTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                        this.updateFileInputAccept();
+                        return;
+                    }
+
+                    const agent = this.availableAgents[agentIndex];
+                    this.selectedAgent = agent;
+                    await this.fetchAgentCard(agent);
                 },
                 
                 
@@ -1481,8 +1580,8 @@
                             break;
                         }
 
-                        if (!this.supportedImageTypes.includes(file.type)) {
-                            this.showError(`Unsupported image type: ${file.type}`);
+                        if (!this.supportedFileTypes.includes(file.type)) {
+                            this.showError(`Unsupported file type: ${file.type}. Supported: ${this.supportedFileTypes.join(', ')}`);
                             continue;
                         }
 
@@ -1492,8 +1591,16 @@
                         }
 
                         try {
-                            // Create preview and base64
-                            const preview = await this.createImagePreview(file);
+                            // Create preview (for images) and base64
+                            let preview = null;
+                            if (file.type.startsWith('image/')) {
+                                try {
+                                    preview = await this.createImagePreview(file);
+                                } catch (e) {
+                                    console.warn('Failed to create preview:', e);
+                                }
+                            }
+                            
                             const base64 = await this.fileToBase64(file);
 
                             this.attachedImages.push({
@@ -1504,7 +1611,7 @@
                                 mediaType: file.type
                             });
                         } catch (error) {
-                            console.error('Error processing image:', error);
+                            console.error('Error processing file:', error);
                             this.showError(`Failed to process ${file.name}`);
                         }
                     }
