@@ -528,23 +528,19 @@ func (p *OpenAIProvider) buildRequest(messages []*pb.Message, stream bool, tools
 				url := ""
 
 				if uri := file.GetFileWithUri(); uri != "" {
-					// OpenAI supports direct HTTP/HTTPS URLs
 					url = uri
 				} else if bytes := file.GetFileWithBytes(); len(bytes) > 0 {
-					// Convert bytes to base64 data URI
 					if mediaType == "" {
-						mediaType = "image/jpeg" // Default fallback
+						mediaType = "image/jpeg"
 					}
 
-					// Validate it's an image type
 					if !strings.HasPrefix(mediaType, "image/") {
-						continue // Skip non-image files
+						continue
 					}
 
-					// Check size limit (20MB for OpenAI)
 					const maxImageSize = 20 * 1024 * 1024
 					if len(bytes) > maxImageSize {
-						continue // Skip oversized images
+						continue
 					}
 
 					base64Data := base64.StdEncoding.EncodeToString(bytes)

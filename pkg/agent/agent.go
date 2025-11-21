@@ -218,6 +218,15 @@ func (a *Agent) execute(
 	input string,
 	strategy reasoning.ReasoningStrategy,
 ) (<-chan *pb.Part, error) {
+	return a.executeWithMessage(ctx, input, nil, strategy)
+}
+
+func (a *Agent) executeWithMessage(
+	ctx context.Context,
+	input string,
+	userMessage *pb.Message,
+	strategy reasoning.ReasoningStrategy,
+) (<-chan *pb.Part, error) {
 	outputCh := make(chan *pb.Part, outputChannelBuffer)
 
 	go func() {
@@ -289,7 +298,13 @@ func (a *Agent) execute(
 			}
 		}
 
-		userMsg := protocol.CreateUserMessage(input)
+		// Use provided userMessage if available (preserves file parts), otherwise create from text
+		var userMsg *pb.Message
+		if userMessage != nil {
+			userMsg = userMessage
+		} else {
+			userMsg = protocol.CreateUserMessage(input)
+		}
 		state.AddCurrentTurnMessage(userMsg)
 
 		maxIterations := a.getMaxIterations(cfg)

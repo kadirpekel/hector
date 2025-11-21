@@ -696,8 +696,45 @@
                                                     </template>
                                                 </div>
                                             </template>
+                                            <!-- Image Widget (Tool-Generated) -->
+                                            <template x-if="widget.type === 'image'">
+                                                <div class="mb-3 rounded-lg overflow-hidden bg-black/20 border border-white/10">
+                                                    <div class="px-4 py-3">
+                                                        <div class="flex items-center gap-2 mb-3">
+                                                            <span class="text-base">🖼️</span>
+                                                            <span class="text-sm font-medium text-gray-300">Generated Image</span>
+                                                        </div>
+                                                        <template x-if="widget.data?.url">
+                                                            <img :src="widget.data.url"
+                                                                 :alt="widget.data.revised_prompt || 'Generated image'"
+                                                                 class="w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                                                 @click="window.open(widget.data.url, '_blank')">
+                                                        </template>
+                                                        <template x-if="widget.data?.revised_prompt">
+                                                            <div class="mt-2 text-xs text-gray-400">
+                                                                <div class="font-medium mb-1">Prompt:</div>
+                                                                <div class="text-gray-300" x-text="widget.data.revised_prompt"></div>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </template>
                                         </div>
                                     </template>
+
+                                    <!-- Image Attachments - Show user's attached images -->
+                                    <template x-if="message.metadata?.images && message.metadata.images.length > 0">
+                                        <div class="mb-3 flex flex-wrap gap-2">
+                                            <template x-for="(image, imgIndex) in message.metadata.images" :key="image.id">
+                                                <img :src="image.preview"
+                                                     :alt="image.file.name"
+                                                     :title="image.file.name"
+                                                     class="max-w-xs max-h-64 rounded-lg border border-white/20 cursor-pointer hover:border-hector-red/50 transition-colors"
+                                                     @click="window.open(image.preview, '_blank')">
+                                            </template>
+                                        </div>
+                                    </template>
+
                                     <!-- Text Content - Show when text exists -->
                                     <div x-show="message.text && message.text.trim()" class="message-text-content mt-3" x-html="marked.parse(message.text || '')"></div>
                                 </div>
@@ -727,17 +764,60 @@
         <!-- Input area -->
         <div class="border-t border-white/10 p-4 bg-hector-dark">
             <div class="max-w-3xl mx-auto px-4">
+                <!-- Image preview area -->
+                <div x-show="attachedImages.length > 0"
+                     x-transition
+                     class="mb-3 flex flex-wrap gap-2">
+                    <template x-for="(image, index) in attachedImages" :key="image.id">
+                        <div class="relative group">
+                            <img :src="image.preview"
+                                 :alt="image.file.name"
+                                 class="w-20 h-20 object-cover rounded-lg border border-white/20">
+                            <button @click="removeImage(index)"
+                                    class="absolute -top-2 -right-2 w-6 h-6 bg-hector-red rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                                <span class="text-white text-xs font-bold">×</span>
+                            </button>
+                            <div class="absolute bottom-0 left-0 right-0 bg-black/70 text-xs px-1 py-0.5 truncate rounded-b-lg text-white"
+                                 x-text="image.file.name"></div>
+                        </div>
+                    </template>
+                </div>
+
                 <div class="flex items-center gap-3">
-                    <textarea x-model="inputText" 
+                    <!-- Image attachment button -->
+                    <div class="relative flex-shrink-0">
+                        <button @click="$refs.imageInput.click()"
+                                :disabled="isGenerating || attachedImages.length >= 5"
+                                class="p-2 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Attach images (max 5)">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                        </button>
+                        <span x-show="attachedImages.length > 0"
+                              class="absolute -top-1 -right-1 bg-hector-green text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                              x-text="attachedImages.length"></span>
+                    </div>
+
+                    <!-- Hidden file input -->
+                    <input type="file"
+                           x-ref="imageInput"
+                           @change="handleImageSelect($event)"
+                           accept="image/jpeg,image/png,image/gif,image/webp"
+                           multiple
+                           class="hidden">
+
+                    <textarea x-model="inputText"
                              @keydown.enter.prevent="!$event.shiftKey && sendMessage()"
-                             :placeholder="activeTaskId || sessions[currentSessionId]?.taskId ? 'Respond to the prompt above...' : 'Type a message'" 
-                             rows="1" 
+                             :placeholder="activeTaskId || sessions[currentSessionId]?.taskId ? 'Respond to the prompt above...' : 'Type a message'"
+                             rows="1"
                              maxlength="4000"
                              :disabled="isGenerating"
                              class="flex-1 px-4 bg-black/50 border border-white/20 rounded-lg resize-none text-sm focus:outline-none focus:ring-2 focus:ring-hector-green focus:border-hector-green disabled:opacity-50"
                              style="height: 44px; max-height: 200px; line-height: 44px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.2) transparent;"></textarea>
-                    <button @click="isGenerating ? cancelGeneration() : sendMessage()" 
-                           :disabled="!isGenerating && !inputText.trim()"
+                    <button @click="isGenerating ? cancelGeneration() : sendMessage()"
+                           :disabled="!isGenerating && !inputText.trim() && attachedImages.length === 0"
                            :class="isGenerating ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-hector-green hover:bg-[#0d9668]'"
                            class="px-6 h-[44px] rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 flex items-center justify-center"
                            x-text="isGenerating ? '□' : '➤'"></button>
@@ -768,7 +848,12 @@
                 isTyping: false,
                 isGenerating: false,
                 inputText: '',
-                
+
+                // Multimodal State
+                attachedImages: [],
+                maxImageSize: 20 * 1024 * 1024, // 20MB
+                supportedImageTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+
                 // Data State
                 sessions: {},
                 currentSessionId: null,
@@ -894,7 +979,64 @@
                 },
                 
                 saveSessions() {
-                    localStorage.setItem('hector_sessions', JSON.stringify(this.sessions));
+                    try {
+                        // Create a lightweight copy of sessions without large image data
+                        const sessionsToSave = {};
+                        for (const [sessionId, session] of Object.entries(this.sessions)) {
+                            sessionsToSave[sessionId] = {
+                                ...session,
+                                messages: session.messages.map(msg => {
+                                    // Don't store full image base64 data in localStorage
+                                    const msgCopy = { ...msg };
+                                    if (msgCopy.metadata?.images) {
+                                        msgCopy.metadata = {
+                                            ...msgCopy.metadata,
+                                            images: msgCopy.metadata.images.map(img => ({
+                                                id: img.id,
+                                                file: {
+                                                    name: img.file?.name || 'image',
+                                                    size: img.file?.size || 0,
+                                                    type: img.file?.type || 'image/png'
+                                                },
+                                                preview: img.preview, // Keep preview (data URL is smaller than base64)
+                                                // Don't store base64 - it's too large for localStorage
+                                            }))
+                                        };
+                                    }
+                                    return msgCopy;
+                                })
+                            };
+                        }
+                        localStorage.setItem('hector_sessions', JSON.stringify(sessionsToSave));
+                    } catch (e) {
+                        if (e.name === 'QuotaExceededError') {
+                            console.warn('localStorage quota exceeded - sessions not saved. Consider clearing old sessions.');
+                            // Try to save without images
+                            try {
+                                const sessionsMinimal = {};
+                                for (const [sessionId, session] of Object.entries(this.sessions)) {
+                                    sessionsMinimal[sessionId] = {
+                                        ...session,
+                                        messages: session.messages.map(msg => {
+                                            const msgCopy = { ...msg };
+                                            if (msgCopy.metadata?.images) {
+                                                msgCopy.metadata = {
+                                                    ...msgCopy.metadata,
+                                                    images: [] // Remove images to save space
+                                                };
+                                            }
+                                            return msgCopy;
+                                        })
+                                    };
+                                }
+                                localStorage.setItem('hector_sessions', JSON.stringify(sessionsMinimal));
+                            } catch (e2) {
+                                console.error('Failed to save sessions even without images:', e2);
+                            }
+                        } else {
+                            console.error('Error saving sessions:', e);
+                        }
+                    }
                 },
                 
                 newChat() {
@@ -1321,50 +1463,165 @@
                         hljs.highlightElement(block);
                     });
                 },
-                
+
+                // ============================================================================
+                // Image Handling Functions
+                // ============================================================================
+
+                /**
+                 * Handle image file selection
+                 */
+                async handleImageSelect(event) {
+                    const files = Array.from(event.target.files);
+
+                    for (const file of files) {
+                        // Validation
+                        if (this.attachedImages.length >= 5) {
+                            this.showError('Maximum 5 images allowed');
+                            break;
+                        }
+
+                        if (!this.supportedImageTypes.includes(file.type)) {
+                            this.showError(`Unsupported image type: ${file.type}`);
+                            continue;
+                        }
+
+                        if (file.size > this.maxImageSize) {
+                            this.showError(`Image too large: ${file.name} (max 20MB)`);
+                            continue;
+                        }
+
+                        try {
+                            // Create preview and base64
+                            const preview = await this.createImagePreview(file);
+                            const base64 = await this.fileToBase64(file);
+
+                            this.attachedImages.push({
+                                id: 'img-' + Date.now() + '-' + Math.random(),
+                                file: file,
+                                preview: preview,
+                                base64: base64,
+                                mediaType: file.type
+                            });
+                        } catch (error) {
+                            console.error('Error processing image:', error);
+                            this.showError(`Failed to process ${file.name}`);
+                        }
+                    }
+
+                    // Clear input
+                    event.target.value = '';
+                },
+
+                /**
+                 * Remove attached image
+                 */
+                removeImage(index) {
+                    this.attachedImages.splice(index, 1);
+                },
+
+                /**
+                 * Create image preview URL
+                 */
+                createImagePreview(file) {
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                },
+
+                /**
+                 * Convert file to base64 string (without data URI prefix)
+                 */
+                fileToBase64(file) {
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            // Remove data URI prefix: "data:image/png;base64,"
+                            const base64 = e.target.result.split(',')[1];
+                            resolve(base64);
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                },
+
+                /**
+                 * Clear all attached images
+                 */
+                clearAttachedImages() {
+                    this.attachedImages = [];
+                },
+
+                // ============================================================================
                 // Message Sending
+                // ============================================================================
                 async sendMessage() {
-                    if (!this.inputText.trim()) return;
-                    
+                    if (!this.inputText.trim() && this.attachedImages.length === 0) return;
+
                     const endpointInput = document.getElementById('endpoint');
                     const endpoint = endpointInput?.value.trim();
                     if (!endpoint) {
                         this.showError('Please enter an endpoint URL');
                         return;
                     }
-                    
+
                     const agentSelect = document.getElementById('agent');
                     const agentIndex = parseInt(agentSelect?.value);
                     const agent = this.availableAgents[agentIndex];
-                    
+
                     if (!agent || !agent.url) {
                         this.showError('No agent selected or agent URL not available');
                         return;
                     }
-                    
+
                     const messageText = this.inputText.trim();
-                    
-                    // Add user message
-                    this.addMessage('user', messageText);
-                    
-                    if (this.currentSessionId) {
-                        this.updateSessionTitle(this.currentSessionId, messageText);
+                    const images = [...this.attachedImages];
+
+                    // Add user message with images (saveSessions will handle quota errors)
+                    try {
+                        this.addMessage('user', messageText, { images });
+                    } catch (e) {
+                        // If saving fails, still continue with sending the message
+                        console.warn('Failed to save message to session, but continuing:', e);
+                        // Manually add message without saving
+                        if (!this.currentSessionId) {
+                            this.newChat();
+                        }
+                        const message = {
+                            id: 'msg-' + Date.now() + '-' + Math.random(),
+                            role: 'user',
+                            text: messageText,
+                            metadata: { images },
+                            toolCalls: [],
+                            thinkingBlocks: [],
+                            widgets: [],
+                            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                        };
+                        this.sessions[this.currentSessionId].messages.push(message);
                     }
-                    
+
+                    if (this.currentSessionId) {
+                        this.updateSessionTitle(this.currentSessionId, messageText || 'Image message');
+                    }
+
                     this.inputText = '';
+                    this.clearAttachedImages();
                     this.isGenerating = true;
-                    
+
                     try {
                         // Check if we're resuming a human-in-the-loop prompt
                         const session = this.sessions[this.currentSessionId];
                         const taskId = this.activeTaskId || session?.taskId;
-                        
+
                         if (taskId) {
                             // Resuming a task - send response with taskId
-                            await this.sendStreamingMessage(agent.url, messageText, taskId);
+                            await this.sendStreamingMessage(agent.url, messageText, taskId, images);
                         } else {
                             // New message
-                            await this.sendStreamingMessage(agent.url, messageText);
+                            await this.sendStreamingMessage(agent.url, messageText, null, images);
                         }
                     } catch (error) {
                         console.error('Error:', error);
@@ -1414,7 +1671,12 @@
                     });
                     
                     this.sessions[this.currentSessionId].messages.push(message);
-                    this.saveSessions();
+                    // Save sessions - if it fails due to quota, continue anyway
+                    try {
+                        this.saveSessions();
+                    } catch (e) {
+                        console.warn('Failed to save sessions, but continuing:', e);
+                    }
                     
                     // Auto-scroll
                     this.$nextTick(() => {
@@ -1475,13 +1737,32 @@
                 },
                 
                 // Streaming handler - Alpine.js state updates
-                async sendStreamingMessage(agentUrl, messageText, taskId = null) {
+                async sendStreamingMessage(agentUrl, messageText, taskId = null, images = []) {
                     const session = this.sessions[this.currentSessionId];
                     if (!session) {
                         this.newChat();
                         return;
                     }
-                    
+
+                    // Construct A2A-compliant parts array
+                    const parts = [];
+
+                    // Add text part if there's text
+                    if (messageText) {
+                        parts.push({ text: messageText });
+                    }
+
+                    // Add image parts as FilePart with base64 bytes
+                    for (const image of images) {
+                        parts.push({
+                            file: {
+                                file_with_bytes: image.base64,
+                                media_type: image.mediaType,
+                                name: image.file.name
+                            }
+                        });
+                    }
+
                     const request = {
                         jsonrpc: '2.0',
                         method: 'message/stream',
@@ -1489,12 +1770,12 @@
                             request: {
                                 contextId: session.contextId,
                                 role: 'user',
-                                parts: [{ text: messageText }]
+                                parts: parts
                             }
                         },
                         id: this.generateRequestId()
                     };
-                    
+
                     // Include taskId if provided (for human-in-the-loop prompts)
                     const activeTaskId = taskId || session.taskId || this.activeTaskId;
                     if (activeTaskId) {
@@ -1950,6 +2231,27 @@
                             if (tr.content) {
                                 widget.content = tr.content;
                             }
+
+                            // Check if this is an image generation result
+                            if (widget.data?.name === 'generate_image' && tr.metadata?.url) {
+                                // Create an image widget for the generated image
+                                const imageWidget = {
+                                    id: `img-${tr.tool_call_id}`,
+                                    type: 'image',
+                                    data: {
+                                        url: tr.metadata.url,
+                                        revised_prompt: tr.metadata.revised_prompt
+                                    },
+                                    status: 'success',
+                                    isExpanded: true
+                                };
+                                // Check if image widget already exists
+                                const existingImageWidget = messageRef.widgets.find(w => w.id === imageWidget.id);
+                                if (!existingImageWidget) {
+                                    messageRef.widgets.push(imageWidget);
+                                }
+                            }
+
                             widgetsUpdated = true;
                         }
                     });

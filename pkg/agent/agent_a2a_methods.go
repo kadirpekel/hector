@@ -303,7 +303,8 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 		// Add taskID to context for tool approval
 		ctx = EnsureAgentContext(ctx, task.Id, contextID)
 
-		streamCh, err := a.execute(ctx, userText, strategy)
+		// Pass the full userMessage to preserve file parts (images, etc.)
+		streamCh, err := a.executeWithMessage(ctx, userText, userMessage, strategy)
 		if err != nil {
 			if updateErr := a.updateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
 				slog.Error("Failed to update task status to FAILED", "agent", a.id, "task", task.Id, "error", updateErr)
@@ -374,7 +375,8 @@ func (a *Agent) SendStreamingMessage(req *pb.SendMessageRequest, stream pb.A2ASe
 		return status.Errorf(codes.Internal, "failed to create strategy: %v", err)
 	}
 
-	streamCh, err := a.execute(ctx, userText, strategy)
+	// Pass the full userMessage to preserve file parts (images, etc.)
+	streamCh, err := a.executeWithMessage(ctx, userText, userMessage, strategy)
 	if err != nil {
 		return status.Errorf(codes.Internal, "reasoning failed: %v", err)
 	}

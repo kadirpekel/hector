@@ -218,20 +218,28 @@ func (s *DefaultPromptService) BuildMessages(
 
 	messages = append(messages, currentToolConversation...)
 
+	// Check if we need to add the user query as a new message
 	needsUserQuery := true
+	var lastUserMessage *pb.Message
 	for i := len(currentToolConversation) - 1; i >= 0; i-- {
 		msg := currentToolConversation[i]
 		if msg.Role == pb.Role_ROLE_USER {
+			lastUserMessage = msg
 			msgText := protocol.ExtractTextFromMessage(msg)
 			if msgText == query {
 				needsUserQuery = false
-				break
 			}
+			break
 		}
 	}
 
 	if needsUserQuery {
-		messages = append(messages, protocol.CreateUserMessage(query))
+		// Use the last user message if it exists (preserves file parts), otherwise create text-only
+		if lastUserMessage != nil {
+			messages = append(messages, lastUserMessage)
+		} else {
+			messages = append(messages, protocol.CreateUserMessage(query))
+		}
 	}
 
 	return messages, nil

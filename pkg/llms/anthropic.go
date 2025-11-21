@@ -304,30 +304,23 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 					// Handle file parts (images)
 					mediaType := file.GetMediaType()
 
+					// Anthropic Messages API doesn't support image URLs - only base64 data
 					if uri := file.GetFileWithUri(); uri != "" {
-						// Anthropic Messages API doesn't support image URLs - only base64 data
-						// URI-based images are silently skipped. Callers should:
-						// 1. Download the image and convert to bytes, OR
-						// 2. Use a different provider that supports URLs (e.g., OpenAI)
 						continue
 					}
 
 					if bytes := file.GetFileWithBytes(); len(bytes) > 0 {
-						// Validate media type is provided
 						if mediaType == "" {
-							// Default to jpeg but this should be set by caller
 							mediaType = "image/jpeg"
 						}
 
-						// Validate it's an image type
 						if !strings.HasPrefix(mediaType, "image/") {
-							continue // Skip non-image files
+							continue
 						}
 
-						// Check size limit (5MB for Anthropic)
 						const maxImageSize = 5 * 1024 * 1024
 						if len(bytes) > maxImageSize {
-							continue // Skip oversized images
+							continue
 						}
 
 						base64Data := base64.StdEncoding.EncodeToString(bytes)

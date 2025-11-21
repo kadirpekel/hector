@@ -413,22 +413,18 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 				mediaType := file.GetMediaType()
 
 				if bytes := file.GetFileWithBytes(); len(bytes) > 0 {
-					// Validate media type
 					if mediaType != "" && !strings.HasPrefix(mediaType, "image/") {
-						continue // Skip non-image files
+						continue
 					}
 
-					// Check size limit (varies by model, use 20MB as safe limit)
 					const maxImageSize = 20 * 1024 * 1024
 					if len(bytes) > maxImageSize {
-						continue // Skip oversized images
+						continue
 					}
 
 					base64Data := base64.StdEncoding.EncodeToString(bytes)
 					ollamaMsg.Images = append(ollamaMsg.Images, base64Data)
 				}
-				// Note: Ollama API expects base64 images in 'images' field, not URLs.
-				// If we have a URL, we'd need to download it first.
 			}
 		}
 

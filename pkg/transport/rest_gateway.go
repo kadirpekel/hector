@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -418,7 +419,6 @@ func customErrorHandler(ctx context.Context, mux *runtime.ServeMux, marshaler ru
 
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		if r.Method != "PRI" {
 			slog.Debug("REST request", "method", r.Method, "path", r.URL.Path)
 		}
@@ -427,7 +427,6 @@ func loggingMiddleware(next http.Handler) http.Handler {
 }
 
 func (g *RESTGateway) handleStreamingMessageSSE(w http.ResponseWriter, r *http.Request) {
-
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -438,7 +437,6 @@ func (g *RESTGateway) handleStreamingMessageSSE(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Get agent ID from URL parameter (chi router extracts this)
 	agentID := chi.URLParam(r, "agent")
 	if agentID == "" {
 		g.sendSSEError(w, "Agent ID required")
@@ -467,8 +465,6 @@ func (g *RESTGateway) handleStreamingMessageSSE(w http.ResponseWriter, r *http.R
 		g.sendSSEError(w, fmt.Sprintf("Invalid request body: %v", err))
 		return
 	}
-
-	slog.Debug("REST SSE", "agent", agentID)
 
 	// Create incoming metadata for the gRPC service (server-side)
 	md := metadata.Pairs("agent-name", agentID)
@@ -638,12 +634,10 @@ type restStreamWrapper struct {
 }
 
 func (w *restStreamWrapper) Send(resp *pb.StreamResponse) error {
-	// If AG-UI mode is enabled, convert A2A to AG-UI events
 	if w.useAGUI {
 		return w.sendAsAGUI(resp)
 	}
 
-	// A2A native format (default)
 	marshaler := protojson.MarshalOptions{
 		UseProtoNames:   false,
 		EmitUnpopulated: false,
@@ -1078,14 +1072,12 @@ func (g *RESTGateway) handleJSONRPCAgentScoped(w http.ResponseWriter, r *http.Re
 
 // handleJSONRPCStreamAgentScoped handles streaming JSON-RPC for a specific agent
 func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *http.Request) {
-	// Get agent ID from URL parameter
 	agentID := chi.URLParam(r, "agent")
 	if agentID == "" {
 		g.sendSSEError(w, "Agent ID required")
 		return
 	}
 
-	// Validate agent exists
 	if !g.validateAgentID(agentID, w, true) {
 		return
 	}
@@ -1115,8 +1107,6 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 		return
 	}
 
-	slog.Debug("JSON-RPC Stream request", "agent", agentID, "method", rpcReq.Method)
-
 	// Create incoming metadata for the gRPC service (server-side)
 	md := metadata.Pairs("agent-name", agentID)
 
@@ -1130,16 +1120,53 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 	// Handle streaming methods
 	switch rpcReq.Method {
 	case "message/stream", "tasks/resubscribe":
-		// Reuse the existing streaming logic with the context that has agent metadata
 		var req pb.SendMessageRequest
 		mappedParams := applyA2AFieldMapping(rpcReq.Params)
-		slog.Debug("JSON-RPC params after mapping", "params", string(mappedParams))
 		if err := g.unmarshaler.Unmarshal(mappedParams, &req); err != nil {
 			g.sendSSEError(w, fmt.Sprintf("Invalid params: %v", err))
 			return
 		}
-		if taskId := req.Request.GetTaskId(); taskId != "" {
-			slog.Debug("Unmarshaled request", "task_id", taskId)
+
+		// Workaround: If protojson didn't decode base64 bytes, manually decode from raw JSON
+		// This handles cases where protojson fails to decode file_with_bytes fields
+		if req.Request != nil && len(req.Request.Parts) > 0 {
+			var rawParts []map[string]interface{}
+			var paramsMap map[string]interface{}
+			if err := json.Unmarshal(rpcReq.Params, &paramsMap); err == nil {
+				if partsRaw, ok := paramsMap["request"].(map[string]interface{}); ok {
+					if partsArray, ok := partsRaw["parts"].([]interface{}); ok {
+						for _, p := range partsArray {
+							if partMap, ok := p.(map[string]interface{}); ok {
+								rawParts = append(rawParts, partMap)
+							}
+						}
+					}
+				}
+			}
+
+			for i, part := range req.Request.Parts {
+				if fileVal := part.GetFile(); fileVal != nil && len(fileVal.GetFileWithBytes()) == 0 && i < len(rawParts) {
+					if fileObj, ok := rawParts[i]["file"].(map[string]interface{}); ok {
+						if bytesStr, ok := fileObj["file_with_bytes"].(string); ok && bytesStr != "" {
+							if decoded, err := base64.StdEncoding.DecodeString(bytesStr); err == nil {
+								// Reconstruct FilePart with decoded bytes
+								filePart := req.Request.Parts[i].GetFile()
+								req.Request.Parts[i] = &pb.Part{
+									Part: &pb.Part_File{
+										File: &pb.FilePart{
+											File: &pb.FilePart_FileWithBytes{
+												FileWithBytes: decoded,
+											},
+											MediaType: filePart.GetMediaType(),
+											Name:      filePart.GetName(),
+										},
+									},
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 
 		// Set contextId as session ID for memory persistence
@@ -1175,7 +1202,11 @@ func (g *RESTGateway) handleJSONRPCStreamAgentScoped(w http.ResponseWriter, r *h
 			messageID: messageID,
 		}
 
-		// Call the streaming service
+		if g.service == nil {
+			g.sendSSEError(w, "Service not available")
+			return
+		}
+
 		if err := g.service.SendStreamingMessage(&req, streamWrapper); err != nil {
 			g.sendSSEError(w, fmt.Sprintf("Service error: %v", err))
 			return
@@ -1805,4 +1836,12 @@ func (g *RESTGateway) handleTaskSubscription(w http.ResponseWriter, r *http.Requ
 		streamWrapper.sendCompletionEvent()
 		return
 	}
+}
+
+// Helper function to get keys from a map for debugging
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
