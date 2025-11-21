@@ -85,7 +85,15 @@ func (a *Agent) getInputModes() []string {
 		return a.config.A2A.InputModes
 	}
 
-	return []string{"text/plain", "application/json"}
+	// Default input modes including multimodal support
+	return []string{
+		"text/plain",
+		"application/json",
+		"image/jpeg",
+		"image/png",
+		"image/gif",
+		"image/webp",
+	}
 }
 
 func (a *Agent) getOutputModes() []string {

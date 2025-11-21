@@ -312,8 +312,88 @@ Per A2A Specification Section 6.5:
 | Type | Status | Description | Spec Section |
 |------|--------|-------------|--------------|
 | `TextPart` | ✅ Supported | Plain text messages | 6.5.1 |
-| `FilePart` | ✅ Supported | File references with URIs | 6.5.2 |
+| `FilePart` | ✅ Supported | Multi-modal content (images, video, audio) | 6.5.2 |
 | `DataPart` | ✅ Supported | Structured JSON data | 6.5.3 |
+
+#### FilePart (Multi-Modality)
+
+`FilePart` enables sending images, video, audio, and other media types alongside text:
+
+```protobuf
+message FilePart {
+  oneof file {
+    string file_with_uri = 1;    // HTTP/HTTPS URL or GCS URI
+    bytes file_with_bytes = 2;   // Base64-encoded data
+  }
+  string media_type = 3;         // MIME type (e.g., "image/jpeg")
+  string name = 4;               // Optional filename
+}
+```
+
+**Field Details:**
+
+- **`file_with_uri`**: HTTP/HTTPS URL or Google Cloud Storage URI (supported by OpenAI, Gemini)
+- **`file_with_bytes`**: Base64-encoded file data (supported by all providers)
+- **`media_type`**: MIME type identifier (required for proper processing)
+  - Images: `image/jpeg`, `image/png`, `image/gif`, `image/webp`
+  - Video: `video/mp4`, `video/avi`, `video/mov` (Gemini only)
+  - Audio: `audio/wav`, `audio/mp3` (Gemini only)
+- **`name`**: Optional filename for reference
+
+**Example with Image:**
+
+```json
+{
+  "message": {
+    "role": "ROLE_USER",
+    "parts": [
+      {
+        "text": "What is in this image?"
+      },
+      {
+        "file": {
+          "file_with_uri": "https://example.com/photo.jpg",
+          "media_type": "image/jpeg",
+          "name": "photo.jpg"
+        }
+      }
+    ]
+  }
+}
+```
+
+**Example with Base64 Image:**
+
+```json
+{
+  "message": {
+    "role": "ROLE_USER",
+    "parts": [
+      {
+        "text": "Analyze this image"
+      },
+      {
+        "file": {
+          "file_with_bytes": "iVBORw0KGgoAAAANSUhEUgAA...",
+          "media_type": "image/png",
+          "name": "screenshot.png"
+        }
+      }
+    ]
+  }
+}
+```
+
+**Provider Support:**
+
+| Provider | URI Support | Base64 Support | Max Size | Media Types |
+|----------|-------------|----------------|----------|-------------|
+| OpenAI | ✅ HTTP/HTTPS | ✅ | 20MB | Images |
+| Anthropic | ❌ | ✅ | 5MB | Images |
+| Gemini | ✅ GCS, some HTTP | ✅ | 20MB | Images, Video, Audio |
+| Ollama | ❌ | ✅ | 20MB | Images |
+
+See [Multi-Modality Support](../core-concepts/multi-modality.md) for complete documentation.
 
 ---
 

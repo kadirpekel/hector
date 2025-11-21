@@ -1063,6 +1063,21 @@ func GetDefaultToolConfigs() map[string]*ToolConfig {
 		"agent_call": {
 			Type: "agent_call",
 		},
+		"generate_image": {
+			Type: "generate_image",
+			Config: map[string]interface{}{
+				"model":   "dall-e-3",
+				"size":    "1024x1024",
+				"quality": "standard",
+				"style":   "vivid",
+			},
+		},
+		"screenshot_page": {
+			Type: "screenshot_page",
+			Config: map[string]interface{}{
+				"timeout": "30s",
+			},
+		},
 	}
 }
 

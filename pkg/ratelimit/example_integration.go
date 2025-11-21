@@ -150,10 +150,10 @@ func estimateTokenCount(message *pb.Message) int64 {
 		if part.GetText() != "" {
 			totalChars += int64(len(part.GetText()))
 		}
-		// Count file parts (name + mime type)
+		// Count file parts (name + media type)
 		if part.GetFile() != nil {
 			totalChars += int64(len(part.GetFile().GetName()))
-			totalChars += int64(len(part.GetFile().GetMimeType()))
+			totalChars += int64(len(part.GetFile().GetMediaType()))
 		}
 		// Count data parts (use a fixed estimate)
 		if part.GetData() != nil {

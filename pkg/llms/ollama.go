@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,6 +43,7 @@ type OllamaRequest struct {
 type OllamaMessage struct {
 	Role       string           `json:"role"`
 	Content    string           `json:"content"`
+	Images     []string         `json:"images,omitempty"`   // Base64 encoded images
 	Thinking   string           `json:"thinking,omitempty"` // Thinking/reasoning trace
 	ToolCalls  []OllamaToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string           `json:"tool_call_id,omitempty"`
@@ -403,6 +405,31 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 		ollamaMsg := OllamaMessage{
 			Role:    role,
 			Content: textContent,
+		}
+
+		// Handle images
+		for _, part := range msg.Parts {
+			if file := part.GetFile(); file != nil {
+				mediaType := file.GetMediaType()
+
+				if bytes := file.GetFileWithBytes(); len(bytes) > 0 {
+					// Validate media type
+					if mediaType != "" && !strings.HasPrefix(mediaType, "image/") {
+						continue // Skip non-image files
+					}
+
+					// Check size limit (varies by model, use 20MB as safe limit)
+					const maxImageSize = 20 * 1024 * 1024
+					if len(bytes) > maxImageSize {
+						continue // Skip oversized images
+					}
+
+					base64Data := base64.StdEncoding.EncodeToString(bytes)
+					ollamaMsg.Images = append(ollamaMsg.Images, base64Data)
+				}
+				// Note: Ollama API expects base64 images in 'images' field, not URLs.
+				// If we have a URL, we'd need to download it first.
+			}
 		}
 
 		// Handle tool calls from assistant

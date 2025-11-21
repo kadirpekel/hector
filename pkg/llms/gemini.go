@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -539,6 +540,57 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 		textContent := protocol.ExtractTextFromMessage(msg)
 		if textContent != "" {
 			parts = append(parts, GeminiPart{"text": textContent})
+		}
+
+		// Handle multi-modal parts
+		for _, part := range msg.Parts {
+			if file := part.GetFile(); file != nil {
+				mediaType := file.GetMediaType()
+
+				if uri := file.GetFileWithUri(); uri != "" {
+					// Use fileData for URIs (assuming Google Cloud Storage URIs or similar supported by Gemini)
+					// Note: standard HTTP URLs might not work directly unless uploaded to File API
+					if mediaType == "" {
+						mediaType = "image/jpeg"
+					}
+
+					// Validate media type for images
+					if !strings.HasPrefix(mediaType, "image/") && !strings.HasPrefix(mediaType, "video/") && !strings.HasPrefix(mediaType, "audio/") {
+						continue // Skip unsupported media types
+					}
+
+					parts = append(parts, GeminiPart{
+						"file_data": map[string]interface{}{
+							"mime_type": mediaType,
+							"file_uri":  uri,
+						},
+					})
+				} else if bytes := file.GetFileWithBytes(); len(bytes) > 0 {
+					// Use inlineData for bytes
+					if mediaType == "" {
+						mediaType = "image/jpeg"
+					}
+
+					// Validate media type
+					if !strings.HasPrefix(mediaType, "image/") && !strings.HasPrefix(mediaType, "video/") && !strings.HasPrefix(mediaType, "audio/") {
+						continue // Skip unsupported media types
+					}
+
+					// Check size limit (20MB for Gemini inline data)
+					const maxInlineDataSize = 20 * 1024 * 1024
+					if len(bytes) > maxInlineDataSize {
+						continue // Skip oversized files
+					}
+
+					base64Data := base64.StdEncoding.EncodeToString(bytes)
+					parts = append(parts, GeminiPart{
+						"inline_data": map[string]interface{}{
+							"mime_type": mediaType,
+							"data":      base64Data,
+						},
+					})
+				}
+			}
 		}
 
 		for _, tc := range protocol.GetToolCallsFromMessage(msg) {

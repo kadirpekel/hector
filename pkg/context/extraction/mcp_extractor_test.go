@@ -601,11 +601,11 @@ func TestMCPExtractor_PathRemapping(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name           string
-		localBasePath  string
-		pathPrefix     string
-		inputPath      string
-		expectedPath   string
+		name          string
+		localBasePath string
+		pathPrefix    string
+		inputPath     string
+		expectedPath  string
 	}{
 		{
 			name:          "no remapping when path_prefix is empty",

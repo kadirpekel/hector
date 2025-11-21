@@ -9,13 +9,13 @@ Hector supports multiple LLM providers out of the box. Each agent references an 
 
 ## Supported Providers
 
-| Provider | Models | Streaming | Structured Output |
-|----------|--------|-----------|-------------------|
-| **OpenAI** | GPT-4o, GPT-4o-mini, GPT-4 Turbo, etc. | ✅ | ✅ |
-| **Anthropic** | Claude Sonnet 4, Claude Opus 4, etc. | ✅ | ✅ |
-| **Google Gemini** | Gemini 2.0 Flash, Gemini Pro, etc. | ✅ | ✅ |
-| **Ollama** | qwen3 (local models) | ✅ | ✅ |
-| **Custom (Plugin)** | Any model via gRPC plugin | ✅ | ✅ |
+| Provider | Models | Streaming | Structured Output | Multi-Modality |
+|----------|--------|-----------|-------------------|----------------|
+| **OpenAI** | GPT-4o, GPT-4o-mini, GPT-4 Turbo, etc. | ✅ | ✅ | ✅ Images |
+| **Anthropic** | Claude Sonnet 4, Claude Opus 4, etc. | ✅ | ✅ | ✅ Images |
+| **Google Gemini** | Gemini 2.0 Flash, Gemini Pro, etc. | ✅ | ✅ | ✅ Images, Video, Audio |
+| **Ollama** | qwen3 (local models) | ✅ | ✅ | ✅ Images |
+| **Custom (Plugin)** | Any model via gRPC plugin | ✅ | ✅ | Depends on plugin |
 
 ---
 
@@ -69,12 +69,12 @@ llms:
 
 ### Popular Models
 
-| Model | Best For | Context Window |
-|-------|----------|----------------|
-| `gpt-4o` | General purpose, balanced | 128K tokens |
-| `gpt-4o-mini` | Fast, cost-effective | 128K tokens |
-| `gpt-4-turbo` | Complex reasoning | 128K tokens |
-| `gpt-3.5-turbo` | Simple tasks, fast | 16K tokens |
+| Model | Best For | Context Window | Vision |
+|-------|----------|----------------|--------|
+| `gpt-4o` | General purpose, balanced | 128K tokens | ✅ |
+| `gpt-4o-mini` | Fast, cost-effective | 128K tokens | ✅ |
+| `gpt-4-turbo` | Complex reasoning | 128K tokens | ✅ |
+| `gpt-3.5-turbo` | Simple tasks, fast | 16K tokens | ❌ |
 
 ### Environment Variables
 
@@ -122,11 +122,11 @@ llms:
 
 ### Popular Models
 
-| Model | Best For | Context Window |
-|-------|----------|----------------|
-| `claude-sonnet-4-20250514` | Balanced speed & capability | 200K tokens |
-| `claude-opus-4-20250514` | Maximum capability | 200K tokens |
-| `claude-3-5-sonnet-20241022` | Previous generation | 200K tokens |
+| Model | Best For | Context Window | Vision |
+|-------|----------|----------------|--------|
+| `claude-sonnet-4-20250514` | Balanced speed & capability | 200K tokens | ✅ |
+| `claude-opus-4-20250514` | Maximum capability | 200K tokens | ✅ |
+| `claude-3-5-sonnet-20241022` | Previous generation | 200K tokens | ✅ |
 
 ### Environment Variables
 
@@ -172,11 +172,11 @@ llms:
 
 ### Popular Models
 
-| Model | Best For | Context Window |
-|-------|----------|----------------|
-| `gemini-2.0-flash-exp` | Fast, efficient (experimental) | 1M tokens |
-| `gemini-pro` | General purpose | 1M tokens |
-| `gemini-pro-vision` | Image analysis | 16K tokens |
+| Model | Best For | Context Window | Multi-Modality |
+|-------|----------|----------------|---------------|
+| `gemini-2.0-flash-exp` | Fast, efficient (experimental) | 1M tokens | ✅ Images, Video, Audio |
+| `gemini-pro` | General purpose | 1M tokens | ✅ Images, Video, Audio |
+| `gemini-pro-vision` | Image analysis | 16K tokens | ✅ Images |
 
 ### Environment Variables
 
@@ -489,8 +489,39 @@ llms:
 
 ---
 
+## Multi-Modality Support
+
+All providers support image inputs when using vision-capable models. See [Multi-Modality Support](multi-modality.md) for complete documentation.
+
+**Quick Summary:**
+
+| Provider | Image Support | URI Support | Max Size |
+|----------|---------------|-------------|----------|
+| OpenAI | ✅ JPEG, PNG, GIF, WebP | ✅ HTTP/HTTPS URLs | 20MB |
+| Anthropic | ✅ JPEG, PNG, GIF, WebP | ❌ Base64 only | 5MB |
+| Gemini | ✅ Images, Video, Audio | ✅ GCS URIs, some HTTP | 20MB |
+| Ollama | ✅ JPEG, PNG, GIF, WebP | ❌ Base64 only | 20MB |
+
+**Example:**
+
+```yaml
+llms:
+  vision:
+    type: "openai"
+    model: "gpt-4o"  # Vision-capable model
+    api_key: "${OPENAI_API_KEY}"
+
+agents:
+  vision_assistant:
+    llm: "vision"
+    # Automatically supports image inputs
+```
+
+---
+
 ## Next Steps
 
+- **[Multi-Modality Support](multi-modality.md)** - Send images, video, and audio to agents
 - **[Prompts](prompts.md)** - Customize agent behavior and instructions
 - **[Memory](memory.md)** - Manage conversation context
 - **[Structured Output](structured-output.md)** - Get JSON/XML responses

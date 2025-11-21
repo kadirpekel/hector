@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -80,9 +81,19 @@ type OpenAIStreamResponse struct {
 
 type OpenAIMessage struct {
 	Role       string           `json:"role"`
-	Content    *string          `json:"content"`
+	Content    interface{}      `json:"content"` // string or []OpenAIContentPart
 	ToolCalls  []OpenAIToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string           `json:"tool_call_id,omitempty"`
+}
+
+type OpenAIContentPart struct {
+	Type     string          `json:"type"`
+	Text     string          `json:"text,omitempty"`
+	ImageURL *OpenAIImageURL `json:"image_url,omitempty"`
+}
+
+type OpenAIImageURL struct {
+	URL string `json:"url"`
 }
 
 type Choice struct {
@@ -242,7 +253,9 @@ func (p *OpenAIProvider) Generate(ctx context.Context, messages []*pb.Message, t
 
 	text := ""
 	if choice.Message.Content != nil {
-		text = *choice.Message.Content
+		if str, ok := choice.Message.Content.(string); ok {
+			text = str
+		}
 	}
 
 	var toolCalls []*protocol.ToolCall
@@ -397,7 +410,9 @@ func (p *OpenAIProvider) GenerateStructured(ctx context.Context, messages []*pb.
 
 	text := ""
 	if choice.Message.Content != nil {
-		text = *choice.Message.Content
+		if str, ok := choice.Message.Content.(string); ok {
+			text = str
+		}
 	}
 
 	var toolCalls []*protocol.ToolCall
@@ -498,11 +513,74 @@ func (p *OpenAIProvider) buildRequest(messages []*pb.Message, stream bool, tools
 			continue
 		}
 
-		content := protocol.ExtractTextFromMessage(msg)
+		// Handle multi-modal content
+		var contentParts []OpenAIContentPart
+
+		for _, part := range msg.Parts {
+			if text := part.GetText(); text != "" {
+				contentParts = append(contentParts, OpenAIContentPart{
+					Type: "text",
+					Text: text,
+				})
+			} else if file := part.GetFile(); file != nil {
+				// Handle file parts (images)
+				mediaType := file.GetMediaType()
+				url := ""
+
+				if uri := file.GetFileWithUri(); uri != "" {
+					// OpenAI supports direct HTTP/HTTPS URLs
+					url = uri
+				} else if bytes := file.GetFileWithBytes(); len(bytes) > 0 {
+					// Convert bytes to base64 data URI
+					if mediaType == "" {
+						mediaType = "image/jpeg" // Default fallback
+					}
+
+					// Validate it's an image type
+					if !strings.HasPrefix(mediaType, "image/") {
+						continue // Skip non-image files
+					}
+
+					// Check size limit (20MB for OpenAI)
+					const maxImageSize = 20 * 1024 * 1024
+					if len(bytes) > maxImageSize {
+						continue // Skip oversized images
+					}
+
+					base64Data := base64.StdEncoding.EncodeToString(bytes)
+					url = fmt.Sprintf("data:%s;base64,%s", mediaType, base64Data)
+				}
+
+				if url != "" {
+					contentParts = append(contentParts, OpenAIContentPart{
+						Type: "image_url",
+						ImageURL: &OpenAIImageURL{
+							URL: url,
+						},
+					})
+				}
+			}
+		}
+
+		var finalContent interface{}
+		if len(contentParts) > 0 {
+			// If we have multiple parts or non-text parts, use the array
+			// But if it's just one text part, OpenAI prefers string? No, array is fine for gpt-4-vision.
+			// However, for backward compatibility with non-vision models, string is safer if only text.
+			if len(contentParts) == 1 && contentParts[0].Type == "text" {
+				finalContent = contentParts[0].Text
+			} else {
+				finalContent = contentParts
+			}
+		} else {
+			// Fallback to legacy extraction if parts are empty (shouldn't happen with new logic but safe)
+			txt := protocol.ExtractTextFromMessage(msg)
+			finalContent = txt
+		}
 
 		openaiMsg := OpenAIMessage{
 			Role:    roleToOpenAI(msg.Role),
-			Content: &content,
+			Content: finalContent,
 		}
 
 		toolCalls := protocol.GetToolCallsFromMessage(msg)

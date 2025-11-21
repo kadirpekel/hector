@@ -228,7 +228,7 @@ message FilePart {
     string file_with_uri = 1;
     bytes file_with_bytes = 2;
   }
-  string mime_type = 3;
+  string media_type = 3;
   string name = 4;
 }
 // --8<-- [end:FilePart]

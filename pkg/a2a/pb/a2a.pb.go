@@ -527,7 +527,7 @@ type FilePart struct {
 	//	*FilePart_FileWithUri
 	//	*FilePart_FileWithBytes
 	File          isFilePart_File `protobuf_oneof:"file"`
-	MimeType      string          `protobuf:"bytes,3,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
+	MediaType     string          `protobuf:"bytes,3,opt,name=media_type,json=mediaType,proto3" json:"media_type,omitempty"`
 	Name          string          `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -588,9 +588,9 @@ func (x *FilePart) GetFileWithBytes() []byte {
 	return nil
 }
 
-func (x *FilePart) GetMimeType() string {
+func (x *FilePart) GetMediaType() string {
 	if x != nil {
-		return x.MimeType
+		return x.MediaType
 	}
 	return ""
 }

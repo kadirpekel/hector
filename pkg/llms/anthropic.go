@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -75,6 +76,13 @@ type AnthropicContent struct {
 	Input     *map[string]interface{} `json:"input,omitempty"`
 	ToolUseID string                  `json:"tool_use_id,omitempty"`
 	Content   string                  `json:"content,omitempty"`
+	Source    *AnthropicImageSource   `json:"source,omitempty"`
+}
+
+type AnthropicImageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
 }
 
 type AnthropicDelta struct {
@@ -284,13 +292,65 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 		}
 
 		if msg.Role == pb.Role_ROLE_USER {
+			var contents []AnthropicContent
 
-			textContent := protocol.ExtractTextFromMessage(msg)
+			for _, part := range msg.Parts {
+				if text := part.GetText(); text != "" {
+					contents = append(contents, AnthropicContent{
+						Type: "text",
+						Text: text,
+					})
+				} else if file := part.GetFile(); file != nil {
+					// Handle file parts (images)
+					mediaType := file.GetMediaType()
+
+					if uri := file.GetFileWithUri(); uri != "" {
+						// Anthropic Messages API doesn't support image URLs - only base64 data
+						// URI-based images are silently skipped. Callers should:
+						// 1. Download the image and convert to bytes, OR
+						// 2. Use a different provider that supports URLs (e.g., OpenAI)
+						continue
+					}
+
+					if bytes := file.GetFileWithBytes(); len(bytes) > 0 {
+						// Validate media type is provided
+						if mediaType == "" {
+							// Default to jpeg but this should be set by caller
+							mediaType = "image/jpeg"
+						}
+
+						// Validate it's an image type
+						if !strings.HasPrefix(mediaType, "image/") {
+							continue // Skip non-image files
+						}
+
+						// Check size limit (5MB for Anthropic)
+						const maxImageSize = 5 * 1024 * 1024
+						if len(bytes) > maxImageSize {
+							continue // Skip oversized images
+						}
+
+						base64Data := base64.StdEncoding.EncodeToString(bytes)
+						contents = append(contents, AnthropicContent{
+							Type: "image",
+							Source: &AnthropicImageSource{
+								Type:      "base64",
+								MediaType: mediaType,
+								Data:      base64Data,
+							},
+						})
+					}
+				}
+			}
+
+			// If no content found (e.g. empty message), skip or add empty text
+			if len(contents) == 0 {
+				contents = append(contents, AnthropicContent{Type: "text", Text: ""})
+			}
+
 			anthropicMessages = append(anthropicMessages, AnthropicMessage{
-				Role: "user",
-				Content: []AnthropicContent{
-					{Type: "text", Text: textContent},
-				},
+				Role:    "user",
+				Content: contents,
 			})
 			continue
 		}

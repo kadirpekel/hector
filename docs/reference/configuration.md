@@ -517,6 +517,32 @@ agents:
     # Visibility
     visibility: "public"          # public|internal|private
     
+    # A2A Card Configuration (Agent Card)
+    a2a:
+      version: "0.3.0"            # A2A protocol version
+      input_modes:                # Supported input media types (MIME types)
+        - "text/plain"
+        - "application/json"
+        - "image/jpeg"            # Multi-modality: images
+        - "image/png"
+        - "image/gif"
+        - "image/webp"
+      output_modes:               # Supported output media types
+        - "text/plain"
+        - "application/json"
+      skills:                     # Agent capabilities/skills
+        - id: "image_analysis"
+          name: "Image Analysis"
+          description: "Analyze images and answer questions about their content"
+          examples:
+            - "What objects are in this image?"
+            - "Describe this photo"
+      provider:                  # Optional: Service provider information
+        name: "My Company"
+        url: "https://example.com"
+      preferred_transport: "json-rpc"  # Override global preferred transport
+      documentation_url: "https://docs.example.com"  # Optional: Documentation link
+    
     # Task Configuration (for async tasks, HITL, and checkpoint recovery)
     task:
       backend: "memory"           # "memory" (default) or "sql"
@@ -594,6 +620,90 @@ agents:
 - See [Tasks](../core-concepts/tasks.md#checkpoint-recovery) for usage guide
 
 **See:** [Tasks](../core-concepts/tasks.md) for complete task management guide.
+
+### A2A Card Configuration
+
+Configure the agent's A2A card, which advertises capabilities to clients:
+
+```yaml
+agents:
+  vision_assistant:
+    name: "Vision Assistant"
+    llm: "gpt-4o"
+    
+    a2a:
+      version: "0.3.0"            # A2A protocol version
+      input_modes:                # Supported input media types (MIME types)
+        - "text/plain"
+        - "application/json"
+        - "image/jpeg"            # Multi-modality: images
+        - "image/png"
+        - "image/gif"
+        - "image/webp"
+      output_modes:               # Supported output media types
+        - "text/plain"
+        - "application/json"
+      skills:                     # Agent capabilities/skills
+        - id: "image_analysis"
+          name: "Image Analysis"
+          description: "Analyze images and answer questions about their content"
+          examples:
+            - "What objects are in this image?"
+            - "Describe this photo"
+        - id: "image_generation"
+          name: "Image Generation"
+          description: "Generate images from text descriptions"
+          examples:
+            - "Create an image of a sunset"
+      provider:                  # Optional: Service provider information
+        name: "My Company"
+        url: "https://example.com"
+      preferred_transport: "json-rpc"  # Override global preferred transport
+      documentation_url: "https://docs.example.com"  # Optional: Documentation link
+```
+
+**Default Input Modes:**
+
+If `input_modes` is not specified, agents automatically include:
+- `text/plain`
+- `application/json`
+- `image/jpeg`
+- `image/png`
+- `image/gif`
+- `image/webp`
+
+This enables multi-modality support by default for all agents using vision-capable LLM models.
+
+**A2A Configuration Options:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `version` | string | ✅ | A2A protocol version (e.g., "0.3.0") |
+| `input_modes` | `[]string` | ✅ | Supported input MIME types |
+| `output_modes` | `[]string` | ✅ | Supported output MIME types |
+| `skills` | `[]A2ASkillConfig` | ✅ | Agent capabilities/skills |
+| `provider` | `A2AProviderConfig` | ❌ | Service provider information |
+| `preferred_transport` | string | ❌ | Override global transport preference |
+| `documentation_url` | string | ❌ | Link to agent documentation |
+
+**Skill Configuration:**
+
+```yaml
+skills:
+  - id: "skill_id"              # Unique identifier
+    name: "Skill Name"          # Display name
+    description: "Description"  # What the skill does
+    tags:                       # Optional: Categorization
+      - "vision"
+      - "analysis"
+    examples:                   # Optional: Example queries
+      - "Example query 1"
+      - "Example query 2"
+```
+
+**See:** [Multi-Modality Support](../core-concepts/multi-modality.md) for complete documentation on sending images to agents.
+
+**See:** [A2A Protocol](../reference/a2a-protocol.md) for protocol details.
 
 ### External A2A Agent
 
@@ -769,7 +879,23 @@ tools:
     max_limit: 50            # Maximum results allowed (default limit comes from agent.search.top_k)
   
   todo_write:
-    
+    type: "todo"
+  
+  generate_image:
+    type: "generate_image"
+    config:
+      api_key: "${OPENAI_API_KEY}"  # Required for DALL-E
+      model: "dall-e-3"              # Default: dall-e-3
+      size: "1024x1024"              # Default: 1024x1024
+      quality: "standard"            # standard or hd
+      style: "vivid"                 # vivid or natural
+      timeout: "60s"                 # Default: 60s
+  
+  screenshot_page:
+    type: "screenshot_page"
+    config:
+      timeout: "30s"                 # Default: 30s
+    # Note: Currently a placeholder - requires headless browser integration
 ```
 
 ### Human-in-the-Loop (Tool Approval)

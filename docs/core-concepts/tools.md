@@ -106,7 +106,7 @@ document_stores:
 
     You can opt-in to whitelist (`allowed_*`) or blacklist (`denied_*`) specific extensions/commands as needed.
 
-Hector includes 10 ready-to-use tools:
+Hector includes 12 ready-to-use tools:
 
 ### 1. execute_command
 
@@ -513,7 +513,99 @@ Agent: The weather in San Francisco is...
 
 ---
 
-### 11. delete_file
+### 12. generate_image
+
+Generate images from text prompts using DALL-E 3:
+
+```yaml
+agents:
+  creative:
+    tools: ["generate_image"]
+
+tools:
+  generate_image:
+    type: "generate_image"
+    config:
+      api_key: "${OPENAI_API_KEY}"  # Required
+      model: "dall-e-3"              # Default: dall-e-3
+      size: "1024x1024"              # Default: 1024x1024
+      quality: "standard"            # standard or hd
+      style: "vivid"                 # vivid or natural
+      timeout: "60s"                 # Default: 60s
+```
+
+**Tool Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `prompt` | string | ✅ | Text description of image to generate |
+| `size` | string | ❌ | Image size (e.g., "1024x1024", "1792x1024", "1024x1792") |
+| `quality` | string | ❌ | "standard" or "hd" |
+| `style` | string | ❌ | "vivid" or "natural" |
+
+**Use cases:** Creative image generation, visual content creation, design mockups
+
+**Example:**
+```
+User: Generate an image of a sunset over mountains
+Agent: generate_image(
+  prompt="A beautiful sunset over snow-capped mountains",
+  size="1024x1024",
+  quality="hd",
+  style="vivid"
+)
+Agent: Image generated successfully: https://oaidalleapiprodscus.blob.core.windows.net/...
+```
+
+**Configuration Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `api_key` | string | Required | OpenAI API key for DALL-E |
+| `model` | string | `dall-e-3` | Model to use (currently only dall-e-3 supported) |
+| `size` | string | `1024x1024` | Image dimensions |
+| `quality` | string | `standard` | Image quality: `standard` or `hd` |
+| `style` | string | `vivid` | Image style: `vivid` or `natural` |
+| `timeout` | string | `60s` | Request timeout |
+
+!!! note "API Key Required"
+    The `generate_image` tool requires an OpenAI API key configured in the tool's `config.api_key` field or via the `OPENAI_API_KEY` environment variable.
+
+---
+
+### 13. screenshot_page
+
+**Status:** ⚠️ Placeholder (not yet implemented)
+
+Take screenshots of web pages (requires headless browser integration):
+
+```yaml
+tools:
+  screenshot_page:
+    type: "screenshot_page"
+    config:
+      timeout: "30s"
+```
+
+**Tool Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `url` | string | ✅ | The URL to screenshot |
+
+**Use cases:** Web page capture, visual testing, documentation
+
+**Note:** This tool is currently a placeholder and will return an error when called. Full implementation requires headless browser integration (Chrome DevTools Protocol, Playwright, etc.).
+
+**Future Implementation:**
+- Headless browser integration (Chrome DevTools Protocol or Playwright)
+- Full page screenshots
+- Element-specific screenshots
+- PDF generation
+
+---
+
+### 14. delete_file
 
 Delete files from the file system:
 
@@ -974,8 +1066,19 @@ agents:
 
 ---
 
+## Vision Tools
+
+Hector includes vision tools for image generation and processing. See [Multi-Modality Support](multi-modality.md) for complete documentation on sending images to agents and using vision tools.
+
+**Vision Tools:**
+- **[generate_image](#12-generate_image)** - Generate images using DALL-E 3
+- **[screenshot_page](#13-screenshot_page)** - Take web page screenshots (placeholder)
+
+---
+
 ## Next Steps
 
+- **[Multi-Modality Support](multi-modality.md)** - Send images to agents and use vision tools
 - **[RAG & Semantic Search](rag.md)** - Set up semantic code search
 - **[Reasoning Strategies](reasoning.md)** - How agents use tools
 - **[Multi-Agent Orchestration](multi-agent.md)** - Use agent_call

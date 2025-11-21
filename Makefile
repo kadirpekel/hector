@@ -68,7 +68,7 @@ uninstall:
 # Run tests
 test:
 	@echo "Running tests..."
-	go test -v ./...
+	go test -v ./pkg/... ./cmd/...
 
 # Run tests with coverage
 test-coverage:
@@ -98,7 +98,7 @@ fmt:
 # Run go vet
 vet:
 	@echo "Running go vet..."
-	go vet ./...
+	go vet ./pkg/... ./cmd/...
 
 # Build release binaries for multiple platforms
 release:
@@ -175,7 +175,7 @@ lint:
 		echo "golangci-lint not found. Installing..."; \
 		$(MAKE) install-lint; \
 	fi
-	export PATH=$$PATH:$(shell go env GOPATH)/bin && golangci-lint run --timeout=5m
+	export PATH=$$PATH:$(shell go env GOPATH)/bin && golangci-lint run --timeout=5m ./pkg/... ./cmd/...
 
 # Run all quality checks
 quality: fmt vet lint test

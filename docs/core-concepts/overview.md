@@ -112,6 +112,7 @@ agents:
       - "execute_command"
       - "search"
       - "agent_call"
+      - "generate_image"  # Vision tools
 ```
 
 See [Tools](tools.md) for details.
@@ -275,6 +276,7 @@ See [Configuration Reference](../reference/configuration.md) for all options.
 Learn about the core components of agents:
 
 - **[LLM Providers](llm-providers.md)** - Connect to OpenAI, Anthropic, or Gemini
+- **[Multi-Modality Support](multi-modality.md)** - Send images, video, and audio to agents
 - **[Prompts](prompts.md)** - Customize agent behavior and personality
 - **[Memory](memory.md)** - Manage conversation history and context
 - **[Tools](tools.md)** - Give agents capabilities

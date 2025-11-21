@@ -76,6 +76,7 @@ nav:
     - Prompts: core-concepts/prompts.md
     - Reasoning: core-concepts/reasoning.md
     - Tools: core-concepts/tools.md
+    - Multi-Modality: core-concepts/multi-modality.md
     - Memory: core-concepts/memory.md
     # RAG & Search
     - RAG & Search: core-concepts/rag.md

@@ -33,10 +33,26 @@ service LLMProvider {
   rpc GetModelInfo(Empty) returns (ModelInfo);
 }
 
+// ContentPart represents a part of the message content
+message ContentPart {
+  enum Type {
+    TEXT = 0;
+    IMAGE_URL = 1;
+    IMAGE_BASE64 = 2;
+    AUDIO_BASE64 = 3;
+    VIDEO_BASE64 = 4;
+  }
+  
+  Type type = 1;
+  string text = 2;
+  string media_type = 3; // MIME type, e.g. "image/jpeg", "audio/wav"
+  string data = 4;       // URL or Base64 string
+}
+
 // Message represents a conversation message
 message Message {
   string role = 1;    // "user", "assistant", "system", "tool"
-  string content = 2;
+  repeated ContentPart content = 2; // Multi-modal content
   repeated ToolCall tool_calls = 3;
   string tool_call_id = 4;
 }
