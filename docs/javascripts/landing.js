@@ -10,6 +10,7 @@ let canvasHeight = 0;
 let initialized = false;
 let mouseX = undefined;
 let mouseY = undefined;
+let lastFrameTime = Date.now();
 
 // Wait for element to exist
 function waitForElement(id, callback, maxAttempts = 50) {
@@ -86,13 +87,16 @@ function initTypewriter() {
         this.pulse = Math.random() * Math.PI * 2;
             }
 
-    update(mouseX, mouseY) {
+    update(mouseX, mouseY, deltaTime = 1) {
+        // Normalize deltaTime to 60fps baseline (16.67ms per frame)
+        const dt = Math.min(deltaTime / 16.67, 3); // Cap at 3x to prevent huge jumps
+
         // Always update pulse first for breathing effect
-        this.pulse += 0.02;
+        this.pulse += 0.02 * dt;
 
         // CRITICAL: Update position with velocity - particles MUST move
-        this.x += this.vx;
-        this.y += this.vy;
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
 
         // Enhanced mouse interaction - particles move away from mouse with stronger force
         if (mouseX !== undefined && mouseY !== undefined) {
@@ -103,8 +107,8 @@ function initTypewriter() {
 
             if (dist < maxDist && dist > 0) {
                 const force = Math.pow((maxDist - dist) / maxDist, 2) * 0.3; // Stronger, smoother force
-                this.vx += (dx / dist) * force;
-                this.vy += (dy / dist) * force;
+                this.vx += (dx / dist) * force * dt;
+                this.vy += (dy / dist) * force * dt;
 
                 // Also increase size when near mouse
                 this.size = this.baseSize + Math.sin(this.pulse) * 0.5 + (maxDist - dist) / maxDist * 1.5;
@@ -218,13 +222,17 @@ function initCanvas() {
             }
         }
 
-        // Track last frame time for watchdog
-        let lastFrameTime = Date.now();
+        // Track last frame time for watchdog and delta time
+        let lastAnimFrameTime = Date.now();
 
         function animate() {
             // Always request next frame FIRST to ensure loop never stops
             canvasAnimationId = requestAnimationFrame(animate);
-            lastFrameTime = Date.now(); // Update frame time
+
+            // Calculate delta time
+            const now = Date.now();
+            const deltaTime = now - lastAnimFrameTime;
+            lastAnimFrameTime = now;
             
             try {
                 if (!canvasCtx || canvasWidth === 0 || canvasHeight === 0) {
@@ -237,9 +245,9 @@ function initCanvas() {
                 
                 canvasCtx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-                // Update and draw particles
+                // Update and draw particles with delta time
                 canvasParticles.forEach((p, index) => {
-                    p.update(mouseX, mouseY);
+                    p.update(mouseX, mouseY, deltaTime);
                     p.draw(canvasCtx);
 
                     // Draw connections - more visible and dense
@@ -271,7 +279,7 @@ function initCanvas() {
         const watchdog = setInterval(() => {
             const now = Date.now();
             // Check if animation stopped (no frame updates in 2 seconds)
-            if (now - lastFrameTime > 2000) {
+            if (now - lastAnimFrameTime > 2000) {
                 if (canvasAnimationId === null) {
                     console.log('Animation stopped, restarting...');
                     start();

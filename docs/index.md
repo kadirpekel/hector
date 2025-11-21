@@ -52,135 +52,162 @@ is_homepage: true
     </div>
     <div class="story-visual">
       <svg id="a2a-federation" viewBox="50 60 400 300" preserveAspectRatio="xMidYMin meet" xmlns="http://www.w3.org/2000/svg">
-      <!-- Enhanced neon glow filters for 3D effect -->
+      <!-- Matrix-themed sharp neon glow filters -->
       <defs>
-        <filter id="glow-yellow" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+        <!-- Sharp vertex glow - Matrix green -->
+        <filter id="matrix-glow-green" x="-150%" y="-150%" width="400%" height="400%">
+          <feGaussianBlur stdDeviation="2" result="blur1"/>
+          <feGaussianBlur stdDeviation="0.5" result="blur2"/>
           <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="blur1"/>
+            <feMergeNode in="blur2"/>
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
-        <filter id="glow-purple" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+        <!-- Sharp vertex glow - Cyan -->
+        <filter id="matrix-glow-cyan" x="-150%" y="-150%" width="400%" height="400%">
+          <feGaussianBlur stdDeviation="2" result="blur1"/>
+          <feGaussianBlur stdDeviation="0.5" result="blur2"/>
           <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="blur1"/>
+            <feMergeNode in="blur2"/>
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
-        <filter id="glow-cyan" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+        <!-- Sharp vertex glow - Magenta -->
+        <filter id="matrix-glow-magenta" x="-150%" y="-150%" width="400%" height="400%">
+          <feGaussianBlur stdDeviation="2" result="blur1"/>
+          <feGaussianBlur stdDeviation="0.5" result="blur2"/>
           <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="blur1"/>
+            <feMergeNode in="blur2"/>
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
 
-        <!-- Laser beam gradient -->
-        <linearGradient id="laser-yellow" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" style="stop-color:rgba(251, 191, 36, 0); stop-opacity:0" />
-          <stop offset="50%" style="stop-color:#fbbf24; stop-opacity:1" />
-          <stop offset="100%" style="stop-color:rgba(251, 191, 36, 0); stop-opacity:0" />
+        <!-- Laser beam gradients - Matrix style -->
+        <linearGradient id="laser-matrix-green" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:rgba(0, 255, 65, 0); stop-opacity:0" />
+          <stop offset="50%" style="stop-color:#00FF41; stop-opacity:1" />
+          <stop offset="100%" style="stop-color:rgba(0, 255, 65, 0); stop-opacity:0" />
         </linearGradient>
-        <linearGradient id="laser-cyan" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" style="stop-color:rgba(6, 182, 212, 0); stop-opacity:0" />
-          <stop offset="50%" style="stop-color:#06b6d4; stop-opacity:1" />
-          <stop offset="100%" style="stop-color:rgba(6, 182, 212, 0); stop-opacity:0" />
+        <linearGradient id="laser-matrix-cyan" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" style="stop-color:rgba(0, 255, 255, 0); stop-opacity:0" />
+          <stop offset="50%" style="stop-color:#00FFFF; stop-opacity:1" />
+          <stop offset="100%" style="stop-color:rgba(0, 255, 255, 0); stop-opacity:0" />
         </linearGradient>
-        <linearGradient id="laser-purple" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" style="stop-color:rgba(139, 92, 246, 0); stop-opacity:0" />
-          <stop offset="50%" style="stop-color:#8b5cf6; stop-opacity:1" />
-          <stop offset="100%" style="stop-color:rgba(139, 92, 246, 0); stop-opacity:0" />
+        <linearGradient id="laser-matrix-magenta" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" style="stop-color:rgba(255, 0, 255, 0); stop-opacity:0" />
+          <stop offset="50%" style="stop-color:#FF00FF; stop-opacity:1" />
+          <stop offset="100%" style="stop-color:rgba(255, 0, 255, 0); stop-opacity:0" />
         </linearGradient>
       </defs>
 
-      <!-- Laser-like connections with animated glow -->
+      <!-- Matrix-style laser connections -->
       <g class="connections">
-        <!-- A ↔ B: Horizontal laser beam -->
+        <!-- A ↔ B: Horizontal Matrix green beam -->
         <line x1="170" y1="105" x2="330" y2="105"
-              stroke="rgba(251, 191, 36, 0.3)" stroke-width="2" fill="none"/>
+              stroke="rgba(0, 255, 65, 0.2)" stroke-width="1.5" fill="none"/>
         <line x1="170" y1="105" x2="330" y2="105"
-              stroke="url(#laser-yellow)" stroke-width="1.5" fill="none">
-          <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
+              stroke="url(#laser-matrix-green)" stroke-width="1" fill="none">
+          <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/>
         </line>
-        <text x="250" y="85" text-anchor="middle" fill="rgba(255, 255, 255, 0.9)"
-              font-size="11" font-weight="600" font-family="Inter, sans-serif">A2A Protocol</text>
+        <text x="250" y="85" text-anchor="middle" fill="#00FF41"
+              font-size="11" font-weight="600" font-family="'Courier New', monospace">A2A Protocol</text>
 
-        <!-- A → C: L-shape laser -->
+        <!-- A → C: L-shape cyan beam -->
         <path d="M 120 130 L 120 305 Q 120 325 140 325 L 200 325"
-              stroke="rgba(6, 182, 212, 0.3)" stroke-width="2" fill="none"/>
+              stroke="rgba(0, 255, 255, 0.2)" stroke-width="1.5" fill="none"/>
         <path d="M 120 130 L 120 305 Q 120 325 140 325 L 200 325"
-              stroke="url(#laser-cyan)" stroke-width="1.5" fill="none">
-          <animate attributeName="opacity" values="0.5;1;0.5" dur="2.3s" repeatCount="indefinite"/>
+              stroke="url(#laser-matrix-cyan)" stroke-width="1" fill="none">
+          <animate attributeName="opacity" values="0.6;1;0.6" dur="2.3s" repeatCount="indefinite"/>
         </path>
 
-        <!-- B → C: L-shape laser -->
+        <!-- B → C: L-shape magenta beam -->
         <path d="M 380 130 L 380 305 Q 380 325 360 325 L 300 325"
-              stroke="rgba(139, 92, 246, 0.3)" stroke-width="2" fill="none"/>
+              stroke="rgba(255, 0, 255, 0.2)" stroke-width="1.5" fill="none"/>
         <path d="M 380 130 L 380 305 Q 380 325 360 325 L 300 325"
-              stroke="url(#laser-purple)" stroke-width="1.5" fill="none">
-          <animate attributeName="opacity" values="0.5;1;0.5" dur="2.5s" repeatCount="indefinite"/>
+              stroke="url(#laser-matrix-magenta)" stroke-width="1" fill="none">
+          <animate attributeName="opacity" values="0.6;1;0.6" dur="2.5s" repeatCount="indefinite"/>
         </path>
       </g>
 
-      <!-- Animated light particles (smaller, brighter) -->
+      <!-- Matrix data particles -->
       <g class="particles">
-        <circle r="3" fill="#fbbf24" filter="url(#glow-yellow)">
+        <circle r="2" fill="#00FF41" filter="url(#matrix-glow-green)">
           <animateMotion dur="3s" repeatCount="indefinite" path="M 170 105 L 330 105"/>
         </circle>
-        <circle r="3" fill="#06b6d4" filter="url(#glow-cyan)">
+        <circle r="2" fill="#00FFFF" filter="url(#matrix-glow-cyan)">
           <animateMotion dur="4s" repeatCount="indefinite" path="M 120 130 L 120 305 Q 120 325 140 325 L 200 325"/>
         </circle>
-        <circle r="3" fill="#8b5cf6" filter="url(#glow-purple)">
+        <circle r="2" fill="#FF00FF" filter="url(#matrix-glow-magenta)">
           <animateMotion dur="4.5s" repeatCount="indefinite" path="M 380 130 L 380 305 Q 380 325 360 325 L 300 325"/>
         </circle>
       </g>
 
-      <!-- 3D Neon Cube Nodes -->
+      <!-- Matrix-themed 3D Neon Cube Nodes -->
       <g class="nodes">
-        <!-- Agent A - 3D Cube (Yellow/Orange) -->
+        <!-- Agent A - 3D Matrix Cube (Matrix Green) -->
         <g class="node" id="node-a">
           <!-- Back face (darker) -->
-          <path d="M 78,83 L 165,83 L 173,76 L 86,76 Z" fill="rgba(251, 191, 36, 0.4)"/>
+          <path d="M 78,83 L 165,83 L 173,76 L 86,76 Z" fill="rgba(0, 255, 65, 0.3)"
+                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.3"/>
           <!-- Top face (lighter) -->
-          <path d="M 78,83 L 86,76 L 86,124 L 78,131 Z" fill="rgba(251, 191, 36, 0.6)"/>
-          <!-- Front face (brightest) with neon edge -->
-          <rect x="78" y="83" width="87" height="48" rx="4"
-                fill="rgba(251, 191, 36, 0.15)"
-                stroke="#fbbf24" stroke-width="2" filter="url(#glow-yellow)"/>
-          <text x="121" y="111" text-anchor="middle" fill="#fbbf24"
-                font-size="14" font-weight="700" font-family="Inter, sans-serif">Agent A</text>
+          <path d="M 78,83 L 86,76 L 86,124 L 78,131 Z" fill="rgba(0, 255, 65, 0.4)"
+                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.4"/>
+          <!-- Front face (brightest) with sharp neon edge -->
+          <rect x="78" y="83" width="87" height="48" rx="2"
+                fill="rgba(0, 255, 65, 0.1)"
+                stroke="#00FF41" stroke-width="1.5" filter="url(#matrix-glow-green)"/>
+          <!-- Sharp vertex markers -->
+          <circle cx="78" cy="83" r="2" fill="#00FF41" filter="url(#matrix-glow-green)"/>
+          <circle cx="165" cy="83" r="2" fill="#00FF41" filter="url(#matrix-glow-green)"/>
+          <circle cx="78" cy="131" r="2" fill="#00FF41" filter="url(#matrix-glow-green)"/>
+          <circle cx="165" cy="131" r="2" fill="#00FF41" filter="url(#matrix-glow-green)"/>
+          <text x="121" y="111" text-anchor="middle" fill="#00FF41"
+                font-size="13" font-weight="600" font-family="'Courier New', monospace">Agent A</text>
         </g>
 
-        <!-- Agent B - 3D Cube (Purple) -->
+        <!-- Agent B - 3D Matrix Cube (Magenta) -->
         <g class="node" id="node-b">
           <!-- Back face -->
-          <path d="M 338,83 L 422,83 L 430,76 L 346,76 Z" fill="rgba(139, 92, 246, 0.4)"/>
+          <path d="M 338,83 L 422,83 L 430,76 L 346,76 Z" fill="rgba(255, 0, 255, 0.3)"
+                stroke="#FF00FF" stroke-width="0.5" stroke-opacity="0.3"/>
           <!-- Top face -->
-          <path d="M 338,83 L 346,76 L 346,124 L 338,131 Z" fill="rgba(139, 92, 246, 0.6)"/>
-          <!-- Front face with neon edge -->
-          <rect x="338" y="83" width="84" height="48" rx="4"
-                fill="rgba(139, 92, 246, 0.15)"
-                stroke="#8b5cf6" stroke-width="2" filter="url(#glow-purple)"/>
-          <text x="380" y="111" text-anchor="middle" fill="#8b5cf6"
-                font-size="14" font-weight="700" font-family="Inter, sans-serif">Agent B</text>
+          <path d="M 338,83 L 346,76 L 346,124 L 338,131 Z" fill="rgba(255, 0, 255, 0.4)"
+                stroke="#FF00FF" stroke-width="0.5" stroke-opacity="0.4"/>
+          <!-- Front face with sharp neon edge -->
+          <rect x="338" y="83" width="84" height="48" rx="2"
+                fill="rgba(255, 0, 255, 0.1)"
+                stroke="#FF00FF" stroke-width="1.5" filter="url(#matrix-glow-magenta)"/>
+          <!-- Sharp vertex markers -->
+          <circle cx="338" cy="83" r="2" fill="#FF00FF" filter="url(#matrix-glow-magenta)"/>
+          <circle cx="422" cy="83" r="2" fill="#FF00FF" filter="url(#matrix-glow-magenta)"/>
+          <circle cx="338" cy="131" r="2" fill="#FF00FF" filter="url(#matrix-glow-magenta)"/>
+          <circle cx="422" cy="131" r="2" fill="#FF00FF" filter="url(#matrix-glow-magenta)"/>
+          <text x="380" y="111" text-anchor="middle" fill="#FF00FF"
+                font-size="13" font-weight="600" font-family="'Courier New', monospace">Agent B</text>
         </g>
 
-        <!-- Agent C - 3D Cube (Cyan) -->
+        <!-- Agent C - 3D Matrix Cube (Cyan) -->
         <g class="node" id="node-c">
           <!-- Back face -->
-          <path d="M 208,303 L 295,303 L 303,296 L 216,296 Z" fill="rgba(6, 182, 212, 0.4)"/>
+          <path d="M 208,303 L 295,303 L 303,296 L 216,296 Z" fill="rgba(0, 255, 255, 0.3)"
+                stroke="#00FFFF" stroke-width="0.5" stroke-opacity="0.3"/>
           <!-- Top face -->
-          <path d="M 208,303 L 216,296 L 216,344 L 208,351 Z" fill="rgba(6, 182, 212, 0.6)"/>
-          <!-- Front face with neon edge -->
-          <rect x="208" y="303" width="87" height="48" rx="4"
-                fill="rgba(6, 182, 212, 0.15)"
-                stroke="#06b6d4" stroke-width="2" filter="url(#glow-cyan)"/>
-          <text x="251" y="331" text-anchor="middle" fill="#06b6d4"
-                font-size="14" font-weight="700" font-family="Inter, sans-serif">Agent C</text>
+          <path d="M 208,303 L 216,296 L 216,344 L 208,351 Z" fill="rgba(0, 255, 255, 0.4)"
+                stroke="#00FFFF" stroke-width="0.5" stroke-opacity="0.4"/>
+          <!-- Front face with sharp neon edge -->
+          <rect x="208" y="303" width="87" height="48" rx="2"
+                fill="rgba(0, 255, 255, 0.1)"
+                stroke="#00FFFF" stroke-width="1.5" filter="url(#matrix-glow-cyan)"/>
+          <!-- Sharp vertex markers -->
+          <circle cx="208" cy="303" r="2" fill="#00FFFF" filter="url(#matrix-glow-cyan)"/>
+          <circle cx="295" cy="303" r="2" fill="#00FFFF" filter="url(#matrix-glow-cyan)"/>
+          <circle cx="208" cy="351" r="2" fill="#00FFFF" filter="url(#matrix-glow-cyan)"/>
+          <circle cx="295" cy="351" r="2" fill="#00FFFF" filter="url(#matrix-glow-cyan)"/>
+          <text x="251" y="331" text-anchor="middle" fill="#00FFFF"
+                font-size="13" font-weight="600" font-family="'Courier New', monospace">Agent C</text>
         </g>
       </g>
     </svg>
@@ -202,150 +229,164 @@ is_homepage: true
     </div>
     <div class="story-visual">
       <svg id="rag-visualization" viewBox="50 60 350 240" preserveAspectRatio="xMidYMin meet" xmlns="http://www.w3.org/2000/svg">
-      <!-- Enhanced neon glow filters for 3D effect -->
+      <!-- Matrix-themed sharp neon glow filters -->
       <defs>
-        <filter id="rag-glow-orange" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+        <filter id="rag-matrix-glow-green" x="-150%" y="-150%" width="400%" height="400%">
+          <feGaussianBlur stdDeviation="2" result="blur1"/>
+          <feGaussianBlur stdDeviation="0.5" result="blur2"/>
           <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="blur1"/>
+            <feMergeNode in="blur2"/>
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
-        <filter id="rag-glow-purple" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+        <filter id="rag-matrix-glow-cyan" x="-150%" y="-150%" width="400%" height="400%">
+          <feGaussianBlur stdDeviation="2" result="blur1"/>
+          <feGaussianBlur stdDeviation="0.5" result="blur2"/>
           <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="blur1"/>
+            <feMergeNode in="blur2"/>
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
-        <filter id="rag-glow-blue" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+        <filter id="rag-matrix-glow-magenta" x="-150%" y="-150%" width="400%" height="400%">
+          <feGaussianBlur stdDeviation="2" result="blur1"/>
+          <feGaussianBlur stdDeviation="0.5" result="blur2"/>
           <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-        <filter id="rag-glow-cyan" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-          <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="blur1"/>
+            <feMergeNode in="blur2"/>
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
 
-        <!-- Laser beam gradients -->
-        <linearGradient id="rag-laser-yellow">
-          <stop offset="0%" style="stop-color:rgba(251, 191, 36, 0); stop-opacity:0" />
-          <stop offset="50%" style="stop-color:#fbbf24; stop-opacity:1" />
-          <stop offset="100%" style="stop-color:rgba(251, 191, 36, 0); stop-opacity:0" />
+        <!-- Matrix laser beam gradients -->
+        <linearGradient id="rag-laser-matrix-green">
+          <stop offset="0%" style="stop-color:rgba(0, 255, 65, 0); stop-opacity:0" />
+          <stop offset="50%" style="stop-color:#00FF41; stop-opacity:1" />
+          <stop offset="100%" style="stop-color:rgba(0, 255, 65, 0); stop-opacity:0" />
         </linearGradient>
-        <linearGradient id="rag-laser-purple">
-          <stop offset="0%" style="stop-color:rgba(139, 92, 246, 0); stop-opacity:0" />
-          <stop offset="50%" style="stop-color:#8b5cf6; stop-opacity:1" />
-          <stop offset="100%" style="stop-color:rgba(139, 92, 246, 0); stop-opacity:0" />
+        <linearGradient id="rag-laser-matrix-cyan">
+          <stop offset="0%" style="stop-color:rgba(0, 255, 255, 0); stop-opacity:0" />
+          <stop offset="50%" style="stop-color:#00FFFF; stop-opacity:1" />
+          <stop offset="100%" style="stop-color:rgba(0, 255, 255, 0); stop-opacity:0" />
         </linearGradient>
-        <linearGradient id="rag-laser-blue">
-          <stop offset="0%" style="stop-color:rgba(59, 130, 246, 0); stop-opacity:0" />
-          <stop offset="50%" style="stop-color:#3b82f6; stop-opacity:1" />
-          <stop offset="100%" style="stop-color:rgba(59, 130, 246, 0); stop-opacity:0" />
-        </linearGradient>
-        <linearGradient id="rag-laser-cyan">
-          <stop offset="0%" style="stop-color:rgba(6, 182, 212, 0); stop-opacity:0" />
-          <stop offset="50%" style="stop-color:#06b6d4; stop-opacity:1" />
-          <stop offset="100%" style="stop-color:rgba(6, 182, 212, 0); stop-opacity:0" />
+        <linearGradient id="rag-laser-matrix-magenta">
+          <stop offset="0%" style="stop-color:rgba(255, 0, 255, 0); stop-opacity:0" />
+          <stop offset="50%" style="stop-color:#FF00FF; stop-opacity:1" />
+          <stop offset="100%" style="stop-color:rgba(255, 0, 255, 0); stop-opacity:0" />
         </linearGradient>
       </defs>
 
-      <!-- Laser-like connections -->
+      <!-- Matrix-style laser connections -->
       <g class="connections">
-        <!-- SQL → Index -->
-        <path d="M 170 85 L 220 150" stroke="rgba(251, 191, 36, 0.3)" stroke-width="2" fill="none"/>
-        <path d="M 170 85 L 220 150" stroke="url(#rag-laser-yellow)" stroke-width="1.5" fill="none">
-          <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
+        <!-- SQL → Index: Matrix green beam -->
+        <path d="M 170 85 L 220 150" stroke="rgba(0, 255, 65, 0.2)" stroke-width="1.5" fill="none"/>
+        <path d="M 170 85 L 220 150" stroke="url(#rag-laser-matrix-green)" stroke-width="1" fill="none">
+          <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/>
         </path>
 
-        <!-- API → Index -->
-        <path d="M 170 150 L 220 150" stroke="rgba(139, 92, 246, 0.3)" stroke-width="2" fill="none"/>
-        <path d="M 170 150 L 220 150" stroke="url(#rag-laser-purple)" stroke-width="1.5" fill="none">
-          <animate attributeName="opacity" values="0.5;1;0.5" dur="2.2s" repeatCount="indefinite"/>
+        <!-- API → Index: Cyan beam -->
+        <path d="M 170 150 L 220 150" stroke="rgba(0, 255, 255, 0.2)" stroke-width="1.5" fill="none"/>
+        <path d="M 170 150 L 220 150" stroke="url(#rag-laser-matrix-cyan)" stroke-width="1" fill="none">
+          <animate attributeName="opacity" values="0.6;1;0.6" dur="2.2s" repeatCount="indefinite"/>
         </path>
 
-        <!-- Docs → Index -->
-        <path d="M 170 215 L 220 150" stroke="rgba(59, 130, 246, 0.3)" stroke-width="2" fill="none"/>
-        <path d="M 170 215 L 220 150" stroke="url(#rag-laser-blue)" stroke-width="1.5" fill="none">
-          <animate attributeName="opacity" values="0.5;1;0.5" dur="2.4s" repeatCount="indefinite"/>
+        <!-- Docs → Index: Magenta beam -->
+        <path d="M 170 215 L 220 150" stroke="rgba(255, 0, 255, 0.2)" stroke-width="1.5" fill="none"/>
+        <path d="M 170 215 L 220 150" stroke="url(#rag-laser-matrix-magenta)" stroke-width="1" fill="none">
+          <animate attributeName="opacity" values="0.6;1;0.6" dur="2.4s" repeatCount="indefinite"/>
         </path>
 
-        <!-- Index → Vector DB -->
-        <path d="M 220 150 L 280 150" stroke="rgba(6, 182, 212, 0.3)" stroke-width="2" fill="none"/>
-        <path d="M 220 150 L 280 150" stroke="url(#rag-laser-cyan)" stroke-width="1.5" fill="none">
-          <animate attributeName="opacity" values="0.5;1;0.5" dur="1.8s" repeatCount="indefinite"/>
+        <!-- Index → Vector DB: Matrix green beam -->
+        <path d="M 220 150 L 280 150" stroke="rgba(0, 255, 65, 0.2)" stroke-width="1.5" fill="none"/>
+        <path d="M 220 150 L 280 150" stroke="url(#rag-laser-matrix-green)" stroke-width="1" fill="none">
+          <animate attributeName="opacity" values="0.6;1;0.6" dur="1.8s" repeatCount="indefinite"/>
         </path>
-        <text x="250" y="135" text-anchor="middle" fill="rgba(255, 255, 255, 0.9)"
-              font-size="11" font-weight="600" font-family="Inter, sans-serif">Index</text>
+        <text x="250" y="135" text-anchor="middle" fill="#00FF41"
+              font-size="11" font-weight="600" font-family="'Courier New', monospace">Index</text>
       </g>
 
-      <!-- Animated light particles -->
+      <!-- Matrix data particles -->
       <g class="particles">
-        <circle r="3" fill="#fbbf24" filter="url(#rag-glow-orange)">
+        <circle r="2" fill="#00FF41" filter="url(#rag-matrix-glow-green)">
           <animateMotion dur="4s" repeatCount="indefinite" path="M 170 85 L 220 150 L 280 150"/>
         </circle>
-        <circle r="3" fill="#8b5cf6" filter="url(#rag-glow-purple)">
+        <circle r="2" fill="#00FFFF" filter="url(#rag-matrix-glow-cyan)">
           <animateMotion dur="4.5s" repeatCount="indefinite" path="M 170 150 L 220 150 L 280 150"/>
         </circle>
-        <circle r="3" fill="#3b82f6" filter="url(#rag-glow-blue)">
+        <circle r="2" fill="#FF00FF" filter="url(#rag-matrix-glow-magenta)">
           <animateMotion dur="5s" repeatCount="indefinite" path="M 170 215 L 220 150 L 280 150"/>
         </circle>
       </g>
 
-      <!-- 3D Neon Cube Nodes -->
+      <!-- Matrix-themed 3D Neon Cube Nodes -->
       <g class="nodes">
-        <!-- SQL - 3D Cube -->
+        <!-- SQL - 3D Matrix Cube (Matrix Green) -->
         <g class="node" id="rag-node-sql">
-          <path d="M 78,63 L 165,63 L 171,57 L 84,57 Z" fill="rgba(251, 191, 36, 0.4)"/>
-          <path d="M 78,63 L 84,57 L 84,104 L 78,110 Z" fill="rgba(251, 191, 36, 0.6)"/>
-          <rect x="78" y="63" width="87" height="47" rx="4"
-                fill="rgba(251, 191, 36, 0.15)"
-                stroke="#fbbf24" stroke-width="2" filter="url(#rag-glow-orange)"/>
-          <text x="121" y="90" text-anchor="middle" fill="#fbbf24"
-                font-size="14" font-weight="700" font-family="Inter, sans-serif">SQL</text>
+          <path d="M 78,63 L 165,63 L 171,57 L 84,57 Z" fill="rgba(0, 255, 65, 0.3)"
+                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.3"/>
+          <path d="M 78,63 L 84,57 L 84,104 L 78,110 Z" fill="rgba(0, 255, 65, 0.4)"
+                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.4"/>
+          <rect x="78" y="63" width="87" height="47" rx="2"
+                fill="rgba(0, 255, 65, 0.1)"
+                stroke="#00FF41" stroke-width="1.5" filter="url(#rag-matrix-glow-green)"/>
+          <circle cx="78" cy="63" r="2" fill="#00FF41" filter="url(#rag-matrix-glow-green)"/>
+          <circle cx="165" cy="63" r="2" fill="#00FF41" filter="url(#rag-matrix-glow-green)"/>
+          <circle cx="78" cy="110" r="2" fill="#00FF41" filter="url(#rag-matrix-glow-green)"/>
+          <circle cx="165" cy="110" r="2" fill="#00FF41" filter="url(#rag-matrix-glow-green)"/>
+          <text x="121" y="90" text-anchor="middle" fill="#00FF41"
+                font-size="13" font-weight="600" font-family="'Courier New', monospace">SQL</text>
         </g>
 
-        <!-- API - 3D Cube -->
+        <!-- API - 3D Matrix Cube (Cyan) -->
         <g class="node" id="rag-node-api">
-          <path d="M 78,128 L 165,128 L 171,122 L 84,122 Z" fill="rgba(139, 92, 246, 0.4)"/>
-          <path d="M 78,128 L 84,122 L 84,169 L 78,175 Z" fill="rgba(139, 92, 246, 0.6)"/>
-          <rect x="78" y="128" width="87" height="47" rx="4"
-                fill="rgba(139, 92, 246, 0.15)"
-                stroke="#8b5cf6" stroke-width="2" filter="url(#rag-glow-purple)"/>
-          <text x="121" y="155" text-anchor="middle" fill="#8b5cf6"
-                font-size="14" font-weight="700" font-family="Inter, sans-serif">API</text>
+          <path d="M 78,128 L 165,128 L 171,122 L 84,122 Z" fill="rgba(0, 255, 255, 0.3)"
+                stroke="#00FFFF" stroke-width="0.5" stroke-opacity="0.3"/>
+          <path d="M 78,128 L 84,122 L 84,169 L 78,175 Z" fill="rgba(0, 255, 255, 0.4)"
+                stroke="#00FFFF" stroke-width="0.5" stroke-opacity="0.4"/>
+          <rect x="78" y="128" width="87" height="47" rx="2"
+                fill="rgba(0, 255, 255, 0.1)"
+                stroke="#00FFFF" stroke-width="1.5" filter="url(#rag-matrix-glow-cyan)"/>
+          <circle cx="78" cy="128" r="2" fill="#00FFFF" filter="url(#rag-matrix-glow-cyan)"/>
+          <circle cx="165" cy="128" r="2" fill="#00FFFF" filter="url(#rag-matrix-glow-cyan)"/>
+          <circle cx="78" cy="175" r="2" fill="#00FFFF" filter="url(#rag-matrix-glow-cyan)"/>
+          <circle cx="165" cy="175" r="2" fill="#00FFFF" filter="url(#rag-matrix-glow-cyan)"/>
+          <text x="121" y="155" text-anchor="middle" fill="#00FFFF"
+                font-size="13" font-weight="600" font-family="'Courier New', monospace">API</text>
         </g>
 
-        <!-- Docs - 3D Cube -->
+        <!-- Docs - 3D Matrix Cube (Magenta) -->
         <g class="node" id="rag-node-docs">
-          <path d="M 78,193 L 165,193 L 171,187 L 84,187 Z" fill="rgba(59, 130, 246, 0.4)"/>
-          <path d="M 78,193 L 84,187 L 84,234 L 78,240 Z" fill="rgba(59, 130, 246, 0.6)"/>
-          <rect x="78" y="193" width="87" height="47" rx="4"
-                fill="rgba(59, 130, 246, 0.15)"
-                stroke="#3b82f6" stroke-width="2" filter="url(#rag-glow-blue)"/>
-          <text x="121" y="220" text-anchor="middle" fill="#3b82f6"
-                font-size="14" font-weight="700" font-family="Inter, sans-serif">Docs</text>
+          <path d="M 78,193 L 165,193 L 171,187 L 84,187 Z" fill="rgba(255, 0, 255, 0.3)"
+                stroke="#FF00FF" stroke-width="0.5" stroke-opacity="0.3"/>
+          <path d="M 78,193 L 84,187 L 84,234 L 78,240 Z" fill="rgba(255, 0, 255, 0.4)"
+                stroke="#FF00FF" stroke-width="0.5" stroke-opacity="0.4"/>
+          <rect x="78" y="193" width="87" height="47" rx="2"
+                fill="rgba(255, 0, 255, 0.1)"
+                stroke="#FF00FF" stroke-width="1.5" filter="url(#rag-matrix-glow-magenta)"/>
+          <circle cx="78" cy="193" r="2" fill="#FF00FF" filter="url(#rag-matrix-glow-magenta)"/>
+          <circle cx="165" cy="193" r="2" fill="#FF00FF" filter="url(#rag-matrix-glow-magenta)"/>
+          <circle cx="78" cy="240" r="2" fill="#FF00FF" filter="url(#rag-matrix-glow-magenta)"/>
+          <circle cx="165" cy="240" r="2" fill="#FF00FF" filter="url(#rag-matrix-glow-magenta)"/>
+          <text x="121" y="220" text-anchor="middle" fill="#FF00FF"
+                font-size="13" font-weight="600" font-family="'Courier New', monospace">Docs</text>
         </g>
 
-        <!-- Vector DB - 3D Cube -->
+        <!-- Vector DB - 3D Matrix Cube (Matrix Green) -->
         <g class="node" id="rag-node-vector">
-          <path d="M 288,128 L 372,128 L 378,122 L 294,122 Z" fill="rgba(6, 182, 212, 0.4)"/>
-          <path d="M 288,128 L 294,122 L 294,169 L 288,175 Z" fill="rgba(6, 182, 212, 0.6)"/>
-          <rect x="288" y="128" width="84" height="47" rx="4"
-                fill="rgba(6, 182, 212, 0.15)"
-                stroke="#06b6d4" stroke-width="2" filter="url(#rag-glow-cyan)"/>
-          <text x="330" y="155" text-anchor="middle" fill="#06b6d4"
-                font-size="13" font-weight="700" font-family="Inter, sans-serif">Vector DB</text>
+          <path d="M 288,128 L 372,128 L 378,122 L 294,122 Z" fill="rgba(0, 255, 65, 0.3)"
+                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.3"/>
+          <path d="M 288,128 L 294,122 L 294,169 L 288,175 Z" fill="rgba(0, 255, 65, 0.4)"
+                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.4"/>
+          <rect x="288" y="128" width="84" height="47" rx="2"
+                fill="rgba(0, 255, 65, 0.1)"
+                stroke="#00FF41" stroke-width="1.5" filter="url(#rag-matrix-glow-green)"/>
+          <circle cx="288" cy="128" r="2" fill="#00FF41" filter="url(#rag-matrix-glow-green)"/>
+          <circle cx="372" cy="128" r="2" fill="#00FF41" filter="url(#rag-matrix-glow-green)"/>
+          <circle cx="288" cy="175" r="2" fill="#00FF41" filter="url(#rag-matrix-glow-green)"/>
+          <circle cx="372" cy="175" r="2" fill="#00FF41" filter="url(#rag-matrix-glow-green)"/>
+          <text x="330" y="155" text-anchor="middle" fill="#00FF41"
+                font-size="12" font-weight="600" font-family="'Courier New', monospace">Vector DB</text>
         </g>
       </g>
     </svg>
@@ -367,163 +408,183 @@ is_homepage: true
     </div>
     <div class="story-visual">
       <svg id="config-visualization" viewBox="50 60 400 260" preserveAspectRatio="xMidYMin meet" xmlns="http://www.w3.org/2000/svg">
-      <!-- Enhanced neon glow filters for 3D effect -->
+      <!-- Matrix-themed sharp neon glow filters -->
       <defs>
-        <filter id="config-glow-orange" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+        <filter id="config-matrix-glow-green" x="-150%" y="-150%" width="400%" height="400%">
+          <feGaussianBlur stdDeviation="2" result="blur1"/>
+          <feGaussianBlur stdDeviation="0.5" result="blur2"/>
           <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="blur1"/>
+            <feMergeNode in="blur2"/>
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
-        <filter id="config-glow-purple" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+        <filter id="config-matrix-glow-cyan" x="-150%" y="-150%" width="400%" height="400%">
+          <feGaussianBlur stdDeviation="2" result="blur1"/>
+          <feGaussianBlur stdDeviation="0.5" result="blur2"/>
           <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="blur1"/>
+            <feMergeNode in="blur2"/>
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
-        <filter id="config-glow-blue" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+        <filter id="config-matrix-glow-magenta" x="-150%" y="-150%" width="400%" height="400%">
+          <feGaussianBlur stdDeviation="2" result="blur1"/>
+          <feGaussianBlur stdDeviation="0.5" result="blur2"/>
           <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-        <filter id="config-glow-cyan" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-          <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="blur1"/>
+            <feMergeNode in="blur2"/>
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
 
-        <!-- Laser beam gradients -->
-        <linearGradient id="config-laser-yellow">
-          <stop offset="0%" style="stop-color:rgba(251, 191, 36, 0); stop-opacity:0" />
-          <stop offset="50%" style="stop-color:#fbbf24; stop-opacity:1" />
-          <stop offset="100%" style="stop-color:rgba(251, 191, 36, 0); stop-opacity:0" />
+        <!-- Matrix laser beam gradients -->
+        <linearGradient id="config-laser-matrix-green">
+          <stop offset="0%" style="stop-color:rgba(0, 255, 65, 0); stop-opacity:0" />
+          <stop offset="50%" style="stop-color:#00FF41; stop-opacity:1" />
+          <stop offset="100%" style="stop-color:rgba(0, 255, 65, 0); stop-opacity:0" />
         </linearGradient>
-        <linearGradient id="config-laser-purple">
-          <stop offset="0%" style="stop-color:rgba(139, 92, 246, 0); stop-opacity:0" />
-          <stop offset="50%" style="stop-color:#8b5cf6; stop-opacity:1" />
-          <stop offset="100%" style="stop-color:rgba(139, 92, 246, 0); stop-opacity:0" />
+        <linearGradient id="config-laser-matrix-cyan">
+          <stop offset="0%" style="stop-color:rgba(0, 255, 255, 0); stop-opacity:0" />
+          <stop offset="50%" style="stop-color:#00FFFF; stop-opacity:1" />
+          <stop offset="100%" style="stop-color:rgba(0, 255, 255, 0); stop-opacity:0" />
         </linearGradient>
-        <linearGradient id="config-laser-blue">
-          <stop offset="0%" style="stop-color:rgba(59, 130, 246, 0); stop-opacity:0" />
-          <stop offset="50%" style="stop-color:#3b82f6; stop-opacity:1" />
-          <stop offset="100%" style="stop-color:rgba(59, 130, 246, 0); stop-opacity:0" />
-        </linearGradient>
-        <linearGradient id="config-laser-cyan">
-          <stop offset="0%" style="stop-color:rgba(6, 182, 212, 0); stop-opacity:0" />
-          <stop offset="50%" style="stop-color:#06b6d4; stop-opacity:1" />
-          <stop offset="100%" style="stop-color:rgba(6, 182, 212, 0); stop-opacity:0" />
+        <linearGradient id="config-laser-matrix-magenta">
+          <stop offset="0%" style="stop-color:rgba(255, 0, 255, 0); stop-opacity:0" />
+          <stop offset="50%" style="stop-color:#FF00FF; stop-opacity:1" />
+          <stop offset="100%" style="stop-color:rgba(255, 0, 255, 0); stop-opacity:0" />
         </linearGradient>
       </defs>
 
-      <!-- Laser-like connections -->
+      <!-- Matrix-style laser connections -->
       <g class="connections">
-        <!-- File → Config -->
-        <path d="M 120 110 L 120 175 L 200 175" stroke="rgba(251, 191, 36, 0.3)" stroke-width="2" fill="none"/>
-        <path d="M 120 110 L 120 175 L 200 175" stroke="url(#config-laser-yellow)" stroke-width="1.5" fill="none">
-          <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
+        <!-- File → Config: Matrix green beam -->
+        <path d="M 120 110 L 120 175 L 200 175" stroke="rgba(0, 255, 65, 0.2)" stroke-width="1.5" fill="none"/>
+        <path d="M 120 110 L 120 175 L 200 175" stroke="url(#config-laser-matrix-green)" stroke-width="1" fill="none">
+          <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/>
         </path>
 
-        <!-- Consul → Config -->
-        <path d="M 250 110 L 250 150" stroke="rgba(139, 92, 246, 0.3)" stroke-width="2" fill="none"/>
-        <path d="M 250 110 L 250 150" stroke="url(#config-laser-purple)" stroke-width="1.5" fill="none">
-          <animate attributeName="opacity" values="0.5;1;0.5" dur="2.2s" repeatCount="indefinite"/>
+        <!-- Consul → Config: Cyan beam -->
+        <path d="M 250 110 L 250 150" stroke="rgba(0, 255, 255, 0.2)" stroke-width="1.5" fill="none"/>
+        <path d="M 250 110 L 250 150" stroke="url(#config-laser-matrix-cyan)" stroke-width="1" fill="none">
+          <animate attributeName="opacity" values="0.6;1;0.6" dur="2.2s" repeatCount="indefinite"/>
         </path>
 
-        <!-- ZooKeeper → Config -->
-        <path d="M 380 110 L 380 175 L 300 175" stroke="rgba(59, 130, 246, 0.3)" stroke-width="2" fill="none"/>
-        <path d="M 380 110 L 380 175 L 300 175" stroke="url(#config-laser-blue)" stroke-width="1.5" fill="none">
-          <animate attributeName="opacity" values="0.5;1;0.5" dur="2.4s" repeatCount="indefinite"/>
+        <!-- ZooKeeper → Config: Magenta beam -->
+        <path d="M 380 110 L 380 175 L 300 175" stroke="rgba(255, 0, 255, 0.2)" stroke-width="1.5" fill="none"/>
+        <path d="M 380 110 L 380 175 L 300 175" stroke="url(#config-laser-matrix-magenta)" stroke-width="1" fill="none">
+          <animate attributeName="opacity" values="0.6;1;0.6" dur="2.4s" repeatCount="indefinite"/>
         </path>
 
-        <!-- Config → Runtime -->
-        <path d="M 250 200 L 250 250" stroke="rgba(6, 182, 212, 0.3)" stroke-width="2" fill="none"/>
-        <path d="M 250 200 L 250 250" stroke="url(#config-laser-cyan)" stroke-width="1.5" fill="none">
-          <animate attributeName="opacity" values="0.5;1;0.5" dur="1.8s" repeatCount="indefinite"/>
+        <!-- Config → Runtime: Matrix green beam -->
+        <path d="M 250 200 L 250 250" stroke="rgba(0, 255, 65, 0.2)" stroke-width="1.5" fill="none"/>
+        <path d="M 250 200 L 250 250" stroke="url(#config-laser-matrix-green)" stroke-width="1" fill="none">
+          <animate attributeName="opacity" values="0.6;1;0.6" dur="1.8s" repeatCount="indefinite"/>
         </path>
-        <text x="275" y="225" text-anchor="middle" fill="rgba(255, 255, 255, 0.9)"
-              font-size="11" font-weight="600" font-family="Inter, sans-serif">Hot Reload</text>
+        <text x="275" y="225" text-anchor="middle" fill="#00FF41"
+              font-size="11" font-weight="600" font-family="'Courier New', monospace">Hot Reload</text>
       </g>
 
-      <!-- Animated light particles -->
+      <!-- Matrix data particles -->
       <g class="particles">
-        <circle r="3" fill="#fbbf24" filter="url(#config-glow-orange)">
+        <circle r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)">
           <animateMotion dur="4s" repeatCount="indefinite" path="M 120 110 L 120 175 L 200 175 L 250 175 L 250 200 L 250 250"/>
         </circle>
-        <circle r="3" fill="#8b5cf6" filter="url(#config-glow-purple)">
+        <circle r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)">
           <animateMotion dur="4.5s" repeatCount="indefinite" path="M 250 110 L 250 150 L 250 175 L 250 200 L 250 250"/>
         </circle>
-        <circle r="3" fill="#3b82f6" filter="url(#config-glow-blue)">
+        <circle r="2" fill="#FF00FF" filter="url(#config-matrix-glow-magenta)">
           <animateMotion dur="5s" repeatCount="indefinite" path="M 380 110 L 380 175 L 300 175 L 250 175 L 250 200 L 250 250"/>
         </circle>
       </g>
 
-      <!-- 3D Neon Cube Nodes -->
+      <!-- Matrix-themed 3D Neon Cube Nodes -->
       <g class="nodes">
-        <!-- File - 3D Cube -->
+        <!-- File - 3D Matrix Cube (Matrix Green) -->
         <g class="node" id="config-node-file">
-          <path d="M 78,63 L 165,63 L 171,57 L 84,57 Z" fill="rgba(251, 191, 36, 0.4)"/>
-          <path d="M 78,63 L 84,57 L 84,104 L 78,110 Z" fill="rgba(251, 191, 36, 0.6)"/>
-          <rect x="78" y="63" width="87" height="47" rx="4"
-                fill="rgba(251, 191, 36, 0.15)"
-                stroke="#fbbf24" stroke-width="2" filter="url(#config-glow-orange)"/>
-          <text x="121" y="90" text-anchor="middle" fill="#fbbf24"
-                font-size="14" font-weight="700" font-family="Inter, sans-serif">File</text>
+          <path d="M 78,63 L 165,63 L 171,57 L 84,57 Z" fill="rgba(0, 255, 65, 0.3)"
+                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.3"/>
+          <path d="M 78,63 L 84,57 L 84,104 L 78,110 Z" fill="rgba(0, 255, 65, 0.4)"
+                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.4"/>
+          <rect x="78" y="63" width="87" height="47" rx="2"
+                fill="rgba(0, 255, 65, 0.1)"
+                stroke="#00FF41" stroke-width="1.5" filter="url(#config-matrix-glow-green)"/>
+          <circle cx="78" cy="63" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
+          <circle cx="165" cy="63" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
+          <circle cx="78" cy="110" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
+          <circle cx="165" cy="110" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
+          <text x="121" y="90" text-anchor="middle" fill="#00FF41"
+                font-size="13" font-weight="600" font-family="'Courier New', monospace">File</text>
         </g>
 
-        <!-- Consul - 3D Cube -->
+        <!-- Consul - 3D Matrix Cube (Cyan) -->
         <g class="node" id="config-node-consul">
-          <path d="M 208,63 L 292,63 L 298,57 L 214,57 Z" fill="rgba(139, 92, 246, 0.4)"/>
-          <path d="M 208,63 L 214,57 L 214,104 L 208,110 Z" fill="rgba(139, 92, 246, 0.6)"/>
-          <rect x="208" y="63" width="84" height="47" rx="4"
-                fill="rgba(139, 92, 246, 0.15)"
-                stroke="#8b5cf6" stroke-width="2" filter="url(#config-glow-purple)"/>
-          <text x="250" y="90" text-anchor="middle" fill="#8b5cf6"
-                font-size="14" font-weight="700" font-family="Inter, sans-serif">Consul</text>
+          <path d="M 208,63 L 292,63 L 298,57 L 214,57 Z" fill="rgba(0, 255, 255, 0.3)"
+                stroke="#00FFFF" stroke-width="0.5" stroke-opacity="0.3"/>
+          <path d="M 208,63 L 214,57 L 214,104 L 208,110 Z" fill="rgba(0, 255, 255, 0.4)"
+                stroke="#00FFFF" stroke-width="0.5" stroke-opacity="0.4"/>
+          <rect x="208" y="63" width="84" height="47" rx="2"
+                fill="rgba(0, 255, 255, 0.1)"
+                stroke="#00FFFF" stroke-width="1.5" filter="url(#config-matrix-glow-cyan)"/>
+          <circle cx="208" cy="63" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
+          <circle cx="292" cy="63" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
+          <circle cx="208" cy="110" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
+          <circle cx="292" cy="110" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
+          <text x="250" y="90" text-anchor="middle" fill="#00FFFF"
+                font-size="13" font-weight="600" font-family="'Courier New', monospace">Consul</text>
         </g>
 
-        <!-- ZooKeeper - 3D Cube -->
+        <!-- ZooKeeper - 3D Matrix Cube (Magenta) -->
         <g class="node" id="config-node-zk">
-          <path d="M 338,63 L 422,63 L 428,57 L 344,57 Z" fill="rgba(59, 130, 246, 0.4)"/>
-          <path d="M 338,63 L 344,57 L 344,104 L 338,110 Z" fill="rgba(59, 130, 246, 0.6)"/>
-          <rect x="338" y="63" width="84" height="47" rx="4"
-                fill="rgba(59, 130, 246, 0.15)"
-                stroke="#3b82f6" stroke-width="2" filter="url(#config-glow-blue)"/>
-          <text x="380" y="83" text-anchor="middle" fill="#3b82f6"
-                font-size="12" font-weight="700" font-family="Inter, sans-serif">Zoo</text>
-          <text x="380" y="98" text-anchor="middle" fill="#3b82f6"
-                font-size="12" font-weight="700" font-family="Inter, sans-serif">Keeper</text>
+          <path d="M 338,63 L 422,63 L 428,57 L 344,57 Z" fill="rgba(255, 0, 255, 0.3)"
+                stroke="#FF00FF" stroke-width="0.5" stroke-opacity="0.3"/>
+          <path d="M 338,63 L 344,57 L 344,104 L 338,110 Z" fill="rgba(255, 0, 255, 0.4)"
+                stroke="#FF00FF" stroke-width="0.5" stroke-opacity="0.4"/>
+          <rect x="338" y="63" width="84" height="47" rx="2"
+                fill="rgba(255, 0, 255, 0.1)"
+                stroke="#FF00FF" stroke-width="1.5" filter="url(#config-matrix-glow-magenta)"/>
+          <circle cx="338" cy="63" r="2" fill="#FF00FF" filter="url(#config-matrix-glow-magenta)"/>
+          <circle cx="422" cy="63" r="2" fill="#FF00FF" filter="url(#config-matrix-glow-magenta)"/>
+          <circle cx="338" cy="110" r="2" fill="#FF00FF" filter="url(#config-matrix-glow-magenta)"/>
+          <circle cx="422" cy="110" r="2" fill="#FF00FF" filter="url(#config-matrix-glow-magenta)"/>
+          <text x="380" y="83" text-anchor="middle" fill="#FF00FF"
+                font-size="11" font-weight="600" font-family="'Courier New', monospace">Zoo</text>
+          <text x="380" y="98" text-anchor="middle" fill="#FF00FF"
+                font-size="11" font-weight="600" font-family="'Courier New', monospace">Keeper</text>
         </g>
 
-        <!-- Config - 3D Cube -->
+        <!-- Config - 3D Matrix Cube (Matrix Green) -->
         <g class="node" id="config-node-config">
-          <path d="M 208,153 L 292,153 L 298,147 L 214,147 Z" fill="rgba(6, 182, 212, 0.4)"/>
-          <path d="M 208,153 L 214,147 L 214,194 L 208,200 Z" fill="rgba(6, 182, 212, 0.6)"/>
-          <rect x="208" y="153" width="84" height="47" rx="4"
-                fill="rgba(6, 182, 212, 0.15)"
-                stroke="#06b6d4" stroke-width="2" filter="url(#config-glow-cyan)"/>
-          <text x="250" y="180" text-anchor="middle" fill="#06b6d4"
-                font-size="14" font-weight="700" font-family="Inter, sans-serif">Config</text>
+          <path d="M 208,153 L 292,153 L 298,147 L 214,147 Z" fill="rgba(0, 255, 65, 0.3)"
+                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.3"/>
+          <path d="M 208,153 L 214,147 L 214,194 L 208,200 Z" fill="rgba(0, 255, 65, 0.4)"
+                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.4"/>
+          <rect x="208" y="153" width="84" height="47" rx="2"
+                fill="rgba(0, 255, 65, 0.1)"
+                stroke="#00FF41" stroke-width="1.5" filter="url(#config-matrix-glow-green)"/>
+          <circle cx="208" cy="153" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
+          <circle cx="292" cy="153" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
+          <circle cx="208" cy="200" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
+          <circle cx="292" cy="200" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
+          <text x="250" y="180" text-anchor="middle" fill="#00FF41"
+                font-size="13" font-weight="600" font-family="'Courier New', monospace">Config</text>
         </g>
 
-        <!-- Runtime - 3D Cube -->
+        <!-- Runtime - 3D Matrix Cube (Cyan) -->
         <g class="node" id="config-node-runtime">
-          <path d="M 208,253 L 292,253 L 298,247 L 214,247 Z" fill="rgba(6, 182, 212, 0.4)"/>
-          <path d="M 208,253 L 214,247 L 214,294 L 208,300 Z" fill="rgba(6, 182, 212, 0.6)"/>
-          <rect x="208" y="253" width="84" height="47" rx="4"
-                fill="rgba(6, 182, 212, 0.15)"
-                stroke="#06b6d4" stroke-width="2" filter="url(#config-glow-cyan)"/>
-          <text x="250" y="280" text-anchor="middle" fill="#06b6d4"
-                font-size="14" font-weight="700" font-family="Inter, sans-serif">Runtime</text>
+          <path d="M 208,253 L 292,253 L 298,247 L 214,247 Z" fill="rgba(0, 255, 255, 0.3)"
+                stroke="#00FFFF" stroke-width="0.5" stroke-opacity="0.3"/>
+          <path d="M 208,253 L 214,247 L 214,294 L 208,300 Z" fill="rgba(0, 255, 255, 0.4)"
+                stroke="#00FFFF" stroke-width="0.5" stroke-opacity="0.4"/>
+          <rect x="208" y="253" width="84" height="47" rx="2"
+                fill="rgba(0, 255, 255, 0.1)"
+                stroke="#00FFFF" stroke-width="1.5" filter="url(#config-matrix-glow-cyan)"/>
+          <circle cx="208" cy="253" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
+          <circle cx="292" cy="253" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
+          <circle cx="208" cy="300" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
+          <circle cx="292" cy="300" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
+          <text x="250" y="280" text-anchor="middle" fill="#00FFFF"
+                font-size="13" font-weight="600" font-family="'Courier New', monospace">Runtime</text>
         </g>
       </g>
     </svg>
