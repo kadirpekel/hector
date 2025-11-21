@@ -878,6 +878,10 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 					chunkCount++
 				}
 
+				if thought, ok := part["thought"].(string); ok {
+					chunks <- StreamChunk{Type: "thinking", Text: thought}
+				}
+
 				if fc, ok := part["functionCall"].(map[string]interface{}); ok {
 					name, _ := fc["name"].(string)
 					args, _ := fc["args"].(map[string]interface{})
