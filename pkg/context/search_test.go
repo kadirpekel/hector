@@ -834,6 +834,10 @@ func (m *mockLLMProviderForReranking) GetTemperature() float64 {
 	return 0.7
 }
 
+func (m *mockLLMProviderForReranking) GetSupportedInputModes() []string {
+	return []string{"text/plain", "application/json"}
+}
+
 func (m *mockLLMProviderForReranking) Close() error {
 	return nil
 }

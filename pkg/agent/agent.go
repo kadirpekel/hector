@@ -370,18 +370,18 @@ func (a *Agent) executeWithMessage(
 					role = "SYSTEM/CONTEXT"
 				}
 				text := protocol.ExtractTextFromMessage(msg)
-				slog.Debug(fmt.Sprintf("Message %d [%s]", i+1, role), "content", text)
+				slog.Debug("Message", "index", i+1, "role", role, "content", text)
 			}
 			slog.Debug("Tool definitions count", "count", len(toolDefs))
 			for i, toolDef := range toolDefs {
-				slog.Debug(fmt.Sprintf("Tool %d: %s", i+1, toolDef.Name), "description", toolDef.Description)
+				slog.Debug("Tool", "index", i+1, "name", toolDef.Name, "description", toolDef.Description)
 				if toolDef.Parameters != nil {
 					if props, ok := toolDef.Parameters["properties"].(map[string]interface{}); ok {
 						paramNames := make([]string, 0, len(props))
 						for name := range props {
 							paramNames = append(paramNames, name)
 						}
-						slog.Debug(fmt.Sprintf("  Parameters: %s", strings.Join(paramNames, ", ")))
+						slog.Debug("Tool parameters", "tool_index", i+1, "tool_name", toolDef.Name, "parameters", paramNames)
 					}
 				}
 			}
@@ -391,8 +391,7 @@ func (a *Agent) executeWithMessage(
 			text, toolCalls, tokens, err := a.callLLMWithRetry(spanCtx, messages, toolDefs, outputCh, cfg, span)
 			if err != nil {
 				span.RecordError(err)
-				// Log the full error details for debugging - include in message since simple format doesn't show attributes
-				slog.Error(fmt.Sprintf("LLM call failed: %v", err), "agent", a.name)
+				slog.Error("LLM call failed", "agent", a.name, "error", err)
 				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error: LLM call failed: %v\n", err))); sendErr != nil {
 					slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
 				}

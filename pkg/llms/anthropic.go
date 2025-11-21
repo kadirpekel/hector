@@ -226,8 +226,11 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message
 		span.RecordError(apiErr)
 		span.SetStatus(codes.Error, response.Error.Message)
 
-		slog.Error(fmt.Sprintf("Anthropic API returned error (type: %s): %s", response.Error.Type, response.Error.Message),
-			"model", p.config.Model, "duration", duration)
+		slog.Error("Anthropic API returned error",
+			"model", p.config.Model,
+			"duration", duration,
+			"error_type", response.Error.Type,
+			"error_message", response.Error.Message)
 
 		// Record metrics for API error
 		metrics := observability.GetGlobalMetrics()
@@ -497,11 +500,11 @@ func (p *AnthropicProvider) makeRequest(ctx context.Context, request AnthropicRe
 			if json.Unmarshal(body, &errorResp) == nil && errorResp.Error != nil {
 				errMsg := fmt.Sprintf("Anthropic API error (HTTP %d): %s (type: %s)",
 					resp.StatusCode, errorResp.Error.Message, errorResp.Error.Type)
-				slog.Error(errMsg)
+				slog.Error("Anthropic API request failed", "status_code", resp.StatusCode, "error_type", errorResp.Error.Type, "error_message", errorResp.Error.Message)
 				return nil, fmt.Errorf("%s", errMsg)
 			}
 			errMsg := fmt.Sprintf("Anthropic API error (HTTP %d): %s", resp.StatusCode, string(body))
-			slog.Error(errMsg)
+			slog.Error("Anthropic API request failed", "status_code", resp.StatusCode, "response_body", string(body))
 			return nil, fmt.Errorf("%s", errMsg)
 		}
 		var response AnthropicResponse
@@ -552,12 +555,12 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 			if json.Unmarshal(body, &errorResp) == nil && errorResp.Error != nil {
 				errMsg := fmt.Sprintf("Anthropic API error (HTTP %d): %s (type: %s)",
 					resp.StatusCode, errorResp.Error.Message, errorResp.Error.Type)
-				slog.Error(errMsg)
+				slog.Error("Anthropic API request failed", "status_code", resp.StatusCode, "error_type", errorResp.Error.Type, "error_message", errorResp.Error.Message)
 				return fmt.Errorf("%s", errMsg)
 			}
 			// Fallback to raw body if error structure not found
 			errMsg := fmt.Sprintf("Anthropic API error (HTTP %d): %s", resp.StatusCode, string(body))
-			slog.Error(errMsg)
+			slog.Error("Anthropic API request failed", "status_code", resp.StatusCode, "response_body", string(body))
 			return fmt.Errorf("%s", errMsg)
 		}
 		// Success case - continue with streaming (don't read body yet!)

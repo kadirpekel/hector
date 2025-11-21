@@ -2,7 +2,6 @@ package logger
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -154,7 +153,7 @@ func (h *coloredTextHandler) Handle(ctx context.Context, record slog.Record) err
 
 	var buf strings.Builder
 
-	// Simple format: only level + message
+	// Simple format: level + message + attributes
 	if h.simple {
 		levelStr := record.Level.String()
 		if levelStr == "WARNING" {
@@ -165,6 +164,16 @@ func (h *coloredTextHandler) Handle(ctx context.Context, record slog.Record) err
 		buf.WriteString(resetCode)
 		buf.WriteString(" ")
 		buf.WriteString(record.Message)
+
+		// Include attributes in simple format
+		record.Attrs(func(a slog.Attr) bool {
+			buf.WriteString(" ")
+			buf.WriteString(a.Key)
+			buf.WriteString("=")
+			buf.WriteString(a.Value.String())
+			return true
+		})
+
 		buf.WriteString("\n")
 	} else {
 		// Verbose format: time + level + message + attributes
@@ -187,7 +196,7 @@ func (h *coloredTextHandler) Handle(ctx context.Context, record slog.Record) err
 			buf.WriteString(" ")
 			buf.WriteString(a.Key)
 			buf.WriteString("=")
-			buf.WriteString(fmt.Sprintf("%v", a.Value.Any()))
+			buf.WriteString(a.Value.String())
 			return true
 		})
 
@@ -297,6 +306,16 @@ func (h *simpleTextHandler) Handle(ctx context.Context, record slog.Record) erro
 	buf.WriteString(strings.ToUpper(levelStr))
 	buf.WriteString(" ")
 	buf.WriteString(record.Message)
+
+	// Include attributes in simple format
+	record.Attrs(func(a slog.Attr) bool {
+		buf.WriteString(" ")
+		buf.WriteString(a.Key)
+		buf.WriteString("=")
+		buf.WriteString(a.Value.String())
+		return true
+	})
+
 	buf.WriteString("\n")
 
 	_, err := h.writer.Write([]byte(buf.String()))

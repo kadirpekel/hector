@@ -228,7 +228,7 @@ func (c *Client) logRetry(strategy RetryStrategy, delay time.Duration, attempt i
 					} `json:"error"`
 				}
 				if json.Unmarshal(body, &errorResp) == nil && errorResp.Error.Message != "" {
-					errorDetails = fmt.Sprintf(" - %s (status: %s, code: %d)", 
+					errorDetails = fmt.Sprintf(" - %s (status: %s, code: %d)",
 						errorResp.Error.Message, errorResp.Error.Status, errorResp.Error.Code)
 				} else {
 					bodyStr := string(body)

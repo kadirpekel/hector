@@ -24,6 +24,38 @@ func (m *mockLLMProvider) Generate(ctx context.Context, messages []*pb.Message, 
 	return m.response, nil, 0, nil
 }
 
+func (m *mockLLMProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {
+	ch := make(chan llms.StreamChunk, 1)
+	if m.err != nil {
+		ch <- llms.StreamChunk{Type: "error", Error: m.err}
+		close(ch)
+		return ch, nil
+	}
+	ch <- llms.StreamChunk{Type: "content", Text: m.response}
+	close(ch)
+	return ch, nil
+}
+
+func (m *mockLLMProvider) GetModelName() string {
+	return "test-model"
+}
+
+func (m *mockLLMProvider) GetMaxTokens() int {
+	return 4096
+}
+
+func (m *mockLLMProvider) GetTemperature() float64 {
+	return 0.7
+}
+
+func (m *mockLLMProvider) GetSupportedInputModes() []string {
+	return []string{"text/plain", "application/json"}
+}
+
+func (m *mockLLMProvider) Close() error {
+	return nil
+}
+
 func TestLLMReranker_Rerank_EmptyResults(t *testing.T) {
 	llm := &mockLLMProvider{response: `["id1", "id2"]`}
 	reranker := NewLLMReranker(llm, 20)

@@ -131,7 +131,7 @@ func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, t
 		return "", nil, 0, reqErr
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	
+
 	apiKey := strings.TrimSpace(p.config.APIKey)
 	if apiKey == "" {
 		return "", nil, 0, fmt.Errorf("gemini API key is empty")
@@ -230,17 +230,18 @@ func (p *GeminiProvider) GenerateStreaming(ctx context.Context, messages []*pb.M
 			if resp.StatusCode != http.StatusOK {
 				bodyBytes, _ := io.ReadAll(resp.Body)
 				var errorResp GeminiResponse
-				var errMsg string
 				if json.Unmarshal(bodyBytes, &errorResp) == nil && errorResp.Error != nil {
-					errMsg = fmt.Sprintf("Gemini API error (HTTP %d): %s (code: %d, status: %s)",
+					err := fmt.Errorf("Gemini API error (HTTP %d): %s (code: %d, status: %s)",
 						resp.StatusCode, errorResp.Error.Message, errorResp.Error.Code, errorResp.Error.Status)
+					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "error_message", errorResp.Error.Message, "error_code", errorResp.Error.Code, "error_status", errorResp.Error.Status)
+					chunks <- StreamChunk{Type: "error", Error: err}
+					return
 				} else {
-					errMsg = fmt.Sprintf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+					err := fmt.Errorf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "response_body", string(bodyBytes))
+					chunks <- StreamChunk{Type: "error", Error: err}
+					return
 				}
-				err := fmt.Errorf("%s", errMsg)
-				slog.Error(errMsg)
-				chunks <- StreamChunk{Type: "error", Error: err}
-				return
 			}
 			// Success case - continue with streaming
 			p.parseStreamingResponse(resp.Body, chunks)
@@ -249,13 +250,12 @@ func (p *GeminiProvider) GenerateStreaming(ctx context.Context, messages []*pb.M
 
 		// No response received - this is a real network/connection error
 		if err != nil {
-			slog.Error(fmt.Sprintf("Gemini API request failed: %v", err))
+			slog.Error("Gemini API request failed", "error", err)
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return
 		}
 		slog.Error("Gemini API request failed: no response received")
 		chunks <- StreamChunk{Type: "error", Error: fmt.Errorf("no response received")}
-		return
 	}()
 
 	return chunks, nil
@@ -378,17 +378,18 @@ func (p *GeminiProvider) GenerateStructuredStreaming(ctx context.Context, messag
 			if resp.StatusCode != http.StatusOK {
 				bodyBytes, _ := io.ReadAll(resp.Body)
 				var errorResp GeminiResponse
-				var errMsg string
 				if json.Unmarshal(bodyBytes, &errorResp) == nil && errorResp.Error != nil {
-					errMsg = fmt.Sprintf("Gemini API error (HTTP %d): %s (code: %d, status: %s)",
+					err := fmt.Errorf("Gemini API error (HTTP %d): %s (code: %d, status: %s)",
 						resp.StatusCode, errorResp.Error.Message, errorResp.Error.Code, errorResp.Error.Status)
+					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "error_message", errorResp.Error.Message, "error_code", errorResp.Error.Code, "error_status", errorResp.Error.Status)
+					chunks <- StreamChunk{Type: "error", Error: err}
+					return
 				} else {
-					errMsg = fmt.Sprintf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+					err := fmt.Errorf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "response_body", string(bodyBytes))
+					chunks <- StreamChunk{Type: "error", Error: err}
+					return
 				}
-				err := fmt.Errorf("%s", errMsg)
-				slog.Error(errMsg)
-				chunks <- StreamChunk{Type: "error", Error: err}
-				return
 			}
 			// Success case - continue with streaming
 			p.parseStreamingResponse(resp.Body, chunks)
@@ -397,13 +398,12 @@ func (p *GeminiProvider) GenerateStructuredStreaming(ctx context.Context, messag
 
 		// No response received - this is a real network/connection error
 		if err != nil {
-			slog.Error(fmt.Sprintf("Gemini API request failed: %v", err))
+			slog.Error("Gemini API request failed", "error", err)
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return
 		}
 		slog.Error("Gemini API request failed: no response received")
 		chunks <- StreamChunk{Type: "error", Error: fmt.Errorf("no response received")}
-		return
 	}()
 
 	return chunks, nil
@@ -475,15 +475,15 @@ func (p *GeminiProvider) handleGeminiResponse(resp *http.Response, err error) ([
 				if json.Unmarshal(body, &errorResp) == nil && errorResp.Error != nil {
 					errMsg := fmt.Sprintf("Gemini API error (HTTP %d): %s (code: %d, status: %s)",
 						resp.StatusCode, errorResp.Error.Message, errorResp.Error.Code, errorResp.Error.Status)
-					slog.Error(errMsg)
+					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "error_message", errorResp.Error.Message, "error_code", errorResp.Error.Code, "error_status", errorResp.Error.Status)
 					return nil, nil, fmt.Errorf("%s", errMsg)
 				}
 				errMsg := fmt.Sprintf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(body))
-				slog.Error(errMsg)
+				slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "response_body", string(body))
 				return nil, nil, fmt.Errorf("%s", errMsg)
 			}
 			errMsg := fmt.Sprintf("Gemini API error (HTTP %d): no response body", resp.StatusCode)
-			slog.Error(errMsg)
+			slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "error", "no response body")
 			return nil, nil, fmt.Errorf("%s", errMsg)
 		}
 
@@ -499,7 +499,7 @@ func (p *GeminiProvider) handleGeminiResponse(resp *http.Response, err error) ([
 		if geminiResp.Error != nil {
 			errMsg := fmt.Sprintf("Gemini API returned error (code: %d, status: %s): %s",
 				geminiResp.Error.Code, geminiResp.Error.Status, geminiResp.Error.Message)
-			slog.Error(errMsg)
+			slog.Error("Gemini API returned error", "error_code", geminiResp.Error.Code, "error_status", geminiResp.Error.Status, "error_message", geminiResp.Error.Message)
 			return body, &geminiResp, fmt.Errorf("%s", errMsg)
 		}
 
@@ -723,7 +723,7 @@ func (p *GeminiProvider) convertTools(tools []ToolDefinition) []GeminiFunctionDe
 
 	for _, tool := range tools {
 		cleanedParams := p.cleanToolParametersForGemini(tool.Parameters)
-		
+
 		cleanedTool := GeminiFunctionDeclaration{
 			Name:        tool.Name,
 			Description: tool.Description,
@@ -744,11 +744,11 @@ func (p *GeminiProvider) cleanToolParametersForGemini(params map[string]interfac
 
 	// Clean the schema first (removes additionalProperties, etc.)
 	cleaned := p.cleanSchemaForGemini(params)
-	
+
 	// Validate required properties (ensures all required props exist)
 	// This must happen after cleaning to catch any properties that were removed
 	p.validateRequiredProperties(cleaned)
-	
+
 	return cleaned
 }
 

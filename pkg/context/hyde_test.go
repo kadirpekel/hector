@@ -57,6 +57,10 @@ func (m *mockLLMForHyDE) GetTemperature() float64 {
 	return 0.7
 }
 
+func (m *mockLLMForHyDE) GetSupportedInputModes() []string {
+	return []string{"text/plain", "application/json"}
+}
+
 func (m *mockLLMForHyDE) Close() error {
 	return nil
 }

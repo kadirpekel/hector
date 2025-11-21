@@ -4,8 +4,6 @@ import (
 	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
-
-
 type ToolDefinition struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`

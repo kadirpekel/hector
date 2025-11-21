@@ -500,13 +500,19 @@ func (s *Server) logStartup() {
 	addresses := s.resolveAddresses()
 	agentCount := len(s.runtime.Registry().ListAgents())
 
-	slog.Info("HTTP server started", "address", addresses.HTTP)
-	slog.Info("gRPC server started", "address", addresses.GRPC)
-	slog.Info("Web UI available", "url", fmt.Sprintf("http://%s/", addresses.HTTP))
-	slog.Info("JSON-RPC endpoint", "url", fmt.Sprintf("http://%s/", addresses.HTTP))
-	slog.Info("REST API endpoint", "url", fmt.Sprintf("http://%s/v1/", addresses.HTTP))
+	httpURL := fmt.Sprintf("http://%s", addresses.HTTP)
+	grpcURL := fmt.Sprintf("grpc://%s", addresses.GRPC)
+	webUIURL := fmt.Sprintf("http://%s/", addresses.HTTP)
+	jsonRPCURL := fmt.Sprintf("http://%s/", addresses.HTTP)
+	restAPIURL := fmt.Sprintf("http://%s/v1/", addresses.HTTP)
 
-	fmt.Printf("Server started (agents: %d) 🍻\n", agentCount)
+	slog.Info("HTTP server started", "address", addresses.HTTP, "url", httpURL)
+	slog.Info("gRPC server started", "address", addresses.GRPC, "url", grpcURL)
+	slog.Info("Web UI available", "url", webUIURL)
+	slog.Info("JSON-RPC endpoint", "url", jsonRPCURL)
+	slog.Info("REST API endpoint", "url", restAPIURL)
+
+	fmt.Printf("Server started (agents: %d) 🚀\n", agentCount)
 }
 
 type ServerAddresses struct {

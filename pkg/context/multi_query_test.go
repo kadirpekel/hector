@@ -49,6 +49,10 @@ func (m *mockLLMProviderForMultiQuery) GetTemperature() float64 {
 	return 0.7
 }
 
+func (m *mockLLMProviderForMultiQuery) GetSupportedInputModes() []string {
+	return []string{"text/plain", "application/json"}
+}
+
 func (m *mockLLMProviderForMultiQuery) Close() error {
 	return nil
 }

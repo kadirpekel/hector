@@ -1849,11 +1849,3 @@ func (g *RESTGateway) handleTaskSubscription(w http.ResponseWriter, r *http.Requ
 		return
 	}
 }
-
-// Helper function to get keys from a map for debugging
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
