@@ -1,7 +1,7 @@
 # Hector Makefile
 # Build and release management for the Hector AI agent platform
 
-.PHONY: help build build-release install test clean fmt vet lint release version test-coverage test-coverage-summary test-package test-race test-verbose dev ci install-lint quality pre-commit
+.PHONY: help build build-release install test clean fmt vet lint release version test-coverage test-coverage-summary test-package test-race test-verbose dev ci install-lint quality pre-commit build-ui
 
 # Build flags
 BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -34,9 +34,17 @@ help:
 	@echo ""
 	@echo "Configuration:"
 	@echo "  validate-configs    - Validate all example configs"
+	@echo "  build-ui            - Build the UI and copy to static assets"
+
+# Build UI
+build-ui:
+	@echo "Building UI..."
+	cd ui && npm install && npm run build
+	@echo "Copying UI to static assets..."
+	cp ui/dist/index.html pkg/transport/static/index.html
 
 # Build the binary (development with debug symbols)
-build:
+build: build-ui
 	@echo "Building hector (development)..."
 	go build -ldflags "$(LDFLAGS_VERSION)" -o hector ./cmd/hector
 	@ls -lh hector
