@@ -73,8 +73,10 @@ export interface Message {
         taskId?: string;
         images?: Attachment[];
         contentOrder?: string[]; // Array of widget IDs in order of appearance
-        [key: string]: any;
+        [key: string]: unknown;
     };
+    // Note: toolCalls and thinkingBlocks are kept for backward compatibility
+    // but are not actively used - widgets array is the primary data structure
     toolCalls: ToolCall[];
     thinkingBlocks: ThinkingBlock[];
     widgets: Widget[];

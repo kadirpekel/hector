@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Wrench, ChevronDown, ChevronRight, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import type { Widget } from '../../types';
 import { cn } from '../../lib/utils';
@@ -10,9 +10,17 @@ interface ToolWidgetProps {
 }
 
 export const ToolWidget: React.FC<ToolWidgetProps> = ({ widget, onExpansionChange, shouldAnimate = false }) => {
-    const [isExpanded, setIsExpanded] = useState(widget.isExpanded);
+    // Widget expansion state: read from prop, sync changes via callback
+    const [isExpanded, setIsExpanded] = useState(widget.isExpanded ?? false);
     const { name, args } = widget.data;
     const status = widget.status;
+
+    // Sync local state when widget prop changes (e.g., from store updates)
+    useEffect(() => {
+        if (widget.isExpanded !== undefined && widget.isExpanded !== isExpanded) {
+            setIsExpanded(widget.isExpanded);
+        }
+    }, [widget.isExpanded, isExpanded]);
 
     const handleToggle = () => {
         const newExpanded = !isExpanded;

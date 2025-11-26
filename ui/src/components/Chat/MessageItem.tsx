@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -15,8 +15,8 @@ import 'highlight.js/styles/github-dark.css';
 
 // Shared ReactMarkdown configuration
 const markdownComponents = {
-    a: ({ node, ...props }: any) => <a {...props} className="text-hector-green hover:underline" target="_blank" rel="noopener noreferrer" />,
-    code: ({ node, inline, className, children, ...props }: any) => {
+    a: ({ ...props }: React.ComponentProps<'a'>) => <a {...props} className="text-hector-green hover:underline" target="_blank" rel="noopener noreferrer" />,
+    code: ({ inline, className, children, ...props }: React.ComponentProps<'code'> & { inline?: boolean }) => {
         const match = /language-(\w+)/.exec(className || '')
         return !inline && match ? (
             <code className={className} {...props}>
@@ -30,31 +30,20 @@ const markdownComponents = {
     }
 };
 
-interface MessageItemProps {
+interface MessageItemWithContextProps {
     message: Message;
-}
-
-interface MessageItemWithContextProps extends MessageItemProps {
     messageIndex: number;
     isLastMessage: boolean;
 }
 
 export const MessageItem: React.FC<MessageItemWithContextProps> = ({ message, messageIndex, isLastMessage }) => {
-    const { currentSessionId, getWidgetExpanded } = useStore();
+    const { currentSessionId } = useStore();
     const isUser = message.role === 'user';
     const isSystem = message.role === 'system';
 
-    // Restore widget expansion state from store
-    useEffect(() => {
-        if (currentSessionId && message.widgets) {
-            message.widgets.forEach((widget) => {
-                const savedExpanded = getWidgetExpanded(currentSessionId, message.id, widget.id);
-                if (savedExpanded !== undefined && widget.isExpanded !== savedExpanded) {
-                    widget.isExpanded = savedExpanded;
-                }
-            });
-        }
-    }, [currentSessionId, message.id, message.widgets, getWidgetExpanded]);
+    // Widget expansion state is managed via widget.isExpanded prop and onExpansionChange callback
+    // Widgets read their initial state from the prop and sync changes back via the callback
+    // No need for additional sync logic here - widgets handle their own state management
 
     if (isSystem) {
         return (
@@ -117,28 +106,62 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({ message, me
                     {(() => {
                         const contentOrder = message.metadata?.contentOrder || [];
                         const widgetsMap = new Map(message.widgets.map(w => [w.id, w]));
+                        const textBeforeWidgets = message.metadata?.textBeforeWidgets as string | undefined;
+                        const textAfterWidgets = message.metadata?.textAfterWidgets as string | undefined;
                         
-                        // If we have contentOrder, render widgets in that order, then text
+                        // If we have contentOrder, render content in that exact order
                         // Otherwise, render text first, then widgets (backward compatibility)
                         if (contentOrder.length > 0) {
                             return (
                                 <>
-                                    {/* Render widgets in order */
-                                    contentOrder.map((widgetId) => {
-                                        const widget = widgetsMap.get(widgetId);
-                                        if (!widget) return null;
-                                        return (
-                                            <div key={widget.id} className="mb-3">
-                                                <WidgetRenderer
-                                                    widget={widget}
-                                                    sessionId={currentSessionId || undefined}
-                                                    messageId={message.id}
-                                                    message={message}
-                                                    messageIndex={messageIndex}
-                                                    isLastMessage={isLastMessage}
-                                                />
-                                            </div>
-                                        );
+                                    {contentOrder.map((itemId) => {
+                                        // Handle text markers
+                                        if (itemId === '__text_before__' && textBeforeWidgets) {
+                                            return (
+                                                <div key="__text_before__" className="prose prose-invert prose-sm max-w-none mb-3">
+                                                    <ReactMarkdown
+                                                        remarkPlugins={[remarkGfm]}
+                                                        rehypePlugins={[rehypeHighlight]}
+                                                        components={markdownComponents}
+                                                    >
+                                                        {textBeforeWidgets}
+                                                    </ReactMarkdown>
+                                                </div>
+                                            );
+                                        }
+                                        
+                                        if (itemId === '__text_after__' && textAfterWidgets) {
+                                            return (
+                                                <div key="__text_after__" className="prose prose-invert prose-sm max-w-none mb-3">
+                                                    <ReactMarkdown
+                                                        remarkPlugins={[remarkGfm]}
+                                                        rehypePlugins={[rehypeHighlight]}
+                                                        components={markdownComponents}
+                                                    >
+                                                        {textAfterWidgets}
+                                                    </ReactMarkdown>
+                                                </div>
+                                            );
+                                        }
+                                        
+                                        // Handle widgets
+                                        const widget = widgetsMap.get(itemId);
+                                        if (widget) {
+                                            return (
+                                                <div key={widget.id} className="mb-3">
+                                                    <WidgetRenderer
+                                                        widget={widget}
+                                                        sessionId={currentSessionId || undefined}
+                                                        messageId={message.id}
+                                                        message={message}
+                                                        messageIndex={messageIndex}
+                                                        isLastMessage={isLastMessage}
+                                                    />
+                                                </div>
+                                            );
+                                        }
+                                        
+                                        return null;
                                     })}
                                     
                                     {/* Render any widgets not in contentOrder */}
@@ -157,8 +180,8 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({ message, me
                                             </div>
                                         ))}
                                     
-                                    {/* Text content after widgets */}
-                                    {message.text && (
+                                    {/* Fallback: render remaining text if no markers were used */}
+                                    {!textBeforeWidgets && !textAfterWidgets && message.text && (
                                         <div className="prose prose-invert prose-sm max-w-none mt-3">
                                             <ReactMarkdown
                                                 remarkPlugins={[remarkGfm]}

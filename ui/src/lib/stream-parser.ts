@@ -1,5 +1,7 @@
 import { useStore } from '../store/useStore';
-import type { Message } from '../types';
+import type { Message, Widget } from '../types';
+import { getBaseUrl } from './api-utils';
+import { handleError } from './error-handler';
 
 export class StreamParser {
     private sessionId: string;
@@ -16,16 +18,12 @@ export class StreamParser {
         this.abortController.abort();
     }
 
-    private getBaseUrl(): string {
-        const state = useStore.getState();
-        return state.endpointUrl || window.location.origin;
-    }
 
-    public async stream(url: string, requestBody: any) {
-        const { updateMessage, addMessage, setError, setIsGenerating } = useStore.getState();
+    public async stream(url: string, requestBody: unknown) {
+        const { updateMessage, setIsGenerating } = useStore.getState();
         
         // Update base URL if needed (handle relative URLs)
-        const baseUrl = this.getBaseUrl();
+        const baseUrl = getBaseUrl();
         const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
 
         try {
@@ -59,36 +57,32 @@ export class StreamParser {
                         try {
                             const data = JSON.parse(line.substring(6));
                             this.handleData(data);
-                        } catch (e) {
-                            console.error('Error parsing SSE data:', e);
+                        } catch (parseError) {
+                            // Silently skip malformed SSE data chunks
+                            // Log only in development
+                            if (import.meta.env.DEV) {
+                                console.error('Error parsing SSE data:', parseError);
+                            }
                         }
                     }
                 }
             }
-        } catch (error: any) {
+            
+            // Stream completed successfully
             setIsGenerating(false);
-            if (error.name === 'AbortError') {
-                console.log('Stream aborted');
+        } catch (error: unknown) {
+            setIsGenerating(false);
+            if (error instanceof Error && error.name === 'AbortError') {
+                // Stream was cancelled by user - update message state
                 updateMessage(this.sessionId, this.messageId, { cancelled: true });
             } else {
-                console.error('Stream error:', error);
-                const errorMessage = error.message || 'An unknown error occurred';
-                setError(errorMessage);
-                addMessage(this.sessionId, {
-                    id: Math.random().toString(36).substring(7),
-                    role: 'system',
-                    text: `Error: ${errorMessage}`,
-                    metadata: {},
-                    toolCalls: [],
-                    thinkingBlocks: [],
-                    widgets: [],
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                });
+                // Real error occurred - use error handler (will display via ErrorDisplay)
+                handleError(error, 'Stream error');
             }
         }
     }
 
-    private handleData(data: any) {
+    private handleData(data: unknown) {
         const { setSessionTaskId, sessions } = useStore.getState();
         const session = sessions[this.sessionId];
         if (!session) return;
@@ -96,11 +90,27 @@ export class StreamParser {
         const message = session.messages.find(m => m.id === this.messageId);
         if (!message) return;
 
-        const result = data.result || data;
+        const result = (data as { result?: unknown }).result || data;
+
+        const resultObj = result as {
+            statusUpdate?: {
+                taskId?: string;
+                status?: {
+                    state?: string;
+                    update?: unknown;
+                };
+            };
+            message?: {
+                taskId?: string;
+                [key: string]: unknown;
+            };
+            parts?: unknown[];
+            [key: string]: unknown;
+        };
 
         // Handle Task Status Updates
-        if (result.statusUpdate) {
-            const statusUpdate = result.statusUpdate;
+        if (resultObj.statusUpdate) {
+            const statusUpdate = resultObj.statusUpdate;
 
             // Update Task ID if present
             if (statusUpdate.taskId) {
@@ -119,58 +129,89 @@ export class StreamParser {
             }
         }
         // Handle Direct Message Updates
-        else if (result.message) {
-            if (result.message.taskId) {
-                setSessionTaskId(this.sessionId, result.message.taskId);
+        else if (resultObj.message) {
+            if (resultObj.message.taskId) {
+                setSessionTaskId(this.sessionId, resultObj.message.taskId);
             }
-            this.processMessageUpdate(message, result.message);
+            this.processMessageUpdate(message, resultObj.message);
         }
         // Handle Parts directly
-        else if (result.parts) {
-            this.processMessageUpdate(message, result);
+        else if (resultObj.parts) {
+            this.processMessageUpdate(message, resultObj);
         }
     }
 
-    private processMessageUpdate(currentMessage: Message, update: any) {
+    private processMessageUpdate(currentMessage: Message, update: unknown) {
         const { updateMessage } = useStore.getState();
-        const parts = update.parts || [];
+        const updateObj = update as { parts?: unknown[] };
+        const parts = updateObj.parts || [];
 
         // Process parts sequentially to maintain correct order
         // This is the proper way to handle content ordering
-        const widgetMap = new Map<string, any>();
+        const widgetMap = new Map<string, Widget>();
         const contentOrder: string[] = currentMessage.metadata?.contentOrder ? [...currentMessage.metadata.contentOrder] : [];
         
         // Initialize with existing widgets
-        let maxOrder = 0;
-        currentMessage.widgets.forEach((w, idx) => {
-            widgetMap.set(w.id, { ...w, _order: idx });
-            maxOrder = Math.max(maxOrder, idx);
+        currentMessage.widgets.forEach((w) => {
+            widgetMap.set(w.id, w);
         });
         
-        // Track text segments - we'll accumulate text but also track where widgets appear
+        // Track text that appears before widgets vs after widgets
         let accumulatedText = currentMessage.text;
+        let textBeforeWidgets = currentMessage.metadata?.textBeforeWidgets as string || '';
+        let textAfterWidgets = currentMessage.metadata?.textAfterWidgets as string || '';
         
         // Process parts in order - this is critical for correct ordering
-        parts.forEach((part: any, partIndex: number) => {
+        parts.forEach((part: unknown, partIndex: number) => {
+            const partObj = part as {
+                metadata?: {
+                    event_type?: string;
+                    block_type?: string;
+                    tool_call_id?: string;
+                    tool_name?: string;
+                    thinking_type?: string;
+                    block_id?: string;
+                    is_error?: boolean;
+                    url?: string;
+                    revised_prompt?: string;
+                };
+                data?: {
+                    data?: {
+                        interaction_type?: string;
+                        approval_id?: string;
+                        tool_name?: string;
+                        tool_input?: unknown;
+                        options?: string[];
+                        id?: string;
+                        name?: string;
+                        arguments?: unknown;
+                        text?: string;
+                        content?: string;
+                        tool_call_id?: string;
+                    };
+                };
+                text?: string;
+            };
+            
             // Check if this is a widget part
-            const isThinking = part.metadata?.event_type === 'thinking' || part.metadata?.block_type === 'thinking';
-            const isToolCall = part.metadata?.event_type === 'tool_call' && !part.metadata?.hasOwnProperty('is_error');
-            const isApproval = part.data?.data?.interaction_type === 'tool_approval';
-            const isToolResult = part.metadata?.event_type === 'tool_call' && part.metadata?.hasOwnProperty('is_error');
+            const metadata = partObj.metadata || {};
+            const isThinking = metadata.event_type === 'thinking' || metadata.block_type === 'thinking';
+            const isToolCall = metadata.event_type === 'tool_call' && !('is_error' in metadata);
+            const isApproval = partObj.data?.data?.interaction_type === 'tool_approval';
+            const isToolResult = metadata.event_type === 'tool_call' && ('is_error' in metadata);
             
             if (isThinking || isToolCall || isApproval) {
                 // Widget appears - track its order
                 if (isThinking) {
-                    const thinkingId = part.metadata?.block_id || `thinking-${partIndex}`;
+                    const thinkingId = metadata.block_id || `thinking-${partIndex}`;
                     if (!widgetMap.has(thinkingId)) {
                         widgetMap.set(thinkingId, {
                             id: thinkingId,
                             type: 'thinking',
-                            data: { type: part.metadata?.thinking_type || 'default' },
+                            data: { type: metadata.thinking_type || 'default' },
                             status: 'active',
-                            content: part.text || part.data?.data?.text || '',
-                            isExpanded: false,
-                            _order: maxOrder++
+                            content: partObj.text || partObj.data?.data?.text || '',
+                            isExpanded: false
                         });
                         // Add to content order if not already there
                         if (!contentOrder.includes(thinkingId)) {
@@ -179,45 +220,45 @@ export class StreamParser {
                     } else {
                         // Update existing thinking block
                         const existing = widgetMap.get(thinkingId);
-                        widgetMap.set(thinkingId, {
-                            ...existing,
-                            content: (existing.content || '') + (part.text || part.data?.data?.text || ''),
-                            status: 'active'
-                        });
+                        if (existing) {
+                            widgetMap.set(thinkingId, {
+                                ...existing,
+                                content: (existing.content || '') + (partObj.text || partObj.data?.data?.text || ''),
+                                status: 'active'
+                            });
+                        }
                     }
                 } else if (isToolCall) {
-                    const toolId = part.metadata?.tool_call_id || part.data?.data?.id || `tool-${partIndex}`;
+                    const toolId = metadata.tool_call_id || partObj.data?.data?.id || `tool-${partIndex}`;
                     if (!widgetMap.has(toolId)) {
                         widgetMap.set(toolId, {
                             id: toolId,
                             type: 'tool',
                             data: {
-                                name: part.metadata?.tool_name || part.data?.data?.name || 'unknown',
-                                args: part.data?.data?.arguments || {}
+                                name: metadata.tool_name || partObj.data?.data?.name || 'unknown',
+                                args: partObj.data?.data?.arguments || {}
                             },
                             status: 'working',
                             content: '',
-                            isExpanded: false,
-                            _order: maxOrder++
+                            isExpanded: false
                         });
                         if (!contentOrder.includes(toolId)) {
                             contentOrder.push(toolId);
                         }
                     }
                 } else if (isApproval) {
-                    const approvalId = part.data?.data?.approval_id || `approval-${partIndex}`;
+                    const approvalId = partObj.data?.data?.approval_id || `approval-${partIndex}`;
                     if (!widgetMap.has(approvalId)) {
                         widgetMap.set(approvalId, {
                             id: approvalId,
                             type: 'approval',
                             data: {
-                                toolName: part.data?.data?.tool_name,
-                                toolInput: part.data?.data?.tool_input,
-                                options: part.data?.data?.options
+                                toolName: partObj.data?.data?.tool_name,
+                                toolInput: partObj.data?.data?.tool_input,
+                                options: partObj.data?.data?.options
                             },
                             status: 'pending',
-                            isExpanded: true,
-                            _order: maxOrder++
+                            isExpanded: true
                         });
                         if (!contentOrder.includes(approvalId)) {
                             contentOrder.push(approvalId);
@@ -226,24 +267,27 @@ export class StreamParser {
                 }
             } else if (isToolResult) {
                 // Tool result - update existing tool widget
-                const toolId = part.metadata?.tool_call_id || part.data?.data?.tool_call_id;
+                const toolId = metadata.tool_call_id || partObj.data?.data?.tool_call_id;
                 if (toolId && widgetMap.has(toolId)) {
                     const existing = widgetMap.get(toolId);
-                    const isDenied = part.metadata?.is_error && 
-                        (part.data?.data?.content?.includes('TOOL_EXECUTION_DENIED') || 
-                         part.data?.data?.content?.includes('user denied'));
+                    if (!existing) return;
+                    
+                    const content = partObj.data?.data?.content || '';
+                    const isDenied = metadata.is_error && 
+                        (content.includes('TOOL_EXECUTION_DENIED') || 
+                         content.includes('user denied'));
                     
                     widgetMap.set(toolId, {
                         ...existing,
-                        status: isDenied ? 'failed' : (part.metadata?.is_error ? 'failed' : 'success'),
-                        content: part.data?.data?.content || existing.content || ''
+                        status: isDenied ? 'failed' : (metadata.is_error ? 'failed' : 'success'),
+                        content: content || existing.content || ''
                     });
                     
                     // If tool was denied, update any related approval widget
                     if (isDenied) {
                         widgetMap.forEach((widget, widgetId) => {
                             if (widget.type === 'approval' && 
-                                widget.data?.toolName === existing.data?.name &&
+                                widget.data?.toolName === (existing.data as { name?: string })?.name &&
                                 widget.status === 'pending') {
                                 widgetMap.set(widgetId, {
                                     ...widget,
@@ -254,32 +298,35 @@ export class StreamParser {
                         });
                     }
                     
-                    // Check for image generation
-                    if (existing.data.name === 'generate_image' && part.metadata?.url) {
+                    // Check for image generation - insert image widget right after the tool
+                    if ((existing.data as { name?: string })?.name === 'generate_image' && metadata.url) {
                         const imageId = `img-${toolId}`;
                         if (!widgetMap.has(imageId)) {
                             widgetMap.set(imageId, {
                                 id: imageId,
                                 type: 'image',
                                 data: {
-                                    url: part.metadata.url,
-                                    revised_prompt: part.metadata.revised_prompt
+                                    url: metadata.url,
+                                    revised_prompt: metadata.revised_prompt
                                 },
                                 status: 'success',
-                                isExpanded: true,
-                                _order: existing._order + 0.5
+                                isExpanded: true
                             });
-                            // Insert image right after tool in content order
+                            // Insert image right after tool in content order (clean insertion, no hacky ordering)
                             const toolIndex = contentOrder.indexOf(toolId);
                             if (toolIndex !== -1 && !contentOrder.includes(imageId)) {
                                 contentOrder.splice(toolIndex + 1, 0, imageId);
+                            } else if (toolIndex === -1 && !contentOrder.includes(imageId)) {
+                                // Tool not in order yet, add both
+                                contentOrder.push(toolId);
+                                contentOrder.push(imageId);
                             }
                         }
                     }
                 }
-            } else if (part.text && !isThinking && !isToolCall && !isApproval) {
-                // Regular text part - accumulate it
-                const textContent = part.text || '';
+            } else if (partObj.text && !isThinking && !isToolCall && !isApproval) {
+                // Regular text part - accumulate it and track its position
+                const textContent = partObj.text || '';
                 
                 // Filter out verbose backend messages that are redundant with widgets
                 // These patterns match common approval-related backend messages
@@ -299,6 +346,26 @@ export class StreamParser {
                 
                 if (textContent && !shouldFilter) {
                     accumulatedText += textContent;
+                    
+                    // Track text position: before widgets or after widgets
+                    // If contentOrder has widgets, text goes after; otherwise before
+                    const hasWidgetsInOrder = contentOrder.some(id => widgetMap.has(id));
+                    
+                    if (hasWidgetsInOrder) {
+                        // Text appears after widgets
+                        textAfterWidgets += textContent;
+                        // Add text marker to contentOrder if not already present
+                        if (!contentOrder.includes('__text_after__')) {
+                            contentOrder.push('__text_after__');
+                        }
+                    } else {
+                        // Text appears before widgets
+                        textBeforeWidgets += textContent;
+                        // Add text marker to contentOrder if not already present
+                        if (!contentOrder.includes('__text_before__')) {
+                            contentOrder.unshift('__text_before__'); // Add at beginning
+                        }
+                    }
                 }
             }
         });
@@ -313,9 +380,10 @@ export class StreamParser {
         }
         
         // Mark thinking as completed when tool calls start
-        const hasNewToolCalls = parts.some((p: any) => 
-            p.metadata?.event_type === 'tool_call' && !p.metadata?.hasOwnProperty('is_error')
-        );
+        const hasNewToolCalls = parts.some((p: unknown) => {
+            const pObj = p as { metadata?: { event_type?: string; is_error?: boolean } };
+            return pObj.metadata?.event_type === 'tool_call' && !('is_error' in (pObj.metadata || {}));
+        });
         if (hasNewToolCalls) {
             widgetMap.forEach((widget, id) => {
                 if (widget.type === 'thinking' && widget.status === 'active') {
@@ -324,35 +392,36 @@ export class StreamParser {
             });
         }
 
-        // Sort widgets by their order in contentOrder array, maintaining insertion order
-        const orderedWidgets: any[] = [];
-        const unorderedWidgets: any[] = [];
+        // Build final widget array in contentOrder sequence
+        const orderedWidgets: Widget[] = [];
+        const seenWidgetIds = new Set<string>();
         
-        // First, add widgets in contentOrder
+        // First, add widgets in contentOrder (maintains stream order)
         contentOrder.forEach(widgetId => {
             const widget = widgetMap.get(widgetId);
             if (widget) {
-                const { _order, ...cleanWidget } = widget;
-                orderedWidgets.push(cleanWidget);
+                orderedWidgets.push(widget);
+                seenWidgetIds.add(widgetId);
             }
         });
         
-        // Then add any widgets not in contentOrder (shouldn't happen, but safety)
+        // Then add any widgets not in contentOrder (shouldn't happen, but safety fallback)
         widgetMap.forEach((widget, id) => {
-            if (!contentOrder.includes(id)) {
-                const { _order, ...cleanWidget } = widget;
-                unorderedWidgets.push(cleanWidget);
+            if (!seenWidgetIds.has(id)) {
+                orderedWidgets.push(widget);
             }
         });
         
-        const newWidgets = [...orderedWidgets, ...unorderedWidgets];
+        const newWidgets = orderedWidgets;
 
         updateMessage(this.sessionId, this.messageId, {
             text: accumulatedText,
             widgets: newWidgets,
             metadata: {
                 ...currentMessage.metadata,
-                contentOrder: contentOrder.length > 0 ? contentOrder : undefined
+                contentOrder: contentOrder.length > 0 ? contentOrder : undefined,
+                textBeforeWidgets: textBeforeWidgets || undefined,
+                textAfterWidgets: textAfterWidgets || undefined
             }
         });
     }

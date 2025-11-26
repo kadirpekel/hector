@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Image as ImageIcon, ChevronDown, ChevronRight, Download, Maximize2 } from 'lucide-react';
 import type { Widget } from '../../types';
 
@@ -9,8 +9,18 @@ interface ImageWidgetProps {
 }
 
 export const ImageWidget: React.FC<ImageWidgetProps> = ({ widget, onExpansionChange }) => {
-    const [isExpanded, setIsExpanded] = useState(widget.isExpanded);
+    // Widget expansion state: read from prop, sync changes via callback
+    // Standardized pattern: use local state with sync effect (consistent with other widgets)
+    // Note: This pattern matches ToolWidget and ThinkingWidget for consistency
+    const [isExpanded, setIsExpanded] = useState(widget.isExpanded ?? true); // Default to expanded for images
     const { url, revised_prompt } = widget.data;
+
+    // Sync local state when widget prop changes (e.g., from store updates)
+    useEffect(() => {
+        if (widget.isExpanded !== undefined && widget.isExpanded !== isExpanded) {
+            setIsExpanded(widget.isExpanded);
+        }
+    }, [widget.isExpanded, isExpanded]);
 
     const handleToggle = () => {
         const newExpanded = !isExpanded;

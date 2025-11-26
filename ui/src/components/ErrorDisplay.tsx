@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { cn } from '../lib/utils';
+import { TIMING } from '../lib/constants';
 
 export const ErrorDisplay: React.FC = () => {
     const { error, setError } = useStore();
@@ -10,7 +11,7 @@ export const ErrorDisplay: React.FC = () => {
         if (error) {
             const timer = setTimeout(() => {
                 setError(null);
-            }, 10000); // Auto-dismiss after 10 seconds
+            }, TIMING.ERROR_AUTO_DISMISS);
 
             return () => clearTimeout(timer);
         }

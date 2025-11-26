@@ -4,6 +4,8 @@ import type { Widget } from '../../types';
 import { cn } from '../../lib/utils';
 import { useStore } from '../../store/useStore';
 import { StreamParser } from '../../lib/stream-parser';
+import { handleError } from '../../lib/error-handler';
+import { generateShortId } from '../../lib/id-generator';
 
 interface ApprovalWidgetProps {
     widget: Widget;
@@ -22,7 +24,7 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({ widget, sessionI
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toolName, toolInput } = widget.data;
     const { status, decision } = widget;
-    const { updateMessage, sessions, selectedAgent } = useStore();
+    const { updateMessage, sessions, selectedAgent, setActiveStreamParser, setIsGenerating } = useStore();
 
     // Update expanded state when widget status changes
     useEffect(() => {
@@ -84,27 +86,26 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({ widget, sessionI
                         ]
                     }
                 },
-                id: Date.now().toString()
+                id: generateShortId()
             };
 
             // Use StreamParser to handle the response stream
             const parser = new StreamParser(sessionId, approvalMessage.id);
-            useStore.getState().setActiveStreamParser(parser);
-            useStore.getState().setIsGenerating(true);
+            setActiveStreamParser(parser);
+            setIsGenerating(true);
 
             try {
                 await parser.stream(`${selectedAgent.url}/stream`, requestBody);
-            } catch (streamError: any) {
-                if (streamError.name !== 'AbortError') {
+            } catch (streamError: unknown) {
+                if (streamError instanceof Error && streamError.name !== 'AbortError') {
                     throw streamError;
                 }
             } finally {
-                useStore.getState().setIsGenerating(false);
-                useStore.getState().setActiveStreamParser(null);
+                setIsGenerating(false);
+                setActiveStreamParser(null);
             }
 
-        } catch (error: any) {
-            console.error('Failed to send approval decision:', error);
+        } catch (error: unknown) {
             // Revert widget state on error
             const errorSession = sessions[sessionId];
             const errorMessage = errorSession?.messages.find(m => m.widgets.some(w => w.id === widget.id));
@@ -116,7 +117,7 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({ widget, sessionI
                 );
                 updateMessage(sessionId, errorMessage.id, { widgets: revertedWidgets });
             }
-            useStore.getState().setError(error.message || 'Failed to send approval decision');
+            handleError(error, 'Failed to send approval decision');
         } finally {
             setIsSubmitting(false);
         }

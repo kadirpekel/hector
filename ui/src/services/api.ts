@@ -1,10 +1,5 @@
 import type { Agent, AgentCard } from '../types';
-import { useStore } from '../store/useStore';
-
-const getBaseUrl = (): string => {
-    const state = useStore.getState();
-    return state.endpointUrl || window.location.origin;
-};
+import { getBaseUrl } from '../lib/api-utils';
 
 export const api = {
     async fetchAgents(): Promise<{ agents: Agent[] }> {

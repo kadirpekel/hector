@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Brain, ChevronDown, ChevronRight, CheckCircle2, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -12,9 +12,17 @@ interface ThinkingWidgetProps {
 }
 
 export const ThinkingWidget: React.FC<ThinkingWidgetProps> = ({ widget, onExpansionChange, shouldAnimate = false }) => {
-    const [isExpanded, setIsExpanded] = useState(widget.isExpanded);
+    // Widget expansion state: read from prop, sync changes via callback
+    const [isExpanded, setIsExpanded] = useState(widget.isExpanded ?? false);
     const { type } = widget.data;
     const status = widget.status;
+
+    // Sync local state when widget prop changes (e.g., from store updates)
+    useEffect(() => {
+        if (widget.isExpanded !== undefined && widget.isExpanded !== isExpanded) {
+            setIsExpanded(widget.isExpanded);
+        }
+    }, [widget.isExpanded, isExpanded]);
 
     const getLabel = (type: string) => {
         switch (type) {

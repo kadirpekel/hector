@@ -4,6 +4,8 @@ import { useStore } from '../store/useStore';
 import { cn, formatTime } from '../lib/utils';
 import { api } from '../services/api';
 import { DeleteButton } from './DeleteButton';
+import { DEFAULT_SUPPORTED_FILE_TYPES } from '../lib/constants';
+import { handleError } from '../lib/error-handler';
 
 export const Sidebar: React.FC = () => {
     const {
@@ -36,16 +38,14 @@ export const Sidebar: React.FC = () => {
                     try {
                         const card = await api.fetchAgentCard(firstAgent.url);
                         setAgentCard(card); // This will also update supportedFileTypes
-                    } catch (e: any) {
-                        console.error('Failed to fetch agent card:', e);
-                        setError(`Failed to fetch agent card: ${e.message}`);
+                    } catch (error) {
+                        handleError(error, 'Failed to fetch agent card');
                         // Reset to defaults on error
-                        useStore.getState().setSupportedFileTypes(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+                        useStore.getState().setSupportedFileTypes([...DEFAULT_SUPPORTED_FILE_TYPES]);
                     }
                 }
-            } catch (e: any) {
-                console.error('Failed to load agents:', e);
-                setError(`Failed to load agents: ${e.message}`);
+            } catch (error) {
+                handleError(error, 'Failed to load agents');
             }
         };
 
@@ -61,12 +61,11 @@ export const Sidebar: React.FC = () => {
             try {
                 const card = await api.fetchAgentCard(agent.url);
                 setAgentCard(card); // This will also update supportedFileTypes
-            } catch (e: any) {
-                console.error('Failed to fetch agent card:', e);
-                setError(`Failed to fetch agent card: ${e.message}`);
+            } catch (error) {
+                handleError(error, 'Failed to fetch agent card');
                 setAgentCard(null);
                 // Reset to defaults on error
-                useStore.getState().setSupportedFileTypes(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+                useStore.getState().setSupportedFileTypes([...DEFAULT_SUPPORTED_FILE_TYPES]);
             }
         }
     };

@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import type { Session, Message, Agent, AgentCard } from '../types';
 import { StreamParser as StreamParserClass } from '../lib/stream-parser';
+import { DEFAULT_SUPPORTED_FILE_TYPES } from '../lib/constants';
 
 type StreamParser = StreamParserClass;
 
@@ -113,7 +114,7 @@ export const useStore = create<AppState>()(
             availableAgents: [],
             selectedAgent: null,
             agentCard: null,
-            supportedFileTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+            supportedFileTypes: [...DEFAULT_SUPPORTED_FILE_TYPES],
 
             setAvailableAgents: (agents) => set({ availableAgents: agents }),
             setSelectedAgent: (agent) => set({ selectedAgent: agent }),
@@ -130,13 +131,13 @@ export const useStore = create<AppState>()(
                     
                     // If no file types found, fall back to image defaults
                     if (fileTypes.length === 0) {
-                        set({ supportedFileTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] });
+                        set({ supportedFileTypes: [...DEFAULT_SUPPORTED_FILE_TYPES] });
                     } else {
                         set({ supportedFileTypes: fileTypes });
                     }
                 } else {
                     // No input modes specified, use defaults
-                    set({ supportedFileTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] });
+                    set({ supportedFileTypes: [...DEFAULT_SUPPORTED_FILE_TYPES] });
                 }
             },
             setSupportedFileTypes: (types) => set({ supportedFileTypes: types }),
@@ -253,10 +254,10 @@ export const useStore = create<AppState>()(
                     const message = session.messages.find(m => m.id === messageId);
                     if (!message) return state;
 
-                    const widget = message.widgets.find(w => w.id === widgetId);
-                    if (widget) {
-                        widget.isExpanded = expanded;
-                    }
+                    // Create new widgets array with updated widget (immutable update)
+                    const updatedWidgets = message.widgets.map(w =>
+                        w.id === widgetId ? { ...w, isExpanded: expanded } : w
+                    );
 
                     return {
                         sessions: {
@@ -264,7 +265,7 @@ export const useStore = create<AppState>()(
                             [sessionId]: {
                                 ...session,
                                 messages: session.messages.map(m =>
-                                    m.id === messageId ? { ...m, widgets: [...m.widgets] } : m
+                                    m.id === messageId ? { ...m, widgets: updatedWidgets } : m
                                 ),
                             },
                         },
@@ -300,7 +301,7 @@ export const useStore = create<AppState>()(
             onRehydrateStorage: () => (state) => {
                 if (state) {
                     // Clean up any potential issues on load
-                    console.log('State rehydrated');
+                    // State successfully rehydrated from localStorage
                 }
             },
         }

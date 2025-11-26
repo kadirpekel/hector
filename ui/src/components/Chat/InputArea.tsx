@@ -4,6 +4,9 @@ import { StreamParser } from '../../lib/stream-parser';
 import { useStore } from '../../store/useStore';
 import type { Attachment } from '../../types';
 import { cn } from '../../lib/utils';
+import { TIMING, UI } from '../../lib/constants';
+import { handleError } from '../../lib/error-handler';
+import { generateId, generateShortId } from '../../lib/id-generator';
 
 export const InputArea: React.FC = () => {
     const {
@@ -15,6 +18,8 @@ export const InputArea: React.FC = () => {
         setActiveStreamParser,
         cancelGeneration,
         supportedFileTypes,
+        sessions,
+        updateSessionTitle,
     } = useStore();
     const [input, setInput] = useState('');
     const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -25,7 +30,7 @@ export const InputArea: React.FC = () => {
     useEffect(() => {
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
-            textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
+            textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, UI.MAX_TEXTAREA_HEIGHT) + 'px';
         }
     }, [input]);
 
@@ -39,7 +44,7 @@ export const InputArea: React.FC = () => {
             prevSessionId.current = currentSessionId;
             const timer = setTimeout(() => {
                 textareaRef.current?.focus();
-            }, 150);
+            }, TIMING.AUTO_FOCUS_DELAY);
             return () => clearTimeout(timer);
         }
     }, [currentSessionId, selectedAgent]);
@@ -50,7 +55,7 @@ export const InputArea: React.FC = () => {
             // Generation just completed - focus input for next user input
             const timer = setTimeout(() => {
                 textareaRef.current?.focus();
-            }, 200); // Small delay to let UI settle after stream completes
+            }, TIMING.POST_GENERATION_FOCUS_DELAY);
             return () => clearTimeout(timer);
         }
         prevIsGenerating.current = isGenerating;
@@ -103,7 +108,7 @@ export const InputArea: React.FC = () => {
                 const [base64, preview] = await Promise.all([base64Promise, previewPromise]);
 
                 newAttachments.push({
-                    id: Math.random().toString(36).substring(7),
+                    id: generateId(),
                     file,
                     preview,
                     base64,
@@ -133,7 +138,7 @@ export const InputArea: React.FC = () => {
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
         // Add user message to UI
-        const userMessageId = Math.random().toString(36).substring(7);
+        const userMessageId = generateId();
         addMessage(currentSessionId, {
             id: userMessageId,
             role: 'user',
@@ -148,14 +153,16 @@ export const InputArea: React.FC = () => {
         });
 
         // Update session title from first user message
-        const session = useStore.getState().sessions[currentSessionId];
+        const session = sessions[currentSessionId];
         if (session && session.title === 'New conversation' && messageText) {
-            const title = messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText;
-            useStore.getState().updateSessionTitle(currentSessionId, title);
+            const title = messageText.length > UI.MAX_TITLE_LENGTH 
+                ? messageText.substring(0, UI.MAX_TITLE_LENGTH) + '...' 
+                : messageText;
+            updateSessionTitle(currentSessionId, title);
         }
 
         // Create agent message placeholder
-        const agentMessageId = Math.random().toString(36).substring(7);
+        const agentMessageId = generateId();
         addMessage(currentSessionId, {
             id: agentMessageId,
             role: 'agent',
@@ -174,7 +181,7 @@ export const InputArea: React.FC = () => {
             setActiveStreamParser(parser);
 
             // Prepare parts
-            const parts: any[] = [];
+            const parts: Array<{ text?: string; file?: { file_with_bytes: string; media_type: string; name: string } }> = [];
             if (messageText) parts.push({ text: messageText });
 
             for (const att of messageAttachments) {
@@ -187,31 +194,42 @@ export const InputArea: React.FC = () => {
                 });
             }
 
-            const requestBody: any = {
+            const requestBody: {
+                jsonrpc: string;
+                method: string;
+                params: {
+                    request: {
+                        contextId: string;
+                        role: string;
+                        parts: typeof parts;
+                        taskId?: string;
+                    };
+                };
+                id: string;
+            } = {
                 jsonrpc: '2.0',
                 method: 'message/stream',
                 params: {
                     request: {
-                        contextId: useStore.getState().sessions[currentSessionId].contextId,
+                        contextId: sessions[currentSessionId].contextId,
                         role: 'user',
                         parts: parts
                     }
                 },
-                id: Date.now().toString()
+                id: generateShortId()
             };
 
             // Handle Task ID for resumption
-            const currentTaskId = useStore.getState().sessions[currentSessionId].taskId;
+            const currentTaskId = sessions[currentSessionId].taskId;
             if (currentTaskId) {
                 requestBody.params.request.taskId = currentTaskId;
             }
 
             if (!selectedAgent) throw new Error('No agent selected');
             await parser.stream(`${selectedAgent.url}/stream`, requestBody);
-        } catch (e: any) {
-            console.error('Send error:', e);
-            if (e.name !== 'AbortError') {
-                useStore.getState().setError(e.message || 'Failed to send message');
+        } catch (error: unknown) {
+            if (error instanceof Error && error.name !== 'AbortError') {
+                handleError(error, 'Failed to send message');
             }
             setIsGenerating(false);
         } finally {
