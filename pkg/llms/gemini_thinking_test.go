@@ -47,7 +47,7 @@ func TestGeminiProvider_GenerateStreaming_Thinking(t *testing.T) {
 		// Stream the response chunks in SSE format
 		for _, resp := range mockResponse {
 			data, _ := json.Marshal(resp)
-			w.Write([]byte("data: " + string(data) + "\n\n"))
+			_, _ = w.Write([]byte("data: " + string(data) + "\n\n"))
 		}
 	}))
 	defer server.Close()
@@ -81,7 +81,7 @@ func TestGeminiProvider_GenerateStreaming_Thinking(t *testing.T) {
 
 	// Verify chunks
 	require.Len(t, receivedChunks, 3)
-	
+
 	// First chunk should be thinking
 	assert.Equal(t, "thinking", receivedChunks[0].Type)
 	assert.Equal(t, "I need to think about this...", receivedChunks[0].Text)
