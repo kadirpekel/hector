@@ -469,6 +469,10 @@ func TestOllamaProvider_GenerateStreaming_WithThinking(t *testing.T) {
 		Type:  "ollama",
 		Model: "qwen3",
 		Host:  server.URL,
+		// Enable thinking via provider config (not context)
+		Thinking: &config.ThinkingConfig{
+			Enabled: true,
+		},
 	}
 
 	provider, err := NewOllamaProviderFromConfig(cfg)
@@ -481,9 +485,8 @@ func TestOllamaProvider_GenerateStreaming_WithThinking(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	// Set ShowThinking in context to enable thinking for thinking-capable models
-	ctx := context.WithValue(context.Background(), protocol.ShowThinkingKey, true)
-	ch, err := provider.GenerateStreaming(ctx, messages, tools)
+	// Thinking is enabled via LLMProviderConfig.Thinking, not via context
+	ch, err := provider.GenerateStreaming(context.Background(), messages, tools)
 
 	if err != nil {
 		t.Errorf("GenerateStreaming() error = %v, want nil", err)

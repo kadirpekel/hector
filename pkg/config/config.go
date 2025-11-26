@@ -685,6 +685,8 @@ func CreateZeroConfig(source interface{}) *Config {
 	instruction := extractStringField(source, "Instruction")
 	enableTools := extractBoolField(source, "Tools")
 	thinking := extractBoolField(source, "Thinking")
+	thinkingBudget := extractIntField(source, "ThinkingBudget")
+	showThinking := extractBoolField(source, "ShowThinking")
 	mcpURL := extractStringField(source, "MCPURL")
 	mcpParserTool := extractStringField(source, "MCPParserTool")
 	docsFolder := extractStringField(source, "DocsFolder")
@@ -804,9 +806,33 @@ func CreateZeroConfig(source interface{}) *Config {
 		agentConfig.Tools = []string{}
 	}
 
-	// Set thinking flag only if explicitly enabled via --thinking
-	// If not set, it will follow the normal default (false) via SetDefaults()
+	// Set thinking flags:
+	// - --thinking: enables thinking in LLM provider config (like --tools enables tools)
+	// - --thinking-budget: sets token budget for thinking (default: 1024 if not specified)
+	// - --show-thinking: shows thinking blocks in output (like --show-tools shows tool calls)
+	//
+	// Architecture:
+	// - LLMProviderConfig.Thinking controls API-level thinking enablement
+	// - ReasoningConfig.EnableThinkingDisplay controls display of thinking blocks
+	// - Each LLM provider reads its own config - no context passing needed
 	if thinking {
+		// Set thinking config in LLM provider config (controls API behavior)
+		if llmConfig.Thinking == nil {
+			llmConfig.Thinking = &ThinkingConfig{
+				Enabled: true,
+			}
+		} else {
+			llmConfig.Thinking.Enabled = true
+		}
+		// Set budget if specified via CLI
+		if thinkingBudget > 0 {
+			llmConfig.Thinking.BudgetTokens = thinkingBudget
+		}
+		// Auto-enable show-thinking when thinking is enabled (zero-config mode default)
+		agentConfig.Reasoning.EnableThinkingDisplay = BoolPtr(true)
+	}
+	// Explicit --show-thinking overrides the auto-enable behavior
+	if showThinking {
 		agentConfig.Reasoning.EnableThinkingDisplay = BoolPtr(true)
 	}
 

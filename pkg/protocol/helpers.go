@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"strings"
+
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -10,12 +12,6 @@ type SessionIDKeyType string
 
 // SessionIDKey is the context key for storing session IDs across the application
 const SessionIDKey SessionIDKeyType = "hector:sessionID"
-
-// ShowThinkingKeyType is a custom type for context keys to avoid collisions
-type ShowThinkingKeyType string
-
-// ShowThinkingKey is the context key for controlling whether thinking should be enabled in LLM providers
-const ShowThinkingKey ShowThinkingKeyType = "hector:showThinking"
 
 func CreateUserMessage(text string) *pb.Message {
 	return &pb.Message{
@@ -179,16 +175,63 @@ func GetToolResultsFromMessage(msg *pb.Message) []*ToolResult {
 	return results
 }
 
+// ExtractTextFromMessage extracts the first non-thinking text part from a message.
+// Thinking parts are excluded as they represent internal reasoning, not conversation content.
+// Use ExtractThinkingFromMessage to retrieve thinking content separately.
 func ExtractTextFromMessage(msg *pb.Message) string {
 	if msg == nil || len(msg.Parts) == 0 {
 		return ""
 	}
 	for _, part := range msg.Parts {
+		// Skip thinking parts - they represent internal reasoning, not user-visible content
+		if IsThinkingPart(part) {
+			continue
+		}
 		if text := part.GetText(); text != "" {
 			return text
 		}
 	}
 	return ""
+}
+
+// ExtractThinkingFromMessage extracts all thinking content from a message
+func ExtractThinkingFromMessage(msg *pb.Message) string {
+	if msg == nil || len(msg.Parts) == 0 {
+		return ""
+	}
+	var thinkingText strings.Builder
+	for _, part := range msg.Parts {
+		if IsThinkingPart(part) {
+			if text := part.GetText(); text != "" {
+				thinkingText.WriteString(text)
+			}
+		}
+	}
+	return thinkingText.String()
+}
+
+// ExtractThinkingBlockFromMessage extracts thinking content and signature from a message
+// Returns content and signature (empty string if not found)
+func ExtractThinkingBlockFromMessage(msg *pb.Message) (content string, signature string) {
+	if msg == nil || len(msg.Parts) == 0 {
+		return "", ""
+	}
+	var thinkingText strings.Builder
+	var sig string
+	for _, part := range msg.Parts {
+		if IsThinkingPart(part) {
+			if text := part.GetText(); text != "" {
+				thinkingText.WriteString(text)
+			}
+			// Extract signature from metadata if present
+			if part.Metadata != nil && part.Metadata.Fields != nil {
+				if sigField, ok := part.Metadata.Fields["signature"]; ok {
+					sig = sigField.GetStringValue()
+				}
+			}
+		}
+	}
+	return thinkingText.String(), sig
 }
 
 func ExtractAllTextFromMessage(msg *pb.Message) string {

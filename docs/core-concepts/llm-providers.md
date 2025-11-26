@@ -118,6 +118,11 @@ llms:
     timeout: 120                       # Seconds, default: 120
     max_retries: 5                     # Default: 5
     retry_delay: 2                     # Seconds, default: 2
+    
+    # Extended thinking configuration (optional)
+    thinking:
+      enabled: true
+      budget_tokens: 10000  # Must be < max_tokens (defaults to 1024 if not specified)
 ```
 
 ### Popular Models
@@ -127,6 +132,41 @@ llms:
 | `claude-sonnet-4-20250514` | Balanced speed & capability | 200K tokens | ✅ |
 | `claude-opus-4-20250514` | Maximum capability | 200K tokens | ✅ |
 | `claude-3-5-sonnet-20241022` | Previous generation | 200K tokens | ✅ |
+
+### Extended Thinking Support
+
+Anthropic Claude models (Sonnet 4.5, Opus 4.5, etc.) support extended thinking for enhanced reasoning. Enable it via:
+
+**CLI:**
+```bash
+# --thinking auto-enables --show-thinking
+hector call "Solve this problem" --thinking --thinking-budget 10000
+
+# To enable thinking but hide thinking blocks:
+hector call "Solve this problem" --thinking --no-show-thinking
+```
+
+**Config File:**
+```yaml
+llms:
+  claude:
+    type: "anthropic"
+    model: "claude-sonnet-4-5"
+    api_key: "${ANTHROPIC_API_KEY}"
+    max_tokens: 16000
+    thinking:
+      enabled: true
+      budget_tokens: 10000  # Must be < max_tokens
+
+agents:
+  assistant:
+    llm: "claude"
+    enable_thinking: true  # Enable thinking at API level
+    reasoning:
+      enable_thinking_display: true  # Show thinking blocks
+```
+
+**Note:** When thinking is enabled, `temperature` is automatically set to `1.0` (required by Anthropic API).
 
 ### Environment Variables
 
@@ -263,7 +303,11 @@ agents:
 The qwen3 model supports thinking/reasoning traces. Enable it with the `--thinking` flag:
 
 ```bash
+# Enable thinking (auto-shows thinking blocks)
 hector call "Solve this problem" --thinking
+
+# Enable thinking but hide blocks
+hector call "Solve this problem" --thinking --no-show-thinking
 ```
 
 ### Environment Variables

@@ -35,6 +35,16 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({ widget, sessionI
         }
     }, [widget.status, isExpanded]);
 
+    // Sync local expansion state to store on unmount (handles edge case where local state
+    // changes via auto-expand but user navigates away before toggling)
+    useEffect(() => {
+        return () => {
+            if (widget.isExpanded !== isExpanded) {
+                onExpansionChange?.(isExpanded);
+            }
+        };
+    }, [isExpanded, widget.isExpanded, onExpansionChange]);
+
     const handleToggle = () => {
         const newExpanded = !isExpanded;
         setIsExpanded(newExpanded);

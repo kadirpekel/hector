@@ -141,6 +141,18 @@ llms:
         properties:
           field: 
             type: "string"
+  
+  # Anthropic with Extended Thinking
+  claude-thinking:
+    type: "anthropic"
+    model: "claude-sonnet-4-5"
+    api_key: "${ANTHROPIC_API_KEY}"
+    max_tokens: 16000
+    
+    # Extended thinking configuration (Anthropic only)
+    thinking:
+      enabled: true
+      budget_tokens: 10000  # Must be < max_tokens (defaults to 1024 if not specified)
 ```
 
 **TLS Configuration for Self-Hosted LLMs:**
@@ -451,6 +463,9 @@ agents:
         enabled: false       # Enable HyDE search (default: false)
         llm: "gpt-4o-mini"   # LLM provider name for generating hypothetical documents (required if enabled)
     
+    # Enable thinking at API level (like enable_tools for tools)
+    enable_thinking: true                 # Enable thinking functionality
+    
     # Reasoning Configuration
     reasoning:
       engine: "chain-of-thought"         # chain-of-thought|supervisor
@@ -460,7 +475,8 @@ agents:
       enable_goal_extraction: false       # For supervisor strategy only
       
       # Display Options
-      enable_thinking_display: false      # Show [Thinking: ...] meta-reflection blocks
+      enable_thinking_display: false      # Show thinking blocks in output (like enable_tool_display)
+      enable_tool_display: true           # Show tool calls and results
       enable_streaming: true              # Real-time output (default: true)
     
     # Tools

@@ -156,10 +156,8 @@ export class StreamParser {
             widgetMap.set(w.id, w);
         });
         
-        // Track text that appears before widgets vs after widgets
+        // Track accumulated text for completion detection
         let accumulatedText = currentMessage.text;
-        let textBeforeWidgets = currentMessage.metadata?.textBeforeWidgets as string || '';
-        let textAfterWidgets = currentMessage.metadata?.textAfterWidgets as string || '';
         
         // Process parts in order - this is critical for correct ordering
         parts.forEach((part: unknown, partIndex: number) => {
@@ -224,7 +222,8 @@ export class StreamParser {
                             widgetMap.set(thinkingId, {
                                 ...existing,
                                 content: (existing.content || '') + (partObj.text || partObj.data?.data?.text || ''),
-                                status: 'active'
+                                // Only set to 'active' if not already completed (preserve completion state)
+                                status: existing.status === 'completed' ? 'completed' : 'active'
                             });
                         }
                     }
@@ -325,11 +324,10 @@ export class StreamParser {
                     }
                 }
             } else if (partObj.text && !isThinking && !isToolCall && !isApproval) {
-                // Regular text part - accumulate it and track its position
+                // Regular text part - accumulate it
                 const textContent = partObj.text || '';
                 
                 // Filter out verbose backend messages that are redundant with widgets
-                // These patterns match common approval-related backend messages
                 const approvalPatterns = [
                     /^✅\s*Approved:/,
                     /^🚫\s*Denied:/,
@@ -339,7 +337,7 @@ export class StreamParser {
                     /This will execute on the server/i,
                     /🔐 Tool Approval Required/i,
                     /Please respond with:\s*approve or deny/i,
-                    /Tool:\s*\w+\s*Input:/i, // Matches "Tool: X Input:" pattern
+                    /Tool:\s*\w+\s*Input:/i,
                 ];
                 
                 const shouldFilter = approvalPatterns.some(pattern => textContent.match(pattern));
@@ -347,23 +345,67 @@ export class StreamParser {
                 if (textContent && !shouldFilter) {
                     accumulatedText += textContent;
                     
-                    // Track text position: before widgets or after widgets
-                    // If contentOrder has widgets, text goes after; otherwise before
-                    const hasWidgetsInOrder = contentOrder.some(id => widgetMap.has(id));
+                    // Find the appropriate text widget to append to
+                    // Strategy: Find the last non-text widget, then look for a text widget immediately after it
+                    // If no text widget exists at that position, create one
+                    const lastNonTextWidgetId = contentOrder
+                        .filter(id => {
+                            const widget = widgetMap.get(id);
+                            return widget && widget.type !== 'text';
+                        })
+                        .pop();
                     
-                    if (hasWidgetsInOrder) {
-                        // Text appears after widgets
-                        textAfterWidgets += textContent;
-                        // Add text marker to contentOrder if not already present
-                        if (!contentOrder.includes('__text_after__')) {
-                            contentOrder.push('__text_after__');
+                    // Text widgets use synthetic IDs to track position relative to other widgets:
+                    // - __text_start__: Text before any widgets (initial text content)
+                    // - __text_after_{widgetId}__: Text after a specific widget (interleaved content)
+                    // This marker-based approach allows proper text accumulation across streaming updates
+                    // and handles interleaved text/widget content correctly
+                    const textMarkerId = lastNonTextWidgetId ? `__text_after_${lastNonTextWidgetId}__` : '__text_start__';
+                    
+                    // Find existing text widget at this position (handles text chunks arriving in separate updates)
+                    let targetTextWidgetId = textMarkerId;
+                    if (lastNonTextWidgetId) {
+                        // Look backwards from end of contentOrder to find the most recent text widget after lastNonTextWidgetId
+                        const lastNonTextIndex = contentOrder.indexOf(lastNonTextWidgetId);
+                        for (let i = contentOrder.length - 1; i > lastNonTextIndex; i--) {
+                            const widget = widgetMap.get(contentOrder[i]);
+                            if (widget?.type === 'text') {
+                                targetTextWidgetId = widget.id;
+                                break;
+                            }
                         }
                     } else {
-                        // Text appears before widgets
-                        textBeforeWidgets += textContent;
-                        // Add text marker to contentOrder if not already present
-                        if (!contentOrder.includes('__text_before__')) {
-                            contentOrder.unshift('__text_before__'); // Add at beginning
+                        // Look for __text_start__ widget
+                        const startTextWidget = contentOrder.find(id => {
+                            const widget = widgetMap.get(id);
+                            return widget?.type === 'text' && id === '__text_start__';
+                        });
+                        if (startTextWidget) {
+                            targetTextWidgetId = startTextWidget;
+                        }
+                    }
+                    
+                    if (!widgetMap.has(targetTextWidgetId)) {
+                        // Create a new text widget at this position
+                        widgetMap.set(targetTextWidgetId, {
+                            id: targetTextWidgetId,
+                            type: 'text' as const,
+                            data: {},
+                            status: 'active',
+                            content: textContent,
+                            isExpanded: true
+                        });
+                        if (!contentOrder.includes(targetTextWidgetId)) {
+                            contentOrder.push(targetTextWidgetId);
+                        }
+                    } else {
+                        // Append to existing text widget
+                        const existing = widgetMap.get(targetTextWidgetId);
+                        if (existing) {
+                            widgetMap.set(targetTextWidgetId, {
+                                ...existing,
+                                content: (existing.content || '') + textContent
+                            });
                         }
                     }
                 }
@@ -419,9 +461,7 @@ export class StreamParser {
             widgets: newWidgets,
             metadata: {
                 ...currentMessage.metadata,
-                contentOrder: contentOrder.length > 0 ? contentOrder : undefined,
-                textBeforeWidgets: textBeforeWidgets || undefined,
-                textAfterWidgets: textAfterWidgets || undefined
+                contentOrder: contentOrder.length > 0 ? contentOrder : undefined
             }
         });
     }

@@ -58,13 +58,14 @@ type OpenAIProvider struct {
 type OpenAIRequest struct {
 	Model               string                `json:"model"`
 	Messages            []OpenAIMessage       `json:"messages"`
-	MaxTokens           int                   `json:"max_tokens,omitempty"`
-	MaxCompletionTokens int                   `json:"max_completion_tokens,omitempty"`
+	MaxTokens           *int                  `json:"max_tokens,omitempty"`
+	MaxCompletionTokens *int                  `json:"max_completion_tokens,omitempty"`
 	Temperature         float64               `json:"temperature"`
 	Stream              bool                  `json:"stream"`
 	Tools               []OpenAITool          `json:"tools,omitempty"`
 	ToolChoice          string                `json:"tool_choice,omitempty"`
 	ResponseFormat      *OpenAIResponseFormat `json:"response_format,omitempty"`
+	ReasoningEffort     string                `json:"reasoning_effort,omitempty"` // For o-series models: "minimal", "low", "medium", "high"
 }
 
 type OpenAIResponse struct {
@@ -109,6 +110,7 @@ type StreamChoice struct {
 type Delta struct {
 	Content   string           `json:"content,omitempty"`
 	ToolCalls []OpenAIToolCall `json:"tool_calls,omitempty"`
+	Reasoning string           `json:"reasoning,omitempty"` // Thinking/reasoning content (if exposed by OpenAI)
 }
 
 type Usage struct {
@@ -572,20 +574,13 @@ func (p *OpenAIProvider) buildRequest(messages []*pb.Message, stream bool, tools
 			}
 		}
 
+		// Always use array format for content (OpenAI API accepts both string and array)
 		var finalContent interface{}
 		if len(contentParts) > 0 {
-			// If we have multiple parts or non-text parts, use the array
-			// But if it's just one text part, OpenAI prefers string? No, array is fine for gpt-4-vision.
-			// However, for backward compatibility with non-vision models, string is safer if only text.
-			if len(contentParts) == 1 && contentParts[0].Type == "text" {
-				finalContent = contentParts[0].Text
-			} else {
-				finalContent = contentParts
-			}
+			finalContent = contentParts
 		} else {
-			// Fallback to legacy extraction if parts are empty (shouldn't happen with new logic but safe)
-			txt := protocol.ExtractTextFromMessage(msg)
-			finalContent = txt
+			// Empty message - use empty array
+			finalContent = []OpenAIContentPart{}
 		}
 
 		openaiMsg := OpenAIMessage{
@@ -612,22 +607,66 @@ func (p *OpenAIProvider) buildRequest(messages []*pb.Message, stream bool, tools
 		openaiMessages = append(openaiMessages, openaiMsg)
 	}
 
+	// Determine if this is a reasoning model that requires max_completion_tokens and temperature=1.0
+	modelName := p.config.Model
+	isReasoningModel := p.isReasoningModel(modelName)
+	
+	// Determine temperature: reasoning models (o-series, gpt-5) require temperature=1.0
+	// See: https://platform.openai.com/docs/guides/reasoning
+	var temperature float64
+	if isReasoningModel {
+		// Reasoning models only support temperature=1.0 (default)
+		temperature = 1.0
+	} else {
+		// Normal temperature handling for other models
+		if p.config.Temperature == nil {
+			temperature = 0.7 // Default
+		} else {
+			temperature = *p.config.Temperature
+		}
+	}
+	
+	// Build request with appropriate max tokens field based on model type
 	request := OpenAIRequest{
-		Model:    p.config.Model,
-		Messages: openaiMessages,
-		Temperature: func() float64 {
-			if p.config.Temperature == nil {
-				return 0.7 // Default
-			}
-			return *p.config.Temperature
-		}(),
-		Stream: stream,
+		Model:       modelName,
+		Messages:    openaiMessages,
+		Temperature: temperature,
+		Stream:      stream,
+		// Initialize both to nil - we'll set only the appropriate one below
+		MaxTokens:           nil,
+		MaxCompletionTokens: nil,
 	}
 
-	if strings.HasPrefix(p.config.Model, "o1-") || strings.HasPrefix(p.config.Model, "o3-") {
-		request.MaxCompletionTokens = p.config.MaxTokens
+	// o-series models (o1, o3, o4) require max_completion_tokens instead of max_tokens
+	// See: https://platform.openai.com/docs/guides/reasoning
+	if isReasoningModel {
+		// For o-series models, use max_completion_tokens
+		if p.config.MaxTokens > 0 {
+			maxCompletionTokens := p.config.MaxTokens
+			request.MaxCompletionTokens = &maxCompletionTokens
+		}
+		// MaxTokens remains nil and will be omitted from JSON
 	} else {
-		request.MaxTokens = p.config.MaxTokens
+		// For other models, use max_tokens
+		if p.config.MaxTokens > 0 {
+			maxTokens := p.config.MaxTokens
+			request.MaxTokens = &maxTokens
+		}
+		// MaxCompletionTokens remains nil and will be omitted from JSON
+	}
+
+	// Add thinking/reasoning support for reasoning models
+	// See: https://platform.openai.com/docs/guides/reasoning
+	// Reasoning models (o1, o3, o4, gpt-5) automatically perform reasoning internally.
+	// The reasoning_effort parameter controls the depth of reasoning:
+	// - "minimal": Least reasoning, fastest responses
+	// - "low": Light reasoning
+	// - "medium": Moderate reasoning (default when thinking enabled)
+	// - "high": Maximum reasoning, best quality but slower
+	// Note: OpenAI reasoning models do NOT expose raw thinking tokens in streaming responses
+	// like Gemini/Anthropic do. The reasoning happens internally and is not visible.
+	if isReasoningModel && p.config.Thinking != nil && p.config.Thinking.Enabled {
+		request.ReasoningEffort = p.mapBudgetToReasoningEffort(p.config.Thinking.BudgetTokens)
 	}
 
 	if len(tools) > 0 {
@@ -636,6 +675,53 @@ func (p *OpenAIProvider) buildRequest(messages []*pb.Message, stream bool, tools
 	}
 
 	return request
+}
+
+// isReasoningModel checks if a model supports reasoning and requires max_completion_tokens
+// Supports models like: o1, o1-preview, o1-mini, o3, o3-mini, o4, o4-mini, gpt-5, gpt-5-mini, etc.
+func (p *OpenAIProvider) isReasoningModel(modelName string) bool {
+	modelLower := strings.ToLower(modelName)
+	// Check for exact matches first (e.g., "o1", "o3", "o4", "gpt-5")
+	if modelLower == "o1" || modelLower == "o3" || modelLower == "o4" || modelLower == "gpt-5" {
+		return true
+	}
+	// Check for prefix matches (e.g., "o1-", "o3-", "o4-", "gpt-5-")
+	reasoningPrefixes := []string{
+		"o1-",
+		"o3-",
+		"o4-",
+		"gpt-5-",
+	}
+	for _, prefix := range reasoningPrefixes {
+		if strings.HasPrefix(modelLower, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// mapBudgetToReasoningEffort maps thinking budget tokens to OpenAI reasoning_effort levels
+// OpenAI supports: "minimal", "low", "medium", "high"
+// Mapping based on token budget similar to Gemini's thinking_budget:
+// - minimal: <= 512 tokens (very low effort)
+// - low: <= 1024 tokens
+// - medium: <= 8192 tokens
+// - high: > 8192 tokens
+func (p *OpenAIProvider) mapBudgetToReasoningEffort(budgetTokens int) string {
+	if budgetTokens <= 0 {
+		// Default to "low" if not specified
+		return "low"
+	}
+	if budgetTokens <= 512 {
+		return "minimal"
+	}
+	if budgetTokens <= 1024 {
+		return "low"
+	}
+	if budgetTokens <= 8192 {
+		return "medium"
+	}
+	return "high"
 }
 
 func convertToOpenAITools(tools []ToolDefinition) []OpenAITool {
@@ -818,6 +904,8 @@ func (p *OpenAIProvider) makeStreamingRequest(ctx context.Context, request OpenA
 
 	toolCallsMap := make(map[int]*OpenAIToolCall)
 	totalTokens := 0
+	var accumulatedThinking strings.Builder
+	var inThinkingBlock bool
 
 	for {
 		line, err := reader.ReadBytes('\n')
@@ -861,7 +949,33 @@ func (p *OpenAIProvider) makeStreamingRequest(ctx context.Context, request OpenA
 
 		choice := streamResp.Choices[0]
 
+		// Handle thinking/reasoning content (if OpenAI exposes it)
+		// Note: OpenAI reasoning models may not expose raw thinking tokens in streaming responses
+		// The reasoning_effort parameter controls internal reasoning, but the thinking process
+		// is typically not exposed. If OpenAI adds support for exposing reasoning content,
+		// it would likely appear in delta.reasoning field
+		if choice.Delta.Reasoning != "" {
+			if !inThinkingBlock {
+				inThinkingBlock = true
+			}
+			accumulatedThinking.WriteString(choice.Delta.Reasoning)
+			outputCh <- StreamChunk{
+				Type: "thinking",
+				Text: choice.Delta.Reasoning,
+			}
+		}
+
+		// Handle regular text content
 		if choice.Delta.Content != "" {
+			// Close thinking block if we were in one
+			if inThinkingBlock {
+				outputCh <- StreamChunk{
+					Type: "thinking_complete",
+					Text: accumulatedThinking.String(),
+				}
+				accumulatedThinking.Reset()
+				inThinkingBlock = false
+			}
 			outputCh <- StreamChunk{
 				Type: "text",
 				Text: choice.Delta.Content,
@@ -889,6 +1003,15 @@ func (p *OpenAIProvider) makeStreamingRequest(ctx context.Context, request OpenA
 		}
 
 		if choice.FinishReason == "stop" || choice.FinishReason == "tool_calls" {
+			// Close any open thinking block before tool calls
+			if inThinkingBlock {
+				outputCh <- StreamChunk{
+					Type: "thinking_complete",
+					Text: accumulatedThinking.String(),
+				}
+				accumulatedThinking.Reset()
+				inThinkingBlock = false
+			}
 
 			var accumulatedToolCalls []OpenAIToolCall
 			for i := 0; i < len(toolCallsMap); i++ {
@@ -909,6 +1032,14 @@ func (p *OpenAIProvider) makeStreamingRequest(ctx context.Context, request OpenA
 				}
 			}
 			break
+		}
+	}
+
+	// Close any remaining thinking block at end of stream
+	if inThinkingBlock && accumulatedThinking.Len() > 0 {
+		outputCh <- StreamChunk{
+			Type: "thinking_complete",
+			Text: accumulatedThinking.String(),
 		}
 	}
 

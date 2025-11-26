@@ -53,7 +53,7 @@ export interface ImageWidget {
     revised_prompt?: string;
 }
 
-export type WidgetType = 'tool' | 'thinking' | 'approval' | 'image';
+export type WidgetType = 'tool' | 'thinking' | 'approval' | 'image' | 'text';
 
 export interface Widget {
     id: string;

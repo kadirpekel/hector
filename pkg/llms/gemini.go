@@ -40,6 +40,14 @@ type GeminiGenerationConfig struct {
 	MaxOutputTokens  int                    `json:"maxOutputTokens,omitempty"`
 	ResponseMimeType string                 `json:"responseMimeType,omitempty"`
 	ResponseSchema   map[string]interface{} `json:"responseSchema,omitempty"`
+	ThinkingConfig   *GeminiThinkingConfig  `json:"thinkingConfig,omitempty"`
+}
+
+// GeminiThinkingConfig configures thinking/reasoning for Gemini models
+// See: https://ai.google.dev/gemini-api/docs/thinking
+type GeminiThinkingConfig struct {
+	IncludeThoughts bool `json:"includeThoughts,omitempty"` // Include thought summaries in response
+	ThinkingBudget  *int `json:"thinkingBudget,omitempty"`  // Token budget: 0=off, -1=dynamic, >0=limit
 }
 
 type GeminiContent struct {
@@ -540,6 +548,18 @@ func (p *GeminiProvider) buildGenerationConfig(structConfig *StructuredOutputCon
 		config.Temperature = p.config.Temperature
 	}
 
+	// Add thinking config if enabled (same pattern as Anthropic/Ollama)
+	// See: https://ai.google.dev/gemini-api/docs/thinking
+	if p.config.Thinking != nil && p.config.Thinking.Enabled {
+		config.ThinkingConfig = &GeminiThinkingConfig{
+			IncludeThoughts: true,
+		}
+		if p.config.Thinking.BudgetTokens > 0 {
+			budget := p.config.Thinking.BudgetTokens
+			config.ThinkingConfig.ThinkingBudget = &budget
+		}
+	}
+
 	if structConfig != nil {
 		switch structConfig.Format {
 		case "json":
@@ -843,13 +863,19 @@ func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []*protoco
 func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- StreamChunk) {
 	scanner := bufio.NewScanner(body)
 	var accumulatedText strings.Builder
+	var accumulatedThinking strings.Builder
+	var inThinkingBlock bool
+	// Track if the thinking block has been closed in this stream.
+	// Semantically, thinking represents internal reasoning before taking action.
+	// Once closed (by tool call or regular text), any subsequent text marked as thinking
+	// should be treated as regular response text, as Gemini sometimes incorrectly marks
+	// post-tool-call responses as thinking.
+	var thinkingBlockClosed bool
 	totalTokens := 0
-	lineCount := 0
 	chunkCount := 0
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		lineCount++
 
 		if !strings.HasPrefix(line, "data: ") {
 			continue
@@ -870,19 +896,58 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 		if len(resp.Candidates) > 0 {
 			candidate := resp.Candidates[0]
 
+			// Process parts in order, maintaining correct thinking block state
 			for _, part := range candidate.Content.Parts {
+				// Handle text content (may be marked as thinking)
+				if text, ok := part["text"].(string); ok && text != "" {
+					// Gemini marks thinking parts with thought: true boolean
+					// See: https://ai.google.dev/gemini-api/docs/thinking
+					thought, hasThought := part["thought"].(bool)
+					isMarkedAsThinking := hasThought && thought
 
-				if text, ok := part["text"].(string); ok {
-					accumulatedText.WriteString(text)
-					chunks <- StreamChunk{Type: "text", Text: text}
-					chunkCount++
+					// Only treat as thinking if:
+					// 1. It's marked as thinking by Gemini, AND
+					// 2. We haven't closed the thinking block yet
+					// Once closed, any text (even if marked as thinking) is regular response text
+					shouldTreatAsThinking := isMarkedAsThinking && !thinkingBlockClosed
+
+					if shouldTreatAsThinking {
+						// Valid thinking block (internal reasoning before actions)
+						if !inThinkingBlock {
+							inThinkingBlock = true
+						}
+						accumulatedThinking.WriteString(text)
+						chunks <- StreamChunk{Type: "thinking", Text: text}
+					} else {
+						// Regular text content - close any open thinking block first
+						if inThinkingBlock {
+							chunks <- StreamChunk{
+								Type: "thinking_complete",
+								Text: accumulatedThinking.String(),
+							}
+							accumulatedThinking.Reset()
+							inThinkingBlock = false
+							thinkingBlockClosed = true
+						}
+						accumulatedText.WriteString(text)
+						chunks <- StreamChunk{Type: "text", Text: text}
+						chunkCount++
+					}
 				}
 
-				if thought, ok := part["thought"].(string); ok {
-					chunks <- StreamChunk{Type: "thinking", Text: thought}
-				}
-
+				// Handle tool calls
 				if fc, ok := part["functionCall"].(map[string]interface{}); ok {
+					// Close any open thinking block before emitting tool call
+					if inThinkingBlock {
+						chunks <- StreamChunk{
+							Type: "thinking_complete",
+							Text: accumulatedThinking.String(),
+						}
+						accumulatedThinking.Reset()
+						inThinkingBlock = false
+						thinkingBlockClosed = true
+					}
+
 					name, _ := fc["name"].(string)
 					args, _ := fc["args"].(map[string]interface{})
 
@@ -901,6 +966,14 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 
 		if resp.UsageMetadata != nil {
 			totalTokens = resp.UsageMetadata.TotalTokenCount
+		}
+	}
+
+	// Close any open thinking block at end of stream
+	if inThinkingBlock && accumulatedThinking.Len() > 0 {
+		chunks <- StreamChunk{
+			Type: "thinking_complete",
+			Text: accumulatedThinking.String(),
 		}
 	}
 

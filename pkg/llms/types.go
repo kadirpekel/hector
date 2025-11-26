@@ -11,11 +11,12 @@ type ToolDefinition struct {
 }
 
 type StreamChunk struct {
-	Type     string
-	Text     string
-	ToolCall *protocol.ToolCall
-	Tokens   int
-	Error    error
+	Type      string
+	Text      string
+	ToolCall  *protocol.ToolCall
+	Tokens    int
+	Error     error
+	Signature string // For Anthropic thinking blocks - signature for verification
 }
 
 type StructuredOutputConfig struct {

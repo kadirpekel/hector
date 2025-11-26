@@ -255,9 +255,10 @@ func (a *Agent) executeWithMessage(
 		spanCtx, span := startAgentSpan(ctx, a.name, llmName, input)
 		defer span.End()
 
-		// Add ShowThinking flag to context for LLM providers
+		// Thinking display is controlled by ReasoningConfig.EnableThinkingDisplay
+		// Thinking API enablement is controlled by LLMProviderConfig.Thinking.Enabled (read by each provider)
+		// This separation follows the pattern: LLM config controls API behavior, reasoning config controls display
 		showThinking := config.BoolValue(cfg.EnableThinkingDisplay, false)
-		spanCtx = context.WithValue(spanCtx, protocol.ShowThinkingKey, showThinking)
 
 		// Get sub-agents (from config or builder - stored directly on agent)
 		state, err := reasoning.Builder().
@@ -388,7 +389,7 @@ func (a *Agent) executeWithMessage(
 			slog.Debug("=== END FINAL PROMPT ===")
 
 			// Call LLM with retry logic for rate limits
-			text, toolCalls, tokens, err := a.callLLMWithRetry(spanCtx, messages, toolDefs, outputCh, cfg, span)
+			text, toolCalls, tokens, thinking, err := a.callLLMWithRetry(spanCtx, messages, toolDefs, outputCh, cfg, span)
 			if err != nil {
 				span.RecordError(err)
 				slog.Error("LLM call failed", "agent", a.name, "error", err)
@@ -416,7 +417,7 @@ func (a *Agent) executeWithMessage(
 			var results []reasoning.ToolResult
 			if len(toolCalls) > 0 {
 				var shouldContinue bool
-				ctx, results, shouldContinue, err = a.processToolCalls(ctx, text, toolCalls, state, outputCh, cfg)
+				ctx, results, shouldContinue, err = a.processToolCalls(ctx, text, toolCalls, thinking, state, outputCh, cfg)
 				if err != nil {
 					if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error processing tool calls: %v\n", err))); sendErr != nil {
 						slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
@@ -476,6 +477,7 @@ func (a *Agent) processToolCalls(
 	ctx context.Context,
 	text string,
 	toolCalls []*protocol.ToolCall,
+	thinking *ThinkingBlock,
 	state *reasoning.ReasoningState,
 	outputCh chan<- *pb.Part,
 	cfg config.ReasoningConfig,
@@ -534,8 +536,8 @@ func (a *Agent) processToolCalls(
 		return ctx, nil, true, nil
 	}
 
-	// Create assistant message with text and all tool calls (approved and denied)
-	assistantMsg := a.createAssistantMessageWithToolCalls(text, approvedCalls, deniedCalls)
+	// Create assistant message with text, thinking, and all tool calls (approved and denied)
+	assistantMsg := a.createAssistantMessageWithToolCalls(text, thinking, approvedCalls, deniedCalls)
 	state.AddCurrentTurnMessage(assistantMsg)
 
 	// Execute approved tools
@@ -732,15 +734,27 @@ func (a *Agent) handleAsyncHITL(
 	return ctx, false, ErrInputRequired
 }
 
-// createAssistantMessageWithToolCalls creates an assistant message with text and tool calls
+// createAssistantMessageWithToolCalls creates an assistant message with text, thinking, and tool calls
 func (a *Agent) createAssistantMessageWithToolCalls(
 	text string,
+	thinking *ThinkingBlock,
 	approvedCalls []*protocol.ToolCall,
 	deniedCalls []*protocol.ToolCall,
 ) *pb.Message {
 	assistantMsg := &pb.Message{
 		Role:  pb.Role_ROLE_AGENT,
 		Parts: []*pb.Part{},
+	}
+
+	// Add thinking block FIRST (Anthropic requires thinking before tool_use)
+	if thinking != nil && thinking.Content != "" {
+		thinkingPart := protocol.CreateThinkingPartWithSignature(
+			thinking.Content,
+			thinking.Signature,
+			fmt.Sprintf("think-%d", time.Now().UnixNano()),
+			0,
+		)
+		assistantMsg.Parts = append(assistantMsg.Parts, thinkingPart)
 	}
 
 	if text != "" {
@@ -763,6 +777,12 @@ func (a *Agent) createAssistantMessageWithToolCalls(
 	return assistantMsg
 }
 
+// ThinkingBlock holds thinking content and signature for storage
+type ThinkingBlock struct {
+	Content   string
+	Signature string
+}
+
 // callLLMWithRetry calls the LLM with automatic retry logic for rate limits
 func (a *Agent) callLLMWithRetry(
 	ctx context.Context,
@@ -771,35 +791,36 @@ func (a *Agent) callLLMWithRetry(
 	outputCh chan<- *pb.Part,
 	cfg config.ReasoningConfig,
 	span trace.Span,
-) (string, []*protocol.ToolCall, int, error) {
+) (string, []*protocol.ToolCall, int, *ThinkingBlock, error) {
 	var text string
 	var toolCalls []*protocol.ToolCall
 	var tokens int
+	var thinking *ThinkingBlock
 	var err error
 
 	for attempt := 0; attempt <= maxLLMRetries; attempt++ {
 		// Check context cancellation before each retry
 		select {
 		case <-ctx.Done():
-			return "", nil, 0, ctx.Err()
+			return "", nil, 0, nil, ctx.Err()
 		default:
 		}
 
-		text, toolCalls, tokens, err = a.callLLM(ctx, messages, toolDefs, outputCh, cfg)
+		text, toolCalls, tokens, thinking, err = a.callLLM(ctx, messages, toolDefs, outputCh, cfg)
 
 		if err == nil {
-			return text, toolCalls, tokens, nil
+			return text, toolCalls, tokens, thinking, nil
 		}
 
 		var retryErr *httpclient.RetryableError
 		if !errors.As(err, &retryErr) {
 			// Non-retryable error - return immediately
-			return "", nil, 0, err
+			return "", nil, 0, nil, err
 		}
 
 		if attempt >= maxLLMRetries {
 			// Exceeded max retries
-			return "", nil, 0, fmt.Errorf("rate limit exceeded after %d retries: %w", maxLLMRetries, err)
+			return "", nil, 0, nil, fmt.Errorf("rate limit exceeded after %d retries: %w", maxLLMRetries, err)
 		}
 
 		waitTime := retryErr.RetryAfter
@@ -815,7 +836,7 @@ func (a *Agent) callLLMWithRetry(
 		// Wait with context cancellation support
 		select {
 		case <-ctx.Done():
-			return "", nil, 0, ctx.Err()
+			return "", nil, 0, nil, ctx.Err()
 		case <-time.After(waitTime):
 		}
 
@@ -824,7 +845,7 @@ func (a *Agent) callLLMWithRetry(
 		}
 	}
 
-	return "", nil, 0, fmt.Errorf("unexpected retry loop exit")
+	return "", nil, 0, nil, fmt.Errorf("unexpected retry loop exit")
 }
 
 func (a *Agent) callLLM(
@@ -833,7 +854,7 @@ func (a *Agent) callLLM(
 	toolDefs []llms.ToolDefinition,
 	outputCh chan<- *pb.Part,
 	cfg config.ReasoningConfig,
-) (string, []*protocol.ToolCall, int, error) {
+) (string, []*protocol.ToolCall, int, *ThinkingBlock, error) {
 	llm := a.services.LLM()
 
 	// Check for structured output configuration
@@ -848,7 +869,7 @@ func (a *Agent) callLLM(
 
 		text, toolCalls, tokens, err := llm.GenerateStructured(ctx, messages, toolDefs, structConfig)
 		if err != nil {
-			return "", nil, 0, err
+			return "", nil, 0, nil, err
 		}
 
 		if text != "" {
@@ -857,7 +878,7 @@ func (a *Agent) callLLM(
 			}
 		}
 
-		return text, toolCalls, tokens, nil
+		return text, toolCalls, tokens, nil, nil
 	}
 
 	if cfg.EnableStreaming != nil && *cfg.EnableStreaming {
@@ -871,12 +892,13 @@ func (a *Agent) callLLM(
 		// ctx already has ShowThinking flag from execute() function
 		streamCh, err := llmService.GenerateStreamingChunks(ctx, messages, toolDefs)
 		if err != nil {
-			return "", nil, 0, err
+			return "", nil, 0, nil, err
 		}
 
 		var accumulatedToolCalls []*protocol.ToolCall
 		var tokens int
 		var currentThinkingBlockID string
+		var currentThinkingSignature string // Store signature for thinking blocks
 
 		for chunk := range streamCh {
 			switch chunk.Type {
@@ -884,7 +906,7 @@ func (a *Agent) callLLM(
 				streamedText.WriteString(chunk.Text)
 				if sendErr := safeSendPart(ctx, outputCh, createTextPart(chunk.Text)); sendErr != nil {
 					slog.Error("Failed to send streaming text chunk", "agent", a.name, "error", sendErr)
-					return "", nil, 0, sendErr
+					return "", nil, 0, nil, sendErr
 				}
 			case "thinking":
 				// Only create thinking parts if ShowThinking is enabled
@@ -896,7 +918,7 @@ func (a *Agent) callLLM(
 						thinkingPart := protocol.CreateThinkingPart("", currentThinkingBlockID, 0)
 						if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
 							slog.Error("Failed to send thinking start", "agent", a.name, "error", sendErr)
-							return "", nil, 0, sendErr
+							return "", nil, 0, nil, sendErr
 						}
 					}
 					streamedThinking.WriteString(chunk.Text)
@@ -904,33 +926,48 @@ func (a *Agent) callLLM(
 					thinkingPart := protocol.CreateThinkingPart(chunk.Text, currentThinkingBlockID, 0)
 					if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
 						slog.Error("Failed to send thinking chunk", "agent", a.name, "error", sendErr)
-						return "", nil, 0, sendErr
+						return "", nil, 0, nil, sendErr
 					}
 				} else {
 					// Still accumulate thinking for internal tracking, but don't emit parts
 					streamedThinking.WriteString(chunk.Text)
 				}
+			case "thinking_complete":
+				// Complete thinking block with signature - store it properly
+				if chunk.Signature != "" {
+					currentThinkingSignature = chunk.Signature
+				}
+				// Reset thinking block ID - next thinking chunk will start a new block
+				currentThinkingBlockID = ""
 			case "tool_call":
 				if chunk.ToolCall != nil {
 					accumulatedToolCalls = append(accumulatedToolCalls, chunk.ToolCall)
 				}
 			case "done":
 				tokens = chunk.Tokens
-				// End of thinking block if any
-				if currentThinkingBlockID != "" {
-					currentThinkingBlockID = ""
-				}
+				// End of thinking block - don't send to outputCh, return via ThinkingBlock
+				currentThinkingBlockID = ""
 			case "error":
-				return "", nil, 0, chunk.Error
+				return "", nil, 0, nil, chunk.Error
 			}
 		}
 
-		return streamedText.String(), accumulatedToolCalls, tokens, nil
+		// Return thinking block if we have content
+		// Signature is optional (Anthropic uses it, Ollama doesn't)
+		var thinkingBlock *ThinkingBlock
+		if streamedThinking.Len() > 0 {
+			thinkingBlock = &ThinkingBlock{
+				Content:   streamedThinking.String(),
+				Signature: currentThinkingSignature, // May be empty for non-Anthropic providers
+			}
+		}
+
+		return streamedText.String(), accumulatedToolCalls, tokens, thinkingBlock, nil
 	}
 
 	text, toolCalls, tokens, err := llm.Generate(ctx, messages, toolDefs)
 	if err != nil {
-		return "", nil, 0, err
+		return "", nil, 0, nil, err
 	}
 
 	if text != "" {
@@ -939,7 +976,7 @@ func (a *Agent) callLLM(
 		}
 	}
 
-	return text, toolCalls, tokens, nil
+	return text, toolCalls, tokens, nil, nil
 }
 
 func (a *Agent) executeTools(
@@ -1218,8 +1255,9 @@ func (a *Agent) saveToHistory(
 		textContent := protocol.ExtractTextFromMessage(msg)
 		hasToolCalls := len(protocol.GetToolCallsFromMessage(msg)) > 0
 		hasToolResults := len(protocol.GetToolResultsFromMessage(msg)) > 0
+		hasThinking := protocol.ExtractThinkingFromMessage(msg) != ""
 
-		if textContent != "" || hasToolCalls || hasToolResults {
+		if textContent != "" || hasToolCalls || hasToolResults || hasThinking {
 			messagesToSave = append(messagesToSave, msg)
 		}
 

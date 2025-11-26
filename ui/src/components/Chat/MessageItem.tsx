@@ -102,49 +102,16 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({ message, me
                         </div>
                     )}
 
-                    {/* Render content in order: widgets and text based on contentOrder */}
+                    {/* Render content in order based on contentOrder */}
                     {(() => {
                         const contentOrder = message.metadata?.contentOrder || [];
                         const widgetsMap = new Map(message.widgets.map(w => [w.id, w]));
-                        const textBeforeWidgets = message.metadata?.textBeforeWidgets as string | undefined;
-                        const textAfterWidgets = message.metadata?.textAfterWidgets as string | undefined;
                         
-                        // If we have contentOrder, render content in that exact order
-                        // Otherwise, render text first, then widgets (backward compatibility)
+                        // If we have contentOrder, render in that exact order
                         if (contentOrder.length > 0) {
                             return (
                                 <>
                                     {contentOrder.map((itemId) => {
-                                        // Handle text markers
-                                        if (itemId === '__text_before__' && textBeforeWidgets) {
-                                            return (
-                                                <div key="__text_before__" className="prose prose-invert prose-sm max-w-none mb-3">
-                                                    <ReactMarkdown
-                                                        remarkPlugins={[remarkGfm]}
-                                                        rehypePlugins={[rehypeHighlight]}
-                                                        components={markdownComponents}
-                                                    >
-                                                        {textBeforeWidgets}
-                                                    </ReactMarkdown>
-                                                </div>
-                                            );
-                                        }
-                                        
-                                        if (itemId === '__text_after__' && textAfterWidgets) {
-                                            return (
-                                                <div key="__text_after__" className="prose prose-invert prose-sm max-w-none mb-3">
-                                                    <ReactMarkdown
-                                                        remarkPlugins={[remarkGfm]}
-                                                        rehypePlugins={[rehypeHighlight]}
-                                                        components={markdownComponents}
-                                                    >
-                                                        {textAfterWidgets}
-                                                    </ReactMarkdown>
-                                                </div>
-                                            );
-                                        }
-                                        
-                                        // Handle widgets
                                         const widget = widgetsMap.get(itemId);
                                         if (widget) {
                                             return (
@@ -160,7 +127,6 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({ message, me
                                                 </div>
                                             );
                                         }
-                                        
                                         return null;
                                     })}
                                     
@@ -179,19 +145,6 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({ message, me
                                                 />
                                             </div>
                                         ))}
-                                    
-                                    {/* Fallback: render remaining text if no markers were used */}
-                                    {!textBeforeWidgets && !textAfterWidgets && message.text && (
-                                        <div className="prose prose-invert prose-sm max-w-none mt-3">
-                                            <ReactMarkdown
-                                                remarkPlugins={[remarkGfm]}
-                                                rehypePlugins={[rehypeHighlight]}
-                                                components={markdownComponents}
-                                            >
-                                                {message.text}
-                                            </ReactMarkdown>
-                                        </div>
-                                    )}
                                 </>
                             );
                         }
@@ -270,6 +223,19 @@ const WidgetRenderer: React.FC<{
             return sessionId ? <ApprovalWidget widget={widget} sessionId={sessionId} onExpansionChange={handleExpansionChange} shouldAnimate={shouldAnimate} /> : null;
         case 'image':
             return <ImageWidget widget={widget} onExpansionChange={handleExpansionChange} />;
+        case 'text':
+            // Text widgets are rendered inline as markdown
+            return widget.content ? (
+                <div className="prose prose-invert prose-sm max-w-none">
+                    <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeHighlight]}
+                        components={markdownComponents}
+                    >
+                        {widget.content}
+                    </ReactMarkdown>
+                </div>
+            ) : null;
         default:
             return (
                 <div className="bg-black/30 border border-white/10 rounded p-2 text-xs font-mono text-gray-500">

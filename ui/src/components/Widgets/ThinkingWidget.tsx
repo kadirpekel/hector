@@ -24,6 +24,16 @@ export const ThinkingWidget: React.FC<ThinkingWidgetProps> = ({ widget, onExpans
         }
     }, [widget.isExpanded, isExpanded]);
 
+    // Sync local expansion state to store on unmount (handles edge case where local state
+    // changes but user navigates away before toggling, e.g., auto-expand scenarios)
+    useEffect(() => {
+        return () => {
+            if (widget.isExpanded !== isExpanded) {
+                onExpansionChange?.(isExpanded);
+            }
+        };
+    }, [isExpanded, widget.isExpanded, onExpansionChange]);
+
     const getLabel = (type: string) => {
         switch (type) {
             case 'todo': return 'Planning';
@@ -58,7 +68,7 @@ export const ThinkingWidget: React.FC<ThinkingWidgetProps> = ({ widget, onExpans
                     {status === 'active' ? (
                         <Loader2 size={14} className="animate-spin text-blue-400" />
                     ) : (
-                        <CheckCircle2 size={14} className="text-gray-500" />
+                        <CheckCircle2 size={14} className="text-green-500" />
                     )}
 
                     {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}

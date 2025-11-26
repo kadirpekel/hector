@@ -263,6 +263,10 @@ When using zero-config mode (no `--config` flag), use these to configure quickly
 | `--role TEXT` | string | Set agent identity (WHO, merges with strategy) | - |
 | `--instruction TEXT` | string | Add user guidance (WHAT, highest priority) | - |
 | `--tools` | bool | Enable all built-in tools | `false` |
+| `--thinking` | bool | Enable thinking at API level (auto-enables `--show-thinking`) | `false` |
+| `--thinking-budget TOKENS` | int | Token budget for thinking (default: 1024, must be < max-tokens) | `0` |
+| `--show-tools` | bool | Show tool calls and results in output | `false` |
+| `--show-thinking` | bool | Show thinking blocks in output (auto-enabled with `--thinking`, use `--no-show-thinking` to disable) | `false` |
 | `--mcp-url URL` | string | MCP server URL | - |
 | `--mcp-parser-tool TOOL` | string | MCP parser tool name for document parsing | - |
 | `--docs-folder PATH` | string | Documents folder for RAG. Supports path mapping syntax `local:remote` for containerized MCP services (e.g., `test-docs:/docs`) | - |

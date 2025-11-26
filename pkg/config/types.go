@@ -204,6 +204,10 @@ type LLMProviderConfig struct {
 
 	StructuredOutput *StructuredOutputConfig `yaml:"structured_output,omitempty"`
 
+	// Extended thinking/reasoning configuration
+	// Supported by: Anthropic (extended thinking), Gemini (thinking), OpenAI (reasoning models), Ollama (thinking-capable models)
+	Thinking *ThinkingConfig `yaml:"thinking,omitempty"`
+
 	// TLS configuration for HTTPS connections (useful for self-hosted LLMs)
 	InsecureSkipVerify *bool  `yaml:"insecure_skip_verify,omitempty"` // Skip TLS certificate verification (dev/test only)
 	CACertificate      string `yaml:"ca_certificate,omitempty"`       // Path to custom CA certificate file
@@ -219,6 +223,19 @@ type StructuredOutputConfig struct {
 	Prefill string `yaml:"prefill,omitempty"`
 
 	PropertyOrdering []string `yaml:"property_ordering,omitempty"`
+}
+
+type ThinkingConfig struct {
+	Enabled      bool `yaml:"enabled"`
+	BudgetTokens int  `yaml:"budget_tokens"` // Maximum tokens for thinking (must be < max_tokens)
+}
+
+// Validate validates the thinking configuration
+func (c *ThinkingConfig) Validate(maxTokens int) error {
+	if c.BudgetTokens > 0 && c.BudgetTokens >= maxTokens {
+		return fmt.Errorf("thinking budget_tokens (%d) must be less than max_tokens (%d)", c.BudgetTokens, maxTokens)
+	}
+	return nil
 }
 
 func (c *LLMProviderConfig) Validate() error {
@@ -258,6 +275,11 @@ func (c *LLMProviderConfig) Validate() error {
 	}
 	if c.RetryDelay < 0 {
 		return fmt.Errorf("retry_delay must be non-negative")
+	}
+	if c.Thinking != nil {
+		if err := c.Thinking.Validate(c.MaxTokens); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -614,6 +636,8 @@ type AgentConfig struct {
 	DocsFolder    string `yaml:"docs_folder,omitempty"`
 	MCPParserTool string `yaml:"mcp_parser_tool,omitempty"` // Shortcut: Explicitly specified MCP parser tool name (required for auto-config)
 	EnableTools   *bool  `yaml:"enable_tools,omitempty"`
+	// Note: Thinking enablement is in LLMProviderConfig.Thinking, not here
+	// This follows the pattern: LLM-level settings in LLMProviderConfig, agent-level in AgentConfig
 
 	A2A *A2ACardConfig `yaml:"a2a,omitempty"`
 }

@@ -496,24 +496,14 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 		request.Options = opts
 	}
 
-	// Enable thinking for known thinking-capable models only if ShowThinking is enabled
-	// Check context for ShowThinking flag (set by agent based on --thinking flag)
-	showThinking := false
-	if showThinkingValue := ctx.Value(protocol.ShowThinkingKey); showThinkingValue != nil {
-		if st, ok := showThinkingValue.(bool); ok {
-			showThinking = st
-		}
-	}
+	// Enable thinking from provider config (same pattern as Anthropic)
+	// Each LLM provider reads its own config - no context passing needed
+	enableThinking := p.config.Thinking != nil && p.config.Thinking.Enabled
 
 	// For thinking-capable models, explicitly control thinking mode
 	// Note: Ollama generates thinking by default for qwen3, so we must explicitly disable it
 	if p.isThinkingCapableModel(p.config.Model) {
-		if showThinking {
-			request.Think = true
-		} else {
-			// Explicitly disable thinking - omitting the field doesn't work for qwen3
-			request.Think = false
-		}
+		request.Think = enableThinking
 	}
 
 	// Set format for structured output
@@ -687,6 +677,7 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 	// Track tool calls by index for accumulation
 	toolCallsMap := make(map[int]*OllamaToolCall)
 	var totalTokens int
+	var accumulatedThinking strings.Builder
 
 	for {
 		line, err := reader.ReadBytes('\n')
@@ -721,7 +712,7 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 
 		// Handle thinking/reasoning trace (Ollama thinking capability)
 		if chunk.Message.Thinking != "" {
-			// Emit thinking as thinking chunks - will be converted to thinking parts
+			accumulatedThinking.WriteString(chunk.Message.Thinking)
 			outputCh <- StreamChunk{
 				Type: "thinking",
 				Text: chunk.Message.Thinking,
@@ -755,6 +746,23 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 		// Update token count and check if done
 		if chunk.Done {
 			totalTokens = chunk.PromptEvalCount + chunk.EvalCount
+
+			// Check for thinking in final chunk (Ollama may send it here)
+			if chunk.Message.Thinking != "" {
+				accumulatedThinking.WriteString(chunk.Message.Thinking)
+				outputCh <- StreamChunk{
+					Type: "thinking",
+					Text: chunk.Message.Thinking,
+				}
+			}
+
+			// Emit thinking_complete if we have accumulated thinking
+			if accumulatedThinking.Len() > 0 {
+				outputCh <- StreamChunk{
+					Type: "thinking_complete",
+					Text: accumulatedThinking.String(),
+				}
+			}
 
 			// Send accumulated tool calls when done
 			if len(toolCallsMap) > 0 {

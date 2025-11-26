@@ -936,7 +936,7 @@ func (a *Agent) resumeTaskExecution(
 		}
 
 		// Call LLM
-		text, toolCalls, tokens, err := a.callLLMWithRetry(ctx, messages, toolDefs, outputCh, cfg, nil)
+		text, toolCalls, tokens, thinking, err := a.callLLMWithRetry(ctx, messages, toolDefs, outputCh, cfg, nil)
 		if err != nil {
 			slog.Error("LLM call failed", "agent", a.id, "error", err)
 			if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
@@ -955,7 +955,7 @@ func (a *Agent) resumeTaskExecution(
 		var results []reasoning.ToolResult
 		if len(toolCalls) > 0 {
 			var shouldContinue bool
-			ctx, results, shouldContinue, err = a.processToolCalls(ctx, text, toolCalls, reasoningState, outputCh, cfg)
+			ctx, results, shouldContinue, err = a.processToolCalls(ctx, text, toolCalls, thinking, reasoningState, outputCh, cfg)
 			if err != nil {
 				slog.Error("Error processing tool calls", "agent", a.id, "error", err)
 				if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {

@@ -32,7 +32,7 @@ agents:
       # Improve LLM reasoning
       
       # Display options
-      show_thinking: true                 # Show meta-reflection
+      enable_thinking_display: true                 # Show meta-reflection
       enable_streaming: true
 ```
 
@@ -87,11 +87,21 @@ Agent: Here are the files...
 
 #### Thinking Display
 
-Show agent's internal reasoning (Claude-style):
+Show agent's internal reasoning (Claude extended thinking, Ollama qwen3):
 
+**CLI (zero-config mode):**
+```bash
+# --thinking auto-enables display
+hector call "Solve this" --thinking
+
+# Disable display if needed
+hector call "Solve this" --thinking --no-show-thinking
+```
+
+**Config file:**
 ```yaml
 reasoning:
-  show_thinking: true
+  enable_thinking_display: true
 ```
 
 Output:
@@ -325,7 +335,7 @@ agents:
       
       # Display
       enable_streaming: true           # Stream responses
-      show_thinking: false             # Show internal reasoning
+      enable_thinking_display: false    # Show internal reasoning
       
       # Reflection
 ```
@@ -476,7 +486,7 @@ agents:
 agents:
   debug:
     reasoning:
-      show_thinking: true
+      enable_thinking_display: true
 ```
 
 Output shows:
@@ -606,7 +616,7 @@ agents:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `show_thinking` | bool | `false` | Show `[Thinking: ...]` meta-reflection blocks |
+| `enable_thinking_display` | bool | `false` | Show thinking blocks in output (like `enable_tool_display` for tools) |
 | `enable_streaming` | bool | `true` | Real-time token-by-token output |
 
 ### Example: Maximum Visibility
@@ -615,7 +625,7 @@ agents:
 reasoning:
   engine: "chain-of-thought"
   max_iterations: 100
-  show_thinking: true                 # Display reflection
+  enable_thinking_display: true      # Display reflection
   enable_streaming: true
 ```
 

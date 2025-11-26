@@ -62,6 +62,27 @@ func CreateThinkingPart(text string, blockID string, blockIndex int) *pb.Part {
 	}
 }
 
+// CreateThinkingPartWithSignature creates a thinking part with signature (for Anthropic extended thinking)
+func CreateThinkingPartWithSignature(content string, signature string, blockID string, blockIndex int) *pb.Part {
+	if blockID == "" {
+		blockID = uuid.New().String()
+	}
+
+	// Store signature in metadata for later retrieval
+	metadata, _ := structpb.NewStruct(map[string]interface{}{
+		"event_type":  AGUIEventTypeThinking,
+		"block_type":  AGUIBlockTypeThinking,
+		"block_id":    blockID,
+		"block_index": blockIndex,
+		"signature":   signature, // Store signature for Anthropic API
+	})
+
+	return &pb.Part{
+		Part:     &pb.Part_Text{Text: content},
+		Metadata: metadata,
+	}
+}
+
 // CreateThinkingPartWithData creates a thinking part with structured data
 // Backend emits structured data, client decides how to render
 func CreateThinkingPartWithData(text string, thinkingType string, data map[string]interface{}) *pb.Part {

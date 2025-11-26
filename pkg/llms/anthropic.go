@@ -34,6 +34,11 @@ type AnthropicTool struct {
 	InputSchema map[string]interface{} `json:"input_schema"`
 }
 
+type AnthropicThinking struct {
+	Type         string `json:"type"`
+	BudgetTokens int    `json:"budget_tokens"`
+}
+
 type AnthropicRequest struct {
 	Model       string             `json:"model"`
 	Messages    []AnthropicMessage `json:"messages"`
@@ -42,6 +47,7 @@ type AnthropicRequest struct {
 	Stream      bool               `json:"stream"`
 	System      string             `json:"system,omitempty"`
 	Tools       []AnthropicTool    `json:"tools,omitempty"`
+	Thinking    *AnthropicThinking `json:"thinking,omitempty"`
 }
 
 type AnthropicMessage struct {
@@ -72,6 +78,8 @@ type AnthropicStreamResponse struct {
 type AnthropicContent struct {
 	Type      string                  `json:"type"`
 	Text      string                  `json:"text,omitempty"`
+	Thinking  string                  `json:"thinking,omitempty"`  // Extended thinking content (string)
+	Signature string                  `json:"signature,omitempty"` // Signature for thinking block (required when sending thinking back)
 	ID        string                  `json:"id,omitempty"`
 	Name      string                  `json:"name,omitempty"`
 	Input     *map[string]interface{} `json:"input,omitempty"`
@@ -89,7 +97,9 @@ type AnthropicImageSource struct {
 type AnthropicDelta struct {
 	Type        string `json:"type"`
 	Text        string `json:"text,omitempty"`
+	Thinking    string `json:"thinking,omitempty"` // Thinking content for thinking_delta events
 	PartialJSON string `json:"partial_json,omitempty"`
+	Signature   string `json:"signature,omitempty"` // Signature for thinking blocks (from signature_delta events)
 }
 
 type AnthropicUsage struct {
@@ -200,7 +210,7 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message
 	)
 	defer span.End()
 
-	request, err := p.buildRequest(messages, false, tools)
+	request, err := p.buildRequest(ctx, messages, false, tools)
 	if err != nil {
 		return "", nil, 0, err
 	}
@@ -249,6 +259,10 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message
 	for _, content := range response.Content {
 		if content.Type == "text" {
 			text += content.Text
+		} else if content.Type == "thinking" {
+			// Thinking blocks are included in the response but we don't need to process them
+			// They're already used by Claude internally for reasoning
+			// The thinking content is available in content.Text if needed for debugging
 		} else if content.Type == "tool_use" {
 
 			var args map[string]interface{}
@@ -280,7 +294,7 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message
 }
 
 func (p *AnthropicProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
-	request, err := p.buildRequest(messages, true, tools)
+	request, err := p.buildRequest(ctx, messages, true, tools)
 	if err != nil {
 		return nil, err
 	}
@@ -301,12 +315,71 @@ func (p *AnthropicProvider) GenerateStreaming(ctx context.Context, messages []*p
 	return outputCh, nil
 }
 
-func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, tools []ToolDefinition) (AnthropicRequest, error) {
+func (p *AnthropicProvider) buildRequest(ctx context.Context, messages []*pb.Message, stream bool, tools []ToolDefinition) (AnthropicRequest, error) {
+
+	// Check if thinking is enabled from provider config
+	// Each LLM provider reads its own config - no context passing needed
+	shouldEnableThinking := false
+	budgetTokens := 0
+
+	if p.config.Thinking != nil && p.config.Thinking.Enabled {
+		shouldEnableThinking = true
+		if p.config.Thinking.BudgetTokens > 0 {
+			budgetTokens = p.config.Thinking.BudgetTokens
+		}
+	}
 
 	var systemParts []string
 	anthropicMessages := make([]AnthropicMessage, 0, len(messages))
 
-	for _, msg := range messages {
+	// Find the last assistant message with tool_use (for thinking block requirement)
+	// According to Anthropic docs: "When thinking is enabled, a final assistant message must start
+	// with a thinking block (preceeding the lastmost set of tool_use and tool_result blocks)."
+	// The "final assistant message" is the LAST assistant message that has tool_use AND will be included
+	// in the request (i.e., not skipped).
+	//
+	// Strategy: First pass - identify all assistant messages with tool_use
+	// Then determine which is the last one that will actually be included (has thinking block if thinking is enabled)
+	assistantMessagesWithToolUse := make([]int, 0)
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == pb.Role_ROLE_AGENT {
+			toolCalls := protocol.GetToolCallsFromMessage(messages[i])
+			if len(toolCalls) > 0 {
+				assistantMessagesWithToolUse = append(assistantMessagesWithToolUse, i)
+			}
+		}
+	}
+
+	// Track which tool call IDs are actually included (not skipped)
+	// This is needed to filter out tool results that reference skipped tool calls
+	includedToolCallIDs := make(map[string]bool)
+
+	// When thinking is enabled, we need to ensure the FINAL assistant message with tool_use
+	// in the request has a thinking block. The "final" one is the LAST one in the array.
+	//
+	// Key insight: Messages we're processing are from HISTORY (previous turns).
+	// NEW messages being generated will automatically have thinking blocks (because thinking is enabled).
+	// The "final assistant message" in the ACTUAL REQUEST will be the NEW one being generated,
+	// which will have a thinking block. So we can include ALL history messages, even without
+	// thinking blocks (docs allow omitting from prior turns).
+	// When thinking is enabled, we need to identify which assistant messages with tool_use
+	// are missing thinking blocks. These messages (and their tool_results) must be SKIPPED
+	// to avoid the API error. We keep thinking enabled so NEW responses have thinking blocks.
+	//
+	// Track which messages should be skipped (assistant with tool_use but no thinking block)
+	skipMessageIndices := make(map[int]bool)
+	if shouldEnableThinking {
+		for _, idx := range assistantMessagesWithToolUse {
+			msg := messages[idx]
+			thinkingContent, _ := protocol.ExtractThinkingBlockFromMessage(msg)
+			if thinkingContent == "" {
+				// This assistant message with tool_use has no thinking block - mark for skipping
+				skipMessageIndices[idx] = true
+			}
+		}
+	}
+
+	for i, msg := range messages {
 
 		if msg.Role == pb.Role_ROLE_UNSPECIFIED {
 
@@ -374,8 +447,16 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 
 		toolResults := protocol.GetToolResultsFromMessage(msg)
 		if len(toolResults) > 0 {
-
+			// Filter tool results to only include those that reference tool calls we actually included
+			// If we skipped an assistant message with tool_use, we must also skip its corresponding tool results
 			for _, toolResult := range toolResults {
+				if !includedToolCallIDs[toolResult.ToolCallID] {
+					// This tool result references a tool call that was skipped (no thinking block)
+					slog.Debug("Skipping tool result for skipped tool call",
+						"tool_call_id", toolResult.ToolCallID,
+						"message_index", i)
+					continue
+				}
 				anthropicMessages = append(anthropicMessages, AnthropicMessage{
 					Role: "user",
 					Content: []AnthropicContent{
@@ -393,7 +474,43 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 		toolCalls := protocol.GetToolCallsFromMessage(msg)
 		if msg.Role == pb.Role_ROLE_AGENT && len(toolCalls) > 0 {
 
+			// Check if this message should be skipped (no thinking block when thinking is enabled)
+			if skipMessageIndices[i] {
+				slog.Debug("Skipping assistant message with tool_use (no thinking block)",
+					"message_index", i,
+					"tool_calls_count", len(toolCalls))
+				// Don't add tool call IDs - this will cause corresponding tool_results to be skipped too
+				continue
+			}
+
 			contents := []AnthropicContent{}
+
+			// When thinking is enabled, assistant messages with tool_use MUST start with a thinking block
+			// Extract thinking content and signature from the message (if it exists from previous turns)
+			thinkingContent, thinkingSignature := protocol.ExtractThinkingBlockFromMessage(msg)
+
+			slog.Debug("Processing assistant message with tool_use",
+				"message_index", i,
+				"has_thinking_content", thinkingContent != "",
+				"has_signature", thinkingSignature != "",
+				"tool_calls_count", len(toolCalls))
+
+			if shouldEnableThinking {
+				// Include thinking block if content exists from previous turn
+				// Anthropic format: {"type": "thinking", "thinking": "...", "signature": "..."}
+				// Both content and signature are required by Anthropic API
+				if thinkingContent != "" && thinkingSignature != "" {
+					contents = append(contents, AnthropicContent{
+						Type:      "thinking",
+						Thinking:  thinkingContent,
+						Signature: thinkingSignature,
+					})
+				}
+				// Note: If we have content but no signature, we can't send it back (signature is required)
+			}
+			// When thinking is disabled, skip thinking parts entirely.
+			// Thinking content represents internal reasoning and should not be included as regular text
+			// to prevent polluting conversation history with internal thoughts.
 
 			textContent := protocol.ExtractTextFromMessage(msg)
 			if textContent != "" {
@@ -404,6 +521,8 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 			}
 
 			for _, tc := range toolCalls {
+				// Track this tool call ID as included
+				includedToolCallIDs[tc.ID] = true
 
 				input := tc.Args
 				if input == nil {
@@ -415,6 +534,13 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 					Name:  tc.Name,
 					Input: &input,
 				})
+			}
+
+			// Skip adding message if it has no content
+			// Anthropic requires all messages (except optional final assistant) to have non-empty content
+			if len(contents) == 0 {
+				slog.Debug("Skipping empty assistant message (no thinking block and no text content)")
+				continue
 			}
 
 			anthropicMessages = append(anthropicMessages, AnthropicMessage{
@@ -440,18 +566,43 @@ func (p *AnthropicProvider) buildRequest(messages []*pb.Message, stream bool, to
 		systemPrompt = strings.Join(systemParts, "\n\n")
 	}
 
+	// Determine temperature: when thinking is enabled, Anthropic requires temperature=1.0
+	// According to Anthropic docs: "Thinking isn't compatible with temperature or top_k modifications"
+	var temperature float64
+	if shouldEnableThinking {
+		// When thinking is enabled, temperature must be 1.0
+		temperature = 1.0
+	} else {
+		// Normal temperature handling
+		if p.config.Temperature == nil {
+			temperature = 0.7 // Default
+		} else {
+			temperature = *p.config.Temperature
+		}
+	}
+
 	request := AnthropicRequest{
-		Model:     p.config.Model,
-		Messages:  anthropicMessages,
-		MaxTokens: p.config.MaxTokens,
-		Temperature: func() float64 {
-			if p.config.Temperature == nil {
-				return 0.7 // Default
-			}
-			return *p.config.Temperature
-		}(),
-		Stream: stream,
-		System: systemPrompt,
+		Model:       p.config.Model,
+		Messages:    anthropicMessages,
+		MaxTokens:   p.config.MaxTokens,
+		Temperature: temperature,
+		Stream:      stream,
+		System:      systemPrompt,
+	}
+
+	if shouldEnableThinking {
+		if budgetTokens <= 0 {
+			// Default to 1024 tokens minimum as per Anthropic docs
+			budgetTokens = 1024
+		}
+		// Ensure budget_tokens is less than max_tokens
+		if budgetTokens >= p.config.MaxTokens {
+			budgetTokens = p.config.MaxTokens - 1
+		}
+		request.Thinking = &AnthropicThinking{
+			Type:         "enabled",
+			BudgetTokens: budgetTokens,
+		}
 	}
 
 	if len(tools) > 0 {
@@ -574,7 +725,8 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 
 	toolCalls := make(map[int]*protocol.ToolCall)
 	toolJSONBuffers := make(map[int]string)
-	thinkingBuffers := make(map[int]string) // Track thinking content by index
+	thinkingBuffers := make(map[int]string)    // Track thinking content by index
+	thinkingSignatures := make(map[int]string) // Track thinking signatures by index
 	var totalTokens int
 
 	// Stream directly from resp.Body (not consumed yet for successful responses)
@@ -616,14 +768,39 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 
 		case "content_block_delta":
 			if streamResp.Delta != nil {
+				// Handle signature_delta events for thinking blocks
+				if streamResp.Delta.Type == "signature_delta" || streamResp.Delta.Signature != "" {
+					if streamResp.Delta.Signature != "" {
+						thinkingSignatures[streamResp.Index] = streamResp.Delta.Signature
+						continue
+					}
+				}
+
 				// Handle thinking content deltas
-				if _, isThinking := thinkingBuffers[streamResp.Index]; isThinking {
-					if streamResp.Delta.Text != "" {
+				// Anthropic API structure: thinking blocks are identified by content_block_start with type "thinking"
+				// and subsequent deltas have type "thinking_delta" with content in the "thinking" field.
+				isThinkingDelta := streamResp.Delta.Type == "thinking_delta"
+				_, isInThinkingBlock := thinkingBuffers[streamResp.Index]
+
+				if isInThinkingBlock || isThinkingDelta {
+					// Primary path: thinking content is in the "thinking" field
+					thinkingText := streamResp.Delta.Thinking
+					if thinkingText != "" {
+						if !isInThinkingBlock {
+							// Initialize buffer if not already tracking this index
+							thinkingBuffers[streamResp.Index] = ""
+						}
+						thinkingBuffers[streamResp.Index] += thinkingText
+						outputCh <- StreamChunk{Type: "thinking", Text: thinkingText}
+					} else if streamResp.Delta.Text != "" && isInThinkingBlock {
+						// Fallback: if we're already in a thinking block (tracked by index) but delta
+						// uses "text" field instead of "thinking" field, treat it as thinking content.
+						// This handles edge cases where API versions might differ.
 						thinkingBuffers[streamResp.Index] += streamResp.Delta.Text
 						outputCh <- StreamChunk{Type: "thinking", Text: streamResp.Delta.Text}
 					}
 				} else if streamResp.Delta.Text != "" {
-					// Regular text content
+					// Regular text content (not in a thinking block)
 					outputCh <- StreamChunk{Type: "text", Text: streamResp.Delta.Text}
 				}
 
@@ -633,8 +810,20 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 			}
 
 		case "content_block_stop":
-			// Clean up thinking buffer when block stops
+			// When thinking block stops, emit signature if we have it
+			if thinkingContent, hasThinking := thinkingBuffers[streamResp.Index]; hasThinking {
+				signature, hasSig := thinkingSignatures[streamResp.Index]
+				if hasSig && signature != "" {
+					outputCh <- StreamChunk{
+						Type:      "thinking_complete",
+						Text:      thinkingContent,
+						Signature: signature,
+					}
+				}
+			}
+			// Clean up thinking buffers when block stops
 			delete(thinkingBuffers, streamResp.Index)
+			delete(thinkingSignatures, streamResp.Index)
 
 			if tc, exists := toolCalls[streamResp.Index]; exists {
 
@@ -691,7 +880,7 @@ func (p *AnthropicProvider) GenerateStructured(ctx context.Context, messages []*
 
 	systemPrompt := p.buildSystemPromptWithSchema(structConfig)
 
-	req, err := p.buildRequest(messages, false, tools)
+	req, err := p.buildRequest(ctx, messages, false, tools)
 	if err != nil {
 		return "", nil, 0, err
 	}
@@ -755,7 +944,7 @@ func (p *AnthropicProvider) GenerateStructuredStreaming(ctx context.Context, mes
 
 	systemPrompt := p.buildSystemPromptWithSchema(structConfig)
 
-	req, err := p.buildRequest(messages, true, tools)
+	req, err := p.buildRequest(ctx, messages, true, tools)
 	if err != nil {
 		return nil, err
 	}

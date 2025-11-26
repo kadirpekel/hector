@@ -19,23 +19,25 @@ var CLI struct {
 }
 
 type ZeroConfigFlags struct {
-	Provider      string  `help:"LLM provider" enum:"openai,anthropic,gemini,ollama" default:"openai" env:"HECTOR_PROVIDER"`
-	Model         string  `help:"LLM model name" env:"HECTOR_MODEL"`
-	APIKey        string  `name:"api-key" help:"API key for LLM provider (overrides env vars)"`
-	BaseURL       string  `name:"base-url" help:"Custom API base URL" env:"HECTOR_BASE_URL" placeholder:"URL"`
-	Temperature   float64 `help:"LLM temperature (0.0-2.0, controls randomness)" default:"0.7"`
-	MaxTokens     int     `name:"max-tokens" help:"Maximum tokens in LLM response" default:"8000"`
-	Role          string  `help:"Override agent's system role/persona (e.g., 'You are a security expert')"`
-	Instruction   string  `help:"Additional guidance appended to system prompt (e.g., 'Focus on performance')"`
-	Tools         bool    `help:"Enable built-in tools"`
-	Thinking      bool    `help:"Show thinking blocks from LLM (disabled by default, use --thinking to enable)" negatable:""`
-	ShowTools     bool    `name:"show-tools" help:"Show tool calls and results in output (disabled by default, use --show-tools to enable)" negatable:""`
-	MCPURL        string  `name:"mcp-url" help:"MCP server URL for external tools" env:"MCP_URL" placeholder:"URL"`
-	MCPParserTool string  `name:"mcp-parser-tool" help:"MCP parser tool name(s) to use for document parsing (comma-separated for fallback chain, e.g., parse_document,docling_parse,convert_document)" placeholder:"TOOL_NAME"`
-	DocsFolder    string  `name:"docs-folder" help:"Folder containing documents for RAG" type:"path" placeholder:"PATH"`
-	EmbedderModel string  `name:"embedder-model" help:"Embedder model for document store" default:"nomic-embed-text"`
-	VectorDB      string  `name:"vectordb" help:"Vector database connection string" default:"http://localhost:6334" placeholder:"URL"`
-	Observe       bool    `help:"Enable observability (metrics + tracing to localhost:4317)"`
+	Provider       string  `help:"LLM provider" enum:"openai,anthropic,gemini,ollama" default:"openai" env:"HECTOR_PROVIDER"`
+	Model          string  `help:"LLM model name" env:"HECTOR_MODEL"`
+	APIKey         string  `name:"api-key" help:"API key for LLM provider (overrides env vars)"`
+	BaseURL        string  `name:"base-url" help:"Custom API base URL" env:"HECTOR_BASE_URL" placeholder:"URL"`
+	Temperature    float64 `help:"LLM temperature (0.0-2.0, controls randomness)" default:"0.7"`
+	MaxTokens      int     `name:"max-tokens" help:"Maximum tokens in LLM response" default:"8000"`
+	Role           string  `help:"Override agent's system role/persona (e.g., 'You are a security expert')"`
+	Instruction    string  `help:"Additional guidance appended to system prompt (e.g., 'Focus on performance')"`
+	Tools          bool    `help:"Enable built-in tools"`
+	Thinking       bool    `help:"Enable thinking at API level (like --tools enables tools)" negatable:""`
+	ThinkingBudget int     `name:"thinking-budget" help:"Token budget for thinking (default: 1024, must be < max-tokens)" default:"0"`
+	ShowTools      bool    `name:"show-tools" help:"Show tool calls and results in output (disabled by default, use --show-tools to enable)" negatable:""`
+	ShowThinking   bool    `name:"show-thinking" help:"Show thinking blocks in output (disabled by default, use --show-thinking to enable)" negatable:""`
+	MCPURL         string  `name:"mcp-url" help:"MCP server URL for external tools" env:"MCP_URL" placeholder:"URL"`
+	MCPParserTool  string  `name:"mcp-parser-tool" help:"MCP parser tool name(s) to use for document parsing (comma-separated for fallback chain, e.g., parse_document,docling_parse,convert_document)" placeholder:"TOOL_NAME"`
+	DocsFolder     string  `name:"docs-folder" help:"Folder containing documents for RAG" type:"path" placeholder:"PATH"`
+	EmbedderModel  string  `name:"embedder-model" help:"Embedder model for document store" default:"nomic-embed-text"`
+	VectorDB       string  `name:"vectordb" help:"Vector database connection string" default:"http://localhost:6334" placeholder:"URL"`
+	Observe        bool    `help:"Enable observability (metrics + tracing to localhost:4317)"`
 }
 
 type ClientModeFlags struct {
