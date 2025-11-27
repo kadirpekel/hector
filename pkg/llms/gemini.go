@@ -23,6 +23,51 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// Gemini API constants
+const (
+	// Default API endpoint
+	geminiDefaultHost = "https://generativelanguage.googleapis.com"
+	geminiAPIVersion  = "v1beta"
+
+	// API Methods
+	geminiMethodGenerate       = "generateContent"
+	geminiMethodStreamGenerate = "streamGenerateContent"
+
+	// SSE Query Parameters
+	geminiStreamFormat = "sse"
+
+	// Channel buffer sizes
+	geminiStreamChannelBufferSize = 100
+
+	// Defaults
+	geminiDefaultTemperature = 0.7
+	geminiDefaultMediaType   = "image/jpeg"
+
+	// Headers
+	geminiHeaderAPIKey      = "X-goog-api-key"
+	geminiHeaderContentType = "application/json"
+
+	// Roles
+	geminiRoleUser  = "user"
+	geminiRoleModel = "model"
+
+	// Response MIME Types
+	geminiMimeTypeJSON = "application/json"
+	geminiMimeTypeEnum = "text/x.enum"
+
+	// Part Types
+	geminiPartText             = "text"
+	geminiPartThought          = "thought"
+	geminiPartFunctionCall     = "functionCall"
+	geminiPartFunctionResponse = "functionResponse"
+	geminiPartFileData         = "file_data"
+	geminiPartInlineData       = "inline_data"
+	geminiPartSignature        = "signature"
+
+	// Logging preview limits
+	geminiMaxPayloadPreviewLength = 200
+)
+
 type GeminiProvider struct {
 	config     *config.LLMProviderConfig
 	httpClient *httpclient.Client
@@ -90,9 +135,64 @@ type GeminiError struct {
 	Status  string `json:"status"`
 }
 
+// geminiStreamingState encapsulates all state variables used during SSE streaming.
+type geminiStreamingState struct {
+	accumulatedText        strings.Builder
+	accumulatedThinking    strings.Builder
+	thinkingState          ThinkingState
+	totalTokens            int
+	chunkCount             int
+	mismarkedThinkingCount int
+}
+
+// newGeminiStreamingState creates a new streaming state
+func newGeminiStreamingState() *geminiStreamingState {
+	return &geminiStreamingState{
+		thinkingState: ThinkingStateNone,
+	}
+}
+
+// closeThinkingBlock marks the thinking block as closed
+func (s *geminiStreamingState) closeThinkingBlock() {
+	s.accumulatedThinking.Reset()
+	s.thinkingState = ThinkingStateClosed
+}
+
+// hasActiveThinking returns true if thinking block is active
+func (s *geminiStreamingState) hasActiveThinking() bool {
+	return s.thinkingState == ThinkingStateActive
+}
+
+// NewGeminiProvider creates a new Gemini provider with default configuration.
+// This is a convenience constructor for simple use cases.
+// For production use, prefer NewGeminiProviderFromConfig with explicit configuration.
+func NewGeminiProvider(apiKey string, model string) *GeminiProvider {
+	cfg := &config.LLMProviderConfig{
+		Type:        "gemini",
+		Model:       model,
+		APIKey:      apiKey,
+		Host:        geminiDefaultHost,
+		Temperature: func() *float64 { t := geminiDefaultTemperature; return &t }(),
+		MaxTokens:   1000,
+		Timeout:     120,
+	}
+
+	provider, err := NewGeminiProviderFromConfig(cfg)
+	if err != nil {
+		slog.Error("Failed to create Gemini provider", "error", err)
+		return nil
+	}
+	return provider
+}
+
 func NewGeminiProviderFromConfig(cfg *config.LLMProviderConfig) (*GeminiProvider, error) {
 	if strings.TrimSpace(cfg.APIKey) == "" {
 		return nil, fmt.Errorf("gemini API key is required")
+	}
+
+	// Set default host if not provided
+	if cfg.Host == "" {
+		cfg.Host = geminiDefaultHost
 	}
 
 	return &GeminiProvider{
@@ -117,34 +217,29 @@ func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, t
 
 	req := p.buildRequest(messages, tools, nil)
 
-	// Gemini API supports both query parameter and header for API key
-	// Use header method (X-goog-api-key) as it's more standard and matches curl examples
-	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent",
-		p.config.Host, p.config.Model)
-
-	reqBody, _ := json.Marshal(req)
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
+	reqBody, err := json.Marshal(req)
 	if err != nil {
-		reqErr := fmt.Errorf("failed to create request: %w", err)
-		span.RecordError(reqErr)
-		span.SetStatus(codes.Error, "failed to create request")
+		marshalErr := fmt.Errorf("failed to marshal request: %w", err)
+		span.RecordError(marshalErr)
+		span.SetStatus(codes.Error, "failed to marshal request")
+		return "", nil, 0, nil, marshalErr
+	}
+
+	p.logRequestDebug(req, reqBody)
+
+	httpReq, err := p.createAPIRequest(ctx, p.getGenerateURL(), reqBody)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 
 		duration := time.Since(startTime)
 		metrics := observability.GetGlobalMetrics()
 		if metrics != nil {
-			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, reqErr)
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
 		}
 
-		return "", nil, 0, nil, reqErr
+		return "", nil, 0, nil, err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	apiKey := strings.TrimSpace(p.config.APIKey)
-	if apiKey == "" {
-		return "", nil, 0, nil, fmt.Errorf("gemini API key is empty")
-	}
-	httpReq.Header.Set("X-goog-api-key", apiKey)
 
 	resp, err := p.httpClient.Do(httpReq)
 	_, geminiResp, err := p.handleGeminiResponse(resp, err)
@@ -211,45 +306,31 @@ func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, t
 func (p *GeminiProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, tools, nil)
 
-	url := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?alt=sse",
-		p.config.Host, p.config.Model)
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
 
-	chunks := make(chan StreamChunk, 10)
+	p.logRequestDebug(req, reqBody)
+
+	chunks := make(chan StreamChunk, geminiStreamChannelBufferSize)
 
 	go func() {
 		defer close(chunks)
 
-		reqBody, _ := json.Marshal(req)
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
+		httpReq, err := p.createAPIRequest(ctx, p.getStreamGenerateURL(), reqBody)
 		if err != nil {
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return
 		}
 
-		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("X-goog-api-key", strings.TrimSpace(p.config.APIKey))
-
 		resp, err := p.httpClient.Do(httpReq)
-		// httpclient returns both response and error for non-2xx status codes
-		// We need to check the response body even if there's an error
 		if resp != nil {
 			defer resp.Body.Close()
 
 			if resp.StatusCode != http.StatusOK {
-				bodyBytes, _ := io.ReadAll(resp.Body)
-				var errorResp GeminiResponse
-				if json.Unmarshal(bodyBytes, &errorResp) == nil && errorResp.Error != nil {
-					err := fmt.Errorf("gemini API error (HTTP %d): %s (code: %d, status: %s)",
-						resp.StatusCode, errorResp.Error.Message, errorResp.Error.Code, errorResp.Error.Status)
-					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "error_message", errorResp.Error.Message, "error_code", errorResp.Error.Code, "error_status", errorResp.Error.Status)
-					chunks <- StreamChunk{Type: "error", Error: err}
-					return
-				} else {
-					err := fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
-					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "response_body", string(bodyBytes))
-					chunks <- StreamChunk{Type: "error", Error: err}
-					return
-				}
+				chunks <- StreamChunk{Type: "error", Error: p.parseErrorResponse(resp)}
+				return
 			}
 			// Success case - continue with streaming
 			p.parseStreamingResponse(resp.Body, chunks)
@@ -286,27 +367,29 @@ func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.
 
 	req := p.buildRequest(messages, tools, structConfig)
 
-	url := fmt.Sprintf("%s/v1beta/models/%s:generateContent",
-		p.config.Host, p.config.Model)
-
-	reqBody, _ := json.Marshal(req)
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
+	reqBody, err := json.Marshal(req)
 	if err != nil {
-		reqErr := fmt.Errorf("failed to create request: %w", err)
-		span.RecordError(reqErr)
-		span.SetStatus(codes.Error, "failed to create request")
+		marshalErr := fmt.Errorf("failed to marshal request: %w", err)
+		span.RecordError(marshalErr)
+		span.SetStatus(codes.Error, "failed to marshal request")
+		return "", nil, 0, nil, marshalErr
+	}
+
+	p.logRequestDebug(req, reqBody)
+
+	httpReq, err := p.createAPIRequest(ctx, p.getGenerateURL(), reqBody)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 
 		duration := time.Since(startTime)
 		metrics := observability.GetGlobalMetrics()
 		if metrics != nil {
-			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, reqErr)
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
 		}
 
-		return "", nil, 0, nil, reqErr
+		return "", nil, 0, nil, err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("X-goog-api-key", strings.TrimSpace(p.config.APIKey))
 
 	resp, err := p.httpClient.Do(httpReq)
 	_, geminiResp, err := p.handleGeminiResponse(resp, err)
@@ -366,45 +449,31 @@ func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.
 func (p *GeminiProvider) GenerateStructuredStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
 	req := p.buildRequest(messages, tools, structConfig)
 
-	url := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?alt=sse",
-		p.config.Host, p.config.Model)
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
 
-	chunks := make(chan StreamChunk, 10)
+	p.logRequestDebug(req, reqBody)
+
+	chunks := make(chan StreamChunk, geminiStreamChannelBufferSize)
 
 	go func() {
 		defer close(chunks)
 
-		reqBody, _ := json.Marshal(req)
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
+		httpReq, err := p.createAPIRequest(ctx, p.getStreamGenerateURL(), reqBody)
 		if err != nil {
 			chunks <- StreamChunk{Type: "error", Error: err}
 			return
 		}
 
-		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("X-goog-api-key", strings.TrimSpace(p.config.APIKey))
-
 		resp, err := p.httpClient.Do(httpReq)
-		// httpclient returns both response and error for non-2xx status codes
-		// We need to check the response body even if there's an error
 		if resp != nil {
 			defer resp.Body.Close()
 
 			if resp.StatusCode != http.StatusOK {
-				bodyBytes, _ := io.ReadAll(resp.Body)
-				var errorResp GeminiResponse
-				if json.Unmarshal(bodyBytes, &errorResp) == nil && errorResp.Error != nil {
-					err := fmt.Errorf("gemini API error (HTTP %d): %s (code: %d, status: %s)",
-						resp.StatusCode, errorResp.Error.Message, errorResp.Error.Code, errorResp.Error.Status)
-					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "error_message", errorResp.Error.Message, "error_code", errorResp.Error.Code, "error_status", errorResp.Error.Status)
-					chunks <- StreamChunk{Type: "error", Error: err}
-					return
-				} else {
-					err := fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
-					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "response_body", string(bodyBytes))
-					chunks <- StreamChunk{Type: "error", Error: err}
-					return
-				}
+				chunks <- StreamChunk{Type: "error", Error: p.parseErrorResponse(resp)}
+				return
 			}
 			// Success case - continue with streaming
 			p.parseStreamingResponse(resp.Body, chunks)
@@ -438,7 +507,7 @@ func (p *GeminiProvider) GetMaxTokens() int {
 
 func (p *GeminiProvider) GetTemperature() float64 {
 	if p.config.Temperature == nil {
-		return 0.7 // Default
+		return geminiDefaultTemperature
 	}
 	return *p.config.Temperature
 }
@@ -475,6 +544,104 @@ func (p *GeminiProvider) GetSupportedInputModes() []string {
 
 func (p *GeminiProvider) Close() error {
 	return nil
+}
+
+// getGenerateURL returns the URL for non-streaming generate requests
+func (p *GeminiProvider) getGenerateURL() string {
+	host := p.config.Host
+	if host == "" {
+		host = geminiDefaultHost
+	}
+	return fmt.Sprintf("%s/%s/models/%s:%s",
+		strings.TrimSuffix(host, "/"),
+		geminiAPIVersion,
+		p.config.Model,
+		geminiMethodGenerate)
+}
+
+// getStreamGenerateURL returns the URL for streaming generate requests
+func (p *GeminiProvider) getStreamGenerateURL() string {
+	host := p.config.Host
+	if host == "" {
+		host = geminiDefaultHost
+	}
+	return fmt.Sprintf("%s/%s/models/%s:%s?alt=%s",
+		strings.TrimSuffix(host, "/"),
+		geminiAPIVersion,
+		p.config.Model,
+		geminiMethodStreamGenerate,
+		geminiStreamFormat)
+}
+
+// createAPIRequest creates an HTTP request for the Gemini API
+func (p *GeminiProvider) createAPIRequest(ctx context.Context, url string, body []byte) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", geminiHeaderContentType)
+
+	apiKey := strings.TrimSpace(p.config.APIKey)
+	if apiKey == "" {
+		return nil, fmt.Errorf("gemini API key is empty")
+	}
+	req.Header.Set(geminiHeaderAPIKey, apiKey)
+
+	return req, nil
+}
+
+// parseErrorResponse parses an error response from the Gemini API
+func (p *GeminiProvider) parseErrorResponse(resp *http.Response) error {
+	bodyBytes, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return fmt.Errorf("gemini API error (HTTP %d): failed to read body: %w", resp.StatusCode, readErr)
+	}
+
+	var errorResp GeminiResponse
+	if json.Unmarshal(bodyBytes, &errorResp) == nil && errorResp.Error != nil {
+		slog.Error("Gemini API request failed",
+			"status_code", resp.StatusCode,
+			"error_code", errorResp.Error.Code,
+			"error_status", errorResp.Error.Status,
+			"error_message", errorResp.Error.Message)
+		return fmt.Errorf("gemini API error (HTTP %d): %s (code: %d, status: %s)",
+			resp.StatusCode, errorResp.Error.Message, errorResp.Error.Code, errorResp.Error.Status)
+	}
+
+	slog.Error("Gemini API request failed",
+		"status_code", resp.StatusCode,
+		"response_body", string(bodyBytes))
+	return fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+}
+
+// logRequestDebug logs debug information about a Gemini API request
+func (p *GeminiProvider) logRequestDebug(req *GeminiRequest, reqBody []byte) {
+	payloadPreview := string(reqBody)
+	if len(payloadPreview) > geminiMaxPayloadPreviewLength {
+		payloadPreview = payloadPreview[:geminiMaxPayloadPreviewLength] + "..."
+	}
+
+	hasThinking := req.GenerationConfig != nil && req.GenerationConfig.ThinkingConfig != nil
+	thinkingBudget := 0
+	if hasThinking && req.GenerationConfig.ThinkingConfig.ThinkingBudget != nil {
+		thinkingBudget = *req.GenerationConfig.ThinkingConfig.ThinkingBudget
+	}
+
+	maxTokens := 0
+	if req.GenerationConfig != nil {
+		maxTokens = req.GenerationConfig.MaxOutputTokens
+	}
+
+	slog.Debug("Gemini API request",
+		"model", p.config.Model,
+		"content_count", len(req.Contents),
+		"has_system", req.SystemInstruction != nil,
+		"max_tokens", maxTokens,
+		"thinking_enabled", hasThinking,
+		"thinking_budget", thinkingBudget,
+		"tools_count", len(req.Tools),
+		"payload_preview", payloadPreview)
 }
 
 func (p *GeminiProvider) handleGeminiResponse(resp *http.Response, err error) ([]byte, *GeminiResponse, error) {
@@ -577,13 +744,12 @@ func (p *GeminiProvider) buildGenerationConfig(structConfig *StructuredOutputCon
 	if structConfig != nil {
 		switch structConfig.Format {
 		case "json":
-			config.ResponseMimeType = "application/json"
+			config.ResponseMimeType = geminiMimeTypeJSON
 			if structConfig.Schema != nil {
 				config.ResponseSchema = p.convertSchemaToGemini(structConfig.Schema, structConfig.PropertyOrdering)
 			}
 		case "enum":
-			config.ResponseMimeType = "text/x.enum"
-
+			config.ResponseMimeType = geminiMimeTypeEnum
 		}
 	}
 
@@ -652,10 +818,9 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 
 		var role string
 		if msg.Role == pb.Role_ROLE_AGENT {
-			role = "model"
+			role = geminiRoleModel
 		} else {
-
-			role = "user"
+			role = geminiRoleUser
 		}
 
 		var parts []GeminiPart
@@ -689,7 +854,7 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 					// Use fileData for URIs (assuming Google Cloud Storage URIs or similar supported by Gemini)
 					// For URIs, media type must be provided (can't detect from bytes)
 					if mediaType == "" {
-						mediaType = "image/jpeg"
+						mediaType = geminiDefaultMediaType
 					}
 
 					// Validate media type for images
@@ -932,18 +1097,7 @@ const (
 
 func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- StreamChunk) {
 	scanner := bufio.NewScanner(body)
-	var accumulatedText strings.Builder
-	var accumulatedThinking strings.Builder
-
-	// Explicit state machine for thinking blocks
-	// States: NONE -> ACTIVE -> CLOSED
-	// Once CLOSED, any text marked as thinking by Gemini is treated as regular response text
-	// This handles Gemini's occasional incorrect marking of post-tool-call responses as thinking
-	thinkingState := ThinkingStateNone
-
-	totalTokens := 0
-	chunkCount := 0
-	mismarkedThinkingCount := 0 // Track frequency of Gemini's incorrect thinking marks
+	state := newGeminiStreamingState()
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -966,122 +1120,111 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 
 		if len(resp.Candidates) > 0 {
 			candidate := resp.Candidates[0]
-
-			// Process parts in order, maintaining correct thinking block state
-			for _, part := range candidate.Content.Parts {
-				// CRITICAL FIX: Extract thought signatures for function calling continuity
-				// Gemini returns thought signatures within parts (required for function calling)
-				// See: https://ai.google.dev/gemini-api/docs/thought-signatures
-				if signature, hasSig := part["signature"].(string); hasSig && signature != "" {
-					// Emit signature in metadata for later reconstruction
-					chunks <- StreamChunk{
-						Type: "thinking_complete",
-						Text: accumulatedThinking.String(),
-						Metadata: map[string]interface{}{
-							"thought_signature": signature, // Gemini-specific signature
-						},
-					}
-					// Note: Signature is stored in metadata, not Signature field (which is Anthropic-specific)
-					// The agent layer will need to extract from metadata when reconstructing history
-				}
-
-				// Handle text content (may be marked as thinking)
-				if text, ok := part["text"].(string); ok && text != "" {
-					// Gemini marks thinking parts with thought: true boolean
-					// See: https://ai.google.dev/gemini-api/docs/thinking
-					thought, hasThought := part["thought"].(bool)
-					isMarkedAsThinking := hasThought && thought
-
-					// State machine logic:
-					// - NONE -> ACTIVE: First thinking chunk arrives
-					// - ACTIVE -> CLOSED: Text or tool call arrives (thinking complete)
-					// - CLOSED: Any subsequent thinking marks are ignored (Gemini bug workaround)
-					shouldTreatAsThinking := isMarkedAsThinking && thinkingState != ThinkingStateClosed
-
-					if shouldTreatAsThinking {
-						// Valid thinking block (internal reasoning before actions)
-						if thinkingState == ThinkingStateNone {
-							thinkingState = ThinkingStateActive
-						}
-						accumulatedThinking.WriteString(text)
-						chunks <- StreamChunk{Type: "thinking", Text: text}
-					} else {
-						// Regular text content - transition from ACTIVE to CLOSED
-						if thinkingState == ThinkingStateActive {
-							chunks <- StreamChunk{
-								Type: "thinking_complete",
-								Text: accumulatedThinking.String(),
-							}
-							accumulatedThinking.Reset()
-							thinkingState = ThinkingStateClosed
-						}
-
-						// Log if Gemini incorrectly marked post-closure text as thinking
-						if isMarkedAsThinking && thinkingState == ThinkingStateClosed {
-							mismarkedThinkingCount++
-							if mismarkedThinkingCount == 1 {
-								// Log warning on first occurrence (avoid spam)
-								slog.Warn("Gemini marked post-tool-call text as thinking, treating as regular text",
-									"model", p.config.Model,
-									"chunk_index", chunkCount)
-							}
-						}
-
-						accumulatedText.WriteString(text)
-						chunks <- StreamChunk{Type: "text", Text: text}
-						chunkCount++
-					}
-				}
-
-				// Handle tool calls
-				if fc, ok := part["functionCall"].(map[string]interface{}); ok {
-					// Transition from ACTIVE to CLOSED before emitting tool call
-					if thinkingState == ThinkingStateActive {
-						chunks <- StreamChunk{
-							Type: "thinking_complete",
-							Text: accumulatedThinking.String(),
-						}
-						accumulatedThinking.Reset()
-						thinkingState = ThinkingStateClosed
-					}
-
-					name, _ := fc["name"].(string)
-					args, _ := fc["args"].(map[string]interface{})
-
-					chunks <- StreamChunk{
-						Type: "tool_call",
-						ToolCall: &protocol.ToolCall{
-							ID:   fmt.Sprintf("call_%d", time.Now().UnixNano()),
-							Name: name,
-							Args: args,
-						},
-					}
-					chunkCount++
-				}
-			}
+			p.processStreamingCandidate(candidate, state, chunks)
 		}
 
 		if resp.UsageMetadata != nil {
-			totalTokens = resp.UsageMetadata.TotalTokenCount
+			state.totalTokens = resp.UsageMetadata.TotalTokenCount
 		}
 	}
 
 	// Close any open thinking block at end of stream
-	if thinkingState == ThinkingStateActive && accumulatedThinking.Len() > 0 {
+	if state.hasActiveThinking() && state.accumulatedThinking.Len() > 0 {
 		chunks <- StreamChunk{
 			Type: "thinking_complete",
-			Text: accumulatedThinking.String(),
+			Text: state.accumulatedThinking.String(),
 		}
-		thinkingState = ThinkingStateClosed
+		state.closeThinkingBlock()
 	}
 
 	// Log metrics for thinking state transitions (if mismarked count > 0)
-	if mismarkedThinkingCount > 0 {
+	if state.mismarkedThinkingCount > 0 {
 		slog.Debug("Gemini thinking state machine completed",
 			"model", p.config.Model,
-			"mismarked_thinking_count", mismarkedThinkingCount,
-			"final_state", thinkingState)
+			"mismarked_thinking_count", state.mismarkedThinkingCount,
+			"final_state", state.thinkingState)
 	}
 
-	chunks <- StreamChunk{Type: "done", Tokens: totalTokens}
+	chunks <- StreamChunk{Type: "done", Tokens: state.totalTokens}
+}
+
+// processStreamingCandidate processes a single streaming candidate and updates state
+func (p *GeminiProvider) processStreamingCandidate(candidate GeminiCandidate, state *geminiStreamingState, chunks chan<- StreamChunk) {
+	for _, part := range candidate.Content.Parts {
+		// Extract thought signatures for function calling continuity
+		if signature, hasSig := part[geminiPartSignature].(string); hasSig && signature != "" {
+			chunks <- StreamChunk{
+				Type: "thinking_complete",
+				Text: state.accumulatedThinking.String(),
+				Metadata: map[string]interface{}{
+					"thought_signature": signature,
+				},
+			}
+		}
+
+		// Handle text content (may be marked as thinking)
+		if text, ok := part[geminiPartText].(string); ok && text != "" {
+			thought, hasThought := part[geminiPartThought].(bool)
+			isMarkedAsThinking := hasThought && thought
+
+			// State machine logic
+			shouldTreatAsThinking := isMarkedAsThinking && state.thinkingState != ThinkingStateClosed
+
+			if shouldTreatAsThinking {
+				if state.thinkingState == ThinkingStateNone {
+					state.thinkingState = ThinkingStateActive
+				}
+				state.accumulatedThinking.WriteString(text)
+				chunks <- StreamChunk{Type: "thinking", Text: text}
+			} else {
+				// Regular text content - transition from ACTIVE to CLOSED
+				if state.hasActiveThinking() {
+					chunks <- StreamChunk{
+						Type: "thinking_complete",
+						Text: state.accumulatedThinking.String(),
+					}
+					state.closeThinkingBlock()
+				}
+
+				// Log if Gemini incorrectly marked post-closure text as thinking
+				if isMarkedAsThinking && state.thinkingState == ThinkingStateClosed {
+					state.mismarkedThinkingCount++
+					if state.mismarkedThinkingCount == 1 {
+						slog.Warn("Gemini marked post-tool-call text as thinking, treating as regular text",
+							"model", p.config.Model,
+							"chunk_index", state.chunkCount)
+					}
+				}
+
+				state.accumulatedText.WriteString(text)
+				chunks <- StreamChunk{Type: "text", Text: text}
+				state.chunkCount++
+			}
+		}
+
+		// Handle tool calls
+		if fc, ok := part[geminiPartFunctionCall].(map[string]interface{}); ok {
+			// Transition from ACTIVE to CLOSED before emitting tool call
+			if state.hasActiveThinking() {
+				chunks <- StreamChunk{
+					Type: "thinking_complete",
+					Text: state.accumulatedThinking.String(),
+				}
+				state.closeThinkingBlock()
+			}
+
+			name, _ := fc["name"].(string)
+			args, _ := fc["args"].(map[string]interface{})
+
+			chunks <- StreamChunk{
+				Type: "tool_call",
+				ToolCall: &protocol.ToolCall{
+					ID:   fmt.Sprintf("call_%d", time.Now().UnixNano()),
+					Name: name,
+					Args: args,
+				},
+			}
+			state.chunkCount++
+		}
+	}
 }
