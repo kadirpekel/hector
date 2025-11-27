@@ -30,8 +30,8 @@ type ZeroConfigFlags struct {
 	Tools          bool    `help:"Enable built-in tools"`
 	Thinking       bool    `help:"Enable thinking at API level (like --tools enables tools)" negatable:""`
 	ThinkingBudget int     `name:"thinking-budget" help:"Token budget for thinking (default: 1024, must be < max-tokens)" default:"0"`
-	ShowTools      bool    `name:"show-tools" help:"Show tool calls and results in output (disabled by default, use --show-tools to enable)" negatable:""`
-	ShowThinking   bool    `name:"show-thinking" help:"Show thinking blocks in output (disabled by default, use --show-thinking to enable)" negatable:""`
+	ShowTools      bool    `name:"show-tools" help:"Show tool calls and results in output (enabled by default, use --no-show-tools to disable)" default:"true" negatable:""`
+	ShowThinking   bool    `name:"show-thinking" help:"Show thinking blocks in output (enabled by default, use --no-show-thinking to disable)" default:"true" negatable:""`
 	MCPURL         string  `name:"mcp-url" help:"MCP server URL for external tools" env:"MCP_URL" placeholder:"URL"`
 	MCPParserTool  string  `name:"mcp-parser-tool" help:"MCP parser tool name(s) to use for document parsing (comma-separated for fallback chain, e.g., parse_document,docling_parse,convert_document)" placeholder:"TOOL_NAME"`
 	DocsFolder     string  `name:"docs-folder" help:"Folder containing documents for RAG" type:"path" placeholder:"PATH"`

@@ -20,6 +20,14 @@ var currentThinkingBlockID string
 // the prefix on the first non-empty chunk
 var thinkingPrefixPrinted bool
 
+// displayedToolCallIDs tracks tool call IDs that have already been displayed
+// This prevents double-printing when tool calls appear both in streamed parts and final message parts
+var displayedToolCallIDs = make(map[string]bool)
+
+// lastOutputType tracks the type of the last displayed output for proper block separation
+// Values: "thinking", "tool", "text", or "" (none)
+var lastOutputType string
+
 func DisplayAgentList(agents []*pb.AgentCard, mode string) {
 	fmt.Printf("\nAvailable Agents (%s)\n\n", mode)
 	fmt.Printf("Found %d agent(s):\n\n", len(agents))
@@ -87,6 +95,15 @@ func DisplayAgentCard(agentID string, card *pb.AgentCard) {
 	}
 }
 
+// ResetDisplayState resets the display state tracking variables
+// Call this when starting a new conversation or message sequence
+func ResetDisplayState() {
+	currentThinkingBlockID = ""
+	thinkingPrefixPrinted = false
+	displayedToolCallIDs = make(map[string]bool)
+	lastOutputType = ""
+}
+
 func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools bool) bool {
 	if msg == nil {
 		return false
@@ -111,6 +128,11 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 			// Display thinking parts (AG-UI compliant) - only if showThinking is true
 			if eventType == "thinking" {
 				if showThinking {
+					// Add newline if transitioning from a different block type
+					if lastOutputType != "" && lastOutputType != "thinking" {
+						fmt.Print("\n")
+					}
+
 					// Get block ID to track if this is a new thinking block
 					blockID := ""
 					if bid, ok := part.Metadata.Fields["block_id"]; ok {
@@ -149,7 +171,7 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 					if blockID != currentThinkingBlockID {
 						// Close previous thinking block if any
 						if currentThinkingBlockID != "" {
-							fmt.Print("\033[0m") // Reset styling
+							fmt.Print("\033[0m\n") // Reset styling and add newline
 						}
 						// Start new thinking block
 						currentThinkingBlockID = blockID
@@ -164,6 +186,7 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 
 					// Display the thinking content (styling already applied)
 					displayThinkingPart(part)
+					lastOutputType = "thinking"
 					hasOutput = true
 				}
 				continue
@@ -173,7 +196,7 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 			if eventType == "tool_call" {
 				// Reset thinking block state when transitioning to tool calls
 				if currentThinkingBlockID != "" {
-					fmt.Print("\033[0m") // Reset styling
+					fmt.Print("\033[0m\n") // Reset styling and add newline
 					currentThinkingBlockID = ""
 					thinkingPrefixPrinted = false
 				}
@@ -187,7 +210,26 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 				_, hasIsError := part.Metadata.Fields["is_error"]
 
 				if !hasIsError {
+					// This is a tool call - add newline if transitioning from a different block type
+					if lastOutputType != "" && lastOutputType != "tool" {
+						fmt.Print("\n")
+					}
 					// This is a tool call
+					// Extract tool call ID to track duplicates
+					toolCallID := ""
+					if id, ok := part.Metadata.Fields["tool_call_id"]; ok {
+						toolCallID = id.GetStringValue()
+					} else if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
+						if id, ok := dataPart.Data.Fields["id"]; ok {
+							toolCallID = id.GetStringValue()
+						}
+					}
+
+					// Skip if we've already displayed this tool call (prevents duplication)
+					if toolCallID != "" && displayedToolCallIDs[toolCallID] {
+						continue
+					}
+
 					// Extract tool name from AGUI metadata or data
 					toolName := ""
 					if name, ok := part.Metadata.Fields["tool_name"]; ok {
@@ -198,22 +240,51 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 						}
 					}
 					if toolName != "" {
+						// Mark as displayed
+						if toolCallID != "" {
+							displayedToolCallIDs[toolCallID] = true
+						}
 						// Display tool call with better formatting
 						fmt.Print("\033[36m") // Cyan color for tool calls
 						fmt.Printf("TOOL: %s", toolName)
-						fmt.Print("\033[0m ")
+						fmt.Print("\033[0m")
+						// Set lastOutputType to "tool" so result stays on same line
+						lastOutputType = "tool"
 						os.Stdout.Sync()
 						hasOutput = true
 					}
 					continue
 				} else {
 					// This is a tool result
+					// Extract tool call ID to match with the call
+					toolCallID := ""
+					if id, ok := part.Metadata.Fields["tool_call_id"]; ok {
+						toolCallID = id.GetStringValue()
+					} else if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
+						if id, ok := dataPart.Data.Fields["tool_call_id"]; ok {
+							toolCallID = id.GetStringValue()
+						}
+					}
+
+					// Skip if we've already displayed this result (prevents duplication)
+					if toolCallID != "" && displayedToolCallIDs[toolCallID+"_result"] {
+						continue
+					}
+
 					isError := false
 					if isErrorField, ok := part.Metadata.Fields["is_error"]; ok {
 						isError = isErrorField.GetBoolValue()
 					}
+
+					// Mark result as displayed
+					if toolCallID != "" {
+						displayedToolCallIDs[toolCallID+"_result"] = true
+					}
+
+					// Don't add newline if we're continuing a tool call (lastOutputType is already "tool")
+					// The tool call and result should be on the same line
 					if isError {
-						fmt.Print("\033[31m✗\033[0m\n") // Red for errors
+						fmt.Print(" \033[31m✗\033[0m\n") // Red for errors, with space before
 						// Extract and display error message
 						if toolResult := protocol.ExtractToolResult(part); toolResult != nil {
 							errorMsg := toolResult.Error
@@ -225,9 +296,11 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 								fmt.Printf("\033[31m   Error: %s\033[0m\n", errorMsg)
 							}
 						}
+						lastOutputType = "tool"
 						hasOutput = true
 					} else {
-						fmt.Print("\033[32mOK\033[0m\n") // Green for success
+						fmt.Print(" \033[32mOK\033[0m\n") // Green for success, with space before
+						lastOutputType = "tool"
 						hasOutput = true
 					}
 					os.Stdout.Sync()
@@ -240,11 +313,18 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 		if text := part.GetText(); text != "" {
 			// Reset thinking block state when transitioning to regular text
 			if currentThinkingBlockID != "" {
-				fmt.Print("\033[0m") // Reset styling
+				fmt.Print("\033[0m\n") // Reset styling and add newline
 				currentThinkingBlockID = ""
 				thinkingPrefixPrinted = false
 			}
+
+			// Add newline if transitioning from a different block type
+			if lastOutputType != "" && lastOutputType != "text" {
+				fmt.Print("\n")
+			}
+
 			fmt.Print(text)
+			lastOutputType = "text"
 			os.Stdout.Sync()
 			hasOutput = true
 			continue

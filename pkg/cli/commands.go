@@ -136,6 +136,9 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 
 	ctx := context.Background()
 
+	// Reset display state for clean tracking of tool calls and thinking blocks
+	ResetDisplayState()
+
 	if args.Stream {
 
 		streamChan, err := client.StreamMessage(ctx, agentID, msg)
@@ -245,6 +248,9 @@ func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streamin
 			DisplayGoodbye()
 			break
 		}
+
+		// Reset display state for each message in chat
+		ResetDisplayState()
 
 		msg := &pb.Message{
 			ContextId: sessionID,
