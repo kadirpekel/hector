@@ -1276,8 +1276,9 @@ func (p *OpenAIProvider) buildResponsesRequest(messages []*pb.Message, tools []T
 		MaxOutputTokens: maxOutputTokens,
 	}
 
-	// Only set reasoning config if effort is specified (for reasoning models)
-	if effort != "" {
+	// Only set reasoning config for reasoning models (o1, o3, o4, gpt-5, etc.)
+	// Non-reasoning models don't support the reasoning parameter
+	if effort != "" && p.isReasoningModel(p.config.Model) {
 		reasoningConfig := &OpenAIReasoningConfig{
 			Effort: effort,
 		}
@@ -1299,7 +1300,8 @@ func (p *OpenAIProvider) buildResponsesRequest(messages []*pb.Message, tools []T
 	}
 
 	// Only request encrypted content for reasoning models (needed for multi-turn)
-	if effort != "" {
+	// Non-reasoning models (like gpt-4o) don't support encrypted content
+	if effort != "" && p.isReasoningModel(p.config.Model) {
 		req.Include = []string{"reasoning.encrypted_content"}
 	}
 
