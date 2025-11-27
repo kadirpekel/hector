@@ -103,17 +103,6 @@ type streamingState struct {
 	totalTokens       int
 }
 
-// reset clears all streaming state for a new request
-func (s *streamingState) reset() {
-	s.thinkingBlockID = ""
-	s.thinkingSignature = ""
-	s.thinkingStreamed = false
-	s.functionCallID = ""
-	s.functionCallName = ""
-	s.functionCallArgs.Reset()
-	s.totalTokens = 0
-}
-
 // resetThinking clears thinking-related state
 func (s *streamingState) resetThinking() {
 	s.thinkingBlockID = ""
