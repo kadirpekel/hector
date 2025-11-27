@@ -4,6 +4,13 @@ import (
 	"github.com/kadirpekel/hector/pkg/protocol"
 )
 
+// ThinkingBlock represents thinking/reasoning content from LLM responses
+// Used for both streaming and non-streaming responses
+type ThinkingBlock struct {
+	Content   string // The thinking/reasoning content
+	Signature string // Provider-specific signature (Anthropic: signature, Gemini: thought_signature)
+}
+
 type ToolDefinition struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
@@ -16,7 +23,8 @@ type StreamChunk struct {
 	ToolCall  *protocol.ToolCall
 	Tokens    int
 	Error     error
-	Signature string // For Anthropic thinking blocks - signature for verification
+	Signature string                 // For Anthropic thinking blocks - signature for verification
+	Metadata  map[string]interface{} // Provider-specific metadata (e.g., Gemini thought signatures)
 }
 
 type StructuredOutputConfig struct {

@@ -99,7 +99,7 @@ The document should be brief and directly address the core of the query.`, sanit
 		},
 	}
 
-	response, _, _, err := llmProvider.Generate(ctx, messages, nil)
+	response, _, _, _, err := llmProvider.Generate(ctx, messages, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate hypothetical document: %w", err)
 	}

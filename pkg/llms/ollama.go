@@ -135,7 +135,7 @@ func NewOllamaProviderFromConfig(cfg *config.LLMProviderConfig) (*OllamaProvider
 	}, nil
 }
 
-func (p *OllamaProvider) Generate(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+func (p *OllamaProvider) Generate(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, *ThinkingBlock, error) {
 	startTime := time.Now()
 
 	// Create span for LLM request
@@ -163,11 +163,11 @@ func (p *OllamaProvider) Generate(ctx context.Context, messages []*pb.Message, t
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
 		}
 
-		return "", nil, 0, err
+		return "", nil, 0, nil, err
 	}
 
 	if response.Error != "" {
-		apiErr := fmt.Errorf("Ollama API error: %s", response.Error)
+		apiErr := fmt.Errorf("ollama API error: %s", response.Error)
 		span.RecordError(apiErr)
 		span.SetStatus(codes.Error, response.Error)
 
@@ -176,7 +176,7 @@ func (p *OllamaProvider) Generate(ctx context.Context, messages []*pb.Message, t
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, apiErr)
 		}
 
-		return "", nil, 0, apiErr
+		return "", nil, 0, nil, apiErr
 	}
 
 	text := response.Message.Content
@@ -187,12 +187,37 @@ func (p *OllamaProvider) Generate(ctx context.Context, messages []*pb.Message, t
 		toolCalls = p.parseToolCalls(response.Message.ToolCalls)
 	}
 
+	// CRITICAL FIX: Extract and return thinking from non-streaming responses
+	// Ollama stores thinking in message.thinking field (separate from content)
+	// See: https://docs.ollama.com/thinking
+	var thinkingBlock *ThinkingBlock
+	thinkingContent := response.Message.Thinking
+	if thinkingContent != "" {
+		thinkingBlock = &ThinkingBlock{
+			Content:   thinkingContent,
+			Signature: "", // Ollama doesn't use signatures
+		}
+		span.SetAttributes(
+			attribute.String("llm.thinking.content", thinkingContent),
+			attribute.Bool("llm.thinking.present", true),
+		)
+		slog.Debug("Ollama non-streaming response contains thinking",
+			"model", p.config.Model,
+			"thinking_length", len(thinkingContent))
+	}
+
 	// Record successful metrics
 	span.SetAttributes(
 		attribute.Int(observability.AttrLLMTokensInput, response.PromptEvalCount),
 		attribute.Int(observability.AttrLLMTokensOutput, response.EvalCount),
 		attribute.Int("llm.tool_calls", len(toolCalls)),
 	)
+	if thinkingBlock != nil {
+		span.SetAttributes(
+			attribute.Int(observability.AttrLLMThinkingBlocks, 1),
+			attribute.Int(observability.AttrLLMThinkingLength, len(thinkingBlock.Content)),
+		)
+	}
 	span.SetStatus(codes.Ok, "success")
 
 	metrics := observability.GetGlobalMetrics()
@@ -200,7 +225,7 @@ func (p *OllamaProvider) Generate(ctx context.Context, messages []*pb.Message, t
 		metrics.RecordLLMCall(ctx, p.config.Model, duration, response.PromptEvalCount, response.EvalCount, nil)
 	}
 
-	return text, toolCalls, tokensUsed, nil
+	return text, toolCalls, tokensUsed, thinkingBlock, nil
 }
 
 func (p *OllamaProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
@@ -222,7 +247,7 @@ func (p *OllamaProvider) GenerateStreaming(ctx context.Context, messages []*pb.M
 	return outputCh, nil
 }
 
-func (p *OllamaProvider) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
+func (p *OllamaProvider) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, *ThinkingBlock, error) {
 	startTime := time.Now()
 
 	tracer := observability.GetTracer("hector.llm")
@@ -263,11 +288,11 @@ func (p *OllamaProvider) GenerateStructured(ctx context.Context, messages []*pb.
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
 		}
 
-		return "", nil, 0, err
+		return "", nil, 0, nil, err
 	}
 
 	if response.Error != "" {
-		apiErr := fmt.Errorf("Ollama API error: %s", response.Error)
+		apiErr := fmt.Errorf("ollama API error: %s", response.Error)
 		span.RecordError(apiErr)
 		span.SetStatus(codes.Error, response.Error)
 
@@ -276,7 +301,7 @@ func (p *OllamaProvider) GenerateStructured(ctx context.Context, messages []*pb.
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, apiErr)
 		}
 
-		return "", nil, 0, apiErr
+		return "", nil, 0, nil, apiErr
 	}
 
 	text := response.Message.Content
@@ -285,6 +310,15 @@ func (p *OllamaProvider) GenerateStructured(ctx context.Context, messages []*pb.
 	var toolCalls []*protocol.ToolCall
 	if len(response.Message.ToolCalls) > 0 {
 		toolCalls = p.parseToolCalls(response.Message.ToolCalls)
+	}
+
+	// Extract thinking if present (structured output may still include thinking)
+	var thinkingBlock *ThinkingBlock
+	if response.Message.Thinking != "" {
+		thinkingBlock = &ThinkingBlock{
+			Content:   response.Message.Thinking,
+			Signature: "",
+		}
 	}
 
 	span.SetAttributes(
@@ -299,7 +333,7 @@ func (p *OllamaProvider) GenerateStructured(ctx context.Context, messages []*pb.
 		metrics.RecordLLMCall(ctx, p.config.Model, duration, response.PromptEvalCount, response.EvalCount, nil)
 	}
 
-	return text, toolCalls, tokensUsed, nil
+	return text, toolCalls, tokensUsed, thinkingBlock, nil
 }
 
 func (p *OllamaProvider) GenerateStructuredStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
@@ -420,6 +454,17 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 			Content: textContent,
 		}
 
+		// CRITICAL FIX: Extract and inject thinking from history for multi-turn conversations
+		// Ollama stores thinking separately from content in message.thinking field
+		// See: https://docs.ollama.com/thinking
+		if msg.Role == pb.Role_ROLE_AGENT {
+			thinkingContent := protocol.ExtractThinkingFromMessage(msg)
+			if thinkingContent != "" && p.config.Thinking != nil && p.config.Thinking.Enabled {
+				// Ollama stores thinking in separate field, not as part of content
+				ollamaMsg.Thinking = thinkingContent
+			}
+		}
+
 		// Handle images
 		for _, part := range msg.Parts {
 			if file := part.GetFile(); file != nil {
@@ -430,8 +475,7 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 						continue
 					}
 
-					const maxImageSize = 20 * 1024 * 1024
-					if len(bytes) > maxImageSize {
+					if len(bytes) > MaxOllamaImageSize {
 						continue
 					}
 
@@ -502,8 +546,17 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 
 	// For thinking-capable models, explicitly control thinking mode
 	// Note: Ollama generates thinking by default for qwen3, so we must explicitly disable it
+	// GPT-OSS requires think levels ("low", "medium", "high") instead of boolean
+	// See: https://docs.ollama.com/thinking
 	if p.isThinkingCapableModel(p.config.Model) {
-		request.Think = enableThinking
+		if strings.Contains(strings.ToLower(p.config.Model), "gpt-oss") {
+			// GPT-OSS requires think levels, not boolean
+			thinkLevel := p.mapBudgetToThinkLevel(p.config.Thinking.BudgetTokens)
+			request.Think = thinkLevel
+		} else {
+			// Other models use boolean
+			request.Think = enableThinking
+		}
 	}
 
 	// Set format for structured output
@@ -559,6 +612,26 @@ func (p *OllamaProvider) isThinkingCapableModel(modelName string) bool {
 		}
 	}
 	return false
+}
+
+// mapBudgetToThinkLevel maps thinking budget tokens to Ollama GPT-OSS think levels
+// GPT-OSS supports: "low", "medium", "high"
+// Mapping based on token budget similar to OpenAI reasoning_effort:
+// - low: <= 2000 tokens (light reasoning)
+// - medium: <= 8000 tokens (moderate reasoning)
+// - high: > 8000 tokens (maximum reasoning)
+func (p *OllamaProvider) mapBudgetToThinkLevel(budgetTokens int) string {
+	if budgetTokens <= 0 {
+		// Default to "medium" if not specified
+		return "medium"
+	}
+	if budgetTokens < 2000 {
+		return "low"
+	}
+	if budgetTokens < 8000 {
+		return "medium"
+	}
+	return "high"
 }
 
 func (p *OllamaProvider) convertToOllamaTools(tools []ToolDefinition) []OllamaTool {
@@ -621,7 +694,7 @@ func (p *OllamaProvider) makeRequest(ctx context.Context, request OllamaRequest)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("api request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var response OllamaResponse
@@ -661,9 +734,9 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 				Error string `json:"error"`
 			}
 			if json.Unmarshal(bodyBytes, &errorJSON) == nil && errorJSON.Error != "" {
-				return fmt.Errorf("Ollama API error: %s", errorJSON.Error)
+				return fmt.Errorf("ollama API error: %s", errorJSON.Error)
 			}
-			return fmt.Errorf("Ollama API request failed with status %d: %s", resp.StatusCode, errorBody)
+			return fmt.Errorf("ollama API request failed with status %d: %s", resp.StatusCode, errorBody)
 		}
 	}
 	if err != nil {
@@ -699,7 +772,7 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 		}
 
 		if chunk.Error != "" {
-			return fmt.Errorf("Ollama API error: %s", chunk.Error)
+			return fmt.Errorf("ollama API error: %s", chunk.Error)
 		}
 
 		// Accumulate text content

@@ -212,6 +212,7 @@ func ExtractThinkingFromMessage(msg *pb.Message) string {
 
 // ExtractThinkingBlockFromMessage extracts thinking content and signature from a message
 // Returns content and signature (empty string if not found)
+// Supports both Anthropic signatures (in "signature" field) and Gemini thought signatures (in "thought_signature" field)
 func ExtractThinkingBlockFromMessage(msg *pb.Message) (content string, signature string) {
 	if msg == nil || len(msg.Parts) == 0 {
 		return "", ""
@@ -224,9 +225,17 @@ func ExtractThinkingBlockFromMessage(msg *pb.Message) (content string, signature
 				thinkingText.WriteString(text)
 			}
 			// Extract signature from metadata if present
+			// Supports both Anthropic (signature) and Gemini (thought_signature) formats
 			if part.Metadata != nil && part.Metadata.Fields != nil {
+				// Check for Anthropic signature first
 				if sigField, ok := part.Metadata.Fields["signature"]; ok {
 					sig = sigField.GetStringValue()
+				}
+				// Check for Gemini thought signature (takes precedence if Anthropic signature not found)
+				if sig == "" {
+					if thoughtSigField, ok := part.Metadata.Fields["thought_signature"]; ok {
+						sig = thoughtSigField.GetStringValue()
+					}
 				}
 			}
 		}

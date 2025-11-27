@@ -514,7 +514,7 @@ type llmPluginBridge struct {
 	adapter *plugingrpc.LLMPluginAdapter
 }
 
-func (b *llmPluginBridge) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (text string, toolCalls []*protocol.ToolCall, tokens int, err error) {
+func (b *llmPluginBridge) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (text string, toolCalls []*protocol.ToolCall, tokens int, thinking *llms.ThinkingBlock, err error) {
 
 	pbMessages := make([]*plugingrpc.Message, len(messages))
 	for i, msg := range messages {
@@ -538,7 +538,7 @@ func (b *llmPluginBridge) Generate(ctx context.Context, messages []*pb.Message, 
 
 	response, err := b.adapter.GetPlugin().Generate(ctx, pbMessages, pbTools)
 	if err != nil {
-		return "", nil, 0, err
+		return "", nil, 0, nil, err
 	}
 
 	llmToolCalls := make([]*protocol.ToolCall, len(response.ToolCalls))
@@ -556,7 +556,8 @@ func (b *llmPluginBridge) Generate(ctx context.Context, messages []*pb.Message, 
 		}
 	}
 
-	return response.Text, llmToolCalls, int(response.TokensUsed), nil
+	// Note: Plugin API doesn't expose thinking blocks, so return nil
+	return response.Text, llmToolCalls, int(response.TokensUsed), nil, nil
 }
 
 func (b *llmPluginBridge) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {

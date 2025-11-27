@@ -218,7 +218,7 @@ func (e *LLMEvaluator) scoreWithLLM(ctx context.Context, prompt string) (float64
 		},
 	}
 
-	response, _, _, err := e.llmProvider.Generate(ctx, messages, nil)
+	response, _, _, _, err := e.llmProvider.Generate(ctx, messages, nil)
 	if err != nil {
 		return 0.0, fmt.Errorf("LLM generation failed: %w", err)
 	}

@@ -812,8 +812,8 @@ func (m *mockLLMRegistry) GetLLM(name string) (llms.LLMProvider, error) {
 // Mock LLM provider for reranking tests
 type mockLLMProviderForReranking struct{}
 
-func (m *mockLLMProviderForReranking) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, error) {
-	return "", nil, 0, nil
+func (m *mockLLMProviderForReranking) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, *llms.ThinkingBlock, error) {
+	return "", nil, 0, nil, nil
 }
 
 func (m *mockLLMProviderForReranking) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {

@@ -168,7 +168,7 @@ func TestAnthropicProvider_Generate_Success(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	text, toolCalls, tokens, err := provider.Generate(context.Background(), messages, tools)
+	text, toolCalls, tokens, _, err := provider.Generate(context.Background(), messages, tools)
 
 	if err != nil {
 		t.Errorf("Generate() error = %v, want nil", err)
@@ -252,7 +252,7 @@ func TestAnthropicProvider_Generate_WithTools(t *testing.T) {
 		},
 	}
 
-	text, toolCalls, tokens, err := provider.Generate(context.Background(), messages, tools)
+	text, toolCalls, tokens, _, err := provider.Generate(context.Background(), messages, tools)
 
 	if err != nil {
 		t.Errorf("Generate() error = %v, want nil", err)
@@ -299,7 +299,7 @@ func TestAnthropicProvider_Generate_HTTPError(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	_, _, _, err = provider.Generate(context.Background(), messages, tools)
+	_, _, _, _, err = provider.Generate(context.Background(), messages, tools)
 
 	if err == nil {
 		t.Error("Generate() expected error, got nil")
@@ -331,7 +331,7 @@ func TestAnthropicProvider_Generate_InvalidJSON(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	_, _, _, err = provider.Generate(context.Background(), messages, tools)
+	_, _, _, _, err = provider.Generate(context.Background(), messages, tools)
 
 	if err == nil {
 		t.Error("Generate() expected error, got nil")
@@ -450,7 +450,7 @@ func TestAnthropicProvider_Generate_ErrorOnURI(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	_, _, _, err := provider.Generate(context.Background(), messages, tools)
+	_, _, _, _, err := provider.Generate(context.Background(), messages, tools)
 
 	if err == nil {
 		t.Error("Generate() expected error for URI input, got nil")
@@ -552,7 +552,7 @@ func TestAnthropicProvider_WithCustomHTTPClient(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	text, _, tokens, err := provider.Generate(context.Background(), messages, tools)
+	text, _, tokens, _, err := provider.Generate(context.Background(), messages, tools)
 
 	if err != nil {
 		t.Errorf("Generate() error = %v, want nil", err)

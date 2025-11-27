@@ -18,11 +18,11 @@ type mockLLMProviderForMultiQuery struct {
 	err      error
 }
 
-func (m *mockLLMProviderForMultiQuery) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+func (m *mockLLMProviderForMultiQuery) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, *llms.ThinkingBlock, error) {
 	if m.err != nil {
-		return "", nil, 0, m.err
+		return "", nil, 0, nil, m.err
 	}
-	return m.response, nil, 0, nil
+	return m.response, nil, 0, nil, nil
 }
 
 func (m *mockLLMProviderForMultiQuery) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {

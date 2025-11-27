@@ -159,6 +159,10 @@ export class StreamParser {
         // Track accumulated text for completion detection
         let accumulatedText = currentMessage.text;
         
+        // Track completed thinking blocks explicitly to prevent race conditions
+        // This prevents marking thinking as completed while chunks are still arriving out-of-order
+        const completedThinkingBlocks = new Set<string>();
+        
         // Process parts in order - this is critical for correct ordering
         parts.forEach((part: unknown, partIndex: number) => {
             const partObj = part as {
@@ -186,6 +190,7 @@ export class StreamParser {
                         text?: string;
                         content?: string;
                         tool_call_id?: string;
+                        thinking_id?: string;
                     };
                 };
                 text?: string;
@@ -197,17 +202,35 @@ export class StreamParser {
             const isToolCall = metadata.event_type === 'tool_call' && !('is_error' in metadata);
             const isApproval = partObj.data?.data?.interaction_type === 'tool_approval';
             const isToolResult = metadata.event_type === 'tool_call' && ('is_error' in metadata);
+            const isThinkingComplete = metadata.event_type === 'thinking_complete' || metadata.block_type === 'thinking_complete';
+            
+            // Handle explicit thinking_complete events first (prevents race conditions)
+            if (isThinkingComplete) {
+                const thinkingId = metadata.block_id || partObj.data?.data?.thinking_id;
+                if (thinkingId) {
+                    completedThinkingBlocks.add(thinkingId);
+                    const existing = widgetMap.get(thinkingId);
+                    if (existing && existing.type === 'thinking') {
+                        widgetMap.set(thinkingId, {
+                            ...existing,
+                            status: 'completed'
+                        });
+                    }
+                }
+            }
             
             if (isThinking || isToolCall || isApproval) {
                 // Widget appears - track its order
                 if (isThinking) {
                     const thinkingId = metadata.block_id || `thinking-${partIndex}`;
+                    const isCompleted = completedThinkingBlocks.has(thinkingId);
+                    
                     if (!widgetMap.has(thinkingId)) {
                         widgetMap.set(thinkingId, {
                             id: thinkingId,
                             type: 'thinking',
                             data: { type: metadata.thinking_type || 'default' },
-                            status: 'active',
+                            status: isCompleted ? 'completed' : 'active',
                             content: partObj.text || partObj.data?.data?.text || '',
                             isExpanded: false
                         });
@@ -219,11 +242,13 @@ export class StreamParser {
                         // Update existing thinking block
                         const existing = widgetMap.get(thinkingId);
                         if (existing) {
+                            // Only mark as completed if explicitly completed, otherwise preserve state
+                            const newStatus = isCompleted ? 'completed' : 
+                                             (existing.status === 'completed' ? 'completed' : 'active');
                             widgetMap.set(thinkingId, {
                                 ...existing,
                                 content: (existing.content || '') + (partObj.text || partObj.data?.data?.text || ''),
-                                // Only set to 'active' if not already completed (preserve completion state)
-                                status: existing.status === 'completed' ? 'completed' : 'active'
+                                status: newStatus
                             });
                         }
                     }
@@ -356,11 +381,15 @@ export class StreamParser {
                         .pop();
                     
                     // Text widgets use synthetic IDs to track position relative to other widgets:
-                    // - __text_start__: Text before any widgets (initial text content)
-                    // - __text_after_{widgetId}__: Text after a specific widget (interleaved content)
+                    // - $$text_marker$$_start: Text before any widgets (initial text content)
+                    // - $$text_marker$$_after_{widgetId}: Text after a specific widget (interleaved content)
+                    // Using $$ delimiters prevents collision with widget IDs that might contain __
                     // This marker-based approach allows proper text accumulation across streaming updates
                     // and handles interleaved text/widget content correctly
-                    const textMarkerId = lastNonTextWidgetId ? `__text_after_${lastNonTextWidgetId}__` : '__text_start__';
+                    const TEXT_MARKER_PREFIX = '$$text_marker$$';
+                    const textMarkerId = lastNonTextWidgetId 
+                        ? `${TEXT_MARKER_PREFIX}_after_${lastNonTextWidgetId}` 
+                        : `${TEXT_MARKER_PREFIX}_start`;
                     
                     // Find existing text widget at this position (handles text chunks arriving in separate updates)
                     let targetTextWidgetId = textMarkerId;
@@ -375,10 +404,11 @@ export class StreamParser {
                             }
                         }
                     } else {
-                        // Look for __text_start__ widget
+                        // Look for $$text_marker$$_start widget
+                        const TEXT_MARKER_PREFIX = '$$text_marker$$';
                         const startTextWidget = contentOrder.find(id => {
                             const widget = widgetMap.get(id);
-                            return widget?.type === 'text' && id === '__text_start__';
+                            return widget?.type === 'text' && id === `${TEXT_MARKER_PREFIX}_start`;
                         });
                         if (startTextWidget) {
                             targetTextWidgetId = startTextWidget;
@@ -412,23 +442,27 @@ export class StreamParser {
             }
         });
 
-        // Mark completed thinking blocks when text appears
+        // Mark completed thinking blocks when text appears (fallback for implicit completion)
+        // Only mark blocks that haven't been explicitly completed via thinking_complete event
         if (accumulatedText.length > currentMessage.text.length) {
             widgetMap.forEach((widget, id) => {
-                if (widget.type === 'thinking' && widget.status === 'active') {
+                if (widget.type === 'thinking' && widget.status === 'active' && !completedThinkingBlocks.has(id)) {
+                    completedThinkingBlocks.add(id);
                     widgetMap.set(id, { ...widget, status: 'completed' });
                 }
             });
         }
         
-        // Mark thinking as completed when tool calls start
+        // Mark thinking as completed when tool calls start (fallback for implicit completion)
+        // Only mark blocks that haven't been explicitly completed via thinking_complete event
         const hasNewToolCalls = parts.some((p: unknown) => {
             const pObj = p as { metadata?: { event_type?: string; is_error?: boolean } };
             return pObj.metadata?.event_type === 'tool_call' && !('is_error' in (pObj.metadata || {}));
         });
         if (hasNewToolCalls) {
             widgetMap.forEach((widget, id) => {
-                if (widget.type === 'thinking' && widget.status === 'active') {
+                if (widget.type === 'thinking' && widget.status === 'active' && !completedThinkingBlocks.has(id)) {
+                    completedThinkingBlocks.add(id);
                     widgetMap.set(id, { ...widget, status: 'completed' });
                 }
             });

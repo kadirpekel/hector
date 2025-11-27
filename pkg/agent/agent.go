@@ -14,10 +14,13 @@ import (
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/httpclient"
 	"github.com/kadirpekel/hector/pkg/llms"
+	"github.com/kadirpekel/hector/pkg/observability"
 	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/reasoning"
 	"github.com/kadirpekel/hector/pkg/tools"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
@@ -399,6 +402,16 @@ func (a *Agent) executeWithMessage(
 				return
 			}
 
+			// Record thinking-specific telemetry
+			if thinking != nil && thinking.Content != "" {
+				thinkingLength := len(thinking.Content)
+				thinkingBlocks := 1 // Count thinking blocks (could be multiple in future)
+				span.SetAttributes(
+					attribute.Int(observability.AttrLLMThinkingBlocks, thinkingBlocks),
+					attribute.Int(observability.AttrLLMThinkingLength, thinkingLength),
+				)
+			}
+
 			state.AddTokens(tokens)
 
 			if text != "" {
@@ -777,11 +790,8 @@ func (a *Agent) createAssistantMessageWithToolCalls(
 	return assistantMsg
 }
 
-// ThinkingBlock holds thinking content and signature for storage
-type ThinkingBlock struct {
-	Content   string
-	Signature string
-}
+// ThinkingBlock is an alias for llms.ThinkingBlock
+type ThinkingBlock = llms.ThinkingBlock
 
 // callLLMWithRetry calls the LLM with automatic retry logic for rate limits
 func (a *Agent) callLLMWithRetry(
@@ -867,9 +877,25 @@ func (a *Agent) callLLM(
 			PropertyOrdering: a.config.StructuredOutput.PropertyOrdering,
 		}
 
-		text, toolCalls, tokens, err := llm.GenerateStructured(ctx, messages, toolDefs, structConfig)
+		text, toolCalls, tokens, thinkingBlock, err := llm.GenerateStructured(ctx, messages, toolDefs, structConfig)
 		if err != nil {
 			return "", nil, 0, nil, err
+		}
+
+		// Handle thinking block from structured output if present
+		if thinkingBlock != nil && thinkingBlock.Content != "" {
+			showThinking := config.BoolValue(cfg.EnableThinkingDisplay, false)
+			if showThinking {
+				thinkingPart := protocol.CreateThinkingPartWithSignature(
+					thinkingBlock.Content,
+					thinkingBlock.Signature,
+					fmt.Sprintf("think-%d", time.Now().UnixNano()),
+					0,
+				)
+				if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
+					slog.Error("Failed to send thinking part", "agent", a.name, "error", sendErr)
+				}
+			}
 		}
 
 		if text != "" {
@@ -878,7 +904,7 @@ func (a *Agent) callLLM(
 			}
 		}
 
-		return text, toolCalls, tokens, nil, nil
+		return text, toolCalls, tokens, thinkingBlock, nil
 	}
 
 	if cfg.EnableStreaming != nil && *cfg.EnableStreaming {
@@ -934,11 +960,37 @@ func (a *Agent) callLLM(
 				}
 			case "thinking_complete":
 				// Complete thinking block with signature - store it properly
+				// Handle both Anthropic-style signatures (chunk.Signature) and Gemini-style signatures (chunk.Metadata)
 				if chunk.Signature != "" {
 					currentThinkingSignature = chunk.Signature
+				} else if chunk.Metadata != nil {
+					// Extract Gemini thought signature from metadata
+					if thoughtSig, ok := chunk.Metadata["thought_signature"].(string); ok && thoughtSig != "" {
+						currentThinkingSignature = thoughtSig
+						// Store Gemini signature in the last thinking part's metadata for history reconstruction
+						// Note: Gemini signatures are provider-specific and stored differently than Anthropic
+					}
+				}
+				// Emit explicit completion event to prevent race conditions
+				// This allows clients to track completion state even if chunks arrive out-of-order
+				if currentThinkingBlockID != "" && showThinking {
+					completionPart := protocol.CreateThinkingCompletionPart(currentThinkingBlockID, currentThinkingSignature)
+					if completionPart != nil {
+						// Store Gemini signature in completion part metadata if present
+						if chunk.Metadata != nil && currentThinkingSignature != "" {
+							if completionPart.Metadata != nil && completionPart.Metadata.Fields != nil {
+								completionPart.Metadata.Fields["thought_signature"] = structpb.NewStringValue(currentThinkingSignature)
+							}
+						}
+						if sendErr := safeSendPart(ctx, outputCh, completionPart); sendErr != nil {
+							slog.Error("Failed to send thinking completion", "agent", a.name, "error", sendErr)
+							return "", nil, 0, nil, sendErr
+						}
+					}
 				}
 				// Reset thinking block ID - next thinking chunk will start a new block
 				currentThinkingBlockID = ""
+				currentThinkingSignature = ""
 			case "tool_call":
 				if chunk.ToolCall != nil {
 					accumulatedToolCalls = append(accumulatedToolCalls, chunk.ToolCall)
@@ -965,9 +1017,41 @@ func (a *Agent) callLLM(
 		return streamedText.String(), accumulatedToolCalls, tokens, thinkingBlock, nil
 	}
 
-	text, toolCalls, tokens, err := llm.Generate(ctx, messages, toolDefs)
+	// CRITICAL FIX: OpenAI provider automatically uses Responses API for reasoning models
+	// when thinking is enabled (handled in OpenAIProvider.Generate())
+	// OpenAI reasoning models (o1, o3, o4, gpt-5) expose reasoning via Responses API
+	text, toolCalls, tokens, thinkingBlock, err := llm.Generate(ctx, messages, toolDefs)
+
 	if err != nil {
 		return "", nil, 0, nil, err
+	}
+
+	// CRITICAL FIX: Handle thinking block from non-streaming response
+	// Create thinking parts if thinking block is present
+	if thinkingBlock != nil && thinkingBlock.Content != "" {
+		showThinking := config.BoolValue(cfg.EnableThinkingDisplay, false)
+		if showThinking {
+			// Create thinking part with signature
+			thinkingPart := protocol.CreateThinkingPartWithSignature(
+				thinkingBlock.Content,
+				thinkingBlock.Signature,
+				fmt.Sprintf("think-%d", time.Now().UnixNano()),
+				0,
+			)
+			if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
+				slog.Error("Failed to send thinking part", "agent", a.name, "error", sendErr)
+			}
+			// Emit completion event
+			completionPart := protocol.CreateThinkingCompletionPart(
+				fmt.Sprintf("think-%d", time.Now().UnixNano()),
+				thinkingBlock.Signature,
+			)
+			if completionPart != nil {
+				if sendErr := safeSendPart(ctx, outputCh, completionPart); sendErr != nil {
+					slog.Error("Failed to send thinking completion", "agent", a.name, "error", sendErr)
+				}
+			}
+		}
 	}
 
 	if text != "" {
@@ -976,7 +1060,7 @@ func (a *Agent) callLLM(
 		}
 	}
 
-	return text, toolCalls, tokens, nil, nil
+	return text, toolCalls, tokens, thinkingBlock, nil
 }
 
 func (a *Agent) executeTools(

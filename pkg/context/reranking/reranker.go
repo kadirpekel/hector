@@ -106,7 +106,7 @@ type Reranker interface {
 
 // LLMProviderForReranking is a simplified interface for reranking
 type LLMProviderForReranking interface {
-	Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, error)
+	Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, *llms.ThinkingBlock, error)
 }
 
 // LLMReranker uses an LLM to re-rank search results
@@ -169,7 +169,7 @@ func (r *LLMReranker) Rerank(ctx context.Context, query string, results []databa
 	}
 
 	// Call LLM to get reranked order
-	response, _, _, err := r.llmProvider.Generate(ctx, messages, nil)
+	response, _, _, _, err := r.llmProvider.Generate(ctx, messages, nil)
 	if err != nil {
 		// If LLM call fails, return original results
 		return results[:min(topK, len(results))], fmt.Errorf("failed to rerank results: %w", err)

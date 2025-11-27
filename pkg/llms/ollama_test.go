@@ -169,7 +169,7 @@ func TestOllamaProvider_Generate_Success(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	text, toolCalls, tokens, err := provider.Generate(context.Background(), messages, tools)
+	text, toolCalls, tokens, _, err := provider.Generate(context.Background(), messages, tools)
 
 	if err != nil {
 		t.Errorf("Generate() error = %v, want nil", err)
@@ -259,7 +259,7 @@ func TestOllamaProvider_Generate_WithTools(t *testing.T) {
 		},
 	}
 
-	text, toolCalls, tokens, err := provider.Generate(context.Background(), messages, tools)
+	text, toolCalls, tokens, _, err := provider.Generate(context.Background(), messages, tools)
 
 	if err != nil {
 		t.Errorf("Generate() error = %v, want nil", err)
@@ -350,7 +350,7 @@ func TestOllamaProvider_Generate_WithToolResults(t *testing.T) {
 		},
 	}
 
-	text, _, _, err := provider.Generate(context.Background(), messages, []ToolDefinition{})
+	text, _, _, _, err := provider.Generate(context.Background(), messages, []ToolDefinition{})
 
 	if err != nil {
 		t.Errorf("Generate() error = %v, want nil", err)
@@ -630,7 +630,7 @@ func TestOllamaProvider_GenerateStructured_JSONString(t *testing.T) {
 		Format: "json",
 	}
 
-	text, _, tokens, err := provider.GenerateStructured(context.Background(), messages, []ToolDefinition{}, structConfig)
+	text, _, tokens, _, err := provider.GenerateStructured(context.Background(), messages, []ToolDefinition{}, structConfig)
 
 	if err != nil {
 		t.Errorf("GenerateStructured() error = %v, want nil", err)
@@ -706,7 +706,7 @@ func TestOllamaProvider_GenerateStructured_WithSchema(t *testing.T) {
 		},
 	}
 
-	text, _, tokens, err := provider.GenerateStructured(context.Background(), messages, []ToolDefinition{}, structConfig)
+	text, _, tokens, _, err := provider.GenerateStructured(context.Background(), messages, []ToolDefinition{}, structConfig)
 
 	if err != nil {
 		t.Errorf("GenerateStructured() error = %v, want nil", err)
@@ -815,7 +815,7 @@ func TestOllamaProvider_Generate_HTTPError(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	_, _, _, err = provider.Generate(context.Background(), messages, tools)
+	_, _, _, _, err = provider.Generate(context.Background(), messages, tools)
 
 	if err == nil {
 		t.Error("Generate() expected error, got nil")
@@ -849,7 +849,7 @@ func TestOllamaProvider_Generate_APIError(t *testing.T) {
 	}
 	tools := []ToolDefinition{}
 
-	_, _, _, err = provider.Generate(context.Background(), messages, tools)
+	_, _, _, _, err = provider.Generate(context.Background(), messages, tools)
 
 	if err == nil {
 		t.Error("Generate() expected error, got nil")
@@ -976,7 +976,7 @@ func TestOllamaProvider_ParallelToolCalls(t *testing.T) {
 		{Name: "tool2", Description: "Tool 2", Parameters: map[string]interface{}{"type": "object"}},
 	}
 
-	_, toolCalls, _, err := provider.Generate(context.Background(), messages, tools)
+	_, toolCalls, _, _, err := provider.Generate(context.Background(), messages, tools)
 
 	if err != nil {
 		t.Errorf("Generate() error = %v, want nil", err)
@@ -1061,7 +1061,7 @@ func TestOllamaProvider_SystemMessageHandling(t *testing.T) {
 		protocol.CreateUserMessage("Hello"),
 	}
 
-	_, _, _, err = provider.Generate(context.Background(), messages, []ToolDefinition{})
+	_, _, _, _, err = provider.Generate(context.Background(), messages, []ToolDefinition{})
 	if err != nil {
 		t.Errorf("Generate() error = %v, want nil", err)
 	}

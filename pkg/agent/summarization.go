@@ -75,7 +75,7 @@ Format your summary as a coherent narrative, not bullet points unless the conver
 
 Provide a comprehensive summary that preserves all important context:`, conversationText)
 
-	text, _, _, err := s.llm.Generate(ctx, []*pb.Message{
+	text, _, _, _, err := s.llm.Generate(ctx, []*pb.Message{
 		protocol.CreateTextMessage(pb.Role_ROLE_UNSPECIFIED, systemPrompt),
 		protocol.CreateUserMessage(userPrompt),
 	}, []llms.ToolDefinition{})
@@ -134,7 +134,7 @@ Preserve ALL key information from all summaries while eliminating redundancy.`
 
 Provide a unified summary:`, combinedText)
 
-		text, _, _, err := s.llm.Generate(ctx, []*pb.Message{
+		text, _, _, _, err := s.llm.Generate(ctx, []*pb.Message{
 			protocol.CreateTextMessage(pb.Role_ROLE_UNSPECIFIED, systemPrompt),
 			protocol.CreateUserMessage(userPrompt),
 		}, []llms.ToolDefinition{})

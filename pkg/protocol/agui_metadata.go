@@ -186,6 +186,44 @@ func CreateToolResultPartWithAGUI(result *ToolResult) *pb.Part {
 	}
 }
 
+// CreateThinkingCompletionPart creates a thinking completion part with AG-UI metadata
+// This explicitly signals the end of a thinking block, preventing race conditions
+// where thinking chunks arrive out-of-order after text/tool calls have started
+func CreateThinkingCompletionPart(blockID string, signature string) *pb.Part {
+	if blockID == "" {
+		// Cannot create completion part without block ID
+		return nil
+	}
+
+	metadata := map[string]interface{}{
+		"event_type": "thinking_complete",
+		"block_type": "thinking_complete",
+		"block_id":   blockID,
+	}
+
+	// Include signature if provided (for Anthropic extended thinking)
+	if signature != "" {
+		metadata["signature"] = signature
+	}
+
+	metadataStruct, _ := structpb.NewStruct(metadata)
+
+	// Create a data part with minimal content (completion is signaled via metadata)
+	data, _ := structpb.NewStruct(map[string]interface{}{
+		"thinking_id": blockID,
+		"signature":   signature,
+	})
+
+	return &pb.Part{
+		Part: &pb.Part_Data{
+			Data: &pb.DataPart{
+				Data: data,
+			},
+		},
+		Metadata: metadataStruct,
+	}
+}
+
 // CreateErrorPart creates an error part with AG-UI metadata
 func CreateErrorPart(errorText string, errorCode string) *pb.Part {
 	metadata, _ := structpb.NewStruct(map[string]interface{}{

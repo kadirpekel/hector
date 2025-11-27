@@ -11,7 +11,10 @@ import (
 )
 
 type LLMProvider interface {
-	Generate(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (text string, toolCalls []*protocol.ToolCall, tokens int, err error)
+	// Generate performs a non-streaming LLM request
+	// Returns text, toolCalls, tokens, thinking block (if available), and error
+	// Thinking block may be nil if not available or not enabled
+	Generate(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (text string, toolCalls []*protocol.ToolCall, tokens int, thinking *ThinkingBlock, err error)
 
 	GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error)
 
@@ -31,7 +34,7 @@ type LLMProvider interface {
 type StructuredOutputProvider interface {
 	LLMProvider
 
-	GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, config *StructuredOutputConfig) (text string, toolCalls []*protocol.ToolCall, tokens int, err error)
+	GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, config *StructuredOutputConfig) (text string, toolCalls []*protocol.ToolCall, tokens int, thinking *ThinkingBlock, err error)
 
 	GenerateStructuredStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, config *StructuredOutputConfig) (<-chan StreamChunk, error)
 

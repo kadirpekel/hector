@@ -63,7 +63,7 @@ Example format: ["query 1", "query 2", "query 3"]`, numVariations, sanitizedQuer
 		},
 	}
 
-	response, _, _, err := e.llmProvider.Generate(ctx, messages, nil)
+	response, _, _, _, err := e.llmProvider.Generate(ctx, messages, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate query variations: %w", err)
 	}

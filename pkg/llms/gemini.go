@@ -101,7 +101,7 @@ func NewGeminiProviderFromConfig(cfg *config.LLMProviderConfig) (*GeminiProvider
 	}, nil
 }
 
-func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, *ThinkingBlock, error) {
 	startTime := time.Now()
 
 	// Create span for LLM request
@@ -136,13 +136,13 @@ func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, t
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, reqErr)
 		}
 
-		return "", nil, 0, reqErr
+		return "", nil, 0, nil, reqErr
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	apiKey := strings.TrimSpace(p.config.APIKey)
 	if apiKey == "" {
-		return "", nil, 0, fmt.Errorf("gemini API key is empty")
+		return "", nil, 0, nil, fmt.Errorf("gemini API key is empty")
 	}
 	httpReq.Header.Set("X-goog-api-key", apiKey)
 
@@ -159,7 +159,7 @@ func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, t
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
 		}
 
-		return "", nil, 0, err
+		return "", nil, 0, nil, err
 	}
 
 	if len(geminiResp.Candidates) == 0 {
@@ -172,10 +172,10 @@ func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, t
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, noCandErr)
 		}
 
-		return "", nil, 0, noCandErr
+		return "", nil, 0, nil, noCandErr
 	}
 
-	text, toolCalls, tokens, parseErr := p.parseResponse(geminiResp)
+	text, toolCalls, tokens, thinkingBlock, parseErr := p.parseResponse(geminiResp)
 	if parseErr != nil {
 		span.RecordError(parseErr)
 		span.SetStatus(codes.Error, "parse error")
@@ -185,7 +185,7 @@ func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, t
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, parseErr)
 		}
 
-		return text, toolCalls, tokens, parseErr
+		return text, toolCalls, tokens, thinkingBlock, parseErr
 	}
 
 	// Record successful metrics
@@ -205,7 +205,7 @@ func (p *GeminiProvider) Generate(ctx context.Context, messages []*pb.Message, t
 		metrics.RecordLLMCall(ctx, p.config.Model, duration, inputTokens, outputTokens, nil)
 	}
 
-	return text, toolCalls, tokens, nil
+	return text, toolCalls, tokens, thinkingBlock, nil
 }
 
 func (p *GeminiProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
@@ -239,13 +239,13 @@ func (p *GeminiProvider) GenerateStreaming(ctx context.Context, messages []*pb.M
 				bodyBytes, _ := io.ReadAll(resp.Body)
 				var errorResp GeminiResponse
 				if json.Unmarshal(bodyBytes, &errorResp) == nil && errorResp.Error != nil {
-					err := fmt.Errorf("Gemini API error (HTTP %d): %s (code: %d, status: %s)",
+					err := fmt.Errorf("gemini API error (HTTP %d): %s (code: %d, status: %s)",
 						resp.StatusCode, errorResp.Error.Message, errorResp.Error.Code, errorResp.Error.Status)
 					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "error_message", errorResp.Error.Message, "error_code", errorResp.Error.Code, "error_status", errorResp.Error.Status)
 					chunks <- StreamChunk{Type: "error", Error: err}
 					return
 				} else {
-					err := fmt.Errorf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+					err := fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
 					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "response_body", string(bodyBytes))
 					chunks <- StreamChunk{Type: "error", Error: err}
 					return
@@ -269,7 +269,7 @@ func (p *GeminiProvider) GenerateStreaming(ctx context.Context, messages []*pb.M
 	return chunks, nil
 }
 
-func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
+func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, *ThinkingBlock, error) {
 	startTime := time.Now()
 
 	// Create span for structured LLM request
@@ -303,7 +303,7 @@ func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, reqErr)
 		}
 
-		return "", nil, 0, reqErr
+		return "", nil, 0, nil, reqErr
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("X-goog-api-key", strings.TrimSpace(p.config.APIKey))
@@ -321,10 +321,10 @@ func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
 		}
 
-		return "", nil, 0, err
+		return "", nil, 0, nil, err
 	}
 
-	text, toolCalls, tokens, parseErr := p.parseResponse(geminiResp)
+	text, toolCalls, tokens, thinkingBlock, parseErr := p.parseResponse(geminiResp)
 	if parseErr != nil {
 		span.RecordError(parseErr)
 		span.SetStatus(codes.Error, "parse error")
@@ -334,7 +334,7 @@ func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, parseErr)
 		}
 
-		return text, toolCalls, tokens, parseErr
+		return text, toolCalls, tokens, thinkingBlock, parseErr
 	}
 
 	// Record successful metrics
@@ -346,6 +346,13 @@ func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.
 		attribute.Int(observability.AttrLLMTokensOutput, outputTokens),
 		attribute.Int("llm.tool_calls", len(toolCalls)),
 	)
+	if thinkingBlock != nil {
+		span.SetAttributes(
+			attribute.Int(observability.AttrLLMThinkingBlocks, 1),
+			attribute.Int(observability.AttrLLMThinkingLength, len(thinkingBlock.Content)),
+			attribute.Bool("llm.thinking.has_signature", thinkingBlock.Signature != ""),
+		)
+	}
 	span.SetStatus(codes.Ok, "success")
 
 	metrics := observability.GetGlobalMetrics()
@@ -353,7 +360,7 @@ func (p *GeminiProvider) GenerateStructured(ctx context.Context, messages []*pb.
 		metrics.RecordLLMCall(ctx, p.config.Model, duration, inputTokens, outputTokens, nil)
 	}
 
-	return text, toolCalls, tokens, nil
+	return text, toolCalls, tokens, thinkingBlock, nil
 }
 
 func (p *GeminiProvider) GenerateStructuredStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
@@ -387,13 +394,13 @@ func (p *GeminiProvider) GenerateStructuredStreaming(ctx context.Context, messag
 				bodyBytes, _ := io.ReadAll(resp.Body)
 				var errorResp GeminiResponse
 				if json.Unmarshal(bodyBytes, &errorResp) == nil && errorResp.Error != nil {
-					err := fmt.Errorf("Gemini API error (HTTP %d): %s (code: %d, status: %s)",
+					err := fmt.Errorf("gemini API error (HTTP %d): %s (code: %d, status: %s)",
 						resp.StatusCode, errorResp.Error.Message, errorResp.Error.Code, errorResp.Error.Status)
 					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "error_message", errorResp.Error.Message, "error_code", errorResp.Error.Code, "error_status", errorResp.Error.Status)
 					chunks <- StreamChunk{Type: "error", Error: err}
 					return
 				} else {
-					err := fmt.Errorf("Gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+					err := fmt.Errorf("gemini API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
 					slog.Error("Gemini API request failed", "status_code", resp.StatusCode, "response_body", string(bodyBytes))
 					chunks <- StreamChunk{Type: "error", Error: err}
 					return
@@ -501,7 +508,7 @@ func (p *GeminiProvider) handleGeminiResponse(resp *http.Response, err error) ([
 
 		var geminiResp GeminiResponse
 		if err := json.Unmarshal(body, &geminiResp); err != nil {
-			return body, nil, fmt.Errorf("failed to parse Gemini response: %w", err)
+			return body, nil, fmt.Errorf("failed to parse gemini response: %w", err)
 		}
 
 		if geminiResp.Error != nil {
@@ -515,9 +522,9 @@ func (p *GeminiProvider) handleGeminiResponse(resp *http.Response, err error) ([
 	}
 
 	if err != nil {
-		return nil, nil, fmt.Errorf("Gemini API request failed: %w", err)
+		return nil, nil, fmt.Errorf("gemini API request failed: %w", err)
 	}
-	return nil, nil, fmt.Errorf("Gemini API request failed: no response received")
+	return nil, nil, fmt.Errorf("gemini API request failed: no response received")
 }
 
 func (p *GeminiProvider) buildRequest(messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) *GeminiRequest {
@@ -528,7 +535,14 @@ func (p *GeminiProvider) buildRequest(messages []*pb.Message, tools []ToolDefini
 		GenerationConfig:  p.buildGenerationConfig(structConfig),
 	}
 
-	if len(tools) > 0 {
+	// Gemini only supports combining function calling with structured JSON output
+	// on gemini-3-pro-preview model (preview feature). For all other models,
+	// skip tools when structured JSON output is configured.
+	// See: https://ai.google.dev/gemini-api/docs/structured-output#structured_outputs_with_tools
+	canCombineToolsWithStructuredOutput := strings.Contains(strings.ToLower(p.config.Model), "gemini-3")
+	useStructuredJSON := structConfig != nil && structConfig.Format == "json"
+
+	if len(tools) > 0 && (!useStructuredJSON || canCombineToolsWithStructuredOutput) {
 		req.Tools = []GeminiToolSet{
 			{FunctionDeclarations: p.convertTools(tools)},
 		}
@@ -646,6 +660,21 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 
 		var parts []GeminiPart
 
+		// CRITICAL FIX: Extract and inject thinking from history for multi-turn conversations
+		// Gemini requires thought signatures to be passed back for function calling continuity
+		// See: https://ai.google.dev/gemini-api/docs/thought-signatures
+		if msg.Role == pb.Role_ROLE_AGENT {
+			thinkingContent := protocol.ExtractThinkingFromMessage(msg)
+			if thinkingContent != "" && p.config.Thinking != nil && p.config.Thinking.Enabled {
+				// Add thinking as first part with thought:true marker
+				// This preserves reasoning context across multi-turn conversations
+				parts = append(parts, GeminiPart{
+					"text":    thinkingContent,
+					"thought": true,
+				})
+			}
+		}
+
 		textContent := protocol.ExtractTextFromMessage(msg)
 		if textContent != "" {
 			parts = append(parts, GeminiPart{"text": textContent})
@@ -683,8 +712,7 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 						continue
 					}
 
-					const maxInlineDataSize = 20 * 1024 * 1024
-					if len(bytes) > maxInlineDataSize {
+					if len(bytes) > MaxGeminiImageSize {
 						continue
 					}
 
@@ -823,19 +851,37 @@ func (p *GeminiProvider) validateRequiredProperties(schema map[string]interface{
 	}
 }
 
-func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []*protocol.ToolCall, int, error) {
+func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []*protocol.ToolCall, int, *ThinkingBlock, error) {
 	if len(resp.Candidates) == 0 {
-		return "", nil, 0, fmt.Errorf("no candidates in response")
+		return "", nil, 0, nil, fmt.Errorf("no candidates in response")
 	}
 
 	candidate := resp.Candidates[0]
 	var textParts []string
 	var toolCalls []*protocol.ToolCall
+	var thinkingParts []string
+	var thoughtSignature string
 
 	for _, part := range candidate.Content.Parts {
+		// CRITICAL FIX: Extract thinking content (marked with thought: true) from non-streaming responses
+		// Thinking must be preserved for multi-turn conversations and function calling continuity
+		// See: https://ai.google.dev/gemini-api/docs/thought-signatures
+		if text, ok := part["text"].(string); ok && text != "" {
+			thought, hasThought := part["thought"].(bool)
+			isThinking := hasThought && thought
 
-		if text, ok := part["text"].(string); ok {
-			textParts = append(textParts, text)
+			if isThinking {
+				// Thinking content - extract for history preservation
+				thinkingParts = append(thinkingParts, text)
+			} else {
+				// Regular text content (not thinking)
+				textParts = append(textParts, text)
+			}
+		}
+
+		// Extract thought signature if present (required for function calling)
+		if sig, hasSig := part["signature"].(string); hasSig && sig != "" {
+			thoughtSignature = sig
 		}
 
 		if fc, ok := part["functionCall"].(map[string]interface{}); ok {
@@ -857,22 +903,47 @@ func (p *GeminiProvider) parseResponse(resp *GeminiResponse) (string, []*protoco
 
 	finalText := strings.Join(textParts, "")
 
-	return finalText, toolCalls, tokens, nil
+	// CRITICAL FIX: Return thinking block from non-streaming response
+	var thinkingBlock *ThinkingBlock
+	if len(thinkingParts) > 0 {
+		thinkingContent := strings.Join(thinkingParts, "")
+		thinkingBlock = &ThinkingBlock{
+			Content:   thinkingContent,
+			Signature: thoughtSignature, // Gemini thought signature
+		}
+		slog.Debug("Gemini non-streaming response contains thinking",
+			"model", p.config.Model,
+			"thinking_length", len(thinkingContent),
+			"has_signature", thoughtSignature != "",
+			"thinking_parts_count", len(thinkingParts))
+	}
+
+	return finalText, toolCalls, tokens, thinkingBlock, nil
 }
+
+// ThinkingState represents the state machine for Gemini thinking blocks
+type ThinkingState int
+
+const (
+	ThinkingStateNone   ThinkingState = iota // No thinking block active
+	ThinkingStateActive                      // Thinking block is active (internal reasoning)
+	ThinkingStateClosed                      // Thinking block closed (transitioned to response/tools)
+)
 
 func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- StreamChunk) {
 	scanner := bufio.NewScanner(body)
 	var accumulatedText strings.Builder
 	var accumulatedThinking strings.Builder
-	var inThinkingBlock bool
-	// Track if the thinking block has been closed in this stream.
-	// Semantically, thinking represents internal reasoning before taking action.
-	// Once closed (by tool call or regular text), any subsequent text marked as thinking
-	// should be treated as regular response text, as Gemini sometimes incorrectly marks
-	// post-tool-call responses as thinking.
-	var thinkingBlockClosed bool
+
+	// Explicit state machine for thinking blocks
+	// States: NONE -> ACTIVE -> CLOSED
+	// Once CLOSED, any text marked as thinking by Gemini is treated as regular response text
+	// This handles Gemini's occasional incorrect marking of post-tool-call responses as thinking
+	thinkingState := ThinkingStateNone
+
 	totalTokens := 0
 	chunkCount := 0
+	mismarkedThinkingCount := 0 // Track frequency of Gemini's incorrect thinking marks
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -898,6 +969,22 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 
 			// Process parts in order, maintaining correct thinking block state
 			for _, part := range candidate.Content.Parts {
+				// CRITICAL FIX: Extract thought signatures for function calling continuity
+				// Gemini returns thought signatures within parts (required for function calling)
+				// See: https://ai.google.dev/gemini-api/docs/thought-signatures
+				if signature, hasSig := part["signature"].(string); hasSig && signature != "" {
+					// Emit signature in metadata for later reconstruction
+					chunks <- StreamChunk{
+						Type: "thinking_complete",
+						Text: accumulatedThinking.String(),
+						Metadata: map[string]interface{}{
+							"thought_signature": signature, // Gemini-specific signature
+						},
+					}
+					// Note: Signature is stored in metadata, not Signature field (which is Anthropic-specific)
+					// The agent layer will need to extract from metadata when reconstructing history
+				}
+
 				// Handle text content (may be marked as thinking)
 				if text, ok := part["text"].(string); ok && text != "" {
 					// Gemini marks thinking parts with thought: true boolean
@@ -905,30 +992,41 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 					thought, hasThought := part["thought"].(bool)
 					isMarkedAsThinking := hasThought && thought
 
-					// Only treat as thinking if:
-					// 1. It's marked as thinking by Gemini, AND
-					// 2. We haven't closed the thinking block yet
-					// Once closed, any text (even if marked as thinking) is regular response text
-					shouldTreatAsThinking := isMarkedAsThinking && !thinkingBlockClosed
+					// State machine logic:
+					// - NONE -> ACTIVE: First thinking chunk arrives
+					// - ACTIVE -> CLOSED: Text or tool call arrives (thinking complete)
+					// - CLOSED: Any subsequent thinking marks are ignored (Gemini bug workaround)
+					shouldTreatAsThinking := isMarkedAsThinking && thinkingState != ThinkingStateClosed
 
 					if shouldTreatAsThinking {
 						// Valid thinking block (internal reasoning before actions)
-						if !inThinkingBlock {
-							inThinkingBlock = true
+						if thinkingState == ThinkingStateNone {
+							thinkingState = ThinkingStateActive
 						}
 						accumulatedThinking.WriteString(text)
 						chunks <- StreamChunk{Type: "thinking", Text: text}
 					} else {
-						// Regular text content - close any open thinking block first
-						if inThinkingBlock {
+						// Regular text content - transition from ACTIVE to CLOSED
+						if thinkingState == ThinkingStateActive {
 							chunks <- StreamChunk{
 								Type: "thinking_complete",
 								Text: accumulatedThinking.String(),
 							}
 							accumulatedThinking.Reset()
-							inThinkingBlock = false
-							thinkingBlockClosed = true
+							thinkingState = ThinkingStateClosed
 						}
+
+						// Log if Gemini incorrectly marked post-closure text as thinking
+						if isMarkedAsThinking && thinkingState == ThinkingStateClosed {
+							mismarkedThinkingCount++
+							if mismarkedThinkingCount == 1 {
+								// Log warning on first occurrence (avoid spam)
+								slog.Warn("Gemini marked post-tool-call text as thinking, treating as regular text",
+									"model", p.config.Model,
+									"chunk_index", chunkCount)
+							}
+						}
+
 						accumulatedText.WriteString(text)
 						chunks <- StreamChunk{Type: "text", Text: text}
 						chunkCount++
@@ -937,15 +1035,14 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 
 				// Handle tool calls
 				if fc, ok := part["functionCall"].(map[string]interface{}); ok {
-					// Close any open thinking block before emitting tool call
-					if inThinkingBlock {
+					// Transition from ACTIVE to CLOSED before emitting tool call
+					if thinkingState == ThinkingStateActive {
 						chunks <- StreamChunk{
 							Type: "thinking_complete",
 							Text: accumulatedThinking.String(),
 						}
 						accumulatedThinking.Reset()
-						inThinkingBlock = false
-						thinkingBlockClosed = true
+						thinkingState = ThinkingStateClosed
 					}
 
 					name, _ := fc["name"].(string)
@@ -970,11 +1067,20 @@ func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- St
 	}
 
 	// Close any open thinking block at end of stream
-	if inThinkingBlock && accumulatedThinking.Len() > 0 {
+	if thinkingState == ThinkingStateActive && accumulatedThinking.Len() > 0 {
 		chunks <- StreamChunk{
 			Type: "thinking_complete",
 			Text: accumulatedThinking.String(),
 		}
+		thinkingState = ThinkingStateClosed
+	}
+
+	// Log metrics for thinking state transitions (if mismarked count > 0)
+	if mismarkedThinkingCount > 0 {
+		slog.Debug("Gemini thinking state machine completed",
+			"model", p.config.Model,
+			"mismarked_thinking_count", mismarkedThinkingCount,
+			"final_state", thinkingState)
 	}
 
 	chunks <- StreamChunk{Type: "done", Tokens: totalTokens}

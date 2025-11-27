@@ -23,7 +23,7 @@ type ReasoningResponse struct {
 }
 
 type LLMService interface {
-	Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, error)
+	Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, *llms.ThinkingBlock, error)
 
 	GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition, outputCh chan<- string) ([]*protocol.ToolCall, int, error)
 
@@ -31,7 +31,7 @@ type LLMService interface {
 	// This method maintains the abstraction from LLMProvider and allows proper handling of thinking blocks
 	GenerateStreamingChunks(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error)
 
-	GenerateStructured(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []*protocol.ToolCall, int, error)
+	GenerateStructured(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []*protocol.ToolCall, int, *llms.ThinkingBlock, error)
 
 	SupportsStructuredOutput() bool
 

@@ -19,7 +19,7 @@ type mockLLMForHyDE struct {
 	capturedPrompt string
 }
 
-func (m *mockLLMForHyDE) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+func (m *mockLLMForHyDE) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, *llms.ThinkingBlock, error) {
 	// Capture the prompt
 	if len(messages) > 0 && len(messages[len(messages)-1].Parts) > 0 {
 		if textPart := messages[len(messages)-1].Parts[0].GetText(); textPart != "" {
@@ -28,9 +28,9 @@ func (m *mockLLMForHyDE) Generate(ctx context.Context, messages []*pb.Message, t
 	}
 
 	if m.err != nil {
-		return "", nil, 0, m.err
+		return "", nil, 0, nil, m.err
 	}
-	return m.response, nil, 0, nil
+	return m.response, nil, 0, nil, nil
 }
 
 func (m *mockLLMForHyDE) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (<-chan llms.StreamChunk, error) {

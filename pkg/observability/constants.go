@@ -1,16 +1,18 @@
 package observability
 
 const (
-	AttrServiceName     = "service.name"
-	AttrServiceVersion  = "service.version"
-	AttrAgentName       = "agent.name"
-	AttrAgentLLM        = "agent.llm"
-	AttrToolName        = "tool.name"
-	AttrLLMModel        = "llm.model"
-	AttrLLMTokensInput  = "llm.tokens.input"
-	AttrLLMTokensOutput = "llm.tokens.output"
-	AttrErrorType       = "error.type"
-	AttrStatusCode      = "http.status_code"
+	AttrServiceName       = "service.name"
+	AttrServiceVersion    = "service.version"
+	AttrAgentName         = "agent.name"
+	AttrAgentLLM          = "agent.llm"
+	AttrToolName          = "tool.name"
+	AttrLLMModel          = "llm.model"
+	AttrLLMTokensInput    = "llm.tokens.input"
+	AttrLLMTokensOutput   = "llm.tokens.output"
+	AttrLLMThinkingBlocks = "llm.thinking.blocks" // Number of thinking blocks in response
+	AttrLLMThinkingLength = "llm.thinking.length" // Total length of thinking content (chars)
+	AttrErrorType         = "error.type"
+	AttrStatusCode        = "http.status_code"
 
 	SpanAgentCall     = "agent.call"
 	SpanLLMRequest    = "agent.llm_request"

@@ -23,6 +23,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// Image size limits for different providers (in bytes)
+const (
+	MaxAnthropicImageSize = 5 * 1024 * 1024  // 5MB - Anthropic's limit
+	MaxGeminiImageSize    = 20 * 1024 * 1024 // 20MB - Gemini's limit
+	MaxOpenAIImageSize    = 20 * 1024 * 1024 // 20MB - OpenAI's limit
+	MaxOllamaImageSize    = 20 * 1024 * 1024 // 20MB - Ollama's limit (typical)
+)
+
 type AnthropicProvider struct {
 	config     *config.LLMProviderConfig
 	httpClient *httpclient.Client
@@ -196,7 +204,7 @@ func (p *AnthropicProvider) Close() error {
 	return nil
 }
 
-func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (string, []*protocol.ToolCall, int, *ThinkingBlock, error) {
 	startTime := time.Now()
 
 	// Create span for LLM request
@@ -212,7 +220,7 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message
 
 	request, err := p.buildRequest(ctx, messages, false, tools)
 	if err != nil {
-		return "", nil, 0, err
+		return "", nil, 0, nil, err
 	}
 
 	response, err := p.makeRequest(ctx, request)
@@ -228,7 +236,7 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
 		}
 
-		return "", nil, 0, err
+		return "", nil, 0, nil, err
 	}
 
 	if response.Error != nil {
@@ -248,21 +256,29 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, apiErr)
 		}
 
-		return "", nil, 0, apiErr
+		return "", nil, 0, nil, apiErr
 	}
 
 	tokensUsed := response.Usage.InputTokens + response.Usage.OutputTokens
 
 	var text string
 	var toolCalls []*protocol.ToolCall
+	var thinkingContent string
+	var thinkingSignature string
 
 	for _, content := range response.Content {
 		if content.Type == "text" {
 			text += content.Text
 		} else if content.Type == "thinking" {
-			// Thinking blocks are included in the response but we don't need to process them
-			// They're already used by Claude internally for reasoning
-			// The thinking content is available in content.Text if needed for debugging
+			// CRITICAL FIX: Extract thinking content and signature from non-streaming responses
+			// Thinking blocks must be preserved for multi-turn conversations and tool calling continuity
+			// See: https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#preserving-thinking-blocks
+			if content.Thinking != "" {
+				thinkingContent += content.Thinking
+			}
+			if content.Signature != "" {
+				thinkingSignature = content.Signature // Last signature is the complete one
+			}
 		} else if content.Type == "tool_use" {
 
 			var args map[string]interface{}
@@ -277,12 +293,37 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message
 		}
 	}
 
+	// CRITICAL FIX: Return thinking block from non-streaming response
+	var thinkingBlock *ThinkingBlock
+	if thinkingContent != "" {
+		thinkingBlock = &ThinkingBlock{
+			Content:   thinkingContent,
+			Signature: thinkingSignature,
+		}
+		// Store thinking in span attributes for observability
+		span.SetAttributes(
+			attribute.String("llm.thinking.content", thinkingContent),
+			attribute.Bool("llm.thinking.present", true),
+			attribute.Bool("llm.thinking.has_signature", thinkingSignature != ""),
+		)
+		slog.Debug("Anthropic non-streaming response contains thinking",
+			"model", p.config.Model,
+			"thinking_length", len(thinkingContent),
+			"has_signature", thinkingSignature != "")
+	}
+
 	// Record successful metrics
 	span.SetAttributes(
 		attribute.Int(observability.AttrLLMTokensInput, response.Usage.InputTokens),
 		attribute.Int(observability.AttrLLMTokensOutput, response.Usage.OutputTokens),
 		attribute.Int("llm.tool_calls", len(toolCalls)),
 	)
+	if thinkingBlock != nil {
+		span.SetAttributes(
+			attribute.Int(observability.AttrLLMThinkingBlocks, 1),
+			attribute.Int(observability.AttrLLMThinkingLength, len(thinkingBlock.Content)),
+		)
+	}
 	span.SetStatus(codes.Ok, "success")
 
 	metrics := observability.GetGlobalMetrics()
@@ -290,7 +331,7 @@ func (p *AnthropicProvider) Generate(ctx context.Context, messages []*pb.Message
 		metrics.RecordLLMCall(ctx, p.config.Model, duration, response.Usage.InputTokens, response.Usage.OutputTokens, nil)
 	}
 
-	return text, toolCalls, tokensUsed, nil
+	return text, toolCalls, tokensUsed, thinkingBlock, nil
 }
 
 func (p *AnthropicProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
@@ -334,7 +375,7 @@ func (p *AnthropicProvider) buildRequest(ctx context.Context, messages []*pb.Mes
 
 	// Find the last assistant message with tool_use (for thinking block requirement)
 	// According to Anthropic docs: "When thinking is enabled, a final assistant message must start
-	// with a thinking block (preceeding the lastmost set of tool_use and tool_result blocks)."
+	// with a thinking block (preceding the lastmost set of tool_use and tool_result blocks)."
 	// The "final assistant message" is the LAST assistant message that has tool_use AND will be included
 	// in the request (i.e., not skipped).
 	//
@@ -377,6 +418,27 @@ func (p *AnthropicProvider) buildRequest(ctx context.Context, messages []*pb.Mes
 				skipMessageIndices[idx] = true
 			}
 		}
+
+		// CRITICAL: Validate we're not breaking conversation continuity
+		// If we skip ALL assistant messages with tool_use, we might have orphaned tool_results
+		// or break the conversation flow. This should never happen in practice, but we need to guard against it.
+		if len(skipMessageIndices) > 0 {
+			// Check: Are we skipping ALL assistant messages with tool_use?
+			if len(skipMessageIndices) == len(assistantMessagesWithToolUse) {
+				return AnthropicRequest{}, fmt.Errorf(
+					"thinking enabled but no assistant messages with thinking blocks found - "+
+						"cannot build valid request (found %d assistant messages with tool_use, all missing thinking blocks)",
+					len(assistantMessagesWithToolUse))
+			}
+
+			// Additional validation: Check if skipping messages would leave orphaned tool_results
+			// A tool_result must reference a tool_call that exists in the request.
+			// If we skip an assistant message with tool_use, we must also skip its tool_results.
+			// This is handled below by filtering tool_results based on includedToolCallIDs.
+			slog.Debug("Skipping assistant messages without thinking blocks",
+				"skipped_count", len(skipMessageIndices),
+				"total_with_tool_use", len(assistantMessagesWithToolUse))
+		}
 	}
 
 	for i, msg := range messages {
@@ -416,7 +478,7 @@ func (p *AnthropicProvider) buildRequest(ctx context.Context, messages []*pb.Mes
 							continue
 						}
 
-						const maxImageSize = 5 * 1024 * 1024
+						const maxImageSize = MaxAnthropicImageSize
 						if len(bytes) > maxImageSize {
 							continue
 						}
@@ -863,7 +925,7 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 	return nil
 }
 
-func (p *AnthropicProvider) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
+func (p *AnthropicProvider) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, *ThinkingBlock, error) {
 	startTime := time.Now()
 
 	// Create span for structured LLM request
@@ -882,7 +944,7 @@ func (p *AnthropicProvider) GenerateStructured(ctx context.Context, messages []*
 
 	req, err := p.buildRequest(ctx, messages, false, tools)
 	if err != nil {
-		return "", nil, 0, err
+		return "", nil, 0, nil, err
 	}
 	if systemPrompt != "" {
 		if req.System != "" {
@@ -917,12 +979,16 @@ func (p *AnthropicProvider) GenerateStructured(ctx context.Context, messages []*
 			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, 0, err)
 		}
 
-		return "", nil, 0, err
+		return "", nil, 0, nil, err
 	}
 
 	// Calculate input/output tokens from total
 	inputTokens := tokens / 2 // Rough estimate
 	outputTokens := tokens / 2
+
+	// Note: Structured output requests typically don't include thinking blocks
+	// but we return nil for consistency with interface
+	var thinkingBlock *ThinkingBlock
 
 	// Record successful metrics
 	span.SetAttributes(
@@ -937,7 +1003,7 @@ func (p *AnthropicProvider) GenerateStructured(ctx context.Context, messages []*
 		metrics.RecordLLMCall(ctx, p.config.Model, duration, inputTokens, outputTokens, nil)
 	}
 
-	return text, toolCalls, tokens, nil
+	return text, toolCalls, tokens, thinkingBlock, nil
 }
 
 func (p *AnthropicProvider) GenerateStructuredStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {

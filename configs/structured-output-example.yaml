@@ -1,27 +1,20 @@
 llms:
-  main-llm:
+  openai:
     type: "openai"
     model: "gpt-4o-mini"
     api_key: "${OPENAI_API_KEY}"
-    temperature: 0.0
-    max_tokens: 1000
-  gemini-llm:
+  gemini:
     type: "gemini"
-    model: "gemini-2.0-flash-exp"
+    model: "gemini-2.5-flash"
     api_key: "${GEMINI_API_KEY}"
-    temperature: 0.7
-    max_tokens: 1000
-  anthropic-llm:
+  anthropic:
     type: "anthropic"
-    model: "claude-sonnet-4-20250514"
+    model: "claude-sonnet-4-5"
     api_key: "${ANTHROPIC_API_KEY}"
-    temperature: 0.7
-    max_tokens: 1000
+
 agents:
   sentiment_analyzer:
-    name: "Sentiment Analyzer"
-    description: "Analyzes sentiment and returns structured JSON"
-    llm: "gemini-llm"
+    llm: "gemini"
     structured_output:
       format: json
       schema:
@@ -35,94 +28,4 @@ agents:
         required: ["sentiment", "confidence"]
         additionalProperties: false
     prompt:
-      system_prompt: |
-        You analyze text sentiment and return structured JSON with this format:
-        {
-          "sentiment": "positive|negative|neutral",
-          "confidence": 0.0-1.0,
-          "key_phrases": ["phrase1", "phrase2"]
-        }
-        Provide accurate sentiment classification with confidence scores.
-  data_extractor:
-    name: "Data Extractor"
-    description: "Extracts structured data from unstructured text"
-    llm: "main-llm"
-    structured_output:
-      format: json
-      schema:
-        type: object
-        properties:
-          name:
-            type: string
-          email:
-            type: string
-          company:
-            type: string
-        required: ["name", "email", "company"]
-        additionalProperties: false
-    prompt:
-      system_prompt: |
-        You extract structured information from text.
-        Return only the information found - use null for missing fields.
-  classifier:
-    name: "Content Classifier"
-    description: "Classifies content into categories with priority"
-    llm: "main-llm"
-    structured_output:
-      format: json
-      schema:
-        type: object
-        properties:
-          category:
-            type: string
-            enum: ["bug", "feature", "question", "documentation"]
-          priority:
-            type: string
-            enum: ["low", "medium", "high", "critical"]
-        required: ["category", "priority"]
-        additionalProperties: false
-    prompt:
-      system_prompt: |
-        You classify content into categories.
-        Provide clear categorization with appropriate priority levels.
-  gemini_sentiment:
-    name: "Gemini Sentiment Analyzer"
-    description: "Analyzes sentiment using Gemini with structured output"
-    llm: "gemini-llm"
-    structured_output:
-      format: json
-      schema:
-        type: object
-        properties:
-          sentiment:
-            type: string
-            enum: ["positive", "negative", "neutral"]
-          confidence:
-            type: number
-        required: ["sentiment", "confidence"]
-        additionalProperties: false
-    prompt:
-      system_prompt: |
-        You analyze text sentiment and return structured JSON.
-        Provide accurate sentiment classification with confidence scores (0.0-1.0).
-  anthropic_sentiment:
-    name: "Anthropic Sentiment Analyzer"
-    description: "Analyzes sentiment using Claude with prefill technique"
-    llm: "anthropic-llm"
-    structured_output:
-      format: json
-      prefill: "{"
-      schema:
-        type: object
-        properties:
-          sentiment:
-            type: string
-            enum: ["positive", "negative", "neutral"]
-          confidence:
-            type: number
-        required: ["sentiment", "confidence"]
-        additionalProperties: false
-    prompt:
-      system_prompt: |
-        You analyze text sentiment and return structured JSON.
-        Provide accurate sentiment classification with confidence scores (0.0-1.0).
+      system_prompt: "Analyze the sentiment of the given text and return JSON with sentiment (positive/negative/neutral) and confidence (0.0-1.0)."

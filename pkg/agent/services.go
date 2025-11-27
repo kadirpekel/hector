@@ -297,7 +297,7 @@ func (s *DefaultLLMService) GenerateStreamingChunks(ctx context.Context, message
 	return s.llmProvider.GenerateStreaming(ctx, messages, tools)
 }
 
-func (s *DefaultLLMService) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, error) {
+func (s *DefaultLLMService) Generate(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition) (string, []*protocol.ToolCall, int, *llms.ThinkingBlock, error) {
 	return s.llmProvider.Generate(ctx, messages, tools)
 }
 
@@ -334,16 +334,16 @@ func (s *DefaultLLMService) GenerateStreaming(ctx context.Context, messages []*p
 	return toolCalls, tokens, nil
 }
 
-func (s *DefaultLLMService) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []*protocol.ToolCall, int, error) {
+func (s *DefaultLLMService) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []llms.ToolDefinition, config *llms.StructuredOutputConfig) (string, []*protocol.ToolCall, int, *llms.ThinkingBlock, error) {
 
 	structProvider, ok := s.llmProvider.(llms.StructuredOutputProvider)
 	if !ok {
 
-		return "", nil, 0, fmt.Errorf("provider does not support structured output")
+		return "", nil, 0, nil, fmt.Errorf("provider does not support structured output")
 	}
 
 	if !structProvider.SupportsStructuredOutput() {
-		return "", nil, 0, fmt.Errorf("provider does not support structured output")
+		return "", nil, 0, nil, fmt.Errorf("provider does not support structured output")
 	}
 
 	return structProvider.GenerateStructured(ctx, messages, tools, config)
