@@ -37,6 +37,9 @@ const (
 	anthropicDefaultHost = "https://api.anthropic.com"
 	anthropicAPIVersion  = "2023-06-01"
 
+	// Beta features - interleaved thinking allows Claude to think between tool calls
+	anthropicBetaInterleavedThinking = "interleaved-thinking-2025-05-14"
+
 	// SSE Event Types
 	anthropicEventContentBlockStart = "content_block_start"
 	anthropicEventContentBlockDelta = "content_block_delta"
@@ -311,6 +314,12 @@ func (p *AnthropicProvider) createAPIRequest(ctx context.Context, request Anthro
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", p.config.APIKey)
 	req.Header.Set("anthropic-version", anthropicAPIVersion)
+
+	// Enable interleaved thinking - allows Claude to think between tool calls
+	// This provides better reasoning after receiving tool results
+	if p.config.Thinking != nil && p.config.Thinking.Enabled {
+		req.Header.Set("anthropic-beta", anthropicBetaInterleavedThinking)
+	}
 
 	return req, nil
 }
@@ -1017,14 +1026,15 @@ func (p *AnthropicProvider) handleContentBlockDelta(streamResp AnthropicStreamRe
 
 // handleContentBlockStop handles content_block_stop SSE events
 func (p *AnthropicProvider) handleContentBlockStop(streamResp AnthropicStreamResponse, state *anthropicStreamingState, outputCh chan<- StreamChunk) {
-	// Emit thinking_complete if we have a thinking block with signature
+	// Emit thinking_complete if we have a thinking block
 	if thinkingContent, hasThinking := state.thinkingBuffers[streamResp.Index]; hasThinking {
-		if signature, hasSig := state.thinkingSignatures[streamResp.Index]; hasSig && signature != "" {
-			outputCh <- StreamChunk{
-				Type:      "thinking_complete",
-				Text:      thinkingContent,
-				Signature: signature,
-			}
+		signature := state.thinkingSignatures[streamResp.Index]
+		// Always emit thinking_complete so agent knows thinking is done
+		// Signature may be empty for some providers/models
+		outputCh <- StreamChunk{
+			Type:      "thinking_complete",
+			Text:      thinkingContent,
+			Signature: signature,
 		}
 	}
 	state.cleanupThinkingBlock(streamResp.Index)

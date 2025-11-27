@@ -989,8 +989,9 @@ func (a *Agent) callLLM(
 					}
 				}
 				// Reset thinking block ID - next thinking chunk will start a new block
+				// NOTE: Do NOT reset currentThinkingSignature here - it's needed after the loop
+				// to create the ThinkingBlock with the signature for multi-turn conversations
 				currentThinkingBlockID = ""
-				currentThinkingSignature = ""
 			case "tool_call":
 				if chunk.ToolCall != nil {
 					accumulatedToolCalls = append(accumulatedToolCalls, chunk.ToolCall)
