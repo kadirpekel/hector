@@ -23,6 +23,130 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// Ollama provider constants
+const (
+	// Default configuration
+	ollamaDefaultHost        = "http://localhost:11434"
+	ollamaDefaultTemperature = 0.7
+
+	// API endpoints
+	ollamaAPIChatEndpoint = "/api/chat"
+
+	// Channel buffer sizes
+	ollamaStreamChannelBufferSize = 100
+
+	// Headers
+	ollamaHeaderContentType = "application/json"
+
+	// Tool types
+	ollamaToolTypeFunction = "function"
+	ollamaToolChoiceAuto   = "auto"
+
+	// Think levels (GPT-OSS)
+	ollamaThinkLevelLow    = "low"
+	ollamaThinkLevelMedium = "medium"
+	ollamaThinkLevelHigh   = "high"
+
+	// Think level thresholds (token budgets)
+	ollamaThinkLevelDefaultBudget = 0
+	ollamaThinkLowThreshold       = 2000
+	ollamaThinkMediumThreshold    = 8000
+
+	// Roles
+	ollamaRoleUser      = "user"
+	ollamaRoleAssistant = "assistant"
+	ollamaRoleSystem    = "system"
+	ollamaRoleTool      = "tool"
+
+	// Logging
+	ollamaMaxPayloadPreviewLength = 500
+
+	// Model patterns for thinking capability detection
+	ollamaModelQwen3      = "qwen3"
+	ollamaModelDeepSeekR1 = "deepseek-r1"
+	ollamaModelDeepSeekV3 = "deepseek-v3"
+	ollamaModelGPTOSS     = "gpt-oss"
+
+	// Excluded models (don't support thinking)
+	ollamaModelQwen3Coder = "qwen3-coder"
+	ollamaModelQwen2Coder = "qwen2-coder"
+)
+
+// ollamaThinkingModels contains model patterns that support thinking
+var ollamaThinkingModels = []string{
+	ollamaModelQwen3,
+	ollamaModelDeepSeekR1,
+	ollamaModelDeepSeekV3,
+	ollamaModelGPTOSS,
+}
+
+// ollamaExcludedModels contains model patterns that don't support thinking
+var ollamaExcludedModels = []string{
+	ollamaModelQwen3Coder,
+	ollamaModelQwen2Coder,
+}
+
+// ollamaStreamingState encapsulates streaming state management
+type ollamaStreamingState struct {
+	toolCallsMap        map[int]*OllamaToolCall
+	totalTokens         int
+	accumulatedThinking strings.Builder
+}
+
+// newOllamaStreamingState creates a new streaming state
+func newOllamaStreamingState() *ollamaStreamingState {
+	return &ollamaStreamingState{
+		toolCallsMap: make(map[int]*OllamaToolCall),
+	}
+}
+
+// hasAccumulatedThinking returns true if thinking has been accumulated
+func (s *ollamaStreamingState) hasAccumulatedThinking() bool {
+	return s.accumulatedThinking.Len() > 0
+}
+
+// getThinkingContent returns the accumulated thinking content
+func (s *ollamaStreamingState) getThinkingContent() string {
+	return s.accumulatedThinking.String()
+}
+
+// accumulateThinking adds thinking content to the accumulator
+func (s *ollamaStreamingState) accumulateThinking(content string) {
+	s.accumulatedThinking.WriteString(content)
+}
+
+// addOrUpdateToolCall adds or updates a tool call in the map
+func (s *ollamaStreamingState) addOrUpdateToolCall(tc OllamaToolCall) {
+	idx := tc.Function.Index
+	if idx < 0 {
+		// If no index, use the map size as index
+		idx = len(s.toolCallsMap)
+	}
+
+	if existing, exists := s.toolCallsMap[idx]; exists {
+		// Merge: update arguments if provided, keep name
+		if len(tc.Function.Arguments) > 0 {
+			for k, v := range tc.Function.Arguments {
+				existing.Function.Arguments[k] = v
+			}
+		}
+	} else {
+		// Create new entry
+		s.toolCallsMap[idx] = &tc
+	}
+}
+
+// getOrderedToolCalls returns tool calls in index order
+func (s *ollamaStreamingState) getOrderedToolCalls() []OllamaToolCall {
+	var result []OllamaToolCall
+	for i := 0; i < len(s.toolCallsMap); i++ {
+		if tc, exists := s.toolCallsMap[i]; exists {
+			result = append(result, *tc)
+		}
+	}
+	return result
+}
+
 type OllamaProvider struct {
 	config     *config.LLMProviderConfig
 	httpClient *httpclient.Client
@@ -105,6 +229,31 @@ type OllamaStreamChunk struct {
 	Error              string        `json:"error,omitempty"`
 }
 
+// NewOllamaProvider creates a new Ollama provider with default configuration.
+// This is a convenience constructor for simple use cases.
+func NewOllamaProvider(model string, host string) *OllamaProvider {
+	if host == "" {
+		host = ollamaDefaultHost
+	}
+
+	cfg := &config.LLMProviderConfig{
+		Type:        "ollama",
+		Model:       model,
+		Host:        host,
+		Temperature: func() *float64 { t := ollamaDefaultTemperature; return &t }(),
+		MaxTokens:   1000,
+		Timeout:     120,
+	}
+
+	provider, err := NewOllamaProviderFromConfig(cfg)
+	if err != nil {
+		slog.Error("Failed to create Ollama provider", "error", err)
+		return nil
+	}
+	return provider
+}
+
+// NewOllamaProviderFromConfig creates a new Ollama provider from a configuration.
 func NewOllamaProviderFromConfig(cfg *config.LLMProviderConfig) (*OllamaProvider, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
@@ -112,17 +261,17 @@ func NewOllamaProviderFromConfig(cfg *config.LLMProviderConfig) (*OllamaProvider
 
 	// Warn if using a model other than qwen3 (currently the only fully supported model)
 	modelLower := strings.ToLower(cfg.Model)
-	if !strings.Contains(modelLower, "qwen3") {
+	if !strings.Contains(modelLower, ollamaModelQwen3) {
 		// Log a warning but don't fail - allow users to try other models
 		// Note: This is a soft warning, not a hard restriction
 		slog.Warn("Ollama provider currently only fully supports qwen3 model",
 			"model", cfg.Model,
-			"recommended", "qwen3")
+			"recommended", ollamaModelQwen3)
 	}
 
 	baseURL := cfg.Host
 	if baseURL == "" {
-		baseURL = "http://localhost:11434"
+		baseURL = ollamaDefaultHost
 	}
 
 	// Remove trailing slash if present
@@ -231,7 +380,7 @@ func (p *OllamaProvider) Generate(ctx context.Context, messages []*pb.Message, t
 func (p *OllamaProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
 	request := p.buildRequest(ctx, messages, true, tools, nil)
 
-	outputCh := make(chan StreamChunk, 100)
+	outputCh := make(chan StreamChunk, ollamaStreamChannelBufferSize)
 
 	go func() {
 		defer close(outputCh)
@@ -351,7 +500,7 @@ func (p *OllamaProvider) GenerateStructuredStreaming(ctx context.Context, messag
 
 	request := p.buildRequest(ctx, messages, true, tools, structConfig)
 
-	outputCh := make(chan StreamChunk, 100)
+	outputCh := make(chan StreamChunk, ollamaStreamChannelBufferSize)
 
 	go func() {
 		defer close(outputCh)
@@ -381,7 +530,7 @@ func (p *OllamaProvider) GetMaxTokens() int {
 
 func (p *OllamaProvider) GetTemperature() float64 {
 	if p.config.Temperature == nil {
-		return 0.7 // Default
+		return ollamaDefaultTemperature
 	}
 	return *p.config.Temperature
 }
@@ -403,6 +552,84 @@ func (p *OllamaProvider) Close() error {
 	return nil
 }
 
+// getChatURL returns the full URL for the chat API endpoint
+func (p *OllamaProvider) getChatURL() string {
+	return fmt.Sprintf("%s%s", p.baseURL, ollamaAPIChatEndpoint)
+}
+
+// createAPIRequest creates an HTTP request for the Ollama API
+func (p *OllamaProvider) createAPIRequest(ctx context.Context, body []byte) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", p.getChatURL(), bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", ollamaHeaderContentType)
+	return req, nil
+}
+
+// parseErrorResponse parses an error response from the Ollama API
+func (p *OllamaProvider) parseErrorResponse(resp *http.Response) error {
+	bodyBytes, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return fmt.Errorf("Ollama API error (HTTP %d): failed to read body: %w", resp.StatusCode, readErr)
+	}
+
+	// Try to extract error message from JSON if present
+	var errorJSON struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(bodyBytes, &errorJSON) == nil && errorJSON.Error != "" {
+		slog.Error("Ollama API request failed",
+			"status_code", resp.StatusCode,
+			"error_message", errorJSON.Error)
+		return fmt.Errorf("Ollama API error (HTTP %d): %s", resp.StatusCode, errorJSON.Error)
+	}
+
+	slog.Error("Ollama API request failed",
+		"status_code", resp.StatusCode,
+		"response_body", string(bodyBytes))
+	return fmt.Errorf("Ollama API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
+}
+
+// logRequestDebug logs debug information about an API request
+func (p *OllamaProvider) logRequestDebug(req *OllamaRequest, reqBody []byte) {
+	payloadPreview := string(reqBody)
+	if len(payloadPreview) > ollamaMaxPayloadPreviewLength {
+		payloadPreview = payloadPreview[:ollamaMaxPayloadPreviewLength] + "..."
+	}
+
+	thinkEnabled := req.Think != nil && req.Think != false
+	thinkValue := ""
+	if thinkEnabled {
+		thinkValue = fmt.Sprintf("%v", req.Think)
+	}
+
+	slog.Debug("Ollama API request",
+		"model", req.Model,
+		"message_count", len(req.Messages),
+		"stream", req.Stream,
+		"thinking_enabled", thinkEnabled,
+		"thinking_value", thinkValue,
+		"tools_count", len(req.Tools),
+		"has_format", req.Format != nil,
+		"payload_preview", payloadPreview)
+}
+
+// getThinkingConfig returns whether thinking is enabled and the think value to use
+func (p *OllamaProvider) getThinkingConfig() (bool, interface{}) {
+	if p.config.Thinking == nil || !p.config.Thinking.Enabled {
+		return false, false
+	}
+
+	// GPT-OSS requires think levels
+	if strings.Contains(strings.ToLower(p.config.Model), ollamaModelGPTOSS) {
+		return true, p.mapBudgetToThinkLevel(p.config.Thinking.BudgetTokens)
+	}
+
+	// Other models use boolean
+	return true, true
+}
+
 func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Message, stream bool, tools []ToolDefinition, structConfig *StructuredOutputConfig) OllamaRequest {
 	ollamaMessages := make([]OllamaMessage, 0, len(messages))
 	// Track tool call IDs to tool names for mapping tool results
@@ -415,7 +642,7 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 			if textContent != "" {
 				// Convert system message to user message with system prefix
 				ollamaMessages = append(ollamaMessages, OllamaMessage{
-					Role:    "user",
+					Role:    ollamaRoleUser,
 					Content: fmt.Sprintf("System: %s", textContent),
 				})
 			}
@@ -437,7 +664,7 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 					toolName = tr.ToolCallID
 				}
 				ollamaMessages = append(ollamaMessages, OllamaMessage{
-					Role:     "tool",
+					Role:     ollamaRoleTool,
 					Content:  content,
 					ToolName: toolName, // Ollama uses tool_name field
 				})
@@ -497,7 +724,7 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 				// Track tool call ID to name mapping for tool results
 				toolCallIDToName[tc.ID] = tc.Name
 				ollamaMsg.ToolCalls[i] = OllamaToolCall{
-					Type: "function",
+					Type: ollamaToolTypeFunction,
 					Function: OllamaToolCallFunction{
 						Index:     i, // Ollama uses index for parallel tool calls
 						Name:      tc.Name,
@@ -540,23 +767,13 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 		request.Options = opts
 	}
 
-	// Enable thinking from provider config (same pattern as Anthropic)
-	// Each LLM provider reads its own config - no context passing needed
-	enableThinking := p.config.Thinking != nil && p.config.Thinking.Enabled
-
 	// For thinking-capable models, explicitly control thinking mode
 	// Note: Ollama generates thinking by default for qwen3, so we must explicitly disable it
 	// GPT-OSS requires think levels ("low", "medium", "high") instead of boolean
 	// See: https://docs.ollama.com/thinking
 	if p.isThinkingCapableModel(p.config.Model) {
-		if strings.Contains(strings.ToLower(p.config.Model), "gpt-oss") {
-			// GPT-OSS requires think levels, not boolean
-			thinkLevel := p.mapBudgetToThinkLevel(p.config.Thinking.BudgetTokens)
-			request.Think = thinkLevel
-		} else {
-			// Other models use boolean
-			request.Think = enableThinking
-		}
+		_, thinkValue := p.getThinkingConfig()
+		request.Think = thinkValue
 	}
 
 	// Set format for structured output
@@ -575,7 +792,7 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 	// We'll send them anyway and let Ollama return an error if unsupported
 	if len(tools) > 0 {
 		request.Tools = p.convertToOllamaTools(tools)
-		request.ToolChoice = "auto"
+		request.ToolChoice = ollamaToolChoiceAuto
 	}
 
 	return request
@@ -584,29 +801,16 @@ func (p *OllamaProvider) buildRequest(ctx context.Context, messages []*pb.Messag
 // isThinkingCapableModel checks if a model name indicates it supports thinking
 func (p *OllamaProvider) isThinkingCapableModel(modelName string) bool {
 	modelLower := strings.ToLower(modelName)
-	// Check for known thinking-capable model patterns
-	// Note: Not all variants support thinking (e.g., qwen3-coder:30b doesn't support thinking)
-	thinkingModels := []string{
-		"qwen3",       // Qwen3 base models support thinking
-		"deepseek-r1", // DeepSeek R1 models support thinking
-		"deepseek-v3", // DeepSeek V3 models support thinking
-		"gpt-oss",     // GPT-OSS supports thinking
-	}
-	// Exclude models that don't support thinking despite matching patterns
-	excludedModels := []string{
-		"qwen3-coder", // Qwen3-coder variants don't support thinking
-		"qwen2-coder", // Qwen2-coder variants don't support thinking
-	}
 
-	// Check exclusions first
-	for _, excluded := range excludedModels {
+	// Check exclusions first - models that don't support thinking despite matching patterns
+	for _, excluded := range ollamaExcludedModels {
 		if strings.Contains(modelLower, excluded) {
 			return false
 		}
 	}
 
 	// Check if model matches thinking-capable patterns
-	for _, pattern := range thinkingModels {
+	for _, pattern := range ollamaThinkingModels {
 		if strings.Contains(modelLower, pattern) {
 			return true
 		}
@@ -621,24 +825,24 @@ func (p *OllamaProvider) isThinkingCapableModel(modelName string) bool {
 // - medium: <= 8000 tokens (moderate reasoning)
 // - high: > 8000 tokens (maximum reasoning)
 func (p *OllamaProvider) mapBudgetToThinkLevel(budgetTokens int) string {
-	if budgetTokens <= 0 {
+	if budgetTokens <= ollamaThinkLevelDefaultBudget {
 		// Default to "medium" if not specified
-		return "medium"
+		return ollamaThinkLevelMedium
 	}
-	if budgetTokens < 2000 {
-		return "low"
+	if budgetTokens < ollamaThinkLowThreshold {
+		return ollamaThinkLevelLow
 	}
-	if budgetTokens < 8000 {
-		return "medium"
+	if budgetTokens < ollamaThinkMediumThreshold {
+		return ollamaThinkLevelMedium
 	}
-	return "high"
+	return ollamaThinkLevelHigh
 }
 
 func (p *OllamaProvider) convertToOllamaTools(tools []ToolDefinition) []OllamaTool {
 	result := make([]OllamaTool, len(tools))
 	for i, tool := range tools {
 		result[i] = OllamaTool{
-			Type:     "function",
+			Type:     ollamaToolTypeFunction,
 			Function: OllamaToolFunction(tool),
 		}
 	}
@@ -675,12 +879,13 @@ func (p *OllamaProvider) makeRequest(ctx context.Context, request OllamaRequest)
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/api/chat", bytes.NewReader(jsonData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
+	// Log request debug info
+	p.logRequestDebug(&request, jsonData)
 
-	req.Header.Set("Content-Type", "application/json")
+	req, err := p.createAPIRequest(ctx, jsonData)
+	if err != nil {
+		return nil, err
+	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
@@ -688,13 +893,13 @@ func (p *OllamaProvider) makeRequest(ctx context.Context, request OllamaRequest)
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, p.parseErrorResponse(resp)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("api request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var response OllamaResponse
@@ -711,12 +916,13 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/api/chat", bytes.NewReader(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
+	// Log request debug info
+	p.logRequestDebug(&request, jsonData)
 
-	req.Header.Set("Content-Type", "application/json")
+	req, err := p.createAPIRequest(ctx, jsonData)
+	if err != nil {
+		return err
+	}
 
 	resp, err := p.httpClient.Do(req)
 	// HTTP client may return both response and error for non-2xx status codes
@@ -724,19 +930,7 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 	if resp != nil {
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			bodyBytes, readErr := io.ReadAll(resp.Body)
-			errorBody := string(bodyBytes)
-			if readErr != nil {
-				errorBody = fmt.Sprintf("(failed to read error body: %v)", readErr)
-			}
-			// Try to extract error message from JSON if present
-			var errorJSON struct {
-				Error string `json:"error"`
-			}
-			if json.Unmarshal(bodyBytes, &errorJSON) == nil && errorJSON.Error != "" {
-				return fmt.Errorf("ollama API error: %s", errorJSON.Error)
-			}
-			return fmt.Errorf("ollama API request failed with status %d: %s", resp.StatusCode, errorBody)
+			return p.parseErrorResponse(resp)
 		}
 	}
 	if err != nil {
@@ -747,10 +941,7 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 	}
 
 	reader := bufio.NewReader(resp.Body)
-	// Track tool calls by index for accumulation
-	toolCallsMap := make(map[int]*OllamaToolCall)
-	var totalTokens int
-	var accumulatedThinking strings.Builder
+	state := newOllamaStreamingState()
 
 	for {
 		line, err := reader.ReadBytes('\n')
@@ -772,7 +963,7 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 		}
 
 		if chunk.Error != "" {
-			return fmt.Errorf("ollama API error: %s", chunk.Error)
+			return fmt.Errorf("Ollama API error: %s", chunk.Error)
 		}
 
 		// Accumulate text content
@@ -785,44 +976,25 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 
 		// Handle thinking/reasoning trace (Ollama thinking capability)
 		if chunk.Message.Thinking != "" {
-			accumulatedThinking.WriteString(chunk.Message.Thinking)
+			state.accumulateThinking(chunk.Message.Thinking)
 			outputCh <- StreamChunk{
 				Type: "thinking",
 				Text: chunk.Message.Thinking,
 			}
 		}
 
-		// Handle tool calls - accumulate by index
-		if len(chunk.Message.ToolCalls) > 0 {
-			for _, tc := range chunk.Message.ToolCalls {
-				idx := tc.Function.Index
-				if idx < 0 {
-					// If no index, use the map size as index
-					idx = len(toolCallsMap)
-				}
-				// Update or create tool call entry
-				if existing, exists := toolCallsMap[idx]; exists {
-					// Merge: update arguments if provided, keep name
-					if len(tc.Function.Arguments) > 0 {
-						// Merge arguments (Ollama might send partial updates)
-						for k, v := range tc.Function.Arguments {
-							existing.Function.Arguments[k] = v
-						}
-					}
-				} else {
-					// Create new entry
-					toolCallsMap[idx] = &tc
-				}
-			}
+		// Handle tool calls - accumulate by index using state
+		for _, tc := range chunk.Message.ToolCalls {
+			state.addOrUpdateToolCall(tc)
 		}
 
 		// Update token count and check if done
 		if chunk.Done {
-			totalTokens = chunk.PromptEvalCount + chunk.EvalCount
+			state.totalTokens = chunk.PromptEvalCount + chunk.EvalCount
 
 			// Check for thinking in final chunk (Ollama may send it here)
 			if chunk.Message.Thinking != "" {
-				accumulatedThinking.WriteString(chunk.Message.Thinking)
+				state.accumulateThinking(chunk.Message.Thinking)
 				outputCh <- StreamChunk{
 					Type: "thinking",
 					Text: chunk.Message.Thinking,
@@ -830,36 +1002,28 @@ func (p *OllamaProvider) makeStreamingRequest(ctx context.Context, request Ollam
 			}
 
 			// Emit thinking_complete if we have accumulated thinking
-			if accumulatedThinking.Len() > 0 {
+			if state.hasAccumulatedThinking() {
 				outputCh <- StreamChunk{
 					Type: "thinking_complete",
-					Text: accumulatedThinking.String(),
+					Text: state.getThinkingContent(),
 				}
 			}
 
 			// Send accumulated tool calls when done
-			if len(toolCallsMap) > 0 {
-				// Convert map to slice in index order
-				var accumulatedToolCalls []OllamaToolCall
-				for i := 0; i < len(toolCallsMap); i++ {
-					if tc, exists := toolCallsMap[i]; exists {
-						accumulatedToolCalls = append(accumulatedToolCalls, *tc)
-					}
-				}
-				if len(accumulatedToolCalls) > 0 {
-					toolCalls := p.parseToolCalls(accumulatedToolCalls)
-					for _, tc := range toolCalls {
-						outputCh <- StreamChunk{
-							Type:     "tool_call",
-							ToolCall: tc,
-						}
+			accumulatedToolCalls := state.getOrderedToolCalls()
+			if len(accumulatedToolCalls) > 0 {
+				toolCalls := p.parseToolCalls(accumulatedToolCalls)
+				for _, tc := range toolCalls {
+					outputCh <- StreamChunk{
+						Type:     "tool_call",
+						ToolCall: tc,
 					}
 				}
 			}
 
 			outputCh <- StreamChunk{
 				Type:   "done",
-				Tokens: totalTokens,
+				Tokens: state.totalTokens,
 			}
 			break
 		}
@@ -892,12 +1056,12 @@ Important:
 func roleToOllama(role pb.Role) string {
 	switch role {
 	case pb.Role_ROLE_USER:
-		return "user"
+		return ollamaRoleUser
 	case pb.Role_ROLE_AGENT:
-		return "assistant"
+		return ollamaRoleAssistant
 	case pb.Role_ROLE_UNSPECIFIED:
-		return "system"
+		return ollamaRoleSystem
 	default:
-		return "user"
+		return ollamaRoleUser
 	}
 }
