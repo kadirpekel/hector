@@ -31,7 +31,9 @@ func createHTTPClient(cfg *config.LLMProviderConfig) *httpclient.Client {
 			CACertificate:      cfg.CACertificate,
 		}
 		if tlsConfig.InsecureSkipVerify {
-			fmt.Printf("Warning: TLS certificate verification disabled for LLM provider %s (insecure_skip_verify=true)\n", cfg.Type)
+			slog.Warn("TLS certificate verification disabled for LLM provider",
+				"provider_type", cfg.Type,
+				"insecure_skip_verify", true)
 		}
 	}
 
@@ -41,6 +43,7 @@ func createHTTPClient(cfg *config.LLMProviderConfig) *httpclient.Client {
 		}),
 		httpclient.WithMaxRetries(cfg.MaxRetries),
 		httpclient.WithBaseDelay(time.Duration(cfg.RetryDelay) * time.Second),
+		httpclient.WithHeaderParser(httpclient.ParseOpenAIRateLimitHeaders),
 	}
 
 	if tlsConfig != nil {
@@ -50,9 +53,92 @@ func createHTTPClient(cfg *config.LLMProviderConfig) *httpclient.Client {
 	return httpclient.New(opts...)
 }
 
+// Constants for OpenAI Responses API
+const (
+	// Default OpenAI API base URL
+	openAIDefaultHost = "https://api.openai.com/v1"
+
+	// SSE Event Types
+	eventResponseCreated           = "response.created"
+	eventOutputItemAdded           = "response.output_item.added"
+	eventOutputItemDone            = "response.output_item.done"
+	eventOutputTextDelta           = "response.output_text.delta"
+	eventOutputTextDone            = "response.output_text.done"
+	eventFunctionCallArgsDelta     = "response.function_call_arguments.delta"
+	eventFunctionCallArgsDone      = "response.function_call_arguments.done"
+	eventReasoningSummaryTextDelta = "response.reasoning_summary_text.delta"
+	eventReasoningSummaryTextDone  = "response.reasoning_summary_text.done"
+	eventReasoningSummaryPartDone  = "response.reasoning_summary_part.done"
+	eventContentPartAdded          = "response.content_part.added"
+	eventContentPartDone           = "response.content_part.done"
+	eventInProgress                = "response.in_progress"
+	eventResponseCompleted         = "response.completed"
+
+	// Logging preview limits
+	maxPayloadPreviewLength = 200
+	maxDataPreviewLength    = 300
+
+	// Stream channel buffer size
+	streamChannelBufferSize = 100
+
+	// Reasoning effort thresholds based on OpenAI docs
+	reasoningEffortLowThreshold    = 1024
+	reasoningEffortMediumThreshold = 8192
+)
+
 type OpenAIProvider struct {
 	config     *config.LLMProviderConfig
 	httpClient *httpclient.Client
+}
+
+// streamingState encapsulates all state variables used during SSE streaming.
+// This improves code organization and makes state management explicit.
+type streamingState struct {
+	thinkingBlockID   string
+	thinkingSignature string
+	thinkingStreamed  bool
+	functionCallID    string
+	functionCallName  string
+	functionCallArgs  strings.Builder
+	totalTokens       int
+}
+
+// reset clears all streaming state for a new request
+func (s *streamingState) reset() {
+	s.thinkingBlockID = ""
+	s.thinkingSignature = ""
+	s.thinkingStreamed = false
+	s.functionCallID = ""
+	s.functionCallName = ""
+	s.functionCallArgs.Reset()
+	s.totalTokens = 0
+}
+
+// resetThinking clears thinking-related state
+func (s *streamingState) resetThinking() {
+	s.thinkingBlockID = ""
+	s.thinkingSignature = ""
+}
+
+// resetFunctionCall clears function call state
+func (s *streamingState) resetFunctionCall() {
+	s.functionCallID = ""
+	s.functionCallName = ""
+	s.functionCallArgs.Reset()
+}
+
+// hasOpenThinkingBlock returns true if there's an uncompleted thinking block
+func (s *streamingState) hasOpenThinkingBlock() bool {
+	return s.thinkingBlockID != "" && !s.thinkingStreamed
+}
+
+// getMapKeys returns the keys of a map for debugging purposes
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // Responses API Types - OpenAI Responses API is the only supported API
@@ -193,30 +279,32 @@ type OpenAIUsage struct {
 	TotalTokens  int `json:"total_tokens"`
 }
 
+// NewOpenAIProvider creates a new OpenAI provider with default configuration.
+// This is a convenience constructor for simple use cases.
+// For production use, prefer NewOpenAIProviderFromConfig with explicit configuration.
 func NewOpenAIProvider(apiKey string, model string) *OpenAIProvider {
 	cfg := &config.LLMProviderConfig{
 		Type:        "openai",
 		Model:       model,
 		APIKey:      apiKey,
-		Host:        "https://api.openai.com/v1",
+		Host:        openAIDefaultHost,
 		Temperature: func() *float64 { t := 0.7; return &t }(),
 		MaxTokens:   1000,
 		Timeout:     60,
 	}
 
-	provider, _ := NewOpenAIProviderFromConfig(cfg)
+	provider, err := NewOpenAIProviderFromConfig(cfg)
+	if err != nil {
+		// This should never happen with valid config, but log for debugging
+		slog.Error("Failed to create OpenAI provider", "error", err)
+		return nil
+	}
 	return provider
 }
 
 func NewOpenAIProviderFromConfig(cfg *config.LLMProviderConfig) (*OpenAIProvider, error) {
-	httpClient := httpclient.New(
-		httpclient.WithHTTPClient(&http.Client{
-			Timeout: time.Duration(cfg.Timeout) * time.Second,
-		}),
-		httpclient.WithMaxRetries(cfg.MaxRetries),
-		httpclient.WithBaseDelay(time.Duration(cfg.RetryDelay)*time.Second),
-		httpclient.WithHeaderParser(httpclient.ParseOpenAIRateLimitHeaders),
-	)
+	// Use createHTTPClient to properly configure TLS settings
+	httpClient := createHTTPClient(cfg)
 
 	return &OpenAIProvider{
 		config:     cfg,
@@ -238,13 +326,8 @@ func (p *OpenAIProvider) Generate(ctx context.Context, messages []*pb.Message, t
 	)
 	defer span.End()
 
-	thinkingEnabled := p.config.Thinking != nil && p.config.Thinking.Enabled
-
-	// Only set reasoning effort when --thinking flag is explicitly enabled
-	// This gives user explicit control over whether model should reason
-	var effort string
-	if thinkingEnabled {
-		effort = p.mapBudgetToReasoningEffort(p.config.Thinking.BudgetTokens)
+	effort := p.getReasoningEffort()
+	if effort != "" {
 		slog.Debug("Using Responses API with reasoning enabled",
 			"model", p.config.Model,
 			"effort", effort)
@@ -282,12 +365,8 @@ func (p *OpenAIProvider) Generate(ctx context.Context, messages []*pb.Message, t
 }
 
 func (p *OpenAIProvider) GenerateStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition) (<-chan StreamChunk, error) {
-	thinkingEnabled := p.config.Thinking != nil && p.config.Thinking.Enabled
-
-	// Only set reasoning effort when --thinking flag is explicitly enabled
-	var effort string
-	if thinkingEnabled {
-		effort = p.mapBudgetToReasoningEffort(p.config.Thinking.BudgetTokens)
+	effort := p.getReasoningEffort()
+	if effort != "" {
 		slog.Debug("Using Responses API streaming with reasoning enabled",
 			"model", p.config.Model,
 			"effort", effort)
@@ -296,12 +375,7 @@ func (p *OpenAIProvider) GenerateStreaming(ctx context.Context, messages []*pb.M
 			"model", p.config.Model)
 	}
 
-	streamCh, err := p.GenerateWithReasoningStreaming(ctx, messages, tools, effort, "")
-	if err != nil {
-		return nil, err
-	}
-
-	return streamCh, nil
+	return p.GenerateWithReasoningStreaming(ctx, messages, tools, effort, "")
 }
 
 func (p *OpenAIProvider) GenerateStructured(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (string, []*protocol.ToolCall, int, *ThinkingBlock, error) {
@@ -319,17 +393,12 @@ func (p *OpenAIProvider) GenerateStructured(ctx context.Context, messages []*pb.
 	)
 	defer span.End()
 
-	thinkingEnabled := p.config.Thinking != nil && p.config.Thinking.Enabled
-
-	// Only set reasoning effort when --thinking flag is explicitly enabled
-	var effort string
-	if thinkingEnabled {
-		effort = p.mapBudgetToReasoningEffort(p.config.Thinking.BudgetTokens)
-	}
+	effort := p.getReasoningEffort()
+	requestSummary := p.config.Thinking != nil && p.config.Thinking.Enabled
 
 	// Build Responses API request
 	// Only request summaries when thinking is explicitly enabled
-	req := p.buildResponsesRequest(messages, tools, effort, "", thinkingEnabled)
+	req := p.buildResponsesRequest(messages, tools, effort, "", requestSummary)
 
 	// Add structured output format using text.format (Responses API format)
 	if structConfig != nil && structConfig.Format == "json" {
@@ -395,17 +464,12 @@ func (p *OpenAIProvider) GenerateStructured(ctx context.Context, messages []*pb.
 }
 
 func (p *OpenAIProvider) GenerateStructuredStreaming(ctx context.Context, messages []*pb.Message, tools []ToolDefinition, structConfig *StructuredOutputConfig) (<-chan StreamChunk, error) {
-	thinkingEnabled := p.config.Thinking != nil && p.config.Thinking.Enabled
-
-	// Only set reasoning effort when --thinking flag is explicitly enabled
-	var effort string
-	if thinkingEnabled {
-		effort = p.mapBudgetToReasoningEffort(p.config.Thinking.BudgetTokens)
-	}
+	effort := p.getReasoningEffort()
+	requestSummary := p.config.Thinking != nil && p.config.Thinking.Enabled
 
 	// Build Responses API request with streaming
 	// Only request summaries when thinking is explicitly enabled
-	req := p.buildResponsesRequest(messages, tools, effort, "", thinkingEnabled)
+	req := p.buildResponsesRequest(messages, tools, effort, "", requestSummary)
 	req.Stream = true
 
 	// Add structured output format using text.format (Responses API format)
@@ -462,6 +526,64 @@ func (p *OpenAIProvider) SupportsStructuredOutput() bool {
 	return true
 }
 
+// getResponsesURL returns the URL for the OpenAI Responses API
+func (p *OpenAIProvider) getResponsesURL() string {
+	if p.config.Host == "" {
+		return openAIDefaultHost + "/responses"
+	}
+
+	host := strings.TrimSuffix(p.config.Host, "/")
+	if strings.HasSuffix(host, "/v1") {
+		return fmt.Sprintf("%s/responses", host)
+	}
+	return fmt.Sprintf("%s/v1/responses", host)
+}
+
+// getReasoningEffort returns the reasoning effort level based on thinking config
+func (p *OpenAIProvider) getReasoningEffort() string {
+	if p.config.Thinking != nil && p.config.Thinking.Enabled {
+		return p.mapBudgetToReasoningEffort(p.config.Thinking.BudgetTokens)
+	}
+	return ""
+}
+
+// shouldRetryWithoutSummary checks if an error indicates org verification is needed for summaries
+func (p *OpenAIProvider) shouldRetryWithoutSummary(errorResp *OpenAIResponsesResponse) bool {
+	if errorResp == nil || errorResp.Error == nil {
+		return false
+	}
+	return errorResp.Error.Code == "unsupported_value" &&
+		strings.Contains(errorResp.Error.Message, "reasoning summaries")
+}
+
+// logRequestDebug logs debug information about a Responses API request
+func (p *OpenAIProvider) logRequestDebug(req *OpenAIResponsesRequest, reqBody []byte) {
+	payloadPreview := string(reqBody)
+	if len(payloadPreview) > maxPayloadPreviewLength {
+		payloadPreview = payloadPreview[:maxPayloadPreviewLength] + "..."
+	}
+
+	// Safe extraction of reasoning effort (may be nil for non-reasoning models)
+	reasoningEffort := ""
+	if req.Reasoning != nil {
+		reasoningEffort = req.Reasoning.Effort
+	}
+
+	// Safe extraction of input items count
+	inputItemsCount := 0
+	if items, ok := req.Input.([]OpenAIInputItem); ok {
+		inputItemsCount = len(items)
+	}
+
+	slog.Debug("OpenAI Responses API request",
+		"model", req.Model,
+		"input_items", inputItemsCount,
+		"has_instructions", req.Instructions != "",
+		"max_output_tokens", req.MaxOutputTokens,
+		"effort", reasoningEffort,
+		"payload_preview", payloadPreview)
+}
+
 // roleToOpenAI converts pb.Role to OpenAI role string
 // Used internally in convertMessagesToInputItems
 func roleToOpenAI(role pb.Role) string {
@@ -505,42 +627,14 @@ func (p *OpenAIProvider) GenerateWithReasoning(
 
 // makeResponsesRequest makes a non-streaming request to the Responses API
 func (p *OpenAIProvider) makeResponsesRequest(ctx context.Context, req *OpenAIResponsesRequest) (string, []*protocol.ToolCall, int, *ThinkingBlock, string, error) {
-	url := "https://api.openai.com/v1/responses"
-	if p.config.Host != "" {
-		host := strings.TrimSuffix(p.config.Host, "/")
-		if strings.HasSuffix(host, "/v1") {
-			url = fmt.Sprintf("%s/responses", host)
-		} else {
-			url = fmt.Sprintf("%s/v1/responses", host)
-		}
-	}
+	url := p.getResponsesURL()
 
 	reqBody, err := json.Marshal(req)
 	if err != nil {
 		return "", nil, 0, nil, "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	payloadPreview := string(reqBody)
-	if len(payloadPreview) > 200 {
-		payloadPreview = payloadPreview[:200] + "..."
-	}
-	// Safe extraction of reasoning effort (may be nil for non-reasoning models)
-	reasoningEffort := ""
-	if req.Reasoning != nil {
-		reasoningEffort = req.Reasoning.Effort
-	}
-	// Safe extraction of input items count
-	inputItemsCount := 0
-	if items, ok := req.Input.([]OpenAIInputItem); ok {
-		inputItemsCount = len(items)
-	}
-	slog.Debug("OpenAI Responses API request",
-		"model", req.Model,
-		"input_items", inputItemsCount,
-		"has_instructions", req.Instructions != "",
-		"max_output_tokens", req.MaxOutputTokens,
-		"effort", reasoningEffort,
-		"payload_preview", payloadPreview)
+	p.logRequestDebug(req, reqBody)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 	if err != nil {
@@ -556,56 +650,91 @@ func (p *OpenAIProvider) makeResponsesRequest(ctx context.Context, req *OpenAIRe
 	}
 	defer resp.Body.Close()
 
+	// Handle non-OK responses
+	if resp.StatusCode != http.StatusOK {
+		return p.handleErrorResponse(ctx, resp, req, url)
+	}
+
+	// Decode successful response
 	var responsesResp OpenAIResponsesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&responsesResp); err != nil {
+		return "", nil, 0, nil, "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return p.processResponsesResponse(&responsesResp)
+}
+
+// handleErrorResponse handles non-OK HTTP responses from the Responses API
+func (p *OpenAIProvider) handleErrorResponse(ctx context.Context, resp *http.Response, req *OpenAIResponsesRequest, url string) (string, []*protocol.ToolCall, int, *ThinkingBlock, string, error) {
+	bodyBytes, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return "", nil, 0, nil, "", fmt.Errorf("openai responses API error (HTTP %d): failed to read body: %w", resp.StatusCode, readErr)
+	}
 
 	if resp.StatusCode == http.StatusNotFound {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		err := fmt.Errorf("openai responses API endpoint not found (404): %s", string(bodyBytes))
-		return "", nil, 0, nil, "", err
+		return "", nil, 0, nil, "", fmt.Errorf("openai responses API endpoint not found (404): %s", string(bodyBytes))
 	}
 
-	if resp.StatusCode == http.StatusBadRequest {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		var errorResp OpenAIResponsesResponse
-		if json.Unmarshal(bodyBytes, &errorResp) == nil && errorResp.Error != nil {
-			if errorResp.Error.Code == "unsupported_value" && strings.Contains(errorResp.Error.Message, "reasoning summaries") {
-				slog.Debug("Organization not verified for reasoning summaries, retrying without summary parameter")
-				req.Reasoning.Summary = ""
-				reqBody, _ := json.Marshal(req)
-				retryReq, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
-				retryReq.Header.Set("Content-Type", "application/json")
-				retryReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", strings.TrimSpace(p.config.APIKey)))
-				retryResp, retryErr := p.httpClient.Do(retryReq)
-				if retryErr == nil {
-					defer retryResp.Body.Close()
-					if retryResp.StatusCode == http.StatusOK {
-						if err := json.NewDecoder(retryResp.Body).Decode(&responsesResp); err != nil {
-							return "", nil, 0, nil, "", fmt.Errorf("failed to decode retry response: %w", err)
-						}
-					} else {
-						return "", nil, 0, nil, "", fmt.Errorf("openai responses API error: %s", errorResp.Error.Message)
-					}
-				} else {
-					return "", nil, 0, nil, "", fmt.Errorf("openai responses API error: %s", errorResp.Error.Message)
-				}
-			} else {
-				return "", nil, 0, nil, "", fmt.Errorf("openai responses API error: %s", errorResp.Error.Message)
-			}
-		} else {
-			return "", nil, 0, nil, "", fmt.Errorf("openai responses API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
-		}
-	} else if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		var errorResp OpenAIResponsesResponse
-		if json.Unmarshal(bodyBytes, &errorResp) == nil && errorResp.Error != nil {
-			return "", nil, 0, nil, "", fmt.Errorf("openai responses API error: %s", errorResp.Error.Message)
-		}
+	// Try to parse error response
+	var errorResp OpenAIResponsesResponse
+	if err := json.Unmarshal(bodyBytes, &errorResp); err != nil || errorResp.Error == nil {
 		return "", nil, 0, nil, "", fmt.Errorf("openai responses API error (HTTP %d): %s", resp.StatusCode, string(bodyBytes))
-	} else {
-		if err := json.NewDecoder(resp.Body).Decode(&responsesResp); err != nil {
-			return "", nil, 0, nil, "", fmt.Errorf("failed to decode response: %w", err)
-		}
 	}
+
+	// Check if we should retry without reasoning summary
+	if resp.StatusCode == http.StatusBadRequest && p.shouldRetryWithoutSummary(&errorResp) {
+		return p.retryWithoutSummary(ctx, req, url)
+	}
+
+	return "", nil, 0, nil, "", fmt.Errorf("openai responses API error (HTTP %d): %s", resp.StatusCode, errorResp.Error.Message)
+}
+
+// retryWithoutSummary retries the request without the reasoning summary parameter
+func (p *OpenAIProvider) retryWithoutSummary(ctx context.Context, originalReq *OpenAIResponsesRequest, url string) (string, []*protocol.ToolCall, int, *ThinkingBlock, string, error) {
+	slog.Debug("Organization not verified for reasoning summaries, retrying without summary parameter")
+
+	// Create a copy of the request to avoid mutating the original
+	retryReq := *originalReq
+	if retryReq.Reasoning != nil {
+		reasoningCopy := *retryReq.Reasoning
+		reasoningCopy.Summary = ""
+		retryReq.Reasoning = &reasoningCopy
+	}
+
+	reqBody, err := json.Marshal(&retryReq)
+	if err != nil {
+		return "", nil, 0, nil, "", fmt.Errorf("failed to marshal retry request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
+	if err != nil {
+		return "", nil, 0, nil, "", fmt.Errorf("failed to create retry request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", strings.TrimSpace(p.config.APIKey)))
+
+	retryResp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return "", nil, 0, nil, "", fmt.Errorf("openai responses API retry request failed: %w", err)
+	}
+	defer retryResp.Body.Close()
+
+	if retryResp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(retryResp.Body)
+		return "", nil, 0, nil, "", fmt.Errorf("openai responses API retry error (HTTP %d): %s", retryResp.StatusCode, string(bodyBytes))
+	}
+
+	var responsesResp OpenAIResponsesResponse
+	if err := json.NewDecoder(retryResp.Body).Decode(&responsesResp); err != nil {
+		return "", nil, 0, nil, "", fmt.Errorf("failed to decode retry response: %w", err)
+	}
+
+	return p.processResponsesResponse(&responsesResp)
+}
+
+// processResponsesResponse processes a successful response from the Responses API
+func (p *OpenAIProvider) processResponsesResponse(responsesResp *OpenAIResponsesResponse) (string, []*protocol.ToolCall, int, *ThinkingBlock, string, error) {
 
 	if responsesResp.Error != nil {
 		return "", nil, 0, nil, "", fmt.Errorf("openai responses API error: %s", responsesResp.Error.Message)
@@ -693,7 +822,7 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 		),
 	)
 
-	outputCh := make(chan StreamChunk, 100)
+	outputCh := make(chan StreamChunk, streamChannelBufferSize)
 
 	go func() {
 		defer span.End()
@@ -704,15 +833,7 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 		req := p.buildResponsesRequest(messages, tools, effort, previousResponseID, requestSummary)
 		req.Stream = true
 
-		url := "https://api.openai.com/v1/responses"
-		if p.config.Host != "" {
-			host := strings.TrimSuffix(p.config.Host, "/")
-			if strings.HasSuffix(host, "/v1") {
-				url = fmt.Sprintf("%s/responses", host)
-			} else {
-				url = fmt.Sprintf("%s/v1/responses", host)
-			}
-		}
+		url := p.getResponsesURL()
 
 		reqBody, err := json.Marshal(req)
 		if err != nil {
@@ -723,22 +844,8 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 			return
 		}
 
-		payloadPreview := string(reqBody)
-		if len(payloadPreview) > 200 {
-			payloadPreview = payloadPreview[:200] + "..."
-		}
-		// Safe extraction of input items count
-		streamInputItemsCount := 0
-		if items, ok := req.Input.([]OpenAIInputItem); ok {
-			streamInputItemsCount = len(items)
-		}
-		slog.Debug("OpenAI Responses API streaming request",
-			"model", req.Model,
-			"input_items", streamInputItemsCount,
-			"has_instructions", req.Instructions != "",
-			"max_output_tokens", req.MaxOutputTokens,
-			"effort", effort,
-			"payload_preview", payloadPreview)
+		p.logRequestDebug(req, reqBody)
+		slog.Debug("OpenAI Responses API streaming request", "effort", effort)
 
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 		if err != nil {
@@ -826,16 +933,7 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 		}
 
 		reader := bufio.NewReader(resp.Body)
-		var totalTokens int
-		var currentThinkingBlockID string
-		var currentThinkingSignature string
-		var thinkingAlreadyStreamed bool // Track if we already streamed thinking via delta events
-
-		// Function call streaming state
-		var currentFunctionCallID string
-		var currentFunctionCallName string
-		var currentFunctionCallArgs strings.Builder
-
+		state := &streamingState{}
 		var currentEventType string
 		for {
 			line, err := reader.ReadBytes('\n')
@@ -883,8 +981,8 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 				keys = append(keys, k)
 			}
 			dataPreview := string(dataLine)
-			if len(dataPreview) > 300 {
-				dataPreview = dataPreview[:300] + "..."
+			if len(dataPreview) > maxDataPreviewLength {
+				dataPreview = dataPreview[:maxDataPreviewLength] + "..."
 			}
 			slog.Debug("SSE event received",
 				"event_type_from_header", currentEventType,
@@ -896,116 +994,129 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 			currentEventType = ""
 
 			switch eventType {
-			case "response.created":
+			case eventResponseCreated:
 				if response, ok := streamEvent["response"].(map[string]interface{}); ok {
 					if id, ok := response["id"].(string); ok {
 						slog.Debug("Responses API streaming started", "response_id", id)
 					}
 				}
-			case "response.output_item.added":
-				if item, ok := streamEvent["item"].(map[string]interface{}); ok {
-					itemType, _ := item["type"].(string)
-					if itemType == "reasoning" {
-						// Track the reasoning block - content will arrive via delta events
-						if id, ok := item["id"].(string); ok {
-							currentThinkingBlockID = id
-						}
-						// Reset the streamed flag for this new reasoning block
-						thinkingAlreadyStreamed = false
-						slog.Debug("Reasoning block started", "id", currentThinkingBlockID)
-					} else if itemType == "function_call" {
-						// Start tracking a new function call
-						if callID, ok := item["call_id"].(string); ok {
-							currentFunctionCallID = callID
-						} else if id, ok := item["id"].(string); ok {
-							currentFunctionCallID = id
-						}
-						if name, ok := item["name"].(string); ok {
-							currentFunctionCallName = name
-						}
-						currentFunctionCallArgs.Reset()
-						slog.Debug("Function call started",
-							"call_id", currentFunctionCallID,
-							"name", currentFunctionCallName)
-					}
+			case eventOutputItemAdded:
+				item, ok := streamEvent["item"].(map[string]interface{})
+				if !ok {
+					slog.Debug("output_item.added event missing item field")
+					continue
 				}
-			case "response.output_item.done":
-				if item, ok := streamEvent["item"].(map[string]interface{}); ok {
-					itemType, _ := item["type"].(string)
-					if itemType == "reasoning" {
-						// Extract encrypted content signature if available
-						if encryptedContentObj, ok := item["encrypted_content"].(map[string]interface{}); ok {
-							if data, ok := encryptedContentObj["data"].(string); ok {
-								currentThinkingSignature = data
-							}
+				itemType, ok := item["type"].(string)
+				if !ok {
+					slog.Debug("output_item.added item missing type field", "item_keys", getMapKeys(item))
+					continue
+				}
+				switch itemType {
+				case "reasoning":
+					// Track the reasoning block - content will arrive via delta events
+					if id, ok := item["id"].(string); ok {
+						state.thinkingBlockID = id
+					}
+					// Reset the streamed flag for this new reasoning block
+					state.thinkingStreamed = false
+					slog.Debug("Reasoning block started", "id", state.thinkingBlockID)
+				case "function_call":
+					// Start tracking a new function call
+					if callID, ok := item["call_id"].(string); ok {
+						state.functionCallID = callID
+					} else if id, ok := item["id"].(string); ok {
+						state.functionCallID = id
+					}
+					if name, ok := item["name"].(string); ok {
+						state.functionCallName = name
+					}
+					state.functionCallArgs.Reset()
+					slog.Debug("Function call started",
+						"call_id", state.functionCallID,
+						"name", state.functionCallName)
+				}
+			case eventOutputItemDone:
+				item, ok := streamEvent["item"].(map[string]interface{})
+				if !ok {
+					slog.Debug("output_item.done event missing item field")
+					continue
+				}
+				itemType, ok := item["type"].(string)
+				if !ok {
+					slog.Debug("output_item.done item missing type field", "item_keys", getMapKeys(item))
+					continue
+				}
+				switch itemType {
+				case "reasoning":
+					// Extract encrypted content signature if available
+					if encryptedContentObj, ok := item["encrypted_content"].(map[string]interface{}); ok {
+						if data, ok := encryptedContentObj["data"].(string); ok {
+							state.thinkingSignature = data
 						}
-						// Only emit thinking content if we haven't already streamed it via delta events
-						// This prevents duplication when both delta streaming and done events have content
-						if !thinkingAlreadyStreamed {
-							if summary, ok := item["summary"].([]interface{}); ok {
-								for _, summaryItem := range summary {
-									if itemMap, ok := summaryItem.(map[string]interface{}); ok {
-										if textType, _ := itemMap["type"].(string); textType == "summary_text" {
-											if text, ok := itemMap["text"].(string); ok && text != "" {
-												outputCh <- StreamChunk{
-													Type: "thinking",
-													Text: text,
-												}
+					}
+					// Only emit thinking content if we haven't already streamed it via delta events
+					// This prevents duplication when both delta streaming and done events have content
+					if !state.thinkingStreamed {
+						if summary, ok := item["summary"].([]interface{}); ok {
+							for _, summaryItem := range summary {
+								if itemMap, ok := summaryItem.(map[string]interface{}); ok {
+									textType, _ := itemMap["type"].(string)
+									if textType == "summary_text" {
+										if text, ok := itemMap["text"].(string); ok && text != "" {
+											outputCh <- StreamChunk{
+												Type: "thinking",
+												Text: text,
 											}
 										}
 									}
 								}
 							}
-							outputCh <- StreamChunk{
-								Type:      "thinking_complete",
-								Signature: currentThinkingSignature,
-							}
 						}
-						currentThinkingBlockID = ""
-						currentThinkingSignature = ""
-					} else if itemType == "function_call" {
-						// Alternative path: function call completed via output_item.done
-						// Extract call_id, name, arguments from the completed item
-						callID := ""
-						if cid, ok := item["call_id"].(string); ok {
-							callID = cid
-						} else if id, ok := item["id"].(string); ok {
-							callID = id
+						outputCh <- StreamChunk{
+							Type:      "thinking_complete",
+							Signature: state.thinkingSignature,
 						}
-						name, _ := item["name"].(string)
-						argsStr, _ := item["arguments"].(string)
+					}
+					state.resetThinking()
+				case "function_call":
+					// Alternative path: function call completed via output_item.done
+					// Extract call_id, name, arguments from the completed item
+					callID := ""
+					if cid, ok := item["call_id"].(string); ok {
+						callID = cid
+					} else if id, ok := item["id"].(string); ok {
+						callID = id
+					}
+					name, _ := item["name"].(string)
+					argsStr, _ := item["arguments"].(string)
 
-						if callID != "" && name != "" {
-							var args map[string]interface{}
-							if argsStr != "" {
-								if err := json.Unmarshal([]byte(argsStr), &args); err != nil {
-									slog.Warn("Failed to parse function call arguments from output_item.done",
-										"error", err, "call_id", callID)
-									args = make(map[string]interface{})
-								}
-							} else {
+					if callID != "" && name != "" {
+						var args map[string]interface{}
+						if argsStr != "" {
+							if err := json.Unmarshal([]byte(argsStr), &args); err != nil {
+								slog.Warn("Failed to parse function call arguments from output_item.done",
+									"error", err, "call_id", callID)
 								args = make(map[string]interface{})
 							}
-
-							outputCh <- StreamChunk{
-								Type: "tool_call",
-								ToolCall: &protocol.ToolCall{
-									ID:   callID,
-									Name: name,
-									Args: args,
-								},
-							}
-							slog.Debug("Function call completed via output_item.done",
-								"call_id", callID, "name", name)
+						} else {
+							args = make(map[string]interface{})
 						}
 
-						// Clear streaming state
-						currentFunctionCallID = ""
-						currentFunctionCallName = ""
-						currentFunctionCallArgs.Reset()
+						outputCh <- StreamChunk{
+							Type: "tool_call",
+							ToolCall: &protocol.ToolCall{
+								ID:   callID,
+								Name: name,
+								Args: args,
+							},
+						}
+						slog.Debug("Function call completed via output_item.done",
+							"call_id", callID, "name", name)
 					}
+
+					state.resetFunctionCall()
 				}
-			case "response.output_text.delta":
+			case eventOutputTextDelta:
 				// Responses API streaming: delta can be in different formats
 				// Try multiple possible structures
 				var deltaText string
@@ -1030,21 +1141,21 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 				} else {
 					slog.Debug("No delta text found in output_text.delta event", "event_keys", keys, "delta_type", fmt.Sprintf("%T", streamEvent["delta"]))
 				}
-			case "response.function_call_arguments.delta":
+			case eventFunctionCallArgsDelta:
 				// Streaming function call arguments
 				if delta, ok := streamEvent["delta"].(string); ok && delta != "" {
-					currentFunctionCallArgs.WriteString(delta)
+					state.functionCallArgs.WriteString(delta)
 				}
-			case "response.function_call_arguments.done":
+			case eventFunctionCallArgsDone:
 				// Function call arguments complete - emit tool call
-				if currentFunctionCallID != "" && currentFunctionCallName != "" {
+				if state.functionCallID != "" && state.functionCallName != "" {
 					var args map[string]interface{}
-					argsStr := currentFunctionCallArgs.String()
+					argsStr := state.functionCallArgs.String()
 					if argsStr != "" {
 						if err := json.Unmarshal([]byte(argsStr), &args); err != nil {
 							slog.Warn("Failed to parse streaming function call arguments",
 								"error", err,
-								"call_id", currentFunctionCallID,
+								"call_id", state.functionCallID,
 								"args", argsStr)
 							args = make(map[string]interface{})
 						}
@@ -1055,57 +1166,52 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 					outputCh <- StreamChunk{
 						Type: "tool_call",
 						ToolCall: &protocol.ToolCall{
-							ID:   currentFunctionCallID,
-							Name: currentFunctionCallName,
+							ID:   state.functionCallID,
+							Name: state.functionCallName,
 							Args: args,
 						},
 					}
 					slog.Debug("Function call completed",
-						"call_id", currentFunctionCallID,
-						"name", currentFunctionCallName)
+						"call_id", state.functionCallID,
+						"name", state.functionCallName)
 
-					// Reset state
-					currentFunctionCallID = ""
-					currentFunctionCallName = ""
-					currentFunctionCallArgs.Reset()
+					state.resetFunctionCall()
 				}
-			case "response.reasoning_summary_text.delta":
+			case eventReasoningSummaryTextDelta:
 				// Stream reasoning/thinking content as it arrives
 				if delta, ok := streamEvent["delta"].(string); ok && delta != "" {
-					thinkingAlreadyStreamed = true
+					state.thinkingStreamed = true
 					outputCh <- StreamChunk{
 						Type: "thinking",
 						Text: delta,
 					}
 				}
-			case "response.reasoning_summary_text.done":
+			case eventReasoningSummaryTextDone:
 				// Reasoning summary text is complete - mark thinking as complete
 				// The full text is in streamEvent["text"] but we've already streamed via deltas
-				thinkingAlreadyStreamed = true
+				state.thinkingStreamed = true
 				outputCh <- StreamChunk{
 					Type:      "thinking_complete",
-					Signature: currentThinkingSignature,
+					Signature: state.thinkingSignature,
 				}
-				currentThinkingBlockID = ""
-				currentThinkingSignature = ""
-			case "response.reasoning_summary_part.done":
+				state.resetThinking()
+			case eventReasoningSummaryPartDone:
 				// Alternative completion event - mark thinking complete if not already done
-				if currentThinkingBlockID != "" {
-					thinkingAlreadyStreamed = true
+				if state.thinkingBlockID != "" {
+					state.thinkingStreamed = true
 					outputCh <- StreamChunk{
 						Type:      "thinking_complete",
-						Signature: currentThinkingSignature,
+						Signature: state.thinkingSignature,
 					}
-					currentThinkingBlockID = ""
-					currentThinkingSignature = ""
+					state.resetThinking()
 				}
-			case "response.content_part.added", "response.content_part.done", "response.in_progress", "response.output_text.done":
+			case eventContentPartAdded, eventContentPartDone, eventInProgress, eventOutputTextDone:
 				// No action needed
-			case "response.completed":
+			case eventResponseCompleted:
 				if response, ok := streamEvent["response"].(map[string]interface{}); ok {
 					if usage, ok := response["usage"].(map[string]interface{}); ok {
 						if total, ok := usage["total_tokens"].(float64); ok {
-							totalTokens = int(total)
+							state.totalTokens = int(total)
 						}
 					}
 					// Note: We don't emit thinking content from response.completed
@@ -1120,15 +1226,15 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 		}
 
 		// Safety: emit thinking_complete if we have an open thinking block that wasn't completed
-		if currentThinkingBlockID != "" && !thinkingAlreadyStreamed {
+		if state.hasOpenThinkingBlock() {
 			outputCh <- StreamChunk{
 				Type:      "thinking_complete",
-				Signature: currentThinkingSignature,
+				Signature: state.thinkingSignature,
 			}
 		}
 		outputCh <- StreamChunk{
 			Type:   "done",
-			Tokens: totalTokens,
+			Tokens: state.totalTokens,
 		}
 
 		duration := time.Since(startTime)
@@ -1136,7 +1242,7 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 
 		metrics := observability.GetGlobalMetrics()
 		if metrics != nil {
-			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, totalTokens, nil)
+			metrics.RecordLLMCall(ctx, p.config.Model, duration, 0, state.totalTokens, nil)
 		}
 	}()
 
@@ -1445,10 +1551,10 @@ func IsOpenAIReasoningModel(modelName string) bool {
 // Valid values are: "low", "medium", "high"
 // See: https://platform.openai.com/docs/guides/reasoning
 func (p *OpenAIProvider) mapBudgetToReasoningEffort(budgetTokens int) string {
-	if budgetTokens <= 1024 {
+	if budgetTokens <= reasoningEffortLowThreshold {
 		return "low"
 	}
-	if budgetTokens <= 8192 {
+	if budgetTokens <= reasoningEffortMediumThreshold {
 		return "medium"
 	}
 	return "high"
