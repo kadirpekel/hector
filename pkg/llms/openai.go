@@ -1388,7 +1388,7 @@ func (p *OpenAIProvider) convertMessagesToInputItems(messages []*pb.Message) ([]
 
 		role := roleToOpenAI(msg.Role)
 
-		content := p.extractContentFromMessage(msg)
+		content := p.extractContentFromMessage(msg, role)
 		if len(content) == 0 {
 			continue
 		}
@@ -1406,13 +1406,23 @@ func (p *OpenAIProvider) convertMessagesToInputItems(messages []*pb.Message) ([]
 }
 
 // extractContentFromMessage extracts content from pb.Message for Responses API
-func (p *OpenAIProvider) extractContentFromMessage(msg *pb.Message) []map[string]interface{} {
+// The role parameter determines the content type:
+// - "user" messages use "input_text" and "input_image"
+// - "assistant" messages use "output_text"
+func (p *OpenAIProvider) extractContentFromMessage(msg *pb.Message, role string) []map[string]interface{} {
 	contentParts := make([]map[string]interface{}, 0)
+
+	// Determine the text content type based on role
+	// Per OpenAI Responses API: user messages use input_text, assistant uses output_text
+	textType := "input_text"
+	if role == "assistant" {
+		textType = "output_text"
+	}
 
 	for _, part := range msg.Parts {
 		if text := part.GetText(); text != "" {
 			contentParts = append(contentParts, map[string]interface{}{
-				"type": "input_text",
+				"type": textType,
 				"text": text,
 			})
 		} else if file := part.GetFile(); file != nil {
