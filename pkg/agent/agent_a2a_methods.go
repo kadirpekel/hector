@@ -30,14 +30,50 @@ const (
 
 // handleInputRequiredResume handles resuming a task that's in INPUT_REQUIRED state.
 // Returns (handled, response, error) where handled indicates if this was an INPUT_REQUIRED resume.
+// If TaskId is empty but ContextId is set, tries to find a pending task for that session.
 func (a *Agent) handleInputRequiredResume(ctx context.Context, userMessage *pb.Message) (bool, *pb.SendMessageResponse, error) {
-	if userMessage.TaskId == "" || a.services.Task() == nil {
+	if a.services.Task() == nil {
 		return false, nil, nil
 	}
 
-	existingTask, err := a.services.Task().GetTask(ctx, userMessage.TaskId)
-	if err != nil {
-		// Task not found or error - not an INPUT_REQUIRED resume
+	var existingTask *pb.Task
+	var err error
+
+	// If TaskId is provided, use it directly
+	if userMessage.TaskId != "" {
+		existingTask, err = a.services.Task().GetTask(ctx, userMessage.TaskId)
+		if err != nil {
+			// Task not found or error - not an INPUT_REQUIRED resume
+			return false, nil, nil
+		}
+	} else if userMessage.ContextId != "" {
+		// TaskId not provided but ContextId is - try to find pending task for this session
+		// This allows "approve"/"deny" messages to auto-resume without explicit task ID
+		// First check if message text indicates this is an approval decision
+		decision := parseUserDecision(userMessage)
+		if decision != DecisionApprove && decision != DecisionDeny {
+			// Not an approval message - not an INPUT_REQUIRED resume
+			return false, nil, nil
+		}
+
+		// Message is an approval decision - find pending task
+		tasks, _, _, listErr := a.services.Task().ListTasks(ctx, userMessage.ContextId, pb.TaskState_TASK_STATE_INPUT_REQUIRED, 1, "")
+		if listErr != nil {
+			slog.Debug("Failed to list tasks for resume check", "agent", a.id, "session", userMessage.ContextId, "error", listErr)
+			return false, nil, nil
+		}
+		if len(tasks) == 0 {
+			// No pending tasks found - not an INPUT_REQUIRED resume
+			slog.Debug("No pending INPUT_REQUIRED tasks found for session", "agent", a.id, "session", userMessage.ContextId)
+			return false, nil, nil
+		}
+		// Use the most recent pending task
+		existingTask = tasks[0]
+		// Update message with found task ID
+		userMessage.TaskId = existingTask.Id
+		slog.Info("Auto-detected pending task for approval", "agent", a.id, "task", existingTask.Id, "session", userMessage.ContextId, "decision", decision)
+	} else {
+		// Neither TaskId nor ContextId - can't resume
 		return false, nil, nil
 	}
 
@@ -50,52 +86,60 @@ func (a *Agent) handleInputRequiredResume(ctx context.Context, userMessage *pb.M
 		return true, nil, status.Errorf(codes.InvalidArgument, "context ID mismatch: cannot resume task with different context")
 	}
 
-	// Check if this is async HITL (has execution state) or blocking HITL (has waiting channel)
+	// According to A2A spec Section 6.3 (Multi-Turn Interaction), tasks in INPUT_REQUIRED
+	// state must be resumable. Check for execution state first (saved by both async and
+	// non-streaming blocking modes), then fall back to blocking mode if no state exists.
 	sessionID := existingTask.ContextId
-	if a.shouldUseAsyncHITL() {
-		// Try to load execution state - if found, use async resume
-		execState, err := a.LoadExecutionStateFromSession(ctx, sessionID, userMessage.TaskId)
-		if err == nil {
-			// Async HITL: Load state and resume execution
-			decision := parseUserDecision(userMessage)
-			slog.Info("Resuming task from async execution state", "agent", a.id, "task", userMessage.TaskId, "decision", decision)
-			go a.resumeTaskExecution(userMessage.TaskId, execState, decision)
 
-			return true, &pb.SendMessageResponse{
-				Payload: &pb.SendMessageResponse_Task{
-					Task: existingTask,
-				},
-			}, nil
+	// Always try to load execution state first (regardless of HITL mode)
+	// This supports both async HITL and non-streaming blocking mode with BlockForHITL=false
+	execState, err := a.LoadExecutionStateFromSession(ctx, sessionID, userMessage.TaskId)
+	if err == nil {
+		// Execution state found: resume from saved state (A2A spec compliant)
+		decision := parseUserDecision(userMessage)
+		slog.Info("Resuming task from execution state", "agent", a.id, "task", userMessage.TaskId, "decision", decision)
+
+		// Update task status to WORKING synchronously BEFORE starting goroutine
+		// This ensures the response includes WORKING status so CLI can start polling
+		if err := a.updateTaskStatus(ctx, userMessage.TaskId, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
+			slog.Error("Failed to update task status to WORKING before resuming", "agent", a.id, "task", userMessage.TaskId, "error", err)
+			// Continue anyway - goroutine will try to update it
 		}
-		// If no execution state found, check if blocking mode is available
-		slog.Debug("No execution state found for task, checking blocking mode", "agent", a.id, "task", userMessage.TaskId, "session", sessionID, "error", err)
-		if a.taskAwaiter.IsWaiting(userMessage.TaskId) {
-			// Blocking HITL: Provide input to waiting goroutine
-			if err := a.taskAwaiter.ProvideInput(userMessage.TaskId, userMessage); err != nil {
-				return true, nil, status.Errorf(codes.InvalidArgument, "failed to resume task: %v", err)
-			}
-			return true, &pb.SendMessageResponse{
-				Payload: &pb.SendMessageResponse_Task{
-					Task: existingTask,
-				},
-			}, nil
+
+		// Start async execution
+		go a.resumeTaskExecution(userMessage.TaskId, execState, decision)
+
+		// Get updated task with WORKING status for response
+		updatedTask, err := a.services.Task().GetTask(ctx, userMessage.TaskId)
+		if err != nil {
+			// Fallback to existing task if GetTask fails
+			updatedTask = existingTask
 		}
-		// Neither async nor blocking mode available - this is an error
-		return true, nil, status.Errorf(codes.InvalidArgument, "failed to resume task: task %s is in INPUT_REQUIRED state but no execution state found and task is not waiting for input. This may indicate the execution state was lost or the task was already resumed.", userMessage.TaskId)
+
+		return true, &pb.SendMessageResponse{
+			Payload: &pb.SendMessageResponse_Task{
+				Task: updatedTask,
+			},
+		}, nil
 	}
 
-	// Blocking HITL: Provide input to waiting goroutine
-	if err := a.taskAwaiter.ProvideInput(userMessage.TaskId, userMessage); err != nil {
-		return true, nil, status.Errorf(codes.InvalidArgument, "failed to resume task: %v", err)
+	// No execution state found: fall back to blocking mode (streaming with BlockForHITL=true)
+	// Check if task is waiting for input via task awaiter
+	slog.Debug("No execution state found, checking blocking mode", "agent", a.id, "task", userMessage.TaskId, "session", sessionID)
+	if a.taskAwaiter.IsWaiting(userMessage.TaskId) {
+		// Blocking HITL: Provide input to waiting goroutine
+		if err := a.taskAwaiter.ProvideInput(userMessage.TaskId, userMessage); err != nil {
+			return true, nil, status.Errorf(codes.InvalidArgument, "failed to resume task: %v", err)
+		}
+		return true, &pb.SendMessageResponse{
+			Payload: &pb.SendMessageResponse_Task{
+				Task: existingTask,
+			},
+		}, nil
 	}
 
-	// Task will resume execution in background goroutine
-	// Return current task state (will be updated as execution continues)
-	return true, &pb.SendMessageResponse{
-		Payload: &pb.SendMessageResponse_Task{
-			Task: existingTask,
-		},
-	}, nil
+	// Neither execution state nor blocking mode available - this is an error
+	return true, nil, status.Errorf(codes.InvalidArgument, "failed to resume task: task %s is in INPUT_REQUIRED state but no execution state found and task is not waiting for input. This may indicate the execution state was lost or the task was already resumed.", userMessage.TaskId)
 }
 
 func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
@@ -879,9 +923,12 @@ func (a *Agent) resumeTaskExecution(
 		a.executionsMu.Unlock()
 	}()
 
-	// Update task to WORKING
+	// Task status already updated to WORKING synchronously before goroutine started
+	// This is just a safety check - if status update failed earlier, try again
+	// But don't error if it fails - task might already be WORKING or in a different state
 	if err := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
-		slog.Error("Failed to update task to WORKING", "agent", a.id, "task", taskID, "error", err)
+		slog.Debug("Task status update in goroutine (may already be WORKING)", "agent", a.id, "task", taskID, "error", err)
+		// Continue execution - status might already be correct
 	}
 
 	// Create strategy

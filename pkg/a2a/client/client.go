@@ -17,6 +17,8 @@ type A2AClient interface {
 
 	GetTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error)
 
+	ListTasks(ctx context.Context, agentID string, contextID string, status pb.TaskState, pageSize int32, pageToken string) ([]*pb.Task, string, int32, error)
+
 	CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error)
 
 	// GetAgentID returns the discovered/configured agent ID (for client mode URL-only discovery)

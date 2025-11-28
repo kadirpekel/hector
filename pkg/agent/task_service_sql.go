@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -100,6 +101,21 @@ func NewSQLTaskServiceFromConfig(cfg *config.TaskSQLConfig) (*SQLTaskService, er
 	db, err := sql.Open(driverName, cfg.ConnectionString())
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// For SQLite, enable WAL mode for better concurrent access
+	// This allows multiple connections to read/write simultaneously
+	if driverName == "sqlite3" {
+		if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
+			slog.Warn("Failed to enable WAL mode for SQLite task database", "error", err)
+			// Continue anyway - database will work but with less concurrency
+		} else {
+			slog.Debug("Enabled WAL mode for SQLite task database")
+		}
+		// Set busy timeout to handle concurrent access better
+		if _, err := db.Exec("PRAGMA busy_timeout=5000;"); err != nil {
+			slog.Warn("Failed to set busy timeout for SQLite task database", "error", err)
+		}
 	}
 
 	db.SetMaxOpenConns(cfg.MaxConns)

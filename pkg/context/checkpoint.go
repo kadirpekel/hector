@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/kadirpekel/hector/pkg/utils"
 )
 
 // IndexCheckpoint represents a saved indexing checkpoint
@@ -50,8 +52,10 @@ type CheckpointManager struct {
 func NewCheckpointManager(storeName, sourcePath string, enabled bool) *CheckpointManager {
 	// Store checkpoints in .hector/checkpoints/ within the source directory
 	// This keeps checkpoints co-located with the data and allows easy cleanup
-	checkpointDir := filepath.Join(sourcePath, ".hector", "checkpoints")
-	_ = os.MkdirAll(checkpointDir, 0755) // Ignore error - will fail on first save if needed
+	// Use unified .hector directory creation utility
+	hectorDir, _ := utils.EnsureHectorDir(sourcePath) // Ignore error - will fail on first save if needed
+	checkpointDir := filepath.Join(hectorDir, "checkpoints")
+	_ = os.MkdirAll(checkpointDir, 0755) // Ensure checkpoints subdirectory exists
 
 	return &CheckpointManager{
 		checkpointDir: checkpointDir,

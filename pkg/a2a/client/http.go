@@ -319,6 +319,58 @@ func (c *HTTPClient) GetTask(ctx context.Context, agentID string, taskID string)
 	return &task, nil
 }
 
+func (c *HTTPClient) ListTasks(ctx context.Context, agentID string, contextID string, status pb.TaskState, pageSize int32, pageToken string) ([]*pb.Task, string, int32, error) {
+	// Build query parameters
+	url := fmt.Sprintf("%s/v1/tasks", c.baseURL)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	if c.token != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
+	}
+
+	// Add query parameters
+	q := req.URL.Query()
+	if contextID != "" {
+		q.Set("context_id", contextID)
+	}
+	if status != pb.TaskState_TASK_STATE_UNSPECIFIED {
+		q.Set("status", fmt.Sprintf("%d", int(status)))
+	}
+	if pageSize > 0 {
+		q.Set("page_size", fmt.Sprintf("%d", pageSize))
+	}
+	if pageToken != "" {
+		q.Set("page_token", pageToken)
+	}
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, "", 0, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var response pb.ListTasksResponse
+	if err := protojson.Unmarshal(body, &response); err != nil {
+		return nil, "", 0, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return response.Tasks, response.NextPageToken, response.TotalSize, nil
+}
+
 func (c *HTTPClient) CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
 	url := fmt.Sprintf("%s/v1/agents/%s/tasks/%s:cancel", c.baseURL, agentID, taskID)
 

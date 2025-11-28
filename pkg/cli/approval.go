@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/kadirpekel/hector/pkg/a2a/client"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
+	"golang.org/x/term"
 )
 
 // ApprovalOrchestrator handles the HITL (Human-in-the-Loop) approval flow.
@@ -62,6 +64,13 @@ func (o *ApprovalOrchestrator) CheckAndHandleApproval(
 
 	// Display and prompt
 	o.displayApprovalMessage(msg)
+
+	// Show session and task info for clarity (helpful for understanding resumption)
+	if contextID != "" || taskID != "" {
+		fmt.Printf("\n%s[INFO]%s Session: %s | Task: %s\n", colorDim, colorReset, contextID, taskID)
+		fmt.Printf("%s[INFO]%s Resumption will happen automatically after approval\n\n", colorDim, colorReset)
+	}
+
 	decision := PromptForApproval()
 
 	// Log decision before sending (audit trail in case of errors)
@@ -199,6 +208,45 @@ func (o *ApprovalOrchestrator) isInputRequired(status *pb.TaskStatus) bool {
 	return status != nil && status.State == pb.TaskState_TASK_STATE_INPUT_REQUIRED
 }
 
+// isTerminal checks if the file descriptor is a terminal
+func isTerminal(f *os.File) bool {
+	return term.IsTerminal(int(f.Fd()))
+}
+
+// pollTaskUntilComplete polls GetTask until the task completes or fails.
+// This is needed for async task resumption where the task runs in a background goroutine.
+func (o *ApprovalOrchestrator) pollTaskUntilComplete(ctx context.Context, taskID, contextID string) (*pb.Task, error) {
+	const maxPollAttempts = 300 // 5 minutes max (1 second intervals)
+	const pollInterval = 1 * time.Second
+
+	for attempt := 0; attempt < maxPollAttempts; attempt++ {
+		task, err := o.client.GetTask(ctx, o.agentID, taskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get task: %w", err)
+		}
+
+		if task.Status == nil {
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		state := task.Status.State
+		if state == pb.TaskState_TASK_STATE_COMPLETED || state == pb.TaskState_TASK_STATE_FAILED || state == pb.TaskState_TASK_STATE_CANCELLED {
+			return task, nil
+		}
+
+		// Still working or waiting for input
+		if state == pb.TaskState_TASK_STATE_INPUT_REQUIRED {
+			// Another approval needed - return task so caller can handle it
+			return task, nil
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	return nil, fmt.Errorf("task did not complete within %d seconds", maxPollAttempts)
+}
+
 // ProcessNonStreamingResponse handles a non-streaming response with HITL support.
 // Uses iteration instead of recursion for the approval loop.
 func (o *ApprovalOrchestrator) ProcessNonStreamingResponse(
@@ -251,6 +299,21 @@ func (o *ApprovalOrchestrator) ProcessNonStreamingResponse(
 			return nil
 		}
 
+		// Check if stdin is a TTY (interactive terminal)
+		// If not interactive, return immediately and let user approve in separate call
+		// This supports async workflow: create task → approve later
+		if !isTerminal(os.Stdin) {
+			// Non-interactive: return task info and exit
+			// User can approve in separate call: ./hector call "approve" --session <session>
+			fmt.Printf("\n%s[INFO]%s Task created and waiting for approval\n", colorDim, colorReset)
+			fmt.Printf("%s[INFO]%s Task ID: %s\n", colorDim, colorReset, taskID)
+			fmt.Printf("%s[INFO]%s Session: %s\n", colorDim, colorReset, contextID)
+			fmt.Printf("%s[INFO]%s To approve, run: ./hector call --no-stream \"approve\" --session %s\n\n", colorDim, colorReset, contextID)
+			DisplayTask(task)
+			return nil
+		}
+
+		// Interactive terminal: prompt for approval
 		result, err := o.CheckAndHandleApproval(ctx, msg, taskID, contextID)
 		if err != nil {
 			return err
@@ -262,8 +325,83 @@ func (o *ApprovalOrchestrator) ProcessNonStreamingResponse(
 			return nil
 		}
 
-		// Prepare next iteration with approval response
-		currentMsg = CreateApprovalResponse(contextID, taskID, result.Decision)
+		// Approval was already sent by CheckAndHandleApproval
+		// Process the response from approval (same as regular SendMessage response)
+		if result.Response == nil {
+			return fmt.Errorf("approval sent but no response received")
+		}
+
+		// Process approval response the same way as SendMessage response
+		// Handle message response
+		if respMsg := result.Response.GetMsg(); respMsg != nil {
+			DisplayMessageLine(respMsg, "", o.showThinking, o.showTools)
+			return nil
+		}
+
+		// Handle task response from approval
+		approvalTask := result.Response.GetTask()
+		if approvalTask == nil {
+			return nil
+		}
+
+		// Update context ID if provided
+		if approvalTask.ContextId != "" {
+			contextID = approvalTask.ContextId
+		}
+
+		// Check task status and handle accordingly
+		if approvalTask.Status == nil {
+			DisplayTask(approvalTask)
+			return nil
+		}
+
+		state := approvalTask.Status.State
+
+		// Task resumed asynchronously - poll for completion
+		// After approval, task resumes in background goroutine, so we need to poll GetTask
+		// until it completes (per A2A spec Section 6.3)
+		// Note: The client (and its database connections) must stay open during polling
+		// to allow the background goroutine to access the database
+		// IMPORTANT: Check WORKING state BEFORE checking isInputRequired, because
+		// WORKING is not INPUT_REQUIRED, so we'd return early and skip polling
+		if state == pb.TaskState_TASK_STATE_WORKING {
+			slog.Info("Task resumed asynchronously, polling for completion", "task", approvalTask.Id)
+			// Use a longer timeout context to ensure we can poll long enough
+			// The database connection will stay open as long as the client is not closed
+			pollCtx, pollCancel := context.WithTimeout(ctx, 5*time.Minute)
+			defer pollCancel()
+			completedTask, err := o.pollTaskUntilComplete(pollCtx, approvalTask.Id, contextID)
+			if err != nil {
+				return fmt.Errorf("failed to poll task completion: %w", err)
+			}
+			// Display final result
+			if completedTask.Status != nil && completedTask.Status.Update != nil {
+				DisplayMessageLine(completedTask.Status.Update, "", o.showThinking, o.showTools)
+			} else {
+				DisplayTask(completedTask)
+			}
+			return nil
+		}
+
+		// Check if task completed (COMPLETED, FAILED, CANCELLED)
+		if !o.isInputRequired(approvalTask.Status) {
+			// Task completed - display result
+			if approvalTask.Status != nil && approvalTask.Status.Update != nil {
+				DisplayMessageLine(approvalTask.Status.Update, "", o.showThinking, o.showTools)
+			} else {
+				DisplayTask(approvalTask)
+			}
+			return nil
+		}
+
+		// Task still requires input (another approval?), continue loop
+		// Send empty message to get next update
+		currentMsg = &pb.Message{
+			ContextId: contextID,
+			TaskId:    approvalTask.Id,
+			Role:      pb.Role_ROLE_USER,
+			Parts:     []*pb.Part{{Part: &pb.Part_Text{Text: ""}}},
+		}
 	}
 
 	return fmt.Errorf("maximum iterations (%d) exceeded in approval flow", maxIterations)

@@ -350,6 +350,12 @@ func (c *UniversalA2AClient) GetTask(ctx context.Context, agentID string, taskID
 	return httpClient.GetTask(ctx, agentID, taskID)
 }
 
+// ListTasks lists tasks
+func (c *UniversalA2AClient) ListTasks(ctx context.Context, agentID string, contextID string, status pb.TaskState, pageSize int32, pageToken string) ([]*pb.Task, string, int32, error) {
+	httpClient := NewHTTPClientWithTLS(c.baseURL, c.token, c.tlsConfig)
+	return httpClient.ListTasks(ctx, agentID, contextID, status, pageSize, pageToken)
+}
+
 // CancelTask cancels a task
 func (c *UniversalA2AClient) CancelTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
 	httpClient := NewHTTPClientWithTLS(c.baseURL, c.token, c.tlsConfig)

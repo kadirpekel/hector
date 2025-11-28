@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"github.com/kadirpekel/hector/pkg/protocol"
 	"github.com/kadirpekel/hector/pkg/reasoning"
 	"github.com/kadirpekel/hector/pkg/tools"
+	"github.com/kadirpekel/hector/pkg/utils"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -235,13 +237,49 @@ func (cm *ComponentManager) getOrCreateSQLDatabase(dbName string, cfg *config.Da
 	}
 
 	driverName := cfg.Driver
-	if driverName == "sqlite" {
+	if driverName == "sqlite" || driverName == "sqlite3" {
 		driverName = "sqlite3"
+		// For SQLite, ensure the directory exists before opening the database
+		// SQLite creates the file but not the directory
+		dbPath := cfg.Database
+		dbDir := filepath.Dir(dbPath)
+
+		// Use unified .hector directory creation if path contains .hector
+		if filepath.Base(dbDir) == ".hector" {
+			// Extract base path (parent of .hector)
+			basePath := filepath.Dir(dbDir)
+			if basePath == "" || basePath == "." {
+				basePath = "."
+			}
+			if _, err := utils.EnsureHectorDir(basePath); err != nil {
+				return nil, fmt.Errorf("failed to create .hector directory for SQLite database: %w", err)
+			}
+		} else if dbDir != "" && dbDir != "." {
+			// For non-.hector directories, create normally
+			if err := os.MkdirAll(dbDir, 0755); err != nil {
+				return nil, fmt.Errorf("failed to create SQLite database directory '%s': %w", dbDir, err)
+			}
+		}
 	}
 
 	db, err := sql.Open(driverName, cfg.ConnectionString())
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// For SQLite, enable WAL mode for better concurrent access
+	// This allows multiple connections to read/write simultaneously
+	if driverName == "sqlite3" {
+		if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
+			slog.Warn("Failed to enable WAL mode for SQLite", "database", dbName, "error", err)
+			// Continue anyway - database will work but with less concurrency
+		} else {
+			slog.Debug("Enabled WAL mode for SQLite", "database", dbName)
+		}
+		// Set busy timeout to handle concurrent access better
+		if _, err := db.Exec("PRAGMA busy_timeout=5000;"); err != nil {
+			slog.Warn("Failed to set busy timeout for SQLite", "database", dbName, "error", err)
+		}
 	}
 
 	db.SetMaxOpenConns(cfg.MaxConns)

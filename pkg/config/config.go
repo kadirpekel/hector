@@ -770,13 +770,24 @@ func CreateZeroConfig(source interface{}) *Config {
 		}
 	}
 
+	// Auto-enable SQLite for tasks in zero-config mode to support HITL across CLI invocations
+	// SQLite is lightweight, file-based, and persists across separate CLI calls (unlike in-memory)
+	// This enables non-streaming HITL where approval happens in a separate CLI invocation
+	taskDBName := "zero-config-tasks"
+	cfg.Databases[taskDBName] = &DatabaseConfig{
+		Driver:   "sqlite",
+		Database: "./.hector/tasks.db", // Store in .hector directory (hidden, local to project)
+	}
+
 	agentConfig := AgentConfig{
 		Name: agentName,
 		Type: "native",
 		LLM:  provider,
 		// Enable Task service for HITL support (tool approval in non-streaming mode)
+		// Use SQLite backend in zero-config mode to persist tasks across CLI invocations
 		Task: &TaskConfig{
-			Backend: "memory", // In-memory task service for zero-config
+			Backend:     "sql",      // SQL backend for persistence
+			SQLDatabase: taskDBName, // Reference to auto-created SQLite database
 		},
 	}
 

@@ -23,6 +23,7 @@ import (
 	"github.com/kadirpekel/hector/pkg/context/indexing"
 	"github.com/kadirpekel/hector/pkg/context/metadata"
 	"github.com/kadirpekel/hector/pkg/databases"
+	"github.com/kadirpekel/hector/pkg/utils"
 )
 
 const (
@@ -1207,11 +1208,17 @@ func (ds *DocumentStore) loadIndexState() (map[string]FileIndexInfo, error) {
 
 func (ds *DocumentStore) saveIndexState(files map[string]FileIndexInfo, totalChunks int) error {
 	statePath := ds.getIndexStatePath()
+	// Use unified .hector directory creation utility
+	hectorDir, err := utils.EnsureHectorDir(ds.sourcePath)
+	if err != nil {
+		return fmt.Errorf("failed to create .hector directory: %w", err)
+	}
+	// Ensure the state file directory exists (should already exist from EnsureHectorDir, but be safe)
 	stateDir := filepath.Dir(statePath)
-
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
 		return fmt.Errorf("failed to create state directory: %w", err)
 	}
+	_ = hectorDir // Use hectorDir to ensure it's created
 
 	state := IndexState{
 		StoreName:   ds.name,

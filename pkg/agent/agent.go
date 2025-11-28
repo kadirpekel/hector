@@ -668,24 +668,36 @@ func (a *Agent) handleToolApprovalRequest(
 	if a.shouldUseAsyncHITL() {
 		return a.handleAsyncHITL(ctx, approvalResult, outputCh, reasoningState)
 	} else {
-		return a.handleBlockingHITL(ctx, approvalResult, outputCh, opts.BlockForHITL)
+		return a.handleBlockingHITL(ctx, approvalResult, outputCh, reasoningState, opts.BlockForHITL)
 	}
 }
 
 // handleBlockingHITL handles tool approval in blocking mode.
 // If blockForInput is false, returns ErrInputRequired immediately after
 // updating task state, allowing the caller to handle approval externally.
+// According to A2A spec Section 6.3, execution state must be saved for resumption.
 func (a *Agent) handleBlockingHITL(
 	ctx context.Context,
 	approvalResult *ToolApprovalResult,
 	outputCh chan<- *pb.Part,
+	reasoningState *reasoning.ReasoningState,
 	blockForInput bool,
 ) (context.Context, bool, error) {
 	taskID := getTaskIDFromContext(ctx)
+	sessionID := getSessionIDFromContext(ctx)
 
-	// Update task to INPUT_REQUIRED state with approval request message
+	// Fallback: get sessionID from task if not in context (for non-streaming mode)
+	if sessionID == "" && taskID != "" && a.services.Task() != nil {
+		if task, err := a.services.Task().GetTask(ctx, taskID); err == nil && task != nil {
+			sessionID = task.ContextId
+		}
+	}
+
+	// Update task to INPUT_REQUIRED state BEFORE sending approval request or waiting
+	// This ensures clients can see the task is waiting for input (A2A spec compliance)
+	// Must happen for both blocking and non-blocking modes
 	if err := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_INPUT_REQUIRED, approvalResult.InteractionMsg); err != nil {
-		return ctx, false, fmt.Errorf("updating task status: %w", err)
+		return ctx, false, fmt.Errorf("updating task status to INPUT_REQUIRED: %w", err)
 	}
 
 	// Send approval request message parts to stream so UI can display them
@@ -698,10 +710,30 @@ func (a *Agent) handleBlockingHITL(
 		}
 	}
 
-	// If not blocking for input, return immediately with ErrInputRequired.
-	// The caller should return the task in INPUT_REQUIRED state to the client,
-	// who will then send a follow-up message with the user's decision.
+	// If not blocking for input, save execution state before returning ErrInputRequired.
+	// This allows the task to be resumed according to A2A spec Section 6.3 (Multi-Turn Interaction).
+	// The client will send a follow-up message with the user's decision, which will be
+	// handled by handleInputRequiredResume.
 	if !blockForInput {
+		// Save execution state for resumption (required by A2A spec for INPUT_REQUIRED tasks)
+		if sessionID != "" && reasoningState != nil {
+			err := a.checkpointExecution(
+				ctx,
+				taskID,
+				PhaseToolApproval,   // HITL-specific phase
+				CheckpointTypeEvent, // Event-driven
+				reasoningState,
+				approvalResult.PendingToolCall,
+			)
+			if err != nil {
+				slog.Warn("Failed to save execution state for non-streaming HITL resume",
+					"agent", a.id, "task", taskID, "error", err)
+				// Continue anyway - task is already in INPUT_REQUIRED state
+			} else {
+				slog.Info("Saved execution state for non-streaming HITL resume",
+					"agent", a.id, "task", taskID)
+			}
+		}
 		return ctx, false, ErrInputRequired
 	}
 

@@ -101,6 +101,27 @@ func (r *Runtime) GetAgentCard(ctx context.Context, agentID string) (*pb.AgentCa
 	return agentEntry.Agent.GetAgentCard(ctx, &pb.GetAgentCardRequest{})
 }
 
+func (r *Runtime) ListTasks(ctx context.Context, agentID string, contextID string, status pb.TaskState, pageSize int32, pageToken string) ([]*pb.Task, string, int32, error) {
+	agentEntry, ok := r.registry.Get(agentID)
+	if !ok {
+		return nil, "", 0, fmt.Errorf("agent '%s' not found", agentID)
+	}
+
+	req := &pb.ListTasksRequest{
+		ContextId: contextID,
+		Status:    status,
+		PageSize:  pageSize,
+		PageToken: pageToken,
+	}
+
+	resp, err := agentEntry.Agent.ListTasks(ctx, req)
+	if err != nil {
+		return nil, "", 0, err
+	}
+
+	return resp.Tasks, resp.NextPageToken, resp.TotalSize, nil
+}
+
 func (r *Runtime) GetTask(ctx context.Context, agentID string, taskID string) (*pb.Task, error) {
 
 	agentEntry, ok := r.registry.Get(agentID)
