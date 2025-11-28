@@ -301,14 +301,15 @@ export class StreamParser {
                         (content.includes('TOOL_EXECUTION_DENIED') || 
                          content.includes('user denied'));
                     
+                    const toolStatus = isDenied ? 'failed' : (metadata.is_error ? 'failed' : 'success');
                     widgetMap.set(toolId, {
                         ...existing,
-                        status: isDenied ? 'failed' : (metadata.is_error ? 'failed' : 'success'),
+                        status: toolStatus,
                         content: content || existing.content || ''
                     });
                     
-                    // If tool was denied, update any related approval widget
-                    if (isDenied) {
+                    // Update related approval widget when tool completes (approved or denied)
+                    if (toolStatus === 'success' || isDenied) {
                         widgetMap.forEach((widget, widgetId) => {
                             if (widget.type === 'approval' && 
                                 widget.data?.toolName === (existing.data as { name?: string })?.name &&
@@ -316,7 +317,7 @@ export class StreamParser {
                                 widgetMap.set(widgetId, {
                                     ...widget,
                                     status: 'decided',
-                                    decision: 'deny'
+                                    decision: isDenied ? 'deny' : 'approve'
                                 });
                             }
                         });

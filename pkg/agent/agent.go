@@ -1197,19 +1197,18 @@ func (a *Agent) executeTools(
 				return nil
 			})
 
-			// Emit final tool result part (in case there were no chunks or to ensure final state)
+			// Always emit final tool result part to signal completion
 			// Mark as final (is_final: true) so web UI updates status to 'success'/'failed'
-			if finalResult.Content != "" || finalResult.Error != "" {
-				a2aResult := &protocol.ToolResult{
-					ToolCallID: toolCall.ID,
-					Content:    finalResult.Content,
-					Error:      finalResult.Error,
-				}
-				// Use CreateToolResultPartWithFinal to mark as final
-				if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPartWithFinal(a2aResult, true)); sendErr != nil {
-					slog.Error("Failed to send final tool result part", "agent", a.name, "error", sendErr)
-					return results
-				}
+			// This is sent even if content is empty (e.g., `rm` command with no output)
+			a2aResult := &protocol.ToolResult{
+				ToolCallID: toolCall.ID,
+				Content:    finalResult.Content,
+				Error:      finalResult.Error,
+			}
+			// Use CreateToolResultPartWithFinal to mark as final
+			if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPartWithFinal(a2aResult, true)); sendErr != nil {
+				slog.Error("Failed to send final tool result part", "agent", a.name, "error", sendErr)
+				return results
 			}
 
 			results = append(results, reasoning.ToolResult{

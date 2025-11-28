@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -101,6 +102,7 @@ type streamingState struct {
 	functionCallName  string
 	functionCallArgs  strings.Builder
 	totalTokens       int
+	emittedCallIDs    map[string]bool // Track emitted tool call IDs to prevent duplicates
 }
 
 // resetThinking clears thinking-related state
@@ -193,7 +195,7 @@ type OpenAIInputItem struct {
 	Name      string `json:"name,omitempty"`      // Function name (for function_call)
 	Arguments string `json:"arguments,omitempty"` // JSON arguments (for function_call)
 	// Function call output fields (for type="function_call_output")
-	Output string `json:"output,omitempty"` // Output string (for function_call_output)
+	Output *string `json:"output,omitempty"` // Output string (required for function_call_output, nil for other types)
 }
 
 // OpenAIResponsesResponse represents a response from the Responses API
@@ -922,7 +924,9 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 		}
 
 		reader := bufio.NewReader(resp.Body)
-		state := &streamingState{}
+		state := &streamingState{
+			emittedCallIDs: make(map[string]bool),
+		}
 		var currentEventType string
 		for {
 			line, err := reader.ReadBytes('\n')
@@ -1080,6 +1084,14 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 					argsStr, _ := item["arguments"].(string)
 
 					if callID != "" && name != "" {
+						// Skip if already emitted (prevent duplicates from multiple events)
+						if state.emittedCallIDs[callID] {
+							slog.Debug("Skipping duplicate tool call from output_item.done",
+								"call_id", callID, "name", name)
+							state.resetFunctionCall()
+							continue
+						}
+
 						var args map[string]interface{}
 						if argsStr != "" {
 							if err := json.Unmarshal([]byte(argsStr), &args); err != nil {
@@ -1091,6 +1103,7 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 							args = make(map[string]interface{})
 						}
 
+						state.emittedCallIDs[callID] = true
 						outputCh <- StreamChunk{
 							Type: "tool_call",
 							ToolCall: &protocol.ToolCall{
@@ -1138,6 +1151,14 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 			case eventFunctionCallArgsDone:
 				// Function call arguments complete - emit tool call
 				if state.functionCallID != "" && state.functionCallName != "" {
+					// Skip if already emitted (prevent duplicates from multiple events)
+					if state.emittedCallIDs[state.functionCallID] {
+						slog.Debug("Skipping duplicate tool call from function_call_arguments.done",
+							"call_id", state.functionCallID, "name", state.functionCallName)
+						state.resetFunctionCall()
+						continue
+					}
+
 					var args map[string]interface{}
 					argsStr := state.functionCallArgs.String()
 					if argsStr != "" {
@@ -1152,6 +1173,7 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 						args = make(map[string]interface{})
 					}
 
+					state.emittedCallIDs[state.functionCallID] = true
 					outputCh <- StreamChunk{
 						Type: "tool_call",
 						ToolCall: &protocol.ToolCall{
@@ -1348,12 +1370,13 @@ func (p *OpenAIProvider) convertMessagesToInputItems(messages []*pb.Message) ([]
 		toolResults := protocol.GetToolResultsFromMessage(msg)
 		if len(toolResults) > 0 {
 			// Tool results must be sent as function_call_output items
-			// Fields at top level: type, call_id, output
+			// Fields at top level: type, call_id, output (output is required by OpenAI API)
 			for _, result := range toolResults {
+				output := result.Content // Output field is required, even if empty string
 				inputItems = append(inputItems, OpenAIInputItem{
 					Type:   "function_call_output",
 					CallID: result.ToolCallID,
-					Output: result.Content,
+					Output: &output, // Use pointer so field is included even if empty string
 				})
 			}
 			continue
@@ -1430,15 +1453,30 @@ func (p *OpenAIProvider) extractContentFromMessage(msg *pb.Message, role string)
 			if uri := file.GetFileWithUri(); uri != "" {
 				url = uri
 			} else if bytes := file.GetFileWithBytes(); len(bytes) > 0 {
-				// TODO: Implement base64 encoding for image bytes
-				_ = bytes
+				mediaType := file.GetMediaType()
+				if mediaType == "" {
+					mediaType = detectImageMediaType(bytes)
+				}
+
+				// Only process image types
+				if strings.HasPrefix(mediaType, "image/") {
+					// Check image size limit
+					if len(bytes) > MaxOpenAIImageSize {
+						slog.Warn("Image exceeds size limit, skipping",
+							"size", len(bytes),
+							"limit", MaxOpenAIImageSize)
+						continue
+					}
+
+					// Encode bytes to base64 and format as data URL
+					base64Data := base64.StdEncoding.EncodeToString(bytes)
+					url = fmt.Sprintf("data:%s;base64,%s", mediaType, base64Data)
+				}
 			}
 			if url != "" {
 				contentParts = append(contentParts, map[string]interface{}{
-					"type": "input_image",
-					"image_url": map[string]string{
-						"url": url,
-					},
+					"type":      "input_image",
+					"image_url": url,
 				})
 			}
 		}

@@ -29,11 +29,12 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({ widget, sessionI
     // Update expanded state when widget status changes
     useEffect(() => {
         if (widget.status === 'decided' && isExpanded) {
+            // Collapse immediately when decided
             setIsExpanded(false);
         } else if (widget.status === 'pending' && !isExpanded) {
             setIsExpanded(true);
         }
-    }, [widget.status, isExpanded]);
+    }, [widget.status]); // Remove isExpanded from dependencies to avoid loops
 
     // Sync local expansion state to store on unmount (handles edge case where local state
     // changes via auto-expand but user navigates away before toggling)
