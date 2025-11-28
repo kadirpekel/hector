@@ -158,8 +158,24 @@ func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*p
 		// Use EnsureAgentContext to maintain consistency
 		ctx = EnsureAgentContext(ctx, task.Id, contextID)
 
-		responseText, err := a.executeReasoningForA2A(ctx, userText, contextID)
+		// Non-streaming mode: don't block for HITL, return task in INPUT_REQUIRED state instead
+		opts := ExecutionOptions{BlockForHITL: false}
+		responseText, err := a.executeReasoningForA2A(ctx, userText, contextID, opts)
 		if err != nil {
+			// Check if this is an INPUT_REQUIRED signal (HITL needs user input)
+			if err == ErrInputRequired {
+				// Task is in INPUT_REQUIRED state, return it so client can prompt for approval
+				task, getErr := a.services.Task().GetTask(ctx, task.Id)
+				if getErr != nil {
+					return nil, status.Errorf(codes.Internal, "failed to get task: %v", getErr)
+				}
+				slog.Info("Returning task in INPUT_REQUIRED state for client-side approval", "agent", a.id, "task", task.Id)
+				return &pb.SendMessageResponse{
+					Payload: &pb.SendMessageResponse_Task{
+						Task: task,
+					},
+				}, nil
+			}
 			if updateErr := a.updateTaskStatus(ctx, task.Id, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
 				slog.Error("Failed to update task status to FAILED", "agent", a.id, "task", task.Id, "error", updateErr)
 			}
@@ -188,7 +204,8 @@ func (a *Agent) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*p
 		}, nil
 	}
 
-	responseText, err := a.executeReasoningForA2A(ctx, userText, contextID)
+	// No task service: use default execution (blocks for HITL if needed)
+	responseText, err := a.executeReasoningForA2A(ctx, userText, contextID, DefaultExecutionOptions())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "agent execution failed: %v", err)
 	}
@@ -755,7 +772,8 @@ func (a *Agent) processTaskAsync(taskID, userText, contextID string) {
 		// Task will still be created and can be queried
 	}
 
-	responseText, err := a.executeReasoningForA2A(ctx, userText, contextID)
+	// Async mode: block for HITL since we're already in background execution
+	responseText, err := a.executeReasoningForA2A(ctx, userText, contextID, DefaultExecutionOptions())
 	if err != nil {
 		// Check if error is due to context cancellation/timeout
 		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
@@ -952,10 +970,11 @@ func (a *Agent) resumeTaskExecution(
 		reasoningState.RecordFirstToolCalls(toolCalls)
 
 		// Process tool calls if any
+		// In async resume mode, always block for HITL since we're already in background execution
 		var results []reasoning.ToolResult
 		if len(toolCalls) > 0 {
 			var shouldContinue bool
-			ctx, results, shouldContinue, err = a.processToolCalls(ctx, text, toolCalls, thinking, reasoningState, outputCh, cfg)
+			ctx, results, shouldContinue, err = a.processToolCalls(ctx, text, toolCalls, thinking, reasoningState, outputCh, cfg, DefaultExecutionOptions())
 			if err != nil {
 				slog.Error("Error processing tool calls", "agent", a.id, "error", err)
 				if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
@@ -1002,9 +1021,15 @@ func (a *Agent) resumeTaskExecution(
 }
 
 // executeReasoningForA2A executes agent reasoning and collects the full response text.
-// For tasks with HITL support, this will block until execution fully completes,
-// including any resumed execution after user provides input for tool approval.
-func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, contextID string) (string, error) {
+//
+// The opts parameter controls HITL behavior:
+//   - BlockForHITL=true: Blocks waiting for user input (streaming mode)
+//   - BlockForHITL=false: Returns ErrInputRequired immediately when approval needed
+//
+// When ErrInputRequired is returned, the caller should return the task in
+// INPUT_REQUIRED state. The client will send a follow-up message with the
+// user's decision, which will be handled by handleInputRequiredResume.
+func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, contextID string, opts ExecutionOptions) (string, error) {
 	// Get reasoning config from services (works for both config-based and programmatic agents)
 	reasoningCfg := a.services.GetConfig()
 	strategy, err := reasoning.CreateStrategy(reasoningCfg.Engine, reasoningCfg)
@@ -1013,9 +1038,10 @@ func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, con
 	}
 
 	// Set SessionIDKey if not already set (may be set by caller)
+	// Note: This preserves taskID if already set (empty string doesn't overwrite)
 	ctx = EnsureAgentContext(ctx, "", contextID)
 
-	streamCh, err := a.execute(ctx, userText, strategy)
+	streamCh, err := a.executeWithOptions(ctx, userText, nil, strategy, opts)
 	if err != nil {
 		return "", fmt.Errorf("reasoning failed: %w", err)
 	}
@@ -1025,6 +1051,18 @@ func (a *Agent) executeReasoningForA2A(ctx context.Context, userText string, con
 		// Extract text from parts for full response
 		if textPart, ok := part.Part.(*pb.Part_Text); ok {
 			fullResponse.WriteString(textPart.Text)
+		}
+	}
+
+	// Check if task is in INPUT_REQUIRED state (non-blocking HITL mode)
+	// This happens when BlockForHITL=false and tool approval was needed
+	if !opts.BlockForHITL && a.services.Task() != nil {
+		taskID := getTaskIDFromContext(ctx)
+		if taskID != "" {
+			task, err := a.services.Task().GetTask(ctx, taskID)
+			if err == nil && task.Status != nil && task.Status.State == pb.TaskState_TASK_STATE_INPUT_REQUIRED {
+				return "", ErrInputRequired
+			}
 		}
 	}
 

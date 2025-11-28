@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -10,6 +12,21 @@ import (
 	"github.com/kadirpekel/hector/pkg/protocol"
 	"google.golang.org/protobuf/types/known/structpb"
 )
+
+// ANSI color codes for CLI output
+const (
+	colorReset   = "\033[0m"
+	colorRed     = "\033[31m"
+	colorGreen   = "\033[32m"
+	colorYellow  = "\033[33m"
+	colorCyan    = "\033[36m"
+	colorWhite   = "\033[37m"
+	colorDim     = "\033[90m"
+	colorDimBold = "\033[90m\033[2m"
+)
+
+// Maximum size for JSON pretty-printing (10KB)
+const maxPrettyPrintSize = 10000
 
 // currentThinkingBlockID tracks the active thinking block across multiple DisplayMessage calls
 // This ensures the THINKING prefix is only shown once per thinking block, even when chunks arrive separately
@@ -116,7 +133,59 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 		hasOutput = true
 	}
 
+	// First, check if this is an approval message by looking for approval DataPart
+	isApprovalMessage := false
 	for _, part := range msg.Parts {
+		if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
+			if interactionType, ok := dataPart.Data.Fields["interaction_type"]; ok {
+				it := interactionType.GetStringValue()
+				if it == "tool_approval" || it == "approval" {
+					isApprovalMessage = true
+					break
+				}
+			}
+		}
+	}
+
+	for _, part := range msg.Parts {
+		// If this is an approval message, handle TextPart specially
+		if isApprovalMessage {
+			if text := part.GetText(); text != "" {
+				// This is the TextPart of an approval message
+				// Reset thinking block state when transitioning to approval
+				if currentThinkingBlockID != "" {
+					fmt.Print(colorReset + "\n") // Reset styling and add newline
+					currentThinkingBlockID = ""
+					thinkingPrefixPrinted = false
+				}
+
+				// Add newline if transitioning from a different block type
+				if lastOutputType != "" && lastOutputType != "approval" {
+					fmt.Print("\n")
+				}
+
+				// Display the approval prompt text
+				fmt.Print(text)
+				os.Stdout.Sync() // Ensure text is flushed
+				lastOutputType = "approval"
+				hasOutput = true
+				continue
+			}
+
+			// Skip DataPart of approval message (we already detected it's an approval)
+			if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
+				if interactionType, ok := dataPart.Data.Fields["interaction_type"]; ok {
+					it := interactionType.GetStringValue()
+					if it == "tool_approval" || it == "approval" {
+						// Already handled above, just mark as approval type
+						lastOutputType = "approval"
+						hasOutput = true
+						continue
+					}
+				}
+			}
+		}
+
 		// Check metadata FIRST before displaying text
 		// This ensures thinking parts and tool parts are handled correctly
 		if part.Metadata != nil {
@@ -171,7 +240,7 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 					if blockID != currentThinkingBlockID {
 						// Close previous thinking block if any
 						if currentThinkingBlockID != "" {
-							fmt.Print("\033[0m\n") // Reset styling and add newline
+							fmt.Print(colorReset + "\n") // Reset styling and add newline
 						}
 						// Start new thinking block
 						currentThinkingBlockID = blockID
@@ -180,7 +249,7 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 
 					// Print prefix only if we haven't printed it for this block yet
 					if !thinkingPrefixPrinted {
-						fmt.Print("\033[90m\033[2mTHINKING: ")
+						fmt.Print(colorDimBold + "THINKING: ")
 						thinkingPrefixPrinted = true
 					}
 
@@ -192,11 +261,37 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 				continue
 			}
 
+			// Display approval request parts
+			if eventType == "approval" || eventType == "tool_approval" {
+				// Reset thinking block state when transitioning to approval
+				if currentThinkingBlockID != "" {
+					fmt.Print(colorReset + "\n") // Reset styling and add newline
+					currentThinkingBlockID = ""
+					thinkingPrefixPrinted = false
+				}
+
+				// Add newline if transitioning from a different block type
+				if lastOutputType != "" && lastOutputType != "approval" {
+					fmt.Print("\n")
+				}
+
+				// Display text content if this part has text (approval messages have text in TextPart)
+				if text := part.GetText(); text != "" {
+					fmt.Print(text)
+					os.Stdout.Sync() // Ensure text is flushed before prompt
+				}
+
+				// Mark this as approval type
+				lastOutputType = "approval"
+				hasOutput = true
+				continue
+			}
+
 			// Display tool call parts (AG-UI format) - only if showTools is true
 			if eventType == "tool_call" {
 				// Reset thinking block state when transitioning to tool calls
 				if currentThinkingBlockID != "" {
-					fmt.Print("\033[0m\n") // Reset styling and add newline
+					fmt.Print(colorReset + "\n") // Reset styling and add newline
 					currentThinkingBlockID = ""
 					thinkingPrefixPrinted = false
 				}
@@ -245,9 +340,9 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 							displayedToolCallIDs[toolCallID] = true
 						}
 						// Display tool call with better formatting
-						fmt.Print("\033[36m") // Cyan color for tool calls
+						fmt.Print(colorCyan) // Cyan color for tool calls
 						fmt.Printf("TOOL: %s", toolName)
-						fmt.Print("\033[0m")
+						fmt.Print(colorReset)
 						// Set lastOutputType to "tool" so result stays on same line
 						lastOutputType = "tool"
 						os.Stdout.Sync()
@@ -284,7 +379,7 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 					// Don't add newline if we're continuing a tool call (lastOutputType is already "tool")
 					// The tool call and result should be on the same line
 					if isError {
-						fmt.Print(" \033[31m✗\033[0m\n") // Red for errors, with space before
+						fmt.Print(" " + colorRed + "✗" + colorReset + "\n") // Red for errors, with space before
 						// Extract and display error message
 						if toolResult := protocol.ExtractToolResult(part); toolResult != nil {
 							errorMsg := toolResult.Error
@@ -293,13 +388,46 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 								errorMsg = toolResult.Content
 							}
 							if errorMsg != "" {
-								fmt.Printf("\033[31m   Error: %s\033[0m\n", errorMsg)
+								fmt.Printf(colorRed+"   Error: %s"+colorReset+"\n", errorMsg)
 							}
 						}
 						lastOutputType = "tool"
 						hasOutput = true
 					} else {
-						fmt.Print(" \033[32mOK\033[0m\n") // Green for success, with space before
+						// Display tool result status
+						fmt.Print(" " + colorGreen + "OK" + colorReset) // Green for success, with space before
+
+						// If showTools is true, also display the full result content
+						if showTools {
+							if toolResult := protocol.ExtractToolResult(part); toolResult != nil {
+								if toolResult.Content != "" {
+									// Display result content in a formatted way
+									fmt.Print("\n")
+									fmt.Print(colorDim) // Dim color for result content
+									fmt.Print("   Result: ")
+									fmt.Print(colorReset)
+									// Try to format as JSON if possible, otherwise display as-is
+									content := toolResult.Content
+									if len(content) > 0 && len(content) < maxPrettyPrintSize && (content[0] == '{' || content[0] == '[') {
+										// Try to pretty-print JSON (only for small content)
+										var jsonData interface{}
+										if err := json.Unmarshal([]byte(content), &jsonData); err == nil {
+											if jsonBytes, err := json.MarshalIndent(jsonData, "   ", "  "); err == nil {
+												content = string(jsonBytes)
+											}
+										}
+									}
+									// Display content with indentation
+									lines := strings.Split(content, "\n")
+									for _, line := range lines {
+										fmt.Printf("   %s\n", line)
+									}
+									fmt.Print(colorReset)
+								}
+							}
+						} else {
+							fmt.Print("\n") // Just OK status, no content
+						}
 						lastOutputType = "tool"
 						hasOutput = true
 					}
@@ -310,10 +438,12 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 		}
 
 		// Display regular text parts (only if not handled by metadata above)
+		// For approval messages, display the text part normally (it will be followed by DataPart)
 		if text := part.GetText(); text != "" {
+
 			// Reset thinking block state when transitioning to regular text
 			if currentThinkingBlockID != "" {
-				fmt.Print("\033[0m\n") // Reset styling and add newline
+				fmt.Print(colorReset + "\n") // Reset styling and add newline
 				currentThinkingBlockID = ""
 				thinkingPrefixPrinted = false
 			}
@@ -391,7 +521,7 @@ func displayTodosCLI(data *structpb.Struct) {
 		return
 	}
 
-	fmt.Print("\033[90m\033[2mTHINKING: ")
+	fmt.Print(colorDimBold + "THINKING: ")
 	fmt.Println("TASKS: Current Tasks:")
 
 	for i, todoValue := range todosList.Values {
@@ -414,29 +544,29 @@ func displayTodosCLI(data *structpb.Struct) {
 		switch status {
 		case "completed":
 			checkbox = "☑"
-			color = "\033[32m" // green
+			color = colorGreen // green
 		case "in_progress":
 			checkbox = "⧗"
-			color = "\033[33m" // yellow
+			color = colorYellow // yellow
 		case "pending":
 			checkbox = "☐"
-			color = "\033[37m" // white
+			color = colorWhite // white
 		case "canceled":
 			checkbox = "☒"
-			color = "\033[31m" // red
+			color = colorRed // red
 		default:
 			checkbox = "☐"
-			color = "\033[37m"
+			color = colorWhite
 		}
 
-		fmt.Printf("  %s%s%d. %s\033[0m\033[90m\033[2m\n", color, checkbox, i+1, content)
+		fmt.Printf("  %s%s%d. %s%s%s\n", color, checkbox, i+1, content, colorReset, colorDimBold)
 	}
-	fmt.Print("\033[0m")
+	fmt.Print(colorReset)
 }
 
 // displayGoalCLI renders goal decomposition from structured data
 func displayGoalCLI(data *structpb.Struct) {
-	fmt.Print("\033[90m\033[2mTHINKING: ")
+	fmt.Print(colorDimBold + "THINKING: ")
 
 	// Display main goal
 	if mainGoal, ok := data.Fields["main_goal"]; ok {
@@ -480,7 +610,7 @@ func displayGoalCLI(data *structpb.Struct) {
 		}
 	}
 
-	fmt.Print("\033[0m")
+	fmt.Print(colorReset)
 }
 
 func DisplayMessageLine(msg *pb.Message, prefix string, showThinking bool, showTools bool) {
@@ -585,4 +715,87 @@ func DisplayAgentPrompt(agentID string) {
 
 func DisplayGoodbye() {
 	fmt.Println("Goodbye!")
+}
+
+// PromptForApproval prompts the user for approval and returns their decision
+// Returns "approve" or "deny"
+func PromptForApproval() string {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print(colorYellow + "[APPROVAL] " + colorReset)
+		fmt.Print("Approve or deny? (approve/deny/a/d): ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return "deny" // Safe default on error
+		}
+
+		input = strings.ToLower(strings.TrimSpace(input))
+		switch input {
+		case "approve", "a":
+			return "approve"
+		case "deny", "d":
+			return "deny"
+		default:
+			fmt.Println("Please enter 'approve' or 'deny' (or 'a'/'d')")
+			continue
+		}
+	}
+}
+
+// IsApprovalRequest checks if a message is an approval request
+func IsApprovalRequest(msg *pb.Message) bool {
+	if msg == nil {
+		return false
+	}
+
+	for _, part := range msg.Parts {
+		if dataPart := part.GetData(); dataPart != nil && dataPart.Data != nil {
+			fields := dataPart.Data.Fields
+			if interactionType, ok := fields["interaction_type"]; ok {
+				it := interactionType.GetStringValue()
+				if it == "tool_approval" || it == "approval" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// CreateApprovalResponse creates a message with approval decision
+func CreateApprovalResponse(contextID, taskID, decision string) *pb.Message {
+	// Validate that IDs are not empty
+	if contextID == "" || taskID == "" {
+		slog.Warn("Creating approval response with empty IDs", "contextID", contextID, "taskID", taskID)
+	}
+
+	// Create structured data part
+	decisionValue := structpb.NewStringValue(decision)
+	fields := map[string]*structpb.Value{
+		"decision": decisionValue,
+	}
+
+	return &pb.Message{
+		ContextId: contextID,
+		TaskId:    taskID,
+		Role:      pb.Role_ROLE_USER,
+		Parts: []*pb.Part{
+			// Text part with decision
+			{
+				Part: &pb.Part_Text{
+					Text: decision,
+				},
+			},
+			// Data part with structured decision
+			{
+				Part: &pb.Part_Data{
+					Data: &pb.DataPart{
+						Data: &structpb.Struct{
+							Fields: fields,
+						},
+					},
+				},
+			},
+		},
+	}
 }

@@ -101,12 +101,8 @@ func (a *Agent) filterToolCallsWithApproval(
 
 		// Create approval request message (A2A compliant)
 		customPrompt := getApprovalPrompt(toolConfig)
-		// Convert Args to JSON string for display
-		argsJSON, err := json.Marshal(call.Args)
-		argsStr := string(argsJSON)
-		if err != nil {
-			argsStr = fmt.Sprintf("%v", call.Args)
-		}
+		// Format tool input for display (special handling for execute_command)
+		argsStr := formatToolInputForDisplay(call.Name, call.Args)
 		interactionMsg := createToolApprovalMessage(call.Name, argsStr, customPrompt)
 
 		result.NeedsUserInput = true
@@ -119,6 +115,36 @@ func (a *Agent) filterToolCallsWithApproval(
 	}
 
 	return result, nil
+}
+
+// formatToolInputForDisplay formats tool arguments for display in approval prompts
+// Special handling for execute_command to show command and working_dir clearly
+func formatToolInputForDisplay(toolName string, args map[string]interface{}) string {
+	// Special formatting for execute_command
+	if toolName == "execute_command" {
+		command := ""
+		workingDir := ""
+
+		if cmd, ok := args["command"].(string); ok {
+			command = cmd
+		}
+		if wd, ok := args["working_dir"].(string); ok {
+			workingDir = wd
+		}
+
+		// Format nicely
+		if workingDir != "" {
+			return fmt.Sprintf("Command: %s\nWorking Directory: %s", command, workingDir)
+		}
+		return fmt.Sprintf("Command: %s", command)
+	}
+
+	// For other tools, convert to JSON string
+	argsJSON, err := json.Marshal(args)
+	if err != nil {
+		return fmt.Sprintf("%v", args)
+	}
+	return string(argsJSON)
 }
 
 // getConfigKeys returns a slice of all keys in the toolConfigs map for debugging

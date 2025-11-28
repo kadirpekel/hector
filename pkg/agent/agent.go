@@ -30,6 +30,28 @@ const (
 	maxLLMRetries              = 3
 )
 
+// ExecutionOptions controls agent execution behavior.
+// This provides clean separation between transport concerns (streaming vs non-streaming)
+// and core agent logic.
+type ExecutionOptions struct {
+	// BlockForHITL controls whether the agent blocks waiting for user input
+	// when tool approval is required. If false, the agent returns immediately
+	// with the task in INPUT_REQUIRED state, allowing the caller to handle
+	// the approval flow externally.
+	//
+	// Typical usage:
+	// - Streaming mode (gRPC/SSE): true - the stream stays open for approval flow
+	// - Non-streaming mode (REST): false - return task, client sends follow-up
+	BlockForHITL bool
+}
+
+// DefaultExecutionOptions returns options suitable for streaming execution
+func DefaultExecutionOptions() ExecutionOptions {
+	return ExecutionOptions{
+		BlockForHITL: true, // Default: block for HITL (streaming behavior)
+	}
+}
+
 type Agent struct {
 	pb.UnimplementedA2AServiceServer
 
@@ -228,19 +250,26 @@ func (a *Agent) getInputTimeout() time.Duration {
 	return 10 * time.Minute // Default
 }
 
-func (a *Agent) execute(
-	ctx context.Context,
-	input string,
-	strategy reasoning.ReasoningStrategy,
-) (<-chan *pb.Part, error) {
-	return a.executeWithMessage(ctx, input, nil, strategy)
-}
-
+// executeWithMessage runs the agent with a user message (preserves file parts).
+// Uses default execution options (blocks for HITL - suitable for streaming mode).
 func (a *Agent) executeWithMessage(
 	ctx context.Context,
 	input string,
 	userMessage *pb.Message,
 	strategy reasoning.ReasoningStrategy,
+) (<-chan *pb.Part, error) {
+	return a.executeWithOptions(ctx, input, userMessage, strategy, DefaultExecutionOptions())
+}
+
+// executeWithOptions runs the agent with explicit execution options.
+// This is the primary execution entry point for A2A methods that need
+// to control HITL behavior.
+func (a *Agent) executeWithOptions(
+	ctx context.Context,
+	input string,
+	userMessage *pb.Message,
+	strategy reasoning.ReasoningStrategy,
+	opts ExecutionOptions,
 ) (<-chan *pb.Part, error) {
 	outputCh := make(chan *pb.Part, outputChannelBuffer)
 
@@ -430,8 +459,15 @@ func (a *Agent) executeWithMessage(
 			var results []reasoning.ToolResult
 			if len(toolCalls) > 0 {
 				var shouldContinue bool
-				ctx, results, shouldContinue, err = a.processToolCalls(ctx, text, toolCalls, thinking, state, outputCh, cfg)
+				ctx, results, shouldContinue, err = a.processToolCalls(ctx, text, toolCalls, thinking, state, outputCh, cfg, opts)
 				if err != nil {
+					// Check if this is ErrInputRequired (HITL needs external handling)
+					if err == ErrInputRequired {
+						// Task is in INPUT_REQUIRED state, exit goroutine immediately.
+						// The caller will detect the task state and return it to the client,
+						// who will send a follow-up message with the user's decision.
+						return
+					}
 					if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error processing tool calls: %v\n", err))); sendErr != nil {
 						slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
 					}
@@ -494,6 +530,7 @@ func (a *Agent) processToolCalls(
 	state *reasoning.ReasoningState,
 	outputCh chan<- *pb.Part,
 	cfg config.ReasoningConfig,
+	opts ExecutionOptions,
 ) (context.Context, []reasoning.ToolResult, bool, error) {
 	// Get tool configs for approval checking
 	// componentManager may be nil for agents built programmatically
@@ -514,13 +551,13 @@ func (a *Agent) processToolCalls(
 	// Handle tool approval request if needed
 	if approvalResult.NeedsUserInput {
 		var shouldContinue bool
-		ctx, shouldContinue, err = a.handleToolApprovalRequest(ctx, approvalResult, outputCh, state)
+		ctx, shouldContinue, err = a.handleToolApprovalRequest(ctx, approvalResult, outputCh, state, opts)
 		if err != nil {
-			// Check if this is ErrInputRequired (async HITL pause signal)
+			// Check if this is ErrInputRequired (non-streaming HITL pause signal)
 			if err == ErrInputRequired {
-				// Task paused for async HITL - exit this iteration
-				// State is already saved, goroutine can exit
-				return ctx, nil, false, nil
+				// Task paused for HITL in non-streaming mode
+				// Signal caller to exit the goroutine so client can handle approval
+				return ctx, nil, false, ErrInputRequired
 			}
 			return ctx, nil, false, err
 		}
@@ -616,6 +653,7 @@ func (a *Agent) handleToolApprovalRequest(
 	approvalResult *ToolApprovalResult,
 	outputCh chan<- *pb.Part,
 	reasoningState *reasoning.ReasoningState,
+	opts ExecutionOptions,
 ) (context.Context, bool, error) {
 	taskID := getTaskIDFromContext(ctx)
 	if taskID == "" {
@@ -630,15 +668,18 @@ func (a *Agent) handleToolApprovalRequest(
 	if a.shouldUseAsyncHITL() {
 		return a.handleAsyncHITL(ctx, approvalResult, outputCh, reasoningState)
 	} else {
-		return a.handleBlockingHITL(ctx, approvalResult, outputCh)
+		return a.handleBlockingHITL(ctx, approvalResult, outputCh, opts.BlockForHITL)
 	}
 }
 
-// handleBlockingHITL handles tool approval in blocking mode (current behavior)
+// handleBlockingHITL handles tool approval in blocking mode.
+// If blockForInput is false, returns ErrInputRequired immediately after
+// updating task state, allowing the caller to handle approval externally.
 func (a *Agent) handleBlockingHITL(
 	ctx context.Context,
 	approvalResult *ToolApprovalResult,
 	outputCh chan<- *pb.Part,
+	blockForInput bool,
 ) (context.Context, bool, error) {
 	taskID := getTaskIDFromContext(ctx)
 
@@ -655,6 +696,13 @@ func (a *Agent) handleBlockingHITL(
 				return ctx, false, sendErr
 			}
 		}
+	}
+
+	// If not blocking for input, return immediately with ErrInputRequired.
+	// The caller should return the task in INPUT_REQUIRED state to the client,
+	// who will then send a follow-up message with the user's decision.
+	if !blockForInput {
+		return ctx, false, ErrInputRequired
 	}
 
 	// Store tool name before waiting (will be nil after re-running filter)

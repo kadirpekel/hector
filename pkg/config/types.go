@@ -1234,9 +1234,37 @@ func (c *ToolConfig) SetDefaults() {
 		if c.MaxExecutionTime == "" {
 			c.MaxExecutionTime = "30s"
 		}
+		// Smart default: require approval only if sandboxing is disabled
+		if c.EnableApproval == nil {
+			if c.EnableSandboxing != nil && !*c.EnableSandboxing {
+				c.EnableApproval = BoolPtr(true) // Unsandboxed commands are dangerous
+			} else {
+				c.EnableApproval = BoolPtr(false) // Sandboxed commands are safe by default
+			}
+		}
 	case "write_file":
 		if c.MaxFileSize == 0 {
 			c.MaxFileSize = 1048576
+		}
+		// Smart default: require approval for file writes (high risk)
+		if c.EnableApproval == nil {
+			c.EnableApproval = BoolPtr(true)
+		}
+	case "delete_file":
+		// Smart default: always require approval for deletions (high risk)
+		if c.EnableApproval == nil {
+			c.EnableApproval = BoolPtr(true)
+		}
+	case "apply_patch":
+		if c.MaxFileSize == 0 {
+			c.MaxFileSize = 10485760 // 10MB
+		}
+		if c.ContextLines == 0 {
+			c.ContextLines = 3
+		}
+		// Smart default: require approval for patches (modifies files)
+		if c.EnableApproval == nil {
+			c.EnableApproval = BoolPtr(true)
 		}
 	case "search_replace":
 		if c.MaxReplacements == 0 {
@@ -1245,10 +1273,40 @@ func (c *ToolConfig) SetDefaults() {
 		if c.WorkingDirectory == "" {
 			c.WorkingDirectory = "./"
 		}
+		// Smart default: require approval for search_replace (modifies files)
+		if c.EnableApproval == nil {
+			c.EnableApproval = BoolPtr(true)
+		}
+	case "read_file":
+		if c.MaxFileSize == 0 {
+			c.MaxFileSize = 10485760 // 10MB
+		}
+		// Smart default: no approval needed for read-only operations
+		if c.EnableApproval == nil {
+			c.EnableApproval = BoolPtr(false)
+		}
+	case "grep_search":
+		if c.MaxResults == 0 {
+			c.MaxResults = 1000
+		}
+		if c.MaxFileSize == 0 {
+			c.MaxFileSize = 10485760 // 10MB
+		}
+		if c.ContextLines == 0 {
+			c.ContextLines = 2
+		}
+		// Smart default: no approval needed for read-only operations
+		if c.EnableApproval == nil {
+			c.EnableApproval = BoolPtr(false)
+		}
 	case "search":
 		// Default limit comes from SearchConfig.TopK, not tool config
 		if c.MaxLimit == 0 {
 			c.MaxLimit = 50 // Tool-level safety limit (must be <= SearchEngine.MaxTopK = 100)
+		}
+		// Smart default: no approval needed for read-only operations
+		if c.EnableApproval == nil {
+			c.EnableApproval = BoolPtr(false)
 		}
 	case "web_request":
 		// Liberal defaults - allow everything unless explicitly restricted
@@ -1279,6 +1337,10 @@ func (c *ToolConfig) SetDefaults() {
 		if c.JavaScriptRendered == nil {
 			c.JavaScriptRendered = BoolPtr(false)
 		}
+		// Smart default: require approval for web requests (can make external calls)
+		if c.EnableApproval == nil {
+			c.EnableApproval = BoolPtr(true)
+		}
 		// No defaults for AllowedDomains, DeniedDomains, AllowedMethods
 		// Omitted = allow all (liberal default)
 	case "mcp":
@@ -1290,7 +1352,16 @@ func (c *ToolConfig) SetDefaults() {
 		if c.Timeout == "" {
 			c.Timeout = "5m"
 		}
-
+		// Smart default: no approval needed for MCP tools (they're external, user controls server)
+		if c.EnableApproval == nil {
+			c.EnableApproval = BoolPtr(false)
+		}
+	default:
+		// For unknown tool types, default to no approval (safe default)
+		// Users can explicitly enable approval via CLI flags if needed
+		if c.EnableApproval == nil {
+			c.EnableApproval = BoolPtr(false)
+		}
 	}
 }
 

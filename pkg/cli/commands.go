@@ -140,39 +140,9 @@ func CallCommand(args *CallCmd, cfg *config.Config, mode CLIMode) error {
 	ResetDisplayState()
 
 	if args.Stream {
-
-		streamChan, err := client.StreamMessage(ctx, agentID, msg)
-		if err != nil {
-			return fmt.Errorf("failed to start streaming: %w", err)
-		}
-
-		for chunk := range streamChan {
-			if msgChunk := chunk.GetMsg(); msgChunk != nil {
-				DisplayMessage(msgChunk, "", args.ShowThinking, args.ShowTools)
-			}
-		}
-		fmt.Println()
-		return nil
+		return handleStreaming(ctx, client, agentID, msg, sessionID, args.ShowThinking, args.ShowTools)
 	} else {
-
-		resp, err := client.SendMessage(ctx, agentID, msg)
-		if err != nil {
-			return fmt.Errorf("failed to send message: %w", err)
-		}
-
-		if respMsg := resp.GetMsg(); respMsg != nil {
-			// Clean output: no prefix, just the agent's response
-			DisplayMessageLine(respMsg, "", args.ShowThinking, args.ShowTools)
-		} else if task := resp.GetTask(); task != nil {
-			// Extract message from task instead of showing full task details
-			if task.Status != nil && task.Status.Update != nil {
-				DisplayMessageLine(task.Status.Update, "", args.ShowThinking, args.ShowTools)
-			} else {
-				// Fallback: show task details only if no message available
-				DisplayTask(task)
-			}
-		}
-		return nil
+		return handleNonStreaming(ctx, client, agentID, msg, sessionID, args.ShowThinking, args.ShowTools)
 	}
 }
 
@@ -265,42 +235,48 @@ func executeChat(a2aClient client.A2AClient, agentID, sessionID string, streamin
 		DisplayAgentPrompt(agentID)
 
 		if streaming {
-
-			streamChan, err := a2aClient.StreamMessage(ctx, agentID, msg)
-			if err != nil {
+			if err := handleStreaming(ctx, a2aClient, agentID, msg, sessionID, showThinking, showTools); err != nil {
 				slog.Error("Chat error", "error", err)
 				continue
-			}
-
-			for chunk := range streamChan {
-				if msgChunk := chunk.GetMsg(); msgChunk != nil {
-					DisplayMessage(msgChunk, "", showThinking, showTools)
-				}
 			}
 			fmt.Println()
 		} else {
-
-			resp, err := a2aClient.SendMessage(ctx, agentID, msg)
-			if err != nil {
+			if err := handleNonStreaming(ctx, a2aClient, agentID, msg, sessionID, showThinking, showTools); err != nil {
 				slog.Error("Chat error", "error", err)
 				continue
-			}
-
-			if respMsg := resp.GetMsg(); respMsg != nil {
-				DisplayMessageLine(respMsg, "", showThinking, showTools)
-			} else if task := resp.GetTask(); task != nil {
-				// Extract message from task instead of showing full task details
-				if task.Status != nil && task.Status.Update != nil {
-					DisplayMessageLine(task.Status.Update, "", showThinking, showTools)
-				} else {
-					// Fallback: show task details only if no message available
-					DisplayTask(task)
-				}
 			}
 		}
 	}
 
 	return nil
+}
+
+// handleStreaming handles streaming responses with HITL support.
+// This is the unified handler for both call and chat streaming modes.
+func handleStreaming(ctx context.Context, c client.A2AClient, agentID string, msg *pb.Message, sessionID string, showThinking, showTools bool) error {
+	streamChan, err := c.StreamMessage(ctx, agentID, msg)
+	if err != nil {
+		return fmt.Errorf("failed to start streaming: %w", err)
+	}
+
+	orchestrator := NewApprovalOrchestrator(c, agentID, showThinking, showTools)
+	state := &StreamState{ContextID: sessionID}
+
+	for chunk := range streamChan {
+		if _, err := orchestrator.ProcessStreamChunk(ctx, chunk, state); err != nil {
+			return err
+		}
+	}
+
+	fmt.Println()
+	return nil
+}
+
+// handleNonStreaming handles non-streaming responses with HITL support.
+// This is the unified handler for both call and chat non-streaming modes.
+func handleNonStreaming(ctx context.Context, c client.A2AClient, agentID string, msg *pb.Message, sessionID string, showThinking, showTools bool) error {
+	orchestrator := NewApprovalOrchestrator(c, agentID, showThinking, showTools)
+	return orchestrator.ProcessNonStreamingResponse(ctx, msg, sessionID)
 }
 
 type ClientArgs interface {

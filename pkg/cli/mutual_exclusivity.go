@@ -19,6 +19,8 @@ var zeroConfigFlagNames = []string{
 	"--embedder-model",
 	"--vectordb",
 	"--observe",
+	"--approve-tools",
+	"--no-approve-tools",
 }
 
 // ValidateConfigMutualExclusivity checks if --config and zero-config flags are mutually exclusive

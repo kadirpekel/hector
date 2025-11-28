@@ -120,15 +120,54 @@ func createToolApprovalMessage(toolName string, toolInput string, customPrompt s
 	// Use custom prompt if provided, otherwise generate default
 	prompt := customPrompt
 	if prompt == "" {
-		prompt = fmt.Sprintf(
-			"🔐 Tool Approval Required\n\nTool: %s\nInput: %s\n\nPlease respond with: approve or deny",
-			toolName,
-			toolInput,
-		)
+		// Format prompt based on tool type for better readability
+		if toolName == "execute_command" {
+			// For execute_command, toolInput is already formatted nicely by formatToolInputForDisplay
+			prompt = fmt.Sprintf(
+				"🔐 Tool Approval Required\n\nTool: %s\n%s\n\nPlease respond with: approve or deny",
+				toolName,
+				toolInput,
+			)
+		} else {
+			// For other tools, show as "Input: ..."
+			prompt = fmt.Sprintf(
+				"🔐 Tool Approval Required\n\nTool: %s\nInput: %s\n\nPlease respond with: approve or deny",
+				toolName,
+				toolInput,
+			)
+		}
 	} else {
 		// Interpolate variables in custom prompt
-		prompt = strings.ReplaceAll(prompt, "{tool}", toolName)
-		prompt = strings.ReplaceAll(prompt, "{input}", toolInput)
+		// For execute_command, extract command and working_dir for {command} and {working_dir} placeholders
+		if toolName == "execute_command" {
+			// Parse the formatted toolInput to extract command and working_dir
+			// Format is: "Command: <cmd>\nWorking Directory: <dir>" or "Command: <cmd>"
+			lines := strings.Split(toolInput, "\n")
+			command := ""
+			workingDir := ""
+
+			for _, line := range lines {
+				if strings.HasPrefix(line, "Command: ") {
+					command = strings.TrimPrefix(line, "Command: ")
+				} else if strings.HasPrefix(line, "Working Directory: ") {
+					workingDir = strings.TrimPrefix(line, "Working Directory: ")
+				}
+			}
+
+			// Replace placeholders
+			prompt = strings.ReplaceAll(prompt, "{tool}", toolName)
+			prompt = strings.ReplaceAll(prompt, "{input}", toolInput)
+			if command != "" {
+				prompt = strings.ReplaceAll(prompt, "{command}", command)
+			}
+			if workingDir != "" {
+				prompt = strings.ReplaceAll(prompt, "{working_dir}", workingDir)
+			}
+		} else {
+			// For other tools, just replace {tool} and {input}
+			prompt = strings.ReplaceAll(prompt, "{tool}", toolName)
+			prompt = strings.ReplaceAll(prompt, "{input}", toolInput)
+		}
 	}
 
 	return createInteractionMessage(

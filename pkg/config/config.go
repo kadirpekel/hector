@@ -774,6 +774,10 @@ func CreateZeroConfig(source interface{}) *Config {
 		Name: agentName,
 		Type: "native",
 		LLM:  provider,
+		// Enable Task service for HITL support (tool approval in non-streaming mode)
+		Task: &TaskConfig{
+			Backend: "memory", // In-memory task service for zero-config
+		},
 	}
 
 	// Add custom role and/or instruction if provided
@@ -854,6 +858,72 @@ func CreateZeroConfig(source interface{}) *Config {
 	}
 
 	return cfg
+}
+
+// ApplyToolApprovalOverrides applies CLI-specified approval overrides to tool configs
+// This should be called AFTER ProcessConfigPipeline (which calls SetDefaults)
+// to override the smart defaults set by SetDefaults
+func ApplyToolApprovalOverrides(cfg *Config, approveTools, noApproveTools string) {
+	if approveTools == "" && noApproveTools == "" {
+		return
+	}
+
+	// Parse comma-separated tool lists
+	approveList := parseCommaSeparatedList(approveTools)
+	noApproveList := parseCommaSeparatedList(noApproveTools)
+
+	// Ensure tools map exists
+	if cfg.Tools == nil {
+		cfg.Tools = make(map[string]*ToolConfig)
+	}
+
+	// Apply approval overrides
+	for _, toolName := range approveList {
+		applyToolApprovalOverride(cfg, toolName, true)
+	}
+
+	// Apply no-approval overrides
+	for _, toolName := range noApproveList {
+		applyToolApprovalOverride(cfg, toolName, false)
+	}
+}
+
+// applyToolApprovalOverride applies an approval override to a tool config
+// Creates the tool config if it doesn't exist, then sets EnableApproval
+func applyToolApprovalOverride(cfg *Config, toolName string, enable bool) {
+	if cfg.Tools[toolName] == nil {
+		// Create tool config if it doesn't exist
+		defaultConfigs := GetDefaultToolConfigs()
+		if defaultCfg, ok := defaultConfigs[toolName]; ok {
+			cfg.Tools[toolName] = &ToolConfig{
+				Type: defaultCfg.Type,
+			}
+			cfg.Tools[toolName].SetDefaults()
+		} else {
+			// Unknown tool, create minimal config
+			cfg.Tools[toolName] = &ToolConfig{
+				Type: "unknown",
+			}
+			cfg.Tools[toolName].SetDefaults()
+		}
+	}
+	cfg.Tools[toolName].EnableApproval = BoolPtr(enable)
+}
+
+// parseCommaSeparatedList parses a comma-separated string into a list of trimmed strings
+func parseCommaSeparatedList(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 func (c *Config) GetAgent(name string) (*AgentConfig, bool) {

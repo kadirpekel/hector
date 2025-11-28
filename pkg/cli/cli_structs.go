@@ -38,6 +38,10 @@ type ZeroConfigFlags struct {
 	EmbedderModel  string  `name:"embedder-model" help:"Embedder model for document store" default:"nomic-embed-text"`
 	VectorDB       string  `name:"vectordb" help:"Vector database connection string" default:"http://localhost:6334" placeholder:"URL"`
 	Observe        bool    `help:"Enable observability (metrics + tracing to localhost:4317)"`
+
+	// Tool approval overrides (comma-separated tool names)
+	ApproveTools   string `name:"approve-tools" help:"Enable approval for specific tools (comma-separated, e.g., execute_command,write_file). Overrides smart defaults." placeholder:"TOOL1,TOOL2"`
+	NoApproveTools string `name:"no-approve-tools" help:"Disable approval for specific tools (comma-separated, e.g., write_file). Overrides smart defaults." placeholder:"TOOL1,TOOL2"`
 }
 
 type ClientModeFlags struct {

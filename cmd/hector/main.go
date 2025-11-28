@@ -253,6 +253,25 @@ func main() {
 			if err != nil {
 				cli.Fatalf("%s", cli.FormatConfigError(cli.CLI.Config, err))
 			}
+
+			// Apply tool approval overrides from CLI flags (only for zero-config mode)
+			if !hasConfigFile {
+				var approveTools, noApproveTools string
+				switch command {
+				case "serve", "serve <agent-name>":
+					approveTools = cli.CLI.Serve.ApproveTools
+					noApproveTools = cli.CLI.Serve.NoApproveTools
+				case "call <message>":
+					approveTools = cli.CLI.Call.ApproveTools
+					noApproveTools = cli.CLI.Call.NoApproveTools
+				case "chat":
+					approveTools = cli.CLI.Chat.ApproveTools
+					noApproveTools = cli.CLI.Chat.NoApproveTools
+				}
+				if approveTools != "" || noApproveTools != "" {
+					config.ApplyToolApprovalOverrides(cfg, approveTools, noApproveTools)
+				}
+			}
 		}
 	}
 
