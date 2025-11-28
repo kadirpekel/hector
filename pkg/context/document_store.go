@@ -32,7 +32,7 @@ const (
 
 	DefaultFileWatchTimeout = 10 * time.Second
 
-	MaxConcurrentIndexing = 10 // Increased from 3 to 10 for better throughput
+	MaxConcurrentIndexing = 1 // Sequential by default - safe for local models like Ollama
 )
 
 const (
@@ -286,7 +286,7 @@ func NewDocumentStoreWithToolRegistry(storeName string, storeConfig *config.Docu
 	// Determine concurrency limit
 	maxConcurrent := storeConfig.MaxConcurrentFiles
 	if maxConcurrent == 0 {
-		maxConcurrent = 10
+		maxConcurrent = MaxConcurrentIndexing
 	}
 
 	// Initialize progress tracker using pointer values (defaults already set in SetDefaults)

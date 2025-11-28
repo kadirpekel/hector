@@ -5,12 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/ollama"
 )
+
+// Global mutex to serialize Ollama embedding requests
+// Ollama's llama runner crashes when receiving concurrent embedding requests
+var ollamaEmbedMu sync.Mutex
 
 type OllamaEmbedder struct {
 	config *config.EmbedderProviderConfig
@@ -52,6 +58,14 @@ func (e *OllamaEmbedder) Embed(text string) ([]float32, error) {
 }
 
 func (e *OllamaEmbedder) EmbedWithContext(ctx context.Context, text string) ([]float32, error) {
+	// Serialize all Ollama embedding requests to prevent crashes
+	// Ollama's llama runner crashes with SIGABRT when receiving concurrent embedding requests
+	// See: https://github.com/ollama/ollama/issues - "decode: cannot decode batches with this context"
+	ollamaEmbedMu.Lock()
+	defer ollamaEmbedMu.Unlock()
+
+	textLen := len(text)
+	slog.Debug("Ollama embedding request", "model", e.config.Model, "text_length", textLen)
 
 	request := OllamaEmbedRequest{
 		Model:  e.config.Model,
@@ -66,12 +80,14 @@ func (e *OllamaEmbedder) EmbedWithContext(ctx context.Context, text string) ([]f
 			break
 		}
 
+		slog.Debug("Ollama embedding retry", "attempt", attempt+1, "error", err, "text_length", textLen)
 		if attempt < e.config.MaxRetries-1 {
 			time.Sleep(time.Duration(attempt+1) * time.Second)
 		}
 	}
 
 	if err != nil {
+		slog.Error("Ollama embedding failed", "error", err, "text_length", textLen, "model", e.config.Model)
 		return nil, fmt.Errorf("failed to send request to Ollama: %w", err)
 	}
 	defer resp.Body.Close()
