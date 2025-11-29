@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
@@ -1290,100 +1289,9 @@ func (a *Agent) executeTools(
 			ToolName:   toolCall.Name,
 			Metadata:   metadata,
 		})
-
-		// Special handling: if todo_write was called, emit display part immediately
-		if toolCall.Name == "todo_write" && config.BoolValue(cfg.EnableThinkingDisplay, false) {
-			a.emitTodoDisplay(ctx, outputCh)
-		}
 	}
 
 	return results
-}
-
-// emitTodoDisplay retrieves current todos and emits a display part
-func (a *Agent) emitTodoDisplay(ctx context.Context, outputCh chan<- *pb.Part) {
-	// Get todo tool from registry
-	tool, err := a.services.Tools().GetTool("todo_write")
-	if err != nil {
-		return
-	}
-
-	todoTool, ok := tool.(*tools.TodoTool)
-	if !ok {
-		return
-	}
-
-	// Extract session ID from context
-	sessionID := getSessionIDFromContext(ctx)
-	if sessionID == "" {
-		sessionID = "default"
-	}
-
-	// Get todos for this session
-	todos := todoTool.GetTodos(sessionID)
-	if len(todos) == 0 {
-		return
-	}
-
-	// Build text fallback
-	var textBuilder strings.Builder
-	textBuilder.WriteString("TASKS: Current Tasks:\n")
-	for i, todo := range todos {
-		var checkbox string
-		switch todo.Status {
-		case "completed":
-			checkbox = "☑"
-		case "in_progress":
-			checkbox = "⧗"
-		case "pending":
-			checkbox = "☐"
-		case "canceled":
-			checkbox = "☒"
-		default:
-			checkbox = "☐"
-		}
-		textBuilder.WriteString(fmt.Sprintf("  %s %d. %s\n", checkbox, i+1, todo.Content))
-	}
-
-	// Build structured data for rich clients
-	todoData := make([]map[string]interface{}, len(todos))
-	for i, todo := range todos {
-		todoData[i] = map[string]interface{}{
-			"id":      todo.ID,
-			"content": todo.Content,
-			"status":  todo.Status,
-		}
-	}
-
-	data := map[string]interface{}{
-		"todos": todoData,
-	}
-
-	// Emit as AG-UI thinking part with a tracked block ID
-	blockID := uuid.New().String()
-
-	// Add block_id to the metadata via the data
-	data["block_id"] = blockID
-
-	part := protocol.CreateThinkingPartWithData(textBuilder.String(), "todo", data)
-	// Override the auto-generated block_id with our tracked one
-	if part.Metadata != nil && part.Metadata.Fields != nil {
-		part.Metadata.Fields["block_id"] = structpb.NewStringValue(blockID)
-	}
-
-	if sendErr := safeSendPart(ctx, outputCh, part); sendErr != nil {
-		slog.Error("Failed to send todo display", "agent", a.name, "error", sendErr)
-		return
-	}
-
-	// Immediately emit thinking_complete to close the block
-	// Todo display is a one-shot display, not a streaming thinking block
-	completionPart := protocol.CreateThinkingCompletionPart(blockID, "")
-	if completionPart != nil {
-		if sendErr := safeSendPart(ctx, outputCh, completionPart); sendErr != nil {
-			slog.Error("Failed to send todo display completion", "agent", a.name, "error", sendErr)
-		}
-	}
 }
 func (a *Agent) truncateToolResults(results []reasoning.ToolResult, cfg config.ReasoningConfig) []reasoning.ToolResult {
 

@@ -45,6 +45,13 @@ var displayedToolCallIDs = make(map[string]bool)
 // Values: "thinking", "tool", "text", or "" (none)
 var lastOutputType string
 
+// accumulatedTodos tracks todos across todo_write tool calls (similar to UI behavior)
+// Key: todo ID, Value: todo item with id, content, status
+var accumulatedTodos = make(map[string]map[string]interface{})
+
+// toolCallIDToName maps tool call IDs to tool names (for identifying todo_write results)
+var toolCallIDToName = make(map[string]string)
+
 func DisplayAgentList(agents []*pb.AgentCard, mode string) {
 	fmt.Printf("\nAvailable Agents (%s)\n\n", mode)
 	fmt.Printf("Found %d agent(s):\n\n", len(agents))
@@ -119,6 +126,8 @@ func ResetDisplayState() {
 	thinkingPrefixPrinted = false
 	displayedToolCallIDs = make(map[string]bool)
 	lastOutputType = ""
+	accumulatedTodos = make(map[string]map[string]interface{})
+	toolCallIDToName = make(map[string]string)
 }
 
 func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools bool) bool {
@@ -306,7 +315,7 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 
 				if !hasIsError {
 					// This is a tool call - add newline if transitioning from a different block type
-					if lastOutputType != "" && lastOutputType != "tool" {
+					if lastOutputType != "" && lastOutputType != "tool" && lastOutputType != "todo" {
 						fmt.Print("\n")
 					}
 					// This is a tool call
@@ -335,11 +344,37 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 						}
 					}
 					if toolName != "" {
-						// Mark as displayed
+						// Track tool name by call ID (for identifying results later)
 						if toolCallID != "" {
+							toolCallIDToName[toolCallID] = toolName
 							displayedToolCallIDs[toolCallID] = true
 						}
-						// Display tool call with better formatting
+
+						// Special handling for todo_write: extract and display todos inline
+						if toolName == "todo_write" {
+							// Extract todos from tool call arguments
+							if toolCall := protocol.ExtractToolCall(part); toolCall != nil {
+								if todosArg, ok := toolCall.Args["todos"]; ok {
+									if todosList, ok := todosArg.([]interface{}); ok {
+										// Update accumulated todos (merge behavior - latest status wins)
+										for _, todoRaw := range todosList {
+											if todoMap, ok := todoRaw.(map[string]interface{}); ok {
+												if id, ok := todoMap["id"].(string); ok && id != "" {
+													accumulatedTodos[id] = todoMap
+												}
+											}
+										}
+										// Display accumulated todos inline
+										displayTodosInlineCLI()
+										lastOutputType = "todo"
+										hasOutput = true
+										continue
+									}
+								}
+							}
+						}
+
+						// Display tool call with better formatting (for non-todo_write tools)
 						fmt.Print(colorCyan) // Cyan color for tool calls
 						fmt.Printf("TOOL: %s", toolName)
 						fmt.Print(colorReset)
@@ -394,6 +429,21 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 						lastOutputType = "tool"
 						hasOutput = true
 					} else {
+						// Check if this is a todo_write result - if so, skip standard display
+						// (todos are already displayed inline when the tool call was processed)
+						toolName := ""
+						if toolCallID != "" {
+							toolName = toolCallIDToName[toolCallID]
+						}
+
+						if toolName == "todo_write" {
+							// For todo_write, we already displayed the todos inline, so just mark as processed
+							// Don't show "TOOL: todo_write OK" - it's redundant
+							lastOutputType = "todo"
+							hasOutput = true
+							continue
+						}
+
 						// Display tool result status
 						fmt.Print(" " + colorGreen + "OK" + colorReset) // Green for success, with space before
 
@@ -509,7 +559,7 @@ func displayThinkingPart(part *pb.Part) {
 	}
 }
 
-// displayTodosCLI renders todo list from structured data
+// displayTodosCLI renders todo list from structured data (for thinking blocks)
 func displayTodosCLI(data *structpb.Struct) {
 	todosField, ok := data.Fields["todos"]
 	if !ok {
@@ -562,6 +612,75 @@ func displayTodosCLI(data *structpb.Struct) {
 		fmt.Printf("  %s%s%d. %s%s%s\n", color, checkbox, i+1, content, colorReset, colorDimBold)
 	}
 	fmt.Print(colorReset)
+}
+
+// displayTodosInlineCLI renders accumulated todos inline (for todo_write tool calls)
+// Shows compact, offset format similar to UI - only shows first 4 items by default
+const visibleTodosCount = 4
+
+func displayTodosInlineCLI() {
+	if len(accumulatedTodos) == 0 {
+		return
+	}
+
+	// Convert map to slice for ordered display
+	todos := make([]map[string]interface{}, 0, len(accumulatedTodos))
+	for _, todo := range accumulatedTodos {
+		todos = append(todos, todo)
+	}
+
+	// Show only first N items (offset for long lists)
+	visibleTodos := todos
+	if len(todos) > visibleTodosCount {
+		visibleTodos = todos[:visibleTodosCount]
+	}
+
+	// Add newline if transitioning from different block type
+	if lastOutputType != "" && lastOutputType != "todo" && lastOutputType != "tool" {
+		fmt.Print("\n")
+	}
+
+	// Display compact todo list with offset
+	fmt.Print(colorDim + "│ " + colorReset) // Left border indicator
+	fmt.Print(colorDim + "Tasks" + colorReset + "\n")
+
+	for i, todo := range visibleTodos {
+		content := ""
+		if c, ok := todo["content"].(string); ok {
+			content = c
+		}
+
+		status := ""
+		if s, ok := todo["status"].(string); ok {
+			status = s
+		}
+
+		var icon, color string
+		switch status {
+		case "completed":
+			icon = "✓"
+			color = colorGreen
+		case "in_progress":
+			icon = "⧗"
+			color = colorYellow
+		case "canceled":
+			icon = "✗"
+			color = colorRed
+		default:
+			icon = "○"
+			color = colorWhite
+		}
+
+		// Compact format: number, icon, content (all on one line)
+		fmt.Printf(colorDim+"│ "+colorReset+"%s%s %d. %s%s\n", color, icon, i+1, content, colorReset)
+	}
+
+	// Show "more" indicator if there are additional todos
+	if len(todos) > visibleTodosCount {
+		fmt.Printf(colorDim+"│ "+colorReset+"%s... (%d more)%s\n", colorDim, len(todos)-visibleTodosCount, colorReset)
+	}
+
+	lastOutputType = "todo"
 }
 
 // displayGoalCLI renders goal decomposition from structured data

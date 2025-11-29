@@ -47,6 +47,12 @@ export interface ApprovalRequest {
     decision?: 'approve' | 'deny';
 }
 
+export interface TodoItem {
+    id: string;
+    content: string;
+    status: 'pending' | 'in_progress' | 'completed' | 'canceled';
+}
+
 export interface ImageWidget {
     id: string;
     url: string;

@@ -9,8 +9,10 @@ import { ToolWidget } from '../Widgets/ToolWidget';
 import { ThinkingWidget } from '../Widgets/ThinkingWidget';
 import { ApprovalWidget } from '../Widgets/ApprovalWidget';
 import { ImageWidget } from '../Widgets/ImageWidget';
+import { TodoList } from './TodoList';
 import { useStore } from '../../store/useStore';
 import { isWidgetInLifecycle } from '../../lib/widget-animations';
+import type { TodoItem } from '../../types';
 import 'highlight.js/styles/github-dark.css';
 
 // Shared ReactMarkdown configuration
@@ -61,7 +63,7 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({ message, me
         )}>
             {/* Avatar */}
             <div className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg",
+                "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-lg",
                 isUser ? "bg-blue-600" : "bg-hector-green"
             )}>
                 {isUser ? <User size={16} className="text-white" /> : <Bot size={16} className="text-white" />}
@@ -104,8 +106,26 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({ message, me
 
                     {/* Render content in order based on contentOrder */}
                     {(() => {
+                        // Helper functions
+                        const extractTodos = (widget: Widget): TodoItem[] | null => {
+                            if (widget.type === 'tool' && widget.data?.name === 'todo_write' && widget.data?.args?.todos && Array.isArray(widget.data.args.todos)) {
+                                return widget.data.args.todos.map((todo: Record<string, unknown>) => ({
+                                    id: (typeof todo.id === 'string' ? todo.id : '') || '',
+                                    content: (typeof todo.content === 'string' ? todo.content : '') || '',
+                                    status: (typeof todo.status === 'string' ? todo.status : 'pending') as TodoItem['status'],
+                                }));
+                            }
+                            return null;
+                        };
+
+                        const isTodoWidget = (widget: Widget): boolean => 
+                            widget.type === 'tool' && widget.data?.name === 'todo_write';
+                        
                         const contentOrder = message.metadata?.contentOrder || [];
                         const widgetsMap = new Map(message.widgets.map(w => [w.id, w]));
+                        
+                        // Track accumulated todos as we iterate through contentOrder
+                        const accumulatedTodosMap = new Map<string, TodoItem>();
                         
                         // If we have contentOrder, render in that exact order
                         if (contentOrder.length > 0) {
@@ -113,26 +133,45 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({ message, me
                                 <>
                                     {contentOrder.map((itemId) => {
                                         const widget = widgetsMap.get(itemId);
-                                        if (widget) {
-                                            return (
-                                                <div key={widget.id} className="mb-3">
-                                                    <WidgetRenderer
-                                                        widget={widget}
-                                                        sessionId={currentSessionId || undefined}
-                                                        messageId={message.id}
-                                                        message={message}
-                                                        messageIndex={messageIndex}
-                                                        isLastMessage={isLastMessage}
-                                                    />
-                                                </div>
-                                            );
+                                        if (!widget) return null;
+                                        
+                                        // If this is a todo_write widget, render the accumulated todos at this point
+                                        if (isTodoWidget(widget)) {
+                                            const todos = extractTodos(widget);
+                                            if (todos) {
+                                                // Update accumulated todos (merge=true behavior - latest status wins)
+                                                todos.forEach((todo: TodoItem) => {
+                                                    accumulatedTodosMap.set(todo.id, todo);
+                                                });
+                                                // Render the current state of todos at this point in the flow
+                                                const currentTodos = Array.from(accumulatedTodosMap.values());
+                                                return (
+                                                    <div key={widget.id} className="mb-2">
+                                                        <TodoList todos={currentTodos} />
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
                                         }
-                                        return null;
+                                        
+                                        // Render other widgets normally
+                                        return (
+                                            <div key={widget.id} className="mb-3">
+                                                <WidgetRenderer
+                                                    widget={widget}
+                                                    sessionId={currentSessionId || undefined}
+                                                    messageId={message.id}
+                                                    message={message}
+                                                    messageIndex={messageIndex}
+                                                    isLastMessage={isLastMessage}
+                                                />
+                                            </div>
+                                        );
                                     })}
                                     
-                                    {/* Render any widgets not in contentOrder */}
+                                    {/* Render any widgets not in contentOrder (excluding todo widgets) */}
                                     {message.widgets
-                                        .filter(w => !contentOrder.includes(w.id))
+                                        .filter(w => !contentOrder.includes(w.id) && !isTodoWidget(w))
                                         .map((widget) => (
                                             <div key={widget.id} className="mb-3">
                                                 <WidgetRenderer
@@ -149,7 +188,9 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({ message, me
                             );
                         }
                         
-                        // Fallback: render text first, then widgets (backward compatibility)
+                        // Fallback: render text first, then widgets (with todos inline)
+                        const fallbackTodosMap = new Map<string, TodoItem>();
+                        
                         return (
                             <>
                                 {message.text && (
@@ -164,19 +205,40 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({ message, me
                                     </div>
                                 )}
                                 
+                                {/* Render widgets - todos inline */}
                                 {message.widgets && message.widgets.length > 0 && (
                                     <div className="mt-3 space-y-2">
-                                        {message.widgets.map((widget) => (
-                                            <WidgetRenderer
-                                                key={widget.id}
-                                                widget={widget}
-                                                sessionId={currentSessionId || undefined}
-                                                messageId={message.id}
-                                                message={message}
-                                                messageIndex={messageIndex}
-                                                isLastMessage={isLastMessage}
-                                            />
-                                        ))}
+                                        {message.widgets.map((widget) => {
+                                            if (isTodoWidget(widget)) {
+                                                const todos = extractTodos(widget);
+                                                if (todos) {
+                                                    // Update accumulated todos
+                                                    todos.forEach((todo: TodoItem) => {
+                                                        fallbackTodosMap.set(todo.id, todo);
+                                                    });
+                                                    // Render current state
+                                                    const currentTodos = Array.from(fallbackTodosMap.values());
+                                                    return (
+                                                        <div key={widget.id} className="mb-2">
+                                                            <TodoList todos={currentTodos} />
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }
+                                            
+                                            return (
+                                                <WidgetRenderer
+                                                    key={widget.id}
+                                                    widget={widget}
+                                                    sessionId={currentSessionId || undefined}
+                                                    messageId={message.id}
+                                                    message={message}
+                                                    messageIndex={messageIndex}
+                                                    isLastMessage={isLastMessage}
+                                                />
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </>

@@ -10,33 +10,31 @@ interface ToolWidgetProps {
 }
 
 export const ToolWidget: React.FC<ToolWidgetProps> = ({ widget, onExpansionChange, shouldAnimate = false }) => {
-    // Widget expansion state: read from prop, sync changes via callback
-    const [isExpanded, setIsExpanded] = useState(widget.isExpanded ?? false);
     const { name, args } = widget.data;
     const status = widget.status;
 
-    // Sync local state when widget prop changes (e.g., from store updates)
-    useEffect(() => {
-        if (widget.isExpanded !== undefined && widget.isExpanded !== isExpanded) {
-            setIsExpanded(widget.isExpanded);
-        }
-    }, [widget.isExpanded, isExpanded]);
+    // Widget expansion state: use prop if defined, otherwise use local state
+    const [localExpanded, setLocalExpanded] = useState(widget.isExpanded ?? false);
+    const isExpanded = widget.isExpanded !== undefined ? widget.isExpanded : localExpanded;
 
     // Sync local expansion state to store on unmount (handles edge case where local state
     // changes but user navigates away before toggling)
     useEffect(() => {
         return () => {
-            if (widget.isExpanded !== isExpanded) {
-                onExpansionChange?.(isExpanded);
+            if (widget.isExpanded === undefined && localExpanded !== (widget.isExpanded ?? false)) {
+                onExpansionChange?.(localExpanded);
             }
         };
-    }, [isExpanded, widget.isExpanded, onExpansionChange]);
+    }, [localExpanded, widget.isExpanded, onExpansionChange]);
 
     const handleToggle = () => {
         const newExpanded = !isExpanded;
-        setIsExpanded(newExpanded);
+        if (widget.isExpanded === undefined) {
+            setLocalExpanded(newExpanded);
+        }
         onExpansionChange?.(newExpanded);
     };
+
 
     return (
         <div className="border border-white/10 rounded-lg bg-black/20 overflow-hidden text-sm">
