@@ -816,8 +816,17 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 			continue
 		}
 
+		// CRITICAL FIX: Gemini requires tool results to be in user role messages, not model role messages
+		// Check if this message contains tool results - if so, treat it as a user message
+		toolResults := protocol.GetToolResultsFromMessage(msg)
+		hasToolResults := len(toolResults) > 0
+
 		var role string
-		if msg.Role == pb.Role_ROLE_AGENT {
+		// If message has tool results, it must be a user message for Gemini API
+		// This matches Anthropic's behavior where tool results are in user messages
+		if hasToolResults {
+			role = geminiRoleUser
+		} else if msg.Role == pb.Role_ROLE_AGENT {
 			role = geminiRoleModel
 		} else {
 			role = geminiRoleUser
@@ -828,7 +837,8 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 		// CRITICAL FIX: Extract and inject thinking from history for multi-turn conversations
 		// Gemini requires thought signatures to be passed back for function calling continuity
 		// See: https://ai.google.dev/gemini-api/docs/thought-signatures
-		if msg.Role == pb.Role_ROLE_AGENT {
+		// Only add thinking for model role messages (not tool result messages)
+		if msg.Role == pb.Role_ROLE_AGENT && !hasToolResults {
 			thinkingContent := protocol.ExtractThinkingFromMessage(msg)
 			if thinkingContent != "" && p.config.Thinking != nil && p.config.Thinking.Enabled {
 				// Add thinking as first part with thought:true marker
@@ -892,16 +902,19 @@ func (p *GeminiProvider) convertMessages(messages []*pb.Message) ([]GeminiConten
 			}
 		}
 
-		for _, tc := range protocol.GetToolCallsFromMessage(msg) {
-			parts = append(parts, GeminiPart{
-				"functionCall": map[string]interface{}{
-					"name": tc.Name,
-					"args": tc.Args,
-				},
-			})
+		// Only add functionCall parts for model role messages (not tool result messages)
+		if !hasToolResults {
+			for _, tc := range protocol.GetToolCallsFromMessage(msg) {
+				parts = append(parts, GeminiPart{
+					"functionCall": map[string]interface{}{
+						"name": tc.Name,
+						"args": tc.Args,
+					},
+				})
+			}
 		}
 
-		toolResults := protocol.GetToolResultsFromMessage(msg)
+		// Add functionResponse parts for tool result messages
 		for _, toolResult := range toolResults {
 			parts = append(parts, GeminiPart{
 				"functionResponse": map[string]interface{}{

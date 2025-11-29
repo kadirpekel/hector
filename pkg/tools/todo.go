@@ -35,7 +35,7 @@ func NewTodoTool() *TodoTool {
 func (t *TodoTool) GetInfo() ToolInfo {
 	return ToolInfo{
 		Name:        "todo_write",
-		Description: "Create and manage a structured task list for tracking progress. Use for complex multi-step tasks (3+ steps) to demonstrate thoroughness.",
+		Description: "Create and manage a structured task list for tracking progress. Use for complex multi-step tasks (3+ steps) to demonstrate thoroughness. IMPORTANT: You cannot clear todos - the todos array must always contain at least one item. Completed todos remain in the list.",
 		Parameters: []ToolParameter{
 			{
 				Name:        "merge",
@@ -46,7 +46,7 @@ func (t *TodoTool) GetInfo() ToolInfo {
 			{
 				Name:        "todos",
 				Type:        "array",
-				Description: "Array of todo items. Each item has: id (string), content (string), status ('pending'|'in_progress'|'completed'|'canceled')",
+				Description: "Array of todo items. Each item has: id (string), content (string), status ('pending'|'in_progress'|'completed'|'canceled'). Must contain at least one item - empty arrays are not allowed. You cannot clear todos; completed todos remain in the list.",
 				Required:    true,
 				Items: map[string]interface{}{
 					"type": "object",
@@ -91,9 +91,13 @@ func (t *TodoTool) Execute(ctx context.Context, args map[string]interface{}) (To
 	}
 
 	todosRaw, ok := args["todos"].([]interface{})
-	if !ok || len(todosRaw) == 0 {
-		return t.errorResult("todos parameter is required and must be a non-empty array", start),
+	if !ok {
+		return t.errorResult("todos parameter is required and must be an array", start),
 			fmt.Errorf("todos parameter is required")
+	}
+	if len(todosRaw) == 0 {
+		return t.errorResult("todos array cannot be empty. You cannot clear todos - completed todos remain in the list. To update todos, include at least one todo item with id, content, and status.", start),
+			fmt.Errorf("todos array cannot be empty")
 	}
 
 	todos := make([]TodoItem, 0, len(todosRaw))
