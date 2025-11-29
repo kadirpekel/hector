@@ -112,7 +112,6 @@ agents:
       - "execute_command"
       - "search"
       - "agent_call"
-      - "generate_image"  # Vision tools
 ```
 
 See [Tools](tools.md) for details.

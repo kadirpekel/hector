@@ -322,66 +322,6 @@ message FilePart {
 
 ---
 
-## Vision Tools
-
-Hector includes built-in vision tools for image generation and processing:
-
-### generate_image
-
-Generate images using DALL-E 3:
-
-```yaml
-agents:
-  creative:
-    tools: ["generate_image"]
-
-tools:
-  generate_image:
-    type: "generate_image"
-    config:
-      api_key: "${OPENAI_API_KEY}"  # Required
-      model: "dall-e-3"              # Default: dall-e-3
-      size: "1024x1024"              # Default: 1024x1024
-      quality: "standard"            # standard or hd
-      style: "vivid"                 # vivid or natural
-      timeout: "60s"                 # Default: 60s
-```
-
-**Tool Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `prompt` | string | ✅ | Text description of image to generate |
-| `size` | string | ❌ | Image size (e.g., "1024x1024") |
-| `quality` | string | ❌ | "standard" or "hd" |
-| `style` | string | ❌ | "vivid" or "natural" |
-
-**Example Usage:**
-
-```
-User: Generate an image of a sunset over mountains
-Agent: generate_image(prompt="A beautiful sunset over snow-capped mountains")
-Agent: Image generated successfully: https://...
-```
-
-### screenshot_page
-
-**Status:** Placeholder (not yet implemented)
-
-Take screenshots of web pages (requires headless browser integration):
-
-```yaml
-tools:
-  screenshot_page:
-    type: "screenshot_page"
-    config:
-      timeout: "30s"
-```
-
-**Note:** This tool is currently a placeholder. Full implementation requires headless browser integration (Chrome DevTools Protocol, Playwright, etc.).
-
----
-
 ## Use Cases
 
 ### Image Analysis
@@ -426,16 +366,6 @@ Answer questions about image content:
 ```
 User: [sends photo] "What color is the car?"
 Agent: The car in the image is red.
-```
-
-### Image Generation
-
-Generate images based on text descriptions:
-
-```
-User: Create an image of a futuristic cityscape
-Agent: generate_image(prompt="Futuristic cityscape with flying cars and neon lights")
-Agent: [returns generated image URL]
 ```
 
 ### Multi-Modal Conversations
@@ -606,7 +536,6 @@ agents:
         - "image/webp"
     
     tools:
-      - "generate_image"
     
     prompt:
       system_role: |
@@ -707,7 +636,7 @@ func sendImageMessage(ctx context.Context, agent *agent.Agent, imageURL string) 
 
 ## Next Steps
 
-- **[Tools](tools.md)** - Learn about vision tools (generate_image, screenshot_page)
+- **[Tools](tools.md)** - Learn about available tools
 - **[LLM Providers](llm-providers.md)** - Configure vision-capable models
 - **[A2A Protocol](../reference/a2a-protocol.md)** - Understand FilePart message format
 - **[Configuration Reference](../reference/configuration.md)** - Complete configuration options

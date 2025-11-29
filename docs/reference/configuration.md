@@ -897,21 +897,6 @@ tools:
   todo_write:
     type: "todo"
   
-  generate_image:
-    type: "generate_image"
-    config:
-      api_key: "${OPENAI_API_KEY}"  # Required for DALL-E
-      model: "dall-e-3"              # Default: dall-e-3
-      size: "1024x1024"              # Default: 1024x1024
-      quality: "standard"            # standard or hd
-      style: "vivid"                 # vivid or natural
-      timeout: "60s"                 # Default: 60s
-  
-  screenshot_page:
-    type: "screenshot_page"
-    config:
-      timeout: "30s"                 # Default: 30s
-    # Note: Currently a placeholder - requires headless browser integration
 ```
 
 ### Human-in-the-Loop (Tool Approval)

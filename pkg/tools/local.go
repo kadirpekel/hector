@@ -64,10 +64,6 @@ func NewLocalToolSourceWithConfigAndAgentRegistry(toolConfigs map[string]*config
 			tool, err = NewWebRequestToolWithConfig(toolName, toolConfig)
 		case "todo":
 			tool = NewTodoTool()
-		case "generate_image":
-			tool, err = NewGenerateImageToolWithConfig(toolName, toolConfig)
-		case "screenshot_page":
-			tool, err = NewScreenshotPageToolWithConfig(toolName, toolConfig)
 		case "agent_call":
 
 			var registry AgentRegistry

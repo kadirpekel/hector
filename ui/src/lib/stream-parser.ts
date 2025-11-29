@@ -322,32 +322,6 @@ export class StreamParser {
                             }
                         });
                     }
-                    
-                    // Check for image generation - insert image widget right after the tool
-                    if ((existing.data as { name?: string })?.name === 'generate_image' && metadata.url) {
-                        const imageId = `img-${toolId}`;
-                        if (!widgetMap.has(imageId)) {
-                            widgetMap.set(imageId, {
-                                id: imageId,
-                                type: 'image',
-                                data: {
-                                    url: metadata.url,
-                                    revised_prompt: metadata.revised_prompt
-                                },
-                                status: 'success',
-                                isExpanded: true
-                            });
-                            // Insert image right after tool in content order (clean insertion, no hacky ordering)
-                            const toolIndex = contentOrder.indexOf(toolId);
-                            if (toolIndex !== -1 && !contentOrder.includes(imageId)) {
-                                contentOrder.splice(toolIndex + 1, 0, imageId);
-                            } else if (toolIndex === -1 && !contentOrder.includes(imageId)) {
-                                // Tool not in order yet, add both
-                                contentOrder.push(toolId);
-                                contentOrder.push(imageId);
-                            }
-                        }
-                    }
                 }
             } else if (partObj.text && !isThinking && !isToolCall && !isApproval) {
                 // Regular text part - accumulate it
