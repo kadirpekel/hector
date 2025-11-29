@@ -224,8 +224,8 @@ func (s *ChainOfThoughtStrategy) GetPromptSlots() PromptSlots {
 
 		<completion_spec>
 			- When all goal tasks are done or nothing else is needed:
-				- Confirm that all tasks are checked off in the todo list ('todo_write' with merge=true).
-				- Reconcile and close the todo list.
+				- Confirm that all tasks are checked off in the todo list ('todo_write' with merge=true, updating remaining items to 'completed' status).
+				- Do NOT call todo_write with an empty array - always include at least the items being updated.
 				- Then give your summary per <summary_spec>.
 		</completion_spec>
 

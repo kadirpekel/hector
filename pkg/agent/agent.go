@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/component"
 	"github.com/kadirpekel/hector/pkg/config"
@@ -1358,10 +1359,30 @@ func (a *Agent) emitTodoDisplay(ctx context.Context, outputCh chan<- *pb.Part) {
 		"todos": todoData,
 	}
 
-	// Emit as AG-UI thinking part
+	// Emit as AG-UI thinking part with a tracked block ID
+	blockID := uuid.New().String()
+
+	// Add block_id to the metadata via the data
+	data["block_id"] = blockID
+
 	part := protocol.CreateThinkingPartWithData(textBuilder.String(), "todo", data)
+	// Override the auto-generated block_id with our tracked one
+	if part.Metadata != nil && part.Metadata.Fields != nil {
+		part.Metadata.Fields["block_id"] = structpb.NewStringValue(blockID)
+	}
+
 	if sendErr := safeSendPart(ctx, outputCh, part); sendErr != nil {
 		slog.Error("Failed to send todo display", "agent", a.name, "error", sendErr)
+		return
+	}
+
+	// Immediately emit thinking_complete to close the block
+	// Todo display is a one-shot display, not a streaming thinking block
+	completionPart := protocol.CreateThinkingCompletionPart(blockID, "")
+	if completionPart != nil {
+		if sendErr := safeSendPart(ctx, outputCh, completionPart); sendErr != nil {
+			slog.Error("Failed to send todo display completion", "agent", a.name, "error", sendErr)
+		}
 	}
 }
 func (a *Agent) truncateToolResults(results []reasoning.ToolResult, cfg config.ReasoningConfig) []reasoning.ToolResult {
