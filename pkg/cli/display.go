@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 
 	"github.com/kadirpekel/hector/pkg/a2a/pb"
 	"github.com/kadirpekel/hector/pkg/protocol"
@@ -28,6 +30,10 @@ const (
 // Maximum size for JSON pretty-printing (10KB)
 const maxPrettyPrintSize = 10000
 
+// displayMu protects all display state variables from concurrent access
+// This is necessary because DisplayMessage may be called from multiple goroutines
+var displayMu sync.Mutex
+
 // currentThinkingBlockID tracks the active thinking block across multiple DisplayMessage calls
 // This ensures the THINKING prefix is only shown once per thinking block, even when chunks arrive separately
 var currentThinkingBlockID string
@@ -47,10 +53,18 @@ var lastOutputType string
 
 // accumulatedTodos tracks todos across todo_write tool calls (similar to UI behavior)
 // Key: todo ID, Value: todo item with id, content, status
+// Note: This map is bounded by maxAccumulatedTodos to prevent memory leaks in long sessions
 var accumulatedTodos = make(map[string]map[string]interface{})
+
+// todoInsertOrder tracks the order in which todos were inserted for consistent display ordering
+// Go maps don't maintain insertion order, so we track IDs separately
+var todoInsertOrder []string
 
 // toolCallIDToName maps tool call IDs to tool names (for identifying todo_write results)
 var toolCallIDToName = make(map[string]string)
+
+// maxAccumulatedTodos limits the number of todos to prevent memory leaks in long sessions
+const maxAccumulatedTodos = 100
 
 func DisplayAgentList(agents []*pb.AgentCard, mode string) {
 	fmt.Printf("\nAvailable Agents (%s)\n\n", mode)
@@ -122,15 +136,22 @@ func DisplayAgentCard(agentID string, card *pb.AgentCard) {
 // ResetDisplayState resets the display state tracking variables
 // Call this when starting a new conversation or message sequence
 func ResetDisplayState() {
+	displayMu.Lock()
+	defer displayMu.Unlock()
+
 	currentThinkingBlockID = ""
 	thinkingPrefixPrinted = false
 	displayedToolCallIDs = make(map[string]bool)
 	lastOutputType = ""
 	accumulatedTodos = make(map[string]map[string]interface{})
+	todoInsertOrder = nil
 	toolCallIDToName = make(map[string]string)
 }
 
 func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools bool) bool {
+	displayMu.Lock()
+	defer displayMu.Unlock()
+
 	if msg == nil {
 		return false
 	}
@@ -360,6 +381,18 @@ func DisplayMessage(msg *pb.Message, prefix string, showThinking bool, showTools
 										for _, todoRaw := range todosList {
 											if todoMap, ok := todoRaw.(map[string]interface{}); ok {
 												if id, ok := todoMap["id"].(string); ok && id != "" {
+													// Track insertion order for new todos
+													if _, exists := accumulatedTodos[id]; !exists {
+														todoInsertOrder = append(todoInsertOrder, id)
+														// Prevent memory leak: remove oldest if over limit
+														if len(accumulatedTodos) >= maxAccumulatedTodos {
+															if len(todoInsertOrder) > 0 {
+																oldestID := todoInsertOrder[0]
+																delete(accumulatedTodos, oldestID)
+																todoInsertOrder = todoInsertOrder[1:]
+															}
+														}
+													}
 													accumulatedTodos[id] = todoMap
 												}
 											}
@@ -616,6 +649,7 @@ func displayTodosCLI(data *structpb.Struct) {
 
 // displayTodosInlineCLI renders accumulated todos inline (for todo_write tool calls)
 // Shows compact, offset format similar to UI - only shows first 4 items by default
+// Note: visibleTodosCount=4 should match VISIBLE_ITEMS in ui/src/components/Chat/TodoList.tsx
 const visibleTodosCount = 4
 
 func displayTodosInlineCLI() {
@@ -623,10 +657,26 @@ func displayTodosInlineCLI() {
 		return
 	}
 
-	// Convert map to slice for ordered display
+	// Build ordered slice using insertion order (todoInsertOrder tracks when each todo was first added)
+	// This ensures consistent display order across multiple DisplayMessage calls
 	todos := make([]map[string]interface{}, 0, len(accumulatedTodos))
-	for _, todo := range accumulatedTodos {
-		todos = append(todos, todo)
+	for _, id := range todoInsertOrder {
+		if todo, exists := accumulatedTodos[id]; exists {
+			todos = append(todos, todo)
+		}
+	}
+
+	// Fallback: if todoInsertOrder is somehow out of sync, sort by ID for deterministic order
+	if len(todos) != len(accumulatedTodos) {
+		todos = todos[:0] // Reset slice
+		ids := make([]string, 0, len(accumulatedTodos))
+		for id := range accumulatedTodos {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			todos = append(todos, accumulatedTodos[id])
+		}
 	}
 
 	// Show only first N items (offset for long lists)

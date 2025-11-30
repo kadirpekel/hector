@@ -1,135 +1,162 @@
-import { useState, useEffect, useRef } from 'react';
-import type { Widget } from '../../types';
+import { useState, useEffect, useRef, useCallback } from "react";
+import type { Widget } from "../../types";
 
 interface UseWidgetExpansionOptions {
-    widget: Widget;
-    onExpansionChange?: (expanded: boolean) => void;
-    autoExpandWhenActive?: boolean; // Only thinking widgets should auto-expand by default
-    activeStatuses?: string[]; // Statuses that count as "active" for auto-expand
-    completedStatuses?: string[]; // Statuses that trigger auto-collapse
-    collapseDelay?: number; // Delay before auto-collapse (default 4000ms)
+  widget: Widget;
+  onExpansionChange?: (expanded: boolean) => void;
+  autoExpandWhenActive?: boolean;
+  activeStatuses?: string[];
+  completedStatuses?: string[];
+  collapseDelay?: number;
 }
 
 /**
- * Shared hook for widget expansion behavior
- * Handles auto-expand/collapse logic consistently across all widgets
+ * Widget Expansion State Machine
+ * ==============================
+ *
+ * This hook manages widget expansion with the following states:
+ *
+ * STATES:
+ *   - collapsed: Widget is minimized
+ *   - expanded: Widget is showing full content
+ *   - pending_collapse: Widget will collapse after delay (completed status)
+ *
+ * TRANSITIONS:
+ *   - collapsed → expanded: When status becomes active OR content starts streaming
+ *   - expanded → pending_collapse: When status becomes completed
+ *   - pending_collapse → collapsed: After collapseDelay timeout
+ *   - any → (manual): User toggle overrides all automatic behavior
+ *
+ * OVERRIDE BEHAVIOR:
+ *   - User manual toggle sets userToggled=true
+ *   - While userToggled=true, no automatic transitions occur
+ *   - userToggled resets to false when status changes
  */
 export function useWidgetExpansion({
-    widget,
-    onExpansionChange,
-    autoExpandWhenActive = false, // Default: don't auto-expand (only thinking should)
-    activeStatuses = ['working', 'pending', 'active'],
-    completedStatuses = ['success', 'failed', 'completed', 'decided'],
-    collapseDelay = 4000, // 4 seconds default
+  widget,
+  onExpansionChange,
+  autoExpandWhenActive = false,
+  activeStatuses = ["working", "pending", "active"],
+  completedStatuses = ["success", "failed", "completed", "decided"],
+  collapseDelay = 4000,
 }: UseWidgetExpansionOptions) {
-    const status = widget.status;
-    const isActive = activeStatuses.includes(status || '');
-    const isCompleted = completedStatuses.includes(status || '');
-    
-    // Determine initial expanded state
-    // Also auto-expand if widget has content and is active (content is streaming)
-    const hasContent = !!(widget.content && widget.content.length > 0);
-    const shouldAutoExpand = autoExpandWhenActive && (isActive || (isActive && hasContent));
-    const [localExpanded, setLocalExpanded] = useState(
-        widget.isExpanded !== undefined 
-            ? widget.isExpanded 
-            : shouldAutoExpand
-    );
-    
-    const isExpanded = widget.isExpanded !== undefined ? widget.isExpanded : localExpanded;
-    const prevStatusRef = useRef<string | undefined>(status);
-    const prevContentLengthRef = useRef(0);
-    const collapseTimeoutRef = useRef<number | null>(null);
-    const userToggledRef = useRef(false);
+  // Derived state
+  const status = widget.status;
+  const isActive = activeStatuses.includes(status || "");
+  const isCompleted = completedStatuses.includes(status || "");
 
-    // Auto-expand/collapse logic
-    useEffect(() => {
-        const prevStatus = prevStatusRef.current;
-        const statusChanged = prevStatus !== status;
-        prevStatusRef.current = status;
+  // Expansion state
+  const [localExpanded, setLocalExpanded] = useState(() => {
+    if (widget.isExpanded !== undefined) return widget.isExpanded;
+    return autoExpandWhenActive && isActive;
+  });
 
-        // Track content changes for streaming detection
-        const currentContentLength = widget.content?.length || 0;
-        const contentAppeared = currentContentLength > prevContentLengthRef.current;
-        prevContentLengthRef.current = currentContentLength;
+  // Refs for tracking changes between renders
+  const prevStatusRef = useRef(status);
+  const prevContentLengthRef = useRef(widget.content?.length || 0);
+  const collapseTimeoutRef = useRef<number | null>(null);
+  const userToggledRef = useRef(false);
 
-        // Clear any pending collapse timeout
-        if (collapseTimeoutRef.current !== null) {
-            window.clearTimeout(collapseTimeoutRef.current);
-            collapseTimeoutRef.current = null;
-        }
+  // Computed: actual expanded state (prop takes precedence over local)
+  const isExpanded = widget.isExpanded ?? localExpanded;
 
-        // Auto-expand when:
-        // 1. Status becomes active (statusChanged && isActive)
-        // 2. Content starts appearing while active (contentAppeared && isActive)
-        const shouldExpand = (isActive && statusChanged) || (isActive && contentAppeared);
-        
-        if (shouldExpand && autoExpandWhenActive && !isExpanded && !userToggledRef.current) {
-            requestAnimationFrame(() => {
-                const newExpanded = true;
-                if (widget.isExpanded === undefined) {
-                    setLocalExpanded(newExpanded);
-                }
-                onExpansionChange?.(newExpanded);
-            });
-        }
-        // Auto-collapse when completed (after delay)
-        else if (isCompleted && statusChanged) {
-            if (isExpanded && !userToggledRef.current) {
-                collapseTimeoutRef.current = window.setTimeout(() => {
-                    const newExpanded = false;
-                    if (widget.isExpanded === undefined) {
-                        setLocalExpanded(newExpanded);
-                    }
-                    onExpansionChange?.(newExpanded);
-                }, collapseDelay);
-            }
-        }
+  // Helper: update expansion state
+  const setExpanded = useCallback(
+    (expanded: boolean) => {
+      if (widget.isExpanded === undefined) {
+        setLocalExpanded(expanded);
+      }
+      onExpansionChange?.(expanded);
+    },
+    [widget.isExpanded, onExpansionChange],
+  );
 
-        // Reset user toggle flag when status changes
-        if (statusChanged) {
-            userToggledRef.current = false;
-        }
+  // Helper: clear any pending collapse timeout
+  const clearCollapseTimeout = useCallback(() => {
+    if (collapseTimeoutRef.current !== null) {
+      window.clearTimeout(collapseTimeoutRef.current);
+      collapseTimeoutRef.current = null;
+    }
+  }, []);
 
-        // Cleanup timeout on unmount
-        return () => {
-            if (collapseTimeoutRef.current !== null) {
-                window.clearTimeout(collapseTimeoutRef.current);
-            }
-        };
-    }, [status, isExpanded, widget.isExpanded, widget.content, onExpansionChange, isActive, isCompleted, autoExpandWhenActive, collapseDelay]);
+  // Main effect: handle automatic expansion/collapse
+  useEffect(() => {
+    const prevStatus = prevStatusRef.current;
+    const statusChanged = prevStatus !== status;
+    prevStatusRef.current = status;
 
-    // Sync local expansion state to store on unmount
-    useEffect(() => {
-        return () => {
-            if (widget.isExpanded === undefined && localExpanded !== (widget.isExpanded ?? false)) {
-                onExpansionChange?.(localExpanded);
-            }
-        };
-    }, [localExpanded, widget.isExpanded, onExpansionChange]);
+    const currentContentLength = widget.content?.length || 0;
+    const contentAppeared = currentContentLength > prevContentLengthRef.current;
+    prevContentLengthRef.current = currentContentLength;
 
-    const handleToggle = () => {
-        // Clear any pending auto-collapse when user manually toggles
-        if (collapseTimeoutRef.current !== null) {
-            window.clearTimeout(collapseTimeoutRef.current);
-            collapseTimeoutRef.current = null;
-        }
+    // Reset user override when status changes
+    if (statusChanged) {
+      userToggledRef.current = false;
+    }
 
-        // Mark that user manually toggled (prevents auto-expand/collapse)
-        userToggledRef.current = true;
+    // Skip automatic behavior if user manually toggled
+    if (userToggledRef.current) {
+      return;
+    }
 
-        const newExpanded = !isExpanded;
-        if (widget.isExpanded === undefined) {
-            setLocalExpanded(newExpanded);
-        }
-        onExpansionChange?.(newExpanded);
+    clearCollapseTimeout();
+
+    // Auto-expand: status became active OR content started streaming while active
+    if (autoExpandWhenActive && !isExpanded) {
+      const shouldExpand =
+        (isActive && statusChanged) || (isActive && contentAppeared);
+      if (shouldExpand) {
+        requestAnimationFrame(() => setExpanded(true));
+        return;
+      }
+    }
+
+    // Auto-collapse: status became completed (with delay)
+    if (isCompleted && statusChanged && isExpanded) {
+      collapseTimeoutRef.current = window.setTimeout(() => {
+        setExpanded(false);
+      }, collapseDelay);
+    }
+
+    return clearCollapseTimeout;
+  }, [
+    status,
+    isExpanded,
+    widget.content,
+    autoExpandWhenActive,
+    isActive,
+    isCompleted,
+    collapseDelay,
+    setExpanded,
+    clearCollapseTimeout,
+  ]);
+
+  // Cleanup on unmount: sync final state
+  useEffect(() => {
+    return () => {
+      clearCollapseTimeout();
+      if (widget.isExpanded === undefined && localExpanded !== false) {
+        onExpansionChange?.(localExpanded);
+      }
     };
+  }, [
+    localExpanded,
+    widget.isExpanded,
+    onExpansionChange,
+    clearCollapseTimeout,
+  ]);
 
-    return {
-        isExpanded,
-        isActive,
-        isCompleted,
-        handleToggle,
-    };
+  // Manual toggle handler
+  const handleToggle = useCallback(() => {
+    clearCollapseTimeout();
+    userToggledRef.current = true;
+    setExpanded(!isExpanded);
+  }, [isExpanded, setExpanded, clearCollapseTimeout]);
+
+  return {
+    isExpanded,
+    isActive,
+    isCompleted,
+    handleToggle,
+  };
 }
-

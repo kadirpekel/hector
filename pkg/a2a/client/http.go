@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -143,9 +144,25 @@ func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message 
 		defer close(streamChan)
 		defer resp.Body.Close()
 
-		// Use bufio.NewReader with ReadBytes instead of Scanner for better handling of large lines
-		// ReadBytes reads until delimiter (no fixed buffer limit), making it more suitable for
-		// large tool results (images, etc.) compared to Scanner's default 64KB limit
+		// SSE Streaming Pattern (intentionally duplicated across streaming implementations)
+		// ================================================================================
+		// This pattern is used in multiple files for SSE stream processing:
+		//   - pkg/a2a/client/http.go (this file)
+		//   - pkg/llms/anthropic.go
+		//   - pkg/llms/gemini.go
+		//   - pkg/llms/openai.go
+		//   - pkg/llms/ollama.go
+		//   - pkg/tools/mcp.go
+		//
+		// The duplication is intentional because:
+		// 1. Each implementation has different error handling semantics (channels vs returns)
+		// 2. Each has context-specific logging and recovery behavior
+		// 3. Extracting to a shared utility would require complex callback patterns
+		//
+		// Key pattern: Use bufio.NewReader.ReadBytes('\n') instead of bufio.Scanner
+		// Reason: Scanner has a default 64KB buffer limit which fails on large payloads
+		// (e.g., base64-encoded images in tool results). ReadBytes has no such limit.
+		// ================================================================================
 		reader := bufio.NewReader(resp.Body)
 
 		var currentEvent string
@@ -157,7 +174,8 @@ func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message 
 				if err == io.EOF {
 					break
 				}
-				// Log error but continue - stream may have ended
+				// Log non-EOF errors for debugging, then exit stream loop
+				slog.Debug("A2A SSE stream read error", "error", err)
 				break
 			}
 
