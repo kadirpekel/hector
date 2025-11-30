@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Shield,
   Check,
   X,
   ChevronDown,
-  ChevronRight,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import type { Widget } from "../../types";
 import { cn } from "../../lib/utils";
@@ -13,6 +13,8 @@ import { useStore } from "../../store/useStore";
 import { StreamParser } from "../../lib/stream-parser";
 import { handleError } from "../../lib/error-handler";
 import { generateShortId } from "../../lib/id-generator";
+import { useWidgetExpansion } from "./useWidgetExpansion";
+import { getWidgetStatusStyles, getWidgetContainerClasses, getWidgetHeaderClasses } from "./widgetStyles";
 
 interface ApprovalWidgetProps {
   widget: Widget;
@@ -27,12 +29,6 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
   onExpansionChange,
   shouldAnimate = false,
 }) => {
-  // Auto-expand when pending for better UX, collapse when decided
-  const [isExpanded, setIsExpanded] = useState(
-    widget.isExpanded !== undefined
-      ? widget.isExpanded
-      : widget.status === "pending",
-  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toolName, toolInput } = widget.data;
   const { status, decision } = widget;
@@ -44,31 +40,28 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
     setIsGenerating,
   } = useStore();
 
-  // Update expanded state when widget status changes
-  useEffect(() => {
-    if (widget.status === "decided" && isExpanded) {
-      // Collapse immediately when decided
-      setIsExpanded(false);
-    } else if (widget.status === "pending" && !isExpanded) {
-      setIsExpanded(true);
+  // Use shared expansion hook - approval widgets auto-expand when pending
+  const { isExpanded, isActive, isCompleted, handleToggle } = useWidgetExpansion({
+    widget,
+    onExpansionChange,
+    autoExpandWhenActive: true, // Auto-expand when pending
+    activeStatuses: ['pending'],
+    completedStatuses: ['decided'],
+    collapseDelay: 4000, // 4 seconds
+  });
+
+  // Custom status styles for approval (handles approve/deny decision)
+  const getApprovalStatusStyles = () => {
+    if (status === "pending") {
+      return getWidgetStatusStyles("pending", false);
+    } else if (decision === "approve") {
+      return getWidgetStatusStyles("success", true);
+    } else {
+      return getWidgetStatusStyles("failed", true);
     }
-  }, [widget.status]); // Remove isExpanded from dependencies to avoid loops
-
-  // Sync local expansion state to store on unmount (handles edge case where local state
-  // changes via auto-expand but user navigates away before toggling)
-  useEffect(() => {
-    return () => {
-      if (widget.isExpanded !== isExpanded) {
-        onExpansionChange?.(isExpanded);
-      }
-    };
-  }, [isExpanded, widget.isExpanded, onExpansionChange]);
-
-  const handleToggle = () => {
-    const newExpanded = !isExpanded;
-    setIsExpanded(newExpanded);
-    onExpansionChange?.(newExpanded);
   };
+
+  const statusStyles = getApprovalStatusStyles();
 
   const handleDecision = async (decisionValue: "approve" | "deny") => {
     if (status !== "pending" || isSubmitting) return;
@@ -157,32 +150,35 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
   };
 
   return (
-    <div className="border border-white/10 rounded-lg bg-black/20 overflow-hidden text-sm">
+    <div className={getWidgetContainerClasses(statusStyles, isExpanded, isCompleted)}>
       <div
-        className="flex items-center gap-2 p-2 bg-white/5 cursor-pointer hover:bg-white/10 transition-colors"
+        className={getWidgetHeaderClasses(statusStyles, isActive)}
         onClick={handleToggle}
       >
-        <Shield
-          size={14}
-          className={cn(
-            status === "pending"
-              ? "text-yellow-400"
-              : decision === "approve"
-                ? "text-green-400"
-                : "text-red-400",
-            shouldAnimate && "animate-[badgeLifecycle_2s_ease-in-out_infinite]",
+        <div className={cn(
+          "relative",
+          statusStyles.iconColor
+        )}>
+          {isActive && (
+            <Sparkles 
+              size={12} 
+              className="absolute -top-1 -right-1 animate-pulse opacity-70"
+            />
           )}
-        />
-        <span
-          className={cn(
-            "font-medium",
-            status === "pending"
-              ? "text-yellow-200"
-              : decision === "approve"
-                ? "text-green-200"
-                : "text-red-200",
-          )}
-        >
+          <Shield
+            size={isCompleted ? 14 : 16}
+            className={cn(
+              "transition-transform duration-200",
+              shouldAnimate && "animate-[badgeLifecycle_2s_ease-in-out_infinite]",
+              isExpanded && !isCompleted && "rotate-12"
+            )}
+          />
+        </div>
+        
+        <span className={cn(
+          "font-medium flex-1 text-sm",
+          statusStyles.textColor
+        )}>
           Approval Required: {toolName}
         </span>
 
@@ -192,21 +188,35 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
           )}
           {status === "decided" &&
             (decision === "approve" ? (
-              <Check size={14} className="text-green-400" />
+              <Check size={14} className="text-green-500 transition-all duration-300" />
             ) : (
-              <X size={14} className="text-red-400" />
+              <X size={14} className="text-red-500 transition-all duration-300" />
             ))}
 
-          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <ChevronDown 
+            size={14} 
+            className={cn(
+              "transition-transform duration-300 text-gray-400",
+              isExpanded ? "rotate-0" : "-rotate-90"
+            )} 
+          />
         </div>
       </div>
 
-      {isExpanded && (
-        <div className="p-3 space-y-3 border-t border-white/10 font-mono text-xs">
+      <div className={cn(
+        "overflow-hidden transition-all duration-300 ease-in-out",
+        isExpanded ? "max-h-[300px] opacity-100" : "max-h-0 opacity-0"
+      )}>
+        <div className={cn(
+          "p-3 space-y-2 border-t border-white/10 overflow-y-auto max-h-[300px] scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent",
+          isCompleted ? "bg-black/10" : "bg-black/30"
+        )}>
           {/* Input */}
-          <div>
-            <div className="text-gray-500 mb-1">Input:</div>
-            <pre className="bg-black/40 p-2 rounded overflow-x-auto text-gray-300">
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              Input
+            </div>
+            <pre className="bg-black/60 p-3 rounded-lg overflow-x-auto text-xs max-h-[120px] overflow-y-auto border border-white/10 text-gray-300 font-mono leading-relaxed scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
               {JSON.stringify(toolInput, null, 2)}
             </pre>
           </div>
@@ -221,14 +231,14 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
                 }}
                 disabled={isSubmitting}
                 className={cn(
-                  "flex-1 bg-white/5 hover:bg-green-500/20 border border-green-500/30 text-green-400 hover:text-green-300 py-1.5 px-3 rounded flex items-center justify-center gap-2 transition-colors text-xs disabled:opacity-50 disabled:cursor-not-allowed",
+                  "flex-1 bg-white/5 hover:bg-green-500/20 border border-green-500/30 text-green-400 hover:text-green-300 py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed",
                 )}
               >
                 {isSubmitting ? (
-                  <Loader2 size={12} className="animate-spin" />
+                  <Loader2 size={14} className="animate-spin" />
                 ) : (
                   <>
-                    <Check size={12} />
+                    <Check size={14} />
                     Approve
                   </>
                 )}
@@ -240,14 +250,14 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
                 }}
                 disabled={isSubmitting}
                 className={cn(
-                  "flex-1 bg-white/5 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 py-1.5 px-3 rounded flex items-center justify-center gap-2 transition-colors text-xs disabled:opacity-50 disabled:cursor-not-allowed",
+                  "flex-1 bg-white/5 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed",
                 )}
               >
                 {isSubmitting ? (
-                  <Loader2 size={12} className="animate-spin" />
+                  <Loader2 size={14} className="animate-spin" />
                 ) : (
                   <>
-                    <X size={12} />
+                    <X size={14} />
                     Deny
                   </>
                 )}
@@ -255,7 +265,7 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

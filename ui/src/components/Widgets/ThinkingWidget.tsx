@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Brain, ChevronDown, ChevronRight, CheckCircle2, Loader2 } from 'lucide-react';
+import React from 'react';
+import { Brain, ChevronDown, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Widget } from '../../types';
 import { cn } from '../../lib/utils';
+import { useWidgetExpansion } from './useWidgetExpansion';
+import { getWidgetStatusStyles, getWidgetContainerClasses, getWidgetHeaderClasses } from './widgetStyles';
+import { useAutoScroll } from './useAutoScroll';
 
 interface ThinkingWidgetProps {
     widget: Widget;
@@ -12,27 +15,18 @@ interface ThinkingWidgetProps {
 }
 
 export const ThinkingWidget: React.FC<ThinkingWidgetProps> = ({ widget, onExpansionChange, shouldAnimate = false }) => {
-    // Widget expansion state: read from prop, sync changes via callback
-    const [isExpanded, setIsExpanded] = useState(widget.isExpanded ?? false);
     const { type } = widget.data;
     const status = widget.status;
-
-    // Sync local state when widget prop changes (e.g., from store updates)
-    useEffect(() => {
-        if (widget.isExpanded !== undefined && widget.isExpanded !== isExpanded) {
-            setIsExpanded(widget.isExpanded);
-        }
-    }, [widget.isExpanded, isExpanded]);
-
-    // Sync local expansion state to store on unmount (handles edge case where local state
-    // changes but user navigates away before toggling, e.g., auto-expand scenarios)
-    useEffect(() => {
-        return () => {
-            if (widget.isExpanded !== isExpanded) {
-                onExpansionChange?.(isExpanded);
-            }
-        };
-    }, [isExpanded, widget.isExpanded, onExpansionChange]);
+    
+    // Use shared expansion hook - thinking widgets auto-expand when active
+    const { isExpanded, isActive, isCompleted, handleToggle } = useWidgetExpansion({
+        widget,
+        onExpansionChange,
+        autoExpandWhenActive: true, // Thinking widgets always auto-expand
+        activeStatuses: ['active'],
+        completedStatuses: ['completed'],
+        collapseDelay: 4000, // 4 seconds
+    });
 
     const getLabel = (type: string) => {
         switch (type) {
@@ -43,50 +37,86 @@ export const ThinkingWidget: React.FC<ThinkingWidgetProps> = ({ widget, onExpans
         }
     };
 
-    const handleToggle = () => {
-        const newExpanded = !isExpanded;
-        setIsExpanded(newExpanded);
-        onExpansionChange?.(newExpanded);
-    };
+    const statusStyles = getWidgetStatusStyles(status, isCompleted);
+    
+    // Auto-scroll thinking content when streaming
+    const thinkingContentRef = useAutoScroll<HTMLDivElement>(
+        widget.content,
+        isActive,
+        isExpanded && isActive
+    );
 
     return (
-        <div className="border border-white/10 rounded-lg bg-black/20 overflow-hidden text-sm">
+        <div className={getWidgetContainerClasses(statusStyles, isExpanded, isCompleted)}>
             <div
-                className="flex items-center gap-2 p-2 bg-white/5 cursor-pointer hover:bg-white/10 transition-colors"
+                className={getWidgetHeaderClasses(statusStyles, isActive)}
                 onClick={handleToggle}
             >
-                <Brain 
-                    size={14} 
-                    className={cn(
-                        "text-blue-400",
-                        shouldAnimate && "animate-[badgeLifecycle_2s_ease-in-out_infinite]"
+                <div className={cn(
+                    "relative",
+                    statusStyles.iconColor
+                )}>
+                    {isActive && (
+                        <Sparkles 
+                            size={12} 
+                            className="absolute -top-1 -right-1 animate-pulse opacity-70"
+                        />
                     )}
-                />
-                <span className="font-medium text-blue-200">{getLabel(type)}</span>
+                    <Brain 
+                        size={isCompleted ? 14 : 16} 
+                        className={cn(
+                            "transition-transform duration-200",
+                            shouldAnimate && "animate-[badgeLifecycle_2s_ease-in-out_infinite]",
+                            isExpanded && !isCompleted && "rotate-12"
+                        )}
+                    />
+                </div>
+                
+                <span className={cn(
+                    "font-medium flex-1 text-sm",
+                    statusStyles.textColor
+                )}>
+                    {getLabel(type)}
+                </span>
 
                 <div className="ml-auto flex items-center gap-2">
                     {status === 'active' ? (
                         <Loader2 size={14} className="animate-spin text-blue-400" />
                     ) : (
-                        <CheckCircle2 size={14} className="text-green-500" />
+                        <CheckCircle2 size={14} className="text-green-500 transition-all duration-300" />
                     )}
 
-                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    <ChevronDown 
+                        size={14} 
+                        className={cn(
+                            "transition-transform duration-300 text-gray-400",
+                            isExpanded ? "rotate-0" : "-rotate-90"
+                        )} 
+                    />
                 </div>
             </div>
 
-            {isExpanded && (
-                <div className="p-3 border-t border-white/10 text-gray-300 bg-black/40">
+            <div className={cn(
+                "overflow-hidden transition-all duration-300 ease-in-out",
+                isExpanded ? "max-h-[300px] opacity-100" : "max-h-0 opacity-0"
+            )}>
+                <div 
+                    ref={thinkingContentRef}
+                    className={cn(
+                        "p-3 border-t border-white/10 text-gray-300 overflow-y-auto max-h-[300px] scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent",
+                        isCompleted ? "bg-black/10" : "bg-black/30"
+                    )}
+                >
                     <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-black/50">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {widget.content || ''}
+                            {widget.content || (isActive ? 'Thinking...' : '')}
                         </ReactMarkdown>
                     </div>
                     {status === 'active' && (
                         <span className="inline-block w-2 h-4 ml-1 bg-blue-400 animate-pulse align-middle" />
                     )}
                 </div>
-            )}
+            </div>
         </div>
     );
 };

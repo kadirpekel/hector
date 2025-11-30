@@ -1109,17 +1109,32 @@ const (
 )
 
 func (p *GeminiProvider) parseStreamingResponse(body io.Reader, chunks chan<- StreamChunk) {
-	scanner := bufio.NewScanner(body)
+	// Use bufio.NewReader with ReadBytes instead of Scanner for better handling of large lines
+	// ReadBytes reads until delimiter (no fixed buffer limit), making it more suitable for
+	// large tool results (web search, document parsing, etc.) compared to Scanner's default 64KB limit
+	reader := bufio.NewReader(body)
 	state := newGeminiStreamingState()
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			chunks <- StreamChunk{Type: "error", Error: fmt.Errorf("failed to read stream: %w", err)}
+			return
+		}
 
-		if !strings.HasPrefix(line, "data: ") {
+		lineStr := strings.TrimSpace(string(line))
+		if lineStr == "" {
 			continue
 		}
 
-		data := strings.TrimPrefix(line, "data: ")
+		if !strings.HasPrefix(lineStr, "data: ") {
+			continue
+		}
+
+		data := strings.TrimPrefix(lineStr, "data: ")
 
 		var resp GeminiResponse
 		if err := json.Unmarshal([]byte(data), &resp); err != nil {

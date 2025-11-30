@@ -300,18 +300,28 @@ export class StreamParser {
             }
           }
         } else if (isToolCall) {
-          const toolId =
-            metadata.tool_call_id ||
-            partObj.data?.data?.id ||
-            `tool-${partIndex}`;
-          if (!widgetMap.has(toolId)) {
+          // Use tool_call_id as primary identifier (most reliable)
+          // IMPORTANT: Different tool_call_id = different tool call (e.g., retry after failure)
+          // Only prevent duplicates if the SAME tool_call_id appears multiple times
+          const toolCallId = metadata.tool_call_id || partObj.data?.data?.id;
+          const toolName = metadata.tool_name || partObj.data?.data?.name || "unknown";
+          const toolArgs = partObj.data?.data?.arguments || {};
+          
+          // Generate stable toolId - prefer tool_call_id, otherwise create deterministic ID
+          const toolId = toolCallId || 
+            `tool-${toolName}-${JSON.stringify(toolArgs).slice(0, 50)}-${partIndex}`;
+          
+          // Only prevent duplicates if the SAME tool_call_id already exists
+          // This allows legitimate retries (different tool_call_id, same tool name) to show up
+          const isDuplicate = toolCallId && widgetMap.has(toolCallId);
+          
+          if (!isDuplicate && !widgetMap.has(toolId)) {
             widgetMap.set(toolId, {
               id: toolId,
               type: "tool",
               data: {
-                name:
-                  metadata.tool_name || partObj.data?.data?.name || "unknown",
-                args: partObj.data?.data?.arguments || {},
+                name: toolName,
+                args: toolArgs,
               },
               status: "working",
               content: "",
@@ -343,27 +353,50 @@ export class StreamParser {
         }
       } else if (isToolResult) {
         // Tool result - update existing tool widget
+        // Support incremental content updates for streaming tools (e.g., agent_call, execute_command)
         const toolId =
           metadata.tool_call_id || partObj.data?.data?.tool_call_id;
         if (toolId && widgetMap.has(toolId)) {
           const existing = widgetMap.get(toolId);
           if (!existing) return;
 
-          const content = partObj.data?.data?.content || "";
+          const newContent = partObj.data?.data?.content || "";
           const isDenied =
             metadata.is_error &&
-            (content.includes("TOOL_EXECUTION_DENIED") ||
-              content.includes("user denied"));
+            (newContent.includes("TOOL_EXECUTION_DENIED") ||
+              newContent.includes("user denied"));
 
+          // Determine if this is incremental content (append) or final result (replace)
+          // For streaming tools (e.g., agent_call, execute_command), content may arrive incrementally
+          // We append if: tool is working AND we have existing content AND new content doesn't contain the existing content
+          // (meaning it's a continuation, not a replacement)
+          const existingContent = existing.content || "";
+          const isIncremental = existing.status === "working" && 
+            existingContent.length > 0 && 
+            newContent.length > 0 &&
+            !newContent.includes(existingContent) && // New content doesn't contain old (it's incremental)
+            newContent.length < existingContent.length * 2; // New chunk is reasonable size (not a full replacement)
+          
+          const updatedContent = isIncremental 
+            ? existingContent + newContent
+            : (newContent || existingContent);
+
+          // Tool result events indicate completion - determine final status
+          // IMPORTANT: tool_result events mean the tool has completed (or errored)
+          // Only keep as 'working' if we're certain this is incremental streaming (content being appended)
+          // Otherwise, tool_result without error means success
           const toolStatus = isDenied
             ? "failed"
             : metadata.is_error
               ? "failed"
-              : "success";
+              : isIncremental
+                ? "working" // Keep working only for confirmed incremental streaming updates
+                : "success"; // Tool result without error means completion -> success
+          
           widgetMap.set(toolId, {
             ...existing,
             status: toolStatus,
-            content: content || existing.content || "",
+            content: updatedContent,
           });
 
           // Update related approval widget when tool completes (approved or denied)
@@ -386,7 +419,23 @@ export class StreamParser {
         }
       } else if (partObj.text && !isThinking && !isToolCall && !isApproval) {
         // Regular text part - accumulate it
-        const textContent = partObj.text || "";
+        let textContent = partObj.text || "";
+
+        // Sanitize control characters and escape sequences
+        // Remove control characters (except newlines and tabs)
+        textContent = textContent.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+        // Remove common escape sequences that leak through
+        textContent = textContent.replace(/<ctrl\d+>/gi, '');
+        textContent = textContent.replace(/&lt;ctrl\d+&gt;/gi, '');
+        // Remove ANSI escape sequences
+        textContent = textContent.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+
+        // Filter out tool call syntax that leaks into text
+        const toolCallPatterns = [
+          /call:\w+\{/i,  // call:TOOL_NAME{
+          /tool:\s*\w+\s*\{/i,  // tool: NAME {
+          /^\s*call:\s*\w+/i,  // call:TOOL_NAME at start
+        ];
 
         // Filter out verbose backend messages that are redundant with widgets
         const approvalPatterns = [
@@ -401,11 +450,26 @@ export class StreamParser {
           /Tool:\s*\w+\s*Input:/i,
         ];
 
+        // Remove tool call syntax from text content (but preserve spacing)
+        toolCallPatterns.forEach((pattern) => {
+          textContent = textContent.replace(pattern, '');
+        });
+
+        // Check if entire text should be filtered
         const shouldFilter = approvalPatterns.some((pattern) =>
           textContent.match(pattern),
+        ) || toolCallPatterns.some((pattern) => 
+          partObj.text?.match(pattern) // Check original text for tool call patterns
         );
 
-        if (textContent && !shouldFilter) {
+        // Only skip truly empty content (not whitespace - whitespace is important for word separation!)
+        if (textContent.length === 0 || shouldFilter) {
+          return;
+        }
+
+        if (textContent) {
+          // Trust provider's spacing - append text as-is
+          // All LLM providers (OpenAI, Anthropic, Gemini, Ollama) include proper spacing in their streaming chunks
           accumulatedText += textContent;
 
           // Find the appropriate text widget to append to
@@ -470,6 +534,7 @@ export class StreamParser {
             }
           } else {
             // Append to existing text widget
+            // Trust provider's spacing - append text as-is
             const existing = widgetMap.get(targetTextWidgetId);
             if (existing) {
               widgetMap.set(targetTextWidgetId, {
@@ -482,23 +547,9 @@ export class StreamParser {
       }
     });
 
-    // Mark completed thinking blocks when text appears (fallback for implicit completion)
+    // Mark completed thinking blocks when text appears or tool calls start (fallback for implicit completion)
     // Only mark blocks that haven't been explicitly completed via thinking_complete event
-    if (accumulatedText.length > currentMessage.text.length) {
-      widgetMap.forEach((widget, id) => {
-        if (
-          widget.type === "thinking" &&
-          widget.status === "active" &&
-          !completedThinkingBlocks.has(id)
-        ) {
-          completedThinkingBlocks.add(id);
-          widgetMap.set(id, { ...widget, status: "completed" });
-        }
-      });
-    }
-
-    // Mark thinking as completed when tool calls start (fallback for implicit completion)
-    // Only mark blocks that haven't been explicitly completed via thinking_complete event
+    const hasNewText = accumulatedText.length > currentMessage.text.length;
     const hasNewToolCalls = parts.some((p: unknown) => {
       const pObj = p as {
         metadata?: { event_type?: string; is_error?: boolean };
@@ -508,7 +559,8 @@ export class StreamParser {
         !("is_error" in (pObj.metadata || {}))
       );
     });
-    if (hasNewToolCalls) {
+
+    if (hasNewText || hasNewToolCalls) {
       widgetMap.forEach((widget, id) => {
         if (
           widget.type === "thinking" &&

@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Wrench, ChevronDown, ChevronRight, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import React from 'react';
+import { Wrench, ChevronDown, CheckCircle2, XCircle, Loader2, Sparkles } from 'lucide-react';
 import type { Widget } from '../../types';
 import { cn } from '../../lib/utils';
+import { useWidgetExpansion } from './useWidgetExpansion';
+import { getWidgetStatusStyles, getWidgetContainerClasses, getWidgetHeaderClasses } from './widgetStyles';
+import { useAutoScroll } from './useAutoScroll';
 
 interface ToolWidgetProps {
     widget: Widget;
@@ -13,77 +16,146 @@ export const ToolWidget: React.FC<ToolWidgetProps> = ({ widget, onExpansionChang
     const { name, args } = widget.data;
     const status = widget.status;
 
-    // Widget expansion state: use prop if defined, otherwise use local state
-    const [localExpanded, setLocalExpanded] = useState(widget.isExpanded ?? false);
-    const isExpanded = widget.isExpanded !== undefined ? widget.isExpanded : localExpanded;
+    // Use shared expansion hook - tools only auto-expand when actively working/streaming
+    // They don't auto-expand by default, only when status changes to 'working'
+    const { isExpanded, isActive, isCompleted, handleToggle } = useWidgetExpansion({
+        widget,
+        onExpansionChange,
+        autoExpandWhenActive: true, // Auto-expand when actively working (for streaming visibility)
+        activeStatuses: ['working'], // Only 'working', not 'pending' - we want to see progress
+        completedStatuses: ['success', 'failed'],
+        collapseDelay: 4000, // 4 seconds
+    });
 
-    // Sync local expansion state to store on unmount (handles edge case where local state
-    // changes but user navigates away before toggling)
-    useEffect(() => {
-        return () => {
-            if (widget.isExpanded === undefined && localExpanded !== (widget.isExpanded ?? false)) {
-                onExpansionChange?.(localExpanded);
-            }
-        };
-    }, [localExpanded, widget.isExpanded, onExpansionChange]);
 
-    const handleToggle = () => {
-        const newExpanded = !isExpanded;
-        if (widget.isExpanded === undefined) {
-            setLocalExpanded(newExpanded);
-        }
-        onExpansionChange?.(newExpanded);
-    };
-
+    const statusStyles = getWidgetStatusStyles(status, isCompleted);
+    
+    // Auto-scroll result content when streaming
+    const resultContentRef = useAutoScroll<HTMLPreElement>(
+        widget.content,
+        isActive && !!widget.content,
+        isExpanded && isActive
+    );
 
     return (
-        <div className="border border-white/10 rounded-lg bg-black/20 overflow-hidden text-sm">
+        <div className={getWidgetContainerClasses(statusStyles, isExpanded, isCompleted)}>
             <div
-                className="flex items-center gap-2 p-2 bg-white/5 cursor-pointer hover:bg-white/10 transition-colors"
+                className={getWidgetHeaderClasses(statusStyles, isActive)}
                 onClick={handleToggle}
             >
-                <Wrench 
-                    size={14} 
-                    className={cn(
-                        "text-purple-400",
-                        shouldAnimate && "animate-[badgeLifecycle_2s_ease-in-out_infinite]"
+                <div className={cn(
+                    "relative",
+                    statusStyles.iconColor
+                )}>
+                    {isActive && (
+                        <Sparkles 
+                            size={12} 
+                            className="absolute -top-1 -right-1 animate-pulse opacity-70"
+                        />
                     )}
-                />
-                <span className="font-medium text-purple-200">Tool: {name}</span>
+                    <Wrench 
+                        size={isCompleted ? 14 : 16} 
+                        className={cn(
+                            "transition-transform duration-200",
+                            shouldAnimate && "animate-[badgeLifecycle_2s_ease-in-out_infinite]",
+                            isExpanded && !isCompleted && "rotate-12"
+                        )}
+                    />
+                </div>
+                
+                <span className={cn(
+                    "font-medium flex-1 text-sm",
+                    statusStyles.textColor
+                )}>
+                    Tool: {name}
+                </span>
 
                 <div className="ml-auto flex items-center gap-2">
-                    {status === 'working' && <Loader2 size={14} className="animate-spin text-yellow-500" />}
-                    {status === 'success' && <CheckCircle2 size={14} className="text-green-500" />}
-                    {status === 'failed' && <XCircle size={14} className="text-red-500" />}
+                    {status === 'working' && (
+                        <Loader2 
+                            size={14} 
+                            className="animate-spin text-yellow-400" 
+                        />
+                    )}
+                    {status === 'success' && (
+                        <CheckCircle2 
+                            size={14} 
+                            className="text-green-500 transition-all duration-300" 
+                        />
+                    )}
+                    {status === 'failed' && (
+                        <XCircle 
+                            size={14} 
+                            className="text-red-500 transition-all duration-300" 
+                        />
+                    )}
 
-                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    <ChevronDown 
+                        size={14} 
+                        className={cn(
+                            "transition-transform duration-300 text-gray-400",
+                            isExpanded ? "rotate-0" : "-rotate-90"
+                        )} 
+                    />
                 </div>
             </div>
 
-            {isExpanded && (
-                <div className="p-3 space-y-2 border-t border-white/10 font-mono text-xs">
+            <div className={cn(
+                "overflow-hidden transition-all duration-300 ease-in-out",
+                isExpanded ? "max-h-[400px] opacity-100" : "max-h-0 opacity-0"
+            )}>
+                <div className={cn(
+                    "p-3 space-y-2 border-t border-white/10",
+                    isCompleted ? "bg-black/10" : "bg-black/30"
+                )}>
                     {/* Input */}
-                    <div>
-                        <div className="text-gray-500 mb-1">Input:</div>
-                        <pre className="bg-black/40 p-2 rounded overflow-x-auto text-gray-300">
+                    <div className="space-y-2">
+                        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                            Input
+                        </div>
+                        <pre className={cn(
+                            "bg-black/60 p-3 rounded-lg overflow-x-auto text-xs max-h-[120px] overflow-y-auto",
+                            "border border-white/10",
+                            "text-gray-300 font-mono leading-relaxed",
+                            "scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent"
+                        )}>
                             {JSON.stringify(args, null, 2)}
                         </pre>
                     </div>
 
-                    {/* Output */}
-                    {widget.content && (
-                        <div>
-                            <div className="text-gray-500 mb-1">Result:</div>
-                            <pre className={cn(
-                                "bg-black/40 p-2 rounded overflow-x-auto",
-                                status === 'failed' ? "text-red-300" : "text-green-300"
-                            )}>
-                                {widget.content}
+                    {/* Output - Show even when streaming (working status) */}
+                    {(widget.content || (isActive && status === 'working')) && (
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                    Result
+                                </div>
+                                {status === 'working' && widget.content && (
+                                    <span className="text-xs text-yellow-400 animate-pulse">
+                                        Streaming...
+                                    </span>
+                                )}
+                            </div>
+                            <pre 
+                                ref={resultContentRef}
+                                className={cn(
+                                    "bg-black/60 p-3 rounded-lg overflow-x-auto text-xs max-h-[200px] overflow-y-auto",
+                                    "border border-white/10",
+                                    "font-mono leading-relaxed",
+                                    "scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent",
+                                    status === 'failed' 
+                                        ? "text-red-300 border-red-500/20" 
+                                        : status === 'working'
+                                            ? "text-yellow-300 border-yellow-500/20"
+                                            : "text-green-300 border-green-500/20"
+                                )}
+                            >
+                                {widget.content || (status === 'working' ? 'Waiting for result...' : '')}
                             </pre>
                         </div>
                     )}
                 </div>
-            )}
+            </div>
         </div>
     );
 };

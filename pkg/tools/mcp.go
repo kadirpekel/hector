@@ -508,14 +508,27 @@ func (r *MCPToolSource) makeRequest(ctx context.Context, method string, params i
 		go func() {
 			defer httpResp.Body.Close()
 
-			scanner := bufio.NewScanner(httpResp.Body)
+			// Use bufio.NewReader with ReadBytes instead of Scanner for better handling of large lines
+			// ReadBytes reads until delimiter (no fixed buffer limit), making it more suitable for
+			// large tool results (web search results, etc.) compared to Scanner's default 64KB limit
+			reader := bufio.NewReader(httpResp.Body)
+
 			var currentData strings.Builder
 
-			for scanner.Scan() {
-				line := scanner.Text()
+			for {
+				line, err := reader.ReadBytes('\n')
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					slog.Debug("MCP SSE read error", "source", r.name, "error", err)
+					break
+				}
+
+				lineStr := strings.TrimSpace(string(line))
 
 				// Empty line signals end of event
-				if line == "" {
+				if lineStr == "" {
 					if currentData.Len() > 0 {
 						jsonData := currentData.String()
 						dataPreview := jsonData
@@ -545,16 +558,21 @@ func (r *MCPToolSource) makeRequest(ctx context.Context, method string, params i
 				}
 
 				// Parse SSE field - we only care about data lines
-				if strings.HasPrefix(line, "data:") {
-					data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+				if strings.HasPrefix(lineStr, "data:") {
+					data := strings.TrimSpace(strings.TrimPrefix(lineStr, "data:"))
 					currentData.WriteString(data)
 				}
 				// Ignore event type lines and other SSE fields
 			}
 
-			if err := scanner.Err(); err != nil {
-				resultChan <- result{err: fmt.Errorf("failed to read SSE: %v", err)}
-				return
+			// Handle any remaining data when stream ends
+			if currentData.Len() > 0 {
+				jsonData := currentData.String()
+				var mcpResp Response
+				if parseErr := json.Unmarshal([]byte(jsonData), &mcpResp); parseErr == nil {
+					resultChan <- result{response: &mcpResp}
+					return
+				}
 			}
 
 			// If we exit the loop without finding data, it's an error

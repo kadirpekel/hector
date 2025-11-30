@@ -913,19 +913,30 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 
 	state := newAnthropicStreamingState()
 
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := scanner.Text()
+	// Use bufio.NewReader with ReadBytes instead of Scanner for better handling of large lines
+	// ReadBytes reads until delimiter (no fixed buffer limit), making it more suitable for
+	// large tool results (web search, document parsing, etc.) compared to Scanner's default 64KB limit
+	reader := bufio.NewReader(resp.Body)
 
-		if line == "" || strings.HasPrefix(line, ":") {
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("failed to read streaming response: %w", err)
+		}
+
+		lineStr := strings.TrimSpace(string(line))
+		if lineStr == "" || strings.HasPrefix(lineStr, ":") {
 			continue
 		}
 
-		if !strings.HasPrefix(line, "data: ") {
+		if !strings.HasPrefix(lineStr, "data: ") {
 			continue
 		}
 
-		jsonData := strings.TrimPrefix(line, "data: ")
+		jsonData := strings.TrimPrefix(lineStr, "data: ")
 
 		var streamResp AnthropicStreamResponse
 		if err := json.Unmarshal([]byte(jsonData), &streamResp); err != nil {
@@ -954,10 +965,6 @@ func (p *AnthropicProvider) makeStreamingRequest(ctx context.Context, request An
 			}
 			return nil
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("failed to read streaming response: %w", err)
 	}
 
 	return nil

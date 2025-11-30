@@ -923,6 +923,9 @@ func (p *OpenAIProvider) GenerateWithReasoningStreaming(
 			return
 		}
 
+		// Use bufio.NewReader with ReadBytes instead of Scanner for better handling of large lines
+		// ReadBytes reads until delimiter (no fixed buffer limit), making it more suitable for
+		// large tool results (web search, document parsing, etc.) compared to Scanner's default 64KB limit
 		reader := bufio.NewReader(resp.Body)
 		state := &streamingState{
 			emittedCallIDs: make(map[string]bool),

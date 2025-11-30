@@ -143,23 +143,31 @@ func (c *HTTPClient) StreamMessage(ctx context.Context, agentID string, message 
 		defer close(streamChan)
 		defer resp.Body.Close()
 
-		scanner := bufio.NewScanner(resp.Body)
-		// Increase buffer size to 1MB to handle large tool results (images, etc.)
-		const maxScannerBuffer = 1024 * 1024 // 1MB
-		buf := make([]byte, maxScannerBuffer)
-		scanner.Buffer(buf, maxScannerBuffer)
+		// Use bufio.NewReader with ReadBytes instead of Scanner for better handling of large lines
+		// ReadBytes reads until delimiter (no fixed buffer limit), making it more suitable for
+		// large tool results (images, etc.) compared to Scanner's default 64KB limit
+		reader := bufio.NewReader(resp.Body)
 
 		var currentEvent string
 		var currentData string
 
-		for scanner.Scan() {
-			line := scanner.Text()
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				// Log error but continue - stream may have ended
+				break
+			}
 
-			if strings.HasPrefix(line, "event: ") {
-				currentEvent = strings.TrimPrefix(line, "event: ")
-			} else if strings.HasPrefix(line, "data: ") {
-				currentData = strings.TrimPrefix(line, "data: ")
-			} else if line == "" && currentData != "" {
+			lineStr := strings.TrimSpace(string(line))
+
+			if strings.HasPrefix(lineStr, "event: ") {
+				currentEvent = strings.TrimPrefix(lineStr, "event: ")
+			} else if strings.HasPrefix(lineStr, "data: ") {
+				currentData = strings.TrimPrefix(lineStr, "data: ")
+			} else if lineStr == "" && currentData != "" {
 
 				if currentEvent == "message" || currentEvent == "" {
 
