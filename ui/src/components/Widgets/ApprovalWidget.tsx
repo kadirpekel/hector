@@ -1,23 +1,20 @@
 import React, { useState } from "react";
-import {
-  Shield,
-  Check,
-  X,
-  ChevronDown,
-  Loader2,
-  Sparkles,
-} from "lucide-react";
-import type { Widget } from "../../types";
+import { Shield, Check, X, ChevronDown, Loader2, Sparkles } from "lucide-react";
+import type { ApprovalWidget as ApprovalWidgetType } from "../../types";
 import { cn } from "../../lib/utils";
 import { useStore } from "../../store/useStore";
 import { StreamParser } from "../../lib/stream-parser";
 import { handleError } from "../../lib/error-handler";
 import { generateShortId } from "../../lib/id-generator";
 import { useWidgetExpansion } from "./useWidgetExpansion";
-import { getWidgetStatusStyles, getWidgetContainerClasses, getWidgetHeaderClasses } from "./widgetStyles";
+import {
+  getWidgetStatusStyles,
+  getWidgetContainerClasses,
+  getWidgetHeaderClasses,
+} from "./widgetStyles";
 
 interface ApprovalWidgetProps {
-  widget: Widget;
+  widget: ApprovalWidgetType;
   sessionId: string;
   onExpansionChange?: (expanded: boolean) => void;
   shouldAnimate?: boolean;
@@ -41,14 +38,15 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
   } = useStore();
 
   // Use shared expansion hook - approval widgets auto-expand when pending
-  const { isExpanded, isActive, isCompleted, handleToggle } = useWidgetExpansion({
-    widget,
-    onExpansionChange,
-    autoExpandWhenActive: true, // Auto-expand when pending
-    activeStatuses: ['pending'],
-    completedStatuses: ['decided'],
-    collapseDelay: 4000, // 4 seconds
-  });
+  const { isExpanded, isActive, isCompleted, handleToggle } =
+    useWidgetExpansion({
+      widget,
+      onExpansionChange,
+      autoExpandWhenActive: true, // Auto-expand when pending
+      activeStatuses: ["pending"],
+      completedStatuses: ["decided"],
+      collapseDelay: 4000, // 4 seconds
+    });
 
   // Custom status styles for approval (handles approve/deny decision)
   const getApprovalStatusStyles = () => {
@@ -88,8 +86,8 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
       }
 
       const updatedWidgets = approvalMessage.widgets.map((w) =>
-        w.id === widget.id
-          ? { ...w, status: "decided", decision: decisionValue }
+        w.id === widget.id && w.type === "approval"
+          ? { ...w, status: "decided" as const, decision: decisionValue }
           : w,
       );
       updateMessage(sessionId, approvalMessage.id, { widgets: updatedWidgets });
@@ -137,8 +135,8 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
       );
       if (errorMessage) {
         const revertedWidgets = errorMessage.widgets.map((w) =>
-          w.id === widget.id
-            ? { ...w, status: "pending", decision: undefined }
+          w.id === widget.id && w.type === "approval"
+            ? { ...w, status: "pending" as const, decision: undefined }
             : w,
         );
         updateMessage(sessionId, errorMessage.id, { widgets: revertedWidgets });
@@ -150,18 +148,33 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
   };
 
   return (
-    <div className={getWidgetContainerClasses(statusStyles, isExpanded, isCompleted)}>
+    <div
+      className={getWidgetContainerClasses(
+        statusStyles,
+        isExpanded,
+        isCompleted,
+      )}
+      role="region"
+      aria-label={`Approval request for ${toolName}`}
+    >
       <div
         className={getWidgetHeaderClasses(statusStyles, isActive)}
         onClick={handleToggle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleToggle();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        aria-label={`Toggle ${toolName} approval details. Status: ${status === "pending" ? "awaiting decision" : `${decision}`}`}
       >
-        <div className={cn(
-          "relative",
-          statusStyles.iconColor
-        )}>
+        <div className={cn("relative", statusStyles.iconColor)}>
           {isActive && (
-            <Sparkles 
-              size={12} 
+            <Sparkles
+              size={12}
               className="absolute -top-1 -right-1 animate-pulse opacity-70"
             />
           )}
@@ -169,16 +182,16 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
             size={isCompleted ? 14 : 16}
             className={cn(
               "transition-transform duration-200",
-              shouldAnimate && "animate-[badgeLifecycle_2s_ease-in-out_infinite]",
-              isExpanded && !isCompleted && "rotate-12"
+              shouldAnimate &&
+                "animate-[badgeLifecycle_2s_ease-in-out_infinite]",
+              isExpanded && !isCompleted && "rotate-12",
             )}
           />
         </div>
-        
-        <span className={cn(
-          "font-medium flex-1 text-sm",
-          statusStyles.textColor
-        )}>
+
+        <span
+          className={cn("font-medium flex-1 text-sm", statusStyles.textColor)}
+        >
           Approval Required: {toolName}
         </span>
 
@@ -188,29 +201,39 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
           )}
           {status === "decided" &&
             (decision === "approve" ? (
-              <Check size={14} className="text-green-500 transition-all duration-300" />
+              <Check
+                size={14}
+                className="text-green-500 transition-all duration-300"
+              />
             ) : (
-              <X size={14} className="text-red-500 transition-all duration-300" />
+              <X
+                size={14}
+                className="text-red-500 transition-all duration-300"
+              />
             ))}
 
-          <ChevronDown 
-            size={14} 
+          <ChevronDown
+            size={14}
             className={cn(
               "transition-transform duration-300 text-gray-400",
-              isExpanded ? "rotate-0" : "-rotate-90"
-            )} 
+              isExpanded ? "rotate-0" : "-rotate-90",
+            )}
           />
         </div>
       </div>
 
-      <div className={cn(
-        "overflow-hidden transition-all duration-300 ease-in-out",
-        isExpanded ? "max-h-[300px] opacity-100" : "max-h-0 opacity-0"
-      )}>
-        <div className={cn(
-          "p-3 space-y-2 border-t border-white/10 overflow-y-auto max-h-[300px] scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent",
-          isCompleted ? "bg-black/10" : "bg-black/30"
-        )}>
+      <div
+        className={cn(
+          "overflow-hidden transition-all duration-300 ease-in-out",
+          isExpanded ? "max-h-[300px] opacity-100" : "max-h-0 opacity-0",
+        )}
+      >
+        <div
+          className={cn(
+            "p-3 space-y-2 border-t border-white/10 overflow-y-auto max-h-[300px] scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent",
+            isCompleted ? "bg-black/10" : "bg-black/30",
+          )}
+        >
           {/* Input */}
           <div className="space-y-2">
             <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">

@@ -1,21 +1,37 @@
 import { useStore } from "../store/useStore";
-import type { Message, Widget } from "../types";
+import type {
+  Message,
+  Widget,
+  AGUIStreamData,
+  AGUIPart,
+  AGUIPartMetadata,
+} from "../types";
 import { getBaseUrl } from "./api-utils";
 import { handleError } from "./error-handler";
+import { STREAM } from "./constants";
 
 export class StreamParser {
   private sessionId: string;
   private messageId: string;
   private abortController: AbortController;
+  private parseErrors: Error[] = [];
 
   constructor(sessionId: string, messageId: string) {
     this.sessionId = sessionId;
     this.messageId = messageId;
     this.abortController = new AbortController();
+    this.parseErrors = [];
   }
 
   public abort() {
     this.abortController.abort();
+  }
+
+  /**
+   * Get accumulated parse errors (useful for debugging/telemetry)
+   */
+  public getParseErrors(): Error[] {
+    return [...this.parseErrors];
   }
 
   public async stream(url: string, requestBody: unknown) {
@@ -59,10 +75,28 @@ export class StreamParser {
               const data = JSON.parse(line.substring(6));
               this.handleData(data);
             } catch (parseError) {
-              // Silently skip malformed SSE data chunks
-              // Log only in development
+              // Track parse errors for debugging/telemetry
+              const error =
+                parseError instanceof Error
+                  ? parseError
+                  : new Error(String(parseError));
+              this.parseErrors.push(error);
+
+              // Log in development
               if (import.meta.env.DEV) {
                 console.error("Error parsing SSE data:", parseError);
+              }
+
+              // Surface to user if too many errors (indicates stream corruption)
+              if (this.parseErrors.length >= STREAM.MAX_PARSE_ERRORS) {
+                handleError(
+                  new Error(
+                    `Stream parsing failed ${this.parseErrors.length} times. Data may be incomplete.`,
+                  ),
+                  "Stream error",
+                );
+                // Reset counter to avoid spamming
+                this.parseErrors = [];
               }
             }
           }
@@ -84,7 +118,7 @@ export class StreamParser {
           // Mark all active thinking widgets as completed when stream ends
           const updatedWidgets = message.widgets.map((w) =>
             w.type === "thinking" && w.status === "active"
-              ? { ...w, status: "completed" }
+              ? { ...w, status: "completed" as const }
               : w,
           );
           updateMessage(this.sessionId, this.messageId, {
@@ -123,23 +157,9 @@ export class StreamParser {
     const message = session.messages.find((m) => m.id === this.messageId);
     if (!message) return;
 
-    const result = (data as { result?: unknown }).result || data;
-
-    const resultObj = result as {
-      statusUpdate?: {
-        taskId?: string;
-        status?: {
-          state?: string;
-          update?: unknown;
-        };
-      };
-      message?: {
-        taskId?: string;
-        [key: string]: unknown;
-      };
-      parts?: unknown[];
-      [key: string]: unknown;
-    };
+    // Parse the stream data using proper protocol types
+    const streamData = data as AGUIStreamData;
+    const resultObj = streamData.result || streamData;
 
     // Handle Task Status Updates
     if (resultObj.statusUpdate) {
@@ -174,10 +194,12 @@ export class StreamParser {
     }
   }
 
-  private processMessageUpdate(currentMessage: Message, update: unknown) {
+  private processMessageUpdate(
+    currentMessage: Message,
+    update: { parts?: AGUIPart[]; [key: string]: unknown },
+  ) {
     const { updateMessage } = useStore.getState();
-    const updateObj = update as { parts?: unknown[] };
-    const parts = updateObj.parts || [];
+    const parts: AGUIPart[] = update.parts || [];
 
     // Process parts sequentially to maintain correct order
     // This is the proper way to handle content ordering
@@ -199,47 +221,15 @@ export class StreamParser {
     const completedThinkingBlocks = new Set<string>();
 
     // Process parts in order - this is critical for correct ordering
-    parts.forEach((part: unknown, partIndex: number) => {
-      const partObj = part as {
-        metadata?: {
-          event_type?: string;
-          block_type?: string;
-          tool_call_id?: string;
-          tool_name?: string;
-          thinking_type?: string;
-          block_id?: string;
-          is_error?: boolean;
-          url?: string;
-          revised_prompt?: string;
-        };
-        data?: {
-          data?: {
-            interaction_type?: string;
-            approval_id?: string;
-            tool_name?: string;
-            tool_input?: unknown;
-            options?: string[];
-            id?: string;
-            name?: string;
-            arguments?: unknown;
-            text?: string;
-            content?: string;
-            tool_call_id?: string;
-            thinking_id?: string;
-          };
-        };
-        text?: string;
-      };
-
+    parts.forEach((part: AGUIPart, partIndex: number) => {
       // Check if this is a widget part
-      const metadata = partObj.metadata || {};
+      const metadata: AGUIPartMetadata = part.metadata || {};
       const isThinking =
         metadata.event_type === "thinking" ||
         metadata.block_type === "thinking";
       const isToolCall =
         metadata.event_type === "tool_call" && !("is_error" in metadata);
-      const isApproval =
-        partObj.data?.data?.interaction_type === "tool_approval";
+      const isApproval = part.data?.data?.interaction_type === "tool_approval";
       const isToolResult =
         metadata.event_type === "tool_call" && "is_error" in metadata;
       const isThinkingComplete =
@@ -248,7 +238,7 @@ export class StreamParser {
 
       // Handle explicit thinking_complete events first (prevents race conditions)
       if (isThinkingComplete) {
-        const thinkingId = metadata.block_id || partObj.data?.data?.thinking_id;
+        const thinkingId = metadata.block_id || part.data?.data?.thinking_id;
         if (thinkingId) {
           completedThinkingBlocks.add(thinkingId);
           const existing = widgetMap.get(thinkingId);
@@ -268,12 +258,19 @@ export class StreamParser {
           const isCompleted = completedThinkingBlocks.has(thinkingId);
 
           if (!widgetMap.has(thinkingId)) {
+            const thinkingType = (metadata.thinking_type || "default") as
+              | "todo"
+              | "goal"
+              | "reflection"
+              | "default";
             widgetMap.set(thinkingId, {
               id: thinkingId,
-              type: "thinking",
-              data: { type: metadata.thinking_type || "default" },
-              status: isCompleted ? "completed" : "active",
-              content: partObj.text || partObj.data?.data?.text || "",
+              type: "thinking" as const,
+              data: { type: thinkingType },
+              status: isCompleted
+                ? ("completed" as const)
+                : ("active" as const),
+              content: part.text || part.data?.data?.text || "",
               isExpanded: false,
             });
             // Add to content order if not already there
@@ -283,9 +280,9 @@ export class StreamParser {
           } else {
             // Update existing thinking block
             const existing = widgetMap.get(thinkingId);
-            if (existing) {
+            if (existing && existing.type === "thinking") {
               // Only mark as completed if explicitly completed, otherwise preserve state
-              const newStatus = isCompleted
+              const newStatus: "completed" | "active" = isCompleted
                 ? "completed"
                 : existing.status === "completed"
                   ? "completed"
@@ -294,7 +291,7 @@ export class StreamParser {
                 ...existing,
                 content:
                   (existing.content || "") +
-                  (partObj.text || partObj.data?.data?.text || ""),
+                  (part.text || part.data?.data?.text || ""),
                 status: newStatus,
               });
             }
@@ -303,27 +300,29 @@ export class StreamParser {
           // Use tool_call_id as primary identifier (most reliable)
           // IMPORTANT: Different tool_call_id = different tool call (e.g., retry after failure)
           // Only prevent duplicates if the SAME tool_call_id appears multiple times
-          const toolCallId = metadata.tool_call_id || partObj.data?.data?.id;
-          const toolName = metadata.tool_name || partObj.data?.data?.name || "unknown";
-          const toolArgs = partObj.data?.data?.arguments || {};
-          
+          const toolCallId = metadata.tool_call_id || part.data?.data?.id;
+          const toolName =
+            metadata.tool_name || part.data?.data?.name || "unknown";
+          const toolArgs = part.data?.data?.arguments || {};
+
           // Generate stable toolId - prefer tool_call_id, otherwise create deterministic ID
-          const toolId = toolCallId || 
+          const toolId =
+            toolCallId ||
             `tool-${toolName}-${JSON.stringify(toolArgs).slice(0, 50)}-${partIndex}`;
-          
+
           // Only prevent duplicates if the SAME tool_call_id already exists
           // This allows legitimate retries (different tool_call_id, same tool name) to show up
           const isDuplicate = toolCallId && widgetMap.has(toolCallId);
-          
+
           if (!isDuplicate && !widgetMap.has(toolId)) {
             widgetMap.set(toolId, {
               id: toolId,
-              type: "tool",
+              type: "tool" as const,
               data: {
                 name: toolName,
                 args: toolArgs,
               },
-              status: "working",
+              status: "working" as const,
               content: "",
               isExpanded: false,
             });
@@ -333,17 +332,17 @@ export class StreamParser {
           }
         } else if (isApproval) {
           const approvalId =
-            partObj.data?.data?.approval_id || `approval-${partIndex}`;
+            part.data?.data?.approval_id || `approval-${partIndex}`;
           if (!widgetMap.has(approvalId)) {
             widgetMap.set(approvalId, {
               id: approvalId,
-              type: "approval",
+              type: "approval" as const,
               data: {
-                toolName: partObj.data?.data?.tool_name,
-                toolInput: partObj.data?.data?.tool_input,
-                options: partObj.data?.data?.options,
+                toolName: part.data?.data?.tool_name || "unknown",
+                toolInput: part.data?.data?.tool_input || {},
+                options: part.data?.data?.options,
               },
-              status: "pending",
+              status: "pending" as const,
               isExpanded: true,
             });
             if (!contentOrder.includes(approvalId)) {
@@ -354,13 +353,12 @@ export class StreamParser {
       } else if (isToolResult) {
         // Tool result - update existing tool widget
         // Support incremental content updates for streaming tools (e.g., agent_call, execute_command)
-        const toolId =
-          metadata.tool_call_id || partObj.data?.data?.tool_call_id;
+        const toolId = metadata.tool_call_id || part.data?.data?.tool_call_id;
         if (toolId && widgetMap.has(toolId)) {
           const existing = widgetMap.get(toolId);
           if (!existing) return;
 
-          const newContent = partObj.data?.data?.content || "";
+          const newContent = part.data?.data?.content || "";
           const isDenied =
             metadata.is_error &&
             (newContent.includes("TOOL_EXECUTION_DENIED") ||
@@ -371,70 +369,80 @@ export class StreamParser {
           // We append if: tool is working AND we have existing content AND new content doesn't contain the existing content
           // (meaning it's a continuation, not a replacement)
           const existingContent = existing.content || "";
-          const isIncremental = existing.status === "working" && 
-            existingContent.length > 0 && 
+          const isIncremental =
+            existing.status === "working" &&
+            existingContent.length > 0 &&
             newContent.length > 0 &&
             !newContent.includes(existingContent) && // New content doesn't contain old (it's incremental)
             newContent.length < existingContent.length * 2; // New chunk is reasonable size (not a full replacement)
-          
-          const updatedContent = isIncremental 
+
+          const updatedContent = isIncremental
             ? existingContent + newContent
-            : (newContent || existingContent);
+            : newContent || existingContent;
 
           // Tool result events indicate completion - determine final status
           // IMPORTANT: tool_result events mean the tool has completed (or errored)
           // Only keep as 'working' if we're certain this is incremental streaming (content being appended)
           // Otherwise, tool_result without error means success
-          const toolStatus = isDenied
+          const toolStatus: "working" | "success" | "failed" = isDenied
             ? "failed"
             : metadata.is_error
               ? "failed"
               : isIncremental
                 ? "working" // Keep working only for confirmed incremental streaming updates
                 : "success"; // Tool result without error means completion -> success
-          
-          widgetMap.set(toolId, {
-            ...existing,
-            status: toolStatus,
-            content: updatedContent,
-          });
+
+          if (existing.type === "tool") {
+            widgetMap.set(toolId, {
+              ...existing,
+              status: toolStatus,
+              content: updatedContent,
+            });
+          }
 
           // Update related approval widget when tool completes (approved or denied)
           if (toolStatus === "success" || isDenied) {
-            widgetMap.forEach((widget, widgetId) => {
-              if (
-                widget.type === "approval" &&
-                widget.data?.toolName ===
-                  (existing.data as { name?: string })?.name &&
-                widget.status === "pending"
-              ) {
-                widgetMap.set(widgetId, {
-                  ...widget,
-                  status: "decided",
-                  decision: isDenied ? "deny" : "approve",
-                });
-              }
-            });
+            // Get tool name from the existing tool widget for matching approval widgets
+            const existingToolName =
+              existing.type === "tool" ? existing.data.name : undefined;
+            if (existingToolName) {
+              widgetMap.forEach((widget, widgetId) => {
+                if (
+                  widget.type === "approval" &&
+                  widget.data?.toolName === existingToolName &&
+                  widget.status === "pending"
+                ) {
+                  widgetMap.set(widgetId, {
+                    ...widget,
+                    status: "decided",
+                    decision: isDenied ? "deny" : "approve",
+                  });
+                }
+              });
+            }
           }
         }
-      } else if (partObj.text && !isThinking && !isToolCall && !isApproval) {
+      } else if (part.text && !isThinking && !isToolCall && !isApproval) {
         // Regular text part - accumulate it
-        let textContent = partObj.text || "";
+        let textContent = part.text || "";
 
         // Sanitize control characters and escape sequences
         // Remove control characters (except newlines and tabs)
-        textContent = textContent.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+        textContent = textContent.replace(
+          /[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g,
+          "",
+        );
         // Remove common escape sequences that leak through
-        textContent = textContent.replace(/<ctrl\d+>/gi, '');
-        textContent = textContent.replace(/&lt;ctrl\d+&gt;/gi, '');
+        textContent = textContent.replace(/<ctrl\d+>/gi, "");
+        textContent = textContent.replace(/&lt;ctrl\d+&gt;/gi, "");
         // Remove ANSI escape sequences
-        textContent = textContent.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+        textContent = textContent.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
 
         // Filter out tool call syntax that leaks into text
         const toolCallPatterns = [
-          /call:\w+\{/i,  // call:TOOL_NAME{
-          /tool:\s*\w+\s*\{/i,  // tool: NAME {
-          /^\s*call:\s*\w+/i,  // call:TOOL_NAME at start
+          /call:\w+\{/i, // call:TOOL_NAME{
+          /tool:\s*\w+\s*\{/i, // tool: NAME {
+          /^\s*call:\s*\w+/i, // call:TOOL_NAME at start
         ];
 
         // Filter out verbose backend messages that are redundant with widgets
@@ -452,15 +460,15 @@ export class StreamParser {
 
         // Remove tool call syntax from text content (but preserve spacing)
         toolCallPatterns.forEach((pattern) => {
-          textContent = textContent.replace(pattern, '');
+          textContent = textContent.replace(pattern, "");
         });
 
         // Check if entire text should be filtered
-        const shouldFilter = approvalPatterns.some((pattern) =>
-          textContent.match(pattern),
-        ) || toolCallPatterns.some((pattern) => 
-          partObj.text?.match(pattern) // Check original text for tool call patterns
-        );
+        const shouldFilter =
+          approvalPatterns.some((pattern) => textContent.match(pattern)) ||
+          toolCallPatterns.some(
+            (pattern) => part.text?.match(pattern), // Check original text for tool call patterns
+          );
 
         // Only skip truly empty content (not whitespace - whitespace is important for word separation!)
         if (textContent.length === 0 || shouldFilter) {
@@ -550,15 +558,9 @@ export class StreamParser {
     // Mark completed thinking blocks when text appears or tool calls start (fallback for implicit completion)
     // Only mark blocks that haven't been explicitly completed via thinking_complete event
     const hasNewText = accumulatedText.length > currentMessage.text.length;
-    const hasNewToolCalls = parts.some((p: unknown) => {
-      const pObj = p as {
-        metadata?: { event_type?: string; is_error?: boolean };
-      };
-      return (
-        pObj.metadata?.event_type === "tool_call" &&
-        !("is_error" in (pObj.metadata || {}))
-      );
-    });
+    const hasNewToolCalls = parts.some(
+      (p) => p.metadata?.event_type === "tool_call" && !p.metadata?.is_error,
+    );
 
     if (hasNewText || hasNewToolCalls) {
       widgetMap.forEach((widget, id) => {

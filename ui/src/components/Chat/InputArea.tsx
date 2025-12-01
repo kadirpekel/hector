@@ -165,8 +165,6 @@ export const InputArea: React.FC = () => {
       metadata: {
         images: messageAttachments,
       },
-      toolCalls: [],
-      thinkingBlocks: [],
       widgets: [],
       time: new Date().toLocaleTimeString([], {
         hour: "2-digit",
@@ -191,8 +189,6 @@ export const InputArea: React.FC = () => {
       role: "agent",
       text: "",
       metadata: {},
-      toolCalls: [],
-      thinkingBlocks: [],
       widgets: [],
       time: new Date().toLocaleTimeString([], {
         hour: "2-digit",

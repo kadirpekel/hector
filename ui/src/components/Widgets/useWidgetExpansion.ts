@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { Widget } from "../../types";
+import { WIDGET } from "../../lib/constants";
 
 interface UseWidgetExpansionOptions {
   widget: Widget;
@@ -38,7 +39,7 @@ export function useWidgetExpansion({
   autoExpandWhenActive = false,
   activeStatuses = ["working", "pending", "active"],
   completedStatuses = ["success", "failed", "completed", "decided"],
-  collapseDelay = 4000,
+  collapseDelay = WIDGET.COLLAPSE_DELAY_MS,
 }: UseWidgetExpansionOptions) {
   // Derived state
   const status = widget.status;
