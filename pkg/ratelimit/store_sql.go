@@ -1,3 +1,18 @@
+// SPDX-License-Identifier: AGPL-3.0
+// Copyright 2025 Kadir Pekel
+//
+// Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.gnu.org/licenses/agpl-3.0.en.html
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package ratelimit
 
 import (
@@ -7,13 +22,8 @@ import (
 	"time"
 )
 
-// SQLStore is a SQL-based implementation of Store
-type SQLStore struct {
-	db      *sql.DB
-	dialect string
-}
-
 const (
+	// SQL schema for rate_limits table.
 	createRateLimitTableSQL = `
 CREATE TABLE IF NOT EXISTS rate_limits (
     scope VARCHAR(50) NOT NULL,
@@ -33,7 +43,15 @@ CREATE INDEX IF NOT EXISTS idx_rate_limits_scope_identifier ON rate_limits(scope
 `
 )
 
-// NewSQLStore creates a new SQL-based store
+// SQLStore is a SQL-based implementation of Store.
+// It supports Postgres, MySQL, and SQLite.
+type SQLStore struct {
+	db      *sql.DB
+	dialect string
+}
+
+// NewSQLStore creates a new SQL-based store.
+// Supported dialects: "postgres", "mysql", "sqlite".
 func NewSQLStore(db *sql.DB, dialect string) (*SQLStore, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database connection is required")
@@ -58,7 +76,7 @@ func NewSQLStore(db *sql.DB, dialect string) (*SQLStore, error) {
 	return s, nil
 }
 
-// initSchema creates the necessary tables
+// initSchema creates the necessary tables.
 func (s *SQLStore) initSchema() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -70,7 +88,7 @@ func (s *SQLStore) initSchema() error {
 	return nil
 }
 
-// GetUsage gets current usage for a specific limit
+// GetUsage gets current usage for a specific limit.
 func (s *SQLStore) GetUsage(ctx context.Context, scope Scope, identifier string, limitType LimitType, window TimeWindow) (int64, time.Time, error) {
 	query := `SELECT amount, window_end FROM rate_limits WHERE scope = ? AND identifier = ? AND limit_type = ? AND window = ?`
 	if s.dialect == "postgres" {
@@ -100,7 +118,7 @@ func (s *SQLStore) GetUsage(ctx context.Context, scope Scope, identifier string,
 	return amount, windowEnd, nil
 }
 
-// IncrementUsage increments usage for a specific limit
+// IncrementUsage increments usage for a specific limit.
 func (s *SQLStore) IncrementUsage(ctx context.Context, scope Scope, identifier string, limitType LimitType, window TimeWindow, incrementAmount int64) (int64, time.Time, error) {
 	now := time.Now()
 
@@ -183,7 +201,7 @@ func (s *SQLStore) IncrementUsage(ctx context.Context, scope Scope, identifier s
 	return incrementAmount, newWindowEnd, nil
 }
 
-// SetUsage sets usage for a specific limit
+// SetUsage sets usage for a specific limit.
 func (s *SQLStore) SetUsage(ctx context.Context, scope Scope, identifier string, limitType LimitType, window TimeWindow, amount int64, windowEnd time.Time) error {
 	now := time.Now()
 
@@ -217,7 +235,7 @@ func (s *SQLStore) SetUsage(ctx context.Context, scope Scope, identifier string,
 	return nil
 }
 
-// DeleteUsage deletes usage records for an identifier
+// DeleteUsage deletes usage records for an identifier.
 func (s *SQLStore) DeleteUsage(ctx context.Context, scope Scope, identifier string) error {
 	query := `DELETE FROM rate_limits WHERE scope = ? AND identifier = ?`
 	if s.dialect == "postgres" {
@@ -232,7 +250,7 @@ func (s *SQLStore) DeleteUsage(ctx context.Context, scope Scope, identifier stri
 	return nil
 }
 
-// DeleteExpired deletes expired usage records
+// DeleteExpired deletes expired usage records.
 func (s *SQLStore) DeleteExpired(ctx context.Context, before time.Time) error {
 	query := `DELETE FROM rate_limits WHERE window_end < ?`
 	if s.dialect == "postgres" {
@@ -247,7 +265,15 @@ func (s *SQLStore) DeleteExpired(ctx context.Context, before time.Time) error {
 	return nil
 }
 
-// Close closes the store
+// Close closes the store.
+// Note: This does NOT close the underlying database connection,
+// as that connection may be shared with other components.
 func (s *SQLStore) Close() error {
-	return s.db.Close()
+	// Don't close the database connection as it may be shared
+	return nil
+}
+
+// Dialect returns the SQL dialect (for testing).
+func (s *SQLStore) Dialect() string {
+	return s.dialect
 }

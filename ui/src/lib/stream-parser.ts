@@ -1,48 +1,64 @@
 import { useStore } from "../store/useStore";
 import type {
-  Message,
   Widget,
-  AGUIStreamData,
-  AGUIPart,
-  AGUIPartMetadata,
+  ToolWidget,
+  ThinkingWidget,
+  ApprovalWidget,
+  TextWidget,
+  ToolWidgetStatus,
 } from "../types";
-import { getBaseUrl } from "./api-utils";
 import { handleError } from "./error-handler";
-import { STREAM } from "./constants";
+
+/**
+ * StreamParser - V2 A2A-native stream parser following legacy patterns.
+ *
+ * V2 Backend Event Flow (aligned with legacy):
+ *
+ * STREAMING (partial=true):
+ * - artifact.parts: [DataPart(thinking), TextPart(chunk), DataPart(tool_use)]
+ *   ^ ALL content types stream as Parts in order!
+ * - metadata.partial: true
+ * - metadata.thinking: {id, content, status}   (also in metadata for backwards compat)
+ * - metadata.tool_calls: [{id, name}]          (also in metadata for backwards compat)
+ *
+ * FINAL (partial=false):
+ * - artifact.parts: [DataPart(thinking), TextPart(full), DataPart(tool_use)]
+ * - metadata.partial: false
+ * - metadata.thinking: completed
+ *
+ * Key Pattern (from legacy):
+ * - ALL contextual content (thinking, text, tool calls) streams as Parts
+ * - Parts arrive IN ORDER as the LLM generates them
+ * - Widgets are created/updated in the order Parts arrive
+ * - Metadata is supplementary, Parts are primary
+ */
+
+const TEXT_MARKER_PREFIX = "$$text_marker$$";
 
 export class StreamParser {
   private sessionId: string;
   private messageId: string;
   private abortController: AbortController;
-  private parseErrors: Error[] = [];
+
+  // Track created widgets to avoid duplicates
+  private createdToolWidgets = new Set<string>();
+  private createdThinkingWidgets = new Set<string>();
 
   constructor(sessionId: string, messageId: string) {
     this.sessionId = sessionId;
     this.messageId = messageId;
     this.abortController = new AbortController();
-    this.parseErrors = [];
   }
 
   public abort() {
     this.abortController.abort();
   }
 
-  /**
-   * Get accumulated parse errors (useful for debugging/telemetry)
-   */
-  public getParseErrors(): Error[] {
-    return [...this.parseErrors];
-  }
-
   public async stream(url: string, requestBody: unknown) {
     const { updateMessage, setIsGenerating } = useStore.getState();
 
-    // Update base URL if needed (handle relative URLs)
-    const baseUrl = getBaseUrl();
-    const fullUrl = url.startsWith("http") ? url : `${baseUrl}${url}`;
-
     try {
-      const response = await fetch(fullUrl, {
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
@@ -51,11 +67,12 @@ export class StreamParser {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "Unknown error");
-        throw new Error(
-          `HTTP ${response.status}: ${errorText.substring(0, 100)}`,
-        );
+        throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 200)}`);
       }
-      if (!response.body) throw new Error("No response body");
+
+      if (!response.body) {
+        throw new Error("No response body");
+      }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -74,512 +91,148 @@ export class StreamParser {
             try {
               const data = JSON.parse(line.substring(6));
               this.handleData(data);
-            } catch (parseError) {
-              // Track parse errors for debugging/telemetry
-              const error =
-                parseError instanceof Error
-                  ? parseError
-                  : new Error(String(parseError));
-              this.parseErrors.push(error);
-
-              // Log in development
-              if (import.meta.env.DEV) {
-                console.error("Error parsing SSE data:", parseError);
-              }
-
-              // Surface to user if too many errors (indicates stream corruption)
-              if (this.parseErrors.length >= STREAM.MAX_PARSE_ERRORS) {
-                handleError(
-                  new Error(
-                    `Stream parsing failed ${this.parseErrors.length} times. Data may be incomplete.`,
-                  ),
-                  "Stream error",
-                );
-                // Reset counter to avoid spamming
-                this.parseErrors = [];
-              }
+            } catch {
+              // Ignore parse errors
             }
           }
         }
       }
 
-      // Stream completed - finalize any active thinking widgets
-      // This handles cases where backend doesn't send explicit thinking_complete events
-      const { sessions } = useStore.getState();
-      const session = sessions[this.sessionId];
-      const message = session?.messages.find((m) => m.id === this.messageId);
-
-      if (message) {
-        const hasActiveThinking = message.widgets.some(
-          (w) => w.type === "thinking" && w.status === "active",
-        );
-
-        if (hasActiveThinking) {
-          // Mark all active thinking widgets as completed when stream ends
-          const updatedWidgets = message.widgets.map((w) =>
-            w.type === "thinking" && w.status === "active"
-              ? { ...w, status: "completed" as const }
-              : w,
-          );
-          updateMessage(this.sessionId, this.messageId, {
-            widgets: updatedWidgets,
-          });
-        }
-      }
-
-      // Check if we're waiting for user input (HITL)
-      // Don't set isGenerating=false if there's a pending approval widget
-      const hasPendingApproval = message?.widgets.some(
-        (w) => w.type === "approval" && w.status === "pending",
-      );
-
-      if (!hasPendingApproval) {
-        setIsGenerating(false);
-      }
+      this.finalizeStream();
+      setIsGenerating(false);
     } catch (error: unknown) {
-      // On error, always stop generating
       setIsGenerating(false);
       if (error instanceof Error && error.name === "AbortError") {
-        // Stream was cancelled by user - update message state
         updateMessage(this.sessionId, this.messageId, { cancelled: true });
       } else {
-        // Real error occurred - use error handler (will display via ErrorDisplay)
         handleError(error, "Stream error");
       }
     }
   }
 
   private handleData(data: unknown) {
-    const { setSessionTaskId, sessions } = useStore.getState();
-    const session = sessions[this.sessionId];
-    if (!session) return;
+    const { setSessionTaskId } = useStore.getState();
+    const result = (data as { result?: A2AResult })?.result || (data as A2AResult);
 
-    const message = session.messages.find((m) => m.id === this.messageId);
-    if (!message) return;
-
-    // Parse the stream data using proper protocol types
-    const streamData = data as AGUIStreamData;
-    const resultObj = streamData.result || streamData;
-
-    // Handle Task Status Updates
-    if (resultObj.statusUpdate) {
-      const statusUpdate = resultObj.statusUpdate;
-
-      // Update Task ID if present
-      if (statusUpdate.taskId) {
-        setSessionTaskId(this.sessionId, statusUpdate.taskId);
-      }
-
-      // Check for INPUT_REQUIRED state
-      if (statusUpdate.status?.state === "TASK_STATE_INPUT_REQUIRED") {
-        // We might want to trigger some UI state here, but the approval widget
-        // usually comes in the message update, so we just ensure taskId is set for resuming
-      }
-
-      // Check if statusUpdate contains a message update
-      if (statusUpdate.status?.update) {
-        this.processMessageUpdate(message, statusUpdate.status.update);
-      }
+    if (result.taskId) {
+      setSessionTaskId(this.sessionId, result.taskId);
     }
-    // Handle Direct Message Updates
-    else if (resultObj.message) {
-      if (resultObj.message.taskId) {
-        setSessionTaskId(this.sessionId, resultObj.message.taskId);
-      }
-      this.processMessageUpdate(message, resultObj.message);
-    }
-    // Handle Parts directly
-    else if (resultObj.parts) {
-      this.processMessageUpdate(message, resultObj);
+
+    switch (result.kind) {
+      case "status-update":
+        this.handleStatusUpdate(result);
+        break;
+      case "artifact-update":
+        this.processArtifactUpdate(result);
+        break;
+      case "task":
+        if (result.artifacts) {
+          for (const artifact of result.artifacts) {
+            this.processArtifactUpdate({ ...result, artifact });
+          }
+        }
+        break;
+      default:
+        if (result.artifact) {
+          this.processArtifactUpdate(result);
+        }
     }
   }
 
-  private processMessageUpdate(
-    currentMessage: Message,
-    update: { parts?: AGUIPart[]; [key: string]: unknown },
-  ) {
-    const { updateMessage } = useStore.getState();
-    const parts: AGUIPart[] = update.parts || [];
+  /**
+   * Process artifact update - V2 specific logic.
+   *
+   * Order of processing matters:
+   * 1. Metadata (tool_calls, thinking, tool_results) - creates widgets during streaming
+   * 2. Artifact parts (text, tool_use DataParts) - only text during streaming
+   * 3. Dedupe: Don't create widget if already exists from metadata
+   */
+  private processArtifactUpdate(result: A2AResult) {
+    const { updateMessage, sessions } = useStore.getState();
+    const session = sessions[this.sessionId];
+    const message = session?.messages.find((m) => m.id === this.messageId);
+    if (!message) return;
 
-    // Process parts sequentially to maintain correct order
-    // This is the proper way to handle content ordering
+    const isPartial = result.metadata?.partial === true;
+
+    // Initialize from existing state (batch update pattern)
     const widgetMap = new Map<string, Widget>();
-    const contentOrder: string[] = currentMessage.metadata?.contentOrder
-      ? [...currentMessage.metadata.contentOrder]
+    const contentOrder: string[] = message.metadata?.contentOrder
+      ? [...message.metadata.contentOrder]
       : [];
 
-    // Initialize with existing widgets
-    currentMessage.widgets.forEach((w) => {
+    message.widgets.forEach((w) => {
       widgetMap.set(w.id, w);
     });
 
-    // Track accumulated text for completion detection
-    let accumulatedText = currentMessage.text;
+    let accumulatedText = message.text || "";
 
-    // Track completed thinking blocks explicitly to prevent race conditions
-    // This prevents marking thinking as completed while chunks are still arriving out-of-order
-    const completedThinkingBlocks = new Set<string>();
+    // ==== STEP 1: Process METADATA (tool results only - they update existing widgets) ====
+    // NOTE: Thinking and tool_calls from metadata are FALLBACK only.
+    // Primary source is artifact.parts (Parts stream in order!)
 
-    // Process parts in order - this is critical for correct ordering
-    parts.forEach((part: AGUIPart, partIndex: number) => {
-      // Check if this is a widget part
-      const metadata: AGUIPartMetadata = part.metadata || {};
-      const isThinking =
-        metadata.event_type === "thinking" ||
-        metadata.block_type === "thinking";
-      const isToolCall =
-        metadata.event_type === "tool_call" && !("is_error" in metadata);
-      const isApproval = part.data?.data?.interaction_type === "tool_approval";
-      const isToolResult =
-        metadata.event_type === "tool_call" && "is_error" in metadata;
-      const isThinkingComplete =
-        metadata.event_type === "thinking_complete" ||
-        metadata.block_type === "thinking_complete";
+    if (result.metadata?.tool_results) {
+      for (const tr of result.metadata.tool_results) {
+        this.processToolResult(tr, widgetMap);
+      }
+    }
 
-      // Handle explicit thinking_complete events first (prevents race conditions)
-      if (isThinkingComplete) {
-        const thinkingId = metadata.block_id || part.data?.data?.thinking_id;
-        if (thinkingId) {
-          completedThinkingBlocks.add(thinkingId);
-          const existing = widgetMap.get(thinkingId);
-          if (existing && existing.type === "thinking") {
-            widgetMap.set(thinkingId, {
-              ...existing,
-              status: "completed",
-            });
+    // ==== STEP 2: Process artifact.parts IN ORDER (thinking, text, tool_use) ====
+    // Parts stream in the order they were generated by the LLM
+    // This is critical for correct widget ordering
+
+    if (result.artifact?.parts) {
+      for (const part of result.artifact.parts) {
+        if (part.kind === "text" && part.text) {
+          // Text content - pass isPartial to handle delta vs complete correctly
+          accumulatedText = this.processTextPart(part.text, accumulatedText, widgetMap, contentOrder, isPartial);
+        } else if (part.kind === "data" && part.data) {
+          const data = part.data as Record<string, unknown>;
+
+          if (data.type === "thinking") {
+            // Thinking Part (legacy pattern: thinking content as Part)
+            const id = data.id as string;
+            const content = data.content as string;
+            const status = data.status as string;
+            const isCompleted = status === "completed";
+            this.processThinking(id, content || "", isCompleted, "default", widgetMap, contentOrder);
+          } else if (data.type === "tool_use") {
+            // Tool call Part
+            const toolId = data.id as string;
+            if (!this.createdToolWidgets.has(toolId)) {
+              this.processToolCallFromPart(data, widgetMap, contentOrder);
+            }
+          } else if (data.type === "tool_result") {
+            // Tool result Part
+            const toolCallId = data.tool_call_id as string;
+            this.processToolResult({
+              tool_call_id: toolCallId,
+              content: data.content as string,
+              is_error: data.is_error as boolean,
+              status: data.status as string,
+            }, widgetMap);
           }
         }
       }
+    }
 
-      if (isThinking || isToolCall || isApproval) {
-        // Widget appears - track its order
-        if (isThinking) {
-          const thinkingId = metadata.block_id || `thinking-${partIndex}`;
-          const isCompleted = completedThinkingBlocks.has(thinkingId);
-
-          if (!widgetMap.has(thinkingId)) {
-            const thinkingType = (metadata.thinking_type || "default") as
-              | "todo"
-              | "goal"
-              | "reflection"
-              | "default";
-            widgetMap.set(thinkingId, {
-              id: thinkingId,
-              type: "thinking" as const,
-              data: { type: thinkingType },
-              status: isCompleted
-                ? ("completed" as const)
-                : ("active" as const),
-              content: part.text || part.data?.data?.text || "",
-              isExpanded: false,
-            });
-            // Add to content order if not already there
-            if (!contentOrder.includes(thinkingId)) {
-              contentOrder.push(thinkingId);
-            }
-          } else {
-            // Update existing thinking block
-            const existing = widgetMap.get(thinkingId);
-            if (existing && existing.type === "thinking") {
-              // Only mark as completed if explicitly completed, otherwise preserve state
-              const newStatus: "completed" | "active" = isCompleted
-                ? "completed"
-                : existing.status === "completed"
-                  ? "completed"
-                  : "active";
-              widgetMap.set(thinkingId, {
-                ...existing,
-                content:
-                  (existing.content || "") +
-                  (part.text || part.data?.data?.text || ""),
-                status: newStatus,
-              });
-            }
-          }
-        } else if (isToolCall) {
-          // Use tool_call_id as primary identifier (most reliable)
-          // IMPORTANT: Different tool_call_id = different tool call (e.g., retry after failure)
-          // Only prevent duplicates if the SAME tool_call_id appears multiple times
-          const toolCallId = metadata.tool_call_id || part.data?.data?.id;
-          const toolName =
-            metadata.tool_name || part.data?.data?.name || "unknown";
-          const toolArgs = part.data?.data?.arguments || {};
-
-          // Generate stable toolId - prefer tool_call_id, otherwise create deterministic ID
-          const toolId =
-            toolCallId ||
-            `tool-${toolName}-${JSON.stringify(toolArgs).slice(0, 50)}-${partIndex}`;
-
-          // Only prevent duplicates if the SAME tool_call_id already exists
-          // This allows legitimate retries (different tool_call_id, same tool name) to show up
-          const isDuplicate = toolCallId && widgetMap.has(toolCallId);
-
-          if (!isDuplicate && !widgetMap.has(toolId)) {
-            widgetMap.set(toolId, {
-              id: toolId,
-              type: "tool" as const,
-              data: {
-                name: toolName,
-                args: toolArgs,
-              },
-              status: "working" as const,
-              content: "",
-              isExpanded: false,
-            });
-            if (!contentOrder.includes(toolId)) {
-              contentOrder.push(toolId);
-            }
-          }
-        } else if (isApproval) {
-          const approvalId =
-            part.data?.data?.approval_id || `approval-${partIndex}`;
-          if (!widgetMap.has(approvalId)) {
-            widgetMap.set(approvalId, {
-              id: approvalId,
-              type: "approval" as const,
-              data: {
-                toolName: part.data?.data?.tool_name || "unknown",
-                toolInput: part.data?.data?.tool_input || {},
-                options: part.data?.data?.options,
-              },
-              status: "pending" as const,
-              isExpanded: true,
-            });
-            if (!contentOrder.includes(approvalId)) {
-              contentOrder.push(approvalId);
-            }
-          }
-        }
-      } else if (isToolResult) {
-        // Tool result - update existing tool widget
-        // Support incremental content updates for streaming tools (e.g., agent_call, execute_command)
-        const toolId = metadata.tool_call_id || part.data?.data?.tool_call_id;
-        if (toolId && widgetMap.has(toolId)) {
-          const existing = widgetMap.get(toolId);
-          if (!existing) return;
-
-          const newContent = part.data?.data?.content || "";
-          const isDenied =
-            metadata.is_error &&
-            (newContent.includes("TOOL_EXECUTION_DENIED") ||
-              newContent.includes("user denied"));
-
-          // Determine if this is incremental content (append) or final result (replace)
-          // For streaming tools (e.g., agent_call, execute_command), content may arrive incrementally
-          // We append if: tool is working AND we have existing content AND new content doesn't contain the existing content
-          // (meaning it's a continuation, not a replacement)
-          const existingContent = existing.content || "";
-          const isIncremental =
-            existing.status === "working" &&
-            existingContent.length > 0 &&
-            newContent.length > 0 &&
-            !newContent.includes(existingContent) && // New content doesn't contain old (it's incremental)
-            newContent.length < existingContent.length * 2; // New chunk is reasonable size (not a full replacement)
-
-          const updatedContent = isIncremental
-            ? existingContent + newContent
-            : newContent || existingContent;
-
-          // Tool result events indicate completion - determine final status
-          // IMPORTANT: tool_result events mean the tool has completed (or errored)
-          // Only keep as 'working' if we're certain this is incremental streaming (content being appended)
-          // Otherwise, tool_result without error means success
-          const toolStatus: "working" | "success" | "failed" = isDenied
-            ? "failed"
-            : metadata.is_error
-              ? "failed"
-              : isIncremental
-                ? "working" // Keep working only for confirmed incremental streaming updates
-                : "success"; // Tool result without error means completion -> success
-
-          if (existing.type === "tool") {
-            widgetMap.set(toolId, {
-              ...existing,
-              status: toolStatus,
-              content: updatedContent,
-            });
-          }
-
-          // Update related approval widget when tool completes (approved or denied)
-          if (toolStatus === "success" || isDenied) {
-            // Get tool name from the existing tool widget for matching approval widgets
-            const existingToolName =
-              existing.type === "tool" ? existing.data.name : undefined;
-            if (existingToolName) {
-              widgetMap.forEach((widget, widgetId) => {
-                if (
-                  widget.type === "approval" &&
-                  widget.data?.toolName === existingToolName &&
-                  widget.status === "pending"
-                ) {
-                  widgetMap.set(widgetId, {
-                    ...widget,
-                    status: "decided",
-                    decision: isDenied ? "deny" : "approve",
-                  });
-                }
-              });
-            }
-          }
-        }
-      } else if (part.text && !isThinking && !isToolCall && !isApproval) {
-        // Regular text part - accumulate it
-        let textContent = part.text || "";
-
-        // Sanitize control characters and escape sequences
-        // Remove control characters (except newlines and tabs)
-        textContent = textContent.replace(
-          /[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g,
-          "",
-        );
-        // Remove common escape sequences that leak through
-        textContent = textContent.replace(/<ctrl\d+>/gi, "");
-        textContent = textContent.replace(/&lt;ctrl\d+&gt;/gi, "");
-        // Remove ANSI escape sequences
-        textContent = textContent.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
-
-        // Filter out tool call syntax that leaks into text
-        const toolCallPatterns = [
-          /call:\w+\{/i, // call:TOOL_NAME{
-          /tool:\s*\w+\s*\{/i, // tool: NAME {
-          /^\s*call:\s*\w+/i, // call:TOOL_NAME at start
-        ];
-
-        // Filter out verbose backend messages that are redundant with widgets
-        const approvalPatterns = [
-          /^✅\s*Approved:/,
-          /^🚫\s*Denied:/,
-          /SUCCESS:\s*Approved:/i,
-          /DENIED:\s*Denied:/i,
-          /Command Execution Request/i,
-          /This will execute on the server/i,
-          /🔐 Tool Approval Required/i,
-          /Please respond with:\s*approve or deny/i,
-          /Tool:\s*\w+\s*Input:/i,
-        ];
-
-        // Remove tool call syntax from text content (but preserve spacing)
-        toolCallPatterns.forEach((pattern) => {
-          textContent = textContent.replace(pattern, "");
-        });
-
-        // Check if entire text should be filtered
-        const shouldFilter =
-          approvalPatterns.some((pattern) => textContent.match(pattern)) ||
-          toolCallPatterns.some(
-            (pattern) => part.text?.match(pattern), // Check original text for tool call patterns
-          );
-
-        // Only skip truly empty content (not whitespace - whitespace is important for word separation!)
-        if (textContent.length === 0 || shouldFilter) {
-          return;
-        }
-
-        if (textContent) {
-          // Trust provider's spacing - append text as-is
-          // All LLM providers (OpenAI, Anthropic, Gemini, Ollama) include proper spacing in their streaming chunks
-          accumulatedText += textContent;
-
-          // Find the appropriate text widget to append to
-          // Strategy: Find the last non-text widget, then look for a text widget immediately after it
-          // If no text widget exists at that position, create one
-          const lastNonTextWidgetId = contentOrder
-            .filter((id) => {
-              const widget = widgetMap.get(id);
-              return widget && widget.type !== "text";
-            })
-            .pop();
-
-          // Text widgets use synthetic IDs to track position relative to other widgets:
-          // - $$text_marker$$_start: Text before any widgets (initial text content)
-          // - $$text_marker$$_after_{widgetId}: Text after a specific widget (interleaved content)
-          // Using $$ delimiters prevents collision with widget IDs that might contain __
-          // This marker-based approach allows proper text accumulation across streaming updates
-          // and handles interleaved text/widget content correctly
-          const TEXT_MARKER_PREFIX = "$$text_marker$$";
-          const textMarkerId = lastNonTextWidgetId
-            ? `${TEXT_MARKER_PREFIX}_after_${lastNonTextWidgetId}`
-            : `${TEXT_MARKER_PREFIX}_start`;
-
-          // Find existing text widget at this position (handles text chunks arriving in separate updates)
-          let targetTextWidgetId = textMarkerId;
-          if (lastNonTextWidgetId) {
-            // Look backwards from end of contentOrder to find the most recent text widget after lastNonTextWidgetId
-            const lastNonTextIndex = contentOrder.indexOf(lastNonTextWidgetId);
-            for (let i = contentOrder.length - 1; i > lastNonTextIndex; i--) {
-              const widget = widgetMap.get(contentOrder[i]);
-              if (widget?.type === "text") {
-                targetTextWidgetId = widget.id;
-                break;
-              }
-            }
-          } else {
-            // Look for $$text_marker$$_start widget
-            const TEXT_MARKER_PREFIX = "$$text_marker$$";
-            const startTextWidget = contentOrder.find((id) => {
-              const widget = widgetMap.get(id);
-              return (
-                widget?.type === "text" && id === `${TEXT_MARKER_PREFIX}_start`
-              );
-            });
-            if (startTextWidget) {
-              targetTextWidgetId = startTextWidget;
-            }
-          }
-
-          if (!widgetMap.has(targetTextWidgetId)) {
-            // Create a new text widget at this position
-            widgetMap.set(targetTextWidgetId, {
-              id: targetTextWidgetId,
-              type: "text" as const,
-              data: {},
-              status: "active",
-              content: textContent,
-              isExpanded: true,
-            });
-            if (!contentOrder.includes(targetTextWidgetId)) {
-              contentOrder.push(targetTextWidgetId);
-            }
-          } else {
-            // Append to existing text widget
-            // Trust provider's spacing - append text as-is
-            const existing = widgetMap.get(targetTextWidgetId);
-            if (existing) {
-              widgetMap.set(targetTextWidgetId, {
-                ...existing,
-                content: (existing.content || "") + textContent,
-              });
-            }
-          }
-        }
-      }
-    });
-
-    // Mark completed thinking blocks when text appears or tool calls start (fallback for implicit completion)
-    // Only mark blocks that haven't been explicitly completed via thinking_complete event
-    const hasNewText = accumulatedText.length > currentMessage.text.length;
-    const hasNewToolCalls = parts.some(
-      (p) => p.metadata?.event_type === "tool_call" && !p.metadata?.is_error,
-    );
-
-    if (hasNewText || hasNewToolCalls) {
+    // ==== STEP 3: Mark thinking completed when final event arrives ====
+    if (!isPartial) {
       widgetMap.forEach((widget, id) => {
-        if (
-          widget.type === "thinking" &&
-          widget.status === "active" &&
-          !completedThinkingBlocks.has(id)
-        ) {
-          completedThinkingBlocks.add(id);
+        if (widget.type === "thinking" && widget.status === "active") {
+          widgetMap.set(id, { ...widget, status: "completed" });
+        }
+        // Also mark text widgets as completed
+        if (widget.type === "text" && widget.status === "active") {
           widgetMap.set(id, { ...widget, status: "completed" });
         }
       });
     }
 
-    // Build final widget array in contentOrder sequence
+    // ==== STEP 4: Build ordered widgets and update ====
     const orderedWidgets: Widget[] = [];
     const seenWidgetIds = new Set<string>();
 
-    // First, add widgets in contentOrder (maintains stream order)
     contentOrder.forEach((widgetId) => {
       const widget = widgetMap.get(widgetId);
       if (widget) {
@@ -588,22 +241,405 @@ export class StreamParser {
       }
     });
 
-    // Then add any widgets not in contentOrder (shouldn't happen, but safety fallback)
     widgetMap.forEach((widget, id) => {
       if (!seenWidgetIds.has(id)) {
         orderedWidgets.push(widget);
       }
     });
 
-    const newWidgets = orderedWidgets;
-
     updateMessage(this.sessionId, this.messageId, {
       text: accumulatedText,
-      widgets: newWidgets,
+      widgets: orderedWidgets,
       metadata: {
-        ...currentMessage.metadata,
+        ...message.metadata,
         contentOrder: contentOrder.length > 0 ? contentOrder : undefined,
       },
     });
   }
+
+  /**
+   * Process text part - compute position fresh from contentOrder.
+   * @param isPartial - true for streaming deltas, false for final complete text
+   */
+  private processTextPart(
+    text: string,
+    accumulatedText: string,
+    widgetMap: Map<string, Widget>,
+    contentOrder: string[],
+    isPartial: boolean
+  ): string {
+    if (!text) return accumulatedText;
+
+    // On final (non-partial) events, apply ADK-Go duplicate detection
+    // This prevents duplication when final event sends complete text after streaming
+    if (!isPartial) {
+      // If accumulated already contains this text, it's a duplicate - skip
+      if (accumulatedText === text || accumulatedText.endsWith(text)) {
+        return accumulatedText;
+      }
+      // If the new text contains the accumulated text, it's the complete version
+      // Skip processing since we already have partial content displayed
+      if (text.includes(accumulatedText) && accumulatedText.length > 0) {
+        return accumulatedText;
+      }
+    }
+
+    const newAccumulatedText = isPartial
+      ? accumulatedText + text  // Streaming: append delta
+      : text;  // Final: use as-is (shouldn't reach here if duplicate detection worked)
+
+    // Find last non-text widget
+    const lastNonTextWidgetId = contentOrder
+      .filter((id) => {
+        const widget = widgetMap.get(id);
+        return widget && widget.type !== "text";
+      })
+      .pop();
+
+    // Determine text widget ID based on position
+    const textMarkerId = lastNonTextWidgetId
+      ? `${TEXT_MARKER_PREFIX}_after_${lastNonTextWidgetId}`
+      : `${TEXT_MARKER_PREFIX}_start`;
+
+    // Find existing text widget at this position
+    let targetTextWidgetId = textMarkerId;
+    if (lastNonTextWidgetId) {
+      const lastNonTextIndex = contentOrder.indexOf(lastNonTextWidgetId);
+      for (let i = contentOrder.length - 1; i > lastNonTextIndex; i--) {
+        const widget = widgetMap.get(contentOrder[i]);
+        if (widget?.type === "text") {
+          targetTextWidgetId = widget.id;
+          break;
+        }
+      }
+    } else {
+      const startTextWidget = contentOrder.find((id) => {
+        const widget = widgetMap.get(id);
+        return widget?.type === "text" && id === `${TEXT_MARKER_PREFIX}_start`;
+      });
+      if (startTextWidget) {
+        targetTextWidgetId = startTextWidget;
+      }
+    }
+
+    // Create or update text widget
+    if (!widgetMap.has(targetTextWidgetId)) {
+      const textWidget: TextWidget = {
+        id: targetTextWidgetId,
+        type: "text",
+        status: isPartial ? "active" : "completed",
+        content: text,
+        data: {},
+        isExpanded: true,
+      };
+      widgetMap.set(targetTextWidgetId, textWidget);
+      if (!contentOrder.includes(targetTextWidgetId)) {
+        contentOrder.push(targetTextWidgetId);
+      }
+    } else {
+      const existing = widgetMap.get(targetTextWidgetId);
+      if (existing && existing.type === "text") {
+        // On partial: append delta
+        // On final: this shouldn't happen (duplicate detection returns early)
+        const newContent = isPartial
+          ? (existing.content || "") + text
+          : text;
+        widgetMap.set(targetTextWidgetId, {
+          ...existing,
+          content: newContent,
+          status: isPartial ? existing.status : ("completed" as const),
+        });
+      }
+    }
+
+    return newAccumulatedText;
+  }
+
+  /**
+   * Process tool call from artifact.parts DataPart.
+   */
+  private processToolCallFromPart(
+    data: Record<string, unknown>,
+    widgetMap: Map<string, Widget>,
+    contentOrder: string[]
+  ) {
+    const id = data.id as string;
+    const widgetId = `tool_${id}`;
+
+    if (this.createdToolWidgets.has(id) || widgetMap.has(widgetId)) {
+      return;
+    }
+
+    this.createdToolWidgets.add(id);
+
+    const toolWidget: ToolWidget = {
+      id: widgetId,
+      type: "tool",
+      status: "working",
+      content: "",
+      data: {
+        name: (data.name as string) || "unknown",
+        args: (data.arguments || data.input || {}) as Record<string, unknown>,
+      },
+      isExpanded: true,
+    };
+
+    widgetMap.set(widgetId, toolWidget);
+    if (!contentOrder.includes(widgetId)) {
+      contentOrder.push(widgetId);
+    }
+  }
+
+  /**
+   * Process tool result - update existing tool widget.
+   */
+  private processToolResult(tr: ToolResultMeta, widgetMap: Map<string, Widget>) {
+    const widgetId = `tool_${tr.tool_call_id}`;
+    const existing = widgetMap.get(widgetId);
+    if (!existing || existing.type !== "tool") return;
+
+    const newContent =
+      typeof tr.content === "string" ? tr.content : JSON.stringify(tr.content);
+
+    const existingContent = existing.content || "";
+    const isIncremental =
+      existing.status === "working" &&
+      existingContent.length > 0 &&
+      newContent.length > 0 &&
+      !newContent.includes(existingContent);
+
+    const updatedContent = isIncremental
+      ? existingContent + newContent
+      : newContent || existingContent;
+
+    let status: ToolWidgetStatus = "success";
+    if (tr.is_error) {
+      status = "failed";
+    } else if (tr.status === "working") {
+      status = "working";
+    } else if (tr.status === "failed") {
+      status = "failed";
+    } else if (isIncremental) {
+      status = "working";
+    }
+
+    widgetMap.set(widgetId, {
+      ...existing,
+      status,
+      content: updatedContent,
+      isExpanded: status === "working",
+    });
+  }
+
+  /**
+   * Process thinking block.
+   */
+  private processThinking(
+    id: string,
+    content: string,
+    isCompleted: boolean,
+    type: string | undefined,
+    widgetMap: Map<string, Widget>,
+    contentOrder: string[]
+  ) {
+    const widgetId = `thinking_${id}`;
+
+    if (this.createdThinkingWidgets.has(id)) {
+      // Update existing widget
+      const existing = widgetMap.get(widgetId) as ThinkingWidget | undefined;
+      if (existing) {
+        // CRITICAL: On completed, REPLACE content (full content arrives)
+        // On active (streaming), APPEND content (delta arrives)
+        const newContent = isCompleted
+          ? content  // Replace - this is the complete content
+          : (existing.content || "") + content;  // Append - this is a delta
+
+        widgetMap.set(widgetId, {
+          ...existing,
+          content: newContent,
+          status: isCompleted ? "completed" : existing.status,
+          // Collapse when completed
+          isExpanded: isCompleted ? false : existing.isExpanded,
+        });
+      }
+      return;
+    }
+
+    this.createdThinkingWidgets.add(id);
+
+    const thinkingWidget: ThinkingWidget = {
+      id: widgetId,
+      type: "thinking",
+      status: isCompleted ? "completed" : "active",
+      content: content,
+      data: { type: (type || "default") as "todo" | "goal" | "reflection" | "default" },
+      isExpanded: !isCompleted,  // Expand while active, collapse when done
+    };
+
+    widgetMap.set(widgetId, thinkingWidget);
+    if (!contentOrder.includes(widgetId)) {
+      contentOrder.push(widgetId);
+    }
+  }
+
+  /**
+   * Handle status update for HITL.
+   */
+  private handleStatusUpdate(result: A2AResult) {
+    // A2A spec uses "input-required" (with hyphen) as the state value
+    const state = result.status?.state;
+    if (state !== "input-required" && state !== "input_required") return;
+
+    const { updateMessage, sessions } = useStore.getState();
+    const session = sessions[this.sessionId];
+    const message = session?.messages.find((m) => m.id === this.messageId);
+    if (!message) return;
+
+    const widgetMap = new Map<string, Widget>();
+    const contentOrder: string[] = message.metadata?.contentOrder
+      ? [...message.metadata.contentOrder]
+      : [];
+
+    message.widgets.forEach((w) => {
+      widgetMap.set(w.id, w);
+    });
+
+    const taskId = result.taskId || session?.taskId;
+    const toolCallIDs = result.metadata?.long_running_tool_ids || [];
+    const inputPrompt = result.metadata?.input_prompt || "Human input required.";
+    const widgetId = `approval_${taskId || this.messageId}`;
+
+    if (widgetMap.has(widgetId)) return;
+
+    // Extract tool name and input from existing tool widgets
+    // Find the first tool widget that matches one of the long-running tool IDs
+    let toolName = "Unknown Tool";
+    let toolInput: Record<string, unknown> = {};
+    
+    if (toolCallIDs.length > 0) {
+      // Find tool widget by matching tool_call_id
+      for (const toolCallID of toolCallIDs) {
+        const toolWidgetId = `tool_${toolCallID}`;
+        const toolWidget = widgetMap.get(toolWidgetId);
+        if (toolWidget && toolWidget.type === "tool") {
+          toolName = toolWidget.data.name || "Unknown Tool";
+          toolInput = toolWidget.data.args || {};
+          break; // Use first matching tool
+        }
+      }
+    }
+
+    const approvalWidget: ApprovalWidget = {
+      id: widgetId,
+      type: "approval",
+      status: "pending",
+      content: inputPrompt,
+      data: {
+        toolName: toolName,
+        toolInput: toolInput,
+        task_id: taskId || undefined,
+        tool_call_ids: toolCallIDs,
+        prompt: inputPrompt,
+      },
+      isExpanded: true,
+    };
+
+    widgetMap.set(widgetId, approvalWidget);
+    if (!contentOrder.includes(widgetId)) {
+      contentOrder.push(widgetId);
+    }
+
+    const orderedWidgets: Widget[] = [];
+    contentOrder.forEach((id) => {
+      const widget = widgetMap.get(id);
+      if (widget) orderedWidgets.push(widget);
+    });
+    widgetMap.forEach((widget, id) => {
+      if (!contentOrder.includes(id)) orderedWidgets.push(widget);
+    });
+
+    updateMessage(this.sessionId, this.messageId, {
+      widgets: orderedWidgets,
+      metadata: {
+        ...message.metadata,
+        contentOrder: contentOrder.length > 0 ? contentOrder : undefined,
+      },
+    });
+  }
+
+  /**
+   * Finalize stream.
+   */
+  private finalizeStream() {
+    const { updateMessage, sessions } = useStore.getState();
+    const session = sessions[this.sessionId];
+    const message = session?.messages.find((m) => m.id === this.messageId);
+    if (!message) return;
+
+    const hasActiveWidgets = message.widgets.some(
+      (w) => (w.type === "thinking" || w.type === "text") && w.status === "active"
+    );
+
+    if (hasActiveWidgets) {
+      const updatedWidgets = message.widgets.map((w) =>
+        (w.type === "thinking" || w.type === "text") && w.status === "active"
+          ? { ...w, status: "completed" as const }
+          : w
+      );
+      updateMessage(this.sessionId, this.messageId, { widgets: updatedWidgets });
+    }
+  }
+}
+
+// ============================================================================
+// A2A Types
+// ============================================================================
+
+interface A2APart {
+  kind: string;
+  text?: string;
+  data?: unknown;
+}
+
+interface A2AArtifact {
+  artifactId: string;
+  parts: A2APart[];
+}
+
+interface A2AResult {
+  kind?: "status-update" | "artifact-update" | "task";
+  taskId?: string;
+  status?: { state: string };
+  artifact?: A2AArtifact;
+  artifacts?: A2AArtifact[];
+  metadata?: {
+    partial?: boolean;
+    thinking?: ThinkingMeta;
+    tool_calls?: ToolCallMeta[];
+    tool_results?: ToolResultMeta[];
+    long_running_tool_ids?: string[];
+    input_prompt?: string;
+    [key: string]: unknown;
+  };
+}
+
+interface ThinkingMeta {
+  id: string;
+  status: "active" | "completed";
+  content: string;
+  type?: string;
+}
+
+interface ToolCallMeta {
+  id: string;
+  name: string;
+  args?: Record<string, unknown>;
+  status?: string;
+}
+
+interface ToolResultMeta {
+  tool_call_id: string;
+  content: string | Record<string, unknown>;
+  status?: string;
+  is_error?: boolean;
 }

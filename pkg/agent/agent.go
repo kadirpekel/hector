@@ -1,1480 +1,381 @@
+// SPDX-License-Identifier: AGPL-3.0
+// Copyright 2025 Kadir Pekel
+//
+// Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.gnu.org/licenses/agpl-3.0.en.html
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package agent
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"log/slog"
-	"strings"
-	"sync"
-	"time"
+	"iter"
 
-	"github.com/kadirpekel/hector/pkg/a2a/pb"
-	"github.com/kadirpekel/hector/pkg/component"
-	"github.com/kadirpekel/hector/pkg/config"
-	"github.com/kadirpekel/hector/pkg/httpclient"
-	"github.com/kadirpekel/hector/pkg/llms"
-	"github.com/kadirpekel/hector/pkg/observability"
-	"github.com/kadirpekel/hector/pkg/protocol"
-	"github.com/kadirpekel/hector/pkg/reasoning"
-	"github.com/kadirpekel/hector/pkg/tools"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/protobuf/types/known/structpb"
+	"github.com/a2aproject/a2a-go/a2a"
 )
+
+// Agent is the base interface which all agents must implement.
+//
+// Agents are created with constructors to ensure correct initialization:
+//   - agent.New for custom agents
+//   - llmagent.New for LLM-based agents
+//   - remoteagent.NewA2A for remote A2A agents
+//   - workflowagents for sequential/parallel/loop patterns
+type Agent interface {
+	// Name returns the unique identifier for this agent within the agent tree.
+	// Agent name cannot be "user" as it's reserved for end-user input.
+	Name() string
+
+	// Description returns a human-readable description of the agent's capability.
+	// Used by LLMs to determine whether to delegate control to this agent.
+	Description() string
+
+	// Run executes the agent and yields events.
+	// The iterator pattern allows clean streaming of results.
+	Run(InvocationContext) iter.Seq2[*Event, error]
+
+	// SubAgents returns child agents that this agent can delegate to.
+	SubAgents() []Agent
+
+	// internal returns the internal agent state for framework use.
+	internal() *baseAgent
+}
+
+// Checkpointable is an optional interface for agents that support state checkpointing.
+//
+// Agents implementing this interface can have their execution state captured
+// for fault tolerance and HITL workflow recovery.
+//
+// Implementation Note (ported from legacy Hector):
+//
+//	Checkpoints capture the state of the CURRENTLY EXECUTING agent only.
+//	The full multi-agent history is preserved in session events (the source
+//	of truth). On recovery:
+//	  1. Checkpoint identifies which agent was active
+//	  2. Session events provide full conversation history
+//	  3. Runner.findAgentToRun() routes to the correct agent
+//
+// Not all agents need to implement this - only agents with internal state
+// that cannot be reconstructed from session events alone.
+type Checkpointable interface {
+	Agent
+
+	// CaptureCheckpointState returns the agent's current execution state.
+	// Called by the checkpoint manager at strategic points (pre-LLM, post-tool, etc.)
+	CaptureCheckpointState() (map[string]any, error)
+
+	// RestoreCheckpointState restores the agent's execution state from a checkpoint.
+	// Called by the recovery manager when resuming from a checkpoint.
+	RestoreCheckpointState(state map[string]any) error
+}
+
+// Config is the configuration for creating a new custom Agent.
+type Config struct {
+	// Name must be a non-empty string, unique within the agent tree.
+	Name string
+
+	// Description of the agent's capability (used for delegation decisions).
+	Description string
+
+	// SubAgents are child agents this agent can delegate tasks to.
+	SubAgents []Agent
+
+	// BeforeAgentCallbacks are called before the agent starts its run.
+	// If any returns non-nil content or error, agent run is skipped.
+	BeforeAgentCallbacks []BeforeAgentCallback
+
+	// Run defines the agent's execution logic.
+	Run func(InvocationContext) iter.Seq2[*Event, error]
+
+	// AfterAgentCallbacks are called after the agent completes its run.
+	AfterAgentCallbacks []AfterAgentCallback
+}
+
+// BeforeAgentCallback is called before the agent starts.
+// If it returns non-nil content or error, agent run is skipped.
+type BeforeAgentCallback func(CallbackContext) (*a2a.Message, error)
+
+// AfterAgentCallback is called after the agent completes.
+// If it returns non-nil content or error, a new event is created.
+type AfterAgentCallback func(CallbackContext) (*a2a.Message, error)
+
+// AgentType identifies the kind of agent for introspection.
+type AgentType string
 
 const (
-	outputChannelBuffer        = 100
-	historyRetentionMultiplier = 10
-	defaultRetryWaitSeconds    = 120
-	maxLLMRetries              = 3
+	TypeCustomAgent     AgentType = "custom"
+	TypeLLMAgent        AgentType = "llm"
+	TypeSequentialAgent AgentType = "sequential"
+	TypeParallelAgent   AgentType = "parallel"
+	TypeLoopAgent       AgentType = "loop"
+	TypeRemoteAgent     AgentType = "remote"
 )
 
-// ExecutionOptions controls agent execution behavior.
-// This provides clean separation between transport concerns (streaming vs non-streaming)
-// and core agent logic.
-type ExecutionOptions struct {
-	// BlockForHITL controls whether the agent blocks waiting for user input
-	// when tool approval is required. If false, the agent returns immediately
-	// with the task in INPUT_REQUIRED state, allowing the caller to handle
-	// the approval flow externally.
-	//
-	// Typical usage:
-	// - Streaming mode (gRPC/SSE): true - the stream stays open for approval flow
-	// - Non-streaming mode (REST): false - return task, client sends follow-up
-	BlockForHITL bool
+// baseAgent implements the Agent interface with common functionality.
+type baseAgent struct {
+	name        string
+	description string
+	subAgents   []Agent
+	agentType   AgentType
+
+	beforeAgentCallbacks []BeforeAgentCallback
+	run                  func(InvocationContext) iter.Seq2[*Event, error]
+	afterAgentCallbacks  []AfterAgentCallback
 }
 
-// DefaultExecutionOptions returns options suitable for streaming execution
-func DefaultExecutionOptions() ExecutionOptions {
-	return ExecutionOptions{
-		BlockForHITL: true, // Default: block for HITL (streaming behavior)
+// New creates an Agent with custom logic defined by the Run function.
+func New(cfg Config) (Agent, error) {
+	if cfg.Name == "" {
+		return nil, fmt.Errorf("agent name is required")
 	}
+	if cfg.Name == "user" {
+		return nil, fmt.Errorf("agent name cannot be 'user' (reserved)")
+	}
+	if cfg.Run == nil {
+		return nil, fmt.Errorf("agent Run function is required")
+	}
+
+	// Check for duplicate sub-agents
+	seen := make(map[string]bool)
+	for _, sub := range cfg.SubAgents {
+		if seen[sub.Name()] {
+			return nil, fmt.Errorf("duplicate sub-agent: %s", sub.Name())
+		}
+		seen[sub.Name()] = true
+	}
+
+	return &baseAgent{
+		name:                 cfg.Name,
+		description:          cfg.Description,
+		subAgents:            cfg.SubAgents,
+		agentType:            TypeCustomAgent,
+		beforeAgentCallbacks: cfg.BeforeAgentCallbacks,
+		run:                  cfg.Run,
+		afterAgentCallbacks:  cfg.AfterAgentCallbacks,
+	}, nil
 }
 
-type Agent struct {
-	pb.UnimplementedA2AServiceServer
-
-	id                 string // Agent ID (config key, URL-safe)
-	name               string // Display name
-	description        string
-	config             *config.AgentConfig
-	componentManager   *component.ComponentManager // For accessing global config
-	services           reasoning.AgentServices
-	taskWorkers        chan struct{}
-	baseURL            string   // Server base URL for agent card URL construction
-	preferredTransport string   // Preferred A2A transport (grpc, json-rpc, rest)
-	subAgents          []string // Sub-agents for multi-agent scenarios (set from config or builder)
-
-	// Human-in-the-loop support (A2A Protocol Section 6.3 - INPUT_REQUIRED state)
-	taskAwaiter      *TaskAwaiter                  // Handles paused tasks waiting for input
-	activeExecutions map[string]context.CancelFunc // Track active task executions for cancellation
-	executionsMu     sync.RWMutex                  // Protects activeExecutions
-}
-
-func (a *Agent) ClearHistory(sessionID string) error {
-	history := a.services.History()
-	if history != nil {
-		return history.ClearHistory(sessionID)
-	}
-	return nil
-}
-
-func (a *Agent) GetAgentCardSimple() *pb.AgentCard {
-	return &pb.AgentCard{
-		Name:               a.name,
-		Description:        a.description,
-		Version:            a.getVersion(),
-		PreferredTransport: a.preferredTransport,
-		Capabilities: &pb.AgentCapabilities{
-			Streaming: true,
-		},
-
-		DefaultInputModes:  a.getInputModes(),
-		DefaultOutputModes: a.getOutputModes(),
-		Skills:             a.getSkills(),
-		Provider:           a.getProvider(),
-		DocumentationUrl:   a.getDocumentationURL(),
-	}
-}
-
-func (a *Agent) getVersion() string {
-	if a.config != nil && a.config.A2A != nil && a.config.A2A.Version != "" {
-		return a.config.A2A.Version
-	}
-	return "0.3.0"
-}
-
-func (a *Agent) getInputModes() []string {
-	// If explicitly configured, use config values
-	if a.config != nil && a.config.A2A != nil && len(a.config.A2A.InputModes) > 0 {
-		return a.config.A2A.InputModes
-	}
-
-	// Query LLM provider for its supported input modes
-	if a.services != nil {
-		llmService := a.services.LLM()
-		if llmService != nil {
-			modes := llmService.GetSupportedInputModes()
-			if len(modes) > 0 {
-				return modes
-			}
-		}
-	}
-
-	// Fallback to safe defaults (images only) if provider info unavailable
-	return []string{
-		"text/plain",
-		"application/json",
-		"image/jpeg",
-		"image/png",
-		"image/gif",
-		"image/webp",
-	}
-}
-
-func (a *Agent) getOutputModes() []string {
-	if a.config != nil && a.config.A2A != nil && len(a.config.A2A.OutputModes) > 0 {
-		return a.config.A2A.OutputModes
-	}
-
-	// Default output modes including AG-UI support
-	return []string{"text/plain", "application/json", "application/x-agui-events"}
-}
-
-func (a *Agent) getSkills() []*pb.AgentSkill {
-	if a.config != nil && a.config.A2A != nil && len(a.config.A2A.Skills) > 0 {
-
-		skills := make([]*pb.AgentSkill, len(a.config.A2A.Skills))
-		for i, skill := range a.config.A2A.Skills {
-			skills[i] = &pb.AgentSkill{
-				Id:          skill.ID,
-				Name:        skill.Name,
-				Description: skill.Description,
-				Tags:        skill.Tags,
-				Examples:    skill.Examples,
-			}
-		}
-		return skills
-	}
-
-	return []*pb.AgentSkill{
-		{
-			Id:          "general-assistance",
-			Name:        "General Assistance",
-			Description: a.description,
-			Tags:        []string{"conversation", "assistance"},
-		},
-	}
-}
-
-func (a *Agent) getProvider() *pb.AgentProvider {
-	if a.config != nil && a.config.A2A != nil && a.config.A2A.Provider != nil {
-		return &pb.AgentProvider{
-			Organization: a.config.A2A.Provider.Name,
-			Url:          a.config.A2A.Provider.URL,
-		}
-	}
-	return nil
-}
-
-func (a *Agent) getDocumentationURL() string {
-	if a.config != nil && a.config.A2A != nil {
-		return a.config.A2A.DocumentationURL
-	}
-	return ""
-}
-
-// Helper function to create a text part
-func createTextPart(text string) *pb.Part {
-	return &pb.Part{Part: &pb.Part_Text{Text: text}}
-}
-
-// safeSendPart sends a part to the output channel with backpressure handling.
-// If the channel is full or the context is cancelled, it returns an error.
-// This prevents goroutine leaks when clients disconnect.
-func safeSendPart(ctx context.Context, outputCh chan<- *pb.Part, part *pb.Part) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case outputCh <- part:
-		return nil
-	default:
-		// Channel is full - try once more with timeout to avoid blocking indefinitely
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case outputCh <- part:
-			return nil
-		case <-time.After(100 * time.Millisecond):
-			// Channel still full after timeout - log warning but don't block
-			// This prevents goroutine leaks on client disconnect
-			return fmt.Errorf("output channel full, client may have disconnected")
-		}
-	}
-}
-
-// Helper functions for context value extraction
-func getSessionIDFromContext(ctx context.Context) string {
-	if sessionIDValue := ctx.Value(SessionIDKey); sessionIDValue != nil {
-		if sid, ok := sessionIDValue.(string); ok {
-			return sid
-		}
-	}
-	return ""
-}
-
-func getTaskIDFromContext(ctx context.Context) string {
-	if taskIDValue := ctx.Value(taskIDContextKey); taskIDValue != nil {
-		if tid, ok := taskIDValue.(string); ok {
-			return tid
-		}
-	}
-	return ""
-}
-
-func getUserDecisionFromContext(ctx context.Context) string {
-	if decisionValue := ctx.Value(userDecisionContextKey); decisionValue != nil {
-		if decision, ok := decisionValue.(string); ok {
-			return decision
-		}
-	}
-	return ""
-}
-
-// getInputTimeout returns the configured input timeout or default
-func (a *Agent) getInputTimeout() time.Duration {
-	if a.config.Task != nil && a.config.Task.InputTimeout > 0 {
-		return time.Duration(a.config.Task.InputTimeout) * time.Second
-	}
-	return 10 * time.Minute // Default
-}
-
-// executeWithMessage runs the agent with a user message (preserves file parts).
-// Uses default execution options (blocks for HITL - suitable for streaming mode).
-func (a *Agent) executeWithMessage(
-	ctx context.Context,
-	input string,
-	userMessage *pb.Message,
-	strategy reasoning.ReasoningStrategy,
-) (<-chan *pb.Part, error) {
-	return a.executeWithOptions(ctx, input, userMessage, strategy, DefaultExecutionOptions())
-}
-
-// executeWithOptions runs the agent with explicit execution options.
-// This is the primary execution entry point for A2A methods that need
-// to control HITL behavior.
-func (a *Agent) executeWithOptions(
-	ctx context.Context,
-	input string,
-	userMessage *pb.Message,
-	strategy reasoning.ReasoningStrategy,
-	opts ExecutionOptions,
-) (<-chan *pb.Part, error) {
-	outputCh := make(chan *pb.Part, outputChannelBuffer)
-
-	go func() {
-		defer close(outputCh)
-
-		startTime := time.Now()
-		cfg := a.services.GetConfig()
-
-		// Get LLM name from config if available, otherwise use empty string
-		llmName := ""
-		if a.config != nil {
-			llmName = a.config.LLM
-		}
-		spanCtx, span := startAgentSpan(ctx, a.name, llmName, input)
-		defer span.End()
-
-		// Thinking display is controlled by ReasoningConfig.EnableThinkingDisplay
-		// Thinking API enablement is controlled by LLMProviderConfig.Thinking.Enabled (read by each provider)
-		// This separation follows the pattern: LLM config controls API behavior, reasoning config controls display
-		showThinking := config.BoolValue(cfg.EnableThinkingDisplay, false)
-
-		// Get sub-agents (from config or builder - stored directly on agent)
-		state, err := reasoning.Builder().
-			WithQuery(input).
-			WithAgentName(a.name).
-			WithSubAgents(a.subAgents).
-			WithOutputChannel(outputCh).
-			WithShowThinking(showThinking).
-			WithServices(a.services).
-			WithContext(spanCtx).
-			Build()
-
-		if err != nil {
-			span.RecordError(err)
-			recordAgentMetrics(spanCtx, time.Since(startTime), 0, err)
-			if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error: Failed to initialize state: %v\n", err))); sendErr != nil {
-				slog.Error("Failed to send error to output channel", "agent", a.name, "error", sendErr)
-			}
-			return
-		}
-
-		defer func() {
-			a.saveToHistory(spanCtx, input, state, strategy, startTime)
-
-			duration := time.Since(startTime)
-			recordAgentMetrics(spanCtx, duration, state.TotalTokens(), nil)
-		}()
-
-		historyService := a.services.History()
-		if historyService != nil {
-			sessionID := getSessionIDFromContext(ctx)
-
-			if notifiable, ok := historyService.(reasoning.StatusNotifiable); ok {
-				notifiable.SetStatusNotifier(func(message string) {
-					if message != "" {
-						if sendErr := safeSendPart(ctx, outputCh, createTextPart("\n"+message+"\n")); sendErr != nil {
-							slog.Error("Failed to send status notification", "agent", a.name, "error", sendErr)
-						}
-					}
-				})
-			}
-
-			recentHistory, err := historyService.GetRecentHistory(sessionID)
-			if err != nil {
-				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Warning: Failed to load conversation history: %v\n", err))); sendErr != nil {
-					slog.Error("Failed to send warning", "agent", a.name, "error", sendErr)
-				}
-			} else if len(recentHistory) > 0 {
-				state.SetHistory(recentHistory)
-			}
-		}
-
-		// Use provided userMessage if available (preserves file parts), otherwise create from text
-		var userMsg *pb.Message
-		if userMessage != nil {
-			userMsg = userMessage
-		} else {
-			userMsg = protocol.CreateUserMessage(input)
-		}
-		state.AddCurrentTurnMessage(userMsg)
-
-		maxIterations := a.getMaxIterations(cfg)
-
-		toolService := a.services.Tools()
-		toolDefs := toolService.GetAvailableTools()
-
-		for state.Iteration() < maxIterations {
-
-			currentIteration := state.NextIteration()
-
-			select {
-			case <-ctx.Done():
-				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("\nCanceled: %v\n", ctx.Err()))); sendErr != nil {
-					slog.Error("Failed to send cancellation message", "agent", a.name, "error", sendErr)
-				}
-				return
-			default:
-			}
-
-			if err := strategy.PrepareIteration(currentIteration, state); err != nil {
-				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error preparing iteration: %v\n", err))); sendErr != nil {
-					slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
-				}
-				return
-			}
-
-			promptSlots := a.buildPromptSlots(strategy)
-
-			additionalContext := strategy.GetContextInjection(state)
-
-			messages, err := a.services.Prompt().BuildMessages(ctx, input, promptSlots, state.AllMessages(), additionalContext)
-			if err != nil {
-				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error building messages: %v\n", err))); sendErr != nil {
-					slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
-				}
-				return
-			}
-
-			// Debug: Print final prompt sent to LLM
-			slog.Debug("=== FINAL PROMPT SENT TO LLM ===")
-			slog.Debug("Messages count", "count", len(messages))
-			for i, msg := range messages {
-				role := "UNKNOWN"
-				switch msg.Role {
-				case pb.Role_ROLE_USER:
-					role = "USER"
-				case pb.Role_ROLE_AGENT:
-					role = "AGENT"
-				case pb.Role_ROLE_UNSPECIFIED:
-					role = "SYSTEM/CONTEXT"
-				}
-				text := protocol.ExtractTextFromMessage(msg)
-				slog.Debug("Message", "index", i+1, "role", role, "content", text)
-			}
-			slog.Debug("Tool definitions count", "count", len(toolDefs))
-			for i, toolDef := range toolDefs {
-				slog.Debug("Tool", "index", i+1, "name", toolDef.Name, "description", toolDef.Description)
-				if toolDef.Parameters != nil {
-					if props, ok := toolDef.Parameters["properties"].(map[string]interface{}); ok {
-						paramNames := make([]string, 0, len(props))
-						for name := range props {
-							paramNames = append(paramNames, name)
-						}
-						slog.Debug("Tool parameters", "tool_index", i+1, "tool_name", toolDef.Name, "parameters", paramNames)
-					}
-				}
-			}
-			slog.Debug("=== END FINAL PROMPT ===")
-
-			// Call LLM with retry logic for rate limits
-			text, toolCalls, tokens, thinking, err := a.callLLMWithRetry(spanCtx, messages, toolDefs, outputCh, cfg, span)
-			if err != nil {
-				span.RecordError(err)
-				slog.Error("LLM call failed", "agent", a.name, "error", err)
-				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error: LLM call failed: %v\n", err))); sendErr != nil {
-					slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
-				}
-				return
-			}
-
-			// Record thinking-specific telemetry
-			if thinking != nil && thinking.Content != "" {
-				thinkingLength := len(thinking.Content)
-				thinkingBlocks := 1 // Count thinking blocks (could be multiple in future)
-				span.SetAttributes(
-					attribute.Int(observability.AttrLLMThinkingBlocks, thinkingBlocks),
-					attribute.Int(observability.AttrLLMThinkingLength, thinkingLength),
-				)
-			}
-
-			state.AddTokens(tokens)
-
-			if text != "" {
-				state.AppendResponse(text)
-			}
-
-			state.RecordFirstToolCalls(toolCalls)
-
-			// Ensure we have some response content
-			if text == "" && len(toolCalls) == 0 {
-				text = "[Internal: Agent returned empty response]"
-				state.AppendResponse(text)
-			}
-
-			// Process tool calls if any
-			var results []reasoning.ToolResult
-			if len(toolCalls) > 0 {
-				var shouldContinue bool
-				ctx, results, shouldContinue, err = a.processToolCalls(ctx, text, toolCalls, thinking, state, outputCh, cfg, opts)
-				if err != nil {
-					// Check if this is ErrInputRequired (HITL needs external handling)
-					if err == ErrInputRequired {
-						// Task is in INPUT_REQUIRED state, exit goroutine immediately.
-						// The caller will detect the task state and return it to the client,
-						// who will send a follow-up message with the user's decision.
-						return
-					}
-					if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error processing tool calls: %v\n", err))); sendErr != nil {
-						slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
-					}
-					return
-				}
-				if shouldContinue {
-					// Tool approval is pending, wait for next iteration
-					continue
-				}
-			}
-
-			if err := strategy.AfterIteration(currentIteration, text, toolCalls, results, state); err != nil {
-				if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("Error in strategy processing: %v\n", err))); sendErr != nil {
-					slog.Error("Failed to send error", "agent", a.name, "error", sendErr)
-				}
-				return
-			}
-
-			// Interval-based checkpointing (if enabled)
-			// Checkpoint at end of iteration for crash recovery
-			if checkpointInterval := a.getCheckpointInterval(); checkpointInterval > 0 {
-				if a.shouldCheckpointInterval(currentIteration, checkpointInterval) {
-					taskID := getTaskIDFromContext(ctx)
-					if taskID != "" {
-						// Background checkpoint - don't block execution
-						// Errors are logged but don't stop execution
-						if err := a.checkpointExecution(
-							ctx,
-							taskID,
-							PhaseIterationEnd,
-							CheckpointTypeInterval,
-							state,
-							nil, // No pending tool call
-						); err != nil {
-							slog.Warn("Failed to checkpoint at iteration", "agent", a.name, "iteration", currentIteration, "error", err)
-							// Continue execution even if checkpoint fails
-						}
-					}
-				}
-			}
-
-			if strategy.ShouldStop(text, toolCalls, state) {
-				break
-			}
-		}
-	}()
-
-	return outputCh, nil
-}
-
-// processToolCalls handles tool approval, execution, and result processing
-// Returns: (updatedContext, results, shouldContinue, error)
-// - updatedContext: context with user decision if approval was handled
-// - shouldContinue: true if waiting for user approval, false to proceed with iteration
-func (a *Agent) processToolCalls(
-	ctx context.Context,
-	text string,
-	toolCalls []*protocol.ToolCall,
-	thinking *ThinkingBlock,
-	state *reasoning.ReasoningState,
-	outputCh chan<- *pb.Part,
-	cfg config.ReasoningConfig,
-	opts ExecutionOptions,
-) (context.Context, []reasoning.ToolResult, bool, error) {
-	// Get tool configs for approval checking
-	// componentManager may be nil for agents built programmatically
-	var toolConfigs map[string]*config.ToolConfig
-	if a.componentManager != nil {
-		globalConfig := a.componentManager.GetGlobalConfig()
-		if globalConfig != nil {
-			toolConfigs = globalConfig.Tools
-		}
-	}
-
-	// Check if any tools require approval (A2A Protocol Section 6.3 - INPUT_REQUIRED state)
-	approvalResult, err := a.filterToolCallsWithApproval(ctx, toolCalls, toolConfigs)
-	if err != nil {
-		return ctx, nil, false, fmt.Errorf("checking tool approval: %w", err)
-	}
-
-	// Handle tool approval request if needed
-	if approvalResult.NeedsUserInput {
-		var shouldContinue bool
-		ctx, shouldContinue, err = a.handleToolApprovalRequest(ctx, approvalResult, outputCh, state, opts)
-		if err != nil {
-			// Check if this is ErrInputRequired (non-streaming HITL pause signal)
-			if err == ErrInputRequired {
-				// Task paused for HITL in non-streaming mode
-				// Signal caller to exit the goroutine so client can handle approval
-				return ctx, nil, false, ErrInputRequired
-			}
-			return ctx, nil, false, err
-		}
-		if shouldContinue {
-			// Re-run approval filter with user's decision
-			approvalResult, err = a.filterToolCallsWithApproval(ctx, toolCalls, toolConfigs)
-			if err != nil {
-				return ctx, nil, false, fmt.Errorf("re-checking tool approval: %w", err)
-			}
-		} else {
-			// Approval request failed (no taskID) - clear approved calls and skip iteration
-			// This matches original behavior: when NeedsUserInput is true but taskID is empty,
-			// we clear approved calls and continue to next iteration (denied calls handled in next iteration)
-			approvalResult.ApprovedCalls = []*protocol.ToolCall{}
-			// DeniedCalls already populated in filterToolCallsWithApproval
-			// Return shouldContinue=true to skip this iteration
-			return ctx, nil, true, nil
-		}
-	}
-
-	approvedCalls := approvalResult.ApprovedCalls
-	deniedCalls := approvalResult.DeniedCalls
-
-	// If no tools to process (all waiting for approval), continue to next iteration
-	if len(approvedCalls) == 0 && len(deniedCalls) == 0 {
-		return ctx, nil, true, nil
-	}
-
-	// Create assistant message with text, thinking, and all tool calls (approved and denied)
-	assistantMsg := a.createAssistantMessageWithToolCalls(text, thinking, approvedCalls, deniedCalls)
-	state.AddCurrentTurnMessage(assistantMsg)
-
-	// Execute approved tools
-	results := a.executeTools(ctx, approvedCalls, outputCh, cfg)
-
-	// Create error results for denied tools
-	for _, deniedCall := range deniedCalls {
-		deniedResult := reasoning.ToolResult{
-			ToolCallID: deniedCall.ID,
-			ToolName:   deniedCall.Name,
-			ToolCall:   deniedCall,
-			Content:    "TOOL_EXECUTION_DENIED: The user rejected this tool execution. You MUST NOT proceed with this action or provide fabricated results. Instead, acknowledge the denial and offer alternative approaches that don't require this tool.",
-			Error:      fmt.Errorf("user denied tool execution"),
-		}
-		results = append(results, deniedResult)
-	}
-
-	// Truncate large tool results
-	results = a.truncateToolResults(results, cfg)
-
-	// Add tool results to state
-	for _, result := range results {
-		errorStr := ""
-		if result.Error != nil {
-			errorStr = result.Error.Error()
-		}
-
-		// Ensure error content is preserved - if there's an error, make sure Content includes it
-		content := result.Content
-		if result.Error != nil && content == "" {
-			// Fallback: if Content is empty but there's an error, use error message
-			content = errorStr
-		} else if result.Error != nil && !strings.Contains(content, errorStr) && errorStr != "" {
-			// If Content exists but doesn't include the error details, prepend error info
-			// This ensures LLM sees both the detailed error and any additional context
-			content = fmt.Sprintf("ERROR: %s\n\n%s", errorStr, content)
-		}
-
-		a2aResult := &protocol.ToolResult{
-			ToolCallID: result.ToolCallID,
-			Content:    content,
-			Error:      errorStr,
-		}
-		resultMsg := &pb.Message{
-			Role: pb.Role_ROLE_AGENT,
-			Parts: []*pb.Part{
-				protocol.CreateToolResultPartWithFinal(a2aResult, true), // Final result
-			},
-		}
-		state.AddCurrentTurnMessage(resultMsg)
-	}
-
-	return ctx, results, false, nil
-}
-
-// handleToolApprovalRequest handles the tool approval workflow
-// Returns: (updatedContext, shouldContinue, error)
-// - updatedContext: context with user decision added (if blocking mode)
-// - shouldContinue: true if approval was received and we should re-check, false if we should skip this iteration
-// - error: ErrInputRequired if async HITL mode (task paused), other errors for failures
-func (a *Agent) handleToolApprovalRequest(
-	ctx context.Context,
-	approvalResult *ToolApprovalResult,
-	outputCh chan<- *pb.Part,
-	reasoningState *reasoning.ReasoningState,
-	opts ExecutionOptions,
-) (context.Context, bool, error) {
-	taskID := getTaskIDFromContext(ctx)
-	if taskID == "" {
-		// No taskID - can't request approval, deny the tool
-		if sendErr := safeSendPart(ctx, outputCh, createTextPart("WARN: Tool requires approval but task tracking not enabled, denying\n")); sendErr != nil {
-			slog.Error("Failed to send approval denial message", "agent", a.id, "error", sendErr)
-		}
-		return ctx, false, nil
-	}
-
-	// Determine which mode to use
-	if a.shouldUseAsyncHITL() {
-		return a.handleAsyncHITL(ctx, approvalResult, outputCh, reasoningState)
-	} else {
-		return a.handleBlockingHITL(ctx, approvalResult, outputCh, reasoningState, opts.BlockForHITL)
-	}
-}
-
-// handleBlockingHITL handles tool approval in blocking mode.
-// If blockForInput is false, returns ErrInputRequired immediately after
-// updating task state, allowing the caller to handle approval externally.
-// According to A2A spec Section 6.3, execution state must be saved for resumption.
-func (a *Agent) handleBlockingHITL(
-	ctx context.Context,
-	approvalResult *ToolApprovalResult,
-	outputCh chan<- *pb.Part,
-	reasoningState *reasoning.ReasoningState,
-	blockForInput bool,
-) (context.Context, bool, error) {
-	taskID := getTaskIDFromContext(ctx)
-	sessionID := getSessionIDFromContext(ctx)
-
-	// Fallback: get sessionID from task if not in context (for non-streaming mode)
-	if sessionID == "" && taskID != "" && a.services.Task() != nil {
-		if task, err := a.services.Task().GetTask(ctx, taskID); err == nil && task != nil {
-			sessionID = task.ContextId
-		}
-	}
-
-	// Update task to INPUT_REQUIRED state BEFORE sending approval request or waiting
-	// This ensures clients can see the task is waiting for input (A2A spec compliance)
-	// Must happen for both blocking and non-blocking modes
-	if err := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_INPUT_REQUIRED, approvalResult.InteractionMsg); err != nil {
-		return ctx, false, fmt.Errorf("updating task status to INPUT_REQUIRED: %w", err)
-	}
-
-	// Send approval request message parts to stream so UI can display them
-	if approvalResult.InteractionMsg != nil && len(approvalResult.InteractionMsg.Parts) > 0 {
-		for _, part := range approvalResult.InteractionMsg.Parts {
-			if sendErr := safeSendPart(ctx, outputCh, part); sendErr != nil {
-				slog.Error("Failed to send approval request part", "agent", a.id, "error", sendErr)
-				return ctx, false, sendErr
-			}
-		}
-	}
-
-	// If not blocking for input, save execution state before returning ErrInputRequired.
-	// This allows the task to be resumed according to A2A spec Section 6.3 (Multi-Turn Interaction).
-	// The client will send a follow-up message with the user's decision, which will be
-	// handled by handleInputRequiredResume.
-	if !blockForInput {
-		// Save execution state for resumption (required by A2A spec for INPUT_REQUIRED tasks)
-		if sessionID != "" && reasoningState != nil {
-			err := a.checkpointExecution(
-				ctx,
-				taskID,
-				PhaseToolApproval,   // HITL-specific phase
-				CheckpointTypeEvent, // Event-driven
-				reasoningState,
-				approvalResult.PendingToolCall,
-			)
-			if err != nil {
-				slog.Warn("Failed to save execution state for non-streaming HITL resume",
-					"agent", a.id, "task", taskID, "error", err)
-				// Continue anyway - task is already in INPUT_REQUIRED state
-			} else {
-				slog.Info("Saved execution state for non-streaming HITL resume",
-					"agent", a.id, "task", taskID)
-			}
-		}
-		return ctx, false, ErrInputRequired
-	}
-
-	// Store tool name before waiting (will be nil after re-running filter)
-	pendingToolName := approvalResult.PendingToolCall.Name
-
-	// Wait for user approval inline (don't return - keep goroutine alive)
-	timeout := a.getInputTimeout()
-	userMessage, err := a.taskAwaiter.WaitForInput(ctx, taskID, timeout)
-	if err != nil {
-		// Update task state to failed on timeout/cancellation
-		if updateErr := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_FAILED, nil); updateErr != nil {
-			slog.Error("Failed to update task status after timeout", "agent", a.id, "task", taskID, "error", updateErr)
-		}
-		if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("ERROR: Approval timeout or cancelled: %v\n", err))); sendErr != nil {
-			slog.Error("Failed to send timeout message", "agent", a.id, "error", sendErr)
-		}
-		return ctx, false, err
-	}
-
-	// Extract user decision and add to context
-	decision := parseUserDecision(userMessage)
-	ctx = context.WithValue(ctx, userDecisionContextKey, decision)
-
-	// Update task back to WORKING state
-	if err := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_WORKING, nil); err != nil {
-		slog.Error("Failed to update task status to WORKING", "agent", a.id, "task", taskID, "error", err)
-	}
-
-	// Send confirmation message to indicate interaction was resolved
-	if decision == DecisionApprove {
-		confirmMsg := fmt.Sprintf("SUCCESS: Approved: %s", pendingToolName)
-		if sendErr := safeSendPart(ctx, outputCh, createTextPart(confirmMsg)); sendErr != nil {
-			slog.Error("Failed to send approval confirmation", "agent", a.id, "error", sendErr)
-		}
-	} else {
-		confirmMsg := fmt.Sprintf("DENIED: Denied: %s", pendingToolName)
-		if sendErr := safeSendPart(ctx, outputCh, createTextPart(confirmMsg)); sendErr != nil {
-			slog.Error("Failed to send denial confirmation", "agent", a.id, "error", sendErr)
-		}
-	}
-
-	// Return updated context and true to indicate we should re-check approval with user decision
-	return ctx, true, nil
-}
-
-// handleAsyncHITL handles tool approval in async mode (saves state and exits)
-func (a *Agent) handleAsyncHITL(
-	ctx context.Context,
-	approvalResult *ToolApprovalResult,
-	outputCh chan<- *pb.Part,
-	reasoningState *reasoning.ReasoningState,
-) (context.Context, bool, error) {
-	taskID := getTaskIDFromContext(ctx)
-	sessionID := getSessionIDFromContext(ctx)
-	if sessionID == "" {
-		return ctx, false, fmt.Errorf("session ID required for async HITL")
-	}
-
-	// Use generic checkpoint function with HITL-specific phase
-	err := a.checkpointExecution(
-		ctx,
-		taskID,
-		PhaseToolApproval,   // HITL-specific phase
-		CheckpointTypeEvent, // Event-driven
-		reasoningState,
-		approvalResult.PendingToolCall,
-	)
-	if err != nil {
-		return ctx, false, fmt.Errorf("failed to checkpoint execution state: %w", err)
-	}
-
-	// Update task to INPUT_REQUIRED state with approval request message
-	if err := a.updateTaskStatus(ctx, taskID, pb.TaskState_TASK_STATE_INPUT_REQUIRED, approvalResult.InteractionMsg); err != nil {
-		return ctx, false, fmt.Errorf("updating task status: %w", err)
-	}
-
-	// Send approval request message parts to stream
-	if approvalResult.InteractionMsg != nil && len(approvalResult.InteractionMsg.Parts) > 0 {
-		for _, part := range approvalResult.InteractionMsg.Parts {
-			if sendErr := safeSendPart(ctx, outputCh, part); sendErr != nil {
-				slog.Error("Failed to send approval request part", "agent", a.id, "error", sendErr)
-				return ctx, false, sendErr
-			}
-		}
-	}
-
-	// Return ErrInputRequired to signal that execution should pause
-	// The caller should exit the goroutine
-	slog.Info("Task paused for async user input", "agent", a.id, "task", taskID)
-	return ctx, false, ErrInputRequired
-}
-
-// createAssistantMessageWithToolCalls creates an assistant message with text, thinking, and tool calls
-func (a *Agent) createAssistantMessageWithToolCalls(
-	text string,
-	thinking *ThinkingBlock,
-	approvedCalls []*protocol.ToolCall,
-	deniedCalls []*protocol.ToolCall,
-) *pb.Message {
-	assistantMsg := &pb.Message{
-		Role:  pb.Role_ROLE_AGENT,
-		Parts: []*pb.Part{},
-	}
-
-	// Add thinking block FIRST (Anthropic requires thinking before tool_use)
-	if thinking != nil && thinking.Content != "" {
-		thinkingPart := protocol.CreateThinkingPartWithSignature(
-			thinking.Content,
-			thinking.Signature,
-			fmt.Sprintf("think-%d", time.Now().UnixNano()),
-			0,
-		)
-		assistantMsg.Parts = append(assistantMsg.Parts, thinkingPart)
-	}
-
-	if text != "" {
-		assistantMsg.Parts = append(assistantMsg.Parts,
-			&pb.Part{Part: &pb.Part_Text{Text: text}})
-	}
-
-	// Add approved tool calls
-	for _, tc := range approvedCalls {
-		assistantMsg.Parts = append(assistantMsg.Parts,
-			protocol.CreateToolCallPart(tc))
-	}
-
-	// Add denied tool calls (so LLM knows what was attempted)
-	for _, tc := range deniedCalls {
-		assistantMsg.Parts = append(assistantMsg.Parts,
-			protocol.CreateToolCallPart(tc))
-	}
-
-	return assistantMsg
-}
-
-// ThinkingBlock is an alias for llms.ThinkingBlock
-type ThinkingBlock = llms.ThinkingBlock
-
-// callLLMWithRetry calls the LLM with automatic retry logic for rate limits
-func (a *Agent) callLLMWithRetry(
-	ctx context.Context,
-	messages []*pb.Message,
-	toolDefs []llms.ToolDefinition,
-	outputCh chan<- *pb.Part,
-	cfg config.ReasoningConfig,
-	span trace.Span,
-) (string, []*protocol.ToolCall, int, *ThinkingBlock, error) {
-	var text string
-	var toolCalls []*protocol.ToolCall
-	var tokens int
-	var thinking *ThinkingBlock
-	var err error
-
-	for attempt := 0; attempt <= maxLLMRetries; attempt++ {
-		// Check context cancellation before each retry
-		select {
-		case <-ctx.Done():
-			return "", nil, 0, nil, ctx.Err()
-		default:
-		}
-
-		text, toolCalls, tokens, thinking, err = a.callLLM(ctx, messages, toolDefs, outputCh, cfg)
-
-		if err == nil {
-			return text, toolCalls, tokens, thinking, nil
-		}
-
-		var retryErr *httpclient.RetryableError
-		if !errors.As(err, &retryErr) {
-			// Non-retryable error - return immediately
-			return "", nil, 0, nil, err
-		}
-
-		if attempt >= maxLLMRetries {
-			// Exceeded max retries
-			return "", nil, 0, nil, fmt.Errorf("rate limit exceeded after %d retries: %w", maxLLMRetries, err)
-		}
-
-		waitTime := retryErr.RetryAfter
-		if waitTime == 0 {
-			waitTime = defaultRetryWaitSeconds * time.Second
-		}
-
-		if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("RATE_LIMIT: Rate limit exceeded (HTTP %d). Waiting %v before retry %d/%d...\n",
-			retryErr.StatusCode, waitTime.Round(time.Second), attempt+1, maxLLMRetries))); sendErr != nil {
-			slog.Error("Failed to send rate limit message", "agent", a.name, "error", sendErr)
-		}
-
-		// Wait with context cancellation support
-		select {
-		case <-ctx.Done():
-			return "", nil, 0, nil, ctx.Err()
-		case <-time.After(waitTime):
-		}
-
-		if sendErr := safeSendPart(ctx, outputCh, createTextPart(fmt.Sprintf("RETRY: Retrying LLM call (attempt %d/%d)...\n", attempt+1, maxLLMRetries))); sendErr != nil {
-			slog.Error("Failed to send retry message", "agent", a.name, "error", sendErr)
-		}
-	}
-
-	return "", nil, 0, nil, fmt.Errorf("unexpected retry loop exit")
-}
-
-func (a *Agent) callLLM(
-	ctx context.Context,
-	messages []*pb.Message,
-	toolDefs []llms.ToolDefinition,
-	outputCh chan<- *pb.Part,
-	cfg config.ReasoningConfig,
-) (string, []*protocol.ToolCall, int, *ThinkingBlock, error) {
-	llm := a.services.LLM()
-
-	// Check for structured output configuration
-	if a.config != nil && a.config.StructuredOutput != nil {
-		structConfig := &llms.StructuredOutputConfig{
-			Format:           a.config.StructuredOutput.Format,
-			Schema:           a.config.StructuredOutput.Schema,
-			Enum:             a.config.StructuredOutput.Enum,
-			Prefill:          a.config.StructuredOutput.Prefill,
-			PropertyOrdering: a.config.StructuredOutput.PropertyOrdering,
-		}
-
-		text, toolCalls, tokens, thinkingBlock, err := llm.GenerateStructured(ctx, messages, toolDefs, structConfig)
-		if err != nil {
-			return "", nil, 0, nil, err
-		}
-
-		// Handle thinking block from structured output if present
-		if thinkingBlock != nil && thinkingBlock.Content != "" {
-			showThinking := config.BoolValue(cfg.EnableThinkingDisplay, false)
-			if showThinking {
-				thinkingPart := protocol.CreateThinkingPartWithSignature(
-					thinkingBlock.Content,
-					thinkingBlock.Signature,
-					fmt.Sprintf("think-%d", time.Now().UnixNano()),
-					0,
-				)
-				if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
-					slog.Error("Failed to send thinking part", "agent", a.name, "error", sendErr)
-				}
-			}
-		}
-
-		if text != "" {
-			if sendErr := safeSendPart(ctx, outputCh, createTextPart(text)); sendErr != nil {
-				slog.Error("Failed to send structured output text", "agent", a.name, "error", sendErr)
-			}
-		}
-
-		return text, toolCalls, tokens, thinkingBlock, nil
-	}
-
-	if cfg.EnableStreaming != nil && *cfg.EnableStreaming {
-
-		var streamedText strings.Builder
-		var streamedThinking strings.Builder
-		llmService := a.services.LLM()
-		showThinking := config.BoolValue(cfg.EnableThinkingDisplay, false)
-
-		// Use GenerateStreamingChunks to get raw StreamChunks with proper abstraction
-		// ctx already has ShowThinking flag from execute() function
-		streamCh, err := llmService.GenerateStreamingChunks(ctx, messages, toolDefs)
-		if err != nil {
-			return "", nil, 0, nil, err
-		}
-
-		var accumulatedToolCalls []*protocol.ToolCall
-		var tokens int
-		var currentThinkingBlockID string
-		var currentThinkingSignature string // Store signature for thinking blocks
-
-		for chunk := range streamCh {
-			switch chunk.Type {
-			case "text":
-				streamedText.WriteString(chunk.Text)
-				if sendErr := safeSendPart(ctx, outputCh, createTextPart(chunk.Text)); sendErr != nil {
-					slog.Error("Failed to send streaming text chunk", "agent", a.name, "error", sendErr)
-					return "", nil, 0, nil, sendErr
-				}
-			case "thinking":
-				// Only create thinking parts if ShowThinking is enabled
-				if showThinking {
-					// Create thinking part with AG-UI metadata
-					if currentThinkingBlockID == "" {
-						currentThinkingBlockID = fmt.Sprintf("think-%d", time.Now().UnixNano())
-						// Start of thinking block - create thinking part
-						thinkingPart := protocol.CreateThinkingPart("", currentThinkingBlockID, 0)
-						if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
-							slog.Error("Failed to send thinking start", "agent", a.name, "error", sendErr)
-							return "", nil, 0, nil, sendErr
-						}
-					}
-					streamedThinking.WriteString(chunk.Text)
-					// Emit thinking delta as text part with thinking metadata
-					thinkingPart := protocol.CreateThinkingPart(chunk.Text, currentThinkingBlockID, 0)
-					if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
-						slog.Error("Failed to send thinking chunk", "agent", a.name, "error", sendErr)
-						return "", nil, 0, nil, sendErr
-					}
-				} else {
-					// Still accumulate thinking for internal tracking, but don't emit parts
-					streamedThinking.WriteString(chunk.Text)
-				}
-			case "thinking_complete":
-				// Complete thinking block with signature - store it properly
-				// Handle both Anthropic-style signatures (chunk.Signature) and Gemini-style signatures (chunk.Metadata)
-				if chunk.Signature != "" {
-					currentThinkingSignature = chunk.Signature
-				} else if chunk.Metadata != nil {
-					// Extract Gemini thought signature from metadata
-					if thoughtSig, ok := chunk.Metadata["thought_signature"].(string); ok && thoughtSig != "" {
-						currentThinkingSignature = thoughtSig
-						// Store Gemini signature in the last thinking part's metadata for history reconstruction
-						// Note: Gemini signatures are provider-specific and stored differently than Anthropic
-					}
-				}
-				// Emit explicit completion event to prevent race conditions
-				// This allows clients to track completion state even if chunks arrive out-of-order
-				if currentThinkingBlockID != "" && showThinking {
-					completionPart := protocol.CreateThinkingCompletionPart(currentThinkingBlockID, currentThinkingSignature)
-					if completionPart != nil {
-						// Store Gemini signature in completion part metadata if present
-						if chunk.Metadata != nil && currentThinkingSignature != "" {
-							if completionPart.Metadata != nil && completionPart.Metadata.Fields != nil {
-								completionPart.Metadata.Fields["thought_signature"] = structpb.NewStringValue(currentThinkingSignature)
-							}
-						}
-						if sendErr := safeSendPart(ctx, outputCh, completionPart); sendErr != nil {
-							slog.Error("Failed to send thinking completion", "agent", a.name, "error", sendErr)
-							return "", nil, 0, nil, sendErr
-						}
-					}
-				}
-				// Reset thinking block ID - next thinking chunk will start a new block
-				// NOTE: Do NOT reset currentThinkingSignature here - it's needed after the loop
-				// to create the ThinkingBlock with the signature for multi-turn conversations
-				currentThinkingBlockID = ""
-			case "tool_call":
-				if chunk.ToolCall != nil {
-					accumulatedToolCalls = append(accumulatedToolCalls, chunk.ToolCall)
-				}
-			case "done":
-				tokens = chunk.Tokens
-				// End of thinking block - don't send to outputCh, return via ThinkingBlock
-				currentThinkingBlockID = ""
-			case "error":
-				return "", nil, 0, nil, chunk.Error
-			}
-		}
-
-		// Return thinking block if we have content
-		// Signature is optional (Anthropic uses it, Ollama doesn't)
-		var thinkingBlock *ThinkingBlock
-		if streamedThinking.Len() > 0 {
-			thinkingBlock = &ThinkingBlock{
-				Content:   streamedThinking.String(),
-				Signature: currentThinkingSignature, // May be empty for non-Anthropic providers
-			}
-		}
-
-		return streamedText.String(), accumulatedToolCalls, tokens, thinkingBlock, nil
-	}
-
-	// CRITICAL FIX: OpenAI provider automatically uses Responses API for reasoning models
-	// when thinking is enabled (handled in OpenAIProvider.Generate())
-	// OpenAI reasoning models (o1, o3, o4, gpt-5) expose reasoning via Responses API
-	text, toolCalls, tokens, thinkingBlock, err := llm.Generate(ctx, messages, toolDefs)
-
-	if err != nil {
-		return "", nil, 0, nil, err
-	}
-
-	// CRITICAL FIX: Handle thinking block from non-streaming response
-	// Create thinking parts if thinking block is present
-	if thinkingBlock != nil && thinkingBlock.Content != "" {
-		showThinking := config.BoolValue(cfg.EnableThinkingDisplay, false)
-		if showThinking {
-			// Create thinking part with signature
-			thinkingPart := protocol.CreateThinkingPartWithSignature(
-				thinkingBlock.Content,
-				thinkingBlock.Signature,
-				fmt.Sprintf("think-%d", time.Now().UnixNano()),
-				0,
-			)
-			if sendErr := safeSendPart(ctx, outputCh, thinkingPart); sendErr != nil {
-				slog.Error("Failed to send thinking part", "agent", a.name, "error", sendErr)
-			}
-			// Emit completion event
-			completionPart := protocol.CreateThinkingCompletionPart(
-				fmt.Sprintf("think-%d", time.Now().UnixNano()),
-				thinkingBlock.Signature,
-			)
-			if completionPart != nil {
-				if sendErr := safeSendPart(ctx, outputCh, completionPart); sendErr != nil {
-					slog.Error("Failed to send thinking completion", "agent", a.name, "error", sendErr)
-				}
-			}
-		}
-	}
-
-	if text != "" {
-		if sendErr := safeSendPart(ctx, outputCh, createTextPart(text)); sendErr != nil {
-			slog.Error("Failed to send LLM response text", "agent", a.name, "error", sendErr)
-		}
-	}
-
-	return text, toolCalls, tokens, thinkingBlock, nil
-}
-
-func (a *Agent) executeTools(
-	ctx context.Context,
-	toolCalls []*protocol.ToolCall,
-	outputCh chan<- *pb.Part,
-	cfg config.ReasoningConfig,
-) []reasoning.ToolResult {
-	toolService := a.services.Tools()
-
-	results := make([]reasoning.ToolResult, 0, len(toolCalls))
-
-	for _, toolCall := range toolCalls {
-
-		select {
-		case <-ctx.Done():
-			return results
-		default:
-		}
-
-		// EMIT TOOL CALL PART (for web UI animations & CLI can extract from this)
-		if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolCallPart(toolCall)); sendErr != nil {
-			slog.Error("Failed to send tool call part", "agent", a.name, "error", sendErr)
-			return results
-		}
-
-		// Check if tool supports streaming
-		tool, err := toolService.GetTool(toolCall.Name)
-		if err != nil {
-			slog.Error("Failed to get tool", "agent", a.name, "tool", toolCall.Name, "error", err)
-			// Fall back to non-streaming execution
-			result, metadata, execErr := toolService.ExecuteToolCall(ctx, toolCall)
-			resultContent := result
-			errorStr := ""
-			if execErr != nil {
-				if resultContent == "" {
-					resultContent = fmt.Sprintf("Error: %v", execErr)
-				}
-				errorStr = execErr.Error()
-			}
-			a2aResult := &protocol.ToolResult{
-				ToolCallID: toolCall.ID,
-				Content:    resultContent,
-				Error:      errorStr,
-			}
-			// Mark as final since this is a complete (non-streaming) result
-			if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPartWithFinal(a2aResult, true)); sendErr != nil {
-				slog.Error("Failed to send tool result part", "agent", a.name, "error", sendErr)
-				return results
-			}
-			results = append(results, reasoning.ToolResult{
-				ToolCall:   toolCall,
-				Content:    resultContent,
-				Error:      execErr,
-				ToolCallID: toolCall.ID,
-				ToolName:   toolCall.Name,
-				Metadata:   metadata,
-			})
-			continue
-		}
-
-		// Check if tool implements StreamingTool interface
-		// Directly assert to StreamingTool to avoid double type checking
-		if streamingTool, ok := tool.(tools.StreamingTool); ok {
-			// Use streaming orchestrator to handle streaming execution
-			// This enables incremental tool result streaming, similar to thinking blocks.
-			// Each chunk from the tool triggers an immediate tool result part emission.
-			const streamingChannelBufferSize = 10
-			orchestrator := tools.NewStreamingOrchestrator(streamingChannelBufferSize)
-
-			finalResult, execErr := orchestrator.Execute(ctx, streamingTool, toolCall.Args, func(content string) error {
-				// Emit incremental tool result part (streams like thinking blocks)
-				// Each chunk triggers a new tool result part with accumulated content
-				// Mark as not final (is_final: false) so web UI keeps status as 'working'
-				a2aResult := &protocol.ToolResult{
-					ToolCallID: toolCall.ID,
-					Content:    content, // Accumulated content up to this point
-					Error:      "",
-				}
-				// Use CreateToolResultPartWithFinal to mark as incremental (not final)
-				if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPartWithFinal(a2aResult, false)); sendErr != nil {
-					slog.Error("Failed to send streaming tool result chunk", "agent", a.name, "error", sendErr)
-					return sendErr
-				}
-				return nil
-			})
-
-			// Always emit final tool result part to signal completion
-			// Mark as final (is_final: true) so web UI updates status to 'success'/'failed'
-			// This is sent even if content is empty (e.g., `rm` command with no output)
-			a2aResult := &protocol.ToolResult{
-				ToolCallID: toolCall.ID,
-				Content:    finalResult.Content,
-				Error:      finalResult.Error,
-			}
-			// Use CreateToolResultPartWithFinal to mark as final
-			if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPartWithFinal(a2aResult, true)); sendErr != nil {
-				slog.Error("Failed to send final tool result part", "agent", a.name, "error", sendErr)
-				return results
-			}
-
-			results = append(results, reasoning.ToolResult{
-				ToolCall:   toolCall,
-				Content:    finalResult.Content,
-				Error:      execErr,
-				ToolCallID: toolCall.ID,
-				ToolName:   toolCall.Name,
-				Metadata:   finalResult.Metadata,
-			})
-			continue
-		}
-
-		// Non-streaming tool execution (existing path)
-		result, metadata, err := toolService.ExecuteToolCall(ctx, toolCall)
-		resultContent := result
-		errorStr := ""
-		if err != nil {
-			// If ExecuteToolCall returned an error, it also returned error content in result
-			// Use that content (which includes detailed error messages) instead of overwriting
-			if resultContent == "" {
-				// Fallback if no content was returned
-				resultContent = fmt.Sprintf("Error: %v", err)
-			}
-			errorStr = err.Error()
-		}
-
-		// EMIT TOOL RESULT PART (for web UI animations & CLI can extract from this)
-		// Non-streaming tools always emit final results
-		a2aResult := &protocol.ToolResult{
-			ToolCallID: toolCall.ID,
-			Content:    resultContent,
-			Error:      errorStr,
-		}
-		// Mark as final since this is a complete (non-streaming) result
-		if sendErr := safeSendPart(ctx, outputCh, protocol.CreateToolResultPartWithFinal(a2aResult, true)); sendErr != nil {
-			slog.Error("Failed to send tool result part", "agent", a.name, "error", sendErr)
-			return results
-		}
-
-		results = append(results, reasoning.ToolResult{
-			ToolCall:   toolCall,
-			Content:    resultContent,
-			Error:      err,
-			ToolCallID: toolCall.ID,
-			ToolName:   toolCall.Name,
-			Metadata:   metadata,
-		})
-	}
-
-	return results
-}
-func (a *Agent) truncateToolResults(results []reasoning.ToolResult, cfg config.ReasoningConfig) []reasoning.ToolResult {
-
-	const maxToolResultSize = 50000
-
-	truncated := make([]reasoning.ToolResult, len(results))
-	copy(truncated, results)
-
-	for i := range truncated {
-		contentSize := len(truncated[i].Content)
-		if contentSize > maxToolResultSize {
-
-			originalSize := contentSize
-			truncated[i].Content = truncated[i].Content[:maxToolResultSize]
-
-			suffix := fmt.Sprintf("\n\n[Warning: Output truncated: showing %d of %d bytes. Use more specific queries or filters to see full content.]",
-				maxToolResultSize, originalSize)
-			truncated[i].Content += suffix
-		}
-	}
-
-	return truncated
-}
-
-func (a *Agent) saveToHistory(
-	ctx context.Context,
-	input string,
-	state *reasoning.ReasoningState,
-	strategy reasoning.ReasoningStrategy,
-	startTime time.Time,
-) {
-	history := a.services.History()
-	if history == nil {
-		return
-	}
-
-	sessionID := getSessionIDFromContext(ctx)
-
-	if !state.IsFinalResponseAdded() {
-		finalResponse := state.GetAssistantResponse()
-		if finalResponse != "" {
-
-			assistantMsg := protocol.CreateTextMessage(pb.Role_ROLE_AGENT, finalResponse)
-			state.AddCurrentTurnMessage(assistantMsg)
-			state.MarkFinalResponseAdded()
-		}
-	}
-
-	currentTurn := state.GetCurrentTurn()
-
-	messagesToSave := make([]*pb.Message, 0, len(currentTurn))
-	for _, msg := range currentTurn {
-
-		textContent := protocol.ExtractTextFromMessage(msg)
-		hasToolCalls := len(protocol.GetToolCallsFromMessage(msg)) > 0
-		hasToolResults := len(protocol.GetToolResultsFromMessage(msg)) > 0
-		hasThinking := protocol.ExtractThinkingFromMessage(msg) != ""
-
-		if textContent != "" || hasToolCalls || hasToolResults || hasThinking {
-			messagesToSave = append(messagesToSave, msg)
-		}
-
-	}
-
-	if len(messagesToSave) > 0 {
-		err := history.AddBatchToHistory(sessionID, messagesToSave)
-		if err != nil {
-			slog.Warn("Failed to save messages to history", "error", err)
-		}
-	}
-}
-
-func (a *Agent) buildPromptSlots(strategy reasoning.ReasoningStrategy) reasoning.PromptSlots {
-	strategySlots := strategy.GetPromptSlots()
-
-	// Use config prompt slots if available
-	if a.config != nil {
-		if a.config.Prompt.SystemPrompt != "" {
-			return reasoning.PromptSlots{}
-		}
-
-		// Use typed config slots if provided
-		if a.config.Prompt.PromptSlots != nil {
-			userSlots := reasoning.PromptSlots{
-				SystemRole:   a.config.Prompt.PromptSlots.SystemRole,
-				Instructions: a.config.Prompt.PromptSlots.Instructions,
-				UserGuidance: a.config.Prompt.PromptSlots.UserGuidance,
-			}
-			strategySlots = strategySlots.Merge(userSlots)
-		}
-	}
-
-	return strategySlots
-}
-
-func (a *Agent) getMaxIterations(cfg config.ReasoningConfig) int {
-	if cfg.MaxIterations > 0 {
-		return cfg.MaxIterations
-	}
-	return 5
-}
-
-func (a *Agent) GetID() string {
-	return a.id
-}
-
-func (a *Agent) GetName() string {
+func (a *baseAgent) Name() string {
 	return a.name
 }
 
-func (a *Agent) GetDescription() string {
+func (a *baseAgent) Description() string {
 	return a.description
 }
 
-func (a *Agent) GetConfig() *config.AgentConfig {
-	return a.config
+func (a *baseAgent) SubAgents() []Agent {
+	return a.subAgents
 }
 
-func (a *Agent) GetServices() reasoning.AgentServices {
-	return a.services
-}
+func (a *baseAgent) Run(ctx InvocationContext) iter.Seq2[*Event, error] {
+	return func(yield func(*Event, error) bool) {
+		// Run before-agent callbacks
+		event, err := a.runBeforeCallbacks(ctx)
+		if event != nil || err != nil {
+			yield(event, err)
+			return
+		}
 
-// Shutdown gracefully shuts down the agent, cancelling all active tasks
-// and waiting for them to complete (with timeout)
-func (a *Agent) Shutdown(ctx context.Context) error {
-	slog.Info("Shutting down", "agent", a.id)
+		if ctx.Ended() {
+			return
+		}
 
-	// Cancel all active executions
-	a.executionsMu.Lock()
-	activeCount := len(a.activeExecutions)
-	cancelFuncs := make([]context.CancelFunc, 0, activeCount)
-	for taskID, cancel := range a.activeExecutions {
-		cancelFuncs = append(cancelFuncs, cancel)
-		slog.Info("Cancelling task", "agent", a.id, "task", taskID)
-	}
-	a.executionsMu.Unlock()
-
-	// Cancel all contexts
-	for _, cancel := range cancelFuncs {
-		cancel()
-	}
-
-	// Cancel all waiting tasks
-	waitingTasks := a.taskAwaiter.GetWaitingTasks()
-	for _, taskID := range waitingTasks {
-		a.taskAwaiter.CancelWaiting(taskID)
-		slog.Info("Cancelled waiting task", "agent", a.id, "task", taskID)
-	}
-
-	// Wait for active executions to finish (with timeout)
-	if activeCount > 0 {
-		slog.Info("Waiting for active tasks to complete", "agent", a.id, "count", activeCount)
-		// Give tasks up to 30 seconds to complete
-		waitCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
-
-		// Poll until all tasks are done or timeout
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-waitCtx.Done():
-				// Timeout or parent context cancelled
-				a.executionsMu.RLock()
-				remaining := len(a.activeExecutions)
-				a.executionsMu.RUnlock()
-				if remaining > 0 {
-					slog.Warn("Tasks still active after shutdown timeout", "agent", a.id, "remaining", remaining)
-				}
-				return waitCtx.Err()
-			case <-ticker.C:
-				a.executionsMu.RLock()
-				remaining := len(a.activeExecutions)
-				a.executionsMu.RUnlock()
-				if remaining == 0 {
-					slog.Info("All tasks completed", "agent", a.id)
-					return nil
-				}
+		// Execute agent logic
+		for event, err := range a.run(ctx) {
+			if event != nil && event.Author == "" {
+				event.Author = a.name
 			}
+			if !yield(event, err) {
+				return
+			}
+		}
+
+		if ctx.Ended() {
+			return
+		}
+
+		// Run after-agent callbacks
+		event, err = a.runAfterCallbacks(ctx)
+		if event != nil || err != nil {
+			yield(event, err)
+		}
+	}
+}
+
+func (a *baseAgent) internal() *baseAgent {
+	return a
+}
+
+func (a *baseAgent) runBeforeCallbacks(ctx InvocationContext) (*Event, error) {
+	cbCtx := newCallbackContext(ctx)
+
+	for _, cb := range a.beforeAgentCallbacks {
+		msg, err := cb(cbCtx)
+		if err != nil {
+			return nil, fmt.Errorf("before-agent callback failed: %w", err)
+		}
+		if msg != nil {
+			event := NewEvent(ctx.InvocationID())
+			event.Message = msg
+			event.Author = a.name
+			event.Branch = ctx.Branch()
+			event.Actions = *cbCtx.actions
+			ctx.EndInvocation()
+			return event, nil
 		}
 	}
 
-	slog.Info("Shutdown complete", "agent", a.id)
+	// Return state delta event if modified
+	if len(cbCtx.actions.StateDelta) > 0 {
+		event := NewEvent(ctx.InvocationID())
+		event.Author = a.name
+		event.Branch = ctx.Branch()
+		event.Actions = *cbCtx.actions
+		return event, nil
+	}
+
+	return nil, nil
+}
+
+func (a *baseAgent) runAfterCallbacks(ctx InvocationContext) (*Event, error) {
+	cbCtx := newCallbackContext(ctx)
+
+	for _, cb := range a.afterAgentCallbacks {
+		msg, err := cb(cbCtx)
+		if err != nil {
+			return nil, fmt.Errorf("after-agent callback failed: %w", err)
+		}
+		if msg != nil {
+			event := NewEvent(ctx.InvocationID())
+			event.Message = msg
+			event.Author = a.name
+			event.Branch = ctx.Branch()
+			event.Actions = *cbCtx.actions
+			return event, nil
+		}
+	}
+
+	// Return state delta event if modified
+	if len(cbCtx.actions.StateDelta) > 0 {
+		event := NewEvent(ctx.InvocationID())
+		event.Author = a.name
+		event.Branch = ctx.Branch()
+		event.Actions = *cbCtx.actions
+		return event, nil
+	}
+
+	return nil, nil
+}
+
+// Type returns the agent type for introspection.
+func (a *baseAgent) Type() AgentType {
+	return a.agentType
+}
+
+// ============================================================================
+// Agent Hierarchy Navigation (adk-go alignment)
+// ============================================================================
+
+// FindAgent searches for an agent by name in the agent tree.
+// It performs a depth-first search starting from the root agent.
+//
+// This provides the same functionality as ADK-Go's find_agent() method.
+//
+// Example:
+//
+//	root, _ := llmagent.New(llmagent.Config{
+//	    Name: "coordinator",
+//	    SubAgents: []agent.Agent{researcher, writer},
+//	})
+//
+//	// Find a descendant by name
+//	found := agent.FindAgent(root, "researcher")
+//	if found != nil {
+//	    // Use the found agent
+//	}
+func FindAgent(root Agent, name string) Agent {
+	if root == nil {
+		return nil
+	}
+	if root.Name() == name {
+		return root
+	}
+	for _, sub := range root.SubAgents() {
+		if found := FindAgent(sub, name); found != nil {
+			return found
+		}
+	}
 	return nil
+}
+
+// FindAgentPath returns the path to an agent in the tree.
+// The path is a slice of agent names from root to the target (exclusive of root).
+// Returns nil if the agent is not found.
+//
+// Example:
+//
+//	// For a tree: coordinator -> team_a -> specialist
+//	path := agent.FindAgentPath(coordinator, "specialist")
+//	// path = ["team_a", "specialist"]
+func FindAgentPath(root Agent, name string) []string {
+	if root == nil {
+		return nil
+	}
+	if root.Name() == name {
+		return []string{} // Found at root
+	}
+	for _, sub := range root.SubAgents() {
+		if path := FindAgentPath(sub, name); path != nil {
+			return append([]string{sub.Name()}, path...)
+		}
+	}
+	return nil
+}
+
+// WalkAgents visits all agents in the tree depth-first.
+// The visitor function is called for each agent with its depth level.
+// If the visitor returns false, the walk stops.
+//
+// Example:
+//
+//	agent.WalkAgents(root, func(ag Agent, depth int) bool {
+//	    fmt.Printf("%s%s\n", strings.Repeat("  ", depth), ag.Name())
+//	    return true // continue walking
+//	})
+func WalkAgents(root Agent, visitor func(Agent, int) bool) {
+	walkAgents(root, 0, visitor)
+}
+
+func walkAgents(ag Agent, depth int, visitor func(Agent, int) bool) bool {
+	if ag == nil {
+		return true
+	}
+	if !visitor(ag, depth) {
+		return false
+	}
+	for _, sub := range ag.SubAgents() {
+		if !walkAgents(sub, depth+1, visitor) {
+			return false
+		}
+	}
+	return true
+}
+
+// ListAgents returns a flat list of all agents in the tree.
+// The root agent is included first, followed by descendants depth-first.
+func ListAgents(root Agent) []Agent {
+	var agents []Agent
+	WalkAgents(root, func(ag Agent, _ int) bool {
+		agents = append(agents, ag)
+		return true
+	})
+	return agents
 }

@@ -36,12 +36,14 @@ help:
 	@echo "  validate-configs    - Validate all example configs"
 	@echo "  build-ui            - Build the UI and copy to static assets"
 
-# Build UI
+# Build UI and copy to static directory
 build-ui:
 	@echo "Building UI..."
 	cd ui && npm install && npm run build
 	@echo "Copying UI to static assets..."
-	cp ui/dist/index.html pkg/transport/static/index.html
+	@mkdir -p pkg/server/static
+	cp ui/dist/index.html pkg/server/static/index.html
+	@echo "✅ UI copied to pkg/server/static/"
 
 # Build the binary (development with debug symbols)
 build: build-ui
@@ -221,9 +223,18 @@ validate-configs:
 # Alias for validate-configs
 validate-config-examples: validate-configs
 
+# Schema generation
+.PHONY: schema
+schema:
+	@echo "🔨 Generating JSON Schema from Go structs..."
+	@mkdir -p ui/src/schemas
+	@go run ./cmd/hector schema > ui/src/schemas/hector-config.schema.json
+	@echo "✅ Schema generated at ui/src/schemas/hector-config.schema.json"
+
 # A2A Protocol Compliance Verification
 .PHONY: a2a-tests
 
 a2a-tests:
 	@echo "🧪 Running A2A compliance tests..."
 	@go test -v ./pkg/a2a -run TestCompliance
+

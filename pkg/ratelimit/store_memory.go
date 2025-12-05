@@ -1,3 +1,18 @@
+// SPDX-License-Identifier: AGPL-3.0
+// Copyright 2025 Kadir Pekel
+//
+// Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.gnu.org/licenses/agpl-3.0.en.html
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package ratelimit
 
 import (
@@ -7,7 +22,7 @@ import (
 	"time"
 )
 
-// usageKey uniquely identifies a usage record
+// usageKey uniquely identifies a usage record.
 type usageKey struct {
 	Scope      Scope
 	Identifier string
@@ -15,26 +30,27 @@ type usageKey struct {
 	Window     TimeWindow
 }
 
-// usageRecord stores usage data
+// usageRecord stores usage data.
 type usageRecord struct {
 	Amount    int64
 	WindowEnd time.Time
 }
 
-// MemoryStore is an in-memory implementation of Store
+// MemoryStore is an in-memory implementation of Store.
+// It is thread-safe and suitable for development, testing, and single-instance deployments.
 type MemoryStore struct {
 	data map[usageKey]*usageRecord
 	mu   sync.RWMutex
 }
 
-// NewMemoryStore creates a new in-memory store
+// NewMemoryStore creates a new in-memory store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		data: make(map[usageKey]*usageRecord),
 	}
 }
 
-// GetUsage gets current usage for a specific limit
+// GetUsage gets current usage for a specific limit.
 func (s *MemoryStore) GetUsage(ctx context.Context, scope Scope, identifier string, limitType LimitType, window TimeWindow) (int64, time.Time, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -62,7 +78,7 @@ func (s *MemoryStore) GetUsage(ctx context.Context, scope Scope, identifier stri
 	return record.Amount, record.WindowEnd, nil
 }
 
-// IncrementUsage increments usage for a specific limit
+// IncrementUsage increments usage for a specific limit.
 func (s *MemoryStore) IncrementUsage(ctx context.Context, scope Scope, identifier string, limitType LimitType, window TimeWindow, amount int64) (int64, time.Time, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -100,7 +116,7 @@ func (s *MemoryStore) IncrementUsage(ctx context.Context, scope Scope, identifie
 	return record.Amount, record.WindowEnd, nil
 }
 
-// SetUsage sets usage for a specific limit
+// SetUsage sets usage for a specific limit.
 func (s *MemoryStore) SetUsage(ctx context.Context, scope Scope, identifier string, limitType LimitType, window TimeWindow, amount int64, windowEnd time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -120,7 +136,7 @@ func (s *MemoryStore) SetUsage(ctx context.Context, scope Scope, identifier stri
 	return nil
 }
 
-// DeleteUsage deletes usage records for an identifier
+// DeleteUsage deletes usage records for an identifier.
 func (s *MemoryStore) DeleteUsage(ctx context.Context, scope Scope, identifier string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -135,7 +151,7 @@ func (s *MemoryStore) DeleteUsage(ctx context.Context, scope Scope, identifier s
 	return nil
 }
 
-// DeleteExpired deletes expired usage records
+// DeleteExpired deletes expired usage records.
 func (s *MemoryStore) DeleteExpired(ctx context.Context, before time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -150,7 +166,7 @@ func (s *MemoryStore) DeleteExpired(ctx context.Context, before time.Time) error
 	return nil
 }
 
-// Close closes the store
+// Close closes the store.
 func (s *MemoryStore) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -160,14 +176,14 @@ func (s *MemoryStore) Close() error {
 	return nil
 }
 
-// Size returns the number of records in the store (for testing)
+// Size returns the number of records in the store (for testing).
 func (s *MemoryStore) Size() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.data)
 }
 
-// Dump returns all records (for debugging)
+// Dump returns all records as a map (for debugging).
 func (s *MemoryStore) Dump() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

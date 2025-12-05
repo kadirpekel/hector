@@ -8,21 +8,20 @@ import { DEFAULT_SUPPORTED_FILE_TYPES } from '../lib/constants';
 import { handleError } from '../lib/error-handler';
 
 export const Sidebar: React.FC = () => {
-    const {
-        sessions,
-        currentSessionId,
-        availableAgents,
-        selectedAgent,
-        setSidebarVisible,
-        createSession,
-        selectSession,
-        deleteSession,
-        setAvailableAgents,
-        setSelectedAgent,
-        setAgentCard,
-    } = useStore();
-
-    const { setError, endpointUrl } = useStore();
+    // Use selectors for better performance - only subscribe to specific state slices
+    const sessions = useStore((state) => state.sessions);
+    const currentSessionId = useStore((state) => state.currentSessionId);
+    const availableAgents = useStore((state) => state.availableAgents);
+    const selectedAgent = useStore((state) => state.selectedAgent);
+    const endpointUrl = useStore((state) => state.endpointUrl);
+    const setSidebarVisible = useStore((state) => state.setSidebarVisible);
+    const createSession = useStore((state) => state.createSession);
+    const selectSession = useStore((state) => state.selectSession);
+    const deleteSession = useStore((state) => state.deleteSession);
+    const setAvailableAgents = useStore((state) => state.setAvailableAgents);
+    const setSelectedAgent = useStore((state) => state.setSelectedAgent);
+    const setAgentCard = useStore((state) => state.setAgentCard);
+    const setError = useStore((state) => state.setError);
 
     // Load agents on mount and when endpoint changes
     useEffect(() => {

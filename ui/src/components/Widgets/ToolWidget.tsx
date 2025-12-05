@@ -1,4 +1,4 @@
-import React from "react";
+import { memo } from "react";
 import {
   Wrench,
   ChevronDown,
@@ -23,11 +23,15 @@ interface ToolWidgetProps {
   shouldAnimate?: boolean;
 }
 
-export const ToolWidget: React.FC<ToolWidgetProps> = ({
+/**
+ * ToolWidget displays tool execution status with expandable input/output.
+ * Memoized to prevent re-renders when parent updates but widget props unchanged.
+ */
+export const ToolWidget = memo<ToolWidgetProps>(function ToolWidget({
   widget,
   onExpansionChange,
   shouldAnimate = false,
-}) => {
+}) {
   const { name, args } = widget.data;
   const status = widget.status;
 
@@ -192,4 +196,4 @@ export const ToolWidget: React.FC<ToolWidgetProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -1,210 +1,124 @@
+// SPDX-License-Identifier: AGPL-3.0
+// Copyright 2025 Kadir Pekel
+//
+// Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.gnu.org/licenses/agpl-3.0.en.html
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package config provides configuration loading and management for Hector v2.
+//
+// Hector is config-first: agents, tools, and LLMs are defined in YAML and
+// the runtime builds them automatically.
+//
+// Example config:
+//
+//	version: "2"
+//	name: my-assistant
+//
+//	llms:
+//	  default:
+//	    provider: anthropic
+//	    model: claude-sonnet-4-20250514
+//	    api_key: ${ANTHROPIC_API_KEY}
+//
+//	tools:
+//	  weather:
+//	    type: mcp
+//	    url: ${MCP_URL}
+//
+//	agents:
+//	  assistant:
+//	    llm: default
+//	    tools: [weather]
+//	    instruction: You are a helpful assistant.
+//
+//	server:
+//	  port: 8080
 package config
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"log/slog"
-	"os"
-	"path/filepath"
-	"reflect"
 	"strings"
 )
 
-const (
-	DefaultMaxDocumentStoreSize = 50 * 1024 * 1024
-)
+// Config is the root configuration structure.
+type Config struct {
+	// Version of the config schema (e.g., "2").
+	Version string `yaml:"version,omitempty" json:"version,omitempty" jsonschema:"title=Config Version,description=Configuration schema version,default=2"`
 
-func ProcessConfigPipeline(cfg *Config) (*Config, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("ProcessConfigPipeline: config cannot be nil")
-	}
+	// Name of this configuration (for logging/display).
+	Name string `yaml:"name,omitempty" json:"name,omitempty" jsonschema:"title=Project Name,description=Name of this configuration"`
 
-	cfg.PreProcess()
+	// Description of this configuration.
+	Description string `yaml:"description,omitempty" json:"description,omitempty" jsonschema:"title=Description,description=Human-readable description"`
 
-	cfg.SetDefaults()
+	// Databases defines available database connections.
+	// These can be referenced by other components (e.g., server.tasks).
+	Databases map[string]*DatabaseConfig `yaml:"databases,omitempty" json:"databases,omitempty" jsonschema:"title=Databases,description=Database connection configurations"`
 
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("ProcessConfigPipeline: validation failed: %w", err)
-	}
+	// VectorStores defines available vector database providers.
+	// These can be referenced by memory, RAG, and document stores.
+	VectorStores map[string]*VectorStoreConfig `yaml:"vector_stores,omitempty" json:"vector_stores,omitempty" jsonschema:"title=Vector Stores,description=Vector database provider configurations"`
 
-	return cfg, nil
+	// LLMs defines available LLM providers.
+	LLMs map[string]*LLMConfig `yaml:"llms,omitempty" json:"llms,omitempty" jsonschema:"title=LLMs,description=LLM provider configurations"`
+
+	// Embedders defines available embedding providers for semantic search.
+	Embedders map[string]*EmbedderConfig `yaml:"embedders,omitempty" json:"embedders,omitempty" jsonschema:"title=Embedders,description=Embedding provider configurations"`
+
+	// Tools defines available tools.
+	Tools map[string]*ToolConfig `yaml:"tools,omitempty" json:"tools,omitempty" jsonschema:"title=Tools,description=Tool configurations"`
+
+	// Agents defines available agents.
+	Agents map[string]*AgentConfig `yaml:"agents,omitempty" json:"agents,omitempty" jsonschema:"title=Agents,description=Agent configurations"`
+
+	// DocumentStores defines available document stores for RAG.
+	DocumentStores map[string]*DocumentStoreConfig `yaml:"document_stores,omitempty" json:"document_stores,omitempty" jsonschema:"title=Document Stores,description=Document store configurations for RAG"`
+
+	// Server configures the A2A server.
+	Server ServerConfig `yaml:"server,omitempty" json:"server,omitempty" jsonschema:"title=Server Configuration,description=A2A server settings"`
+
+	// Logger configures logging behavior.
+	Logger *LoggerConfig `yaml:"logger,omitempty" json:"logger,omitempty" jsonschema:"title=Logger Configuration,description=Logging behavior settings"`
+
+	// RateLimiting configures rate limiting.
+	RateLimiting *RateLimitConfig `yaml:"rate_limiting,omitempty" json:"rate_limiting,omitempty" jsonschema:"title=Rate Limiting,description=Rate limiting configuration"`
+
+	// Defaults provides default values for agents.
+	Defaults *DefaultsConfig `yaml:"defaults,omitempty" json:"defaults,omitempty" jsonschema:"title=Defaults,description=Default values for agents"`
 }
 
-func (c *Config) PreProcess() {
-	c.initializeMaps()
-
-	// Apply defaults to agents
-	c.applyDefaults()
-
-	for _, agent := range c.Agents {
-		// Expand inline configs to top-level providers
-		c.expandInlineConfigs(agent)
-
-		if agent.DocsFolder != "" && len(agent.DocumentStores) == 0 {
-			c.expandDocsFolder(agent)
-		}
-
-		if agent.EnableTools != nil && *agent.EnableTools && len(agent.Tools) == 0 {
-			c.expandEnableTools()
-		}
-	}
+// DefaultsConfig provides default values for agent configurations.
+type DefaultsConfig struct {
+	// LLM is the default LLM reference for agents.
+	LLM string `yaml:"llm,omitempty" json:"llm,omitempty" jsonschema:"title=Default LLM,description=Default LLM reference for agents"`
 }
 
-func (c *Config) initializeMaps() {
-	if c.LLMs == nil {
-		c.LLMs = make(map[string]*LLMProviderConfig)
-	}
-	if c.VectorStores == nil {
-		c.VectorStores = make(map[string]*VectorStoreConfig)
-	}
-	if c.Databases == nil {
-		c.Databases = make(map[string]*DatabaseConfig)
-	}
-	if c.Embedders == nil {
-		c.Embedders = make(map[string]*EmbedderProviderConfig)
-	}
-	if c.Agents == nil {
-		c.Agents = make(map[string]*AgentConfig)
-	}
-	if c.Tools == nil {
-		c.Tools = make(map[string]*ToolConfig)
-	}
-	if c.DocumentStores == nil {
-		c.DocumentStores = make(map[string]*DocumentStoreConfig)
-	}
-	if c.SessionStores == nil {
-		c.SessionStores = make(map[string]*SessionStoreConfig)
-	}
-}
-
-func (c *Config) expandDocsFolder(agent *AgentConfig) {
-	// Parse local:remote syntax for path remapping (e.g., "test-docs:/docs")
-	// This allows containerized MCP services to access files via mounted volumes
-	localPath := agent.DocsFolder
-	remotePath := ""
-
-	if colonIdx := strings.LastIndex(agent.DocsFolder, ":"); colonIdx > 0 {
-		// Check if this looks like a path mapping (remote path starts with /)
-		potentialRemote := agent.DocsFolder[colonIdx+1:]
-		if strings.HasPrefix(potentialRemote, "/") {
-			localPath = agent.DocsFolder[:colonIdx]
-			remotePath = potentialRemote
-		}
-		// Otherwise it might be a Windows path like C:\path, so don't split
-	}
-
-	storeName := generateStoreNameFromPath(localPath)
-
-	docStoreConfig := &DocumentStoreConfig{
-		Source:                    "directory",
-		Path:                      localPath,
-		EnableWatchChanges:        BoolPtr(true),
-		MaxFileSize:               DefaultMaxDocumentStoreSize,
-		EnableIncrementalIndexing: BoolPtr(true),
-	}
-	c.DocumentStores[storeName] = docStoreConfig
-
-	agent.DocumentStores = []string{storeName}
-	agent.DocsFolder = ""
-
-	// Inform about auto-created components
-	if remotePath != "" {
-		slog.Info("Auto-created from docs_folder shortcut",
-			"document_store", storeName,
-			"path", localPath,
-			"remote_path", remotePath)
-	} else {
-		slog.Info("Auto-created from docs_folder shortcut",
-			"document_store", storeName,
-			"path", localPath)
-	}
-
-	if agent.VectorStore == "" {
-		if _, exists := c.VectorStores["default-vector-store"]; !exists {
-			c.VectorStores["default-vector-store"] = &VectorStoreConfig{}
-		}
-		agent.VectorStore = "default-vector-store"
-	}
-
-	if agent.Embedder == "" {
-		if _, exists := c.Embedders["default-embedder"]; !exists {
-			c.Embedders["default-embedder"] = &EmbedderProviderConfig{}
-		}
-		agent.Embedder = "default-embedder"
-	}
-
-	if c.Tools == nil {
-		c.Tools = make(map[string]*ToolConfig)
-	}
-
-	// Auto-configure MCP parsers ONLY if user explicitly specified a parser tool name
-	// Explicit is better than implicit - parser must be explicitly defined to be active
-	if agent.MCPParserTool != "" && docStoreConfig.MCPParsers == nil {
-		// User explicitly specified parser tool name(s) via --mcp-parser-tool
-		// Support comma-separated tool names for fallback chain (e.g., "parse_document,docling_parse,convert_document")
-		toolNames := strings.Split(agent.MCPParserTool, ",")
-		// Trim whitespace from each tool name
-		for i, name := range toolNames {
-			toolNames[i] = strings.TrimSpace(name)
-		}
-		// Runtime will validate that tools exist when actually used
-		docStoreConfig.MCPParsers = &DocumentStoreMCPParserConfig{
-			ToolNames: toolNames,
-			Extensions: []string{
-				".pdf",
-				".docx",
-				".pptx",
-				".xlsx",
-				".html",
-			},
-			Priority:     IntPtr(8), // Higher than native parsers (5)
-			PreferNative: BoolPtr(false),
-			PathPrefix:   remotePath, // For containerized MCP services
-		}
-		if remotePath != "" {
-			slog.Info("Auto-configured MCP parsers", "tools", toolNames, "path_prefix", remotePath)
-		} else {
-			slog.Info("Auto-configured MCP parsers", "tools", toolNames)
-		}
-	}
-
-	// Clear temporary zero-config fields after expansion
-	agent.MCPParserTool = ""
-}
-
-func (c *Config) expandEnableTools() {
-	if c.Tools == nil {
-		c.Tools = make(map[string]*ToolConfig)
-	}
-
-	createdTools := []string{}
-	for toolName, toolConfig := range GetDefaultToolConfigs() {
-		if _, exists := c.Tools[toolName]; !exists {
-			c.Tools[toolName] = toolConfig
-			createdTools = append(createdTools, toolName)
-		}
-	}
-
-	if len(createdTools) > 0 {
-		slog.Info("Auto-created tools from enable_tools shortcut", "tools", createdTools)
-	}
-}
-
+// SetDefaults applies default values to the config.
 func (c *Config) SetDefaults() {
-	c.Global.SetDefaults()
-
-	if c.LLMs == nil {
-		c.LLMs = make(map[string]*LLMProviderConfig)
+	// Initialize maps if nil
+	if c.Databases == nil {
+		c.Databases = make(map[string]*DatabaseConfig)
 	}
 	if c.VectorStores == nil {
 		c.VectorStores = make(map[string]*VectorStoreConfig)
 	}
-	if c.Databases == nil {
-		c.Databases = make(map[string]*DatabaseConfig)
+	if c.LLMs == nil {
+		c.LLMs = make(map[string]*LLMConfig)
 	}
 	if c.Embedders == nil {
-		c.Embedders = make(map[string]*EmbedderProviderConfig)
+		c.Embedders = make(map[string]*EmbedderConfig)
+	}
+	if c.Tools == nil {
+		c.Tools = make(map[string]*ToolConfig)
 	}
 	if c.Agents == nil {
 		c.Agents = make(map[string]*AgentConfig)
@@ -212,847 +126,322 @@ func (c *Config) SetDefaults() {
 	if c.DocumentStores == nil {
 		c.DocumentStores = make(map[string]*DocumentStoreConfig)
 	}
-	if c.Tools == nil {
-		c.Tools = make(map[string]*ToolConfig)
-	}
-	if c.SessionStores == nil {
-		c.SessionStores = make(map[string]*SessionStoreConfig)
-	}
 
+	// Create default LLM if none defined
 	if len(c.LLMs) == 0 {
-		c.LLMs["default-llm"] = &LLMProviderConfig{}
+		c.LLMs["default"] = &LLMConfig{}
 	}
-	if len(c.VectorStores) == 0 {
-		c.VectorStores["default-vector-store"] = &VectorStoreConfig{}
-	}
-	if len(c.Embedders) == 0 {
-		c.Embedders["default-embedder"] = &EmbedderProviderConfig{}
-	}
+
+	// Create default agent if none defined
 	if len(c.Agents) == 0 {
-		c.Agents["default-agent"] = &AgentConfig{}
+		c.Agents["assistant"] = &AgentConfig{}
 	}
 
-	for name := range c.LLMs {
-		if c.LLMs[name] != nil {
-			c.LLMs[name].SetDefaults()
-		}
-	}
-
-	for name := range c.VectorStores {
-		if c.VectorStores[name] != nil {
-			c.VectorStores[name].SetDefaults()
-		}
-	}
-
-	for name := range c.Databases {
-		if c.Databases[name] != nil {
+	// Apply defaults to databases
+	for name, db := range c.Databases {
+		if db != nil {
+			db.SetDefaults()
+		} else {
+			c.Databases[name] = &DatabaseConfig{}
 			c.Databases[name].SetDefaults()
 		}
 	}
 
-	for name := range c.Embedders {
-		if c.Embedders[name] != nil {
-			c.Embedders[name].SetDefaults()
+	// Apply defaults to vector stores
+	for name, vs := range c.VectorStores {
+		if vs != nil {
+			vs.SetDefaults()
+		} else {
+			c.VectorStores[name] = &VectorStoreConfig{}
+			c.VectorStores[name].SetDefaults()
 		}
 	}
 
-	for name := range c.Agents {
-		if c.Agents[name] != nil {
-			c.Agents[name].SetDefaults()
-		}
-	}
-
-	if len(c.Tools) == 0 {
-		c.Tools = GetDefaultToolConfigs()
-	}
-
-	for name := range c.Tools {
-		if c.Tools[name] != nil {
-			c.Tools[name].SetDefaults()
-		}
-	}
-
-	for name := range c.DocumentStores {
-		if c.DocumentStores[name] != nil {
+	// Apply defaults to document stores
+	for name, ds := range c.DocumentStores {
+		if ds != nil {
+			ds.SetDefaults()
+		} else {
+			c.DocumentStores[name] = &DocumentStoreConfig{}
 			c.DocumentStores[name].SetDefaults()
 		}
 	}
 
-	for name := range c.SessionStores {
-		if c.SessionStores[name] != nil {
-			c.SessionStores[name].SetDefaults()
-		}
-	}
-
-	c.Plugins.SetDefaults()
-}
-
-type Config struct {
-	Version     string            `yaml:"version,omitempty"`
-	Name        string            `yaml:"name,omitempty"`
-	Description string            `yaml:"description,omitempty"`
-	Metadata    map[string]string `yaml:"metadata,omitempty"`
-
-	Global GlobalSettings `yaml:"global,omitempty"`
-
-	// Defaults for agents (new feature)
-	Defaults *AgentDefaultsConfig `yaml:"defaults,omitempty"`
-
-	LLMs         map[string]*LLMProviderConfig      `yaml:"llms,omitempty"`
-	VectorStores map[string]*VectorStoreConfig      `yaml:"vector_stores,omitempty"`
-	Databases    map[string]*DatabaseConfig         `yaml:"databases,omitempty"`
-	Embedders    map[string]*EmbedderProviderConfig `yaml:"embedders,omitempty"`
-
-	Agents map[string]*AgentConfig `yaml:"agents,omitempty"`
-
-	Tools map[string]*ToolConfig `yaml:"tools,omitempty"`
-
-	DocumentStores map[string]*DocumentStoreConfig `yaml:"document_stores,omitempty"`
-
-	SessionStores map[string]*SessionStoreConfig `yaml:"session_stores,omitempty"`
-
-	Plugins PluginConfigs `yaml:"plugins,omitempty"`
-}
-
-// AgentDefaultsConfig provides default values for agent configurations
-type AgentDefaultsConfig struct {
-	LLM          string `yaml:"llm,omitempty"`           // Default LLM reference
-	VectorStore  string `yaml:"vector_store,omitempty"`  // Default vector store reference
-	Embedder     string `yaml:"embedder,omitempty"`      // Default embedder reference
-	SessionStore string `yaml:"session_store,omitempty"` // Default session store reference
-}
-
-func (c *Config) ValidateAgent(agentID string) error {
-
-	if len(c.Agents) == 0 {
-
-		return nil
-	}
-
-	if _, exists := c.Agents[agentID]; !exists {
-
-		availableAgents := make([]string, 0, len(c.Agents))
-		for name := range c.Agents {
-			availableAgents = append(availableAgents, name)
-		}
-
-		if len(availableAgents) == 0 {
-			return fmt.Errorf("agent '%s' not found: no agents defined in configuration", agentID)
-		}
-
-		return fmt.Errorf("agent '%s' not found\n\nAvailable agents:\n  - %s",
-			agentID, strings.Join(availableAgents, "\n  - "))
-	}
-
-	return nil
-}
-
-func (c *Config) Validate() error {
-
-	if err := c.Global.Validate(); err != nil {
-		return fmt.Errorf("global settings validation failed: %w", err)
-	}
-
+	// Apply defaults to each component
 	for name, llm := range c.LLMs {
 		if llm != nil {
-			if err := llm.Validate(); err != nil {
-				return fmt.Errorf("LLM '%s' validation failed: %w", name, err)
-			}
-		}
-	}
-
-	for name, db := range c.Databases {
-		if db != nil {
-			if err := db.Validate(); err != nil {
-				return fmt.Errorf("database '%s' validation failed: %w", name, err)
-			}
-		}
-	}
-
-	for name, embedder := range c.Embedders {
-		if embedder != nil {
-			if err := embedder.Validate(); err != nil {
-				return fmt.Errorf("embedder '%s' validation failed: %w", name, err)
-			}
-		}
-	}
-
-	for agentID, agent := range c.Agents {
-		if agent != nil {
-			// Set agent name default to agent ID if not specified
-			if agent.Name == "" {
-				agent.Name = agentID
-			}
-			if err := agent.Validate(); err != nil {
-				return fmt.Errorf("agent '%s' validation failed: %w", agentID, err)
-			}
+			llm.SetDefaults()
+		} else {
+			c.LLMs[name] = &LLMConfig{}
+			c.LLMs[name].SetDefaults()
 		}
 	}
 
 	for name, tool := range c.Tools {
 		if tool != nil {
-			if err := tool.Validate(); err != nil {
-				return fmt.Errorf("tool '%s' validation failed: %w", name, err)
-			}
+			tool.SetDefaults()
+		} else {
+			c.Tools[name] = &ToolConfig{}
+			c.Tools[name].SetDefaults()
 		}
 	}
 
-	for name, store := range c.DocumentStores {
-		if store != nil {
-			if err := store.Validate(); err != nil {
-				return fmt.Errorf("document store '%s' validation failed: %w", name, err)
-			}
+	for name, agent := range c.Agents {
+		if agent != nil {
+			agent.SetDefaults(c.Defaults)
+		} else {
+			c.Agents[name] = &AgentConfig{}
+			c.Agents[name].SetDefaults(c.Defaults)
 		}
 	}
 
-	for name, store := range c.SessionStores {
-		if store != nil {
-			if err := store.Validate(); err != nil {
-				return fmt.Errorf("session store '%s' validation failed: %w", name, err)
-			}
+	c.Server.SetDefaults()
+
+	// Apply defaults to rate limiting
+	if c.RateLimiting != nil {
+		c.RateLimiting.SetDefaults()
+	}
+}
+
+// Validate checks the configuration for errors.
+func (c *Config) Validate() error {
+	var errs []string
+
+	// Validate Databases
+	for name, db := range c.Databases {
+		if db == nil {
+			continue
+		}
+		if err := db.Validate(); err != nil {
+			errs = append(errs, fmt.Sprintf("database %q: %v", name, err))
 		}
 	}
 
-	if err := c.Plugins.Validate(); err != nil {
-		return fmt.Errorf("plugins validation failed: %w", err)
+	// Validate VectorStores
+	for name, vs := range c.VectorStores {
+		if vs == nil {
+			continue
+		}
+		if err := vs.Validate(); err != nil {
+			errs = append(errs, fmt.Sprintf("vector_store %q: %v", name, err))
+		}
 	}
 
-	// Validate all references (moved from separate validateReferences() method)
+	// Validate LLMs
+	for name, llm := range c.LLMs {
+		if llm == nil {
+			continue
+		}
+		if err := llm.Validate(); err != nil {
+			errs = append(errs, fmt.Sprintf("llm %q: %v", name, err))
+		}
+	}
+
+	// Validate Tools
+	for name, tool := range c.Tools {
+		if tool == nil {
+			continue
+		}
+		if err := tool.Validate(); err != nil {
+			errs = append(errs, fmt.Sprintf("tool %q: %v", name, err))
+		}
+	}
+
+	// Validate Agents
+	for name, agent := range c.Agents {
+		if agent == nil {
+			continue
+		}
+		if err := agent.Validate(); err != nil {
+			errs = append(errs, fmt.Sprintf("agent %q: %v", name, err))
+		}
+	}
+
+	// Validate DocumentStores
+	for name, ds := range c.DocumentStores {
+		if ds == nil {
+			continue
+		}
+		if err := ds.Validate(); err != nil {
+			errs = append(errs, fmt.Sprintf("document_store %q: %v", name, err))
+		}
+	}
+
+	// Validate Server
+	if err := c.Server.Validate(); err != nil {
+		errs = append(errs, fmt.Sprintf("server: %v", err))
+	}
+
+	// Validate Logger
+	if c.Logger != nil {
+		if err := c.Logger.Validate(); err != nil {
+			errs = append(errs, fmt.Sprintf("logger: %v", err))
+		}
+	}
+
+	// Validate RateLimiting
+	if c.RateLimiting != nil {
+		if err := c.RateLimiting.Validate(); err != nil {
+			errs = append(errs, fmt.Sprintf("rate_limiting: %v", err))
+		}
+	}
+
+	// Validate references
 	if err := c.validateReferences(); err != nil {
-		return fmt.Errorf("reference validation failed: %w", err)
+		errs = append(errs, err.Error())
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("configuration errors:\n  - %s", strings.Join(errs, "\n  - "))
 	}
 
 	return nil
 }
 
-// validateReferences validates all cross-references between configuration sections
+// validateReferences checks that all references are valid.
 func (c *Config) validateReferences() error {
+	var errs []string
+
 	for agentName, agent := range c.Agents {
 		if agent == nil {
 			continue
 		}
 
-		if agent.Type != "native" {
-			continue
-		}
-
+		// Check LLM reference
 		if agent.LLM != "" {
-			if _, exists := c.LLMs[agent.LLM]; !exists {
-				return fmt.Errorf("agent '%s': llm '%s' not found (available: %v)",
-					agentName, agent.LLM, mapKeys(c.LLMs))
+			if _, ok := c.LLMs[agent.LLM]; !ok {
+				errs = append(errs, fmt.Sprintf("agent %q references undefined llm %q", agentName, agent.LLM))
 			}
 		}
 
-		if agent.VectorStore != "" {
-			if _, exists := c.VectorStores[agent.VectorStore]; !exists {
-				return fmt.Errorf("agent '%s': vector_store '%s' not found (available: %v)",
-					agentName, agent.VectorStore, mapKeys(c.VectorStores))
+		// Check tool references
+		for _, toolName := range agent.Tools {
+			if _, ok := c.Tools[toolName]; !ok {
+				errs = append(errs, fmt.Sprintf("agent %q references undefined tool %q", agentName, toolName))
 			}
 		}
 
-		if agent.Embedder != "" {
-			if _, exists := c.Embedders[agent.Embedder]; !exists {
-				return fmt.Errorf("agent '%s': embedder '%s' not found (available: %v)",
-					agentName, agent.Embedder, mapKeys(c.Embedders))
-			}
-		}
-
-		// Validate conditional database/embedder requirements for agents with document stores
-		if len(agent.DocumentStores) > 0 {
-			// Check if all document stores have their own vector_store/embedder
-			allStoresHaveVectorStore := true
-			allStoresHaveEmbedder := true
-			for _, dsName := range agent.DocumentStores {
-				dsConfig, exists := c.DocumentStores[dsName]
-				if !exists {
-					return fmt.Errorf("agent '%s': document store '%s' not found (available: %v)",
-						agentName, dsName, mapKeys(c.DocumentStores))
+		// Check document store references
+		if agent.DocumentStores != nil {
+			for _, storeName := range *agent.DocumentStores {
+				if _, ok := c.DocumentStores[storeName]; !ok {
+					errs = append(errs, fmt.Sprintf("agent %q references undefined document_store %q", agentName, storeName))
 				}
-				if dsConfig.VectorStore == "" {
-					allStoresHaveVectorStore = false
-				}
-				if dsConfig.Embedder == "" {
-					allStoresHaveEmbedder = false
-				}
-			}
-
-			// Check if IncludeContext is enabled
-			includeContextEnabled := agent.Prompt.IncludeContext != nil && *agent.Prompt.IncludeContext
-
-			// Check if long-term memory is enabled
-			longTermMemoryEnabled := agent.Memory.LongTerm.IsEnabled()
-
-			// Determine if agent vector_store/embedder is needed
-			needsAgentVectorStore := longTermMemoryEnabled || includeContextEnabled || !allStoresHaveVectorStore
-			needsAgentEmbedder := longTermMemoryEnabled || includeContextEnabled || !allStoresHaveEmbedder
-
-			// Validate requirements
-			if needsAgentVectorStore && agent.VectorStore == "" {
-				reasons := []string{}
-				if longTermMemoryEnabled {
-					reasons = append(reasons, "long-term memory is enabled")
-				}
-				if includeContextEnabled {
-					reasons = append(reasons, "IncludeContext is enabled")
-				}
-				if !allStoresHaveVectorStore {
-					reasons = append(reasons, "at least one document store doesn't specify its own vector_store")
-				}
-				return fmt.Errorf("agent '%s': vector_store is required when: %s", agentName, strings.Join(reasons, ", "))
-			}
-
-			if needsAgentEmbedder && agent.Embedder == "" {
-				reasons := []string{}
-				if longTermMemoryEnabled {
-					reasons = append(reasons, "long-term memory is enabled")
-				}
-				if includeContextEnabled {
-					reasons = append(reasons, "IncludeContext is enabled")
-				}
-				if !allStoresHaveEmbedder {
-					reasons = append(reasons, "at least one document store doesn't specify its own embedder")
-				}
-				return fmt.Errorf("agent '%s': embedder is required when: %s", agentName, strings.Join(reasons, ", "))
-			}
-		}
-
-		// Also check for IncludeContext without document stores, and long-term memory
-		if len(agent.DocumentStores) == 0 {
-			includeContextEnabled := agent.Prompt.IncludeContext != nil && *agent.Prompt.IncludeContext
-			longTermMemoryEnabled := agent.Memory.LongTerm.IsEnabled()
-
-			if (includeContextEnabled || longTermMemoryEnabled) && agent.VectorStore == "" {
-				reasons := []string{}
-				if longTermMemoryEnabled {
-					reasons = append(reasons, "long-term memory is enabled")
-				}
-				if includeContextEnabled {
-					reasons = append(reasons, "IncludeContext is enabled")
-				}
-				return fmt.Errorf("agent '%s': vector_store is required when: %s", agentName, strings.Join(reasons, ", "))
-			}
-
-			if (includeContextEnabled || longTermMemoryEnabled) && agent.Embedder == "" {
-				reasons := []string{}
-				if longTermMemoryEnabled {
-					reasons = append(reasons, "long-term memory is enabled")
-				}
-				if includeContextEnabled {
-					reasons = append(reasons, "IncludeContext is enabled")
-				}
-				return fmt.Errorf("agent '%s': embedder is required when: %s", agentName, strings.Join(reasons, ", "))
-			}
-		}
-
-		// Validate document store references
-		for _, storeName := range agent.DocumentStores {
-			if _, exists := c.DocumentStores[storeName]; !exists {
-				return fmt.Errorf("agent '%s': document store '%s' not found (available: %v)",
-					agentName, storeName, mapKeys(c.DocumentStores))
-			}
-		}
-
-		if agent.SessionStore != "" {
-			if _, exists := c.SessionStores[agent.SessionStore]; !exists {
-				return fmt.Errorf("agent '%s': session store '%s' not found (available: %v)",
-					agentName, agent.SessionStore, mapKeys(c.SessionStores))
 			}
 		}
 	}
 
-	// Validate session store references (database references)
-	for storeName, store := range c.SessionStores {
-		if store == nil {
-			continue
-		}
-
-		if store.Backend == "sql" && store.SQLDatabase != "" {
-			if _, exists := c.Databases[store.SQLDatabase]; !exists {
-				return fmt.Errorf("session store '%s': sql_database '%s' not found (available: %v)",
-					storeName, store.SQLDatabase, mapKeys(c.Databases))
-			}
-		}
-	}
-
-	// Tool validation: Search tool no longer has document_stores field
-	// Document stores come from agent assignment, not tool config
-	for _, tool := range c.Tools {
-		if tool == nil {
-			continue
-		}
-		// No validation needed for search tool document_stores (removed from config)
-	}
-
-	// Validate task database references
-	for agentName, agent := range c.Agents {
-		if agent == nil || agent.Task == nil {
-			continue
-		}
-
-		if agent.Task.Backend == "sql" && agent.Task.SQLDatabase != "" {
-			if _, exists := c.Databases[agent.Task.SQLDatabase]; !exists {
-				return fmt.Errorf("agent '%s': task sql_database '%s' not found (available: %v)",
-					agentName, agent.Task.SQLDatabase, mapKeys(c.Databases))
-			}
-		}
-	}
-
-	// Validate document store references (vector_store, database, embedder)
+	// Check document store references
 	for storeName, store := range c.DocumentStores {
 		if store == nil {
 			continue
 		}
 
-		// Validate vector_store reference
+		// Check vector_store reference
 		if store.VectorStore != "" {
-			if _, exists := c.VectorStores[store.VectorStore]; !exists {
-				return fmt.Errorf("document store '%s': vector_store '%s' not found (available: %v)",
-					storeName, store.VectorStore, mapKeys(c.VectorStores))
+			if _, ok := c.VectorStores[store.VectorStore]; !ok {
+				errs = append(errs, fmt.Sprintf("document_store %q references undefined vector_store %q", storeName, store.VectorStore))
 			}
 		}
 
-		// Validate database reference (for SQL source)
-		if store.SQLDatabase != "" {
-			if _, exists := c.Databases[store.SQLDatabase]; !exists {
-				return fmt.Errorf("document store '%s': sql_database '%s' not found (available: %v)",
-					storeName, store.SQLDatabase, mapKeys(c.Databases))
-			}
-		}
-
-		// Validate embedder reference
+		// Check embedder reference
 		if store.Embedder != "" {
-			if _, exists := c.Embedders[store.Embedder]; !exists {
-				return fmt.Errorf("document store '%s': embedder '%s' not found (available: %v)",
-					storeName, store.Embedder, mapKeys(c.Embedders))
+			if _, ok := c.Embedders[store.Embedder]; !ok {
+				errs = append(errs, fmt.Sprintf("document_store %q references undefined embedder %q", storeName, store.Embedder))
 			}
 		}
+
+		// Check SQL database reference
+		if store.Source != nil && store.Source.SQL != nil && store.Source.SQL.Database != "" {
+			if _, ok := c.Databases[store.Source.SQL.Database]; !ok {
+				errs = append(errs, fmt.Sprintf("document_store %q references undefined database %q", storeName, store.Source.SQL.Database))
+			}
+		}
+
+		// Check search LLM references
+		if store.Search != nil {
+			if store.Search.HyDELLM != "" {
+				if _, ok := c.LLMs[store.Search.HyDELLM]; !ok {
+					errs = append(errs, fmt.Sprintf("document_store %q references undefined llm %q for HyDE", storeName, store.Search.HyDELLM))
+				}
+			}
+			if store.Search.RerankLLM != "" {
+				if _, ok := c.LLMs[store.Search.RerankLLM]; !ok {
+					errs = append(errs, fmt.Sprintf("document_store %q references undefined llm %q for reranking", storeName, store.Search.RerankLLM))
+				}
+			}
+			if store.Search.MultiQueryLLM != "" {
+				if _, ok := c.LLMs[store.Search.MultiQueryLLM]; !ok {
+					errs = append(errs, fmt.Sprintf("document_store %q references undefined llm %q for multi-query", storeName, store.Search.MultiQueryLLM))
+				}
+			}
+		}
+	}
+
+	// Check server.tasks database reference
+	if c.Server.Tasks != nil && c.Server.Tasks.Database != "" {
+		if _, ok := c.Databases[c.Server.Tasks.Database]; !ok {
+			errs = append(errs, fmt.Sprintf("server.tasks references undefined database %q", c.Server.Tasks.Database))
+		}
+	}
+
+	// Check server.sessions database reference
+	if c.Server.Sessions != nil && c.Server.Sessions.Database != "" {
+		if _, ok := c.Databases[c.Server.Sessions.Database]; !ok {
+			errs = append(errs, fmt.Sprintf("server.sessions references undefined database %q", c.Server.Sessions.Database))
+		}
+	}
+
+	// Check rate_limiting database reference
+	if c.RateLimiting != nil && c.RateLimiting.Backend == "sql" && c.RateLimiting.SQLDatabase != "" {
+		if _, ok := c.Databases[c.RateLimiting.SQLDatabase]; !ok {
+			errs = append(errs, fmt.Sprintf("rate_limiting references undefined database %q", c.RateLimiting.SQLDatabase))
+		}
+	}
+
+	// Check server.memory embedder reference
+	if c.Server.Memory != nil && c.Server.Memory.Embedder != "" {
+		if _, ok := c.Embedders[c.Server.Memory.Embedder]; !ok {
+			errs = append(errs, fmt.Sprintf("server.memory references undefined embedder %q", c.Server.Memory.Embedder))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("reference errors:\n  - %s", strings.Join(errs, "\n  - "))
 	}
 
 	return nil
 }
 
-func mapKeys[K comparable, V any](m map[K]V) []K {
-	keys := make([]K, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-type GlobalSettings struct {
-	Performance PerformanceConfig `yaml:"performance,omitempty"`
-
-	A2AServer A2AServerConfig `yaml:"a2a_server,omitempty"`
-
-	Auth AuthConfig `yaml:"auth,omitempty"`
-
-	Observability ObservabilityConfig `yaml:"observability,omitempty"`
-}
-
-func (c *GlobalSettings) Validate() error {
-	if err := c.Performance.Validate(); err != nil {
-		return fmt.Errorf("performance config validation failed: %w", err)
-	}
-	if err := c.A2AServer.Validate(); err != nil {
-		return fmt.Errorf("A2A server config validation failed: %w", err)
-	}
-	if err := c.Auth.Validate(); err != nil {
-		return fmt.Errorf("auth config validation failed: %w", err)
-	}
-	if err := c.Observability.Validate(); err != nil {
-		return fmt.Errorf("observability config validation failed: %w", err)
-	}
-	return nil
-}
-
-func (c *GlobalSettings) SetDefaults() {
-	c.Performance.SetDefaults()
-	c.A2AServer.SetDefaults()
-	c.Auth.SetDefaults()
-	c.Observability.SetDefaults()
-}
-
-const DefaultAgentName = "assistant"
-
-func CreateZeroConfig(source interface{}) *Config {
-	provider := extractStringField(source, "Provider")
-	apiKey := extractStringField(source, "APIKey")
-	baseURL := extractStringField(source, "BaseURL")
-	model := extractStringField(source, "Model")
-	temperature := extractFloatField(source, "Temperature")
-	maxTokens := extractIntField(source, "MaxTokens")
-	role := extractStringField(source, "Role")
-	instruction := extractStringField(source, "Instruction")
-	enableTools := extractBoolField(source, "Tools")
-	thinking := extractBoolField(source, "Thinking")
-	thinkingBudget := extractIntField(source, "ThinkingBudget")
-	showThinking := extractBoolField(source, "ShowThinking")
-	mcpURL := extractStringField(source, "MCPURL")
-	mcpParserTool := extractStringField(source, "MCPParserTool")
-	docsFolder := extractStringField(source, "DocsFolder")
-	embedderModel := extractStringField(source, "EmbedderModel")
-	agentName := extractStringField(source, "AgentName")
-	observe := extractBoolField(source, "Observe")
-
-	if apiKey == "" {
-		if provider != "" {
-			apiKey = GetProviderAPIKey(provider)
-		} else {
-			if key := GetProviderAPIKey("openai"); key != "" {
-				apiKey = key
-				provider = "openai"
-			} else if key := GetProviderAPIKey("anthropic"); key != "" {
-				apiKey = key
-				provider = "anthropic"
-			} else if key := GetProviderAPIKey("gemini"); key != "" {
-				apiKey = key
-				provider = "gemini"
-			}
-		}
-	}
-
-	if mcpURL == "" {
-		mcpURL = os.Getenv("MCP_URL")
-	}
-
-	if provider == "" {
-		provider = "openai"
-	}
-
-	if agentName == "" {
-		agentName = DefaultAgentName
-	}
-
-	llmConfig := &LLMProviderConfig{
-		Type: provider,
-	}
-	if apiKey != "" {
-		llmConfig.APIKey = apiKey
-	}
-	if baseURL != "" {
-		llmConfig.Host = baseURL
-	}
-	if model != "" {
-		llmConfig.Model = model
-	}
-	// Set temperature and maxTokens
-	// The CLI library (Kong) sets defaults from struct tags BEFORE we extract:
-	// - If user doesn't provide --temperature: field is 0.7 (from default tag)
-	// - If user provides --temperature 0: field is 0.0
-	// - If user provides --temperature 0.5: field is 0.5
-	// Use pointer to distinguish "explicitly set" from "not set"
-	llmConfig.Temperature = &temperature
-	if maxTokens == 0 {
-		// Explicitly set to 0 - use sentinel value so SetDefaults knows to keep it as 0
-		llmConfig.MaxTokens = -1
-	} else {
-		llmConfig.MaxTokens = maxTokens
-	}
-
-	cfg := &Config{
-		Name: "Zero Config Mode",
-		LLMs: map[string]*LLMProviderConfig{
-			provider: llmConfig,
-		},
-		VectorStores:   make(map[string]*VectorStoreConfig),
-		Databases:      make(map[string]*DatabaseConfig),
-		Embedders:      make(map[string]*EmbedderProviderConfig),
-		DocumentStores: make(map[string]*DocumentStoreConfig),
-		SessionStores:  make(map[string]*SessionStoreConfig),
-	}
-
-	if observe {
-		cfg.Global.Observability = ObservabilityConfig{
-			EnableMetrics: BoolPtr(true),
-			Tracing: TracingConfig{
-				Enabled: BoolPtr(true),
-			},
-		}
-	}
-
-	// Auto-enable SQLite for tasks in zero-config mode to support HITL across CLI invocations
-	// SQLite is lightweight, file-based, and persists across separate CLI calls (unlike in-memory)
-	// This enables non-streaming HITL where approval happens in a separate CLI invocation
-	taskDBName := "zero-config-tasks"
-	cfg.Databases[taskDBName] = &DatabaseConfig{
-		Driver:   "sqlite",
-		Database: "./.hector/tasks.db", // Store in .hector directory (hidden, local to project)
-	}
-
-	agentConfig := AgentConfig{
-		Name: agentName,
-		Type: "native",
-		LLM:  provider,
-		// Enable Task service for HITL support (tool approval in non-streaming mode)
-		// Use SQLite backend in zero-config mode to persist tasks across CLI invocations
-		Task: &TaskConfig{
-			Backend:     "sql",      // SQL backend for persistence
-			SQLDatabase: taskDBName, // Reference to auto-created SQLite database
-		},
-	}
-
-	// Add custom role and/or instruction if provided
-	if role != "" || instruction != "" {
-		agentConfig.Prompt.PromptSlots = &PromptSlotsConfig{
-			SystemRole:   role,
-			UserGuidance: instruction,
-		}
-	}
-
-	if docsFolder != "" {
-		agentConfig.DocsFolder = docsFolder
-		if mcpParserTool != "" {
-			agentConfig.MCPParserTool = mcpParserTool
-		}
-		if embedderModel != "" {
-			cfg.Embedders["default-embedder"] = &EmbedderProviderConfig{
-				Model: embedderModel,
-			}
-		}
-	}
-	// Note: If mcpParserTool is set without docsFolder, validation in AgentConfig.Validate() will catch it
-	// We don't set MCPParserTool here if docsFolder is empty, so it will be caught during validation
-
-	if enableTools {
-		agentConfig.EnableTools = BoolPtr(true)
-	} else if mcpURL != "" {
-		agentConfig.Tools = nil
-	} else {
-		agentConfig.Tools = []string{}
-	}
-
-	// Set thinking flags:
-	// - --thinking: enables thinking in LLM provider config (like --tools enables tools)
-	// - --thinking-budget: sets token budget for thinking (default: 1024 if not specified)
-	// - --show-thinking: shows thinking blocks in output (like --show-tools shows tool calls)
-	//
-	// Architecture:
-	// - LLMProviderConfig.Thinking controls API-level thinking enablement
-	// - ReasoningConfig.EnableThinkingDisplay controls display of thinking blocks
-	// - Each LLM provider reads its own config - no context passing needed
-	if thinking {
-		// Set thinking config in LLM provider config (controls API behavior)
-		if llmConfig.Thinking == nil {
-			llmConfig.Thinking = &ThinkingConfig{
-				Enabled: true,
-			}
-		} else {
-			llmConfig.Thinking.Enabled = true
-		}
-		// Set budget if specified via CLI
-		if thinkingBudget > 0 {
-			llmConfig.Thinking.BudgetTokens = thinkingBudget
-		}
-		// Auto-enable show-thinking when thinking is enabled (zero-config mode default)
-		agentConfig.Reasoning.EnableThinkingDisplay = BoolPtr(true)
-	}
-	// Explicit --show-thinking overrides the auto-enable behavior
-	if showThinking {
-		agentConfig.Reasoning.EnableThinkingDisplay = BoolPtr(true)
-	}
-
-	cfg.Agents = map[string]*AgentConfig{
-		agentName: &agentConfig,
-	}
-
-	if mcpURL != "" {
-		if cfg.Tools == nil {
-			cfg.Tools = make(map[string]*ToolConfig)
-		}
-		cfg.Tools["mcp"] = &ToolConfig{
-			Type:      "mcp",
-			Enabled:   BoolPtr(true),
-			ServerURL: mcpURL,
-			// Note: Internal flag not set here - by default MCP tools are visible to agents
-			// Users can use a config file with internal: true if they want to hide them
-		}
-	}
-
-	return cfg
-}
-
-// ApplyToolApprovalOverrides applies CLI-specified approval overrides to tool configs
-// This should be called AFTER ProcessConfigPipeline (which calls SetDefaults)
-// to override the smart defaults set by SetDefaults
-func ApplyToolApprovalOverrides(cfg *Config, approveTools, noApproveTools string) {
-	if approveTools == "" && noApproveTools == "" {
-		return
-	}
-
-	// Parse comma-separated tool lists
-	approveList := parseCommaSeparatedList(approveTools)
-	noApproveList := parseCommaSeparatedList(noApproveTools)
-
-	// Ensure tools map exists
-	if cfg.Tools == nil {
-		cfg.Tools = make(map[string]*ToolConfig)
-	}
-
-	// Apply approval overrides
-	for _, toolName := range approveList {
-		applyToolApprovalOverride(cfg, toolName, true)
-	}
-
-	// Apply no-approval overrides
-	for _, toolName := range noApproveList {
-		applyToolApprovalOverride(cfg, toolName, false)
-	}
-}
-
-// applyToolApprovalOverride applies an approval override to a tool config
-// Creates the tool config if it doesn't exist, then sets EnableApproval
-func applyToolApprovalOverride(cfg *Config, toolName string, enable bool) {
-	if cfg.Tools[toolName] == nil {
-		// Create tool config if it doesn't exist
-		defaultConfigs := GetDefaultToolConfigs()
-		if defaultCfg, ok := defaultConfigs[toolName]; ok {
-			cfg.Tools[toolName] = &ToolConfig{
-				Type: defaultCfg.Type,
-			}
-			cfg.Tools[toolName].SetDefaults()
-		} else {
-			// Unknown tool, create minimal config
-			cfg.Tools[toolName] = &ToolConfig{
-				Type: "unknown",
-			}
-			cfg.Tools[toolName].SetDefaults()
-		}
-	}
-	cfg.Tools[toolName].EnableApproval = BoolPtr(enable)
-}
-
-// parseCommaSeparatedList parses a comma-separated string into a list of trimmed strings
-func parseCommaSeparatedList(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-	return result
-}
-
+// GetAgent returns the agent config by name.
 func (c *Config) GetAgent(name string) (*AgentConfig, bool) {
-	agent, exists := c.Agents[name]
-	return agent, exists
+	agent, ok := c.Agents[name]
+	return agent, ok
 }
 
-func (c *Config) GetDocumentStore(name string) (*DocumentStoreConfig, bool) {
-	store, exists := c.DocumentStores[name]
-	return store, exists
+// GetLLM returns the LLM config by name.
+func (c *Config) GetLLM(name string) (*LLMConfig, bool) {
+	llm, ok := c.LLMs[name]
+	return llm, ok
 }
 
+// GetTool returns the tool config by name.
+func (c *Config) GetTool(name string) (*ToolConfig, bool) {
+	tool, ok := c.Tools[name]
+	return tool, ok
+}
+
+// ListAgents returns the names of all configured agents.
 func (c *Config) ListAgents() []string {
-	agents := make([]string, 0, len(c.Agents))
+	names := make([]string, 0, len(c.Agents))
 	for name := range c.Agents {
-		agents = append(agents, name)
+		names = append(names, name)
 	}
-	return agents
+	return names
 }
 
-func (c *Config) ListDocumentStores() []string {
-	stores := make([]string, 0, len(c.DocumentStores))
-	for name := range c.DocumentStores {
-		stores = append(stores, name)
-	}
-	return stores
-}
-
-func extractStringField(source any, fieldName string) string {
-	v := reflect.ValueOf(source)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-
-	field := v.FieldByName(fieldName)
-	if !field.IsValid() || !field.CanInterface() {
-		return ""
-	}
-
-	if field.Kind() != reflect.String {
-		return ""
-	}
-
-	return field.String()
-}
-
-func extractBoolField(source any, fieldName string) bool {
-	v := reflect.ValueOf(source)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-
-	field := v.FieldByName(fieldName)
-	if !field.IsValid() || !field.CanInterface() {
-		return false
-	}
-
-	if field.Kind() != reflect.Bool {
-		return false
-	}
-
-	return field.Bool()
-}
-
-func extractFloatField(source any, fieldName string) float64 {
-	v := reflect.ValueOf(source)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-
-	field := v.FieldByName(fieldName)
-	if !field.IsValid() || !field.CanInterface() {
-		return 0
-	}
-
-	if field.Kind() != reflect.Float64 && field.Kind() != reflect.Float32 {
-		return 0
-	}
-
-	return field.Float()
-}
-
-func extractIntField(source any, fieldName string) int {
-	v := reflect.ValueOf(source)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-
-	field := v.FieldByName(fieldName)
-	if !field.IsValid() || !field.CanInterface() {
-		return 0
-	}
-
-	if field.Kind() != reflect.Int && field.Kind() != reflect.Int8 && field.Kind() != reflect.Int16 && field.Kind() != reflect.Int32 && field.Kind() != reflect.Int64 {
-		return 0
-	}
-
-	return int(field.Int())
-}
-
-func generateStoreNameFromPath(sourcePath string) string {
-	normalizedPath := filepath.Clean(sourcePath)
-
-	absPath, err := filepath.Abs(normalizedPath)
-	if err != nil {
-		absPath = normalizedPath
-	}
-
-	hash := sha256.Sum256([]byte(absPath))
-	hashStr := hex.EncodeToString(hash[:])[:12]
-
-	dirName := filepath.Base(absPath)
-	if dirName == "" || dirName == "." {
-		dirName = "root"
-	}
-
-	dirName = strings.ReplaceAll(dirName, " ", "_")
-	dirName = strings.ReplaceAll(dirName, "-", "_")
-
-	return fmt.Sprintf("docs_%s_%s", dirName, hashStr)
+// GetDatabase returns the database config by name.
+func (c *Config) GetDatabase(name string) (*DatabaseConfig, bool) {
+	db, ok := c.Databases[name]
+	return db, ok
 }

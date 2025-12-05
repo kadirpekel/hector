@@ -9,18 +9,19 @@ import { handleError } from "../../lib/error-handler";
 import { generateId, generateShortId } from "../../lib/id-generator";
 
 export const InputArea: React.FC = () => {
-  const {
-    currentSessionId,
-    addMessage,
-    selectedAgent,
-    isGenerating,
-    setIsGenerating,
-    setActiveStreamParser,
-    cancelGeneration,
-    supportedFileTypes,
-    sessions,
-    updateSessionTitle,
-  } = useStore();
+  // Use selectors for better performance - only subscribe to specific state slices
+  const currentSessionId = useStore((state) => state.currentSessionId);
+  const addMessage = useStore((state) => state.addMessage);
+  const selectedAgent = useStore((state) => state.selectedAgent);
+  const isGenerating = useStore((state) => state.isGenerating);
+  const setIsGenerating = useStore((state) => state.setIsGenerating);
+  const setActiveStreamParser = useStore(
+    (state) => state.setActiveStreamParser,
+  );
+  const cancelGeneration = useStore((state) => state.cancelGeneration);
+  const supportedFileTypes = useStore((state) => state.supportedFileTypes);
+  const sessions = useStore((state) => state.sessions);
+  const updateSessionTitle = useStore((state) => state.updateSessionTitle);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -202,40 +203,32 @@ export const InputArea: React.FC = () => {
       const parser = new StreamParser(currentSessionId, agentMessageId);
       setActiveStreamParser(parser);
 
-      // Prepare parts
+      // Prepare parts - A2A spec requires "kind" field
       const parts: Array<{
+        kind: string;
         text?: string;
-        file?: { file_with_bytes: string; media_type: string; name: string };
+        file?: { bytes: string; mimeType: string; name: string };
       }> = [];
-      if (messageText) parts.push({ text: messageText });
+      if (messageText) parts.push({ kind: "text", text: messageText });
 
       for (const att of messageAttachments) {
         parts.push({
+          kind: "file",
           file: {
-            file_with_bytes: att.base64,
-            media_type: att.mediaType,
+            bytes: att.base64,
+            mimeType: att.mediaType,
             name: att.file.name,
           },
         });
       }
 
-      const requestBody: {
-        jsonrpc: string;
-        method: string;
-        params: {
-          request: {
-            contextId: string;
-            role: string;
-            parts: typeof parts;
-            taskId?: string;
-          };
-        };
-        id: string;
-      } = {
+      // A2A spec: params.message with contextId for multi-turn
+      // Note: taskId is server-generated, NOT sent by client
+      const requestBody = {
         jsonrpc: "2.0",
         method: "message/stream",
         params: {
-          request: {
+          message: {
             contextId: sessions[currentSessionId].contextId,
             role: "user",
             parts: parts,
@@ -244,14 +237,9 @@ export const InputArea: React.FC = () => {
         id: generateShortId(),
       };
 
-      // Handle Task ID for resumption
-      const currentTaskId = sessions[currentSessionId].taskId;
-      if (currentTaskId) {
-        requestBody.params.request.taskId = currentTaskId;
-      }
-
       if (!selectedAgent) throw new Error("No agent selected");
-      await parser.stream(`${selectedAgent.url}/stream`, requestBody);
+      // A2A spec: POST to agent's URL - streaming is determined by method name
+      await parser.stream(selectedAgent.url, requestBody);
     } catch (error: unknown) {
       if (error instanceof Error && error.name !== "AbortError") {
         handleError(error, "Failed to send message");

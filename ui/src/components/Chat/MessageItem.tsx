@@ -1,4 +1,4 @@
-import React from "react";
+import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -58,9 +58,22 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({
   messageIndex,
   isLastMessage,
 }) => {
-  const { currentSessionId } = useStore();
+  // Use selector for better performance - only subscribe to currentSessionId
+  const currentSessionId = useStore((state) => state.currentSessionId);
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
+
+  // Memoize widget map to prevent recreation on every render
+  const widgetsMap = useMemo(
+    () => new Map(message.widgets.map((w) => [w.id, w])),
+    [message.widgets],
+  );
+
+  // Memoize contentOrder to prevent unnecessary comparisons
+  const contentOrder = useMemo(
+    () => message.metadata?.contentOrder || [],
+    [message.metadata?.contentOrder],
+  );
 
   // Widget expansion state is managed via widget.isExpanded prop and onExpansionChange callback
   // Widgets read their initial state from the prop and sync changes back via the callback
@@ -166,13 +179,14 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({
             const isTodoWidget = (widget: Widget): boolean =>
               widget.type === "tool" && widget.data?.name === "todo_write";
 
-            const contentOrder = message.metadata?.contentOrder || [];
-            const widgetsMap = new Map(message.widgets.map((w) => [w.id, w]));
+            // Use memoized widgetsMap and contentOrder from component level
 
             // Track accumulated todos as we iterate through contentOrder
             const accumulatedTodosMap = new Map<string, TodoItem>();
 
             // If we have contentOrder, render in that exact order
+            // This preserves the position of tool calls, thinking, and text relative to each other
+            // Text is now rendered as TextWidgets with position markers (text_start, text_after_*)
             if (contentOrder.length > 0) {
               return (
                 <>
@@ -201,7 +215,7 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({
                       return null;
                     }
 
-                    // Render other widgets normally
+                    // Render all widgets (including TextWidget) via WidgetRenderer
                     return (
                       <div key={widget.id} className="mb-3">
                         <WidgetRenderer
@@ -324,7 +338,9 @@ const WidgetRenderer: React.FC<{
   messageIndex,
   isLastMessage,
 }) => {
-  const { setWidgetExpanded, isGenerating: isGeneratingState } = useStore();
+  // Use selectors for better performance - only subscribe to specific state slices
+  const setWidgetExpanded = useStore((state) => state.setWidgetExpanded);
+  const isGeneratingState = useStore((state) => state.isGenerating);
 
   const handleExpansionChange = (expanded: boolean) => {
     if (sessionId) {

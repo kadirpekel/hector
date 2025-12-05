@@ -1,0 +1,50 @@
+version: '2'
+name: example-assistant
+description: A simple example assistant
+llms:
+  default:
+    provider: openai
+    model: gpt-5-mini
+    api_key: ${OPEN_API_KEY}
+    temperature: 0.9
+    max_tokens: 4096
+tools:
+  weather:
+    type: mcp
+    url: ${MCP_URL}
+agents:
+  assistant:
+    name: Assistant
+    description: A helpful AI assistant
+    llm: default
+    instruction: |
+      You are a helpful AI assistant. Be concise, accurate, and friendly.
+
+      When you don't know something, say so honestly.
+    skills:
+      - id: general
+        name: General Assistant
+        description: General purpose assistance and conversation
+        tags:
+          - general
+          - chat
+          - help
+        examples:
+          - What's the weather like?
+          - Help me write an email
+          - Explain quantum computing
+    input_modes:
+      - text/plain
+    output_modes:
+      - text/plain
+server:
+  host: 0.0.0.0
+  port: 8080
+  transport: json-rpc
+  cors:
+    allowed_origins:
+      - '*'
+    allowed_methods:
+      - GET
+      - POST
+      - OPTIONS

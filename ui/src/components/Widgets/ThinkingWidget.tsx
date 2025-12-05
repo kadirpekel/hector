@@ -1,4 +1,4 @@
-import React from "react";
+import { memo } from "react";
 import {
   Brain,
   ChevronDown,
@@ -24,11 +24,15 @@ interface ThinkingWidgetProps {
   shouldAnimate?: boolean;
 }
 
-export const ThinkingWidget: React.FC<ThinkingWidgetProps> = ({
+/**
+ * ThinkingWidget displays AI reasoning/thinking process.
+ * Memoized to prevent re-renders when parent updates but widget props unchanged.
+ */
+export const ThinkingWidget = memo<ThinkingWidgetProps>(function ThinkingWidget({
   widget,
   onExpansionChange,
   shouldAnimate = false,
-}) => {
+}) {
   const { type } = widget.data;
   const status = widget.status;
 
@@ -160,4 +164,4 @@ export const ThinkingWidget: React.FC<ThinkingWidgetProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -12,84 +12,69 @@
 [![Documentation](https://img.shields.io/badge/docs-gohector.dev-blue.svg)](https://gohector.dev)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 
-**Production-Grade A2A-Native Agent Platform**
+**Config-first A2A-Native Agent Platform**
 
-Deploy observable, secure, and scalable AI agents in production—with zero code.
+Deploy observable, secure, and scalable AI agents with zero-config or YAML, plus a programmatic API.
 
-**[📚 Full Documentation →](https://gohector.dev)** | [Quick Start](https://gohector.dev/getting-started/quick-start/) | [API Reference](https://gohector.dev/reference/api/)
+**[📚 Documentation](https://gohector.dev)** | [CLI Reference](https://gohector.dev/reference/cli/) | [Config Reference](https://gohector.dev/reference/configuration/)
 
 ---
 
-## Quick Start
+## Quick Start (zero-config)
 
 ```bash
-# Install
 go install github.com/kadirpekel/hector/cmd/hector@latest
-
-# Create configuration
-cat > agents.yaml << EOF
-agents:
-  assistant:
-    llm: gpt-4o
-    tools: [search, write_file]
-EOF
-
-# Start server
 export OPENAI_API_KEY="sk-..."
-hector serve --config agents.yaml
+
+hector serve --model gpt-4o --tools
 ```
 
-Visit `http://localhost:8080` for the web UI or use the [CLI](https://gohector.dev/reference/cli/) and [REST API](https://gohector.dev/reference/api/).
-
-### Zero-Config Mode
-
-No YAML file needed—configure common use cases via command-line flags:
-
+RAG in one command (with MCP parsing optional):
 ```bash
-# Complete RAG system with Docling document parsing
 hector serve \
+  --model gpt-4o \
   --docs-folder ./documents \
-  --mcp-url http://docling:8000/mcp \
+  --mcp-url http://localhost:8000/mcp \
   --mcp-parser-tool convert_document_into_docling_document
 ```
 
-This instantly enables document indexing, semantic search, and RAG capabilities. See [Zero-Config Mode](https://gohector.dev/getting-started/quick-start/#zero-config-mode) for more options.
+## Quick Start (config file)
 
-## Features
+```bash
+cat > config.yaml <<'EOF'
+version: "2"
+llms:
+  default:
+    provider: openai
+    model: gpt-4o
+    api_key: ${OPENAI_API_KEY}
+agents:
+  assistant:
+    llm: default
+    tools: [search]
+server:
+  port: 8080
+EOF
 
-### Production & Enterprise
+hector serve --config config.yaml
+```
 
-- **Observability** - Prometheus metrics, OpenTelemetry tracing with Jaeger/Datadog/Honeycomb export, Grafana dashboards
-- **Security** - JWT authentication with JWKS (Auth0/Keycloak/Okta), agent-level security schemes (Bearer, API key), command sandboxing
-- **Distributed Configuration** - Hot reload from Consul/Etcd/ZooKeeper, zero-downtime configuration updates
-- **Rate Limiting** - Multi-layer time windows (minute/hour/day/week/month), token & request count tracking, per-session or per-user scoping, SQL or memory backend
-- **Session Persistence** - SQL-based storage (SQLite/Postgres), cross-session memory continuity, conversation history retrieval
-- **Human-in-the-Loop** - Tool approval workflows, async HITL with state persistence (survives restarts), A2A Protocol compliant (TASK_STATE_INPUT_REQUIRED)
-- **Checkpoint Recovery** - Crash recovery, rate limit resilience, long-running task support, event-driven and interval-based strategies
-- **TLS/HTTPS** - Built-in TLS support for A2A server and vector stores
-- **Health Checks** - Kubernetes-ready liveness/readiness probes
-
-### Core Agent Capabilities
-
-- **Memory Management** - Working memory strategies (buffer window, summary buffer), long-term memory with RAG, vector stores (Qdrant, Pinecone, Weaviate, Milvus, Chroma)
-- **Reasoning Engines** - Chain-of-thought (iterative reasoning with tool execution), Supervisor (multi-agent orchestration and task decomposition)
-- **Tools** - 10+ built-in tools (execute_command, write_file, read_file, search_replace, apply_patch, grep_search, search, evaluate_rag, todo_write, agent_call, web_request), MCP protocol support (150+ integrations via Composio), gRPC plugins for custom tools
-- **Multi-Agent Orchestration** - Supervisor reasoning engine, agent_call tool, A2A-native federation, external A2A agent integration
-- **Streaming** - Server-sent events (SSE) for real-time responses
-- **RAG & Semantic Search** - Document stores with automatic indexing, advanced search modes (hybrid, multi-query, HyDE), LLM-based re-ranking, multiple embedder support (Ollama, OpenAI, Cohere)
-- **LLM Providers** - OpenAI (GPT-4o, GPT-4o-mini), Anthropic (Claude Sonnet 4, Opus 4), Google Gemini (Gemini 2.0 Flash), Ollama (qwen3), custom providers via gRPC plugins
-- **A2A Protocol** - 100% v0.3.0 compliant, agent discovery, standardized messaging and streaming, federation support
+## Highlights
+- **Config-first & zero-config**: YAML for repeatability; flags for fast starts. JSON Schema available via `hector schema`.
+- **Programmatic API**: Build agents in Go (`pkg/api.go`), including sub-agents and agent-as-tool patterns.
+- **RAG & MCP**: Folder-based document stores, embedded vector search (chromem), optional MCP parsing chain.
+- **Persistence**: Tasks and sessions can use in-memory or SQL backends (sqlite/postgres/mysql via DSN).
+- **Observability**: Metrics endpoint and OTLP tracing options.
+- **Checkpointing**: Optional checkpoint/recovery strategies.
+- **Auth**: JWT/JWKS support at the server layer.
+- **A2A-native**: Uses a2a-go types and JSON-RPC/gRPC endpoints.
 
 ## Documentation
-
-Complete documentation, guides, and examples available at **[gohector.dev](https://gohector.dev)**:
-
 - [Getting Started](https://gohector.dev/getting-started/)
 - [Configuration Reference](https://gohector.dev/reference/configuration/)
-- [Production Deployment](https://gohector.dev/how-to/deploy-production/)
-- [API Reference](https://gohector.dev/reference/api/)
+- [CLI Reference](https://gohector.dev/reference/cli/)
 - [Core Concepts](https://gohector.dev/core-concepts/)
 
 ## License
 
-AGPL-3.0 License. See [LICENSE.md](LICENSE.md) for details.
+AGPL-3.0 for non-commercial use (see [LICENSE.md](LICENSE.md)). Commercial licensing available per LICENSE.md terms.

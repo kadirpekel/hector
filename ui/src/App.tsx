@@ -1,10 +1,12 @@
-import { useEffect } from 'react';
-import { Layout } from './components/Layout';
-import { ChatArea } from './components/Chat/ChatArea';
-import { useStore } from './store/useStore';
+import { useEffect } from "react";
+import { StudioMode } from "./components/ConfigBuilder/StudioMode";
+import { useStore } from "./store/useStore";
 
 function App() {
-  const { createSession, sessions, currentSessionId } = useStore();
+  // Use selectors for better performance - only subscribe to specific state slices
+  const createSession = useStore((state) => state.createSession);
+  const sessions = useStore((state) => state.sessions);
+  const currentSessionId = useStore((state) => state.currentSessionId);
 
   useEffect(() => {
     // Create a new session if none exists
@@ -13,11 +15,8 @@ function App() {
     }
   }, [currentSessionId, sessions, createSession]);
 
-  return (
-    <Layout>
-      <ChatArea />
-    </Layout>
-  );
+  // Studio Mode is the unified interface (config editor + chat)
+  return <StudioMode />;
 }
 
 export default App;

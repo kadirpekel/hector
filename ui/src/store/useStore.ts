@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
-import type { Session, Message, Agent, AgentCard } from "../types";
+import type { Session, Message, Agent, AgentCard, Widget } from "../types";
 import { StreamParser as StreamParserClass } from "../lib/stream-parser";
 import { DEFAULT_SUPPORTED_FILE_TYPES } from "../lib/constants";
 
@@ -72,6 +72,24 @@ interface AppState {
     messageId: string,
     widgetId: string,
   ) => boolean;
+
+  // Widget management for contextual blocks (thinking, tools, etc.)
+  addWidget: (
+    sessionId: string,
+    messageId: string,
+    widget: Widget,
+  ) => void;
+  updateWidget: (
+    sessionId: string,
+    messageId: string,
+    widgetId: string,
+    updates: Partial<Widget>,
+  ) => void;
+  addToContentOrder: (
+    sessionId: string,
+    messageId: string,
+    widgetId: string,
+  ) => void;
 }
 
 export const useStore = create<AppState>()(
@@ -141,11 +159,11 @@ export const useStore = create<AppState>()(
         // Update supported file types from agent card
         if (
           card &&
-          card.default_input_modes &&
-          Array.isArray(card.default_input_modes)
+          card.defaultInputModes &&
+          Array.isArray(card.defaultInputModes)
         ) {
           // Filter to only file/media types (exclude text/plain, application/json)
-          const fileTypes = card.default_input_modes.filter(
+          const fileTypes = card.defaultInputModes.filter(
             (mode: string) =>
               mode.startsWith("image/") ||
               mode.startsWith("video/") ||
@@ -306,6 +324,104 @@ export const useStore = create<AppState>()(
 
         const widget = message.widgets.find((w) => w.id === widgetId);
         return widget?.isExpanded ?? false;
+      },
+
+      // Add a new widget to a message
+      addWidget: (sessionId, messageId, widget) => {
+        set((state) => {
+          const session = state.sessions[sessionId];
+          if (!session) return state;
+
+          const message = session.messages.find((m) => m.id === messageId);
+          if (!message) return state;
+
+          // Check if widget already exists
+          if (message.widgets.some((w) => w.id === widget.id)) {
+            return state; // Don't add duplicate
+          }
+
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...session,
+                messages: session.messages.map((m) =>
+                  m.id === messageId
+                    ? { ...m, widgets: [...m.widgets, widget] }
+                    : m
+                ),
+              },
+            },
+          };
+        });
+      },
+
+      // Update an existing widget
+      updateWidget: (sessionId, messageId, widgetId, updates) => {
+        set((state) => {
+          const session = state.sessions[sessionId];
+          if (!session) return state;
+
+          const message = session.messages.find((m) => m.id === messageId);
+          if (!message) return state;
+
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...session,
+                messages: session.messages.map((m) =>
+                  m.id === messageId
+                    ? {
+                        ...m,
+                        widgets: m.widgets.map((w) =>
+                          w.id === widgetId
+                            ? ({ ...w, ...updates } as Widget)
+                            : w
+                        ),
+                      }
+                    : m
+                ),
+              },
+            },
+          };
+        });
+      },
+
+      // Add widget ID to content order for proper rendering sequence
+      addToContentOrder: (sessionId, messageId, widgetId) => {
+        set((state) => {
+          const session = state.sessions[sessionId];
+          if (!session) return state;
+
+          const message = session.messages.find((m) => m.id === messageId);
+          if (!message) return state;
+
+          const currentOrder = message.metadata?.contentOrder || [];
+          if (currentOrder.includes(widgetId)) {
+            return state; // Already in order
+          }
+
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...session,
+                messages: session.messages.map((m) =>
+                  m.id === messageId
+                    ? {
+                        ...m,
+                        metadata: {
+                          ...m.metadata,
+                          contentOrder: [...currentOrder, widgetId],
+                        },
+                      }
+                    : m
+                ),
+              },
+            },
+          };
+        });
       },
     }),
     {

@@ -1,15 +1,38 @@
+// A2A spec compliant Agent type (from discovery endpoint)
 export interface Agent {
   name: string;
   url: string;
-  description?: string;
-}
-
-export interface AgentCard {
-  name: string;
   description: string;
   version: string;
-  default_input_modes: string[];
-  capabilities?: string[];
+  protocolVersion?: string;
+  preferredTransport?: string;
+  capabilities?: AgentCapabilities;
+  defaultInputModes?: string[];
+  defaultOutputModes?: string[];
+  skills?: AgentSkill[];
+}
+
+// A2A spec compliant AgentCapabilities
+export interface AgentCapabilities {
+  streaming?: boolean;
+  pushNotifications?: boolean;
+  stateTransitionHistory?: boolean;
+}
+
+// A2A spec compliant AgentSkill
+export interface AgentSkill {
+  id: string;
+  name: string;
+  description: string;
+  tags?: string[];
+  examples?: string[];
+  inputModes?: string[];
+  outputModes?: string[];
+}
+
+// A2A spec compliant AgentCard (full details)
+export interface AgentCard extends Agent {
+  // AgentCard is Agent with all fields populated
 }
 
 export type Role = "user" | "agent" | "system";
@@ -56,9 +79,15 @@ export interface ThinkingWidgetData {
 }
 
 export interface ApprovalWidgetData {
-  toolName: string;
-  toolInput: Record<string, unknown>;
+  // Required for specific tool approval
+  toolName?: string;
+  toolInput?: Record<string, unknown>;
   options?: string[];
+  
+  // HITL-specific fields
+  task_id?: string;
+  tool_call_ids?: string[];
+  prompt?: string;
 }
 
 export interface TextWidgetData {
