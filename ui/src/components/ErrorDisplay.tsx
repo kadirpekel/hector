@@ -5,7 +5,9 @@ import { cn } from '../lib/utils';
 import { TIMING } from '../lib/constants';
 
 export const ErrorDisplay: React.FC = () => {
-    const { error, setError } = useStore();
+    // Use selectors for better performance - only subscribe to specific state slices
+    const error = useStore((state) => state.error);
+    const setError = useStore((state) => state.setError);
 
     useEffect(() => {
         if (error) {

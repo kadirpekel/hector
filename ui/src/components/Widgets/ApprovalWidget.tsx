@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState, memo } from "react";
 import { Shield, Check, X, ChevronDown, Loader2, Sparkles } from "lucide-react";
 import type { ApprovalWidget as ApprovalWidgetType } from "../../types";
 import { cn } from "../../lib/utils";
@@ -20,22 +20,26 @@ interface ApprovalWidgetProps {
   shouldAnimate?: boolean;
 }
 
-export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
+/**
+ * ApprovalWidget handles HITL tool approval requests.
+ * Memoized to prevent re-renders when parent updates but widget props unchanged.
+ */
+export const ApprovalWidget = memo<ApprovalWidgetProps>(function ApprovalWidget({
   widget,
   sessionId,
   onExpansionChange,
   shouldAnimate = false,
-}) => {
+}) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toolName, toolInput } = widget.data;
   const { status, decision } = widget;
-  const {
-    updateMessage,
-    sessions,
-    selectedAgent,
-    setActiveStreamParser,
-    setIsGenerating,
-  } = useStore();
+  
+  // Use selectors for better performance - only subscribe to what we need
+  const updateMessage = useStore((state) => state.updateMessage);
+  const sessions = useStore((state) => state.sessions);
+  const selectedAgent = useStore((state) => state.selectedAgent);
+  const setActiveStreamParser = useStore((state) => state.setActiveStreamParser);
+  const setIsGenerating = useStore((state) => state.setIsGenerating);
 
   // Use shared expansion hook - approval widgets auto-expand when pending
   const { isExpanded, isActive, isCompleted, handleToggle } =
@@ -72,11 +76,6 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
         throw new Error("Session or agent not found");
       }
 
-      const taskId = session.taskId;
-      if (!taskId) {
-        throw new Error("Task ID not found - cannot send approval decision");
-      }
-
       // Update widget state locally first
       const approvalMessage = session.messages.find((m) =>
         m.widgets.some((w) => w.id === widget.id),
@@ -92,19 +91,39 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
       );
       updateMessage(sessionId, approvalMessage.id, { widgets: updatedWidgets });
 
-      // Send decision to backend via message/stream endpoint with taskId
+      // Send decision to backend via message/stream
+      // A2A spec: use same contextId for multi-turn, no taskId in message
+      // Use structured DataPart format for better tool_call_id matching
+      const toolCallIDs = widget.data.tool_call_ids || [];
+      const taskId = widget.data.task_id;
+      
       const requestBody = {
         jsonrpc: "2.0",
         method: "message/stream",
         params: {
-          request: {
+          message: {
             contextId: session.contextId,
-            taskId: taskId,
             role: "user",
             parts: [
-              {
-                text: decisionValue, // Backend parses "approve" or "deny" from text
-              },
+              // Structured approval (preferred - includes tool_call_id and tool_name)
+              ...(toolCallIDs.length > 0
+                ? toolCallIDs.map((toolCallID: string) => ({
+                    kind: "data",
+                    data: {
+                      type: "tool_approval",
+                      decision: decisionValue,
+                      tool_call_id: toolCallID,
+                      ...(widget.data.toolName ? { tool_name: widget.data.toolName } : {}),
+                      ...(taskId ? { task_id: taskId } : {}),
+                    },
+                  }))
+                : // Fallback: simple text approval (server also supports this)
+                  [
+                    {
+                      kind: "text",
+                      text: decisionValue,
+                    },
+                  ]),
             ],
           },
         },
@@ -117,7 +136,8 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
       setIsGenerating(true);
 
       try {
-        await parser.stream(`${selectedAgent.url}/stream`, requestBody);
+        // A2A spec: POST to agent's URL - streaming is determined by method name
+        await parser.stream(selectedAgent.url, requestBody);
       } catch (streamError: unknown) {
         if (streamError instanceof Error && streamError.name !== "AbortError") {
           throw streamError;
@@ -291,4 +311,4 @@ export const ApprovalWidget: React.FC<ApprovalWidgetProps> = ({
       </div>
     </div>
   );
-};
+});

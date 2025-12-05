@@ -4,7 +4,10 @@ import { ChatArea } from './components/Chat/ChatArea';
 import { useStore } from './store/useStore';
 
 function App() {
-  const { createSession, sessions, currentSessionId } = useStore();
+  // Use selectors for better performance - only subscribe to specific state slices
+  const createSession = useStore((state) => state.createSession);
+  const sessions = useStore((state) => state.sessions);
+  const currentSessionId = useStore((state) => state.currentSessionId);
 
   useEffect(() => {
     // Create a new session if none exists

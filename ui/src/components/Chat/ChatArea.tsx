@@ -5,7 +5,10 @@ import { useStore } from "../../store/useStore";
 import { SCROLL } from "../../lib/constants";
 
 export const ChatArea: React.FC = () => {
-  const { currentSessionId, sessions, isGenerating } = useStore();
+  // Use selectors for better performance - only subscribe to specific state slices
+  const currentSessionId = useStore((state) => state.currentSessionId);
+  const sessions = useStore((state) => state.sessions);
+  const isGenerating = useStore((state) => state.isGenerating);
   const session = currentSessionId ? sessions[currentSessionId] : null;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);

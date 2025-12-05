@@ -1,0 +1,50 @@
+# Hector v2 Configuration - Ollama Example
+# Uses local Ollama instance for LLM (no API key required)
+
+version: "2"
+name: ollama-assistant
+description: Example using Ollama as the LLM provider
+
+llms:
+  default:
+    provider: ollama
+    model: llama3.2
+    # base_url: http://localhost:11434  # Default Ollama address
+    max_tokens: 4096
+
+# For thinking models (like deepseek-r1):
+# llms:
+#   default:
+#     provider: ollama
+#     model: deepseek-r1
+#     thinking:
+#       enabled: true
+
+# For code models:
+# llms:
+#   default:
+#     provider: ollama
+#     model: codellama:7b
+
+# For vision models:
+# llms:
+#   default:
+#     provider: ollama
+#     model: llava
+
+agents:
+  assistant:
+    name: Assistant
+    description: A helpful AI assistant powered by Ollama
+    llm: default
+    streaming: true
+    instruction: |
+      You are a helpful AI assistant running locally via Ollama.
+      Be concise and friendly in your responses.
+
+server:
+  port: 8080
+  cors:
+    allowed_origins:
+      - "*"
+

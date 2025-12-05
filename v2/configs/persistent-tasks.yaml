@@ -1,0 +1,108 @@
+# Example: Persistent Task Storage
+#
+# This configuration demonstrates how to enable persistent task storage
+# for A2A task state. Tasks are stored in a SQL database instead of
+# being lost on server restart.
+#
+# Supported databases: sqlite, postgres, mysql
+#
+# ============================================================================
+# ZERO-CONFIG MODE (CLI flags)
+# ============================================================================
+#
+# For quick setup without a config file, use CLI flags:
+#
+#   # SQLite with defaults (.hector/hector.db)
+#   hector serve --provider anthropic --task-store sqlite
+#
+#   # PostgreSQL with defaults (localhost:5432/hector)
+#   hector serve --provider anthropic --task-store postgres
+#
+#   # MySQL with defaults (localhost:3306/hector)
+#   hector serve --provider anthropic --task-store mysql
+#
+#   # Custom database path
+#   hector serve --provider anthropic --task-store sqlite --task-db ./data/my.db
+#
+# ============================================================================
+# CONFIG FILE MODE (below)
+# ============================================================================
+
+version: "2"
+name: persistent-tasks-example
+description: Example configuration with persistent task storage
+
+# Define database connections
+# These can be referenced by components that need persistence
+databases:
+  # SQLite for local development (simple, no setup required)
+  local:
+    driver: sqlite
+    database: ./.hector/tasks.db  # File path for SQLite
+
+  # PostgreSQL for production
+  # postgres:
+  #   driver: postgres
+  #   host: localhost
+  #   port: 5432
+  #   database: hector_tasks
+  #   username: ${DB_USER}
+  #   password: ${DB_PASSWORD}
+  #   ssl_mode: disable
+  #   max_conns: 50
+  #   max_idle: 10
+
+  # MySQL example
+  # mysql:
+  #   driver: mysql
+  #   host: localhost
+  #   port: 3306
+  #   database: hector_tasks
+  #   username: ${DB_USER}
+  #   password: ${DB_PASSWORD}
+  #   max_conns: 50
+  #   max_idle: 10
+
+# LLM configuration
+llms:
+  default:
+    provider: anthropic
+    model: claude-sonnet-4-20250514
+    api_key: ${ANTHROPIC_API_KEY}
+
+# Agent configuration
+agents:
+  assistant:
+    llm: default
+    description: A helpful AI assistant with persistent task history
+    instruction: |
+      You are a helpful AI assistant. You can help users with various tasks.
+      Your conversation history and task states are persisted across server restarts.
+
+# Server configuration
+server:
+  port: 8080
+  
+  # Task persistence configuration
+  tasks:
+    # Backend type: "inmemory" (default) or "sql"
+    backend: sql
+    
+    # Database reference (required when backend is "sql")
+    # Must match a key in the "databases" section above
+    database: local
+
+# Note: If you don't specify the "tasks" section, or set backend to "inmemory",
+# tasks will be stored in memory and lost on server restart.
+#
+# In-memory mode (default):
+#   server:
+#     port: 8080
+#     # No tasks config = in-memory
+#
+# Or explicitly:
+#   server:
+#     port: 8080
+#     tasks:
+#       backend: inmemory
+

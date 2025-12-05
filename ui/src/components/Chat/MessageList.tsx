@@ -16,7 +16,8 @@ const hasVisibleContent = (message: Message): boolean => {
 };
 
 export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
-  const { isGenerating } = useStore();
+  // Use selector for better performance - only subscribe to isGenerating
+  const isGenerating = useStore((state) => state.isGenerating);
 
   // Filter out empty agent messages (placeholders that haven't received content yet)
   const visibleMessages = messages.filter(

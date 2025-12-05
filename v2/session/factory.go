@@ -1,0 +1,66 @@
+// Copyright 2025 Kadir Pekel
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package session
+
+import (
+	"fmt"
+
+	"github.com/kadirpekel/hector/v2/config"
+)
+
+// NewSessionServiceFromConfig creates a session Service based on configuration.
+// DBPool is required for SQL backends to share connections and prevent lock errors.
+// Returns InMemoryService if no session persistence is configured.
+//
+// Example config:
+//
+//	databases:
+//	  default:
+//	    driver: sqlite
+//	    database: ./.hector/hector.db
+//
+//	server:
+//	  sessions:
+//	    backend: sql
+//	    database: default
+func NewSessionServiceFromConfig(cfg *config.Config, pool *config.DBPool) (Service, error) {
+	// Check if sessions config exists and is SQL
+	if cfg.Server.Sessions == nil || cfg.Server.Sessions.IsInMemory() {
+		// Return in-memory service (default)
+		return InMemoryService(), nil
+	}
+
+	if !cfg.Server.Sessions.IsSQL() {
+		return nil, fmt.Errorf("unknown sessions backend: %s", cfg.Server.Sessions.Backend)
+	}
+
+	// DBPool is required for SQL backends
+	if pool == nil {
+		return nil, fmt.Errorf("DBPool is required for SQL session backend")
+	}
+
+	// Get database reference
+	dbName := cfg.Server.Sessions.Database
+	dbCfg, ok := cfg.GetDatabase(dbName)
+	if !ok {
+		return nil, fmt.Errorf("database %q not found", dbName)
+	}
+
+	db, err := pool.Get(dbCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get database connection: %w", err)
+	}
+	return NewSQLSessionService(db, dbCfg.Dialect())
+}

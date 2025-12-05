@@ -11,7 +11,10 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
-    const { sidebarVisible, setSidebarVisible, minimalMode } = useStore();
+    // Use selectors for better performance - only subscribe to specific state slices
+    const sidebarVisible = useStore((state) => state.sidebarVisible);
+    const setSidebarVisible = useStore((state) => state.setSidebarVisible);
+    const minimalMode = useStore((state) => state.minimalMode);
 
     return (
         <div className="flex h-screen w-full bg-gradient-to-br from-hector-darker to-black text-gray-100 overflow-hidden font-sans">

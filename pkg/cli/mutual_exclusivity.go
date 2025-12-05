@@ -14,6 +14,8 @@ var zeroConfigFlagNames = []string{
 	"--role",
 	"--instruction",
 	"--tools",
+	"--thinking",
+	"--thinking-budget",
 	"--mcp-url",
 	"--docs-folder",
 	"--embedder-model",
@@ -53,7 +55,7 @@ func ValidateConfigMutualExclusivity(args []string) error {
 				// Handle --flag value format
 				matched = true
 				// For boolean flags, they don't need a value
-				if zcFlag == "--tools" || zcFlag == "--observe" {
+				if zcFlag == "--tools" || zcFlag == "--observe" || zcFlag == "--thinking" {
 					value = "true"
 				} else if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
 					value = args[i+1]

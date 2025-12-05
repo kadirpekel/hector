@@ -36,12 +36,16 @@ help:
 	@echo "  validate-configs    - Validate all example configs"
 	@echo "  build-ui            - Build the UI and copy to static assets"
 
-# Build UI
+# Build UI and copy to both v1 and v2 static directories
 build-ui:
 	@echo "Building UI..."
 	cd ui && npm install && npm run build
 	@echo "Copying UI to static assets..."
+	@mkdir -p pkg/transport/static
+	@mkdir -p v2/server/static
 	cp ui/dist/index.html pkg/transport/static/index.html
+	cp ui/dist/index.html v2/server/static/index.html
+	@echo "✅ UI copied to pkg/transport/static/ and v2/server/static/"
 
 # Build the binary (development with debug symbols)
 build: build-ui
@@ -227,3 +231,65 @@ validate-config-examples: validate-configs
 a2a-tests:
 	@echo "🧪 Running A2A compliance tests..."
 	@go test -v ./pkg/a2a -run TestCompliance
+
+# ============================================================================
+# Hector v2 Targets
+# ============================================================================
+.PHONY: build-v2 build-v2-release install-v2 test-v2 run-v2
+
+LDFLAGS_V2_VERSION := -X 'github.com/kadirpekel/hector/v2.BuildDate=$(BUILD_DATE)' -X 'github.com/kadirpekel/hector/v2.GitCommit=$(GIT_COMMIT)'
+LDFLAGS_V2_RELEASE := -s -w $(LDFLAGS_V2_VERSION)
+
+# Build hector v2 (development, with UI)
+build-v2: build-ui
+	@echo "Building hector v2 (development)..."
+	go build -ldflags "$(LDFLAGS_V2_VERSION)" -o hector-v2 ./v2/cmd/hector
+	@ls -lh hector-v2
+
+# Build hector v2 quickly without rebuilding UI (for development)
+build-v2-quick:
+	@echo "Building hector v2 (quick, no UI rebuild)..."
+	go build -ldflags "$(LDFLAGS_V2_VERSION)" -o hector-v2 ./v2/cmd/hector
+	@ls -lh hector-v2
+
+# Build hector v2 (production, stripped)
+build-v2-release: build-ui
+	@echo "Building hector v2 (production - stripped)..."
+	go build -ldflags "$(LDFLAGS_V2_RELEASE)" -o hector-v2 ./v2/cmd/hector
+	@ls -lh hector-v2
+	@echo "Binary size optimized for production (debug symbols stripped)"
+
+# Install hector v2 to GOPATH/bin
+install-v2:
+	@echo "Installing hector v2 (production)..."
+	go install -ldflags "$(LDFLAGS_V2_RELEASE)" ./v2/cmd/hector
+
+# Run v2 tests
+test-v2:
+	@echo "Running v2 tests..."
+	go test -v ./v2/...
+
+# Run v2 example
+run-v2:
+	@echo "Running v2 weather example..."
+	go run ./v2/examples/weather "What is the weather in Berlin?"
+
+# Build v2 release binaries for multiple platforms
+release-v2:
+	@echo "Building v2 release binaries (stripped for production)..."
+	@mkdir -p dist
+	
+	# Linux
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS_V2_RELEASE)" -o dist/hector-v2-linux-amd64 ./v2/cmd/hector
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS_V2_RELEASE)" -o dist/hector-v2-linux-arm64 ./v2/cmd/hector
+	
+	# macOS
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS_V2_RELEASE)" -o dist/hector-v2-darwin-amd64 ./v2/cmd/hector
+	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS_V2_RELEASE)" -o dist/hector-v2-darwin-arm64 ./v2/cmd/hector
+	
+	# Windows
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS_V2_RELEASE)" -o dist/hector-v2-windows-amd64.exe ./v2/cmd/hector
+	
+	@echo ""
+	@echo "v2 release binaries built in dist/ (stripped):"
+	@ls -lh dist/hector-v2-*

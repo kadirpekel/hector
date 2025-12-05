@@ -1,0 +1,621 @@
+// Copyright 2025 Kadir Pekel
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package server
+
+import (
+	"context"
+	_ "embed"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/a2aproject/a2a-go/a2a"
+	"github.com/a2aproject/a2a-go/a2agrpc"
+	"github.com/a2aproject/a2a-go/a2asrv"
+
+	"github.com/kadirpekel/hector/v2/auth"
+	"github.com/kadirpekel/hector/v2/config"
+	"github.com/kadirpekel/hector/v2/observability"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+)
+
+//go:embed static/index.html
+var webUIHTML []byte
+
+// HTTPServer is the Hector HTTP server.
+// Uses a2a-go native handlers for A2A protocol compliance.
+type HTTPServer struct {
+	serverCfg *config.ServerConfig
+	appCfg    *config.Config
+	server    *http.Server
+
+	// gRPC server (only when Transport == TransportGRPC)
+	grpcServer *grpc.Server
+	grpcListener net.Listener
+
+	// TaskStore for persistent task storage (nil = in-memory)
+	taskStore a2asrv.TaskStore
+
+	// Auth: JWT validator and a2a-go interceptor
+	authValidator   auth.TokenValidator
+	authInterceptor *auth.Interceptor
+
+	// Observability: tracing and metrics
+	observability *observability.Manager
+
+	// Per-agent: JSON-RPC handler + agent card handler (both from a2a-go)
+	agentJSONRPCHandlers map[string]http.Handler
+	agentCardHandlers    map[string]http.Handler
+	agentCards           map[string]*a2a.AgentCard
+
+	// Per-agent: gRPC handlers (only when Transport == TransportGRPC)
+	agentGRPCHandlers map[string]*a2agrpc.Handler
+}
+
+// HTTPServerOption configures the HTTP server.
+type HTTPServerOption func(*HTTPServer)
+
+// WithTaskStore sets the task store for persistent task storage.
+// If not set, a2a-go uses its internal in-memory store.
+func WithTaskStore(store a2asrv.TaskStore) HTTPServerOption {
+	return func(s *HTTPServer) {
+		s.taskStore = store
+	}
+}
+
+// WithAuthValidator sets the JWT validator for authentication.
+// When set, HTTP requests will be validated and claims passed to agents.
+func WithAuthValidator(validator auth.TokenValidator) HTTPServerOption {
+	return func(s *HTTPServer) {
+		s.authValidator = validator
+	}
+}
+
+// WithObservability sets the observability manager for tracing and metrics.
+func WithObservability(obs *observability.Manager) HTTPServerOption {
+	return func(s *HTTPServer) {
+		s.observability = obs
+	}
+}
+
+// NewHTTPServer creates a new HTTP server from config.
+// executors is a map of agent name to its executor (one per agent).
+func NewHTTPServer(appCfg *config.Config, executors map[string]*Executor, opts ...HTTPServerOption) *HTTPServer {
+	serverCfg := &appCfg.Server
+
+	if serverCfg.Host == "" || serverCfg.Port == 0 {
+		serverCfg.SetDefaults()
+	}
+
+	s := &HTTPServer{
+		serverCfg:            serverCfg,
+		appCfg:               appCfg,
+		agentJSONRPCHandlers: make(map[string]http.Handler),
+		agentCardHandlers:    make(map[string]http.Handler),
+		agentCards:           make(map[string]*a2a.AgentCard),
+		agentGRPCHandlers:    make(map[string]*a2agrpc.Handler),
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	// Build handlers using a2a-go native functions
+	s.buildAgentHandlers(executors)
+
+	return s
+}
+
+// buildAgentHandlers creates a2a-go native handlers for each configured agent.
+func (s *HTTPServer) buildAgentHandlers(executors map[string]*Executor) {
+	baseURL := "http://" + s.serverCfg.Address()
+
+	// Create auth interceptor if validator is configured
+	if s.authValidator != nil {
+		requireAuth := true
+		if s.serverCfg.Auth != nil {
+			requireAuth = s.serverCfg.Auth.IsRequireAuth()
+		}
+		s.authInterceptor = auth.NewInterceptor(requireAuth)
+	}
+
+	for name, agentCfg := range s.appCfg.Agents {
+		// Build A2A AgentCard
+		agentURL := baseURL + "/agents/" + name
+		card := s.buildAgentCard(name, agentCfg, agentURL)
+		s.agentCards[name] = card
+
+		// Get per-agent executor
+		executor, ok := executors[name]
+		if !ok {
+			slog.Warn("No executor for agent, skipping", "agent", name)
+			continue
+		}
+
+		// Create a2a-go native JSON-RPC handler with agent's executor
+		// Include TaskStore if configured for persistent task storage
+		var handlerOpts []a2asrv.RequestHandlerOption
+		if s.taskStore != nil {
+			handlerOpts = append(handlerOpts, a2asrv.WithTaskStore(s.taskStore))
+		}
+
+		// Add auth interceptor to bridge HTTP auth to a2a-go CallContext
+		if s.authInterceptor != nil {
+			handlerOpts = append(handlerOpts, a2asrv.WithCallInterceptor(s.authInterceptor))
+		}
+
+		requestHandler := a2asrv.NewHandler(executor, handlerOpts...)
+
+		// Create transport-specific handlers based on config
+		if s.serverCfg.Transport == config.TransportGRPC {
+			// Create gRPC handler
+			s.agentGRPCHandlers[name] = a2agrpc.NewHandler(requestHandler)
+		} else {
+			// Create JSON-RPC handler (default)
+			s.agentJSONRPCHandlers[name] = a2asrv.NewJSONRPCHandler(requestHandler)
+		}
+
+		// Create a2a-go native agent card handler
+		s.agentCardHandlers[name] = a2asrv.NewStaticAgentCardHandler(card)
+	}
+}
+
+// buildAgentCard creates an A2A-compliant agent card.
+func (s *HTTPServer) buildAgentCard(name string, cfg *config.AgentConfig, url string) *a2a.AgentCard {
+	// Ensure input/output modes have defaults
+	inputModes := cfg.InputModes
+	if len(inputModes) == 0 {
+		inputModes = []string{"text/plain"}
+	}
+	outputModes := cfg.OutputModes
+	if len(outputModes) == 0 {
+		outputModes = []string{"text/plain"}
+	}
+
+	// Build skills
+	skills := s.buildAgentSkills(cfg)
+	if len(skills) == 0 {
+		skills = []a2a.AgentSkill{{
+			ID:          name,
+			Name:        cfg.GetDisplayName(),
+			Description: cfg.Description,
+			Tags:        []string{"general", "assistant"},
+		}}
+	}
+
+	// Version handling
+	version := s.appCfg.Version
+	if version == "" {
+		version = "2.0.0"
+	}
+
+	card := &a2a.AgentCard{
+		Name:               cfg.GetDisplayName(),
+		Description:        cfg.Description,
+		URL:                url,
+		Version:            version,
+		ProtocolVersion:    "1.0",
+		DefaultInputModes:  inputModes,
+		DefaultOutputModes: outputModes,
+		Skills:             skills,
+		Capabilities: a2a.AgentCapabilities{
+			Streaming:              true,
+			PushNotifications:      false,
+			StateTransitionHistory: false,
+		},
+		PreferredTransport: a2a.TransportProtocolJSONRPC,
+		Provider: &a2a.AgentProvider{
+			Org: "Hector",
+			URL: "https://github.com/kadirpekel/hector",
+		},
+	}
+
+	// Add security schemes when auth is enabled (A2A spec section 5.5)
+	if s.authValidator != nil && s.serverCfg.Auth != nil && s.serverCfg.Auth.IsEnabled() {
+		card.SecuritySchemes = a2a.NamedSecuritySchemes{
+			"BearerAuth": a2a.HTTPAuthSecurityScheme{
+				Scheme:       "bearer",
+				BearerFormat: "JWT",
+				Description:  "JWT Bearer token authentication",
+			},
+		}
+		card.Security = []a2a.SecurityRequirements{
+			{"BearerAuth": a2a.SecuritySchemeScopes{}},
+		}
+	}
+
+	return card
+}
+
+// buildAgentSkills converts config skills to A2A skills.
+func (s *HTTPServer) buildAgentSkills(cfg *config.AgentConfig) []a2a.AgentSkill {
+	var skills []a2a.AgentSkill
+	for _, skill := range cfg.Skills {
+		skills = append(skills, a2a.AgentSkill{
+			ID:          skill.ID,
+			Name:        skill.Name,
+			Description: skill.Description,
+			Tags:        skill.Tags,
+			Examples:    skill.Examples,
+		})
+	}
+	return skills
+}
+
+// Start starts the HTTP server.
+func (s *HTTPServer) Start(ctx context.Context) error {
+	mux := s.setupRoutes()
+
+	// Apply middleware chain (order: observability -> logging -> cors -> auth -> routes)
+	// Observability wraps everything so all requests are traced/measured
+	var handler http.Handler = mux
+
+	// Auth middleware: validates JWT and stores claims in context
+	// Must be applied before CORS so OPTIONS preflight requests pass through
+	if s.authValidator != nil {
+		excludedPaths := []string{"/", "/health", "/.well-known/agent-card.json", "/agents"}
+		if s.serverCfg.Auth != nil && len(s.serverCfg.Auth.ExcludedPaths) > 0 {
+			excludedPaths = s.serverCfg.Auth.ExcludedPaths
+		}
+		// Also exclude metrics endpoint from auth
+		if s.observability != nil && s.observability.MetricsEnabled() {
+			excludedPaths = append(excludedPaths, s.observability.MetricsEndpoint())
+		}
+		handler = auth.MiddlewareWithExclusions(s.authValidator, excludedPaths)(handler)
+		slog.Info("Authentication enabled", "excluded_paths", excludedPaths)
+	}
+
+	handler = s.corsMiddleware(handler)
+	handler = s.loggingMiddleware(handler)
+
+	// Observability middleware (outermost for complete request coverage)
+	if s.observability != nil {
+		handler = observability.HTTPMiddleware(s.observability.Tracer(), s.observability.Metrics())(handler)
+	}
+
+	s.server = &http.Server{
+		Addr:         s.serverCfg.Address(),
+		Handler:      handler,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 120 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	slog.Info("HTTP server starting", "address", s.serverCfg.Address())
+
+	errCh := make(chan error, 1)
+	go func() {
+		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+		close(errCh)
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		return s.Shutdown(context.Background())
+	}
+}
+
+// startGRPCServer starts the gRPC server.
+func (s *HTTPServer) startGRPCServer(ctx context.Context, errCh chan error) error {
+	// Create gRPC server
+	var opts []grpc.ServerOption
+
+	// Add observability interceptors if configured
+	if s.observability != nil {
+		// TODO: Add gRPC interceptors for observability when available
+	}
+
+	// Add auth interceptors if configured
+	if s.authValidator != nil {
+		// TODO: Add gRPC interceptors for auth when available
+	}
+
+	s.grpcServer = grpc.NewServer(opts...)
+
+	// Register all agent handlers with gRPC server
+	for name, handler := range s.agentGRPCHandlers {
+		handler.RegisterWith(s.grpcServer)
+		slog.Debug("Registered gRPC handler", "agent", name)
+	}
+
+	// Enable reflection for grpcurl and other tools
+	reflection.Register(s.grpcServer)
+
+	// Start listening
+	listener, err := net.Listen("tcp", s.serverCfg.GRPCAddress())
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s: %w", s.serverCfg.GRPCAddress(), err)
+	}
+	s.grpcListener = listener
+
+	slog.Info("gRPC server starting", "address", s.serverCfg.GRPCAddress())
+
+	go func() {
+		if err := s.grpcServer.Serve(listener); err != nil {
+			errCh <- fmt.Errorf("gRPC server error: %w", err)
+		}
+	}()
+
+	return nil
+}
+
+// Shutdown gracefully shuts down the server(s).
+func (s *HTTPServer) Shutdown(ctx context.Context) error {
+	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var errs []error
+
+	// Shutdown HTTP server
+	if s.server != nil {
+		slog.Info("HTTP server shutting down")
+		if err := s.server.Shutdown(shutdownCtx); err != nil {
+			errs = append(errs, fmt.Errorf("HTTP shutdown error: %w", err))
+		}
+	}
+
+	// Shutdown gRPC server
+	if s.grpcServer != nil {
+		slog.Info("gRPC server shutting down")
+		stopped := make(chan struct{})
+		go func() {
+			s.grpcServer.GracefulStop()
+			close(stopped)
+		}()
+
+		select {
+		case <-stopped:
+			slog.Info("gRPC server stopped gracefully")
+		case <-shutdownCtx.Done():
+			slog.Warn("gRPC graceful stop timeout, forcing shutdown")
+			s.grpcServer.Stop()
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("shutdown errors: %v", errs)
+	}
+
+	return nil
+}
+
+// Address returns the HTTP server address.
+func (s *HTTPServer) Address() string {
+	return s.serverCfg.Address()
+}
+
+// GRPCAddress returns the gRPC server address (if enabled).
+func (s *HTTPServer) GRPCAddress() string {
+	if s.serverCfg.Transport == config.TransportGRPC {
+		return s.serverCfg.GRPCAddress()
+	}
+	return ""
+}
+
+// getPreferredTransport returns the A2A transport protocol based on config.
+func (s *HTTPServer) getPreferredTransport() a2a.TransportProtocol {
+	if s.serverCfg.Transport == config.TransportGRPC {
+		return a2a.TransportProtocolGRPC
+	}
+	return a2a.TransportProtocolJSONRPC
+}
+
+// setupRoutes configures the HTTP routes.
+// A2A spec compliant paths:
+//   - GET  /.well-known/agent-card.json  → Default agent card (a2a-go native)
+//   - GET  /agents                       → Discovery (Hector extension)
+//   - GET  /agents/{name}                → Agent card (a2a-go native)
+//   - POST /agents/{name}                → JSON-RPC (a2a-go native)
+//   - GET  /agents/{name}/.well-known/agent-card.json → Agent card (a2a-go native)
+func (s *HTTPServer) setupRoutes() *http.ServeMux {
+	mux := http.NewServeMux()
+
+	// Web UI at root (GET only)
+	mux.HandleFunc("/", s.handleRoot)
+
+	// Health check
+	mux.HandleFunc("/health", s.handleHealth)
+
+	// Prometheus metrics endpoint (if enabled)
+	if s.observability != nil && s.observability.MetricsEnabled() {
+		metricsEndpoint := s.observability.MetricsEndpoint()
+		mux.Handle(metricsEndpoint, s.observability.MetricsHandler())
+		slog.Info("Metrics endpoint enabled", "path", metricsEndpoint)
+	}
+
+	// A2A spec: server-level well-known agent card (returns first/default agent)
+	// This is what single-agent clients expect per spec section 5.3
+	mux.HandleFunc(a2asrv.WellKnownAgentCardPath, s.handleDefaultAgentCard)
+
+	// Agent discovery - Hector extension (returns all agent cards)
+	mux.HandleFunc("/agents", s.handleDiscovery)
+
+	// Per-agent routes using a2a-go native handlers
+	mux.HandleFunc("/agents/", s.handleAgentRoutes)
+
+	return mux
+}
+
+// handleRoot serves Web UI for GET.
+func (s *HTTPServer) handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(webUIHTML)
+		return
+	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// handleHealth returns server health status.
+func (s *HTTPServer) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// handleDefaultAgentCard serves the default agent's card at the server-level well-known path.
+// Per A2A spec 5.3: "https://{server_domain}/.well-known/agent-card.json"
+// For multi-agent servers, this returns the first configured agent.
+func (s *HTTPServer) handleDefaultAgentCard(w http.ResponseWriter, r *http.Request) {
+	// Get the first/default agent's card handler
+	for _, handler := range s.agentCardHandlers {
+		handler.ServeHTTP(w, r)
+		return
+	}
+	http.Error(w, "No agents configured", http.StatusNotFound)
+}
+
+// handleDiscovery returns all agents (Hector extension).
+func (s *HTTPServer) handleDiscovery(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	agents := make([]*a2a.AgentCard, 0, len(s.agentCards))
+	for _, card := range s.agentCards {
+		agents = append(agents, card)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"agents": agents,
+		"total":  len(agents),
+	})
+}
+
+// handleAgentRoutes routes to a2a-go native handlers.
+func (s *HTTPServer) handleAgentRoutes(w http.ResponseWriter, r *http.Request) {
+	// Parse: /agents/{name}[/...]
+	path := strings.TrimPrefix(r.URL.Path, "/agents/")
+	if path == "" {
+		http.Error(w, "Agent name required", http.StatusBadRequest)
+		return
+	}
+
+	// Extract agent name and subpath
+	parts := strings.SplitN(path, "/", 2)
+	agentName := parts[0]
+	subPath := ""
+	if len(parts) > 1 {
+		subPath = "/" + parts[1]
+	}
+
+	// Verify agent exists
+	jsonRPCHandler, ok := s.agentJSONRPCHandlers[agentName]
+	if !ok {
+		http.Error(w, "Agent not found: "+agentName, http.StatusNotFound)
+		return
+	}
+
+	cardHandler := s.agentCardHandlers[agentName]
+
+	switch {
+	case subPath == "" || subPath == "/":
+		// POST: JSON-RPC (a2a-go native handler)
+		// GET: Agent card (a2a-go native handler)
+		if r.Method == http.MethodPost {
+			jsonRPCHandler.ServeHTTP(w, r)
+			return
+		}
+		if r.Method == http.MethodGet || r.Method == http.MethodOptions {
+			cardHandler.ServeHTTP(w, r)
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
+	case subPath == a2asrv.WellKnownAgentCardPath:
+		// A2A spec: /.well-known/agent-card.json (a2a-go native handler)
+		cardHandler.ServeHTTP(w, r)
+
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+// corsMiddleware adds CORS headers.
+func (s *HTTPServer) corsMiddleware(next http.Handler) http.Handler {
+	cors := s.serverCfg.CORS
+	if cors == nil {
+		// Default permissive CORS for development
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			for _, allowed := range cors.AllowedOrigins {
+				if allowed == "*" || allowed == origin {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					break
+				}
+			}
+		}
+
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if config.BoolValue(cors.AllowCredentials, false) {
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// loggingMiddleware logs requests (ADK-Go pattern: don't wrap ResponseWriter).
+func (s *HTTPServer) loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		// Don't wrap ResponseWriter - it breaks http.Flusher for SSE
+		next.ServeHTTP(w, r)
+		slog.Debug("HTTP request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"duration", time.Since(start),
+		)
+	})
+}

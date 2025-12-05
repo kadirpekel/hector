@@ -1,0 +1,50 @@
+# Hector v2 Configuration - OpenAI Example
+# Uses OpenAI Responses API with tool calling support
+
+version: "2"
+name: openai-assistant
+description: Example using OpenAI as the LLM provider
+
+llms:
+  default:
+    provider: openai
+    model: gpt-4o
+    api_key: ${OPENAI_API_KEY}
+    max_tokens: 4096
+    temperature: 0.7
+
+# For reasoning models (o1, o3, o4, gpt-5) enable thinking:
+# llms:
+#   default:
+#     provider: openai
+#     model: o3-mini
+#     api_key: ${OPENAI_API_KEY}
+#     max_tokens: 8192
+#     thinking:
+#       enabled: true
+#       budget_tokens: 8192  # Maps to effort: high
+
+tools:
+  weather:
+    type: mcp
+    url: ${MCP_URL}
+    transport: streamable-http
+
+agents:
+  assistant:
+    name: Assistant
+    description: A helpful AI assistant powered by OpenAI
+    llm: default
+    tools: [weather]
+    streaming: true
+    instruction: |
+      You are a helpful AI assistant powered by OpenAI.
+      When asked about weather, use the available tools to get current conditions.
+      Be concise and friendly in your responses.
+
+server:
+  port: 8080
+  cors:
+    allowed_origins:
+      - "*"
+

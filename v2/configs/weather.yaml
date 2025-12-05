@@ -1,0 +1,67 @@
+# Hector v2 Weather Assistant Configuration
+#
+# This example shows how to configure a weather assistant with MCP tools.
+#
+# Prerequisites:
+#   - Set ANTHROPIC_API_KEY in your .env or environment
+#   - Set MCP_URL to your MCP weather server (optional)
+#
+# Run:
+#   hector serve --config v2/configs/weather.yaml
+
+version: "2"
+name: weather-assistant
+description: An AI assistant that can check the weather
+
+# LLM Provider
+llms:
+  default:
+    provider: anthropic
+    model: claude-sonnet-4-20250514
+    api_key: ${ANTHROPIC_API_KEY}
+    max_tokens: 1024
+
+# Tools - MCP Weather Server
+tools:
+  weather:
+    type: mcp
+    url: ${MCP_URL:-}
+    transport: streamable-http  # Use streamable-http for Composio-style endpoints
+    # Optional: filter to specific tools
+    # filter: [get_weather, get_forecast]
+
+# Agent Configuration
+agents:
+  assistant:
+    name: Weather Assistant
+    description: A helpful assistant that can check the weather
+    llm: default
+    tools: [weather]
+    streaming: true  # Enable token-by-token streaming
+    instruction: |
+      You are a helpful weather assistant. When users ask about weather:
+      
+      1. Use the available weather tools to get current conditions
+      2. Provide clear, concise weather information
+      3. Include temperature, conditions, and any relevant details
+      4. Be friendly and helpful in your responses
+      
+      If weather tools are not available, let the user know you cannot
+      check the weather right now.
+    
+    skills:
+      - id: weather
+        name: Weather Information
+        description: Get current weather and forecasts
+        tags: [weather, forecast]
+        examples:
+          - "What's the weather like in Berlin?"
+          - "Will it rain today?"
+          - "What's the temperature in New York?"
+
+# Server Configuration
+server:
+  host: "0.0.0.0"
+  port: 8080
+  transport: json-rpc
+
