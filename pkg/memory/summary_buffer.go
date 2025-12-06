@@ -1,3 +1,17 @@
+// Copyright 2025 Kadir Pekel
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package memory
 
 import (
@@ -6,58 +20,92 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/kadirpekel/hector/pkg/a2a/pb"
-	hectorcontext "github.com/kadirpekel/hector/pkg/context"
-	"github.com/kadirpekel/hector/pkg/protocol"
-	"github.com/kadirpekel/hector/pkg/reasoning"
+	"github.com/a2aproject/a2a-go/a2a"
+	"github.com/google/uuid"
+
+	"github.com/kadirpekel/hector/pkg/agent"
 	"github.com/kadirpekel/hector/pkg/utils"
 )
 
-// Default summarization settings
+// Default summary buffer settings (from legacy pkg/memory/summary_buffer.go)
 const (
-	defaultBudget                   = 8000 // Token budget before triggering summarization
-	defaultThreshold                = 0.85 // Percentage of budget that triggers summarization
-	defaultTarget                   = 0.7  // Target percentage of budget after summarization
-	defaultMinMessagesBeforeSummary = 20   // Minimum messages before allowing summarization
-	defaultMinMessagesToKeep        = 10   // Minimum recent messages to keep (5 turns)
-	defaultRecentMessageBudget      = 0.8  // Percentage of target budget for recent messages
+	DefaultSummaryBudget              = 8000 // Token budget before triggering summarization
+	DefaultSummaryThreshold           = 0.85 // Percentage of budget that triggers summarization
+	DefaultSummaryTarget              = 0.7  // Target percentage of budget after summarization
+	DefaultMinMessagesBeforeSummary   = 20   // Minimum messages before allowing summarization
+	DefaultMinMessagesToKeep          = 10   // Minimum recent messages to keep
+	DefaultRecentMessageBudgetPercent = 0.8  // Percentage of target budget for recent messages
+	SummaryPrefix                     = "Previous conversation summary: "
 )
 
-type SummarizationService interface {
-	SummarizeConversation(ctx context.Context, messages []*pb.Message) (string, error)
+// Summarizer is the interface for conversation summarization.
+// Implementations should use an LLM to summarize conversation history.
+type Summarizer interface {
+	// SummarizeConversation summarizes the given messages into a concise summary.
+	SummarizeConversation(ctx context.Context, events []*agent.Event) (string, error)
 }
 
+// SummaryBufferStrategy implements token-based context window management
+// with automatic summarization when the budget is exceeded.
+//
+// When the token count exceeds (budget * threshold), old messages are
+// summarized and replaced with a summary message. Recent messages are
+// preserved to maintain conversational continuity.
+//
+// Ported from pkg/memory/summary_buffer.go for use in v2.
 type SummaryBufferStrategy struct {
-	tokenBudget    int
-	threshold      float64
-	target         float64
-	tokenCounter   *utils.TokenCounter
-	summarizer     SummarizationService
-	statusNotifier StatusNotifier
+	budget       int
+	threshold    float64
+	target       float64
+	tokenCounter *utils.TokenCounter
+	summarizer   Summarizer
+	model        string
 }
 
+// SummaryBufferConfig holds configuration for the summary buffer strategy.
 type SummaryBufferConfig struct {
-	Budget     int
-	Threshold  float64
-	Target     float64
-	Model      string
-	Summarizer SummarizationService
+	// Budget is the maximum number of tokens before summarization triggers.
+	// Default: 8000
+	Budget int
+
+	// Threshold is the percentage of budget that triggers summarization.
+	// When current tokens > budget * threshold, summarization occurs.
+	// Default: 0.85 (85%)
+	Threshold float64
+
+	// Target is the percentage of budget to reduce to after summarization.
+	// Recent messages are kept within budget * target.
+	// Default: 0.7 (70%)
+	Target float64
+
+	// Model is the LLM model name for accurate token counting.
+	// Required for accurate counting.
+	Model string
+
+	// Summarizer performs conversation summarization.
+	// If nil, summarization is disabled (behaves like token_window).
+	Summarizer Summarizer
 }
 
+// NewSummaryBufferStrategy creates a new summary buffer strategy.
 func NewSummaryBufferStrategy(cfg SummaryBufferConfig) (*SummaryBufferStrategy, error) {
+	budget := cfg.Budget
+	if budget <= 0 {
+		budget = DefaultSummaryBudget
+	}
 
-	if cfg.Budget <= 0 {
-		cfg.Budget = defaultBudget
+	threshold := cfg.Threshold
+	if threshold <= 0 || threshold > 1 {
+		threshold = DefaultSummaryThreshold
 	}
-	if cfg.Threshold <= 0 || cfg.Threshold > 1 {
-		cfg.Threshold = defaultThreshold
-	}
-	if cfg.Target <= 0 || cfg.Target > 1 {
-		cfg.Target = defaultTarget
+
+	target := cfg.Target
+	if target <= 0 || target > 1 {
+		target = DefaultSummaryTarget
 	}
 
 	if cfg.Model == "" {
-		return nil, fmt.Errorf("model is required for token counting")
+		return nil, fmt.Errorf("model is required for summary_buffer strategy")
 	}
 
 	tokenCounter, err := utils.NewTokenCounter(cfg.Model)
@@ -65,238 +113,217 @@ func NewSummaryBufferStrategy(cfg SummaryBufferConfig) (*SummaryBufferStrategy, 
 		return nil, fmt.Errorf("failed to create token counter: %w", err)
 	}
 
-	if cfg.Summarizer == nil {
-		return nil, fmt.Errorf("summarization service is required")
-	}
-
 	return &SummaryBufferStrategy{
-		tokenBudget:  cfg.Budget,
-		threshold:    cfg.Threshold,
-		target:       cfg.Target,
+		budget:       budget,
+		threshold:    threshold,
+		target:       target,
 		tokenCounter: tokenCounter,
 		summarizer:   cfg.Summarizer,
+		model:        cfg.Model,
 	}, nil
 }
 
+// Name returns the strategy name.
 func (s *SummaryBufferStrategy) Name() string {
 	return "summary_buffer"
 }
 
-func (s *SummaryBufferStrategy) SetStatusNotifier(notifier StatusNotifier) {
-	s.statusNotifier = notifier
-}
-
-func (s *SummaryBufferStrategy) AddMessage(session *hectorcontext.ConversationHistory, msg *pb.Message) error {
-
-	return session.AddMessage(msg)
-}
-
-func (s *SummaryBufferStrategy) CheckAndSummarize(session *hectorcontext.ConversationHistory) ([]*pb.Message, error) {
-	if s.shouldSummarize(session) {
-		summaryMsg, err := s.summarize(session)
-		if err != nil {
-			return nil, err
-		}
-
-		return []*pb.Message{summaryMsg}, nil
+// FilterEvents returns events that fit within the target token budget.
+// It looks for existing summaries (checkpoint) and loads from there,
+// or applies token-based filtering.
+func (s *SummaryBufferStrategy) FilterEvents(events []*agent.Event) []*agent.Event {
+	if len(events) == 0 {
+		return events
 	}
-	return nil, nil
+
+	// Look for existing summary (checkpoint) - start from there
+	summaryIdx := s.findLastSummaryIndex(events)
+	if summaryIdx >= 0 {
+		// Start from summary
+		events = events[summaryIdx:]
+		slog.Debug("SummaryBufferStrategy: loading from checkpoint",
+			"checkpoint_idx", summaryIdx,
+			"events_after", len(events))
+	}
+
+	// Apply token-based filtering within target budget
+	targetBudget := int(float64(s.budget) * s.target)
+	return s.filterEventsWithinBudget(events, targetBudget)
 }
 
-func (s *SummaryBufferStrategy) GetMessages(session *hectorcontext.ConversationHistory) ([]*pb.Message, error) {
-	return session.GetAllMessages(), nil
+// CheckAndSummarize checks if summarization should occur and performs it.
+// Returns a summary event if summarization happened, nil otherwise.
+func (s *SummaryBufferStrategy) CheckAndSummarize(ctx context.Context, events []*agent.Event) (*agent.Event, error) {
+	if s.summarizer == nil {
+		return nil, nil // Summarization disabled
+	}
+
+	if !s.shouldSummarize(events) {
+		return nil, nil
+	}
+
+	return s.summarize(ctx, events)
 }
 
-func (s *SummaryBufferStrategy) shouldSummarize(session *hectorcontext.ConversationHistory) bool {
-	allMessages := session.GetAllMessages()
-	if len(allMessages) < defaultMinMessagesBeforeSummary {
+// shouldSummarize checks if summarization should be triggered.
+func (s *SummaryBufferStrategy) shouldSummarize(events []*agent.Event) bool {
+	if len(events) < DefaultMinMessagesBeforeSummary {
 		return false
 	}
 
-	utilMessages := make([]utils.Message, len(allMessages))
-	for i, msg := range allMessages {
-		textContent := protocol.ExtractTextFromMessage(msg)
-		utilMessages[i] = utils.Message{
-			Role:    msg.Role.String(),
-			Content: textContent,
-		}
-	}
-
-	currentTokens := s.tokenCounter.CountMessages(utilMessages)
-	thresholdTokens := int(float64(s.tokenBudget) * s.threshold)
+	currentTokens := s.countEventsTokens(events)
+	thresholdTokens := int(float64(s.budget) * s.threshold)
 
 	return currentTokens > thresholdTokens
 }
 
-func (s *SummaryBufferStrategy) summarize(session *hectorcontext.ConversationHistory) (*pb.Message, error) {
+// summarize performs summarization of old events.
+func (s *SummaryBufferStrategy) summarize(ctx context.Context, events []*agent.Event) (*agent.Event, error) {
+	targetTokens := int(float64(s.budget) * s.target)
 
-	targetTokens := int(float64(s.tokenBudget) * s.target)
+	// Select recent messages to keep
+	recentEvents := s.selectRecentEventsWithMinimum(events, targetTokens)
+	oldEvents := events[:len(events)-len(recentEvents)]
 
-	allMessages := session.GetAllMessages()
-
-	recentMessages := s.selectRecentMessagesWithMinimum(allMessages, targetTokens)
-	oldMessages := allMessages[:len(allMessages)-len(recentMessages)]
-
-	if len(oldMessages) == 0 {
-		return nil, nil
+	if len(oldEvents) == 0 {
+		return nil, nil // Nothing to summarize
 	}
 
-	slog.Info("Summarizing messages", "total", len(oldMessages), "keeping_recent", len(recentMessages))
+	slog.Info("Summarizing events",
+		"total", len(events),
+		"old", len(oldEvents),
+		"keeping_recent", len(recentEvents))
 
-	if s.statusNotifier != nil {
-		s.statusNotifier("THINKING: Summarizing conversation history...")
-	}
-
-	summary, err := s.summarizer.SummarizeConversation(context.Background(), oldMessages)
+	// Perform summarization
+	summary, err := s.summarizer.SummarizeConversation(ctx, oldEvents)
 	if err != nil {
-		slog.Warn("Summarization failed", "error", err)
-		if s.statusNotifier != nil {
-			s.statusNotifier("Warning: Summarization failed, continuing with full history")
-		}
 		return nil, fmt.Errorf("summarization failed: %w", err)
 	}
 
-	slog.Info("Summarized messages", "count", len(oldMessages), "summary_tokens", len(summary))
-
-	session.Clear()
-
-	summaryMsg := &pb.Message{
-		Role: pb.Role_ROLE_UNSPECIFIED,
-		Parts: []*pb.Part{
-			{Part: &pb.Part_Text{Text: fmt.Sprintf("Previous conversation summary: %s", summary)}},
-		},
-	}
-	if err := session.AddMessage(summaryMsg); err != nil {
-		return nil, fmt.Errorf("failed to add summary: %w", err)
+	// Create summary event
+	summaryEvent := &agent.Event{
+		ID:     uuid.NewString(),
+		Author: "system",
+		Message: a2a.NewMessage(a2a.MessageRoleUser,
+			a2a.TextPart{Text: SummaryPrefix + summary}),
 	}
 
-	for _, msg := range recentMessages {
-		if err := session.AddMessage(msg); err != nil {
-			slog.Warn("Failed to re-add message", "error", err)
-		}
-	}
+	slog.Info("Summarization complete",
+		"summarized_events", len(oldEvents),
+		"summary_length", len(summary))
 
-	slog.Info("Summarization complete", "kept_recent", len(recentMessages))
-
-	return summaryMsg, nil
+	return summaryEvent, nil
 }
 
-func (s *SummaryBufferStrategy) selectRecentMessagesWithMinimum(messages []*pb.Message, targetTokens int) []*pb.Message {
-	if len(messages) == 0 {
-		return []*pb.Message{}
+// filterEventsWithinBudget returns events that fit within the token budget.
+func (s *SummaryBufferStrategy) filterEventsWithinBudget(events []*agent.Event, budget int) []*agent.Event {
+	if len(events) == 0 {
+		return events
 	}
 
-	minMessages := defaultMinMessagesToKeep
-	if len(messages) < minMessages {
-		return messages
-	}
-
-	recentTokenBudget := int(float64(targetTokens) * defaultRecentMessageBudget)
-
-	recentMessages := s.selectRecentMessages(messages, recentTokenBudget)
-
-	if len(recentMessages) < minMessages {
-		startIdx := len(messages) - minMessages
-		if startIdx < 0 {
-			startIdx = 0
-		}
-		return messages[startIdx:]
-	}
-
-	return recentMessages
-}
-
-func (s *SummaryBufferStrategy) selectRecentMessages(messages []*pb.Message, tokenBudget int) []*pb.Message {
-	if len(messages) == 0 {
-		return []*pb.Message{}
-	}
-
-	var selected []*pb.Message
+	// Work backwards from most recent
+	var selected []*agent.Event
 	currentTokens := 0
 
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg := messages[i]
-		textContent := protocol.ExtractTextFromMessage(msg)
-		msgTokens := s.tokenCounter.CountMessages([]utils.Message{
-			{Role: msg.Role.String(), Content: textContent},
-		})
+	for i := len(events) - 1; i >= 0; i-- {
+		ev := events[i]
+		evTokens := s.countEventTokens(ev)
 
-		if currentTokens+msgTokens <= tokenBudget {
-			selected = append([]*pb.Message{msg}, selected...)
-			currentTokens += msgTokens
+		if currentTokens+evTokens <= budget {
+			selected = append([]*agent.Event{ev}, selected...)
+			currentTokens += evTokens
 		} else {
 			break
 		}
 	}
 
+	// Ensure we keep at least MinMessagesToKeep
+	if len(selected) < DefaultMinMessagesToKeep && len(events) >= DefaultMinMessagesToKeep {
+		return events[len(events)-DefaultMinMessagesToKeep:]
+	}
+	if len(selected) < len(events) && len(selected) < DefaultMinMessagesToKeep {
+		return events
+	}
+
 	return selected
 }
 
-func (s *SummaryBufferStrategy) LoadState(sessionID string, sessionService interface{}) (*hectorcontext.ConversationHistory, error) {
-
-	sessService, ok := sessionService.(interface {
-		GetMessagesWithOptions(sessionID string, opts reasoning.LoadOptions) ([]*pb.Message, error)
-	})
-	if !ok {
-		return nil, fmt.Errorf("session service does not support GetMessagesWithOptions")
+// selectRecentEventsWithMinimum selects recent events within budget, with minimum guarantee.
+func (s *SummaryBufferStrategy) selectRecentEventsWithMinimum(events []*agent.Event, targetTokens int) []*agent.Event {
+	if len(events) == 0 {
+		return events
 	}
 
-	allMessages, err := sessService.GetMessagesWithOptions(sessionID, reasoning.LoadOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to load messages: %w", err)
+	minEvents := DefaultMinMessagesToKeep
+	if len(events) < minEvents {
+		return events
 	}
 
-	if len(allMessages) == 0 {
+	recentBudget := int(float64(targetTokens) * DefaultRecentMessageBudgetPercent)
+	recentEvents := s.filterEventsWithinBudget(events, recentBudget)
 
-		return hectorcontext.NewConversationHistory(sessionID)
-	}
-
-	lastSummaryIdx := s.findLastSummaryIndex(allMessages)
-
-	var messagesToLoad []*pb.Message
-	if lastSummaryIdx >= 0 {
-
-		messagesToLoad = allMessages[lastSummaryIdx:]
-		reduction := float64(len(allMessages)-len(messagesToLoad)) / float64(len(allMessages)) * 100
-		slog.Info("Checkpoint detected, loading messages", "checkpoint_idx", lastSummaryIdx+1, "total", len(allMessages), "loading", len(messagesToLoad), "reduction_pct", reduction)
-	} else {
-
-		maxRecent := 100
-		if len(allMessages) > maxRecent {
-			messagesToLoad = allMessages[len(allMessages)-maxRecent:]
-			slog.Warn("No checkpoint found, loading recent messages", "loading", maxRecent, "total", len(allMessages))
-		} else {
-			messagesToLoad = allMessages
+	if len(recentEvents) < minEvents {
+		startIdx := len(events) - minEvents
+		if startIdx < 0 {
+			startIdx = 0
 		}
+		return events[startIdx:]
 	}
 
-	session, err := hectorcontext.NewConversationHistory(sessionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create session: %w", err)
-	}
-
-	for _, msg := range messagesToLoad {
-		if err := session.AddMessage(msg); err != nil {
-			slog.Warn("Failed to add message to session", "error", err)
-		}
-	}
-
-	return session, nil
+	return recentEvents
 }
 
-func (s *SummaryBufferStrategy) findLastSummaryIndex(messages []*pb.Message) int {
+// findLastSummaryIndex finds the index of the last summary event.
+func (s *SummaryBufferStrategy) findLastSummaryIndex(events []*agent.Event) int {
+	for i := len(events) - 1; i >= 0; i-- {
+		ev := events[i]
+		if ev.Message == nil {
+			continue
+		}
 
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg := messages[i]
-
-		if msg.Role == pb.Role_ROLE_UNSPECIFIED {
-			text := protocol.ExtractTextFromMessage(msg)
-			if len(text) > 0 && (strings.Contains(text, "Previous conversation summary:") ||
-				strings.Contains(text, "Conversation summary:")) {
-				return i
-			}
+		text := extractTextFromMessage(ev.Message)
+		if strings.HasPrefix(text, SummaryPrefix) ||
+			strings.HasPrefix(text, "Conversation summary:") {
+			return i
 		}
 	}
-
 	return -1
 }
+
+// countEventsTokens counts total tokens for all events.
+func (s *SummaryBufferStrategy) countEventsTokens(events []*agent.Event) int {
+	total := 0
+	for _, ev := range events {
+		total += s.countEventTokens(ev)
+	}
+	return total
+}
+
+// countEventTokens counts tokens for a single event.
+func (s *SummaryBufferStrategy) countEventTokens(ev *agent.Event) int {
+	if ev == nil || ev.Message == nil {
+		return 0
+	}
+
+	text := extractTextFromMessage(ev.Message)
+	messages := []utils.Message{{Role: ev.Author, Content: text}}
+	return s.tokenCounter.CountMessages(messages)
+}
+
+// Budget returns the configured token budget.
+func (s *SummaryBufferStrategy) Budget() int {
+	return s.budget
+}
+
+// Threshold returns the configured threshold.
+func (s *SummaryBufferStrategy) Threshold() float64 {
+	return s.threshold
+}
+
+// Target returns the configured target.
+func (s *SummaryBufferStrategy) Target() float64 {
+	return s.target
+}
+
+// Ensure SummaryBufferStrategy implements WorkingMemoryStrategy.
+var _ WorkingMemoryStrategy = (*SummaryBufferStrategy)(nil)
