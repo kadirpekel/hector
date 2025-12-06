@@ -15,6 +15,7 @@
 package llmagent
 
 import (
+	"encoding/json"
 	"fmt"
 	"iter"
 	"log/slog"
@@ -84,6 +85,15 @@ func (f *Flow) Run(ctx agent.InvocationContext) iter.Seq2[*agent.Event, error] {
 		// Outer loop: continues until IsFinalResponse
 		// This matches adk-go's Flow.Run pattern
 		for iteration := 0; iteration < f.agent.reasoning.MaxIterations; iteration++ {
+			// Check context cancellation at start of each iteration (Issue #6)
+			// This prevents wasted CPU cycles when context is cancelled
+			if ctx.Err() != nil {
+				slog.Debug("Flow terminating due to context cancellation",
+					"iteration", iteration,
+					"error", ctx.Err())
+				return
+			}
+
 			var lastEvent *agent.Event
 
 			// Inner loop: run one step (LLM call + tool execution)
@@ -426,10 +436,12 @@ func (f *Flow) buildPartialEvent(ctx agent.InvocationContext, resp *model.Respon
 					args := getMap(dp.Data, "arguments")
 
 					// Create deduplication key: use ID if present, otherwise name+args
+					// Use stable JSON serialization for args to ensure deterministic keys (Issue #8)
 					dedupKey := id
 					if dedupKey == "" {
-						// For empty IDs, use name+args as key
-						dedupKey = fmt.Sprintf("%s|%v", name, args)
+						// For empty IDs, use name+args as key with stable JSON serialization
+						argsJSON, _ := json.Marshal(args) // Marshal sorts map keys alphabetically
+						dedupKey = fmt.Sprintf("%s|%s", name, string(argsJSON))
 					}
 
 					// Skip if we've already seen this exact tool call part
@@ -525,24 +537,29 @@ func (f *Flow) handleToolCalls(ctx agent.InvocationContext, resp *model.Response
 
 			if approvalDecision == "approve" {
 				// User approved - execute the tool
-				slog.Info("Tool approved, executing", "tool", tc.Name, "callID", tc.ID, "args", tc.Args)
-				toolCtx := newToolContext(ctx, tc.ID)
-				result, err := f.callToolWithCallbacks(ctx, t, tc.Args, toolCtx)
-				slog.Info("Tool execution completed", "tool", tc.Name, "callID", tc.ID, "error", err != nil)
-				if err != nil {
-					resultStr = fmt.Sprintf("Error: %v", err)
-					isError = true
-					status = "failed"
-				} else {
-					resultStr = formatToolResult(result)
-					status = "success"
-				}
-				mergeEventActions(mergedActions, toolCtx.Actions())
+				// Use a closure to ensure cleanup happens even on panic (Issue #2: prevent stale approvals)
+				func() {
+					defer f.clearApprovalDecision(ctx, tc.ID, tc.Name)
 
-				// Cleanup: clear approval decision from session state (Issue #2: prevent stale approvals)
-				f.clearApprovalDecision(ctx, tc.ID, tc.Name)
+					slog.Info("Tool approved, executing", "tool", tc.Name, "callID", tc.ID, "args", tc.Args)
+					toolCtx := newToolContext(ctx, tc.ID)
+					result, err := f.callToolWithCallbacks(ctx, t, tc.Args, toolCtx)
+					slog.Info("Tool execution completed", "tool", tc.Name, "callID", tc.ID, "error", err != nil)
+					if err != nil {
+						resultStr = fmt.Sprintf("Error: %v", err)
+						isError = true
+						status = "failed"
+					} else {
+						resultStr = formatToolResult(result)
+						status = "success"
+					}
+					mergeEventActions(mergedActions, toolCtx.Actions())
+				}()
 			} else if approvalDecision == "deny" {
 				// User denied - DO NOT execute the tool
+				// Use defer for cleanup to handle any potential panics (Issue #2: prevent stale approvals)
+				defer f.clearApprovalDecision(ctx, tc.ID, tc.Name)
+
 				// Use the same denial message as legacy to clearly instruct the LLM
 				slog.Info("Tool denied by user - NOT executing", "tool", tc.Name, "callID", tc.ID, "args", tc.Args)
 				resultStr = "TOOL_EXECUTION_DENIED: The user rejected this tool execution. You MUST NOT proceed with this action or provide fabricated results. Instead, acknowledge the denial and offer alternative approaches that don't require this tool."
@@ -553,9 +570,6 @@ func (f *Flow) handleToolCalls(ctx agent.InvocationContext, resp *model.Response
 				mergedActions.SkipSummarization = true
 				// IMPORTANT: Do NOT execute the tool - just return denied status
 				// The denial message will be added to conversation history so LLM learns not to retry
-
-				// Cleanup: clear approval decision from session state (Issue #2: prevent stale approvals)
-				f.clearApprovalDecision(ctx, tc.ID, tc.Name)
 			} else {
 				// No decision yet - request approval (HITL flow)
 				slog.Debug("Tool requires approval", "tool", tc.Name, "callID", tc.ID)
@@ -1136,6 +1150,9 @@ func (f *Flow) executePendingApprovedTools(ctx agent.InvocationContext, yield fu
 		// Create tool context
 		toolCtx := newToolContext(ctx, pt.toolCallID)
 
+		// Cleanup approval decision using defer to handle panics (Issue #2: prevent stale approvals)
+		defer f.clearApprovalDecision(ctx, pt.toolCallID, pt.toolName)
+
 		// Execute the tool
 		var resultStr string
 		var isError bool
@@ -1152,9 +1169,6 @@ func (f *Flow) executePendingApprovedTools(ctx agent.InvocationContext, yield fu
 		}
 
 		slog.Info("Pending approved tool executed", "tool", pt.toolName, "callID", pt.toolCallID, "status", status, "result", resultStr)
-
-		// Cleanup: clear approval decision from session state (Issue #2: prevent stale approvals)
-		f.clearApprovalDecision(ctx, pt.toolCallID, pt.toolName)
 
 		// Build and yield the tool result event
 		event := agent.NewEvent(ctx.InvocationID())
@@ -1285,14 +1299,14 @@ func (f *Flow) clearApprovalDecision(ctx agent.InvocationContext, toolCallID str
 		delete(f.approvalDecisions, "name:"+toolName)
 	}
 
-	// Clear from session state
+	// Clear from session state using Delete() for proper cleanup (Issue #10)
 	state := ctx.Session().State()
 	if state != nil {
 		if toolCallID != "" {
-			_ = state.Set(approvalStatePrefix+toolCallID, nil)
+			_ = state.Delete(approvalStatePrefix + toolCallID)
 		}
 		if toolName != "" {
-			_ = state.Set(approvalNameStatePrefix+toolName, nil)
+			_ = state.Delete(approvalNameStatePrefix + toolName)
 		}
 	}
 }

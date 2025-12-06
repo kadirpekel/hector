@@ -451,8 +451,24 @@ func (a *llmAgent) buildMessages(ctx agent.InvocationContext) []*a2a.Message {
 				events = append(events, event)
 			}
 
+			// Rearrange events for async function responses (adk-go pattern)
+			// This handles long-running tools where responses arrive out of order
+			// IMPORTANT: Rearrangement must happen BEFORE working memory filtering
+			// to ensure tool call/result pairs stay together (Issue #3)
+			var rearrangeErr error
+			events, rearrangeErr = processor.RearrangeEventsForLatestFunctionResponse(events)
+			if rearrangeErr != nil {
+				slog.Warn("Failed to rearrange events for latest function response",
+					"error", rearrangeErr)
+			}
+			events, rearrangeErr = processor.RearrangeEventsForFunctionResponsesInHistory(events)
+			if rearrangeErr != nil {
+				slog.Warn("Failed to rearrange events for function responses in history",
+					"error", rearrangeErr)
+			}
+
 			// Apply working memory strategy to filter events for context window
-			// This happens BEFORE rearranging to ensure we're working with the filtered set
+			// This happens AFTER rearranging to ensure tool call/result pairs stay together
 			if a.workingMemory != nil {
 				beforeCount := len(events)
 				events = a.workingMemory.FilterEvents(events)
@@ -463,11 +479,6 @@ func (a *llmAgent) buildMessages(ctx agent.InvocationContext) []*a2a.Message {
 						"after", len(events))
 				}
 			}
-
-			// Rearrange events for async function responses (adk-go pattern)
-			// This handles long-running tools where responses arrive out of order
-			events, _ = processor.RearrangeEventsForLatestFunctionResponse(events)
-			events, _ = processor.RearrangeEventsForFunctionResponsesInHistory(events)
 
 			// Convert events to messages
 			for _, event := range events {
