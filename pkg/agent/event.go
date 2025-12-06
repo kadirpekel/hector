@@ -21,6 +21,17 @@ import (
 	"github.com/google/uuid"
 )
 
+// Event author constants
+const (
+	// AuthorUser represents events authored by the user (human input).
+	// Used when tool results or other events come from user interactions.
+	AuthorUser = "user"
+
+	// AuthorSystem represents events authored by the system.
+	// Used for system-generated events like errors or notifications.
+	AuthorSystem = "system"
+)
+
 // Event represents an interaction in an agent conversation.
 // Events are yielded by Agent.Run() and translated to A2A events by the server.
 type Event struct {
@@ -38,6 +49,9 @@ type Event struct {
 	Branch string
 
 	// Author is the name of the agent that produced this event.
+	// For agent-authored events, use the agent's Name().
+	// For user-authored events, use AuthorUser.
+	// For system events, use AuthorSystem.
 	Author string
 
 	// Message contains the A2A message content (text, files, data).

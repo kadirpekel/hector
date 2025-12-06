@@ -289,8 +289,8 @@ func (t *CommandTool) extractBaseCommand(command string) string {
 }
 
 // CallStreaming executes the command and yields output using iter.Seq2.
-// If RequireApproval is true, this returns a pending status instead
-// and the agent loop handles the HITL flow via LongRunningToolIDs.
+// Note: The approval flow is handled externally by the agent flow via RequiresApproval().
+// When CallStreaming is invoked, approval has already been granted (if configured).
 func (t *CommandTool) CallStreaming(ctx tool.Context, args map[string]any) iter.Seq2[*tool.Result, error] {
 	return func(yield func(*tool.Result, error) bool) {
 		command, ok := args["command"].(string)
@@ -309,30 +309,6 @@ func (t *CommandTool) CallStreaming(ctx tool.Context, args map[string]any) iter.
 		workDir := t.workingDir
 		if wd, ok := args["working_dir"].(string); ok && wd != "" {
 			workDir = wd
-		}
-
-		// If approval required, trigger HITL flow
-		if t.requireApproval {
-			// Signal that human input is required
-			if actions := ctx.Actions(); actions != nil {
-				actions.RequireInput = true
-				actions.InputPrompt = fmt.Sprintf("%s\n\nCommand: %s\nWorking Directory: %s",
-					t.approvalPrompt, command, workDir)
-			}
-
-			// Return pending status - task will pause for approval
-			yield(&tool.Result{
-				Content:   fmt.Sprintf("Awaiting approval for command: %s", command),
-				Streaming: false,
-				Metadata: map[string]any{
-					"status":          "pending_approval",
-					"command":         command,
-					"working_dir":     workDir,
-					"approval_id":     ctx.FunctionCallID(),
-					"is_long_running": true,
-				},
-			}, nil)
-			return
 		}
 
 		// Execute command with streaming

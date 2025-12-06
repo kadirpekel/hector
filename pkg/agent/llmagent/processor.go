@@ -571,7 +571,7 @@ func (p *ContentProcessor) pairToolCallsWithResults(messages []*a2a.Message) []*
 // ConvertForeignAgentMessage converts messages from other agents to user context.
 // In multi-agent setups, foreign agent messages need to be presented as user context.
 func (p *ContentProcessor) ConvertForeignAgentMessage(msg *a2a.Message, author string) *a2a.Message {
-	if msg.Role != a2a.MessageRoleAgent || author == p.agentName || author == "user" {
+	if msg.Role != a2a.MessageRoleAgent || author == p.agentName || author == agent.AuthorUser {
 		return msg
 	}
 
@@ -891,12 +891,15 @@ func getMap(m map[string]any, key string) map[string]any {
 func (p *ContentProcessor) FilterAuthEvents(messages []*a2a.Message) []*a2a.Message {
 	var result []*a2a.Message
 	for _, msg := range messages {
-		// Filter out auth-related parts
+		// Filter out auth-related and tool approval parts
 		var filteredParts []a2a.Part
 		for _, part := range msg.Parts {
 			if dp, ok := part.(a2a.DataPart); ok {
-				if typeVal, _ := dp.Data["type"].(string); typeVal == "auth" || typeVal == "auth_response" {
-					continue // Skip auth events
+				typeVal, _ := dp.Data["type"].(string)
+				// Skip auth events and tool approval messages (HITL approval/denial decisions)
+				// Tool approval messages are metadata for the flow, not conversation content
+				if typeVal == "auth" || typeVal == "auth_response" || typeVal == "tool_approval" {
+					continue
 				}
 			}
 			filteredParts = append(filteredParts, part)

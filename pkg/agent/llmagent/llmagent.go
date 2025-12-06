@@ -431,6 +431,23 @@ func (a *llmAgent) buildMessages(ctx agent.InvocationContext) []*a2a.Message {
 					continue
 				}
 
+				// Skip pending_approval tool results (HITL flow control only, not real results)
+				// These are placeholder events created when a tool requires approval
+				// The actual result comes after approval in executePendingApprovedTools
+				isPendingApproval := false
+				for _, tr := range event.ToolResults {
+					if tr.Status == "pending_approval" {
+						isPendingApproval = true
+						break
+					}
+				}
+				if isPendingApproval {
+					slog.Debug("Skipping pending_approval event",
+						"event_author", event.Author,
+						"tool_results", len(event.ToolResults))
+					continue
+				}
+
 				events = append(events, event)
 			}
 
@@ -489,7 +506,7 @@ func (a *llmAgent) buildMessages(ctx agent.InvocationContext) []*a2a.Message {
 			// Find start of current turn (latest user message)
 			startIdx := 0
 			for i := len(events) - 1; i >= 0; i-- {
-				if events[i].Author == "user" {
+				if events[i].Author == agent.AuthorUser {
 					startIdx = i
 					break
 				}

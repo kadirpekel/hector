@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/a2aproject/a2a-go/a2a"
@@ -804,6 +805,28 @@ func (f *Flow) callToolWithCallbacks(
 
 	if callable, ok := t.(tool.CallableTool); ok {
 		result, toolErr = callable.Call(toolCtx, args)
+	} else if streaming, ok := t.(tool.StreamingTool); ok {
+		// Handle streaming tools by collecting all results
+		var finalResult *tool.Result
+		for res, err := range streaming.CallStreaming(toolCtx, args) {
+			if err != nil {
+				toolErr = err
+				break
+			}
+			// Keep track of the final result (non-streaming)
+			if res != nil && !res.Streaming {
+				finalResult = res
+			}
+		}
+		if finalResult != nil {
+			result = map[string]any{
+				"content":  finalResult.Content,
+				"metadata": finalResult.Metadata,
+			}
+			if finalResult.Error != "" {
+				result["error"] = finalResult.Error
+			}
+		}
 	} else {
 		return nil, fmt.Errorf("tool %q is not callable", t.Name())
 	}
@@ -875,7 +898,23 @@ func formatToolResult(result map[string]any) string {
 	if result == nil {
 		return ""
 	}
-	// Simple string conversion - can be enhanced
+
+	// Extract content field if present (from streaming tools)
+	if content, ok := result["content"]; ok {
+		switch v := content.(type) {
+		case string:
+			// Trim whitespace and ensure we have valid content
+			trimmed := strings.TrimSpace(v)
+			if trimmed == "" {
+				return "(no output)"
+			}
+			return trimmed
+		default:
+			return fmt.Sprintf("%v", v)
+		}
+	}
+
+	// Fallback: simple string conversion
 	return fmt.Sprintf("%v", result)
 }
 
@@ -1112,22 +1151,24 @@ func (f *Flow) executePendingApprovedTools(ctx agent.InvocationContext, yield fu
 			status = "success"
 		}
 
-		slog.Info("Pending approved tool executed", "tool", pt.toolName, "callID", pt.toolCallID, "status", status)
+		slog.Info("Pending approved tool executed", "tool", pt.toolName, "callID", pt.toolCallID, "status", status, "result", resultStr)
 
 		// Cleanup: clear approval decision from session state (Issue #2: prevent stale approvals)
 		f.clearApprovalDecision(ctx, pt.toolCallID, pt.toolName)
 
 		// Build and yield the tool result event
 		event := agent.NewEvent(ctx.InvocationID())
-		event.Author = f.agent.Name()
+		// Tool results should appear as user messages so the LLM can pair them
+		// with the prior assistant tool_use call (Anthropic/OpenAI pattern).
+		event.Author = agent.AuthorUser
 		event.Branch = ctx.Branch()
 		event.Partial = false
 		if toolCtx.Actions() != nil {
 			event.Actions = *toolCtx.Actions()
 		}
 
-		// Add tool result to message
-		event.Message = a2a.NewMessage(a2a.MessageRoleAgent, a2a.DataPart{
+		// Add tool result to message as a user role
+		event.Message = a2a.NewMessage(a2a.MessageRoleUser, a2a.DataPart{
 			Data: map[string]any{
 				"type":              "tool_result",
 				"tool_call_id":      pt.toolCallID,
