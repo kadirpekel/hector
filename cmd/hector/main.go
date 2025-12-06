@@ -46,6 +46,7 @@ type CLI struct {
 	Serve    ServeCmd    `cmd:"" help:"Start the A2A server."`
 	Info     InfoCmd     `cmd:"" help:"Show agent information."`
 	Validate ValidateCmd `cmd:"" help:"Validate configuration file."`
+	Schema   SchemaCmd   `cmd:"" help:"Generate JSON Schema for config builder."`
 
 	Config    string `short:"c" help:"Path to config file." type:"path"`
 	LogLevel  string `help:"Log level (debug, info, warn, error)." default:"info"`
@@ -439,7 +440,7 @@ func printBanner() {
 }
 
 // shouldSkipBanner checks if command should skip banner
-// In pkg, "info" and "validate" commands skip banner (they're informational, not server)
+// In pkg, "info", "validate", and "schema" commands skip banner (they're informational, not server)
 func shouldSkipBanner(args []string) bool {
 	if len(args) < 2 {
 		return false
@@ -448,7 +449,7 @@ func shouldSkipBanner(args []string) bool {
 	// Check for informational commands
 	for _, arg := range args {
 		// Skip program name and flags, look for commands
-		if arg == "info" || arg == "validate" {
+		if arg == "info" || arg == "validate" || arg == "schema" {
 			return true
 		}
 	}
