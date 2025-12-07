@@ -100,9 +100,12 @@ type ServeCmd struct {
 	RAGWatch      *bool  `name:"rag-watch" default:"true" negatable:"" help:"Watch docs folder for changes and auto-reindex (enabled by default)."`
 	MCPParserTool string `name:"mcp-parser-tool" help:"MCP tool name(s) for document parsing (e.g., 'convert_document_into_docling_document'). Comma-separated for fallback chain." placeholder:"TOOL_NAME"`
 
+	// Studio mode (dev/edit mode)
+	Studio bool `help:"Enable studio mode: config builder UI + auto-reload on save."`
+
 	// Server options
 	Port  int  `help:"Port to listen on." default:"8080"`
-	Watch bool `help:"Watch config file for changes."`
+	Watch bool `help:"Watch config file for changes (auto-enabled with --studio)."`
 }
 
 func (c *ServeCmd) Run(cli *CLI) error {
@@ -130,15 +133,6 @@ func (c *ServeCmd) Run(cli *CLI) error {
 	// Override port if explicitly specified
 	if c.Port != 0 && c.Port != 8080 {
 		cfg.Server.Port = c.Port
-	}
-
-	// Start config watching if enabled
-	if c.Watch && loader != nil {
-		go func() {
-			if err := loader.Watch(ctx); err != nil && ctx.Err() == nil {
-				slog.Error("Config watch error", "error", err)
-			}
-		}()
 	}
 
 	// Create shared database pool for SQLite to prevent "database is locked" errors.
@@ -183,6 +177,58 @@ func (c *ServeCmd) Run(cli *CLI) error {
 	}
 
 	srv := server.NewHTTPServer(cfg, executors, serverOpts...)
+
+	// Enable studio mode if requested
+	if c.Studio {
+		if cli.Config == "" {
+			return fmt.Errorf("--studio requires --config flag with config file path")
+		}
+		srv.SetStudioMode(cli.Config)
+		c.Watch = true // Auto-enable watch
+		slog.Info("Studio mode enabled", "config_file", cli.Config)
+	}
+
+	// Start config watching if enabled (auto-enabled by --studio)
+	if c.Watch && loader != nil {
+		// Register hot-reload callback
+		reloadCallback := func(newCfg *config.Config) {
+			slog.Info("Config file changed, reloading...")
+
+			// Reload runtime
+			if err := rt.Reload(newCfg); err != nil {
+				slog.Error("Failed to reload runtime", "error", err)
+				return
+			}
+
+			// Rebuild executors for HTTP server
+			newExecutors := make(map[string]*server.Executor)
+			for _, agentName := range newCfg.ListAgents() {
+				runnerCfg, err := rt.RunnerConfig(agentName)
+				if err != nil {
+					slog.Error("Failed to create runner config", "agent", agentName, "error", err)
+					continue
+				}
+				newExecutors[agentName] = server.NewExecutor(server.ExecutorConfig{
+					RunnerConfig: *runnerCfg,
+				})
+			}
+
+			// Hot-swap executors
+			srv.UpdateExecutors(newExecutors)
+			slog.Info("✅ Hot reload complete", "agents", len(newExecutors))
+		}
+
+		// Create new loader with onChange callback
+		provider := loader.Provider()
+		loader = config.NewLoader(provider, config.WithOnChange(reloadCallback))
+
+		// Start watching
+		go func() {
+			if err := loader.Watch(ctx); err != nil && ctx.Err() == nil {
+				slog.Error("Config watch error", "error", err)
+			}
+		}()
+	}
 
 	// Print startup info
 	greenColor := "\033[38;2;16;185;129m"

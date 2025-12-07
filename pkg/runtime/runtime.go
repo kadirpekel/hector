@@ -930,42 +930,290 @@ func (r *Runtime) Close() error {
 	return nil
 }
 
-// Reload rebuilds the runtime with new config.
-// Existing connections are closed and new ones created.
-func (r *Runtime) Reload(ctx context.Context, cfg *config.Config) error {
+// Reload rebuilds the runtime with new config (hot-reload).
+// Sessions and memory are preserved, only LLMs/agents/tools are rebuilt.
+func (r *Runtime) Reload(newCfg *config.Config) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Close existing resources
-	for _, llm := range r.llms {
-		llm.Close()
+	slog.Info("Reloading configuration...")
+
+	// 1. Validate new config
+	if err := newCfg.Validate(); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
 	}
-	for _, ts := range r.toolsets {
-		if closer, ok := ts.(interface{ Close() error }); ok {
-			closer.Close()
+
+	// 2. Build new components
+	oldCfg := r.cfg
+	r.cfg = newCfg
+
+	// Build new LLMs
+	newLLMs := make(map[string]model.LLM)
+	for name, cfg := range newCfg.LLMs {
+		if cfg == nil {
+			continue
+		}
+		llm, err := r.llmFactory(cfg)
+		if err != nil {
+			r.cfg = oldCfg // Rollback
+			return fmt.Errorf("llm %q: %w", name, err)
+		}
+		newLLMs[name] = llm
+	}
+
+	// Build new embedders
+	newEmbedders := make(map[string]embedder.Embedder)
+	for name, cfg := range newCfg.Embedders {
+		if cfg == nil {
+			continue
+		}
+		emb, err := r.embedderFactory(cfg)
+		if err != nil {
+			// Cleanup newly created LLMs
+			for _, llm := range newLLMs {
+				llm.Close()
+			}
+			r.cfg = oldCfg // Rollback
+			return fmt.Errorf("embedder %q: %w", name, err)
+		}
+		newEmbedders[name] = emb
+	}
+
+	// Build new toolsets
+	newToolsets := make(map[string]tool.Toolset)
+	for name, cfg := range newCfg.Tools {
+		if cfg == nil || !cfg.IsEnabled() {
+			continue
+		}
+		ts, err := r.toolsetFactory(name, cfg)
+		if err != nil {
+			// Cleanup
+			for _, llm := range newLLMs {
+				llm.Close()
+			}
+			for _, emb := range newEmbedders {
+				if closer, ok := emb.(interface{ Close() error }); ok {
+					closer.Close()
+				}
+			}
+			r.cfg = oldCfg // Rollback
+			return fmt.Errorf("tool %q: %w", name, err)
+		}
+		newToolsets[name] = ts
+	}
+
+	// Update toolsets temporarily for agent building
+	oldToolsets := r.toolsets
+	r.toolsets = newToolsets
+
+	// Build new agents (this needs toolsets in place)
+	newAgents := make(map[string]agent.Agent)
+	if err := r.buildAgentsInto(newAgents, newLLMs); err != nil {
+		// Cleanup
+		for _, llm := range newLLMs {
+			llm.Close()
+		}
+		for _, emb := range newEmbedders {
+			if closer, ok := emb.(interface{ Close() error }); ok {
+				closer.Close()
+			}
+		}
+		for _, ts := range newToolsets {
+			if closer, ok := ts.(interface{ Close() error }); ok {
+				closer.Close()
+			}
+		}
+		r.cfg = oldCfg // Rollback
+		r.toolsets = oldToolsets
+		return fmt.Errorf("failed to build agents: %w", err)
+	}
+
+	// 3. Atomic swap (preserve sessions/memory)
+	oldLLMs := r.llms
+	oldEmbedders := r.embedders
+	// oldToolsets already saved above
+
+	r.llms = newLLMs
+	r.embedders = newEmbedders
+	r.agents = newAgents
+
+	// 4. Cleanup old resources after grace period
+	go func() {
+		time.Sleep(5 * time.Second)
+		for _, llm := range oldLLMs {
+			llm.Close()
+		}
+		for _, emb := range oldEmbedders {
+			if closer, ok := emb.(interface{ Close() error }); ok {
+				closer.Close()
+			}
+		}
+		for _, ts := range oldToolsets {
+			if closer, ok := ts.(interface{ Close() error }); ok {
+				closer.Close()
+			}
+		}
+		slog.Debug("Old resources cleaned up")
+	}()
+
+	slog.Info("✅ Configuration reloaded",
+		"llms", len(newLLMs),
+		"agents", len(newAgents),
+		"tools", len(newToolsets))
+	return nil
+}
+
+// buildAgentsInto is a helper that builds agents into a provided map.
+// Used by Reload to build new agents without modifying r.agents until swap.
+func (r *Runtime) buildAgentsInto(agentsMap map[string]agent.Agent, llmsMap map[string]model.LLM) error {
+	// Pass 1: Create LLM and remote agents first
+	for name, cfg := range r.cfg.Agents {
+		if cfg == nil {
+			continue
+		}
+
+		if isWorkflowAgentType(cfg.Type) {
+			continue
+		}
+
+		if isRemoteAgentType(cfg.Type) {
+			ag, err := r.createRemoteAgent(name, cfg)
+			if err != nil {
+				return fmt.Errorf("remote agent %q: %w", name, err)
+			}
+			agentsMap[name] = ag
+			continue
+		}
+
+		llm, ok := llmsMap[cfg.LLM]
+		if !ok {
+			return fmt.Errorf("agent %q: llm %q not found", name, cfg.LLM)
+		}
+
+		var agentToolsets []tool.Toolset
+		if cfg.Tools == nil {
+			for toolName, ts := range r.toolsets {
+				if toolCfg, ok := r.cfg.Tools[toolName]; ok && toolCfg != nil && !toolCfg.IsEnabled() {
+					continue
+				}
+				agentToolsets = append(agentToolsets, ts)
+			}
+		} else if len(cfg.Tools) == 0 {
+			agentToolsets = []tool.Toolset{}
+		} else {
+			for _, toolName := range cfg.Tools {
+				ts, ok := r.toolsets[toolName]
+				if !ok {
+					return fmt.Errorf("agent %q: tool %q not found", name, toolName)
+				}
+				agentToolsets = append(agentToolsets, ts)
+			}
+		}
+
+		ag, err := r.createLLMAgent(name, cfg, llm, agentToolsets)
+		if err != nil {
+			return fmt.Errorf("agent %q: %w", name, err)
+		}
+
+		agentsMap[name] = ag
+	}
+
+	// Pass 2: Create workflow agents
+	for name, cfg := range r.cfg.Agents {
+		if cfg == nil || !isWorkflowAgentType(cfg.Type) {
+			continue
+		}
+
+		var subAgents []agent.Agent
+		for _, subName := range cfg.SubAgents {
+			subAgent, ok := agentsMap[subName]
+			if !ok {
+				return fmt.Errorf("workflow agent %q: sub_agent %q not found", name, subName)
+			}
+			subAgents = append(subAgents, subAgent)
+		}
+
+		ag, err := r.createWorkflowAgent(name, cfg, subAgents)
+		if err != nil {
+			return fmt.Errorf("workflow agent %q: %w", name, err)
+		}
+
+		agentsMap[name] = ag
+	}
+
+	// Pass 3 & 4: Wire up multi-agent relationships (similar to buildAgents)
+	// Reset sub-agent maps for new config
+	r.subAgents = make(map[string][]agent.Agent)
+	r.agentTools = make(map[string][]agent.Agent)
+
+	for name, cfg := range r.cfg.Agents {
+		if cfg == nil || isWorkflowAgentType(cfg.Type) {
+			continue
+		}
+
+		for _, subName := range cfg.SubAgents {
+			subAgent, ok := agentsMap[subName]
+			if !ok {
+				return fmt.Errorf("agent %q: sub_agent %q not found", name, subName)
+			}
+			r.subAgents[name] = append(r.subAgents[name], subAgent)
+		}
+
+		for _, agToolName := range cfg.AgentTools {
+			agentAsToolAgent, ok := agentsMap[agToolName]
+			if !ok {
+				return fmt.Errorf("agent %q: agent_tool %q not found", name, agToolName)
+			}
+			r.agentTools[name] = append(r.agentTools[name], agentAsToolAgent)
 		}
 	}
 
-	// Reset maps
-	r.cfg = cfg
-	r.llms = make(map[string]model.LLM)
-	r.toolsets = make(map[string]tool.Toolset)
-	r.agents = make(map[string]agent.Agent)
+	// Rebuild agents with multi-agent links
+	for name, cfg := range r.cfg.Agents {
+		if cfg == nil || isWorkflowAgentType(cfg.Type) {
+			continue
+		}
 
-	// Rebuild
-	if err := r.buildLLMs(); err != nil {
-		return fmt.Errorf("failed to rebuild LLMs: %w", err)
+		hasConfigSubAgents := len(cfg.SubAgents) > 0
+		hasConfigAgentTools := len(cfg.AgentTools) > 0
+
+		if !hasConfigSubAgents && !hasConfigAgentTools {
+			continue
+		}
+
+		llm, ok := llmsMap[cfg.LLM]
+		if !ok {
+			return fmt.Errorf("agent %q: llm %q not found", name, cfg.LLM)
+		}
+
+		var agentToolsets []tool.Toolset
+		if cfg.Tools == nil {
+			for toolName, ts := range r.toolsets {
+				if toolCfg, ok := r.cfg.Tools[toolName]; ok && toolCfg != nil && !toolCfg.IsEnabled() {
+					continue
+				}
+				agentToolsets = append(agentToolsets, ts)
+			}
+		} else if len(cfg.Tools) == 0 {
+			agentToolsets = []tool.Toolset{}
+		} else {
+			for _, toolName := range cfg.Tools {
+				ts, ok := r.toolsets[toolName]
+				if !ok {
+					return fmt.Errorf("agent %q: tool %q not found", name, toolName)
+				}
+				agentToolsets = append(agentToolsets, ts)
+			}
+		}
+
+		ag, err := r.createLLMAgent(name, cfg, llm, agentToolsets)
+		if err != nil {
+			return fmt.Errorf("agent %q: %w", name, err)
+		}
+
+		agentsMap[name] = ag
 	}
 
-	if err := r.buildToolsets(); err != nil {
-		return fmt.Errorf("failed to rebuild toolsets: %w", err)
-	}
-
-	if err := r.buildAgents(); err != nil {
-		return fmt.Errorf("failed to rebuild agents: %w", err)
-	}
-
-	slog.Info("Runtime reloaded", "agents", r.ListAgents())
 	return nil
 }
 

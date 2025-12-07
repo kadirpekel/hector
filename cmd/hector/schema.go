@@ -37,10 +37,8 @@ func (c *SchemaCmd) Run(cli *CLI) error {
 	reflector := &jsonschema.Reflector{
 		// Disallow additional properties for strict validation
 		AllowAdditionalProperties: false,
-		// Use references to avoid duplication
-		DoNotReference: false,
-		// Expand first-level definitions for better readability
-		ExpandedStruct: true,
+		// Inline all definitions (no $ref) for @rjsf/core compatibility
+		DoNotReference: true,
 	}
 
 	// Generate schema from Config struct

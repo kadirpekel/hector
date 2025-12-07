@@ -1,7 +1,6 @@
-import { useEffect } from 'react';
-import { Layout } from './components/Layout';
-import { ChatArea } from './components/Chat/ChatArea';
-import { useStore } from './store/useStore';
+import { useEffect } from "react";
+import { StudioMode } from "./components/ConfigBuilder/StudioMode";
+import { useStore } from "./store/useStore";
 
 function App() {
   // Use selectors for better performance - only subscribe to specific state slices
@@ -16,11 +15,8 @@ function App() {
     }
   }, [currentSessionId, sessions, createSession]);
 
-  return (
-    <Layout>
-      <ChatArea />
-    </Layout>
-  );
+  // Studio Mode is the unified interface (config editor + chat)
+  return <StudioMode />;
 }
 
 export default App;

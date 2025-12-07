@@ -66,13 +66,13 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({
   // Memoize widget map to prevent recreation on every render
   const widgetsMap = useMemo(
     () => new Map(message.widgets.map((w) => [w.id, w])),
-    [message.widgets]
+    [message.widgets],
   );
 
   // Memoize contentOrder to prevent unnecessary comparisons
   const contentOrder = useMemo(
     () => message.metadata?.contentOrder || [],
-    [message.metadata?.contentOrder]
+    [message.metadata?.contentOrder],
   );
 
   // Widget expansion state is managed via widget.isExpanded prop and onExpansionChange callback

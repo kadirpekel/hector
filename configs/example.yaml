@@ -1,88 +1,50 @@
-# Hector v2 Example Configuration
-#
-# This is a minimal example showing the config structure.
-# Environment variables can be used with ${VAR} or ${VAR:-default} syntax.
-
-version: "2"
+version: '2'
 name: example-assistant
 description: A simple example assistant
-
-# LLM Providers
-# Define one or more LLM providers that agents can reference
 llms:
   default:
-    provider: anthropic
-    model: claude-sonnet-4-20250514
-    api_key: ${ANTHROPIC_API_KEY}
-    temperature: 0.7
+    provider: openai
+    model: gpt-5-mini
+    api_key: ${OPEN_API_KEY}
+    temperature: 0.9
     max_tokens: 4096
-
-  # Alternative provider example (commented out)
-  # openai:
-  #   provider: openai
-  #   model: gpt-4o
-  #   api_key: ${OPENAI_API_KEY}
-
-# Tools
-# Define MCP or function tools that agents can use
 tools:
-  # Example MCP tool (requires MCP_URL environment variable)
-  # weather:
-  #   type: mcp
-  #   url: ${MCP_URL}
-  #   filter: [get_weather, get_forecast]  # Optional: limit exposed tools
-
-# Agents
-# Define one or more agents
+  weather:
+    type: mcp
+    url: ${MCP_URL}
 agents:
   assistant:
     name: Assistant
     description: A helpful AI assistant
-    llm: default  # Reference to llms section
-    # tools: [weather]  # Reference to tools section
+    llm: default
     instruction: |
       You are a helpful AI assistant. Be concise, accurate, and friendly.
-      
+
       When you don't know something, say so honestly.
-    
-    # A2A discovery metadata
     skills:
       - id: general
         name: General Assistant
         description: General purpose assistance and conversation
-        tags: [general, chat, help]
+        tags:
+          - general
+          - chat
+          - help
         examples:
-          - "What's the weather like?"
-          - "Help me write an email"
-          - "Explain quantum computing"
-
+          - What's the weather like?
+          - Help me write an email
+          - Explain quantum computing
     input_modes:
       - text/plain
     output_modes:
       - text/plain
-
-# Server Configuration
 server:
-  host: "0.0.0.0"
+  host: 0.0.0.0
   port: 8080
-  transport: json-rpc  # or grpc
-
-  # TLS (optional)
-  # tls:
-  #   enabled: true
-  #   cert_file: /path/to/cert.pem
-  #   key_file: /path/to/key.pem
-
-  # CORS (optional, defaults to allow all for development)
+  transport: json-rpc
   cors:
     allowed_origins:
-      - "*"
+      - '*'
     allowed_methods:
       - GET
       - POST
       - OPTIONS
-
-# Global Defaults (optional)
-# defaults:
-#   llm: default  # Default LLM for agents that don't specify one
-

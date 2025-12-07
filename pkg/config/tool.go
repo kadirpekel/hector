@@ -33,62 +33,62 @@ const (
 // ToolConfig configures a tool.
 type ToolConfig struct {
 	// Type of tool (mcp, function, command).
-	Type ToolType `yaml:"type,omitempty"`
+	Type ToolType `yaml:"type,omitempty" json:"type,omitempty" jsonschema:"title=Tool Type,description=Type of tool,enum=mcp,enum=function,enum=command,default=mcp"`
 
 	// Enabled controls whether the tool is active.
-	Enabled *bool `yaml:"enabled,omitempty"`
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" jsonschema:"title=Enabled,description=Whether the tool is active,default=true"`
 
 	// Description of the tool.
-	Description string `yaml:"description,omitempty"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty" jsonschema:"title=Description,description=What this tool does"`
 
 	// MCP-specific configuration
 	// URL is the MCP server URL (for type: mcp).
-	URL string `yaml:"url,omitempty"`
+	URL string `yaml:"url,omitempty" json:"url,omitempty" jsonschema:"title=MCP URL,description=MCP server URL (for type=mcp)"`
 
 	// Transport specifies the MCP transport (stdio, sse, streamable-http).
-	Transport string `yaml:"transport,omitempty"`
+	Transport string `yaml:"transport,omitempty" json:"transport,omitempty" jsonschema:"title=Transport,description=MCP transport type,enum=stdio,enum=sse,enum=streamable-http"`
 
 	// Command for MCP stdio transport (not to be confused with CommandTool).
-	Command string `yaml:"command,omitempty"`
+	Command string `yaml:"command,omitempty" json:"command,omitempty" jsonschema:"title=Command,description=Command to execute MCP server (for type=mcp stdio)"`
 
 	// Args for MCP stdio transport.
-	Args []string `yaml:"args,omitempty"`
+	Args []string `yaml:"args,omitempty" json:"args,omitempty" jsonschema:"title=Args,description=Arguments for MCP stdio transport"`
 
 	// Env for MCP stdio transport.
-	Env map[string]string `yaml:"env,omitempty"`
+	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty" jsonschema:"title=Environment Variables,description=Environment variables for MCP stdio transport"`
 
 	// Filter limits which tools are exposed from an MCP server.
-	Filter []string `yaml:"filter,omitempty"`
+	Filter []string `yaml:"filter,omitempty" json:"filter,omitempty" jsonschema:"title=Filter,description=Limit which tools are exposed from MCP server"`
 
 	// Function-specific configuration
 	// Handler is the function name (for type: function).
-	Handler string `yaml:"handler,omitempty"`
+	Handler string `yaml:"handler,omitempty" json:"handler,omitempty" jsonschema:"title=Handler,description=Function name (for type=function)"`
 
 	// Parameters schema (for type: function).
-	Parameters map[string]any `yaml:"parameters,omitempty"`
+	Parameters map[string]any `yaml:"parameters,omitempty" json:"parameters,omitempty" jsonschema:"title=Parameters,description=Parameters schema (for type=function)"`
 
 	// Command tool configuration (for type: command)
 	// AllowedCommands is a whitelist of allowed base commands.
-	AllowedCommands []string `yaml:"allowed_commands,omitempty"`
+	AllowedCommands []string `yaml:"allowed_commands,omitempty" json:"allowed_commands,omitempty" jsonschema:"title=Allowed Commands,description=Whitelist of allowed base commands"`
 
 	// DeniedCommands is a blacklist of denied base commands.
-	DeniedCommands []string `yaml:"denied_commands,omitempty"`
+	DeniedCommands []string `yaml:"denied_commands,omitempty" json:"denied_commands,omitempty" jsonschema:"title=Denied Commands,description=Blacklist of denied base commands"`
 
 	// WorkingDirectory for command execution.
-	WorkingDirectory string `yaml:"working_directory,omitempty"`
+	WorkingDirectory string `yaml:"working_directory,omitempty" json:"working_directory,omitempty" jsonschema:"title=Working Directory,description=Working directory for command execution"`
 
 	// MaxExecutionTime limits command execution duration.
-	MaxExecutionTime string `yaml:"max_execution_time,omitempty"`
+	MaxExecutionTime string `yaml:"max_execution_time,omitempty" json:"max_execution_time,omitempty" jsonschema:"title=Max Execution Time,description=Maximum command execution duration"`
 
 	// DenyByDefault requires explicit allowed_commands whitelist.
-	DenyByDefault *bool `yaml:"deny_by_default,omitempty"`
+	DenyByDefault *bool `yaml:"deny_by_default,omitempty" json:"deny_by_default,omitempty" jsonschema:"title=Deny By Default,description=Require explicit allowed_commands whitelist,default=false"`
 
 	// HITL (Human-in-the-Loop) settings
 	// RequireApproval requires user approval before execution.
-	RequireApproval *bool `yaml:"require_approval,omitempty"`
+	RequireApproval *bool `yaml:"require_approval,omitempty" json:"require_approval,omitempty" jsonschema:"title=Requires Approval (HITL),description=Whether this tool requires human approval,default=false"`
 
 	// ApprovalPrompt is the message shown when requesting approval.
-	ApprovalPrompt string `yaml:"approval_prompt,omitempty"`
+	ApprovalPrompt string `yaml:"approval_prompt,omitempty" json:"approval_prompt,omitempty" jsonschema:"title=Approval Prompt,description=Message shown when requesting approval"`
 }
 
 // SetDefaults applies default values.

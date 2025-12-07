@@ -51,54 +51,54 @@ import (
 // Config is the root configuration structure.
 type Config struct {
 	// Version of the config schema (e.g., "2").
-	Version string `yaml:"version,omitempty"`
+	Version string `yaml:"version,omitempty" json:"version,omitempty" jsonschema:"title=Config Version,description=Configuration schema version,default=2"`
 
 	// Name of this configuration (for logging/display).
-	Name string `yaml:"name,omitempty"`
+	Name string `yaml:"name,omitempty" json:"name,omitempty" jsonschema:"title=Project Name,description=Name of this configuration"`
 
 	// Description of this configuration.
-	Description string `yaml:"description,omitempty"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty" jsonschema:"title=Description,description=Human-readable description"`
 
 	// Databases defines available database connections.
 	// These can be referenced by other components (e.g., server.tasks).
-	Databases map[string]*DatabaseConfig `yaml:"databases,omitempty"`
+	Databases map[string]*DatabaseConfig `yaml:"databases,omitempty" json:"databases,omitempty" jsonschema:"title=Databases,description=Database connection configurations"`
 
 	// VectorStores defines available vector database providers.
 	// These can be referenced by memory, RAG, and document stores.
-	VectorStores map[string]*VectorStoreConfig `yaml:"vector_stores,omitempty"`
+	VectorStores map[string]*VectorStoreConfig `yaml:"vector_stores,omitempty" json:"vector_stores,omitempty" jsonschema:"title=Vector Stores,description=Vector database provider configurations"`
 
 	// LLMs defines available LLM providers.
-	LLMs map[string]*LLMConfig `yaml:"llms,omitempty"`
+	LLMs map[string]*LLMConfig `yaml:"llms,omitempty" json:"llms,omitempty" jsonschema:"title=LLMs,description=LLM provider configurations"`
 
 	// Embedders defines available embedding providers for semantic search.
-	Embedders map[string]*EmbedderConfig `yaml:"embedders,omitempty"`
+	Embedders map[string]*EmbedderConfig `yaml:"embedders,omitempty" json:"embedders,omitempty" jsonschema:"title=Embedders,description=Embedding provider configurations"`
 
 	// Tools defines available tools.
-	Tools map[string]*ToolConfig `yaml:"tools,omitempty"`
+	Tools map[string]*ToolConfig `yaml:"tools,omitempty" json:"tools,omitempty" jsonschema:"title=Tools,description=Tool configurations"`
 
 	// Agents defines available agents.
-	Agents map[string]*AgentConfig `yaml:"agents,omitempty"`
+	Agents map[string]*AgentConfig `yaml:"agents,omitempty" json:"agents,omitempty" jsonschema:"title=Agents,description=Agent configurations"`
 
 	// DocumentStores defines available document stores for RAG.
-	DocumentStores map[string]*DocumentStoreConfig `yaml:"document_stores,omitempty"`
+	DocumentStores map[string]*DocumentStoreConfig `yaml:"document_stores,omitempty" json:"document_stores,omitempty" jsonschema:"title=Document Stores,description=Document store configurations for RAG"`
 
 	// Server configures the A2A server.
-	Server ServerConfig `yaml:"server,omitempty"`
+	Server ServerConfig `yaml:"server,omitempty" json:"server,omitempty" jsonschema:"title=Server Configuration,description=A2A server settings"`
 
 	// Logger configures logging behavior.
-	Logger *LoggerConfig `yaml:"logger,omitempty"`
+	Logger *LoggerConfig `yaml:"logger,omitempty" json:"logger,omitempty" jsonschema:"title=Logger Configuration,description=Logging behavior settings"`
 
 	// RateLimiting configures rate limiting.
-	RateLimiting *RateLimitConfig `yaml:"rate_limiting,omitempty"`
+	RateLimiting *RateLimitConfig `yaml:"rate_limiting,omitempty" json:"rate_limiting,omitempty" jsonschema:"title=Rate Limiting,description=Rate limiting configuration"`
 
 	// Defaults provides default values for agents.
-	Defaults *DefaultsConfig `yaml:"defaults,omitempty"`
+	Defaults *DefaultsConfig `yaml:"defaults,omitempty" json:"defaults,omitempty" jsonschema:"title=Defaults,description=Default values for agents"`
 }
 
 // DefaultsConfig provides default values for agent configurations.
 type DefaultsConfig struct {
 	// LLM is the default LLM reference for agents.
-	LLM string `yaml:"llm,omitempty"`
+	LLM string `yaml:"llm,omitempty" json:"llm,omitempty" jsonschema:"title=Default LLM,description=Default LLM reference for agents"`
 }
 
 // SetDefaults applies default values to the config.

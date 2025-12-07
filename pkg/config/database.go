@@ -20,31 +20,31 @@ import "fmt"
 // Supports PostgreSQL, MySQL, and SQLite.
 type DatabaseConfig struct {
 	// Driver specifies the database driver: "postgres", "mysql", or "sqlite"
-	Driver string `yaml:"driver"`
+	Driver string `yaml:"driver" json:"driver" jsonschema:"title=Database Type,description=Type of database,enum=postgres,enum=mysql,enum=sqlite,enum=sqlite3,default=postgres"`
 
 	// Host is the database server hostname (not required for SQLite).
-	Host string `yaml:"host,omitempty"`
+	Host string `yaml:"host,omitempty" json:"host,omitempty" jsonschema:"title=Host,description=Database server hostname (not required for SQLite)"`
 
 	// Port is the database server port (not required for SQLite).
-	Port int `yaml:"port,omitempty"`
+	Port int `yaml:"port,omitempty" json:"port,omitempty" jsonschema:"title=Port,description=Database server port (not required for SQLite)"`
 
 	// Database is the database name (or file path for SQLite).
-	Database string `yaml:"database"`
+	Database string `yaml:"database" json:"database" jsonschema:"title=Database,description=Database name (or file path for SQLite)"`
 
 	// Username for database authentication (not required for SQLite).
-	Username string `yaml:"username,omitempty"`
+	Username string `yaml:"username,omitempty" json:"username,omitempty" jsonschema:"title=Username,description=Database username (not required for SQLite)"`
 
 	// Password for database authentication (not required for SQLite).
-	Password string `yaml:"password,omitempty"`
+	Password string `yaml:"password,omitempty" json:"password,omitempty" jsonschema:"title=Password,description=Database password (not required for SQLite)"`
 
 	// SSLMode for PostgreSQL connections.
-	SSLMode string `yaml:"ssl_mode,omitempty"`
+	SSLMode string `yaml:"ssl_mode,omitempty" json:"ssl_mode,omitempty" jsonschema:"title=SSL Mode,description=SSL mode for PostgreSQL connections"`
 
 	// MaxConns is the maximum number of open connections.
-	MaxConns int `yaml:"max_conns,omitempty"`
+	MaxConns int `yaml:"max_conns,omitempty" json:"max_conns,omitempty" jsonschema:"title=Max Open Connections,description=Maximum open connections,minimum=1,default=25"`
 
 	// MaxIdle is the maximum number of idle connections.
-	MaxIdle int `yaml:"max_idle,omitempty"`
+	MaxIdle int `yaml:"max_idle,omitempty" json:"max_idle,omitempty" jsonschema:"title=Max Idle Connections,description=Maximum idle connections,minimum=1,default=5"`
 }
 
 // SetDefaults applies default values to the database config.

@@ -15,7 +15,9 @@ export const InputArea: React.FC = () => {
   const selectedAgent = useStore((state) => state.selectedAgent);
   const isGenerating = useStore((state) => state.isGenerating);
   const setIsGenerating = useStore((state) => state.setIsGenerating);
-  const setActiveStreamParser = useStore((state) => state.setActiveStreamParser);
+  const setActiveStreamParser = useStore(
+    (state) => state.setActiveStreamParser,
+  );
   const cancelGeneration = useStore((state) => state.cancelGeneration);
   const supportedFileTypes = useStore((state) => state.supportedFileTypes);
   const sessions = useStore((state) => state.sessions);

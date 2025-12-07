@@ -19,15 +19,20 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/a2aproject/a2a-go/a2a"
 	"github.com/a2aproject/a2a-go/a2agrpc"
 	"github.com/a2aproject/a2a-go/a2asrv"
+	"github.com/invopop/jsonschema"
+	"gopkg.in/yaml.v3"
 
 	"github.com/kadirpekel/hector/pkg/auth"
 	"github.com/kadirpekel/hector/pkg/config"
@@ -67,6 +72,11 @@ type HTTPServer struct {
 
 	// Per-agent: gRPC handlers (only when Transport == TransportGRPC)
 	agentGRPCHandlers map[string]*a2agrpc.Handler
+
+	// Studio mode: config file path and studio mode flag
+	configPath string
+	studioMode bool
+	mu         sync.RWMutex
 }
 
 // HTTPServerOption configures the HTTP server.
@@ -386,6 +396,12 @@ func (s *HTTPServer) setupRoutes() *http.ServeMux {
 	// Health check
 	mux.HandleFunc("/health", s.handleHealth)
 
+	// Schema endpoint for config builder UI
+	mux.HandleFunc("/api/schema", s.handleGetSchema)
+
+	// Config endpoints (studio mode)
+	mux.HandleFunc("/api/config", s.handleConfigEndpoint)
+
 	// Prometheus metrics endpoint (if enabled)
 	if s.observability != nil && s.observability.MetricsEnabled() {
 		metricsEndpoint := s.observability.MetricsEndpoint()
@@ -427,6 +443,44 @@ func (s *HTTPServer) handleRoot(w http.ResponseWriter, r *http.Request) {
 func (s *HTTPServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// handleGetSchema generates and returns JSON Schema for the config builder UI.
+// Schema is generated dynamically to ensure it's always current and works in
+// production deployments where file paths may not be available.
+func (s *HTTPServer) handleGetSchema(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	reflector := &jsonschema.Reflector{
+		AllowAdditionalProperties: false,
+		DoNotReference:            true, // Inline all definitions for @rjsf/core compatibility
+	}
+
+	schema := reflector.Reflect(&config.Config{})
+
+	// Add metadata
+	schema.ID = "https://hector.dev/schemas/config.json"
+	schema.Title = "Hector Configuration Schema"
+	schema.Description = "Complete configuration schema for Hector v2 agent framework"
+	schema.Version = "http://json-schema.org/draft-07/schema#"
+
+	// Set headers
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
+	// Write response
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(schema); err != nil {
+		slog.Error("Failed to encode schema", "error", err)
+		http.Error(w, "Failed to generate schema", http.StatusInternalServerError)
+		return
+	}
 }
 
 // handleDefaultAgentCard serves the default agent's card at the server-level well-known path.
@@ -566,4 +620,111 @@ func (s *HTTPServer) loggingMiddleware(next http.Handler) http.Handler {
 			"duration", time.Since(start),
 		)
 	})
+}
+
+// UpdateExecutors atomically updates agent executors (for hot-reload).
+func (s *HTTPServer) UpdateExecutors(executors map[string]*Executor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Rebuild handlers for new executors
+	s.buildAgentHandlers(executors)
+	slog.Debug("Executors updated", "count", len(executors))
+}
+
+// SetStudioMode enables studio mode with config file path.
+func (s *HTTPServer) SetStudioMode(configPath string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.studioMode = true
+	s.configPath = configPath
+	slog.Info("Studio mode enabled", "config_path", configPath)
+}
+
+// handleConfigEndpoint handles GET and POST /api/config (studio mode).
+func (s *HTTPServer) handleConfigEndpoint(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	studioMode := s.studioMode
+	configPath := s.configPath
+	s.mu.RUnlock()
+
+	if !studioMode {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "Studio mode not enabled. Start with --studio flag.",
+		})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		// Read current config file
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error": "Failed to read config file: " + err.Error(),
+			})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/yaml")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(data)
+
+	case http.MethodPost:
+		// Read YAML body
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error": "Failed to read body: " + err.Error(),
+			})
+			return
+		}
+
+		// Parse and validate
+		var testCfg config.Config
+		if err := yaml.Unmarshal(body, &testCfg); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error": "Invalid YAML: " + err.Error(),
+			})
+			return
+		}
+
+		if err := testCfg.Validate(); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error": "Validation failed: " + err.Error(),
+			})
+			return
+		}
+
+		// Write to file
+		if err := os.WriteFile(configPath, body, 0644); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error": "Failed to write file: " + err.Error(),
+			})
+			return
+		}
+
+		// File watcher will trigger reload automatically
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"status":  "saved",
+			"message": "Configuration saved. Reloading...",
+		})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }

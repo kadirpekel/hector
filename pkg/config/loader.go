@@ -134,6 +134,11 @@ func (l *Loader) Close() error {
 	return l.provider.Close()
 }
 
+// Provider returns the underlying provider (for hot-reload).
+func (l *Loader) Provider() provider.Provider {
+	return l.provider
+}
+
 // parseBytes parses raw bytes into a map.
 // Supports YAML (primary) and JSON (fallback).
 func parseBytes(data []byte) (map[string]any, error) {

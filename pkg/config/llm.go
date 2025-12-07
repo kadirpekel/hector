@@ -32,34 +32,34 @@ const (
 // LLMConfig configures an LLM provider.
 type LLMConfig struct {
 	// Provider type (anthropic, openai, gemini, ollama).
-	Provider LLMProvider `yaml:"provider,omitempty"`
+	Provider LLMProvider `yaml:"provider,omitempty" json:"provider,omitempty" jsonschema:"title=Provider,description=LLM provider,enum=anthropic,enum=openai,enum=gemini,enum=ollama,default=anthropic"`
 
 	// Model name (e.g., "claude-sonnet-4-20250514", "gpt-4o").
-	Model string `yaml:"model,omitempty"`
+	Model string `yaml:"model,omitempty" json:"model,omitempty" jsonschema:"title=Model,description=Model identifier"`
 
 	// APIKey for authentication. Supports ${VAR} expansion.
-	APIKey string `yaml:"api_key,omitempty"`
+	APIKey string `yaml:"api_key,omitempty" json:"api_key,omitempty" jsonschema:"title=API Key,description=API key for authentication (use ${ENV_VAR})"`
 
 	// BaseURL overrides the default API endpoint.
-	BaseURL string `yaml:"base_url,omitempty"`
+	BaseURL string `yaml:"base_url,omitempty" json:"base_url,omitempty" jsonschema:"title=Base URL,description=Custom base URL for API endpoint"`
 
 	// Temperature for generation (0.0 - 1.0).
-	Temperature *float64 `yaml:"temperature,omitempty"`
+	Temperature *float64 `yaml:"temperature,omitempty" json:"temperature,omitempty" jsonschema:"title=Temperature,description=Sampling temperature,minimum=0,maximum=2,default=0.7"`
 
 	// MaxTokens limits response length.
-	MaxTokens int `yaml:"max_tokens,omitempty"`
+	MaxTokens int `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty" jsonschema:"title=Max Tokens,description=Maximum tokens to generate,minimum=1,default=4096"`
 
 	// Thinking enables extended thinking (Claude).
-	Thinking *ThinkingConfig `yaml:"thinking,omitempty"`
+	Thinking *ThinkingConfig `yaml:"thinking,omitempty" json:"thinking,omitempty" jsonschema:"title=Thinking Configuration,description=Extended thinking configuration (Claude)"`
 }
 
 // ThinkingConfig configures extended thinking (Claude).
 type ThinkingConfig struct {
 	// Enabled turns on extended thinking.
-	Enabled *bool `yaml:"enabled,omitempty"`
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" jsonschema:"title=Enabled,description=Enable extended thinking,default=true"`
 
 	// BudgetTokens is the token budget for thinking.
-	BudgetTokens int `yaml:"budget_tokens,omitempty"`
+	BudgetTokens int `yaml:"budget_tokens,omitempty" json:"budget_tokens,omitempty" jsonschema:"title=Budget Tokens,description=Token budget for thinking,minimum=1,default=1024"`
 }
 
 // SetDefaults applies default values.

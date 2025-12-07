@@ -223,6 +223,14 @@ validate-configs:
 # Alias for validate-configs
 validate-config-examples: validate-configs
 
+# Schema generation
+.PHONY: schema
+schema:
+	@echo "🔨 Generating JSON Schema from Go structs..."
+	@mkdir -p ui/src/schemas
+	@go run ./cmd/hector schema > ui/src/schemas/hector-config.schema.json
+	@echo "✅ Schema generated at ui/src/schemas/hector-config.schema.json"
+
 # A2A Protocol Compliance Verification
 .PHONY: a2a-tests
 
