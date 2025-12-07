@@ -32,12 +32,14 @@ import (
 	"syscall"
 
 	"github.com/alecthomas/kong"
+	"gopkg.in/yaml.v3"
 
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/runtime"
 	"github.com/kadirpekel/hector/pkg/server"
 	"github.com/kadirpekel/hector/pkg/session"
 	"github.com/kadirpekel/hector/pkg/task"
+	"github.com/kadirpekel/hector/pkg/utils"
 )
 
 // CLI defines the command-line interface.
@@ -121,8 +123,15 @@ func (c *ServeCmd) Run(cli *CLI) error {
 		cancel()
 	}()
 
+	// Determine config path
+	configPath := cli.Config
+	if configPath == "" && !c.isZeroConfig() {
+		// Use unified default config path
+		configPath = utils.DefaultConfigPath()
+	}
+
 	// Load configuration
-	cfg, loader, err := c.loadConfig(ctx, cli.Config)
+	cfg, loader, configPathUsed, err := c.loadConfig(ctx, configPath, c.Studio)
 	if err != nil {
 		return err
 	}
@@ -180,12 +189,28 @@ func (c *ServeCmd) Run(cli *CLI) error {
 
 	// Enable studio mode if requested
 	if c.Studio {
-		if cli.Config == "" {
-			return fmt.Errorf("--studio requires --config flag with config file path")
+		// In studio mode, we need a save path for config updates
+		savePath := configPathUsed
+		if savePath == "" {
+			// Zero-config in studio: use default save path
+			savePath = utils.DefaultConfigPath()
+
+			// Create initial config file from current zero-config state
+			if err := c.saveConfigToFile(cfg, savePath); err != nil {
+				slog.Warn("Failed to create initial config file", "error", err)
+			} else {
+				slog.Info("Created initial config from zero-config", "path", savePath)
+			}
 		}
-		srv.SetStudioMode(cli.Config)
+
+		srv.SetStudioMode(savePath)
 		c.Watch = true // Auto-enable watch
-		slog.Info("Studio mode enabled", "config_file", cli.Config)
+
+		if configPathUsed == "" {
+			slog.Info("Studio mode with zero-config base", "save_path", savePath)
+		} else {
+			slog.Info("Studio mode enabled", "config_file", savePath)
+		}
 	}
 
 	// Start config watching if enabled (auto-enabled by --studio)
@@ -307,25 +332,45 @@ func (c *ServeCmd) Run(cli *CLI) error {
 	return srv.Start(ctx)
 }
 
+// isZeroConfig checks if we're using zero-config mode (CLI flags instead of file).
+func (c *ServeCmd) isZeroConfig() bool {
+	return c.Provider != "" || c.Model != "" || c.MCPURL != "" ||
+		c.Tools != "" || c.DocsFolder != "" || c.Storage != ""
+}
+
 // loadConfig loads configuration from file or creates zero-config.
-func (c *ServeCmd) loadConfig(ctx context.Context, configPath string) (*config.Config, *config.Loader, error) {
+// Returns: (config, loader, pathUsed, error)
+// pathUsed is empty string for zero-config mode.
+func (c *ServeCmd) loadConfig(ctx context.Context, configPath string, isStudioMode bool) (*config.Config, *config.Loader, string, error) {
 	if configPath != "" {
+		// Check if file exists
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			// File doesn't exist - create minimal config from zero-config defaults
+			slog.Info("Config file not found, creating from defaults", "path", configPath)
+
+			if err := c.createMinimalConfig(configPath); err != nil {
+				return nil, nil, "", fmt.Errorf("failed to create config: %w", err)
+			}
+		}
+
 		_ = config.LoadDotEnvForConfig(configPath)
 		cfg, loader, err := config.LoadConfigFile(ctx, configPath)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to load config: %w", err)
+			return nil, nil, "", fmt.Errorf("failed to load config: %w", err)
 		}
 		slog.Info("Loaded configuration", "path", configPath)
-		return cfg, loader, nil
+		return cfg, loader, configPath, nil
 	}
 
 	// Zero-config mode
-	// Handle streaming default: Kong may not set pointer bool defaults properly
-	// So we explicitly set it to true if nil (default behavior)
+	slog.Info("Using zero-config mode")
+
+	// Handle streaming default
 	streaming := c.Stream
 	if streaming == nil {
-		streaming = config.BoolPtr(true) // Default to true (streaming enabled)
+		streaming = config.BoolPtr(true)
 	}
+
 	cfg := config.CreateZeroConfig(config.ZeroConfig{
 		Provider:       c.Provider,
 		Model:          c.Model,
@@ -351,7 +396,12 @@ func (c *ServeCmd) loadConfig(ctx context.Context, configPath string) (*config.C
 		RAGWatch:       c.RAGWatch,
 		MCPParserTool:  c.MCPParserTool,
 	})
-	slog.Info("Using zero-config mode")
+
+	if isStudioMode {
+		slog.Info("💡 Studio with zero-config: edits will be saved to " + utils.DefaultConfigPath())
+	}
+
+	// Log enabled features
 	if c.Tools != "" {
 		if c.Tools == "all" || strings.TrimSpace(c.Tools) == "" {
 			slog.Info("All built-in local tools enabled")
@@ -362,10 +412,9 @@ func (c *ServeCmd) loadConfig(ctx context.Context, configPath string) (*config.C
 	if c.Storage != "" && c.Storage != "inmemory" {
 		dbInfo := c.StorageDB
 		if dbInfo == "" {
-			// Show default database info based on backend
 			switch c.Storage {
 			case "sqlite", "sqlite3":
-				dbInfo = "./.hector/hector.db"
+				dbInfo = utils.DefaultDatabasePath()
 			case "postgres":
 				dbInfo = "localhost:5432/hector"
 			case "mysql":
@@ -389,15 +438,61 @@ func (c *ServeCmd) loadConfig(ctx context.Context, configPath string) (*config.C
 			slog.Info("MCP document parsing enabled", "tools", c.MCPParserTool)
 		}
 	}
-	if cfg.Agents != nil {
-		for name, agent := range cfg.Agents {
-			if agent != nil {
-				streamingEnabled := config.BoolValue(agent.Streaming, false)
-				slog.Info("Agent streaming configuration", "agent", name, "streaming", streamingEnabled)
-			}
-		}
+
+	return cfg, nil, "", nil
+}
+
+// createMinimalConfig creates a minimal viable config by dumping the zero-config defaults.
+// This ensures the file-based config matches what "hector serve" would create in memory.
+func (c *ServeCmd) createMinimalConfig(path string) error {
+	// Ensure .hector directory exists
+	if _, err := utils.EnsureHectorDir("."); err != nil {
+		return err
 	}
-	return cfg, nil, nil
+
+	// Create the same config that zero-config mode would create with defaults
+	streaming := config.BoolPtr(true) // Default streaming enabled
+	cfg := config.CreateZeroConfig(config.ZeroConfig{
+		Provider:    "openai", // Default provider
+		Model:       "gpt-4",  // Default model
+		Temperature: 0.7,      // Default temperature
+		MaxTokens:   4096,     // Default max tokens
+		Streaming:   streaming,
+		Port:        8080, // Default port
+	})
+
+	// Serialize to clean YAML
+	yamlData, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(path, yamlData, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	slog.Info("✅ Created minimal config", "path", path)
+	return nil
+}
+
+// saveConfigToFile saves a config to a YAML file.
+func (c *ServeCmd) saveConfigToFile(cfg *config.Config, path string) error {
+	// Ensure directory exists
+	if _, err := utils.EnsureHectorDir("."); err != nil {
+		return err
+	}
+
+	// Serialize to YAML
+	yamlData, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(path, yamlData, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
 }
 
 // InfoCmd shows agent information.
