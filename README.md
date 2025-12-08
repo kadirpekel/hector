@@ -77,4 +77,4 @@ hector serve --config config.yaml
 
 ## License
 
-AGPL-3.0 for non-commercial use (see [LICENSE.md](LICENSE.md)). Commercial licensing available per LICENSE.md terms.
+AGPL-3.0 (see [LICENSE](LICENSE)).
