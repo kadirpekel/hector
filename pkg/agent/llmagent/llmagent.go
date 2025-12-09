@@ -332,6 +332,7 @@ func New(cfg Config) (agent.Agent, error) {
 		BeforeAgentCallbacks: cfg.BeforeAgentCallbacks,
 		Run:                  a.run,
 		AfterAgentCallbacks:  cfg.AfterAgentCallbacks,
+		AgentType:            agent.TypeLLMAgent,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base agent: %w", err)
@@ -388,155 +389,124 @@ func joinInstructions(parts []string) string {
 	return result
 }
 
-// buildMessages constructs the message history for the LLM.
-// It filters events based on branch and content settings, following ADK-Go patterns.
-//
-// Processing pipeline:
-//  1. Filter by branch
-//  2. Skip partial events
-//  3. Reconstruct thinking blocks with signatures
-//  4. Convert foreign agent messages
-//  5. Rearrange events for async function responses (adk-go pattern)
-//  6. Rearrange tool calls/results for proper pairing
-//  7. Filter auth events
 func (a *llmAgent) buildMessages(ctx agent.InvocationContext) []*a2a.Message {
 	var messages []*a2a.Message
+	session := ctx.Session()
+	if session == nil {
+		return messages
+	}
 
-	// Include history if configured
-	if a.includeContents != IncludeContentsNone {
-		session := ctx.Session()
-		if session != nil {
-			currentBranch := ctx.Branch()
+	currentBranch := ctx.Branch()
 
-			// Create model-aware content processor
-			provider := model.ProviderUnknown
-			if a.model != nil {
-				provider = a.model.Provider()
-			}
-			processor := NewContentProcessor(a.Name(), provider)
+	// Create model-aware content processor
+	provider := model.ProviderUnknown
+	if a.model != nil {
+		provider = a.model.Provider()
+	}
+	processor := NewContentProcessor(a.Name(), provider)
 
-			// Collect and filter events first
-			var events []*agent.Event
-			for event := range session.Events().All() {
-				if event.Message == nil {
-					continue
-				}
-
-				// Skip events not belonging to current branch (ADK-Go pattern)
-				if !eventBelongsToBranch(currentBranch, event.Branch) {
-					continue
-				}
-
-				// Skip partial/streaming events
-				if event.Partial {
-					continue
-				}
-
-				// Skip pending_approval tool results (HITL flow control only, not real results)
-				// These are placeholder events created when a tool requires approval
-				// The actual result comes after approval in executePendingApprovedTools
-				isPendingApproval := false
-				for _, tr := range event.ToolResults {
-					if tr.Status == "pending_approval" {
-						isPendingApproval = true
-						break
-					}
-				}
-				if isPendingApproval {
-					slog.Debug("Skipping pending_approval event",
-						"event_author", event.Author,
-						"tool_results", len(event.ToolResults))
-					continue
-				}
-
-				events = append(events, event)
-			}
-
-			// Rearrange events for async function responses (adk-go pattern)
-			// This handles long-running tools where responses arrive out of order
-			// IMPORTANT: Rearrangement must happen BEFORE working memory filtering
-			// to ensure tool call/result pairs stay together (Issue #3)
-			var rearrangeErr error
-			events, rearrangeErr = processor.RearrangeEventsForLatestFunctionResponse(events)
-			if rearrangeErr != nil {
-				slog.Warn("Failed to rearrange events for latest function response",
-					"error", rearrangeErr)
-			}
-			events, rearrangeErr = processor.RearrangeEventsForFunctionResponsesInHistory(events)
-			if rearrangeErr != nil {
-				slog.Warn("Failed to rearrange events for function responses in history",
-					"error", rearrangeErr)
-			}
-
-			// Apply working memory strategy to filter events for context window
-			// This happens AFTER rearranging to ensure tool call/result pairs stay together
-			if a.workingMemory != nil {
-				beforeCount := len(events)
-				events = a.workingMemory.FilterEvents(events)
-				if len(events) != beforeCount {
-					slog.Debug("Working memory filtered events",
-						"strategy", a.workingMemory.Name(),
-						"before", beforeCount,
-						"after", len(events))
-				}
-			}
-
-			// Convert events to messages
-			for _, event := range events {
-				// Reconstruct thinking blocks if present in metadata
-				msg := reconstructMessageWithThinking(event)
-
-				// Convert foreign agent messages to user context
-				msg = processor.ConvertForeignAgentMessage(msg, event.Author)
-
-				messages = append(messages, msg)
-			}
-
-			// Process messages for model-specific requirements
-			// Flow creates the correct message structure for all providers:
-			// - Assistant message with tool_use blocks
-			// - User message with tool_result blocks
-			messages = processor.Process(messages)
-
-			// Filter out auth events
-			messages = processor.FilterAuthEvents(messages)
+	// 1. Gather Candidate Events
+	// ALWAYS read from session events (adk-go pattern)
+	var candidateEvents []*agent.Event
+	for event := range session.Events().All() {
+		if event.Message == nil {
+			continue
 		}
-	} else {
-		// IncludeContentsNone mode: only use current turn context (ADK-Go pattern)
-		// The user message is already in session (runner appends it before agent runs),
-		// so we read from session but only include events from the current turn.
-		session := ctx.Session()
-		if session != nil {
-			// Find the latest user message and include from there (current turn only)
-			var events []*agent.Event
-			for event := range session.Events().All() {
-				if event.Message != nil {
-					events = append(events, event)
-				}
-			}
+		candidateEvents = append(candidateEvents, event)
+	}
 
-			// Find start of current turn (latest user message)
-			startIdx := 0
-			for i := len(events) - 1; i >= 0; i-- {
-				if events[i].Author == agent.AuthorUser {
-					startIdx = i
-					break
-				}
+	// For IncludeContentsNone, only keep events from the current turn
+	if a.includeContents == IncludeContentsNone {
+		// Find start of current turn (latest user message)
+		startIdx := 0
+		for i := len(candidateEvents) - 1; i >= 0; i-- {
+			if candidateEvents[i].Author == agent.AuthorUser {
+				startIdx = i
+				break
 			}
+		}
+		candidateEvents = candidateEvents[startIdx:]
+	}
 
-			// Include events from current turn only
-			for _, event := range events[startIdx:] {
-				messages = append(messages, event.Message)
+	slog.Debug("Candidate events gathered", "count", len(candidateEvents), "agent", a.Name())
+
+	// 2. Filter Events (Branch, Partial, Pending)
+	var events []*agent.Event
+	for _, event := range candidateEvents {
+		// Skip events not belonging to current branch (ADK-Go pattern)
+		if !eventBelongsToBranch(currentBranch, event.Branch) {
+			// slog.Debug("Filtered event (branch mismatch)", "id", event.ID, "branch", event.Branch, "agent_branch", currentBranch)
+			continue
+		}
+
+		// Skip partial/streaming events
+		if event.Partial {
+			continue
+		}
+
+		// Skip pending_approval tool results
+		isPendingApproval := false
+		for _, tr := range event.ToolResults {
+			if tr.Status == "pending_approval" {
+				isPendingApproval = true
+				break
 			}
+		}
+		if isPendingApproval {
+			continue
+		}
+
+		events = append(events, event)
+	}
+	slog.Debug("Events after filtering", "count", len(events), "agent", a.Name())
+	slog.Debug("Events after filtering", "count", len(events), "agent", a.Name())
+
+	// 3. Rearrange Events (Async & History) - Applied to ALL modes
+	// This ensures tool call/result pairing works even in single-turn mode
+	var rearrangeErr error
+	events, rearrangeErr = processor.RearrangeEventsForLatestFunctionResponse(events)
+	if rearrangeErr != nil {
+		slog.Warn("Failed to rearrange events for latest function response",
+			"error", rearrangeErr)
+	}
+	events, rearrangeErr = processor.RearrangeEventsForFunctionResponsesInHistory(events)
+	if rearrangeErr != nil {
+		slog.Warn("Failed to rearrange events for function responses in history",
+			"error", rearrangeErr)
+	}
+
+	// 4. Apply Working Memory Strategy
+	if a.workingMemory != nil {
+		beforeCount := len(events)
+		events = a.workingMemory.FilterEvents(events)
+		if len(events) != beforeCount {
+			slog.Debug("Working memory filtered events",
+				"strategy", a.workingMemory.Name(),
+				"before", beforeCount,
+				"after", len(events))
 		}
 	}
 
-	// NOTE: When including history, do NOT add ctx.UserContent() here!
-	// The Runner already appends the user message to the session BEFORE the agent runs.
-	// Adding it again would cause duplicate user messages on subsequent iterations
-	// (e.g., after tool execution), which breaks the LLM's understanding of the conversation.
-	// This was causing infinite tool call loops with Anthropic.
-	// (ADK-Go pattern: ContentsRequestProcessor only reads from session.Events().All())
+	// 5. Convert Events to Messages
+	for _, event := range events {
+		// Reconstruct thinking blocks if present in metadata
+		msg := reconstructMessageWithThinking(event)
+
+		// Convert foreign agent messages to user context (Critical for adk-go alignment)
+		msg = processor.ConvertForeignAgentMessage(msg, event.Author)
+
+		// Remove empty parts (Gemini fix, alignment with adk-go)
+		msg = processor.SanitizeMessage(msg)
+
+		messages = append(messages, msg)
+	}
+
+	// 6. Post-Process Messages
+	// Process messages for model-specific requirements
+	messages = processor.Process(messages)
+
+	// Filter out auth events (Legacy Hector pattern, kept for compatibility)
+	messages = processor.FilterAuthEvents(messages)
 
 	return messages
 }
@@ -599,10 +569,21 @@ func eventBelongsToBranch(invocationBranch, eventBranch string) bool {
 	}
 
 	// Check if invocation branch starts with event branch (ancestor event)
+	// OR if event branch starts with invocation branch (descendant event)
 	// Use dot delimiter to avoid false matches (agent_1 vs agent_10)
+
+	// Case 1: Ancestor event (My branch starts with Event branch)
 	if len(invocationBranch) > len(eventBranch) &&
 		invocationBranch[:len(eventBranch)] == eventBranch &&
 		invocationBranch[len(eventBranch)] == '.' {
+		return true
+	}
+
+	// Case 2: Descendant event (Event branch starts with My branch)
+	// This ensures agents can see events from sub-tasks (e.g. parallel branches)
+	if len(eventBranch) > len(invocationBranch) &&
+		eventBranch[:len(invocationBranch)] == invocationBranch &&
+		eventBranch[len(invocationBranch)] == '.' {
 		return true
 	}
 

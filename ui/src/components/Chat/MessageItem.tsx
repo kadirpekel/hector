@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -9,10 +9,9 @@ import { ToolWidget } from "../Widgets/ToolWidget";
 import { ThinkingWidget } from "../Widgets/ThinkingWidget";
 import { ApprovalWidget } from "../Widgets/ApprovalWidget";
 import { ImageWidget } from "../Widgets/ImageWidget";
-import { TodoList } from "./TodoList";
 import { useStore } from "../../store/useStore";
 import { isWidgetInLifecycle } from "../../lib/widget-animations";
-import type { TodoItem } from "../../types";
+import { getAgentColor, getAgentColorClasses } from "../../lib/colors";
 import "highlight.js/styles/github-dark.css";
 
 // Shared ReactMarkdown configuration
@@ -53,7 +52,14 @@ interface MessageItemWithContextProps {
   isLastMessage: boolean;
 }
 
-export const MessageItem: React.FC<MessageItemWithContextProps> = ({
+interface BubbleGroup {
+  id: string; // Unique ID for the group
+  author?: string;
+  isUser: boolean;
+  widgetIds: string[];
+}
+
+const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
   message,
   messageIndex,
   isLastMessage,
@@ -75,6 +81,76 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({
     [message.metadata?.contentOrder],
   );
 
+  // Group widgets into separate bubbles based on author continuity
+  const bubbleGroups = useMemo(() => {
+    // Collect all widget IDs from contentOrder first
+    const orderedIds = [...contentOrder];
+
+    // Find any widgets that are NOT in contentOrder (orphans) and append them
+    // This is a safety net for synchronization issues
+    message.widgets.forEach(w => {
+      if (!orderedIds.includes(w.id)) {
+        orderedIds.push(w.id);
+      }
+    });
+
+    if (orderedIds.length === 0) return [];
+
+    const groups: BubbleGroup[] = [];
+    let currentAuthor: string | undefined = undefined;
+    let currentWidgetIds: string[] = [];
+
+    // Helper: Determine author of a widget
+    const getWidgetAuthor = (widgetId: string): string | undefined => {
+      const w = widgetsMap.get(widgetId);
+      if (!w) return undefined;
+      // Check data.author for widgets that support it
+      if (w.type === 'text' && w.data.author) return w.data.author;
+      if (w.type === 'tool' && w.data.author) return w.data.author;
+      if (w.type === 'thinking' && w.data.author) return w.data.author;
+      // For widgets without author metadata, return undefined
+      // This allows proper grouping by treating them as continuation of current author
+      return undefined;
+    };
+
+    orderedIds.forEach((widgetId) => {
+      const author = getWidgetAuthor(widgetId);
+
+      // Transition Logic:
+      // If we have a current group, does the new widget belong to it?
+      // - If author is defined and DIFFERENT from current -> Split
+      // - If author is defined and SAME as current -> Keep
+      // - If author is undefined -> Keep (assume continuation/system)
+
+      const shouldSplit = author && author !== currentAuthor;
+
+      if (shouldSplit && currentWidgetIds.length > 0) {
+        groups.push({
+          id: `group_${groups.length}`,
+          author: currentAuthor,
+          isUser: false,
+          widgetIds: [...currentWidgetIds]
+        });
+        currentWidgetIds = [];
+      }
+
+      if (author) currentAuthor = author;
+      currentWidgetIds.push(widgetId);
+    });
+
+    // Push final group
+    if (currentWidgetIds.length > 0) {
+      groups.push({
+        id: `group_${groups.length}`,
+        author: currentAuthor,
+        isUser: false,
+        widgetIds: currentWidgetIds
+      });
+    }
+
+    return groups;
+  }, [contentOrder, widgetsMap, message.widgets]);
+
   // Widget expansion state is managed via widget.isExpanded prop and onExpansionChange callback
   // Widgets read their initial state from the prop and sync changes back via the callback
   // No need for additional sync logic here - widgets handle their own state management
@@ -88,241 +164,126 @@ export const MessageItem: React.FC<MessageItemWithContextProps> = ({
     );
   }
 
-  return (
-    <div
-      className={cn(
-        "flex gap-4 group",
-        isUser ? "flex-row-reverse" : "flex-row",
-      )}
-    >
-      {/* Avatar */}
-      <div
-        className={cn(
-          "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-lg",
-          isUser ? "bg-blue-600" : "bg-hector-green",
-        )}
-      >
-        {isUser ? (
+  // --- RENDER LOGIC ---
+
+  // User Message (Standard single bubble)
+  if (isUser) {
+    return (
+      <div className="flex flex-row-reverse gap-4 group">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-lg bg-blue-600">
           <User size={16} className="text-white" />
-        ) : (
-          <Bot size={16} className="text-white" />
-        )}
-      </div>
-
-      {/* Content */}
-      <div
-        className={cn(
-          "flex flex-col min-w-0",
-          isUser
-            ? "max-w-[85%] md:max-w-[75%] lg:max-w-[65%] xl:max-w-[55%] items-end"
-            : "w-full items-start",
-        )}
-      >
-        {/* Header */}
-        <div className="flex items-center gap-2 mb-1 opacity-50 text-xs">
-          <span className="font-medium">{isUser ? "You" : "Hector"}</span>
-          <span>{message.time}</span>
         </div>
-
-        {/* Message Bubble */}
-        <div
-          className={cn(
-            "rounded-2xl px-4 py-3 shadow-md text-sm leading-relaxed overflow-hidden break-words w-full",
-            isUser
-              ? "bg-blue-600/20 border border-blue-500/30 text-blue-50 rounded-tr-sm"
-              : "bg-white/5 border border-white/10 text-gray-100 rounded-tl-sm",
-          )}
-        >
-          {/* Attached Images */}
-          {message.metadata?.images && message.metadata.images.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {message.metadata.images.map((img, idx) => (
-                <div
-                  key={idx}
-                  className="relative group/img overflow-hidden rounded-lg border border-white/10"
-                >
-                  <img
-                    src={img.preview}
-                    alt={img.file.name}
-                    className="h-32 w-auto object-cover transition-transform hover:scale-105"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Render content in order based on contentOrder */}
-          {(() => {
-            // Helper functions
-            const extractTodos = (widget: Widget): TodoItem[] | null => {
-              if (
-                widget.type === "tool" &&
-                widget.data?.name === "todo_write" &&
-                widget.data?.args?.todos &&
-                Array.isArray(widget.data.args.todos)
-              ) {
-                return widget.data.args.todos.map(
-                  (todo: Record<string, unknown>) => ({
-                    id: (typeof todo.id === "string" ? todo.id : "") || "",
-                    content:
-                      (typeof todo.content === "string" ? todo.content : "") ||
-                      "",
-                    status: (typeof todo.status === "string"
-                      ? todo.status
-                      : "pending") as TodoItem["status"],
-                  }),
-                );
-              }
-              return null;
-            };
-
-            const isTodoWidget = (widget: Widget): boolean =>
-              widget.type === "tool" && widget.data?.name === "todo_write";
-
-            // Use memoized widgetsMap and contentOrder from component level
-
-            // Track accumulated todos as we iterate through contentOrder
-            const accumulatedTodosMap = new Map<string, TodoItem>();
-
-            // If we have contentOrder, render in that exact order
-            // This preserves the position of tool calls, thinking, and text relative to each other
-            // Text is now rendered as TextWidgets with position markers (text_start, text_after_*)
-            if (contentOrder.length > 0) {
-              return (
-                <>
-                  {contentOrder.map((itemId) => {
-                    const widget = widgetsMap.get(itemId);
-                    if (!widget) return null;
-
-                    // If this is a todo_write widget, render the accumulated todos at this point
-                    if (isTodoWidget(widget)) {
-                      const todos = extractTodos(widget);
-                      if (todos) {
-                        // Update accumulated todos (merge=true behavior - latest status wins)
-                        todos.forEach((todo: TodoItem) => {
-                          accumulatedTodosMap.set(todo.id, todo);
-                        });
-                        // Render the current state of todos at this point in the flow
-                        const currentTodos = Array.from(
-                          accumulatedTodosMap.values(),
-                        );
-                        return (
-                          <div key={widget.id} className="mb-2">
-                            <TodoList todos={currentTodos} />
-                          </div>
-                        );
-                      }
-                      return null;
-                    }
-
-                    // Render all widgets (including TextWidget) via WidgetRenderer
-                    return (
-                      <div key={widget.id} className="mb-3">
-                        <WidgetRenderer
-                          widget={widget}
-                          sessionId={currentSessionId || undefined}
-                          messageId={message.id}
-                          message={message}
-                          messageIndex={messageIndex}
-                          isLastMessage={isLastMessage}
-                        />
-                      </div>
-                    );
-                  })}
-
-                  {/* Render any widgets not in contentOrder (excluding todo widgets) */}
-                  {message.widgets
-                    .filter(
-                      (w) => !contentOrder.includes(w.id) && !isTodoWidget(w),
-                    )
-                    .map((widget) => (
-                      <div key={widget.id} className="mb-3">
-                        <WidgetRenderer
-                          widget={widget}
-                          sessionId={currentSessionId || undefined}
-                          messageId={message.id}
-                          message={message}
-                          messageIndex={messageIndex}
-                          isLastMessage={isLastMessage}
-                        />
-                      </div>
-                    ))}
-                </>
-              );
-            }
-
-            // Fallback: render text first, then widgets (with todos inline)
-            const fallbackTodosMap = new Map<string, TodoItem>();
-
-            return (
-              <>
-                {message.text && (
-                  <div className="prose prose-invert prose-sm max-w-none">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeHighlight]}
-                      components={markdownComponents}
-                    >
-                      {message.text}
-                    </ReactMarkdown>
-                  </div>
-                )}
-
-                {/* Render widgets - todos inline */}
-                {message.widgets && message.widgets.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {message.widgets.map((widget) => {
-                      if (isTodoWidget(widget)) {
-                        const todos = extractTodos(widget);
-                        if (todos) {
-                          // Update accumulated todos
-                          todos.forEach((todo: TodoItem) => {
-                            fallbackTodosMap.set(todo.id, todo);
-                          });
-                          // Render current state
-                          const currentTodos = Array.from(
-                            fallbackTodosMap.values(),
-                          );
-                          return (
-                            <div key={widget.id} className="mb-2">
-                              <TodoList todos={currentTodos} />
-                            </div>
-                          );
-                        }
-                        return null;
-                      }
-
-                      return (
-                        <WidgetRenderer
-                          key={widget.id}
-                          widget={widget}
-                          sessionId={currentSessionId || undefined}
-                          messageId={message.id}
-                          message={message}
-                          messageIndex={messageIndex}
-                          isLastMessage={isLastMessage}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            );
-          })()}
-        </div>
-
-        {/* Cancellation indicator */}
-        {message.cancelled && message.role === "agent" && (
-          <div className="mt-2 px-4 text-xs text-gray-500 italic">
-            user cancelled
+        <div className="flex flex-col min-w-0 max-w-[85%] md:max-w-[75%] items-end">
+          <div className="flex items-center gap-2 mb-1 opacity-50 text-xs">
+            <span className="font-medium">You</span>
+            <span>{message.time}</span>
           </div>
-        )}
+          <div className="rounded-2xl px-4 py-3 shadow-md text-sm leading-relaxed overflow-hidden break-words w-full bg-blue-600/20 border border-blue-500/30 text-blue-50 rounded-tr-sm">
+            {message.metadata?.images?.map((img, idx) => (
+              <div key={idx} className="relative group/img overflow-hidden rounded-lg border border-white/10 mb-3">
+                <img src={img.preview} alt="" className="h-32 w-auto object-cover" />
+              </div>
+            ))}
+            {/* Fallback for user text if not in widgets */}
+            {message.text && (
+              <div className="prose prose-invert prose-sm max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={markdownComponents}>
+                  {message.text}
+                </ReactMarkdown>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+    );
+  }
+
+  // Agent Message (Decoupled Bubbles)
+  return (
+    <div className="flex flex-col gap-4"> {/* Stack of bubbles */}
+      {bubbleGroups.map((group, groupIndex) => {
+        const agentColor = getAgentColor(group.author || "Hector");
+        const colors = getAgentColorClasses(agentColor);
+        const displayName = group.author || "Hector";
+        const isLastGroup = groupIndex === bubbleGroups.length - 1;
+
+        return (
+          <div key={group.id} className="flex flex-row gap-4 group">
+            {/* Avatar (Colored per Agent) */}
+            <div className={cn(
+              "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-lg transition-colors border border-white/10",
+              colors.bg
+            )}>
+              <Bot size={16} className="text-white" />
+            </div>
+
+            {/* Bubble Content */}
+            <div className="flex flex-col min-w-0 w-full items-start">
+              <div className="flex items-center gap-2 mb-1 text-xs">
+                <span className={cn("font-bold uppercase tracking-wider", colors.text)}>
+                  {displayName}
+                </span>
+                <span className="opacity-50">{message.time}</span>
+              </div>
+
+              <div className={cn(
+                "rounded-2xl px-4 py-3 shadow-md text-sm leading-relaxed overflow-hidden break-words w-full rounded-tl-sm transition-colors",
+                "bg-white/5", // Base background
+                colors.border, // Colored border
+                "border"
+              )}>
+                {/* Render Widgets in this Group */}
+                {group.widgetIds.map(itemId => {
+                  const widget = widgetsMap.get(itemId);
+                  if (!widget) return null;
+
+                  return (
+                    <div key={widget.id} className="mb-3 last:mb-0">
+                      <WidgetRenderer
+                        widget={widget}
+                        sessionId={currentSessionId || undefined}
+                        messageId={message.id}
+                        message={message}
+                        messageIndex={messageIndex}
+                        isLastMessage={isLastMessage && isLastGroup}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Fallback: If no contentOrder/widgets but text exists (legacy/error) */}
+      {bubbleGroups.length === 0 && message.text && (
+        <div className="flex flex-row gap-4 group">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-lg bg-hector-green">
+            <Bot size={16} className="text-white" />
+          </div>
+          <div className="flex flex-col min-w-0 w-full items-start">
+            <div className="bg-white/5 border border-white/10 text-gray-100 rounded-2xl px-4 py-3 rounded-tl-sm w-full">
+              <div className="prose prose-invert prose-sm max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={markdownComponents}>
+                  {message.text}
+                </ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancellation Token */}
+      {message.cancelled && (
+        <div className="ml-12 text-xs text-gray-500 italic">user cancelled</div>
+      )}
     </div>
   );
 };
 
 // Widget Renderer
+// Widget Renderer - Memoized to prevent re-rendering irrelevant widgets
 const WidgetRenderer: React.FC<{
   widget: Widget;
   sessionId?: string;
@@ -330,7 +291,7 @@ const WidgetRenderer: React.FC<{
   message: Message;
   messageIndex: number;
   isLastMessage: boolean;
-}> = ({
+}> = React.memo(({
   widget,
   sessionId,
   messageId,
@@ -404,12 +365,20 @@ const WidgetRenderer: React.FC<{
       ) : null;
     default: {
       // Exhaustive check - if we reach here, widget.type is 'never'
-      const _exhaustiveCheck: never = widget;
-      return (
-        <div className="bg-black/30 border border-white/10 rounded p-2 text-xs font-mono text-gray-500">
-          Unknown widget type: {(_exhaustiveCheck as { type: string }).type}
-        </div>
-      );
+      return null;
     }
   }
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison for performance
+  return (
+    prevProps.widget === nextProps.widget &&
+    prevProps.isLastMessage === nextProps.isLastMessage &&
+    prevProps.messageIndex === nextProps.messageIndex &&
+    prevProps.messageId === nextProps.messageId &&
+    prevProps.sessionId === nextProps.sessionId
+    // We exclude 'message' from deep comparison because it changes every stream update
+    // But the widget object itself (prevProps.widget) is stable if it's a previous bubble
+  );
+});
+
+export const MessageItem = React.memo(MessageItemComponent);

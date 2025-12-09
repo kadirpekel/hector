@@ -201,12 +201,18 @@ func (s *HTTPServer) buildAgentCard(name string, cfg *config.AgentConfig, url st
 		outputModes = []string{"text/plain"}
 	}
 
+	// Determine display name: explicit name > map key
+	displayName := cfg.Name
+	if displayName == "" {
+		displayName = name
+	}
+
 	// Build skills
 	skills := s.buildAgentSkills(cfg)
 	if len(skills) == 0 {
 		skills = []a2a.AgentSkill{{
 			ID:          name,
-			Name:        cfg.GetDisplayName(),
+			Name:        displayName,
 			Description: cfg.Description,
 			Tags:        []string{"general", "assistant"},
 		}}
@@ -219,7 +225,7 @@ func (s *HTTPServer) buildAgentCard(name string, cfg *config.AgentConfig, url st
 	}
 
 	card := &a2a.AgentCard{
-		Name:               cfg.GetDisplayName(),
+		Name:               displayName,
 		Description:        cfg.Description,
 		URL:                url,
 		Version:            version,
@@ -282,9 +288,28 @@ func (s *HTTPServer) Start(ctx context.Context) error {
 	// Auth middleware: validates JWT and stores claims in context
 	// Must be applied before CORS so OPTIONS preflight requests pass through
 	if s.authValidator != nil {
-		excludedPaths := []string{"/", "/health", "/.well-known/agent-card.json", "/agents"}
+		excludedPaths := []string{"/", "/health", "/.well-known/agent-card.json", "/agents", "/agents/"}
 		if s.serverCfg.Auth != nil && len(s.serverCfg.Auth.ExcludedPaths) > 0 {
 			excludedPaths = s.serverCfg.Auth.ExcludedPaths
+			// Ensure defaults are always preserved unless explicitly overridden?
+			// Usually we append, but here the config overrides.
+			// Re-add critical system paths if they were overwritten by config
+			// Note: User config should control this, but we need /agents/ excluded to support public visibility logic
+			// If user provides custom list, they might lock themselves out of public agents if they don't include /agents/
+			// Safest approach: Append critical internal exclusions to user list
+			defaults := []string{"/agents", "/agents/"}
+			for _, d := range defaults {
+				found := false
+				for _, u := range excludedPaths {
+					if u == d {
+						found = true
+						break
+					}
+				}
+				if !found {
+					excludedPaths = append(excludedPaths, d)
+				}
+			}
 		}
 		// Also exclude metrics endpoint from auth
 		if s.observability != nil && s.observability.MetricsEnabled() {
@@ -488,6 +513,9 @@ func (s *HTTPServer) handleGetSchema(w http.ResponseWriter, r *http.Request) {
 // Per A2A spec 5.3: "https://{server_domain}/.well-known/agent-card.json"
 // For multi-agent servers, this returns the first configured agent.
 func (s *HTTPServer) handleDefaultAgentCard(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	// Get the first/default agent's card handler
 	for _, handler := range s.agentCardHandlers {
 		handler.ServeHTTP(w, r)
@@ -497,15 +525,62 @@ func (s *HTTPServer) handleDefaultAgentCard(w http.ResponseWriter, r *http.Reque
 }
 
 // handleDiscovery returns all agents (Hector extension).
+// Filters agents based on their visibility configuration and authentication status.
 func (s *HTTPServer) handleDiscovery(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Check authentication (soft check)
+	isAuthenticated := false
+	if s.authValidator != nil {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "" {
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+			if _, err := s.authValidator.ValidateToken(r.Context(), token); err == nil {
+				isAuthenticated = true
+			}
+		}
+	} else {
+		// No auth configured = effectively authenticated (or no auth concept)
+		// But in "visibility" context, if auth is disabled, "internal" implies "hidden from public"?
+		// Or "internal" assumes trusted network?
+		// Common pattern: If Auth OFF, everything is public/trusted.
+		isAuthenticated = true
+	}
+
 	agents := make([]*a2a.AgentCard, 0, len(s.agentCards))
-	for _, card := range s.agentCards {
-		agents = append(agents, card)
+	for name, card := range s.agentCards {
+		cfg, ok := s.appCfg.Agents[name]
+		if !ok {
+			continue // Should not happen
+		}
+
+		visibility := cfg.Visibility
+		if visibility == "" {
+			visibility = "public"
+		}
+
+		switch visibility {
+		case "public":
+			// Always visible
+			agents = append(agents, card)
+		case "internal":
+			// Visible only if authenticated
+			if isAuthenticated {
+				agents = append(agents, card)
+			}
+		case "private":
+			// Never visible in discovery
+			// (Hidden from list, but potentially callable internally)
+		default:
+			// Default to public behavior
+			agents = append(agents, card)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -532,14 +607,50 @@ func (s *HTTPServer) handleAgentRoutes(w http.ResponseWriter, r *http.Request) {
 		subPath = "/" + parts[1]
 	}
 
+	s.mu.RLock()
+
 	// Verify agent exists
 	jsonRPCHandler, ok := s.agentJSONRPCHandlers[agentName]
 	if !ok {
+		s.mu.RUnlock()
 		http.Error(w, "Agent not found: "+agentName, http.StatusNotFound)
 		return
 	}
 
+	// Check Access Control based on Visibility
+	cfg, ok := s.appCfg.Agents[agentName]
+	if ok {
+		switch cfg.Visibility {
+		case "private":
+			// Private agents are hidden from HTTP entirely.
+			// Treat as 404 to avoid leaking existence.
+			s.mu.RUnlock()
+			http.NotFound(w, r)
+			return
+		case "internal":
+			// Internal agents require authentication
+			if s.authValidator != nil {
+				authHeader := r.Header.Get("Authorization")
+				authorized := false
+				if authHeader != "" {
+					token := strings.TrimPrefix(authHeader, "Bearer ")
+					if _, err := s.authValidator.ValidateToken(r.Context(), token); err == nil {
+						authorized = true
+					}
+				}
+				if !authorized {
+					s.mu.RUnlock()
+					http.Error(w, "Unauthorized: agent is internal", http.StatusUnauthorized)
+					return
+				}
+			}
+		case "public", "":
+			// Public access allowed (no check needed)
+		}
+	}
+
 	cardHandler := s.agentCardHandlers[agentName]
+	s.mu.RUnlock()
 
 	switch {
 	case subPath == "" || subPath == "/":
@@ -623,14 +734,18 @@ func (s *HTTPServer) loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// UpdateExecutors atomically updates agent executors (for hot-reload).
-func (s *HTTPServer) UpdateExecutors(executors map[string]*Executor) {
+// UpdateExecutors atomically updates configuration and agent executors (for hot-reload).
+func (s *HTTPServer) UpdateExecutors(cfg *config.Config, executors map[string]*Executor) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Rebuild handlers for new executors
+	// Update config
+	s.appCfg = cfg
+	s.serverCfg = &cfg.Server
+
+	// Rebuild handlers for new executors with new config
 	s.buildAgentHandlers(executors)
-	slog.Debug("Executors updated", "count", len(executors))
+	slog.Debug("Executors and config updated", "count", len(executors))
 }
 
 // SetStudioMode enables studio mode with config file path.
@@ -698,6 +813,9 @@ func (s *HTTPServer) handleConfigEndpoint(w http.ResponseWriter, r *http.Request
 			})
 			return
 		}
+
+		// Apply defaults before validation to handle missing optional fields
+		testCfg.SetDefaults()
 
 		if err := testCfg.Validate(); err != nil {
 			w.Header().Set("Content-Type", "application/json")

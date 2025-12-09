@@ -1,73 +1,27 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Plus, MessageSquare, Settings, ChevronDown, Bot, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { cn, formatTime } from '../lib/utils';
-import { api } from '../services/api';
 import { DeleteButton } from './DeleteButton';
-import { DEFAULT_SUPPORTED_FILE_TYPES } from '../lib/constants';
-import { handleError } from '../lib/error-handler';
+import { useAgentSelection } from '../lib/hooks/useAgentSelection';
 
 export const Sidebar: React.FC = () => {
     // Use selectors for better performance - only subscribe to specific state slices
     const sessions = useStore((state) => state.sessions);
     const currentSessionId = useStore((state) => state.currentSessionId);
     const availableAgents = useStore((state) => state.availableAgents);
-    const selectedAgent = useStore((state) => state.selectedAgent);
-    const endpointUrl = useStore((state) => state.endpointUrl);
     const setSidebarVisible = useStore((state) => state.setSidebarVisible);
     const createSession = useStore((state) => state.createSession);
     const selectSession = useStore((state) => state.selectSession);
     const deleteSession = useStore((state) => state.deleteSession);
-    const setAvailableAgents = useStore((state) => state.setAvailableAgents);
-    const setSelectedAgent = useStore((state) => state.setSelectedAgent);
-    const setAgentCard = useStore((state) => state.setAgentCard);
-    const setError = useStore((state) => state.setError);
+    const selectedAgent = useStore((state) => state.selectedAgent);
 
-    // Load agents on mount and when endpoint changes
-    useEffect(() => {
-        const loadAgents = async () => {
-            try {
-                const data = await api.fetchAgents();
-                setAvailableAgents(data.agents || []);
+    // Use shared agent selection hook
+    const { handleAgentChange } = useAgentSelection();
 
-                // Select first agent by default if none selected
-                if (!selectedAgent && data.agents && data.agents.length > 0) {
-                    const firstAgent = data.agents[0];
-                    setSelectedAgent(firstAgent);
-                    try {
-                        const card = await api.fetchAgentCard(firstAgent.url);
-                        setAgentCard(card); // This will also update supportedFileTypes
-                    } catch (error) {
-                        handleError(error, 'Failed to fetch agent card');
-                        // Reset to defaults on error
-                        useStore.getState().setSupportedFileTypes([...DEFAULT_SUPPORTED_FILE_TYPES]);
-                    }
-                }
-            } catch (error) {
-                handleError(error, 'Failed to load agents');
-            }
-        };
-
-        loadAgents();
-    }, [setAvailableAgents, setSelectedAgent, setAgentCard, selectedAgent, endpointUrl, setError]);
-
-    // Handle agent change
-    const handleAgentChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const index = parseInt(e.target.value);
-        const agent = availableAgents[index];
-        if (agent) {
-            setSelectedAgent(agent);
-            try {
-                const card = await api.fetchAgentCard(agent.url);
-                setAgentCard(card); // This will also update supportedFileTypes
-            } catch (error) {
-                handleError(error, 'Failed to fetch agent card');
-                setAgentCard(null);
-                // Reset to defaults on error
-                useStore.getState().setSupportedFileTypes([...DEFAULT_SUPPORTED_FILE_TYPES]);
-            }
-        }
-    };
+    // Note: Agent loading is now centralized in App.tsx
+    // Removed duplicate loadAgents() call to prevent wasteful network requests
+    // Agent selection logic is now in useAgentSelection hook
 
     const sortedSessions = Object.values(sessions).sort(
         (a, b) => new Date(b.created).getTime() - new Date(a.created).getTime()
@@ -139,13 +93,13 @@ export const Sidebar: React.FC = () => {
                         <select
                             className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-gray-300 appearance-none focus:outline-none focus:border-hector-green"
                             onChange={handleAgentChange}
-                            value={selectedAgent ? availableAgents.indexOf(selectedAgent) : ''}
+                            value={selectedAgent?.name || ''}
                         >
                             {availableAgents.length === 0 ? (
                                 <option value="">Loading agents...</option>
                             ) : (
-                                availableAgents.map((agent, idx) => (
-                                    <option key={idx} value={idx}>
+                                availableAgents.map((agent) => (
+                                    <option key={agent.name} value={agent.name}>
                                         {agent.name}
                                     </option>
                                 ))

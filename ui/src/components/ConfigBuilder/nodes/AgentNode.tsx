@@ -1,7 +1,9 @@
 import React from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { Workflow } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import { cn } from '../../../lib/utils';
+import { useStore } from '../../../store/useStore';
+import { getAgentColor, getAgentColorClasses } from '../../../lib/colors';
 
 interface AgentNodeData extends Record<string, unknown> {
   label: string;
@@ -10,88 +12,81 @@ interface AgentNodeData extends Record<string, unknown> {
   instruction?: string;
 }
 
-const getLLMBadgeColor = (llm: string) => {
-  const lowerLLM = llm.toLowerCase();
-  if (lowerLLM.includes('openai') || lowerLLM.includes('gpt')) {
-    return 'bg-blue-500/20 border-blue-500 text-blue-300';
-  }
-  if (lowerLLM.includes('anthropic') || lowerLLM.includes('claude')) {
-    return 'bg-purple-500/20 border-purple-500 text-purple-300';
-  }
-  if (lowerLLM.includes('gemini') || lowerLLM.includes('google')) {
-    return 'bg-orange-500/20 border-orange-500 text-orange-300';
-  }
-  if (lowerLLM.includes('ollama')) {
-    return 'bg-teal-500/20 border-teal-500 text-teal-300';
-  }
-  return 'bg-gray-500/20 border-gray-500 text-gray-300';
-};
-
-/**
- * Agent node - displays agent information in read-only mode
- * Handles are visible but non-interactive
- */
 export const AgentNode: React.FC<NodeProps> = ({ data, selected }) => {
   const nodeData = data as AgentNodeData;
+  const activeAgentId = useStore((state) => state.activeAgentId);
+  const isActive = activeAgentId === nodeData.label;
+
+  // Get dynamic colors based on agent name
+  const agentColor = getAgentColor(nodeData.label);
+  const colors = getAgentColorClasses(agentColor);
 
   return (
-    <div
-      className={cn(
-        'px-4 py-3 shadow-lg rounded-lg border-2 transition-all min-w-[200px]',
-        'bg-gradient-to-br from-green-500 to-green-600',
-        selected ? 'border-white ring-2 ring-white/50' : 'border-green-700'
+    <div className="relative group/node">
+      {/* Active Pulse Effect - Intensified */}
+      {isActive && (
+        <div className="absolute -inset-4 rounded-xl bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 blur-xl opacity-60 animate-pulse transition duration-1000 group-hover/node:opacity-80 group-hover/node:duration-200 pointer-events-none"></div>
       )}
-    >
-      {/* Handles - read-only, just for visualization */}
-      <Handle 
-        type="target" 
-        position={Position.Top} 
-        className="w-3 h-3 !bg-gray-400 !border-2 !border-gray-600"
-        isConnectable={false}
-      />
-      <Handle 
-        type="target" 
-        position={Position.Left} 
-        className="w-3 h-3 !bg-gray-400 !border-2 !border-gray-600"
-        isConnectable={false}
-      />
 
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-2">
-        <Workflow size={18} className="text-white flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="font-bold text-white truncate">{nodeData.label || 'Unnamed Agent'}</div>
-          <div className="text-xs text-green-100">Agent</div>
-        </div>
-      </div>
+      <div
+        className={cn(
+          'px-4 py-3 shadow-2xl rounded-xl border transition-all min-w-[220px] relative overflow-visible backdrop-blur-xl',
+          // Dynamic Colors
+          colors.bg,
+          colors.border,
+          isActive
+            ? 'scale-110 z-50 ring-4 ring-white/60 brightness-110 translate-y-[-2px]'
+            : selected
+              ? 'ring-2 ring-white/30'
+              : 'hover:border-white/50 hover:scale-105 hover:z-40'
+        )}
+      >
+        {/* Handles - Hidden (opacity-0) but functional if needed for edge rendering */}
+        <Handle
+          type="target"
+          position={Position.Top}
+          id="top"
+          className="w-2 h-2 !opacity-0 !pointer-events-none !-top-2"
+        />
+        <Handle
+          type="target"
+          position={Position.Left}
+          id="left"
+          className="w-2 h-2 !opacity-0 !pointer-events-none !-left-2"
+        />
 
-      {/* LLM Badge */}
-      {nodeData.llm && (
-        <div className="mt-2">
-          <div
-            className={cn(
-              'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border',
-              getLLMBadgeColor(nodeData.llm)
-            )}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
-            {nodeData.llm}
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-3 relative z-10">
+          <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shadow-inner border border-white/20 transition-transform duration-500", colors.bg, isActive && "rotate-6 scale-110")}>
+            <Bot size={20} className="text-white/90" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className={cn("font-bold truncate tracking-tight text-white text-base shadow-black/50 drop-shadow-sm")}>{nodeData.label}</div>
+            <div className="text-[10px] uppercase tracking-wider font-bold opacity-70 text-white flex items-center gap-1">
+              Agent
+              {isActive && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-ping inline-block ml-1" />}
+            </div>
           </div>
         </div>
-      )}
 
-      <Handle 
-        type="source" 
-        position={Position.Right} 
-        className="w-3 h-3 !bg-gray-400 !border-2 !border-gray-600"
-        isConnectable={false}
-      />
-      <Handle 
-        type="source" 
-        position={Position.Bottom} 
-        className="w-3 h-3 !bg-gray-400 !border-2 !border-gray-600"
-        isConnectable={false}
-      />
+        {/* LLM Info */}
+        <div className="flex items-center justify-between text-xs text-white/50 font-mono bg-black/30 rounded px-2.5 py-1.5 border border-white/5 relative z-10 shadow-inner">
+          <span className="truncate max-w-[140px] opacity-80 group-hover/node:opacity-100 transition-opacity">{nodeData.llm || 'default'}</span>
+        </div>
+
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="right"
+          className="w-2 h-2 !opacity-0 !pointer-events-none !-right-2"
+        />
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          id="bottom"
+          className="w-2 h-2 !opacity-0 !pointer-events-none !-bottom-2"
+        />
+      </div>
     </div>
   );
 };

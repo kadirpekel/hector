@@ -132,20 +132,16 @@ export function useWidgetExpansion({
     clearCollapseTimeout,
   ]);
 
-  // Cleanup on unmount: sync final state
+  // Cleanup on unmount only - sync final state
   useEffect(() => {
     return () => {
-      clearCollapseTimeout();
-      if (widget.isExpanded === undefined && localExpanded !== false) {
-        onExpansionChange?.(localExpanded);
+      // Clear any pending timeout
+      if (collapseTimeoutRef.current !== null) {
+        window.clearTimeout(collapseTimeoutRef.current);
+        collapseTimeoutRef.current = null;
       }
     };
-  }, [
-    localExpanded,
-    widget.isExpanded,
-    onExpansionChange,
-    clearCollapseTimeout,
-  ]);
+  }, []); // Empty deps - cleanup only on unmount
 
   // Manual toggle handler
   const handleToggle = useCallback(() => {

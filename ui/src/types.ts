@@ -70,12 +70,14 @@ export interface ImageWidgetData {
 export interface ToolWidgetData {
   name: string;
   args: Record<string, unknown>;
+  author?: string;
 }
 
 export interface ThinkingWidgetData {
   type: "todo" | "goal" | "reflection" | "default";
   todos?: TodoItem[];
   block_id?: string;
+  author?: string;
 }
 
 export interface ApprovalWidgetData {
@@ -83,7 +85,7 @@ export interface ApprovalWidgetData {
   toolName?: string;
   toolInput?: Record<string, unknown>;
   options?: string[];
-  
+
   // HITL-specific fields
   task_id?: string;
   tool_call_ids?: string[];
@@ -92,6 +94,7 @@ export interface ApprovalWidgetData {
 
 export interface TextWidgetData {
   // Text widgets store content in widget.content, not data
+  author?: string;
 }
 
 export type WidgetType = "tool" | "thinking" | "approval" | "image" | "text";

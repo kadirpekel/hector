@@ -717,6 +717,7 @@ func (c *Client) convertMessages(messages []*a2a.Message) []inputItem {
 		// Check for tool results
 		toolResults := c.extractToolResults(msg)
 		if len(toolResults) > 0 {
+			slog.Debug("Converted tool results", "count", len(toolResults), "role", msg.Role)
 			for _, tr := range toolResults {
 				items = append(items, inputItem{
 					Type:   "function_call_output",
@@ -862,6 +863,15 @@ func (c *Client) extractToolResults(msg *a2a.Message) []tool.ToolResult {
 					Content:    getString(dp.Data, "content"),
 				}
 				results = append(results, tr)
+			}
+		}
+	}
+
+	if len(results) == 0 && len(msg.Parts) > 0 {
+		// Debug log for missed parts
+		for i, part := range msg.Parts {
+			if dp, ok := part.(a2a.DataPart); ok {
+				slog.Debug("Inspecting DataPart", "idx", i, "data", dp.Data)
 			}
 		}
 	}

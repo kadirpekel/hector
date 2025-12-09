@@ -1,15 +1,19 @@
 import React from "react";
-import { X, Globe } from "lucide-react";
+import { X, Globe, Monitor } from "lucide-react";
 import { useStore } from "../../store/useStore";
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  editorTheme: 'vs-dark' | 'vs-light' | 'hc-black';
+  onThemeChange: (theme: 'vs-dark' | 'vs-light' | 'hc-black') => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
+  editorTheme,
+  onThemeChange,
 }) => {
   const endpointUrl = useStore((state) => state.endpointUrl);
   const setEndpointUrl = useStore((state) => state.setEndpointUrl);
@@ -106,6 +110,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
                 </div>
               </label>
+            </div>
+            {/* Editor Theme */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+                <Monitor size={16} className="text-hector-green" />
+                Editor Theme
+              </label>
+              <select
+                value={editorTheme}
+                onChange={(e) => onThemeChange(e.target.value as any)}
+                className="w-full px-4 py-2 bg-black/50 border border-white/20 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-hector-green focus:border-transparent appearance-none cursor-pointer"
+              >
+                <option value="hc-black">High Contrast (Default)</option>
+                <option value="vs-dark">Dark Visual Studio</option>
+                <option value="vs-light">Light Visual Studio</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Color scheme for the YAML editor
+              </p>
             </div>
           </div>
 

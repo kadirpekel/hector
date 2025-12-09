@@ -1,11 +1,18 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { api } from "../services/api";
 import { v4 as uuidv4 } from "uuid";
 import type { Session, Message, Agent, AgentCard, Widget } from "../types";
 import { StreamParser as StreamParserClass } from "../lib/stream-parser";
 import { DEFAULT_SUPPORTED_FILE_TYPES } from "../lib/constants";
+import { logger } from "../lib/logger";
 
 type StreamParser = StreamParserClass;
+
+// Type for persisted state fields (added by zustand persist middleware)
+interface PersistedState {
+  selectedAgentName: string | null;
+}
 
 interface AppState {
   // UI State
@@ -19,6 +26,8 @@ interface AppState {
   setIsGenerating: (generating: boolean) => void;
   error: string | null;
   setError: (error: string | null) => void;
+  successMessage: string | null;
+  setSuccessMessage: (message: string | null) => void;
 
   // Config State
   endpointUrl: string;
@@ -40,12 +49,21 @@ interface AppState {
   selectedAgent: Agent | null;
   agentCard: AgentCard | null;
   supportedFileTypes: string[];
+  selectedNodeId: string | null;
+  schema: any;
+  activeAgentId: string | null;
+  agentsLoaded: boolean;
 
   // Actions
   setAvailableAgents: (agents: Agent[]) => void;
+  loadAgents: () => Promise<void>;
+  reloadAgents: () => Promise<void>; // Force reload agents (for deploy)
+  setSelectedNodeId: (id: string | null) => void;
   setSelectedAgent: (agent: Agent | null) => void;
+  setActiveAgentId: (id: string | null) => void;
   setAgentCard: (card: AgentCard | null) => void;
   setSupportedFileTypes: (types: string[]) => void;
+  setSchema: (schema: any) => void;
 
   createSession: () => string;
   selectSession: (sessionId: string) => void;
@@ -106,6 +124,8 @@ export const useStore = create<AppState>()(
       setIsGenerating: (generating) => set({ isGenerating: generating }),
       error: null,
       setError: (error) => set({ error }),
+      successMessage: null,
+      setSuccessMessage: (successMessage) => set({ successMessage }),
 
       // Config defaults
       endpointUrl: typeof window !== "undefined" ? window.location.origin : "",
@@ -149,11 +169,95 @@ export const useStore = create<AppState>()(
       currentSessionId: null,
       availableAgents: [],
       selectedAgent: null,
+      selectedNodeId: null,
       agentCard: null,
       supportedFileTypes: [...DEFAULT_SUPPORTED_FILE_TYPES],
+      schema: null,
+      activeAgentId: null,
+      agentsLoaded: false,
 
-      setAvailableAgents: (agents) => set({ availableAgents: agents }),
+      setAvailableAgents: (agents) =>
+        set((state) => {
+          let newSelectedAgent = state.selectedAgent;
+
+          // CRITICAL: Preserve referential identity if agent still exists
+          // This ensures dropdown and other components using object reference equality work correctly
+          if (newSelectedAgent) {
+            const match = agents.find((a) => a.name === newSelectedAgent?.name);
+            if (match) {
+              // Agent still exists - update to new object reference from fresh agents list
+              newSelectedAgent = match;
+              logger.log(
+                `Agent "${match.name}" still available after reload, preserving selection`,
+              );
+            } else {
+              // Agent disappeared - clear selection
+              logger.log(
+                `Agent "${newSelectedAgent.name}" no longer available, clearing selection`,
+              );
+              newSelectedAgent = null;
+            }
+          }
+
+          return {
+            availableAgents: agents,
+            selectedAgent: newSelectedAgent,
+            agentsLoaded: true,
+          };
+        }),
+      loadAgents: async () => {
+        const state = get();
+
+        // Idempotency guard - prevent multiple simultaneous loads
+        if (state.agentsLoaded) {
+          logger.log("Agents already loaded, skipping");
+          return;
+        }
+
+        try {
+          const response = await api.fetchAgents();
+          let agents: Agent[] = [];
+
+          if (response && Array.isArray(response.agents)) {
+            agents = response.agents;
+          } else if (Array.isArray(response)) {
+            // Fallback if backend changes signature to return direct array
+            agents = response;
+          }
+
+          // Use setAvailableAgents to preserve referential identity
+          get().setAvailableAgents(agents);
+
+          // Restore persisted selection after loading agents (only on initial load)
+          const persistedName = (get() as AppState & PersistedState).selectedAgentName;
+          if (persistedName && !get().selectedAgent) {
+            const restoredAgent = agents.find((a) => a.name === persistedName);
+            if (restoredAgent) {
+              logger.log(
+                `Restored agent selection from localStorage: ${persistedName}`,
+              );
+              set({ selectedAgent: restoredAgent });
+            } else {
+              logger.log(
+                `Persisted agent "${persistedName}" not found, will select first available`,
+              );
+            }
+          }
+        } catch (e) {
+          logger.error("Failed to load agents", e);
+          set({ error: "Failed to load agents. Please check connection." });
+        }
+      },
+      reloadAgents: async () => {
+        logger.log("Forcing agent reload (deploy/config change)");
+        // Reset agentsLoaded to bypass idempotency guard
+        set({ agentsLoaded: false });
+        // Call loadAgents which will now run
+        await get().loadAgents();
+      },
+      setSelectedNodeId: (id) => set({ selectedNodeId: id }),
       setSelectedAgent: (agent) => set({ selectedAgent: agent }),
+      setActiveAgentId: (id) => set({ activeAgentId: id }),
       setAgentCard: (card) => {
         set({ agentCard: card });
         // Update supported file types from agent card
@@ -182,6 +286,7 @@ export const useStore = create<AppState>()(
         }
       },
       setSupportedFileTypes: (types) => set({ supportedFileTypes: types }),
+      setSchema: (schema) => set({ schema }),
 
       createSession: () => {
         const id = `session-${uuidv4()}`;
@@ -373,13 +478,13 @@ export const useStore = create<AppState>()(
                 messages: session.messages.map((m) =>
                   m.id === messageId
                     ? {
-                        ...m,
-                        widgets: m.widgets.map((w) =>
-                          w.id === widgetId
-                            ? ({ ...w, ...updates } as Widget)
-                            : w
-                        ),
-                      }
+                      ...m,
+                      widgets: m.widgets.map((w) =>
+                        w.id === widgetId
+                          ? ({ ...w, ...updates } as Widget)
+                          : w
+                      ),
+                    }
                     : m
                 ),
               },
@@ -410,12 +515,12 @@ export const useStore = create<AppState>()(
                 messages: session.messages.map((m) =>
                   m.id === messageId
                     ? {
-                        ...m,
-                        metadata: {
-                          ...m.metadata,
-                          contentOrder: [...currentOrder, widgetId],
-                        },
-                      }
+                      ...m,
+                      metadata: {
+                        ...m.metadata,
+                        contentOrder: [...currentOrder, widgetId],
+                      },
+                    }
                     : m
                 ),
               },
@@ -431,45 +536,60 @@ export const useStore = create<AppState>()(
           try {
             return localStorage.getItem(name);
           } catch (error) {
-            console.error("Failed to read from localStorage:", error);
+            logger.error("Failed to read from localStorage:", error);
             return null;
           }
         },
         setItem: (name: string, value: string) => {
-          try {
-            localStorage.setItem(name, value);
-          } catch (error) {
-            // Handle quota exceeded error
-            if (
-              error instanceof DOMException &&
-              (error.code === 22 || // Legacy quota exceeded
-                error.code === 1014 || // Firefox
-                error.name === "QuotaExceededError" ||
-                error.name === "NS_ERROR_DOM_QUOTA_REACHED")
-            ) {
-              console.warn(
-                "localStorage quota exceeded, clearing old sessions",
-              );
-              // Try to clear and retry
-              try {
-                localStorage.removeItem(name);
-                localStorage.setItem(name, value);
-              } catch {
-                // If still fails, just log and continue without persistence
-                console.error(
-                  "Failed to save to localStorage even after clearing",
-                );
+          const MAX_RETRIES = 1;
+          let retryCount = 0;
+
+          const attemptSave = (): void => {
+            try {
+              localStorage.setItem(name, value);
+            } catch (error) {
+              // Handle quota exceeded error
+              if (
+                error instanceof DOMException &&
+                (error.code === 22 || // Legacy quota exceeded
+                  error.code === 1014 || // Firefox
+                  error.name === "QuotaExceededError" ||
+                  error.name === "NS_ERROR_DOM_QUOTA_REACHED")
+              ) {
+                if (retryCount < MAX_RETRIES) {
+                  retryCount++;
+                  logger.warn(
+                    `localStorage quota exceeded (attempt ${retryCount}/${MAX_RETRIES}), clearing old sessions`,
+                  );
+                  try {
+                    localStorage.removeItem(name);
+                    attemptSave(); // Recursive retry
+                  } catch (retryError) {
+                    logger.error(
+                      "Failed to save to localStorage even after clearing:",
+                      retryError,
+                    );
+                    // Gracefully degrade - app continues without persistence
+                  }
+                } else {
+                  logger.error(
+                    "localStorage quota exceeded and max retries reached. Persistence disabled.",
+                  );
+                  // Gracefully degrade - app continues without persistence
+                }
+              } else {
+                logger.error("Failed to write to localStorage:", error);
               }
-            } else {
-              console.error("Failed to write to localStorage:", error);
             }
-          }
+          };
+
+          attemptSave();
         },
         removeItem: (name: string) => {
           try {
             localStorage.removeItem(name);
           } catch (error) {
-            console.error("Failed to remove from localStorage:", error);
+            logger.error("Failed to remove from localStorage:", error);
           }
         },
       })),
@@ -481,10 +601,11 @@ export const useStore = create<AppState>()(
         endpointUrl: state.endpointUrl,
         protocol: state.protocol,
         streamingEnabled: state.streamingEnabled,
+        selectedAgentName: state.selectedAgent?.name || null, // Persist agent selection
       }),
       onRehydrateStorage: () => (_state, error) => {
         if (error) {
-          console.error("Failed to rehydrate state from localStorage:", error);
+          logger.error("Failed to rehydrate state from localStorage:", error);
           // State will be initialized with defaults
         }
         // State successfully rehydrated (or using defaults after error)

@@ -1,5 +1,5 @@
 import React from "react";
-import { type NodeProps } from "@xyflow/react";
+import { type NodeProps, Handle, Position } from "@xyflow/react";
 import { GitBranch, Zap, Repeat } from "lucide-react";
 
 interface WorkflowGroupNodeData extends Record<string, unknown> {
@@ -62,7 +62,7 @@ export const WorkflowGroupNode: React.FC<NodeProps> = ({ data }) => {
 
   return (
     <div
-      className="rounded-xl"
+      className="rounded-xl overflow-visible"
       style={{
         width: "100%",
         height: "100%",
@@ -91,6 +91,32 @@ export const WorkflowGroupNode: React.FC<NodeProps> = ({ data }) => {
       </div>
 
       {/* Child nodes render here automatically by React Flow */}
+
+      {/* Handles - Hidden but functional */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-2 h-2 !opacity-0 !pointer-events-none !-top-2"
+        id="top"
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="w-2 h-2 !opacity-0 !pointer-events-none !-left-2"
+        id="left"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="w-2 h-2 !opacity-0 !pointer-events-none !-right-2"
+        id="right"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-2 h-2 !opacity-0 !pointer-events-none !-bottom-2"
+        id="bottom"
+      />
     </div>
   );
 };

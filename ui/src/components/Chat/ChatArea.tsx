@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useCallback, useMemo } from "react";
+import React from "react";
 import { MessageList } from "./MessageList";
 import { InputArea } from "./InputArea";
 import { useStore } from "../../store/useStore";
-import { SCROLL } from "../../lib/constants";
+import { useMessageListAutoScroll } from "../../lib/hooks/useMessageListAutoScroll";
 
 interface ChatAreaProps {
   onNavigateToBuilder?: () => void; // Kept for backward compatibility but not used in Studio Mode
@@ -14,169 +14,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ onNavigateToBuilder }) => {
   const sessions = useStore((state) => state.sessions);
   const isGenerating = useStore((state) => state.isGenerating);
   const session = currentSessionId ? sessions[currentSessionId] : null;
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const shouldAutoScrollRef = useRef(true);
-  const scrollTimeoutRef = useRef<number | null>(null);
 
-  // Check if user is near bottom - if so, auto-scroll
-  const isNearBottom = useCallback(() => {
-    if (!scrollContainerRef.current) return true;
-    const { scrollTop, scrollHeight, clientHeight } =
-      scrollContainerRef.current;
-    return scrollHeight - scrollTop - clientHeight < SCROLL.THRESHOLD_PX;
-  }, []);
-
-  /**
-   * Memoized content hash for scroll trigger dependencies.
-   * This prevents creating new strings on every render which would cause
-   * the useEffect to run on every state change (performance disaster).
-   *
-   * We track: message count, last message changes, widget count, and generation state.
-   * This covers all meaningful content changes without expensive O(n²) computations.
-   */
-  const contentHash = useMemo(() => {
-    if (!session) return null;
-    const messages = session.messages;
-    const lastMsg = messages[messages.length - 1];
-
-    return {
-      messageCount: messages.length,
-      lastMessageId: lastMsg?.id,
-      lastMessageText: lastMsg?.text?.length ?? 0, // Track length, not content
-      lastWidgetCount: lastMsg?.widgets?.length ?? 0,
-      lastWidgetStatuses:
-        lastMsg?.widgets?.map((w) => w.status).join(",") ?? "",
-      isGenerating,
-    };
-  }, [
-    session?.messages.length,
-    session?.messages[session?.messages.length - 1]?.id,
-    session?.messages[session?.messages.length - 1]?.text?.length,
-    session?.messages[session?.messages.length - 1]?.widgets?.length,
-    session?.messages[session?.messages.length - 1]?.widgets
-      ?.map((w) => w.status)
-      .join(","),
+  // Use shared auto-scroll hook
+  const { messagesEndRef, scrollContainerRef } = useMessageListAutoScroll(
+    session,
     isGenerating,
-  ]);
-
-  // Scroll to bottom with smooth behavior
-  const scrollToBottom = useCallback(
-    (force = false) => {
-      if (!messagesEndRef.current || !scrollContainerRef.current) return;
-
-      // Only auto-scroll if user is near bottom or forced
-      if (!force && !isNearBottom() && !shouldAutoScrollRef.current) {
-        return;
-      }
-
-      // Use requestAnimationFrame for smooth scrolling
-      requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "end",
-        });
-        shouldAutoScrollRef.current = true;
-      });
-    },
-    [isNearBottom],
   );
-
-  // Track scroll position to detect manual scrolling
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const handleScroll = () => {
-      // Clear any pending scroll timeout
-      if (scrollTimeoutRef.current !== null) {
-        window.clearTimeout(scrollTimeoutRef.current);
-      }
-
-      // If user scrolls up, disable auto-scroll temporarily
-      if (!isNearBottom()) {
-        shouldAutoScrollRef.current = false;
-      } else {
-        // Re-enable auto-scroll if user scrolls back to bottom
-        shouldAutoScrollRef.current = true;
-      }
-
-      // Reset auto-scroll after a delay of no scrolling
-      scrollTimeoutRef.current = window.setTimeout(() => {
-        if (isNearBottom()) {
-          shouldAutoScrollRef.current = true;
-        }
-      }, SCROLL.RESET_DELAY_MS);
-    };
-
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => {
-      container.removeEventListener("scroll", handleScroll);
-      if (scrollTimeoutRef.current !== null) {
-        window.clearTimeout(scrollTimeoutRef.current);
-      }
-    };
-  }, [isNearBottom]);
-
-  // Scroll trigger - uses memoized contentHash to avoid expensive computations
-  // See contentHash useMemo above for what changes trigger scrolling
-  useEffect(() => {
-    if (!contentHash) return;
-
-    // Scroll when content changes
-    scrollToBottom(false);
-
-    // Force scroll when generating starts (new content incoming)
-    if (contentHash.isGenerating) {
-      scrollToBottom(true);
-    }
-  }, [contentHash, scrollToBottom]);
-
-  // Use MutationObserver to detect DOM changes (widget expansions, content updates, etc.)
-  useEffect(() => {
-    if (!scrollContainerRef.current) return;
-
-    let mutationTimeout: number | null = null;
-
-    const observer = new MutationObserver(() => {
-      // Debounce mutations to avoid excessive scrolling
-      if (mutationTimeout !== null) {
-        window.clearTimeout(mutationTimeout);
-      }
-
-      mutationTimeout = window.setTimeout(() => {
-        // Only scroll if user is near bottom or actively generating
-        if (shouldAutoScrollRef.current || isGenerating) {
-          requestAnimationFrame(() => {
-            scrollToBottom(false);
-          });
-        }
-      }, SCROLL.MUTATION_DEBOUNCE_MS);
-    });
-
-    observer.observe(scrollContainerRef.current, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["class", "style"], // Track class/style changes (for expand/collapse)
-      characterData: true, // Track text content changes
-    });
-
-    return () => {
-      observer.disconnect();
-      if (mutationTimeout !== null) {
-        window.clearTimeout(mutationTimeout);
-      }
-    };
-  }, [isGenerating, scrollToBottom]);
-
-  // Force scroll when generation starts
-  useEffect(() => {
-    if (isGenerating) {
-      shouldAutoScrollRef.current = true;
-      scrollToBottom(true);
-    }
-  }, [isGenerating, scrollToBottom]);
 
   if (!session) {
     return (
@@ -221,7 +64,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ onNavigateToBuilder }) => {
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="sticky bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent pt-10 z-10">
+          <div className="sticky bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent pt-10 z-50">
             <div className="max-w-[760px] mx-auto w-full">
               <InputArea />
             </div>
@@ -253,7 +96,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ onNavigateToBuilder }) => {
             </div>
           )}
 
-          <div className="sticky bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent pt-10 z-10">
+          <div className="sticky bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent pt-10 z-50">
             <div className="max-w-[760px] mx-auto w-full">
               <InputArea />
             </div>

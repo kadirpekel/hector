@@ -15,7 +15,7 @@ export const FloatingChatButton: React.FC<FloatingChatButtonProps> = ({
   style = {},
 }) => {
   return (
-    <div className="fixed bottom-6 right-6 z-40" style={style}>
+    <div className="fixed bottom-12 right-6 z-40" style={style}>
       {/* Simple animated rings with longer intervals */}
       <style>
         {`
@@ -49,9 +49,8 @@ export const FloatingChatButton: React.FC<FloatingChatButtonProps> = ({
       {/* Main button - larger */}
       <button
         onClick={onClick}
-        className={`floating-chat-button relative w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-purple-600 text-white shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 flex items-center justify-center ${
-          isOpen ? "scale-95 opacity-90" : ""
-        }`}
+        className={`floating-chat-button relative w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-purple-600 text-white shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 flex items-center justify-center ${isOpen ? "scale-95 opacity-90" : ""
+          }`}
         style={{
           boxShadow:
             "0 12px 40px rgba(59, 130, 246, 0.6), 0 0 20px rgba(147, 51, 234, 0.3)",

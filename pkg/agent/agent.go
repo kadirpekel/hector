@@ -45,8 +45,9 @@ type Agent interface {
 	// SubAgents returns child agents that this agent can delegate to.
 	SubAgents() []Agent
 
-	// internal returns the internal agent state for framework use.
-	internal() *baseAgent
+	// Type returns the agent type for introspection.
+	// Used by the runner to determine workflow vs delegation semantics.
+	Type() AgentType
 }
 
 // Checkpointable is an optional interface for agents that support state checkpointing.
@@ -94,6 +95,10 @@ type Config struct {
 
 	// Run defines the agent's execution logic.
 	Run func(InvocationContext) iter.Seq2[*Event, error]
+
+	// AgentType allows specifying the agent type (optional).
+	// If empty, defaults to TypeCustomAgent.
+	AgentType AgentType
 
 	// AfterAgentCallbacks are called after the agent completes its run.
 	AfterAgentCallbacks []AfterAgentCallback
@@ -152,15 +157,26 @@ func New(cfg Config) (Agent, error) {
 		seen[sub.Name()] = true
 	}
 
+	// Default agent type
+	agentType := cfg.AgentType
+	if agentType == "" {
+		agentType = TypeCustomAgent
+	}
+
 	return &baseAgent{
 		name:                 cfg.Name,
 		description:          cfg.Description,
 		subAgents:            cfg.SubAgents,
-		agentType:            TypeCustomAgent,
+		agentType:            agentType,
 		beforeAgentCallbacks: cfg.BeforeAgentCallbacks,
 		run:                  cfg.Run,
 		afterAgentCallbacks:  cfg.AfterAgentCallbacks,
 	}, nil
+}
+
+// Type returns the agent type for introspection.
+func (a *baseAgent) Type() AgentType {
+	return a.agentType
 }
 
 func (a *baseAgent) Name() string {
@@ -273,11 +289,6 @@ func (a *baseAgent) runAfterCallbacks(ctx InvocationContext) (*Event, error) {
 	}
 
 	return nil, nil
-}
-
-// Type returns the agent type for introspection.
-func (a *baseAgent) Type() AgentType {
-	return a.agentType
 }
 
 // ============================================================================

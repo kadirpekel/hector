@@ -25,6 +25,13 @@ type AgentConfig struct {
 	// Description describes what the agent does.
 	Description string `yaml:"description,omitempty" json:"description,omitempty" jsonschema:"title=Description,description=Human-readable description of agent's purpose"`
 
+	// Visibility controls agent discovery and access.
+	// Values:
+	//   - "public" (default): Visible in discovery, accessible via HTTP (if auth enabled, requires auth)
+	//   - "internal": Visible in discovery ONLY if authenticated, accessible via HTTP (requires auth)
+	//   - "private": Hidden from discovery, NOT accessible via HTTP (internal calls only)
+	Visibility string `yaml:"visibility,omitempty" json:"visibility,omitempty" jsonschema:"title=Visibility,description=Controls agent discovery and access,enum=public,enum=internal,enum=private,default=public"`
+
 	// LLM references a configured LLM by name.
 	LLM string `yaml:"llm,omitempty" json:"llm,omitempty" jsonschema:"title=LLM Reference,description=References a configured LLM by name,default=default"`
 
@@ -518,6 +525,11 @@ func (c *AgentConfig) SetDefaults(defaults *DefaultsConfig) {
 		c.OutputModes = []string{"text/plain"}
 	}
 
+	// Default visibility
+	if c.Visibility == "" {
+		c.Visibility = "public"
+	}
+
 	// Generate default skill if none provided (A2A spec required)
 	if len(c.Skills) == 0 {
 		c.Skills = []SkillConfig{{
@@ -551,10 +563,10 @@ func (c *AgentConfig) SetDefaults(defaults *DefaultsConfig) {
 		c.IncludeContextMaxLength = IntPtr(500)
 	}
 
-	// Default streaming to false if not set (for config file mode)
+	// Default streaming to true if not set (modern UX expectation)
 	// Note: Zero-config mode sets this explicitly before SetDefaults is called
 	if c.Streaming == nil {
-		c.Streaming = BoolPtr(false)
+		c.Streaming = BoolPtr(true)
 	}
 }
 
@@ -565,6 +577,14 @@ func (c *AgentConfig) Validate() error {
 		if err := c.StructuredOutput.Validate(); err != nil {
 			return fmt.Errorf("structured_output: %w", err)
 		}
+	}
+
+	// Validate visibility
+	switch c.Visibility {
+	case "", "public", "internal", "private":
+		// valid
+	default:
+		return fmt.Errorf("invalid visibility %q (must be public, internal, or private)", c.Visibility)
 	}
 
 	// Validate context config

@@ -123,6 +123,7 @@ func NewA2A(cfg Config) (agent.Agent, error) {
 		Run: func(ctx agent.InvocationContext) iter.Seq2[*agent.Event, error] {
 			return remoteAgent.run(ctx)
 		},
+		AgentType: agent.TypeRemoteAgent,
 	})
 }
 

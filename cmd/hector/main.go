@@ -201,6 +201,23 @@ func (c *ServeCmd) Run(cli *CLI) error {
 				slog.Warn("Failed to create initial config file", "error", err)
 			} else {
 				slog.Info("Created initial config from zero-config", "path", savePath)
+
+				// Create a FileProvider + Loader to enable file watching
+				// This is critical: zero-config returns nil loader, but we need
+				// a loader with FileProvider to watch for config changes in studio mode
+				_ = config.LoadDotEnvForConfig(savePath)
+				_, newLoader, err := config.LoadConfigFile(ctx, savePath)
+				if err != nil {
+					slog.Warn("Failed to create loader for watching", "error", err)
+				} else {
+					// Close old loader if any (should be nil in zero-config)
+					if loader != nil {
+						loader.Close()
+					}
+					loader = newLoader
+					configPathUsed = savePath
+					slog.Debug("Created file loader for config watching", "path", savePath)
+				}
 			}
 		}
 
@@ -240,7 +257,7 @@ func (c *ServeCmd) Run(cli *CLI) error {
 			}
 
 			// Hot-swap executors
-			srv.UpdateExecutors(newExecutors)
+			srv.UpdateExecutors(newCfg, newExecutors)
 			slog.Info("✅ Hot reload complete", "agents", len(newExecutors))
 		}
 

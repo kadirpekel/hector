@@ -200,6 +200,10 @@ func (r *Runner) Run(ctx context.Context, userID, sessionID string, content *age
 					yield(nil, fmt.Errorf("failed to persist event: %w", err))
 					return
 				}
+				// Signal successful persistence (essential for async agents)
+				if event.OnPersisted != nil {
+					event.OnPersisted()
+				}
 			}
 
 			if !yield(event, nil) {
@@ -357,6 +361,15 @@ func (r *Runner) findAgentToRun(sess session.Session) agent.Agent {
 			continue
 		}
 
+		// Skip sub-agents of workflow agents (sequential/parallel/loop).
+		// Workflow agents should always run their full workflow on every invocation,
+		// not resume from a sub-agent.
+		if r.isWorkflowSubAgent(subAgent) {
+			slog.Debug("Skipping workflow sub-agent, will use root instead",
+				"agent", subAgent.Name())
+			continue
+		}
+
 		// Check if transfer is allowed up the tree
 		if r.isTransferableAcrossTree(subAgent) {
 			return subAgent
@@ -364,6 +377,30 @@ func (r *Runner) findAgentToRun(sess session.Session) agent.Agent {
 	}
 
 	return r.rootAgent
+}
+
+// isWorkflowSubAgent checks if an agent is a direct child of a workflow agent.
+// Workflow agents (sequential/parallel/loop) should always run from the root,
+// never resume from their sub-agents.
+func (r *Runner) isWorkflowSubAgent(ag agent.Agent) bool {
+	// Get the parent agent
+	parent := r.parents[ag.Name()]
+	if parent == nil {
+		return false
+	}
+
+	// Check if parent is a workflow agent
+	t := parent.Type()
+	if t == agent.TypeSequentialAgent ||
+		t == agent.TypeParallelAgent ||
+		t == agent.TypeLoopAgent {
+		slog.Debug("Parent is workflow agent, skipping sub-agent",
+			"agent", ag.Name(),
+			"parent", parent.Name(),
+			"parent_type", t)
+		return true
+	}
+	return false
 }
 
 // TransferRestrictable is implemented by agents that can restrict transfers.

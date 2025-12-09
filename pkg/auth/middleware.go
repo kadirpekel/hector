@@ -71,13 +71,13 @@ func MiddlewareWithExclusions(validator TokenValidator, excludedPaths []string) 
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Check if path is excluded
+			// Check if path is excluded (exact match)
 			if excludeSet[r.URL.Path] {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			// Also check with trailing slash variants
+			// Check with trailing slash variants
 			pathWithSlash := r.URL.Path
 			if !strings.HasSuffix(pathWithSlash, "/") {
 				pathWithSlash += "/"
@@ -86,6 +86,14 @@ func MiddlewareWithExclusions(validator TokenValidator, excludedPaths []string) 
 			if excludeSet[pathWithSlash] || excludeSet[pathWithoutSlash] {
 				next.ServeHTTP(w, r)
 				return
+			}
+
+			// Check prefix matches (for paths in exclusion list ending with /)
+			for path := range excludeSet {
+				if strings.HasSuffix(path, "/") && strings.HasPrefix(r.URL.Path, path) {
+					next.ServeHTTP(w, r)
+					return
+				}
 			}
 
 			// Apply auth middleware

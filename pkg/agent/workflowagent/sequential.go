@@ -56,5 +56,6 @@ func NewSequential(cfg SequentialConfig) (agent.Agent, error) {
 		Description:   cfg.Description,
 		SubAgents:     cfg.SubAgents,
 		MaxIterations: 1, // Sequential = single iteration
+		AgentType:     agent.TypeSequentialAgent,
 	})
 }

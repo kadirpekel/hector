@@ -12,6 +12,7 @@ import {
   getWidgetContainerClasses,
   getWidgetHeaderClasses,
 } from "./widgetStyles";
+import { createStreamDispatcher } from "../../lib/stream-utils";
 
 interface ApprovalWidgetProps {
   widget: ApprovalWidgetType;
@@ -33,7 +34,7 @@ export const ApprovalWidget = memo<ApprovalWidgetProps>(function ApprovalWidget(
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toolName, toolInput } = widget.data;
   const { status, decision } = widget;
-  
+
   // Use selectors for better performance - only subscribe to what we need
   const updateMessage = useStore((state) => state.updateMessage);
   const sessions = useStore((state) => state.sessions);
@@ -96,7 +97,7 @@ export const ApprovalWidget = memo<ApprovalWidgetProps>(function ApprovalWidget(
       // Use structured DataPart format for better tool_call_id matching
       const toolCallIDs = widget.data.tool_call_ids || [];
       const taskId = widget.data.task_id;
-      
+
       const requestBody = {
         jsonrpc: "2.0",
         method: "message/stream",
@@ -108,22 +109,22 @@ export const ApprovalWidget = memo<ApprovalWidgetProps>(function ApprovalWidget(
               // Structured approval (preferred - includes tool_call_id and tool_name)
               ...(toolCallIDs.length > 0
                 ? toolCallIDs.map((toolCallID: string) => ({
-                    kind: "data",
-                    data: {
-                      type: "tool_approval",
-                      decision: decisionValue,
-                      tool_call_id: toolCallID,
-                      ...(widget.data.toolName ? { tool_name: widget.data.toolName } : {}),
-                      ...(taskId ? { task_id: taskId } : {}),
-                    },
-                  }))
+                  kind: "data",
+                  data: {
+                    type: "tool_approval",
+                    decision: decisionValue,
+                    tool_call_id: toolCallID,
+                    ...(widget.data.toolName ? { tool_name: widget.data.toolName } : {}),
+                    ...(taskId ? { task_id: taskId } : {}),
+                  },
+                }))
                 : // Fallback: simple text approval (server also supports this)
-                  [
-                    {
-                      kind: "text",
-                      text: decisionValue,
-                    },
-                  ]),
+                [
+                  {
+                    kind: "text",
+                    text: decisionValue,
+                  },
+                ]),
             ],
           },
         },
@@ -131,7 +132,8 @@ export const ApprovalWidget = memo<ApprovalWidgetProps>(function ApprovalWidget(
       };
 
       // Use StreamParser to handle the response stream
-      const parser = new StreamParser(sessionId, approvalMessage.id);
+      const dispatcher = createStreamDispatcher();
+      const parser = new StreamParser(sessionId, approvalMessage.id, dispatcher);
       setActiveStreamParser(parser);
       setIsGenerating(true);
 
@@ -203,7 +205,7 @@ export const ApprovalWidget = memo<ApprovalWidgetProps>(function ApprovalWidget(
             className={cn(
               "transition-transform duration-200",
               shouldAnimate &&
-                "animate-[badgeLifecycle_2s_ease-in-out_infinite]",
+              "animate-[badgeLifecycle_2s_ease-in-out_infinite]",
               isExpanded && !isCompleted && "rotate-12",
             )}
           />

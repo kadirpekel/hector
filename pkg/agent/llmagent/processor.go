@@ -18,6 +18,7 @@ package llmagent
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/a2aproject/a2a-go/a2a"
 
@@ -572,18 +573,86 @@ func (p *ContentProcessor) pairToolCallsWithResults(messages []*a2a.Message) []*
 // ConvertForeignAgentMessage converts messages from other agents to user context.
 // In multi-agent setups, foreign agent messages need to be presented as user context.
 func (p *ContentProcessor) ConvertForeignAgentMessage(msg *a2a.Message, author string) *a2a.Message {
-	if msg.Role != a2a.MessageRoleAgent || author == p.agentName || author == agent.AuthorUser {
+	// Only convert messages from other agents (not self, not user)
+	if author == p.agentName || author == agent.AuthorUser {
 		return msg
 	}
 
-	// Convert to user role with agent attribution
-	var newParts []a2a.Part
-	newParts = append(newParts, a2a.TextPart{
-		Text: fmt.Sprintf("[Message from agent '%s']:\n", author),
-	})
-	newParts = append(newParts, msg.Parts...)
+	// Helper to safely get string from map
+	getString := func(m map[string]any, key string) string {
+		if v, ok := m[key].(string); ok {
+			return v
+		}
+		return ""
+	}
 
-	return a2a.NewMessage(a2a.MessageRoleUser, newParts...)
+	// Convert to user role with agent attribution
+	// We flatten everything to text to ensure the model treats it as context
+	// and to avoid protocol errors (e.g. tool calls inside user messages)
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("[Message from agent '%s']:\n", author))
+
+	for _, part := range msg.Parts {
+		switch pt := part.(type) {
+		case a2a.TextPart:
+			sb.WriteString(pt.Text)
+			sb.WriteString("\n")
+		case a2a.DataPart:
+			typeVal := getString(pt.Data, "type")
+			switch typeVal {
+			case "tool_use":
+				name := getString(pt.Data, "name")
+				args := pt.Data["arguments"]
+				// Simple JSON representation of args
+				argsJson := "{}"
+				if args != nil {
+					argsJson = fmt.Sprintf("%v", args)
+				}
+				sb.WriteString(fmt.Sprintf("Called tool %q with parameters: %s\n", name, argsJson))
+			case "tool_result":
+				name := getString(pt.Data, "tool_name")
+				content := pt.Data["content"]
+				contentStr := ""
+				if s, ok := content.(string); ok {
+					contentStr = s
+				} else {
+					contentStr = fmt.Sprintf("%v", content)
+				}
+				sb.WriteString(fmt.Sprintf("Tool %q returned result: %s\n", name, contentStr))
+			default:
+				// Generic data part
+				sb.WriteString(fmt.Sprintf("Data: %v\n", pt.Data))
+			}
+		default:
+			// Fallback for unknown parts
+			sb.WriteString(fmt.Sprintf("%v\n", part))
+		}
+	}
+
+	return a2a.NewMessage(a2a.MessageRoleUser, a2a.TextPart{Text: sb.String()})
+}
+
+// SanitizeMessage removes empty parts from a message, helpful for some models (e.g. Gemini).
+func (p *ContentProcessor) SanitizeMessage(msg *a2a.Message) *a2a.Message {
+	if msg == nil || len(msg.Parts) == 0 {
+		return msg
+	}
+
+	var cleanParts []a2a.Part
+	for _, part := range msg.Parts {
+		if part == nil {
+			continue
+		}
+		if tp, ok := part.(a2a.TextPart); ok && tp.Text == "" {
+			continue
+		}
+		cleanParts = append(cleanParts, part)
+	}
+
+	if len(cleanParts) == len(msg.Parts) {
+		return msg
+	}
+	return a2a.NewMessage(msg.Role, cleanParts...)
 }
 
 // RearrangeEventsForLatestFunctionResponse handles async function responses.

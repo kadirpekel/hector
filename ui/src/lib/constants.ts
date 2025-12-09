@@ -63,3 +63,12 @@ export const STREAM = {
    */
   MAX_PARSE_ERRORS: 5,
 } as const;
+
+// Editor constants
+export const EDITOR = {
+  /**
+   * Debounce delay for YAML editor changes in milliseconds.
+   * Balances responsiveness with performance by batching rapid edits.
+   */
+  DEBOUNCE_DELAY_MS: 500,
+} as const;

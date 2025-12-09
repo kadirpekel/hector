@@ -32,6 +32,9 @@ type LoopConfig struct {
 	// SubAgents are the agents to run in each iteration.
 	SubAgents []agent.Agent
 
+	// AgentType overrides the agent type. Defaults to TypeLoopAgent.
+	AgentType agent.AgentType
+
 	// MaxIterations is the maximum number of iterations.
 	// If 0, runs indefinitely until any sub-agent escalates.
 	MaxIterations uint
@@ -59,6 +62,11 @@ type LoopConfig struct {
 func NewLoop(cfg LoopConfig) (agent.Agent, error) {
 	maxIterations := cfg.MaxIterations
 
+	agentType := cfg.AgentType
+	if agentType == "" {
+		agentType = agent.TypeLoopAgent
+	}
+
 	return agent.New(agent.Config{
 		Name:        cfg.Name,
 		Description: cfg.Description,
@@ -66,7 +74,9 @@ func NewLoop(cfg LoopConfig) (agent.Agent, error) {
 		Run: func(ctx agent.InvocationContext) iter.Seq2[*agent.Event, error] {
 			return runLoop(ctx, maxIterations)
 		},
+		AgentType: agentType,
 	})
+
 }
 
 func runLoop(ctx agent.InvocationContext, maxIterations uint) iter.Seq2[*agent.Event, error] {
@@ -85,7 +95,7 @@ func runLoop(ctx agent.InvocationContext, maxIterations uint) iter.Seq2[*agent.E
 					Memory:      ctx.Memory(),
 					UserContent: ctx.UserContent(),
 					RunConfig:   ctx.RunConfig(),
-					Branch:      ctx.Branch() + "/" + subAgent.Name(),
+					Branch:      ctx.Branch(), // Share branch so sub-agents see each other's events
 				})
 
 				for event, err := range subAgent.Run(subCtx) {

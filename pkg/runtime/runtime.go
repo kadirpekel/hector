@@ -410,101 +410,114 @@ func (r *Runtime) buildToolsets() error {
 // 2. Second pass: Create workflow agents (depend on sub-agents)
 // 3. Third pass: Wire up multi-agent relationships and rebuild
 func (r *Runtime) buildAgents() error {
-	// Pass 1: Create LLM and remote agents first (they don't depend on other agents)
-	for name, cfg := range r.cfg.Agents {
-		if cfg == nil {
-			continue
-		}
+	// Iterative Build: Unified pass for all agents (LLM, Remote, Workflow)
+	// handling dependencies automatically via topological iterative resolve.
 
-		// Skip workflow agents in first pass (they depend on sub-agents)
-		if isWorkflowAgentType(cfg.Type) {
-			continue
-		}
-
-		// Handle remote agents
-		if isRemoteAgentType(cfg.Type) {
-			ag, err := r.createRemoteAgent(name, cfg)
-			if err != nil {
-				return fmt.Errorf("remote agent %q: %w", name, err)
-			}
-			r.agents[name] = ag
-			slog.Debug("Created remote agent", "name", name, "url", cfg.URL)
-			continue
-		}
-
-		// Handle LLM agents
-		// Get LLM for this agent
-		llm, ok := r.llms[cfg.LLM]
-		if !ok {
-			return fmt.Errorf("agent %q: llm %q not found", name, cfg.LLM)
-		}
-
-		// Collect toolsets for this agent
-		// Consistent assignment pattern: nil/omitted = all enabled toolsets, [] = none, [...] = scoped
-		var agentToolsets []tool.Toolset
-		if cfg.Tools == nil {
-			// Tools omitted (nil) - use all enabled toolsets (permissive default)
-			// This matches legacy behavior where nil = all tools from registry
-			for toolName, ts := range r.toolsets {
-				// Only include enabled toolsets (buildToolsets already filters disabled, but double-check)
-				if toolCfg, ok := r.cfg.Tools[toolName]; ok && toolCfg != nil && !toolCfg.IsEnabled() {
-					continue
-				}
-				agentToolsets = append(agentToolsets, ts)
-			}
-		} else if len(cfg.Tools) == 0 {
-			// Tools explicitly empty ([]) - no toolsets (explicit restriction)
-			agentToolsets = []tool.Toolset{}
-		} else {
-			// Use explicitly listed toolsets
-			for _, toolName := range cfg.Tools {
-				ts, ok := r.toolsets[toolName]
-				if !ok {
-					return fmt.Errorf("agent %q: tool %q not found", name, toolName)
-				}
-				agentToolsets = append(agentToolsets, ts)
-			}
-		}
-
-		// Create the LLM agent
-		ag, err := r.createLLMAgent(name, cfg, llm, agentToolsets)
-		if err != nil {
-			return fmt.Errorf("agent %q: %w", name, err)
-		}
-
-		r.agents[name] = ag
-		slog.Debug("Created LLM agent", "name", name, "llm", cfg.LLM, "tools", cfg.Tools)
+	type pendingAgent struct {
+		Name   string
+		Config *config.AgentConfig
 	}
 
-	// Pass 2: Create workflow agents (they depend on sub-agents created in pass 1)
+	var pending []pendingAgent
 	for name, cfg := range r.cfg.Agents {
 		if cfg == nil {
 			continue
 		}
+		pending = append(pending, pendingAgent{Name: name, Config: cfg})
+	}
 
-		// Only create workflow agents in this pass
-		if !isWorkflowAgentType(cfg.Type) {
-			continue
-		}
+	// Loop until all pending agents are built
+	for len(pending) > 0 {
+		var nextPending []pendingAgent
+		progress := false
 
-		// Resolve sub-agents
-		var subAgents []agent.Agent
-		for _, subName := range cfg.SubAgents {
-			subAgent, ok := r.agents[subName]
-			if !ok {
-				return fmt.Errorf("workflow agent %q: sub_agent %q not found", name, subName)
+		for _, p := range pending {
+			name := p.Name
+			cfg := p.Config
+
+			// Check dependencies based on type
+			ready := true
+
+			// Workflow agents depend on SubAgents
+			if isWorkflowAgentType(cfg.Type) {
+				for _, subName := range cfg.SubAgents {
+					if _, exists := r.agents[subName]; !exists {
+						ready = false
+						break
+					}
+				}
 			}
-			subAgents = append(subAgents, subAgent)
+			// LLM/Remote agents have no "agent" dependencies for *creation*
+			// (LLMs are pre-built, and tool/agent-tool wiring happens in later passes)
+
+			if !ready {
+				nextPending = append(nextPending, p)
+				continue
+			}
+
+			// Build the agent
+			var ag agent.Agent
+			var err error
+
+			if isWorkflowAgentType(cfg.Type) {
+				// Resolve sub-agents (we know they exist now)
+				var subAgents []agent.Agent
+				for _, subName := range cfg.SubAgents {
+					subAgents = append(subAgents, r.agents[subName])
+				}
+				ag, err = r.createWorkflowAgent(name, cfg, subAgents)
+			} else if isRemoteAgentType(cfg.Type) {
+				ag, err = r.createRemoteAgent(name, cfg)
+			} else {
+				// LLM Agent
+				llm, ok := r.llms[cfg.LLM]
+				if !ok {
+					return fmt.Errorf("agent %q: llm %q not found", name, cfg.LLM)
+				}
+
+				// Collect toolsets
+				var agentToolsets []tool.Toolset
+				if cfg.Tools == nil {
+					for toolName, ts := range r.toolsets {
+						if toolCfg, ok := r.cfg.Tools[toolName]; ok && toolCfg != nil && !toolCfg.IsEnabled() {
+							continue
+						}
+						agentToolsets = append(agentToolsets, ts)
+					}
+				} else if len(cfg.Tools) == 0 {
+					agentToolsets = []tool.Toolset{}
+				} else {
+					for _, toolName := range cfg.Tools {
+						ts, ok := r.toolsets[toolName]
+						if !ok {
+							return fmt.Errorf("agent %q: tool %q not found", name, toolName)
+						}
+						agentToolsets = append(agentToolsets, ts)
+					}
+				}
+
+				ag, err = r.createLLMAgent(name, cfg, llm, agentToolsets)
+			}
+
+			if err != nil {
+				return fmt.Errorf("failed to build agent %q: %w", name, err)
+			}
+
+			r.agents[name] = ag
+			slog.Debug("Created agent", "name", name, "type", cfg.Type)
+			progress = true
 		}
 
-		// Create workflow agent
-		ag, err := r.createWorkflowAgent(name, cfg, subAgents)
-		if err != nil {
-			return fmt.Errorf("workflow agent %q: %w", name, err)
+		if !progress && len(nextPending) > 0 {
+			// Cycle detected or missing dependency
+			var missing []string
+			for _, p := range nextPending {
+				missing = append(missing, p.Name)
+			}
+			return fmt.Errorf("failed to build agents: dependency cycle or missing dependencies for: %v", missing)
 		}
 
-		r.agents[name] = ag
-		slog.Debug("Created workflow agent", "name", name, "type", cfg.Type, "sub_agents", cfg.SubAgents)
+		pending = nextPending
 	}
 
 	// Pass 3: Wire up multi-agent relationships from config for LLM agents

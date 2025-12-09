@@ -32,203 +32,190 @@ export const yamlToGraph = (yamlContent: string): GraphData => {
       return { nodes, edges };
     }
 
-    // Layout constants
+    // Constants
     const NODE_WIDTH = 220;
     const NODE_HEIGHT = 80;
     const HORIZONTAL_GAP = 80;
-    const VERTICAL_GAP = 50;
+    const VERTICAL_GAP = 60;
     const GROUP_PADDING = 60;
-    const WORKFLOW_VERTICAL_SPACING = 100;
 
-    let workflowYOffset = 50;
+    // Track processed agents to avoid duplicates
+    const processedAgents = new Set<string>();
 
-    // Track which agents are in workflows
-    const agentsInWorkflows = new Set<string>();
-    const workflowNodes = new Map<string, { type: string; subAgents: string[]; maxIterations?: number }>();
+    let currentY = 50;
 
-    // First pass: Identify workflow agents
-    Object.entries(config.agents).forEach(([id, agentConfig]) => {
-      if (agentConfig.type && ['sequential', 'parallel', 'loop'].includes(agentConfig.type)) {
-        const subAgents = agentConfig.sub_agents || [];
-        workflowNodes.set(id, {
-          type: agentConfig.type,
-          subAgents,
-          maxIterations: agentConfig.max_iterations,
-        });
-        subAgents.forEach((subId: string) => agentsInWorkflows.add(subId));
+    // Helper to calculate dimensions recursively
+    const getLayout = (agentId: string, type?: string): { width: number; height: number; childNodes: string[] } => {
+      const agent = config.agents![agentId];
+      const subAgents = agent?.sub_agents || [];
+      const isWorkflow = type && ['sequential', 'parallel', 'loop'].includes(type);
+
+      if (!isWorkflow || subAgents.length === 0) {
+        return { width: NODE_WIDTH, height: NODE_HEIGHT, childNodes: [] };
       }
-    });
 
-    // Second pass: Create workflow groups with proper sizing
-    workflowNodes.forEach(({ type, subAgents, maxIterations }, workflowId) => {
-      const numChildren = subAgents.length;
-      
-      if (numChildren === 0) return;
+      // Calculate dimensions based on children
+      let width = 0;
+      let height = 0;
 
-      // Calculate group dimensions based on layout type
-      let groupWidth: number;
-      let groupHeight: number;
-      
       if (type === 'sequential') {
-        // Horizontal layout: width grows with children
-        groupWidth = (numChildren * NODE_WIDTH) + ((numChildren - 1) * HORIZONTAL_GAP) + (GROUP_PADDING * 2);
-        groupHeight = NODE_HEIGHT + (GROUP_PADDING * 2) + 40; // Extra for header
-      } else if (type === 'parallel') {
-        // Vertical layout: height grows with children
-        groupWidth = NODE_WIDTH + (GROUP_PADDING * 2);
-        groupHeight = (numChildren * NODE_HEIGHT) + ((numChildren - 1) * VERTICAL_GAP) + (GROUP_PADDING * 2) + 40;
+        // Sum of widths + gaps
+        const childrenDimensions = subAgents.map((sub: string) =>
+          getLayout(sub, config.agents![sub]?.type)
+        );
+        width = childrenDimensions.reduce((acc: number, dim: any) => acc + dim.width, 0) +
+          ((subAgents.length - 1) * HORIZONTAL_GAP) + (GROUP_PADDING * 2);
+        height = Math.max(...childrenDimensions.map((dim: any) => dim.height)) + (GROUP_PADDING * 2) + 40;
       } else {
-        // Loop: circular/grid layout
-        const cols = Math.ceil(Math.sqrt(numChildren));
-        const rows = Math.ceil(numChildren / cols);
-        groupWidth = (cols * NODE_WIDTH) + ((cols - 1) * HORIZONTAL_GAP) + (GROUP_PADDING * 2);
-        groupHeight = (rows * NODE_HEIGHT) + ((rows - 1) * VERTICAL_GAP) + (GROUP_PADDING * 2) + 40;
+        // Parallel/Loop: Max width, Sum of heights
+        const childrenDimensions = subAgents.map((sub: string) =>
+          getLayout(sub, config.agents![sub]?.type)
+        );
+        width = Math.max(...childrenDimensions.map((dim: any) => dim.width)) + (GROUP_PADDING * 2);
+        height = childrenDimensions.reduce((acc: number, dim: any) => acc + dim.height, 0) +
+          ((subAgents.length - 1) * VERTICAL_GAP) + (GROUP_PADDING * 2) + 40;
       }
 
-      // Create workflow group node
-      const groupNode: Node = {
-        id: workflowId,
+      return { width, height, childNodes: subAgents };
+    };
+
+    // Recursive render function
+    const renderNode = (agentId: string, x: number, y: number, parentId?: string) => {
+      if (processedAgents.has(agentId)) {
+        // If already processed but as a root, we might need to edges?
+        // But for strict hierarchy, we shouldn't process twice.
+        // However, if it's referenced multiple times, we might need a visual link or duplicate.
+        // For now, assume unique ownership or just link to existing.
+        return;
+      }
+      processedAgents.add(agentId);
+
+      const agent = config.agents![agentId];
+      if (!agent) return;
+
+      const type = agent.type;
+      const isWorkflow = type && ['sequential', 'parallel', 'loop'].includes(type);
+      const subAgents = agent.sub_agents || [];
+
+      if (!isWorkflow || subAgents.length === 0) {
+        // Render simple agent node
+        nodes.push({
+          id: agentId,
+          type: 'agent',
+          position: { x, y },
+          parentId,
+          extent: parentId ? 'parent' : undefined,
+          data: {
+            label: agent.name || agentId,
+            llm: agent.llm,
+            description: agent.description,
+            instruction: agent.instruction,
+          },
+          style: { width: NODE_WIDTH, height: NODE_HEIGHT },
+        });
+        return;
+      }
+
+      // Render workflow group
+      const dim = getLayout(agentId, type);
+
+      nodes.push({
+        id: agentId,
         type: 'workflowGroup',
-        position: { x: 100, y: workflowYOffset },
+        position: { x, y },
+        parentId,
         data: {
-          label: workflowId,
+          label: agentId,
           workflowType: type,
-          subAgents: subAgents,
-          maxIterations: maxIterations,
+          subAgents,
+          maxIterations: agent.max_iterations,
         },
         style: {
-          width: groupWidth,
-          height: groupHeight,
-          zIndex: -1, // Behind child nodes
+          width: dim.width,
+          height: dim.height,
+          zIndex: -1,
         },
-      };
-      nodes.push(groupNode);
+      });
 
-      // Layout child nodes inside the group
-      subAgents.forEach((subId, index) => {
-        const agentConfig = config.agents![subId];
-        if (!agentConfig) return;
+      // Render children
+      let childX = GROUP_PADDING;
+      let childY = GROUP_PADDING + 40;
 
-        let childX: number;
-        let childY: number;
+      subAgents.forEach((subId: string, index: number) => {
+        const subDim = getLayout(subId, config.agents![subId]?.type);
 
-        if (type === 'sequential') {
-          // Sequential: horizontal row
-          childX = GROUP_PADDING + (index * (NODE_WIDTH + HORIZONTAL_GAP));
-          childY = GROUP_PADDING + 40; // Below header
-        } else if (type === 'parallel') {
-          // Parallel: vertical column
-          childX = GROUP_PADDING;
-          childY = GROUP_PADDING + 40 + (index * (NODE_HEIGHT + VERTICAL_GAP));
-        } else {
-          // Loop: grid layout
-          const cols = Math.ceil(Math.sqrt(numChildren));
-          const col = index % cols;
-          const row = Math.floor(index / cols);
-          childX = GROUP_PADDING + (col * (NODE_WIDTH + HORIZONTAL_GAP));
-          childY = GROUP_PADDING + 40 + (row * (NODE_HEIGHT + VERTICAL_GAP));
+        renderNode(subId, childX, childY, agentId);
+
+        // Add Edges
+        // Add Edges
+        if (type === 'sequential' && index < subAgents.length - 1) {
+          const nextId = subAgents[index + 1];
+          edges.push({
+            id: `edge-${subId}-${nextId}`,
+            source: subId,
+            target: nextId,
+            sourceHandle: 'right', // Horizontal flow: Right -> Left
+            targetHandle: 'left',
+            type: 'default', // Smooth Bezier
+            style: { stroke: '#3b82f6', strokeWidth: 2 },
+            zIndex: 10,
+          });
+        } else if (type === 'loop' && index < subAgents.length - 1) {
+          const nextId = subAgents[index + 1];
+          edges.push({
+            id: `edge-${subId}-${nextId}`,
+            source: subId,
+            target: nextId,
+            sourceHandle: 'bottom', // Vertical flow: Bottom -> Top
+            targetHandle: 'top',
+            type: 'default',
+            style: { stroke: '#14b8a6', strokeWidth: 2 },
+            zIndex: 10,
+          });
         }
 
-        const childNode: Node = {
-          id: subId,
-          type: 'agent',
-          position: { x: childX, y: childY },
-          parentId: workflowId,
-          extent: 'parent' as const,
-          data: {
-            label: agentConfig.name || subId,
-            llm: agentConfig.llm,
-            description: agentConfig.description,
-            instruction: agentConfig.instruction,
-          },
-          style: {
-            width: NODE_WIDTH,
-            height: NODE_HEIGHT,
-          },
-        };
-        nodes.push(childNode);
-
-        // Create edges within workflow
-        if (type === 'sequential' && index < subAgents.length - 1) {
-          // Sequential: left to right
-          edges.push({
-            id: `edge-${subId}-${subAgents[index + 1]}`,
-            source: subId,
-            target: subAgents[index + 1],
-            type: 'smoothstep',
-            animated: false,
-            style: { stroke: '#3b82f6', strokeWidth: 2 },
-            sourceHandle: 'right',
-            targetHandle: 'left',
-          });
-        } else if (type === 'parallel') {
-          // Parallel: no edges between children (they run in parallel)
-          // Could add edges from a parent trigger if needed
-        } else if (type === 'loop' && index < subAgents.length - 1) {
-          // Loop: connect in sequence
-          edges.push({
-            id: `edge-${subId}-${subAgents[index + 1]}`,
-            source: subId,
-            target: subAgents[index + 1],
-            type: 'smoothstep',
-            animated: false,
-            style: { stroke: '#14b8a6', strokeWidth: 2 },
-          });
+        // Move current cursor
+        if (type === 'sequential') {
+          childX += subDim.width + HORIZONTAL_GAP;
+        } else {
+          childY += subDim.height + VERTICAL_GAP;
         }
       });
 
-      // Loop back edge for loop workflows
+      // Loop back edge
       if (type === 'loop' && subAgents.length > 1) {
         edges.push({
-          id: `edge-loop-back-${workflowId}`,
+          id: `edge-loop-${agentId}`,
           source: subAgents[subAgents.length - 1],
           target: subAgents[0],
-          type: 'smoothstep',
-          animated: true,
+          // Loop back: Use Right handles for a clean side curve
+          sourceHandle: 'right',
+          targetHandle: 'right',
+          type: 'default',
           style: { stroke: '#14b8a6', strokeWidth: 2, strokeDasharray: '5 5' },
+          animated: true,
+          zIndex: 10,
         });
       }
+    };
 
-      // Move Y offset for next workflow
-      workflowYOffset += groupHeight + WORKFLOW_VERTICAL_SPACING;
+    // Main Loop: Render all top-level agents (roots)
+    // A top-level agent is one that is NOT a sub_agent of anyone else
+    const allSubAgents = new Set<string>();
+    Object.values(config.agents).forEach((a: any) => {
+      if (a.sub_agents) a.sub_agents.forEach((s: string) => allSubAgents.add(s));
     });
 
-    // Third pass: Standalone agents (not in workflows)
-    let standaloneY = workflowYOffset;
-    Object.entries(config.agents).forEach(([id, agentConfig]) => {
-      if (!agentsInWorkflows.has(id) && !workflowNodes.has(id)) {
-        nodes.push({
-          id,
-          type: 'agent',
-          position: { x: 100, y: standaloneY },
-          data: {
-            label: agentConfig.name || id,
-            llm: agentConfig.llm,
-            description: agentConfig.description,
-            instruction: agentConfig.instruction,
-          },
-          style: {
-            width: NODE_WIDTH,
-            height: NODE_HEIGHT,
-          },
-        });
-        standaloneY += NODE_HEIGHT + 50;
+    const roots = Object.keys(config.agents).filter(id => !allSubAgents.has(id));
 
-        // Create edges for sub_agents
-        if (agentConfig.sub_agents) {
-          agentConfig.sub_agents.forEach((subId: string) => {
-            edges.push({
-              id: `edge-${id}-${subId}`,
-              source: id,
-              target: subId,
-              type: 'smoothstep',
-              animated: false,
-              style: { stroke: '#6b7280', strokeWidth: 2 },
-            });
-          });
-        }
-      }
+    roots.forEach(rootId => {
+      const dim = getLayout(rootId, config.agents![rootId]?.type);
+      renderNode(rootId, 100, currentY, undefined);
+      currentY += dim.height + 100;
     });
+
+    // If there were cycles or orphans not caught, handle them?
+    // For now, this covers the tree structure.
 
     return { nodes, edges };
   } catch (error) {

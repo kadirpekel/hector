@@ -7,8 +7,9 @@ import { cn } from "../../lib/utils";
 import { TIMING, UI } from "../../lib/constants";
 import { handleError } from "../../lib/error-handler";
 import { generateId, generateShortId } from "../../lib/id-generator";
+import { createStreamDispatcher } from "../../lib/stream-utils";
 
-export const InputArea: React.FC = () => {
+export const InputArea: React.FC<{ onSend?: () => void }> = ({ onSend }) => {
   // Use selectors for better performance - only subscribe to specific state slices
   const currentSessionId = useStore((state) => state.currentSessionId);
   const addMessage = useStore((state) => state.addMessage);
@@ -37,41 +38,44 @@ export const InputArea: React.FC = () => {
     }
   }, [input]);
 
-  // Track previous generation state
+  // Track previous generation state and session
   const prevIsGenerating = useRef(isGenerating);
   const prevSessionId = useRef(currentSessionId);
 
-  // Auto-focus when session changes
+  // Unified auto-focus effect (session change OR generation end)
   useEffect(() => {
-    if (
+    const sessionChanged =
       currentSessionId &&
       currentSessionId !== prevSessionId.current &&
-      selectedAgent
-    ) {
-      prevSessionId.current = currentSessionId;
-      const timer = setTimeout(() => {
-        textareaRef.current?.focus();
-      }, TIMING.AUTO_FOCUS_DELAY);
-      return () => clearTimeout(timer);
-    }
-  }, [currentSessionId, selectedAgent]);
+      selectedAgent;
 
-  // Focus when generation stops (user input now expected)
-  useEffect(() => {
-    if (
+    const generationEnded =
       prevIsGenerating.current &&
       !isGenerating &&
       selectedAgent &&
-      currentSessionId
-    ) {
-      // Generation just completed - focus input for next user input
+      currentSessionId;
+
+    if (sessionChanged || generationEnded) {
+      // Choose appropriate delay based on trigger
+      const delay = sessionChanged
+        ? TIMING.AUTO_FOCUS_DELAY
+        : TIMING.POST_GENERATION_FOCUS_DELAY;
+
       const timer = setTimeout(() => {
         textareaRef.current?.focus();
-      }, TIMING.POST_GENERATION_FOCUS_DELAY);
+      }, delay);
+
+      // Update refs for next comparison
+      if (sessionChanged) {
+        prevSessionId.current = currentSessionId;
+      }
+
       return () => clearTimeout(timer);
     }
+
+    // Always update refs
     prevIsGenerating.current = isGenerating;
-  }, [isGenerating, selectedAgent, currentSessionId]);
+  }, [currentSessionId, selectedAgent, isGenerating]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -199,9 +203,12 @@ export const InputArea: React.FC = () => {
 
     setIsGenerating(true);
 
+    // Create dispatcher and parser
+    const dispatcher = createStreamDispatcher();
+    const parser = new StreamParser(currentSessionId, agentMessageId, dispatcher);
+    setActiveStreamParser(parser);
+
     try {
-      const parser = new StreamParser(currentSessionId, agentMessageId);
-      setActiveStreamParser(parser);
 
       // Prepare parts - A2A spec requires "kind" field
       const parts: Array<{
@@ -223,21 +230,35 @@ export const InputArea: React.FC = () => {
       }
 
       // A2A spec: params.message with contextId for multi-turn
-      // Note: taskId is server-generated, NOT sent by client
+      // Include taskId for follow-up messages to maintain conversation context
+      const currentSession = sessions[currentSessionId];
+      const messageParams: any = {
+        contextId: currentSession.contextId,
+        role: "user",
+        parts: parts,
+      };
+
+      // If we have a taskId from previous response, include it for continuity
+      // FIXED: We rely on ContextID for threading.
+      // Sending taskId for follow-ups causes the backend to think we are trying to resume
+      // a completed unique-task.
+
       const requestBody = {
         jsonrpc: "2.0",
         method: "message/stream",
         params: {
-          message: {
-            contextId: sessions[currentSessionId].contextId,
-            role: "user",
-            parts: parts,
-          },
+          message: messageParams,
         },
         id: generateShortId(),
       };
 
       if (!selectedAgent) throw new Error("No agent selected");
+
+
+
+      // Notify parent immediately so layout can switch
+      if (onSend) onSend();
+
       // A2A spec: POST to agent's URL - streaming is determined by method name
       await parser.stream(selectedAgent.url, requestBody);
     } catch (error: unknown) {
@@ -248,6 +269,7 @@ export const InputArea: React.FC = () => {
     } finally {
       // Note: Don't set isGenerating(false) here - StreamParser.stream() handles it
       // This prevents prematurely showing the send button during HITL approval flow
+      parser.cleanup(); // Clean up widget tracking to prevent memory leaks
       setActiveStreamParser(null);
     }
   };

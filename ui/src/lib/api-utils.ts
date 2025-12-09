@@ -1,11 +1,7 @@
-import { useStore } from '../store/useStore';
-
-/**
- * Get the base URL for API requests
- * Uses configured endpoint URL or falls back to current origin
- */
 export function getBaseUrl(): string {
-    const state = useStore.getState();
-    return state.endpointUrl || window.location.origin;
+    // Break circular dependency by not importing store here.
+    // Ideally this should be passed in, but for now defaulting to window location
+    // is safe as the store initializes this way too.
+    return typeof window !== "undefined" ? window.location.origin : "";
 }
 

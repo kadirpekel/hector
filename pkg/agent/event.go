@@ -97,6 +97,11 @@ type Event struct {
 
 	// CustomMetadata for application-specific data.
 	CustomMetadata map[string]any
+
+	// OnPersisted is a callback invoked after the event is persisted to the session.
+	// Used by async agents (like ParallelAgent) to synchronize with the persistence layer.
+	// This field is not serialized.
+	OnPersisted func()
 }
 
 // ThinkingState represents the model's reasoning process.

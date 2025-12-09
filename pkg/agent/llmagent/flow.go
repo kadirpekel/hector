@@ -662,6 +662,8 @@ func (f *Flow) handleToolCalls(ctx agent.InvocationContext, resp *model.Response
 	event.Message = a2a.NewMessage(a2a.MessageRoleUser, toolResultParts...)
 	event.Actions = *mergedActions
 
+	slog.Debug("handleToolCalls created event", "agent", f.agent.Name(), "tool_results", len(toolResults))
+
 	// Set HITL signals if any long-running tools
 	if len(longRunningToolIDs) > 0 {
 		event.LongRunningToolIDs = longRunningToolIDs

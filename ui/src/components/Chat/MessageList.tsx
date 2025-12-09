@@ -3,6 +3,7 @@ import { useStore } from "../../store/useStore";
 import type { Message } from "../../types";
 import { MessageItem } from "./MessageItem";
 import { StreamingIndicator } from "../Widgets/StreamingIndicator";
+import { ErrorBoundary } from "../ErrorBoundary";
 
 interface MessageListProps {
   messages: Message[];
@@ -27,12 +28,13 @@ export const MessageList: React.FC<MessageListProps> = ({ messages }) => {
   return (
     <div className="flex flex-col gap-6 max-w-[760px] mx-auto w-full">
       {visibleMessages.map((message, index) => (
-        <MessageItem
-          key={message.id}
-          message={message}
-          messageIndex={index}
-          isLastMessage={index === visibleMessages.length - 1}
-        />
+        <ErrorBoundary key={message.id}>
+          <MessageItem
+            message={message}
+            messageIndex={index}
+            isLastMessage={index === visibleMessages.length - 1}
+          />
+        </ErrorBoundary>
       ))}
 
       {/* Show streaming indicator while generating */}

@@ -2,10 +2,8 @@ import React, { useEffect } from "react";
 import { AlertCircle, X } from "lucide-react";
 import { useStore } from "../store/useStore";
 import { cn } from "../lib/utils";
-import { TIMING } from "../lib/constants";
 
 export const ErrorDisplay: React.FC = () => {
-  // Use selectors for better performance - only subscribe to specific state slices
   const error = useStore((state) => state.error);
   const setError = useStore((state) => state.setError);
 
@@ -13,8 +11,7 @@ export const ErrorDisplay: React.FC = () => {
     if (error) {
       const timer = setTimeout(() => {
         setError(null);
-      }, TIMING.ERROR_AUTO_DISMISS);
-
+      }, 5000);
       return () => clearTimeout(timer);
     }
   }, [error, setError]);
@@ -24,24 +21,22 @@ export const ErrorDisplay: React.FC = () => {
   return (
     <div
       className={cn(
-        "fixed top-4 right-4 z-50 max-w-md bg-red-900/90 border border-red-500/50 rounded-lg shadow-lg p-4 animate-in slide-in-from-right duration-200",
-        "backdrop-blur-sm",
+        "fixed top-4 right-4 z-50",
+        "flex items-center gap-2 px-3 py-2 max-w-sm",
+        "bg-black/80 border border-red-500/30 rounded-lg",
+        "shadow-lg backdrop-blur-md",
+        "animate-in slide-in-from-right-2 fade-in duration-200"
       )}
     >
-      <div className="flex items-start gap-3">
-        <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-semibold text-red-200 mb-1">Error</h4>
-          <p className="text-sm text-red-100 break-words">{error}</p>
-        </div>
-        <button
-          onClick={() => setError(null)}
-          className="p-1 hover:bg-red-800/50 rounded transition-colors text-red-300 hover:text-red-100 flex-shrink-0"
-          title="Dismiss"
-        >
-          <X size={16} />
-        </button>
-      </div>
+      <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
+      <p className="text-xs text-red-50 font-medium flex-1 break-words">{error}</p>
+      <button
+        onClick={() => setError(null)}
+        className="p-0.5 hover:bg-white/10 rounded transition-colors text-red-400/60 hover:text-red-300 flex-shrink-0"
+        title="Dismiss"
+      >
+        <X size={12} />
+      </button>
     </div>
   );
 };

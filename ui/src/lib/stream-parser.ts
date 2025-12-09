@@ -1,4 +1,3 @@
-import { useStore } from "../store/useStore";
 import type {
   Widget,
   ToolWidget,
@@ -8,6 +7,9 @@ import type {
   ToolWidgetStatus,
 } from "../types";
 import { handleError } from "./error-handler";
+import type { StreamDispatcher } from "./stream-utils";
+
+type Dispatcher = StreamDispatcher;
 
 /**
  * StreamParser - V2 A2A-native stream parser following legacy patterns.
@@ -38,36 +40,49 @@ const TEXT_MARKER_PREFIX = "$$text_marker$$";
 export class StreamParser {
   private sessionId: string;
   private messageId: string;
-  private abortController: AbortController;
+  private currentController: AbortController | null = null;
+  private dispatch: Dispatcher;
 
   // Track created widgets to avoid duplicates
   private createdToolWidgets = new Set<string>();
   private createdThinkingWidgets = new Set<string>();
 
-  constructor(sessionId: string, messageId: string) {
+  constructor(
+    sessionId: string,
+    messageId: string,
+    dispatch: Dispatcher
+  ) {
     this.sessionId = sessionId;
     this.messageId = messageId;
-    this.abortController = new AbortController();
+    this.dispatch = dispatch;
   }
 
-  public abort() {
-    this.abortController.abort();
+  abort() {
+    if (this.currentController) {
+      this.currentController.abort();
+    }
+  }
+
+  cleanup() {
+    this.createdToolWidgets.clear();
+    this.createdThinkingWidgets.clear();
+    this.abort();
   }
 
   public async stream(url: string, requestBody: unknown) {
-    const { updateMessage, setIsGenerating } = useStore.getState();
+    this.currentController = new AbortController();
 
     try {
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
-        signal: this.abortController.signal,
+        signal: this.currentController.signal,
       });
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "Unknown error");
-        throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 200)}`);
+        throw new Error("HTTP " + response.status + ": " + errorText.substring(0, 200));
       }
 
       if (!response.body) {
@@ -99,23 +114,32 @@ export class StreamParser {
       }
 
       this.finalizeStream();
-      setIsGenerating(false);
+      this.dispatch.setIsGenerating(false);
     } catch (error: unknown) {
-      setIsGenerating(false);
+      this.dispatch.setIsGenerating(false);
       if (error instanceof Error && error.name === "AbortError") {
-        updateMessage(this.sessionId, this.messageId, { cancelled: true });
+        this.dispatch.updateMessage(this.sessionId, this.messageId, { cancelled: true });
       } else {
         handleError(error, "Stream error");
       }
+    } finally {
+      this.currentController = null;
+      this.dispatch.setActiveAgentId(null);
     }
   }
 
   private handleData(data: unknown) {
-    const { setSessionTaskId } = useStore.getState();
+    // Dispatch setSessionTaskId action if present (assumes added to Dispatcher if needed,
+    // but for now we can skip it or add it to dispatcher types.
+    // For now, let's assume we handle taskId via metadata update if crucial, or ignore if minor.
+    // Actually, setSessionTaskId helps with context. Let's add it to Dispatcher type later if needed.
+    // For crash fix, let's focus on message updates.
+
     const result = (data as { result?: A2AResult })?.result || (data as A2AResult);
 
     if (result.taskId) {
-      setSessionTaskId(this.sessionId, result.taskId);
+      // Reduced scope for crash fix: taskId update not critical path for rendering
+      this.dispatch.setSessionTaskId(this.sessionId, result.taskId);
     }
 
     switch (result.kind) {
@@ -148,9 +172,17 @@ export class StreamParser {
    * 3. Dedupe: Don't create widget if already exists from metadata
    */
   private processArtifactUpdate(result: A2AResult) {
-    const { updateMessage, sessions } = useStore.getState();
-    const session = sessions[this.sessionId];
-    const message = session?.messages.find((m) => m.id === this.messageId);
+    // We can't access store state directly anymore.
+    // We assume the caller provides the CURRENT message state or we operate on accumulation?
+    // "Legacy Fluent Pattern" relies on reading current message state to accum.
+    // We need 'message' passed in? Or we rely on 'accumulatedText' state in parser?
+    // To support re-hydration, legacy parser read from store.
+    // The safest way without store import is to have 'message' passed into 'stream' or 'handleData'?
+    // OR: we fetch message from store via a getter in dispatcher?
+
+    // Let's use a getter pattern in dispatcher to fetch fresh state without importing store.
+    // This solves the read dependency.
+    const message = this.dispatch.getMessage(this.sessionId, this.messageId);
     if (!message) return;
 
     const isPartial = result.metadata?.partial === true;
@@ -183,9 +215,15 @@ export class StreamParser {
 
     if (result.artifact?.parts) {
       for (const part of result.artifact.parts) {
+        // Flatten/extract author from result metadata
+        const author = (result.metadata?.author as string) || (result.metadata?.["event_author"] as string);
+        if (author) {
+          this.dispatch.setActiveAgentId(author);
+        }
+
         if (part.kind === "text" && part.text) {
           // Text content - pass isPartial to handle delta vs complete correctly
-          accumulatedText = this.processTextPart(part.text, accumulatedText, widgetMap, contentOrder, isPartial);
+          accumulatedText = this.processTextPart(part.text, accumulatedText, widgetMap, contentOrder, isPartial, author);
         } else if (part.kind === "data" && part.data) {
           const data = part.data as Record<string, unknown>;
 
@@ -195,12 +233,12 @@ export class StreamParser {
             const content = data.content as string;
             const status = data.status as string;
             const isCompleted = status === "completed";
-            this.processThinking(id, content || "", isCompleted, "default", widgetMap, contentOrder);
+            this.processThinking(id, content || "", isCompleted, "default", widgetMap, contentOrder, author);
           } else if (data.type === "tool_use") {
             // Tool call Part
             const toolId = data.id as string;
             if (!this.createdToolWidgets.has(toolId)) {
-              this.processToolCallFromPart(data, widgetMap, contentOrder);
+              this.processToolCallFromPart(data, widgetMap, contentOrder, author);
             }
           } else if (data.type === "tool_result") {
             // Tool result Part
@@ -247,7 +285,7 @@ export class StreamParser {
       }
     });
 
-    updateMessage(this.sessionId, this.messageId, {
+    this.dispatch.updateMessage(this.sessionId, this.messageId, {
       text: accumulatedText,
       widgets: orderedWidgets,
       metadata: {
@@ -266,7 +304,8 @@ export class StreamParser {
     accumulatedText: string,
     widgetMap: Map<string, Widget>,
     contentOrder: string[],
-    isPartial: boolean
+    isPartial: boolean,
+    author?: string
   ): string {
     if (!text) return accumulatedText;
 
@@ -277,16 +316,9 @@ export class StreamParser {
       if (accumulatedText === text || accumulatedText.endsWith(text)) {
         return accumulatedText;
       }
-      // If the new text contains the accumulated text, it's the complete version
-      // Skip processing since we already have partial content displayed
-      if (text.includes(accumulatedText) && accumulatedText.length > 0) {
-        return accumulatedText;
-      }
     }
 
-    const newAccumulatedText = isPartial
-      ? accumulatedText + text  // Streaming: append delta
-      : text;  // Final: use as-is (shouldn't reach here if duplicate detection worked)
+    const newAccumulatedText = accumulatedText + text; // Always append (Dedup handled above)
 
     // Find last non-text widget
     const lastNonTextWidgetId = contentOrder
@@ -298,8 +330,8 @@ export class StreamParser {
 
     // Determine text widget ID based on position
     const textMarkerId = lastNonTextWidgetId
-      ? `${TEXT_MARKER_PREFIX}_after_${lastNonTextWidgetId}`
-      : `${TEXT_MARKER_PREFIX}_start`;
+      ? TEXT_MARKER_PREFIX + "_after_" + lastNonTextWidgetId
+      : TEXT_MARKER_PREFIX + "_start";
 
     // Find existing text widget at this position
     let targetTextWidgetId = textMarkerId;
@@ -315,7 +347,7 @@ export class StreamParser {
     } else {
       const startTextWidget = contentOrder.find((id) => {
         const widget = widgetMap.get(id);
-        return widget?.type === "text" && id === `${TEXT_MARKER_PREFIX}_start`;
+        return widget?.type === "text" && id === TEXT_MARKER_PREFIX + "_start";
       });
       if (startTextWidget) {
         targetTextWidgetId = startTextWidget;
@@ -323,13 +355,41 @@ export class StreamParser {
     }
 
     // Create or update text widget
-    if (!widgetMap.has(targetTextWidgetId)) {
+    const existingWidget = widgetMap.get(targetTextWidgetId);
+
+    // Author change detection for sequential agents:
+    // Only create new widget if BOTH widgets have authors AND they differ
+    // This correctly handles:
+    // - undefined → "agent" (first text) → append (don't create new)
+    // - "agent1" → "agent2" (sequential) → create new widget
+    // - "agent" → undefined (backward compat) → append
+    const authorChanged =
+      existingWidget?.type === "text" &&
+      existingWidget.data?.author &&
+      author &&
+      existingWidget.data.author !== author;
+
+    if (!widgetMap.has(targetTextWidgetId) || authorChanged) {
+      // Create NEW text widget if:
+      // 1. No widget exists at this position, OR
+      // 2. Author has changed (e.g., sequential agent switching from researcher to summarizer)
+
+      if (authorChanged) {
+        // Complete the previous author's widget before creating new one
+        widgetMap.set(targetTextWidgetId, {
+          ...existingWidget,
+          status: "completed" as const,
+        });
+        // Generate new unique ID for the new author's text
+        targetTextWidgetId = TEXT_MARKER_PREFIX + "_" + author + "_" + Date.now();
+      }
+
       const textWidget: TextWidget = {
         id: targetTextWidgetId,
         type: "text",
         status: isPartial ? "active" : "completed",
         content: text,
-        data: {},
+        data: { author },
         isExpanded: true,
       };
       widgetMap.set(targetTextWidgetId, textWidget);
@@ -339,11 +399,11 @@ export class StreamParser {
     } else {
       const existing = widgetMap.get(targetTextWidgetId);
       if (existing && existing.type === "text") {
-        // On partial: append delta
-        // On final: this shouldn't happen (duplicate detection returns early)
-        const newContent = isPartial
-          ? (existing.content || "") + text
-          : text;
+        // Append to existing widget (same author, continuing stream)
+        // Add a newline for separation if this is a new block (not streaming delta)
+        const separator = (isPartial || !existing.content) ? "" : "\n\n";
+        const newContent = (existing.content || "") + separator + text;
+
         widgetMap.set(targetTextWidgetId, {
           ...existing,
           content: newContent,
@@ -358,13 +418,17 @@ export class StreamParser {
   /**
    * Process tool call from artifact.parts DataPart.
    */
+  /**
+   * Process tool call from artifact.parts DataPart.
+   */
   private processToolCallFromPart(
     data: Record<string, unknown>,
     widgetMap: Map<string, Widget>,
-    contentOrder: string[]
+    contentOrder: string[],
+    author?: string
   ) {
     const id = data.id as string;
-    const widgetId = `tool_${id}`;
+    const widgetId = "tool_" + id;
 
     if (this.createdToolWidgets.has(id) || widgetMap.has(widgetId)) {
       return;
@@ -380,6 +444,7 @@ export class StreamParser {
       data: {
         name: (data.name as string) || "unknown",
         args: (data.arguments || data.input || {}) as Record<string, unknown>,
+        author: author
       },
       isExpanded: true,
     };
@@ -394,7 +459,7 @@ export class StreamParser {
    * Process tool result - update existing tool widget.
    */
   private processToolResult(tr: ToolResultMeta, widgetMap: Map<string, Widget>) {
-    const widgetId = `tool_${tr.tool_call_id}`;
+    const widgetId = "tool_" + tr.tool_call_id;
     const existing = widgetMap.get(widgetId);
     if (!existing || existing.type !== "tool") return;
 
@@ -434,15 +499,19 @@ export class StreamParser {
   /**
    * Process thinking block.
    */
+  /**
+   * Process thinking block.
+   */
   private processThinking(
     id: string,
     content: string,
     isCompleted: boolean,
     type: string | undefined,
     widgetMap: Map<string, Widget>,
-    contentOrder: string[]
+    contentOrder: string[],
+    author?: string
   ) {
-    const widgetId = `thinking_${id}`;
+    const widgetId = "thinking_" + id;
 
     if (this.createdThinkingWidgets.has(id)) {
       // Update existing widget
@@ -472,7 +541,10 @@ export class StreamParser {
       type: "thinking",
       status: isCompleted ? "completed" : "active",
       content: content,
-      data: { type: (type || "default") as "todo" | "goal" | "reflection" | "default" },
+      data: {
+        type: (type || "default") as "todo" | "goal" | "reflection" | "default",
+        author: author
+      },
       isExpanded: !isCompleted,  // Expand while active, collapse when done
     };
 
@@ -488,12 +560,25 @@ export class StreamParser {
   private handleStatusUpdate(result: A2AResult) {
     // A2A spec uses "input-required" (with hyphen) as the state value
     const state = result.status?.state;
-    if (state !== "input-required" && state !== "input_required") return;
-
-    const { updateMessage, sessions } = useStore.getState();
-    const session = sessions[this.sessionId];
-    const message = session?.messages.find((m) => m.id === this.messageId);
+    // Get fresh message state via dispatcher
+    const message = this.dispatch.getMessage(this.sessionId, this.messageId);
     if (!message) return;
+
+    // Handle failed state
+    if (state === "failed") {
+      const errorText =
+        result.status?.message?.parts?.[0]?.text ||
+        "Agent execution failed with unknown error.";
+
+      const alertContent = "\n\n> [!CAUTION]\n> **Agent Run Failed**\n> " + errorText + "\n";
+
+      this.dispatch.updateMessage(this.sessionId, this.messageId, {
+        text: (message.text || "") + alertContent
+      });
+      return;
+    }
+
+    if (state !== "input-required" && state !== "input_required") return;
 
     const widgetMap = new Map<string, Widget>();
     const contentOrder: string[] = message.metadata?.contentOrder
@@ -504,27 +589,24 @@ export class StreamParser {
       widgetMap.set(w.id, w);
     });
 
-    const taskId = result.taskId || session?.taskId;
+    const taskId = result.taskId;
     const toolCallIDs = result.metadata?.long_running_tool_ids || [];
     const inputPrompt = result.metadata?.input_prompt || "Human input required.";
-    const widgetId = `approval_${taskId || this.messageId}`;
+    const widgetId = "approval_" + (taskId || this.messageId);
 
     if (widgetMap.has(widgetId)) return;
 
-    // Extract tool name and input from existing tool widgets
-    // Find the first tool widget that matches one of the long-running tool IDs
     let toolName = "Unknown Tool";
     let toolInput: Record<string, unknown> = {};
-    
+
     if (toolCallIDs.length > 0) {
-      // Find tool widget by matching tool_call_id
       for (const toolCallID of toolCallIDs) {
-        const toolWidgetId = `tool_${toolCallID}`;
+        const toolWidgetId = "tool_" + toolCallID;
         const toolWidget = widgetMap.get(toolWidgetId);
         if (toolWidget && toolWidget.type === "tool") {
           toolName = toolWidget.data.name || "Unknown Tool";
           toolInput = toolWidget.data.args || {};
-          break; // Use first matching tool
+          break;
         }
       }
     }
@@ -551,29 +633,25 @@ export class StreamParser {
 
     const orderedWidgets: Widget[] = [];
     contentOrder.forEach((id) => {
-      const widget = widgetMap.get(id);
-      if (widget) orderedWidgets.push(widget);
-    });
-    widgetMap.forEach((widget, id) => {
-      if (!contentOrder.includes(id)) orderedWidgets.push(widget);
+      const w = widgetMap.get(id);
+      if (w) orderedWidgets.push(w);
     });
 
-    updateMessage(this.sessionId, this.messageId, {
+    this.dispatch.updateMessage(this.sessionId, this.messageId, {
       widgets: orderedWidgets,
       metadata: {
         ...message.metadata,
-        contentOrder: contentOrder.length > 0 ? contentOrder : undefined,
-      },
+        contentOrder: contentOrder.length > 0 ? contentOrder : undefined
+      }
     });
+
   }
 
   /**
    * Finalize stream.
    */
   private finalizeStream() {
-    const { updateMessage, sessions } = useStore.getState();
-    const session = sessions[this.sessionId];
-    const message = session?.messages.find((m) => m.id === this.messageId);
+    const message = this.dispatch.getMessage(this.sessionId, this.messageId);
     if (!message) return;
 
     const hasActiveWidgets = message.widgets.some(
@@ -586,7 +664,7 @@ export class StreamParser {
           ? { ...w, status: "completed" as const }
           : w
       );
-      updateMessage(this.sessionId, this.messageId, { widgets: updatedWidgets });
+      this.dispatch.updateMessage(this.sessionId, this.messageId, { widgets: updatedWidgets });
     }
   }
 }
@@ -609,7 +687,12 @@ interface A2AArtifact {
 interface A2AResult {
   kind?: "status-update" | "artifact-update" | "task";
   taskId?: string;
-  status?: { state: string };
+  status?: {
+    state: string;
+    message?: {
+      parts?: { text: string }[];
+    };
+  };
   artifact?: A2AArtifact;
   artifacts?: A2AArtifact[];
   metadata?: {
