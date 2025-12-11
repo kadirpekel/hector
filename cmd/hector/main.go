@@ -23,6 +23,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -55,6 +56,20 @@ type CLI struct {
 	LogLevel  string `help:"Log level (debug, info, warn, error)." default:"info"`
 	LogFile   string `help:"Log file path (empty = stderr)."`
 	LogFormat string `help:"Log format (simple, verbose, or custom)." default:"simple"`
+}
+
+// marshalYAMLWithIndent marshals a value to YAML with explicit 2-space indentation.
+func marshalYAMLWithIndent(v interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := yaml.NewEncoder(&buf)
+	encoder.SetIndent(2) // Explicitly set 2-space indentation
+	if err := encoder.Encode(v); err != nil {
+		return nil, err
+	}
+	if err := encoder.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // VersionCmd shows version information.
@@ -479,8 +494,8 @@ func (c *ServeCmd) createMinimalConfig(path string) error {
 		Port:        8080, // Default port
 	})
 
-	// Serialize to clean YAML
-	yamlData, err := yaml.Marshal(cfg)
+	// Serialize to clean YAML with 2-space indentation
+	yamlData, err := marshalYAMLWithIndent(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -500,8 +515,8 @@ func (c *ServeCmd) saveConfigToFile(cfg *config.Config, path string) error {
 		return err
 	}
 
-	// Serialize to YAML
-	yamlData, err := yaml.Marshal(cfg)
+	// Serialize to YAML with 2-space indentation
+	yamlData, err := marshalYAMLWithIndent(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
