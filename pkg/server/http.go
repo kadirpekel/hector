@@ -41,6 +41,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+// webUIHTML contains the embedded web UI.
+// The UI is built from ui/ directory and embedded at build time.
+// Run `go generate ./pkg/server` or `make build` to generate this file.
+//
 //go:embed static/index.html
 var webUIHTML []byte
 

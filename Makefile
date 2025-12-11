@@ -37,23 +37,24 @@ help:
 	@echo "  build-ui            - Build the UI and copy to static assets"
 
 # Build UI and copy to static directory
+# Note: This target is kept for backward compatibility but is now handled by go generate
 build-ui:
-	@echo "Building UI..."
-	cd ui && npm install && npm run build
-	@echo "Copying UI to static assets..."
-	@mkdir -p pkg/server/static
-	cp ui/dist/index.html pkg/server/static/index.html
-	@echo "✅ UI copied to pkg/server/static/"
+	@echo "Building UI (via go generate)..."
+	go generate ./pkg/server
 
 # Build the binary (development with debug symbols)
-build: build-ui
+build:
 	@echo "Building hector (development)..."
+	@echo "Generating embedded assets..."
+	go generate ./pkg/server
 	go build -ldflags "$(LDFLAGS_VERSION)" -o hector ./cmd/hector
 	@ls -lh hector
 
 # Build the binary (production, stripped)
 build-release:
 	@echo "Building hector (production - stripped)..."
+	@echo "Generating embedded assets..."
+	go generate ./pkg/server
 	go build -ldflags "$(LDFLAGS_RELEASE)" -o hector ./cmd/hector
 	@ls -lh hector
 	@echo "Binary size optimized for production (debug symbols stripped)"
@@ -61,6 +62,8 @@ build-release:
 # Install to GOPATH/bin (production build)
 install:
 	@echo "Installing hector (production)..."
+	@echo "Generating embedded assets..."
+	go generate ./pkg/server
 	go install -ldflags "$(LDFLAGS_RELEASE)" ./cmd/hector
 
 # Install to system PATH (requires sudo)
@@ -113,6 +116,8 @@ vet:
 # Build release binaries for multiple platforms
 release:
 	@echo "Building release binaries (stripped for production)..."
+	@echo "Generating embedded assets..."
+	go generate ./pkg/server
 	@mkdir -p dist
 
 	# Linux
