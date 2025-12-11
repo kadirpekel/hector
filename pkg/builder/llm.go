@@ -38,16 +38,17 @@ import (
 //	    MaxTokens(4000).
 //	    Build()
 type LLMBuilder struct {
-	providerType   string
-	model          string
-	apiKey         string
-	baseURL        string
-	temperature    *float64
-	maxTokens      int
-	timeout        time.Duration
-	maxRetries     int
-	enableThinking bool
-	thinkingBudget int
+	providerType        string
+	model               string
+	apiKey              string
+	baseURL             string
+	temperature         *float64
+	maxTokens           int
+	timeout             time.Duration
+	maxRetries          int
+	enableThinking      bool
+	thinkingBudget      int
+	maxToolOutputLength int
 }
 
 // NewLLM creates a new LLM builder.
@@ -161,6 +162,19 @@ func (b *LLMBuilder) Timeout(timeout time.Duration) *LLMBuilder {
 	return b
 }
 
+// MaxToolOutputLength sets the maximum length for tool outputs.
+//
+// Example:
+//
+//	builder.NewLLM("openai").MaxToolOutputLength(50000)
+func (b *LLMBuilder) MaxToolOutputLength(max int) *LLMBuilder {
+	if max < 0 {
+		panic("max tool output length must be non-negative")
+	}
+	b.maxToolOutputLength = max
+	return b
+}
+
 // MaxRetries sets the maximum number of retries.
 //
 // Example:
@@ -259,10 +273,11 @@ func (b *LLMBuilder) Build() (model.LLM, error) {
 			temp = *b.temperature
 		}
 		return gemini.New(gemini.Config{
-			APIKey:      b.apiKey,
-			Model:       b.model,
-			MaxTokens:   b.maxTokens,
-			Temperature: temp,
+			APIKey:              b.apiKey,
+			Model:               b.model,
+			MaxTokens:           b.maxTokens,
+			Temperature:         temp,
+			MaxToolOutputLength: b.maxToolOutputLength,
 		})
 
 	case "ollama":
@@ -277,6 +292,7 @@ func (b *LLMBuilder) Build() (model.LLM, error) {
 		if b.enableThinking {
 			cfg.EnableThinking = true
 		}
+		cfg.MaxToolOutputLength = b.maxToolOutputLength
 		return ollama.New(cfg)
 
 	default:

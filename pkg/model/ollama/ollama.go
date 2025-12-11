@@ -88,6 +88,9 @@ type Config struct {
 
 	// EnableThinking enables thinking for supported models
 	EnableThinking bool
+
+	// MaxToolOutputLength limits the length of tool outputs.
+	MaxToolOutputLength int
 }
 
 // Option configures the Ollama client.
@@ -124,17 +127,18 @@ func WithThinking() Option {
 // Client is an Ollama LLM implementation.
 // Implements model.LLM interface aligned with ADK-Go.
 type Client struct {
-	httpClient     *httpclient.Client
-	baseURL        string
-	modelName      string
-	temperature    *float64
-	topP           *float64
-	topK           *int
-	numPredict     *int
-	numCtx         *int
-	seed           *int
-	keepAlive      string
-	enableThinking bool
+	httpClient          *httpclient.Client
+	baseURL             string
+	modelName           string
+	temperature         *float64
+	topP                *float64
+	topK                *int
+	numPredict          *int
+	numCtx              *int
+	seed                *int
+	keepAlive           string
+	enableThinking      bool
+	maxToolOutputLength int
 }
 
 // New creates a new Ollama client.
@@ -173,17 +177,18 @@ func New(cfg Config) (*Client, error) {
 	)
 
 	return &Client{
-		httpClient:     hc,
-		baseURL:        baseURL,
-		modelName:      modelName,
-		temperature:    cfg.Temperature,
-		topP:           cfg.TopP,
-		topK:           cfg.TopK,
-		numPredict:     cfg.NumPredict,
-		numCtx:         cfg.NumCtx,
-		seed:           cfg.Seed,
-		keepAlive:      keepAlive,
-		enableThinking: cfg.EnableThinking,
+		httpClient:          hc,
+		baseURL:             baseURL,
+		modelName:           modelName,
+		temperature:         cfg.Temperature,
+		topP:                cfg.TopP,
+		topK:                cfg.TopK,
+		numPredict:          cfg.NumPredict,
+		numCtx:              cfg.NumCtx,
+		seed:                cfg.Seed,
+		keepAlive:           keepAlive,
+		enableThinking:      cfg.EnableThinking,
+		maxToolOutputLength: cfg.MaxToolOutputLength,
 	}, nil
 }
 
@@ -603,6 +608,10 @@ func (c *Client) convertMessage(msg *a2a.Message) *chatMessage {
 					// Tool result - change role to "tool"
 					ollamaMsg.Role = "tool"
 					if content, ok := p.Data["content"].(string); ok {
+						// Safety Truncation
+						if c.maxToolOutputLength > 0 && len(content) > c.maxToolOutputLength {
+							content = content[:c.maxToolOutputLength] + fmt.Sprintf("\n... [TRUNCATED by client: output length %d exceeded safety limit]", len(content))
+						}
 						textParts = append(textParts, content)
 					}
 					if toolName, ok := p.Data["tool_name"].(string); ok {

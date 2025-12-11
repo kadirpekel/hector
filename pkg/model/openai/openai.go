@@ -45,10 +45,9 @@ import (
 )
 
 const (
-	defaultBaseURL   = "https://api.openai.com/v1"
-	defaultModel     = "gpt-4o"
-	defaultMaxTokens = 4096
-	defaultTimeout   = 120 * time.Second
+	defaultBaseURL = "https://api.openai.com/v1"
+	defaultModel   = "gpt-5"
+	defaultTimeout = 120 * time.Second
 
 	// Reasoning effort thresholds
 	reasoningEffortLowThreshold    = 1024
@@ -71,22 +70,23 @@ const (
 	eventReasoningSummaryTextDone  = "response.reasoning_summary_text.done"
 	eventReasoningSummaryPartDone  = "response.reasoning_summary_part.done"
 	eventContentPartAdded          = "response.content_part.added"
-	eventContentPartDone           = "response.content_part.done"
-	eventInProgress                = "response.in_progress"
 	eventResponseCompleted         = "response.completed"
+	eventResponseFailed            = "response.failed"
+	eventError                     = "error"
 )
 
 // Config configures the OpenAI client.
 type Config struct {
-	APIKey          string
-	Model           string
-	MaxTokens       int
-	Temperature     *float64
-	BaseURL         string
-	Timeout         time.Duration
-	MaxRetries      int
-	EnableReasoning bool
-	ReasoningBudget int // Maps to reasoning.effort: low/medium/high
+	APIKey              string
+	Model               string
+	MaxTokens           int
+	Temperature         *float64
+	BaseURL             string
+	Timeout             time.Duration
+	MaxRetries          int
+	MaxToolOutputLength int
+	EnableReasoning     bool
+	ReasoningBudget     int // Maps to reasoning.effort: low/medium/high
 }
 
 // Option configures the OpenAI client.
@@ -131,14 +131,15 @@ func WithReasoning(budget int) Option {
 // Client is an OpenAI LLM implementation using the Responses API.
 // Implements model.LLM interface aligned with ADK-Go.
 type Client struct {
-	httpClient      *httpclient.Client
-	apiKey          string
-	baseURL         string
-	modelName       string
-	maxTokens       int
-	temperature     *float64
-	enableReasoning bool
-	reasoningBudget int
+	httpClient          *httpclient.Client
+	apiKey              string
+	baseURL             string
+	modelName           string
+	maxTokens           int
+	maxToolOutputLength int
+	temperature         *float64
+	enableReasoning     bool
+	reasoningBudget     int
 }
 
 // New creates a new OpenAI client.
@@ -159,9 +160,6 @@ func New(cfg Config) (*Client, error) {
 	}
 
 	maxTokens := cfg.MaxTokens
-	if maxTokens == 0 {
-		maxTokens = defaultMaxTokens
-	}
 
 	timeout := cfg.Timeout
 	if timeout == 0 {
@@ -185,14 +183,15 @@ func New(cfg Config) (*Client, error) {
 	}
 
 	return &Client{
-		httpClient:      httpClient,
-		apiKey:          cfg.APIKey,
-		baseURL:         baseURL,
-		modelName:       modelName,
-		maxTokens:       maxTokens,
-		temperature:     cfg.Temperature,
-		enableReasoning: cfg.EnableReasoning,
-		reasoningBudget: reasoningBudget,
+		httpClient:          httpClient,
+		apiKey:              cfg.APIKey,
+		baseURL:             baseURL,
+		modelName:           modelName,
+		maxTokens:           maxTokens,
+		maxToolOutputLength: cfg.MaxToolOutputLength,
+		temperature:         cfg.Temperature,
+		enableReasoning:     cfg.EnableReasoning,
+		reasoningBudget:     reasoningBudget,
 	}, nil
 }
 
@@ -356,6 +355,9 @@ func (c *Client) generateStream(ctx context.Context, req *model.Request) iter.Se
 			line, err := reader.ReadBytes('\n')
 			if err != nil {
 				if err == io.EOF {
+					if state.totalTokens == 0 {
+						slog.Warn("Stream closed with EOF but no content/tokens received")
+					}
 					break
 				}
 				yield(nil, fmt.Errorf("stream read error: %w", err))
@@ -608,6 +610,26 @@ func (c *Client) processStreamEvent(
 					}
 				}
 			}
+
+		case eventResponseFailed:
+			if response, ok := event["response"].(map[string]any); ok {
+				if status, ok := response["status"].(string); ok && status == "failed" {
+					if lastError, ok := response["last_error"].(map[string]any); ok {
+						code, _ := lastError["code"].(string)
+						msg, _ := lastError["message"].(string)
+						yield(nil, fmt.Errorf("API response failed: %s: %s", code, msg))
+						return
+					}
+				}
+			}
+
+		case eventError:
+			if errorObj, ok := event["error"].(map[string]any); ok {
+				code, _ := errorObj["code"].(string)
+				msg, _ := errorObj["message"].(string)
+				yield(nil, fmt.Errorf("API stream error: %s: %s", code, msg))
+				return
+			}
 		}
 	}
 }
@@ -717,12 +739,17 @@ func (c *Client) convertMessages(messages []*a2a.Message) []inputItem {
 		// Check for tool results
 		toolResults := c.extractToolResults(msg)
 		if len(toolResults) > 0 {
-			slog.Debug("Converted tool results", "count", len(toolResults), "role", msg.Role)
 			for _, tr := range toolResults {
+				// Safety Truncation for massive tool outputs (prevents context_length_exceeded)
+				content := tr.Content
+				if c.maxToolOutputLength > 0 && len(content) > c.maxToolOutputLength {
+					content = content[:c.maxToolOutputLength] + fmt.Sprintf("\n... [TRUNCATED by client: output length %d exceeded safety limit]", len(tr.Content))
+				}
+
 				items = append(items, inputItem{
 					Type:   "function_call_output",
 					CallID: tr.ToolCallID,
-					Output: &tr.Content,
+					Output: &content,
 				})
 			}
 			continue

@@ -41,11 +41,12 @@ func DefaultLLMFactory(cfg *config.LLMConfig) (model.LLM, error) {
 	switch cfg.Provider {
 	case config.LLMProviderAnthropic:
 		acfg := anthropic.Config{
-			APIKey:      cfg.APIKey,
-			Model:       cfg.Model,
-			MaxTokens:   cfg.MaxTokens,
-			Temperature: cfg.Temperature,
-			BaseURL:     cfg.BaseURL,
+			APIKey:              cfg.APIKey,
+			Model:               cfg.Model,
+			MaxTokens:           cfg.MaxTokens,
+			Temperature:         cfg.Temperature,
+			BaseURL:             cfg.BaseURL,
+			MaxToolOutputLength: cfg.MaxToolOutputLength,
 		}
 		if cfg.Thinking != nil && config.BoolValue(cfg.Thinking.Enabled, false) {
 			acfg.EnableThinking = true
@@ -55,11 +56,12 @@ func DefaultLLMFactory(cfg *config.LLMConfig) (model.LLM, error) {
 
 	case config.LLMProviderOpenAI:
 		ocfg := openai.Config{
-			APIKey:      cfg.APIKey,
-			Model:       cfg.Model,
-			MaxTokens:   cfg.MaxTokens,
-			Temperature: cfg.Temperature,
-			BaseURL:     cfg.BaseURL,
+			APIKey:              cfg.APIKey,
+			Model:               cfg.Model,
+			MaxTokens:           cfg.MaxTokens,
+			Temperature:         cfg.Temperature,
+			BaseURL:             cfg.BaseURL,
+			MaxToolOutputLength: cfg.MaxToolOutputLength,
 		}
 		if cfg.Thinking != nil && config.BoolValue(cfg.Thinking.Enabled, false) {
 			ocfg.EnableReasoning = true
@@ -69,9 +71,10 @@ func DefaultLLMFactory(cfg *config.LLMConfig) (model.LLM, error) {
 
 	case config.LLMProviderGemini:
 		gcfg := gemini.Config{
-			APIKey:    cfg.APIKey,
-			Model:     cfg.Model,
-			MaxTokens: cfg.MaxTokens,
+			APIKey:              cfg.APIKey,
+			Model:               cfg.Model,
+			MaxTokens:           cfg.MaxTokens,
+			MaxToolOutputLength: cfg.MaxToolOutputLength,
 		}
 		if cfg.Temperature != nil {
 			gcfg.Temperature = *cfg.Temperature
@@ -80,8 +83,9 @@ func DefaultLLMFactory(cfg *config.LLMConfig) (model.LLM, error) {
 
 	case config.LLMProviderOllama:
 		ocfg := ollama.Config{
-			BaseURL: cfg.BaseURL,
-			Model:   cfg.Model,
+			BaseURL:             cfg.BaseURL,
+			Model:               cfg.Model,
+			MaxToolOutputLength: cfg.MaxToolOutputLength,
 		}
 		if cfg.Temperature != nil {
 			ocfg.Temperature = cfg.Temperature

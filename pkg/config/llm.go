@@ -50,6 +50,10 @@ type LLMConfig struct {
 	// MaxTokens limits response length.
 	MaxTokens int `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty" jsonschema:"title=Max Tokens,description=Maximum tokens to generate,minimum=1,default=4096"`
 
+	// MaxToolOutputLength limits the length of tool outputs to prevent context overflow.
+	// 0 means unlimited.
+	MaxToolOutputLength int `yaml:"max_tool_output_length,omitempty" json:"max_tool_output_length,omitempty" jsonschema:"title=Max Tool Output Length,description=Maximum output length for tools tokens to avoid context length error,minimum=0,default=0"`
+
 	// Thinking enables extended thinking (Claude).
 	Thinking *ThinkingConfig `yaml:"thinking,omitempty" json:"thinking,omitempty" jsonschema:"title=Thinking Configuration,description=Extended thinking configuration (Claude)"`
 }
@@ -96,9 +100,9 @@ func (c *LLMConfig) SetDefaults() {
 	}
 
 	// Default max tokens
-	if c.MaxTokens == 0 {
-		c.MaxTokens = 4096
-	}
+	// NOTE: We do NOT set a default here anymore.
+	// 0 means "use provider default" (which is often "infinity" for OpenAI).
+	// Providers that require a max token limit (like Anthropic) handles 0 in their own New() method.
 
 	// Default thinking config
 	if c.Thinking != nil {

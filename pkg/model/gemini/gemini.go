@@ -54,6 +54,9 @@ type Config struct {
 
 	// TopK controls top-k sampling.
 	TopK int
+
+	// MaxToolOutputLength limits the length of tool outputs.
+	MaxToolOutputLength int
 }
 
 // geminiModel implements model.LLM for Gemini.
@@ -364,6 +367,10 @@ func (m *geminiModel) messageToContent(msg *a2a.Message) *genai.Content {
 					// Convert content string to response map
 					var response map[string]any
 					if content, ok := part.Data["content"].(string); ok {
+						// Safety Truncation
+						if m.config.MaxToolOutputLength > 0 && len(content) > m.config.MaxToolOutputLength {
+							content = content[:m.config.MaxToolOutputLength] + fmt.Sprintf("\n... [TRUNCATED by client: output length %d exceeded safety limit]", len(content))
+						}
 						response = map[string]any{"result": content}
 					} else if result, ok := part.Data["result"].(map[string]any); ok {
 						response = result

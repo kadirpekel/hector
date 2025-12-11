@@ -56,28 +56,30 @@ const (
 
 // Config configures the Anthropic client.
 type Config struct {
-	APIKey         string
-	Model          string
-	MaxTokens      int
-	Temperature    *float64
-	BaseURL        string
-	Timeout        time.Duration
-	MaxRetries     int
-	EnableThinking bool
-	ThinkingBudget int
+	APIKey              string
+	Model               string
+	MaxTokens           int
+	Temperature         *float64
+	BaseURL             string
+	Timeout             time.Duration
+	MaxRetries          int
+	EnableThinking      bool
+	ThinkingBudget      int
+	MaxToolOutputLength int
 }
 
 // Client is an Anthropic LLM implementation.
 // Implements model.LLM interface aligned with ADK-Go.
 type Client struct {
-	httpClient     *httpclient.Client
-	apiKey         string
-	baseURL        string
-	model          string
-	maxTokens      int
-	temperature    *float64
-	enableThinking bool
-	thinkingBudget int
+	httpClient          *httpclient.Client
+	apiKey              string
+	baseURL             string
+	model               string
+	maxTokens           int
+	maxToolOutputLength int
+	temperature         *float64
+	enableThinking      bool
+	thinkingBudget      int
 }
 
 // New creates a new Anthropic client.
@@ -123,14 +125,15 @@ func New(cfg Config) (*Client, error) {
 	}
 
 	return &Client{
-		httpClient:     httpClient,
-		apiKey:         cfg.APIKey,
-		baseURL:        baseURL,
-		model:          modelName,
-		maxTokens:      maxTokens,
-		temperature:    cfg.Temperature,
-		enableThinking: cfg.EnableThinking,
-		thinkingBudget: thinkingBudget,
+		httpClient:          httpClient,
+		apiKey:              cfg.APIKey,
+		baseURL:             baseURL,
+		model:               modelName,
+		maxTokens:           maxTokens,
+		maxToolOutputLength: cfg.MaxToolOutputLength,
+		temperature:         cfg.Temperature,
+		enableThinking:      cfg.EnableThinking,
+		thinkingBudget:      thinkingBudget,
 	}, nil
 }
 
@@ -493,6 +496,12 @@ func (c *Client) buildRequest(req *model.Request, stream bool) *apiRequest {
 							slog.Warn("Anthropic: tool_result missing tool_call_id, skipping")
 							continue
 						}
+
+						// Safety Truncation
+						if c.maxToolOutputLength > 0 && len(contentStr) > c.maxToolOutputLength {
+							contentStr = contentStr[:c.maxToolOutputLength] + fmt.Sprintf("\n... [TRUNCATED by client: output length %d exceeded safety limit]", len(contentStr))
+						}
+
 						content = append(content, apiContent{
 							Type:      "tool_result",
 							ToolUseID: toolCallID,
