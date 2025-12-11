@@ -15,7 +15,6 @@ import {
 import { useStore } from "../../store/useStore";
 import { MessageList } from "../Chat/MessageList";
 import { InputArea } from "../Chat/InputArea";
-import { useMessageListAutoScroll } from "../../lib/hooks/useMessageListAutoScroll";
 import { useAgentSelection } from "../../lib/hooks/useAgentSelection";
 
 type ChatWidgetState = "closed" | "popup" | "expanded" | "maximized" | "pane";
@@ -28,7 +27,7 @@ interface ChatWidgetProps {
   onMessageSent?: () => void; // New callback for auto-layout switching
 }
 
-export const ChatWidget: React.FC<ChatWidgetProps> = ({
+export const ChatWidget: React.FC<ChatWidgetProps> = React.memo(({
   state,
   onStateChange,
   isPinned,
@@ -37,33 +36,30 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
 }) => {
 
   // Store
+  // Removed direct session subscription to prevent entire widget re-render on every token
   const currentSessionId = useStore((state) => state.currentSessionId);
-  const sessions = useStore((state) => state.sessions);
+  // PERFORMANCE: Check session existence without accessing full session object
+  // This prevents re-renders during streaming
+  const sessionExists = useStore((state) =>
+    !!(state.currentSessionId && state.currentSessionId in state.sessions)
+  );
+
+  const msgCount = useStore((state) => {
+    if (!state.currentSessionId) return 0;
+    const session = state.sessions[state.currentSessionId];
+    return session?.messages.length || 0;
+  });
+
   const availableAgents = useStore((state) => state.availableAgents);
   const agentsLoaded = useStore((state) => state.agentsLoaded);
   const selectedAgent = useStore((state) => state.selectedAgent);
   const setSelectedAgent = useStore((state) => state.setSelectedAgent);
   const createSession = useStore((state) => state.createSession);
 
-  const session = currentSessionId ? sessions[currentSessionId] : null;
-  const messages = session?.messages || [];
-  const isGenerating = useStore((state) => state.isGenerating);
-
-  // Use shared hooks
-  const { messagesEndRef, scrollContainerRef } = useMessageListAutoScroll(
-    session,
-    isGenerating,
-  );
   const { handleAgentChange, fetchAgentCardSafe } = useAgentSelection();
 
-  // Track previous message count to detect sends
-  const prevMessageCountRef = useRef(messages.length);
+  // No message tracking needed here anymore
 
-  // Note: We removed the useEffect watcher for onMessageSent here because InputArea now directly calls onMessageSent
-  // This is more reliable and prevents race conditions.
-  useEffect(() => {
-    prevMessageCountRef.current = messages.length;
-  }, [messages.length]);
 
   /**
    * Agent Selection State Machine
@@ -252,7 +248,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
 
       {/* Chat Area */}
       <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden">
-        {messages.length === 0 ? (
+        {(!sessionExists || !currentSessionId || msgCount === 0) ? (
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center overflow-y-auto">
             <div className="w-16 h-16 bg-gradient-to-br from-hector-green to-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-hector-green/20">
               <svg
@@ -276,13 +272,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
           </div>
         ) : (
           <div className="flex-1 min-h-0 flex flex-col">
-            <div
-              ref={scrollContainerRef}
-              className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
-            >
-              <MessageList messages={messages} />
-              <div ref={messagesEndRef} className="h-4" />
-            </div>
+            <MessageList sessionId={currentSessionId} />
           </div>
         )}
 
@@ -293,4 +283,4 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -3,18 +3,17 @@ import { X, Globe, Code, Radio, Minimize2 } from "lucide-react";
 import { useStore } from "../store/useStore";
 
 export const ConfigPanel: React.FC = () => {
-  const {
-    configVisible,
-    setConfigVisible,
-    endpointUrl,
-    setEndpointUrl,
-    protocol,
-    setProtocol,
-    streamingEnabled,
-    setStreamingEnabled,
-    minimalMode,
-    setMinimalMode,
-  } = useStore();
+  // Use granular selectors to prevent re-rendering on every store update
+  const configVisible = useStore((state) => state.configVisible);
+  const setConfigVisible = useStore((state) => state.setConfigVisible);
+  const endpointUrl = useStore((state) => state.endpointUrl);
+  const setEndpointUrl = useStore((state) => state.setEndpointUrl);
+  const protocol = useStore((state) => state.protocol);
+  const setProtocol = useStore((state) => state.setProtocol);
+  const streamingEnabled = useStore((state) => state.streamingEnabled);
+  const setStreamingEnabled = useStore((state) => state.setStreamingEnabled);
+  const minimalMode = useStore((state) => state.minimalMode);
+  const setMinimalMode = useStore((state) => state.setMinimalMode);
 
   if (!configVisible) return null;
 

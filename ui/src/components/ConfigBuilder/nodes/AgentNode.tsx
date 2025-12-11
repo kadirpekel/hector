@@ -12,7 +12,7 @@ interface AgentNodeData extends Record<string, unknown> {
   instruction?: string;
 }
 
-export const AgentNode: React.FC<NodeProps> = ({ data, selected }) => {
+export const AgentNode: React.FC<NodeProps> = React.memo(({ data, selected }) => {
   const nodeData = data as AgentNodeData;
   const activeAgentId = useStore((state) => state.activeAgentId);
   const isActive = activeAgentId === nodeData.label;
@@ -89,4 +89,4 @@ export const AgentNode: React.FC<NodeProps> = ({ data, selected }) => {
       </div>
     </div>
   );
-};
+});

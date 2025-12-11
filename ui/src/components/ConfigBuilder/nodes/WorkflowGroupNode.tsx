@@ -9,17 +9,14 @@ interface WorkflowGroupNodeData extends Record<string, unknown> {
   maxIterations?: number;
 }
 
+const WORKFLOW_ICONS = {
+  sequential: GitBranch,
+  parallel: Zap,
+  loop: Repeat,
+};
+
 const getWorkflowIcon = (type: string) => {
-  switch (type) {
-    case "sequential":
-      return GitBranch;
-    case "parallel":
-      return Zap;
-    case "loop":
-      return Repeat;
-    default:
-      return GitBranch;
-  }
+  return WORKFLOW_ICONS[type as keyof typeof WORKFLOW_ICONS] || GitBranch;
 };
 
 const getWorkflowStyles = (type: string) => {

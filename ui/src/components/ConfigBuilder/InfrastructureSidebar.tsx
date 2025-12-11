@@ -10,12 +10,13 @@ interface InfrastructureSidebarProps {
   onToggle?: () => void;
 }
 
-export const InfrastructureSidebar: React.FC<InfrastructureSidebarProps> = ({
+export const InfrastructureSidebar: React.FC<InfrastructureSidebarProps> = React.memo(({
   yamlContent,
   nodes,
   collapsed = false,
   onToggle
 }) => {
+  console.log("RENDER: InfrastructureSidebar (Canvas)");
   const [expandedSection, setExpandedSection] = useState<string | null>('llms');
 
   const infrastructure = useMemo(() => {
@@ -302,4 +303,4 @@ export const InfrastructureSidebar: React.FC<InfrastructureSidebarProps> = ({
       </div>
     </div>
   );
-};
+});

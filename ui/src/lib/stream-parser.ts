@@ -11,32 +11,24 @@ import type { StreamDispatcher } from "./stream-utils";
 
 type Dispatcher = StreamDispatcher;
 
-/**
- * StreamParser - V2 A2A-native stream parser following legacy patterns.
- *
- * V2 Backend Event Flow (aligned with legacy):
- *
- * STREAMING (partial=true):
- * - artifact.parts: [DataPart(thinking), TextPart(chunk), DataPart(tool_use)]
- *   ^ ALL content types stream as Parts in order!
- * - metadata.partial: true
- * - metadata.thinking: {id, content, status}   (also in metadata for backwards compat)
- * - metadata.tool_calls: [{id, name}]          (also in metadata for backwards compat)
- *
- * FINAL (partial=false):
- * - artifact.parts: [DataPart(thinking), TextPart(full), DataPart(tool_use)]
- * - metadata.partial: false
- * - metadata.thinking: completed
- *
- * Key Pattern (from legacy):
- * - ALL contextual content (thinking, text, tool calls) streams as Parts
- * - Parts arrive IN ORDER as the LLM generates them
- * - Widgets are created/updated in the order Parts arrive
- * - Metadata is supplementary, Parts are primary
- */
-
 const TEXT_MARKER_PREFIX = "$$text_marker$$";
 
+/**
+ * StreamParser
+ * 
+ * Handles the parsing of Server-Sent Events (SSE) from the Agent to Agent (A2A) protocol.
+ * 
+ * Key Architecture Features:
+ * 1. **Dispatch Buffering**: High-frequency text updates (tokens) are buffered internally and flushed
+ *    to the Zustand store at a maximum rate of 20fps. This prevents the Main Thread from being blocked
+ *    by excessive State Serialization (JSON.stringify) during high-speed streaming.
+ * 
+ * 2. **Text Markers**: Uses `$$text_marker$$` IDs to manage text segments interleaved with other widgets 
+ *    (Tools, Thinking) within the same message, ensuring correct content ordering.
+ * 
+ * 3. **Read-Consistency**: The parser maintains a local view of the message (`applyPendingBuffer`) to ensure
+ *    that logic remains correct even if the Store is slightly behind the stream due to buffering.
+ */
 export class StreamParser {
   private sessionId: string;
   private messageId: string;
@@ -46,6 +38,16 @@ export class StreamParser {
   // Track created widgets to avoid duplicates
   private createdToolWidgets = new Set<string>();
   private createdThinkingWidgets = new Set<string>();
+
+  // Use local state to track the active text widget ID to prevent fragmentation
+  private activeTextWidgetId: string | null = null;
+  private activeTextWidgetAuthor: string | null = null;
+  private lastDispatchedActiveAgentId: string | null = null;
+
+  // Buffer to batch high-frequency text updates (performance optimization)
+  private pendingTextBuffer = new Map<string, string>();
+  private flushTimeout: ReturnType<typeof setTimeout> | null = null;
+  private readonly FLUSH_INTERVAL_MS = 50; // 20fps cap on store updates
 
   constructor(
     sessionId: string,
@@ -58,15 +60,72 @@ export class StreamParser {
   }
 
   abort() {
+    this.flush(); // Flush any pending text before aborting
     if (this.currentController) {
       this.currentController.abort();
     }
   }
 
   cleanup() {
+    this.flush(); // Ensure final flush
     this.createdToolWidgets.clear();
     this.createdThinkingWidgets.clear();
     this.abort();
+  }
+
+  // Queue a text update for batch processing
+  private queueTextUpdate(widgetId: string, text: string) {
+    const current = this.pendingTextBuffer.get(widgetId) || "";
+    this.pendingTextBuffer.set(widgetId, current + text);
+
+    if (!this.flushTimeout) {
+      this.flushTimeout = setTimeout(() => this.flush(), this.FLUSH_INTERVAL_MS);
+    }
+  }
+
+  // Flush pending updates to the store
+  private flush() {
+    if (this.flushTimeout) {
+      clearTimeout(this.flushTimeout);
+      this.flushTimeout = null;
+    }
+
+    if (this.pendingTextBuffer.size === 0) return;
+
+    // Dispatch all batched updates
+    this.pendingTextBuffer.forEach((text, widgetId) => {
+      this.dispatch.appendTextWidgetContent(
+        this.sessionId,
+        this.messageId,
+        widgetId,
+        text
+      );
+    });
+
+    this.pendingTextBuffer.clear();
+  }
+
+  // Apply pending updates to a message object (read-consistent view)
+  // This ensures that the parser logic sees the "Full" message content including
+  // buffered characters that haven't hit the store yet.
+  private applyPendingBuffer(message: any) {
+    if (this.pendingTextBuffer.size === 0) return message;
+
+    const newWidgets = message.widgets.map((w: Widget) => {
+      if (this.pendingTextBuffer.has(w.id)) {
+        const delta = this.pendingTextBuffer.get(w.id)!;
+        return {
+          ...w,
+          content: (w.content || "") + delta
+        };
+      }
+      return w;
+    });
+
+    return {
+      ...message,
+      widgets: newWidgets
+    };
   }
 
   public async stream(url: string, requestBody: unknown) {
@@ -107,15 +166,17 @@ export class StreamParser {
               const data = JSON.parse(line.substring(6));
               this.handleData(data);
             } catch {
-              // Ignore parse errors
+              // Ignore parse errors from partial JSON
             }
           }
         }
       }
 
+      this.flush(); // Flush before finalizing
       this.finalizeStream();
       this.dispatch.setIsGenerating(false);
     } catch (error: unknown) {
+      this.flush(); // Flush on error
       this.dispatch.setIsGenerating(false);
       if (error instanceof Error && error.name === "AbortError") {
         this.dispatch.updateMessage(this.sessionId, this.messageId, { cancelled: true });
@@ -129,16 +190,9 @@ export class StreamParser {
   }
 
   private handleData(data: unknown) {
-    // Dispatch setSessionTaskId action if present (assumes added to Dispatcher if needed,
-    // but for now we can skip it or add it to dispatcher types.
-    // For now, let's assume we handle taskId via metadata update if crucial, or ignore if minor.
-    // Actually, setSessionTaskId helps with context. Let's add it to Dispatcher type later if needed.
-    // For crash fix, let's focus on message updates.
-
     const result = (data as { result?: A2AResult })?.result || (data as A2AResult);
 
     if (result.taskId) {
-      // Reduced scope for crash fix: taskId update not critical path for rendering
       this.dispatch.setSessionTaskId(this.sessionId, result.taskId);
     }
 
@@ -163,85 +217,64 @@ export class StreamParser {
     }
   }
 
-  /**
-   * Process artifact update - V2 specific logic.
-   *
-   * Order of processing matters:
-   * 1. Metadata (tool_calls, thinking, tool_results) - creates widgets during streaming
-   * 2. Artifact parts (text, tool_use DataParts) - only text during streaming
-   * 3. Dedupe: Don't create widget if already exists from metadata
-   */
   private processArtifactUpdate(result: A2AResult) {
-    // We can't access store state directly anymore.
-    // We assume the caller provides the CURRENT message state or we operate on accumulation?
-    // "Legacy Fluent Pattern" relies on reading current message state to accum.
-    // We need 'message' passed in? Or we rely on 'accumulatedText' state in parser?
-    // To support re-hydration, legacy parser read from store.
-    // The safest way without store import is to have 'message' passed into 'stream' or 'handleData'?
-    // OR: we fetch message from store via a getter in dispatcher?
+    let rawMessage = this.dispatch.getMessage(this.sessionId, this.messageId);
+    if (!rawMessage) return;
 
-    // Let's use a getter pattern in dispatcher to fetch fresh state without importing store.
-    // This solves the read dependency.
-    const message = this.dispatch.getMessage(this.sessionId, this.messageId);
-    if (!message) return;
+    // Apply pending buffer to keep local state consistent with stream
+    const message = this.applyPendingBuffer(rawMessage);
 
     const isPartial = result.metadata?.partial === true;
 
-    // Initialize from existing state (batch update pattern)
     const widgetMap = new Map<string, Widget>();
     const contentOrder: string[] = message.metadata?.contentOrder
       ? [...message.metadata.contentOrder]
       : [];
 
-    message.widgets.forEach((w) => {
+    message.widgets.forEach((w: Widget) => {
       widgetMap.set(w.id, w);
     });
 
     let accumulatedText = message.text || "";
-
-    // ==== STEP 1: Process METADATA (tool results only - they update existing widgets) ====
-    // NOTE: Thinking and tool_calls from metadata are FALLBACK only.
-    // Primary source is artifact.parts (Parts stream in order!)
+    let needsFullUpdate = false;
 
     if (result.metadata?.tool_results) {
       for (const tr of result.metadata.tool_results) {
         this.processToolResult(tr, widgetMap);
+        needsFullUpdate = true;
       }
     }
 
-    // ==== STEP 2: Process artifact.parts IN ORDER (thinking, text, tool_use) ====
-    // Parts stream in the order they were generated by the LLM
-    // This is critical for correct widget ordering
-
     if (result.artifact?.parts) {
       for (const part of result.artifact.parts) {
-        // Flatten/extract author from result metadata
         const author = (result.metadata?.author as string) || (result.metadata?.["event_author"] as string);
-        if (author) {
+        if (author && author !== this.lastDispatchedActiveAgentId) {
           this.dispatch.setActiveAgentId(author);
+          this.lastDispatchedActiveAgentId = author;
         }
 
         if (part.kind === "text" && part.text) {
-          // Text content - pass isPartial to handle delta vs complete correctly
-          accumulatedText = this.processTextPart(part.text, accumulatedText, widgetMap, contentOrder, isPartial, author);
+          const result = this.processTextPart(part.text, accumulatedText, widgetMap, contentOrder, isPartial, author);
+          accumulatedText = result.text;
+          if (result.type === 'create') {
+            needsFullUpdate = true;
+          }
         } else if (part.kind === "data" && part.data) {
           const data = part.data as Record<string, unknown>;
+          needsFullUpdate = true;
 
           if (data.type === "thinking") {
-            // Thinking Part (legacy pattern: thinking content as Part)
             const id = data.id as string;
             const content = data.content as string;
             const status = data.status as string;
             const isCompleted = status === "completed";
             this.processThinking(id, content || "", isCompleted, "default", widgetMap, contentOrder, author);
           } else if (data.type === "tool_use") {
-            // Tool call Part
             const toolId = data.id as string;
             if (!this.createdToolWidgets.has(toolId)) {
               this.processToolCallFromPart(data, widgetMap, contentOrder, author);
             }
           } else if (data.type === "tool_result") {
-            // Tool result Part
             const toolCallId = data.tool_call_id as string;
             this.processToolResult({
               tool_call_id: toolCallId,
@@ -254,51 +287,50 @@ export class StreamParser {
       }
     }
 
-    // ==== STEP 3: Mark thinking completed when final event arrives ====
+    // Mark active widgets as completed if stream is done
     if (!isPartial) {
-      widgetMap.forEach((widget, id) => {
+      needsFullUpdate = true;
+      widgetMap.forEach((widget: Widget, id: string) => {
         if (widget.type === "thinking" && widget.status === "active") {
           widgetMap.set(id, { ...widget, status: "completed" });
         }
-        // Also mark text widgets as completed
         if (widget.type === "text" && widget.status === "active") {
           widgetMap.set(id, { ...widget, status: "completed" });
         }
       });
     }
 
-    // ==== STEP 4: Build ordered widgets and update ====
-    const orderedWidgets: Widget[] = [];
-    const seenWidgetIds = new Set<string>();
+    if (needsFullUpdate) {
+      this.flush(); // Sync store before full update
 
-    contentOrder.forEach((widgetId) => {
-      const widget = widgetMap.get(widgetId);
-      if (widget) {
-        orderedWidgets.push(widget);
-        seenWidgetIds.add(widgetId);
-      }
-    });
+      const orderedWidgets: Widget[] = [];
+      const seenWidgetIds = new Set<string>();
 
-    widgetMap.forEach((widget, id) => {
-      if (!seenWidgetIds.has(id)) {
-        orderedWidgets.push(widget);
-      }
-    });
+      contentOrder.forEach((widgetId) => {
+        const widget = widgetMap.get(widgetId);
+        if (widget) {
+          orderedWidgets.push(widget);
+          seenWidgetIds.add(widgetId);
+        }
+      });
 
-    this.dispatch.updateMessage(this.sessionId, this.messageId, {
-      text: accumulatedText,
-      widgets: orderedWidgets,
-      metadata: {
-        ...message.metadata,
-        contentOrder: contentOrder.length > 0 ? contentOrder : undefined,
-      },
-    });
+      widgetMap.forEach((widget: Widget, id: string) => {
+        if (!seenWidgetIds.has(id)) {
+          orderedWidgets.push(widget);
+        }
+      });
+
+      this.dispatch.updateMessage(this.sessionId, this.messageId, {
+        text: accumulatedText,
+        widgets: orderedWidgets,
+        metadata: {
+          ...message.metadata,
+          contentOrder: contentOrder.length > 0 ? contentOrder : undefined,
+        },
+      });
+    }
   }
 
-  /**
-   * Process text part - compute position fresh from contentOrder.
-   * @param isPartial - true for streaming deltas, false for final complete text
-   */
   private processTextPart(
     text: string,
     accumulatedText: string,
@@ -306,121 +338,129 @@ export class StreamParser {
     contentOrder: string[],
     isPartial: boolean,
     author?: string
-  ): string {
-    if (!text) return accumulatedText;
+  ): { text: string; type: 'create' | 'append' } {
+    if (!text) return { text: accumulatedText, type: 'append' };
 
-    // On final (non-partial) events, apply ADK-Go duplicate detection
-    // This prevents duplication when final event sends complete text after streaming
-    if (!isPartial) {
-      // If accumulated already contains this text, it's a duplicate - skip
-      if (accumulatedText === text || accumulatedText.endsWith(text)) {
-        return accumulatedText;
-      }
+    // CRITICAL: De-duplication check for BOTH partial and complete updates
+    // Many LLM backends re-send the same text in multiple streaming chunks
+    if (accumulatedText === text || accumulatedText.endsWith(text)) {
+      return { text: accumulatedText, type: 'append' };
     }
 
-    const newAccumulatedText = accumulatedText + text; // Always append (Dedup handled above)
+    // Additional check: If we have an active text widget, check if we're duplicating its content
+    if (this.activeTextWidgetId) {
+      const activeWidget = widgetMap.get(this.activeTextWidgetId);
+      if (activeWidget && activeWidget.type === "text") {
+        const widgetContent = activeWidget.content || "";
+        const bufferedContent = this.pendingTextBuffer.get(this.activeTextWidgetId) || "";
+        const fullContent = widgetContent + bufferedContent;
 
-    // Find last non-text widget
-    const lastNonTextWidgetId = contentOrder
-      .filter((id) => {
-        const widget = widgetMap.get(id);
-        return widget && widget.type !== "text";
-      })
-      .pop();
-
-    // Determine text widget ID based on position
-    const textMarkerId = lastNonTextWidgetId
-      ? TEXT_MARKER_PREFIX + "_after_" + lastNonTextWidgetId
-      : TEXT_MARKER_PREFIX + "_start";
-
-    // Find existing text widget at this position
-    let targetTextWidgetId = textMarkerId;
-    if (lastNonTextWidgetId) {
-      const lastNonTextIndex = contentOrder.indexOf(lastNonTextWidgetId);
-      for (let i = contentOrder.length - 1; i > lastNonTextIndex; i--) {
-        const widget = widgetMap.get(contentOrder[i]);
-        if (widget?.type === "text") {
-          targetTextWidgetId = widget.id;
-          break;
+        // Check if the incoming text is already in the widget (exact match or suffix)
+        if (fullContent === text || fullContent.endsWith(text)) {
+          return { text: accumulatedText, type: 'append' };
         }
       }
-    } else {
-      const startTextWidget = contentOrder.find((id) => {
-        const widget = widgetMap.get(id);
-        return widget?.type === "text" && id === TEXT_MARKER_PREFIX + "_start";
-      });
-      if (startTextWidget) {
-        targetTextWidgetId = startTextWidget;
-      }
     }
 
-    // Create or update text widget
-    const existingWidget = widgetMap.get(targetTextWidgetId);
+    const newAccumulatedText = accumulatedText + text;
 
-    // Author change detection for sequential agents:
-    // Only create new widget if BOTH widgets have authors AND they differ
-    // This correctly handles:
-    // - undefined → "agent" (first text) → append (don't create new)
-    // - "agent1" → "agent2" (sequential) → create new widget
-    // - "agent" → undefined (backward compat) → append
-    const authorChanged =
-      existingWidget?.type === "text" &&
-      existingWidget.data?.author &&
-      author &&
-      existingWidget.data.author !== author;
+    let targetTextWidgetId = this.activeTextWidgetId;
+    let shouldUseCached = false;
 
-    if (!widgetMap.has(targetTextWidgetId) || authorChanged) {
-      // Create NEW text widget if:
-      // 1. No widget exists at this position, OR
-      // 2. Author has changed (e.g., sequential agent switching from researcher to summarizer)
+    // Cache validation: check if active widget is still valid
+    if (targetTextWidgetId && widgetMap.has(targetTextWidgetId)) {
+      const cachedAuthor = this.activeTextWidgetAuthor;
+      if (author && author !== cachedAuthor) {
+        shouldUseCached = false;
+      } else {
+        shouldUseCached = true;
+      }
+    } else {
+      shouldUseCached = false;
+    }
 
-      if (authorChanged) {
-        // Complete the previous author's widget before creating new one
-        widgetMap.set(targetTextWidgetId, {
-          ...existingWidget,
-          status: "completed" as const,
-        });
-        // Generate new unique ID for the new author's text
-        targetTextWidgetId = TEXT_MARKER_PREFIX + "_" + author + "_" + Date.now();
+    if (!shouldUseCached) {
+      // Find where to append new text
+      const lastNonTextWidgetId = contentOrder
+        .filter((id) => {
+          const widget = widgetMap.get(id);
+          return widget && widget.type !== "text";
+        })
+        .pop();
+
+      if (lastNonTextWidgetId) {
+        targetTextWidgetId = TEXT_MARKER_PREFIX + "_after_" + lastNonTextWidgetId;
+      } else {
+        targetTextWidgetId = TEXT_MARKER_PREFIX + "_start";
       }
 
+      // If resolving to same author, reuse
+      if (!lastNonTextWidgetId && contentOrder.length > 0) {
+        const lastWidgetId = contentOrder[contentOrder.length - 1];
+        const lastWidget = widgetMap.get(lastWidgetId);
+        if (lastWidget?.type === "text") {
+          const existingAuthor = lastWidget.data.author;
+          if (author === existingAuthor) {
+            targetTextWidgetId = lastWidgetId;
+          }
+        }
+      }
+
+      // Collision check
+      const existing = widgetMap.get(targetTextWidgetId as string);
+      if (existing && existing.type === "text") {
+        const existingAuthor = existing.data.author;
+        if (author !== existingAuthor) {
+          targetTextWidgetId = TEXT_MARKER_PREFIX + "_" + author + "_" + Date.now();
+        }
+      }
+
+      this.activeTextWidgetId = targetTextWidgetId as string;
+      this.activeTextWidgetAuthor = author || null;
+    }
+
+    const resolvedId = this.activeTextWidgetId as string;
+
+    if (!widgetMap.has(resolvedId)) {
+      // PERFORMANCE: Queue initial text to buffer as well
+      this.queueTextUpdate(resolvedId, text);
+
       const textWidget: TextWidget = {
-        id: targetTextWidgetId,
+        id: resolvedId,
         type: "text",
         status: isPartial ? "active" : "completed",
-        content: text,
+        content: text,  // Local state for read-consistency during parsing
         data: { author },
         isExpanded: true,
       };
-      widgetMap.set(targetTextWidgetId, textWidget);
-      if (!contentOrder.includes(targetTextWidgetId)) {
-        contentOrder.push(targetTextWidgetId);
+      widgetMap.set(resolvedId, textWidget);
+      if (!contentOrder.includes(resolvedId)) {
+        contentOrder.push(resolvedId);
       }
+      return { text: newAccumulatedText, type: 'create' };
     } else {
-      const existing = widgetMap.get(targetTextWidgetId);
-      if (existing && existing.type === "text") {
-        // Append to existing widget (same author, continuing stream)
-        // Add a newline for separation if this is a new block (not streaming delta)
-        const separator = (isPartial || !existing.content) ? "" : "\n\n";
-        const newContent = (existing.content || "") + separator + text;
+      const existing = widgetMap.get(resolvedId);
 
-        widgetMap.set(targetTextWidgetId, {
-          ...existing,
+      if (existing && existing.type === "text") {
+        // PERF: BUFFER UPDATE
+        this.queueTextUpdate(resolvedId, text);
+
+        const textWidget = existing as TextWidget;
+        const newContent = (textWidget.content || "") + text;
+
+        widgetMap.set(resolvedId, {
+          ...textWidget,
           content: newContent,
-          status: isPartial ? existing.status : ("completed" as const),
+          status: isPartial ? textWidget.status : ("completed" as const),
         });
+
+        return { text: newAccumulatedText, type: 'append' };
       }
     }
 
-    return newAccumulatedText;
+    return { text: newAccumulatedText, type: 'create' };
   }
 
-  /**
-   * Process tool call from artifact.parts DataPart.
-   */
-  /**
-   * Process tool call from artifact.parts DataPart.
-   */
   private processToolCallFromPart(
     data: Record<string, unknown>,
     widgetMap: Map<string, Widget>,
@@ -453,11 +493,12 @@ export class StreamParser {
     if (!contentOrder.includes(widgetId)) {
       contentOrder.push(widgetId);
     }
+
+    // CRITICAL: Reset active text widget so next text creates a new widget after this tool
+    this.activeTextWidgetId = null;
+    this.activeTextWidgetAuthor = null;
   }
 
-  /**
-   * Process tool result - update existing tool widget.
-   */
   private processToolResult(tr: ToolResultMeta, widgetMap: Map<string, Widget>) {
     const widgetId = "tool_" + tr.tool_call_id;
     const existing = widgetMap.get(widgetId);
@@ -496,12 +537,6 @@ export class StreamParser {
     });
   }
 
-  /**
-   * Process thinking block.
-   */
-  /**
-   * Process thinking block.
-   */
   private processThinking(
     id: string,
     content: string,
@@ -514,20 +549,16 @@ export class StreamParser {
     const widgetId = "thinking_" + id;
 
     if (this.createdThinkingWidgets.has(id)) {
-      // Update existing widget
       const existing = widgetMap.get(widgetId) as ThinkingWidget | undefined;
       if (existing) {
-        // CRITICAL: On completed, REPLACE content (full content arrives)
-        // On active (streaming), APPEND content (delta arrives)
         const newContent = isCompleted
-          ? content  // Replace - this is the complete content
-          : (existing.content || "") + content;  // Append - this is a delta
+          ? content
+          : (existing.content || "") + content;
 
         widgetMap.set(widgetId, {
           ...existing,
           content: newContent,
           status: isCompleted ? "completed" : existing.status,
-          // Collapse when completed
           isExpanded: isCompleted ? false : existing.isExpanded,
         });
       }
@@ -545,26 +576,24 @@ export class StreamParser {
         type: (type || "default") as "todo" | "goal" | "reflection" | "default",
         author: author
       },
-      isExpanded: !isCompleted,  // Expand while active, collapse when done
+      isExpanded: !isCompleted,
     };
 
     widgetMap.set(widgetId, thinkingWidget);
     if (!contentOrder.includes(widgetId)) {
       contentOrder.push(widgetId);
     }
+
+    // CRITICAL: Reset active text widget so next text creates a new widget after thinking
+    this.activeTextWidgetId = null;
+    this.activeTextWidgetAuthor = null;
   }
 
-  /**
-   * Handle status update for HITL.
-   */
   private handleStatusUpdate(result: A2AResult) {
-    // A2A spec uses "input-required" (with hyphen) as the state value
     const state = result.status?.state;
-    // Get fresh message state via dispatcher
     const message = this.dispatch.getMessage(this.sessionId, this.messageId);
     if (!message) return;
 
-    // Handle failed state
     if (state === "failed") {
       const errorText =
         result.status?.message?.parts?.[0]?.text ||
@@ -631,6 +660,10 @@ export class StreamParser {
       contentOrder.push(widgetId);
     }
 
+    // CRITICAL: Reset active text widget so next text creates a new widget after approval
+    this.activeTextWidgetId = null;
+    this.activeTextWidgetAuthor = null;
+
     const orderedWidgets: Widget[] = [];
     contentOrder.forEach((id) => {
       const w = widgetMap.get(id);
@@ -647,12 +680,15 @@ export class StreamParser {
 
   }
 
-  /**
-   * Finalize stream.
-   */
   private finalizeStream() {
     const message = this.dispatch.getMessage(this.sessionId, this.messageId);
     if (!message) return;
+
+    // PERFORMANCE: Finalize all streaming text widgets (commit buffer to message)
+    const textWidgets = message.widgets.filter((w) => w.type === "text");
+    textWidgets.forEach((widget) => {
+      this.dispatch.finalizeStreamingText(this.sessionId, this.messageId, widget.id);
+    });
 
     const hasActiveWidgets = message.widgets.some(
       (w) => (w.type === "thinking" || w.type === "text") && w.status === "active"
@@ -668,10 +704,6 @@ export class StreamParser {
     }
   }
 }
-
-// ============================================================================
-// A2A Types
-// ============================================================================
 
 interface A2APart {
   kind: string;

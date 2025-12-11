@@ -37,7 +37,6 @@ export const ApprovalWidget = memo<ApprovalWidgetProps>(function ApprovalWidget(
 
   // Use selectors for better performance - only subscribe to what we need
   const updateMessage = useStore((state) => state.updateMessage);
-  const sessions = useStore((state) => state.sessions);
   const selectedAgent = useStore((state) => state.selectedAgent);
   const setActiveStreamParser = useStore((state) => state.setActiveStreamParser);
   const setIsGenerating = useStore((state) => state.setIsGenerating);
@@ -72,6 +71,7 @@ export const ApprovalWidget = memo<ApprovalWidgetProps>(function ApprovalWidget(
     setIsSubmitting(true);
 
     try {
+      const sessions = useStore.getState().sessions;
       const session = sessions[sessionId];
       if (!session || !selectedAgent) {
         throw new Error("Session or agent not found");
@@ -151,6 +151,7 @@ export const ApprovalWidget = memo<ApprovalWidgetProps>(function ApprovalWidget(
       }
     } catch (error: unknown) {
       // Revert widget state on error
+      const sessions = useStore.getState().sessions;
       const errorSession = sessions[sessionId];
       const errorMessage = errorSession?.messages.find((m) =>
         m.widgets.some((w) => w.id === widget.id),

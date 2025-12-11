@@ -2,26 +2,52 @@ import React from "react";
 import { MessageList } from "./MessageList";
 import { InputArea } from "./InputArea";
 import { useStore } from "../../store/useStore";
-import { useMessageListAutoScroll } from "../../lib/hooks/useMessageListAutoScroll";
+import { AlertCircle, X } from "lucide-react";
 
 interface ChatAreaProps {
   onNavigateToBuilder?: () => void; // Kept for backward compatibility but not used in Studio Mode
 }
 
-export const ChatArea: React.FC<ChatAreaProps> = ({ onNavigateToBuilder }) => {
-  // Use selectors for better performance - only subscribe to specific state slices
-  const currentSessionId = useStore((state) => state.currentSessionId);
-  const sessions = useStore((state) => state.sessions);
-  const isGenerating = useStore((state) => state.isGenerating);
-  const session = currentSessionId ? sessions[currentSessionId] : null;
+const ErrorBanner = () => {
+  const error = useStore((state) => state.error);
+  const setError = useStore((state) => state.setError);
 
-  // Use shared auto-scroll hook
-  const { messagesEndRef, scrollContainerRef } = useMessageListAutoScroll(
-    session,
-    isGenerating,
+  if (!error) return null;
+
+  return (
+    <div className="absolute top-4 left-4 right-4 z-[60] animate-in fade-in slide-in-from-top-2">
+      <div className="mx-auto max-w-[760px] bg-red-500/10 border border-red-500/50 text-red-200 px-4 py-3 rounded-lg shadow-lg flex items-start gap-3 backdrop-blur-md">
+        <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+        <div className="flex-1 text-sm">{error}</div>
+        <button
+          onClick={() => setError(null)}
+          className="text-red-400 hover:text-red-300 transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+    </div>
   );
+};
 
-  if (!session) {
+export const ChatArea: React.FC<ChatAreaProps> = ({ onNavigateToBuilder }) => {
+  console.log("RENDER: ChatArea");
+
+  const currentSessionId = useStore((state) => state.currentSessionId);
+  // PERFORMANCE: Check session existence without accessing full session object
+  const sessionExists = useStore((state) =>
+    !!(state.currentSessionId && state.currentSessionId in state.sessions)
+  );
+  // PERFORMANCE: Select only message count to avoid re-rendering on text updates
+  const msgCount = useStore((state) => {
+    if (!state.currentSessionId) return 0;
+    const session = state.sessions[state.currentSessionId];
+    return session?.messages.length || 0;
+  });
+
+  const hasMessages = msgCount > 0;
+
+  if (!sessionExists || !currentSessionId) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
         {onNavigateToBuilder && (
@@ -50,19 +76,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ onNavigateToBuilder }) => {
     );
   }
 
-  const hasMessages = session.messages.length > 0;
-
   return (
     <div className="flex flex-col h-full w-full relative">
+      <ErrorBanner />
       {hasMessages ? (
         <>
-          <div
-            ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 pb-32"
-          >
-            <MessageList messages={session.messages} />
-            <div ref={messagesEndRef} />
-          </div>
+          {/* Scroll container is handled inside MessageList now */}
+          <MessageList sessionId={currentSessionId} />
 
           <div className="sticky bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent pt-10 z-50">
             <div className="max-w-[760px] mx-auto w-full">

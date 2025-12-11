@@ -9,7 +9,7 @@ import { handleError } from "../../lib/error-handler";
 import { generateId, generateShortId } from "../../lib/id-generator";
 import { createStreamDispatcher } from "../../lib/stream-utils";
 
-export const InputArea: React.FC<{ onSend?: () => void }> = ({ onSend }) => {
+export const InputArea: React.FC<{ onSend?: () => void }> = React.memo(({ onSend }) => {
   // Use selectors for better performance - only subscribe to specific state slices
   const currentSessionId = useStore((state) => state.currentSessionId);
   const addMessage = useStore((state) => state.addMessage);
@@ -21,7 +21,6 @@ export const InputArea: React.FC<{ onSend?: () => void }> = ({ onSend }) => {
   );
   const cancelGeneration = useStore((state) => state.cancelGeneration);
   const supportedFileTypes = useStore((state) => state.supportedFileTypes);
-  const sessions = useStore((state) => state.sessions);
   const updateSessionTitle = useStore((state) => state.updateSessionTitle);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -178,6 +177,7 @@ export const InputArea: React.FC<{ onSend?: () => void }> = ({ onSend }) => {
     });
 
     // Update session title from first user message
+    const sessions = useStore.getState().sessions;
     const session = sessions[currentSessionId];
     if (session && session.title === "New conversation" && messageText) {
       const title =
@@ -353,4 +353,4 @@ export const InputArea: React.FC<{ onSend?: () => void }> = ({ onSend }) => {
       </div>
     </div>
   );
-};
+});

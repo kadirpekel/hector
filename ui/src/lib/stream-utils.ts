@@ -11,6 +11,9 @@ export interface StreamDispatcher {
   getMessage: (sessionId: string, messageId: string) => Message | undefined;
   setSessionTaskId: (sessionId: string, taskId: string) => void;
   setIsGenerating: (isGenerating: boolean) => void;
+  setError: (error: string | null) => void;
+  appendTextWidgetContent: (sessionId: string, messageId: string, widgetId: string, textDelta: string) => void;
+  finalizeStreamingText: (sessionId: string, messageId: string, widgetId: string) => void;
 }
 
 /**
@@ -36,5 +39,8 @@ export function createStreamDispatcher(): StreamDispatcher {
     },
     setSessionTaskId: store.setSessionTaskId,
     setIsGenerating: store.setIsGenerating,
+    setError: store.setError,
+    appendTextWidgetContent: store.appendTextWidgetContent,
+    finalizeStreamingText: store.finalizeStreamingText,
   };
 }

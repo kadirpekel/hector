@@ -29,6 +29,12 @@ interface AppState {
   successMessage: string | null;
   setSuccessMessage: (message: string | null) => void;
 
+  // Streaming optimization: separate buffer for high-frequency text updates
+  // This prevents re-rendering entire message structure on every token
+  streamingTextContent: Record<string, string>; // widgetId -> accumulating text
+  setStreamingTextContent: (widgetId: string, content: string) => void;
+  clearStreamingTextContent: (widgetId: string) => void;
+
   // Config State
   endpointUrl: string;
   setEndpointUrl: (url: string) => void;
@@ -108,6 +114,20 @@ interface AppState {
     messageId: string,
     widgetId: string,
   ) => void;
+  // Optimized action for high-frequency stream updates
+  appendTextWidgetContent: (
+    sessionId: string,
+    messageId: string,
+    widgetId: string,
+    textDelta: string,
+  ) => void;
+
+  // Finalize streaming content (commit buffer to message)
+  finalizeStreamingText: (
+    sessionId: string,
+    messageId: string,
+    widgetId: string,
+  ) => void;
 }
 
 export const useStore = create<AppState>()(
@@ -126,6 +146,22 @@ export const useStore = create<AppState>()(
       setError: (error) => set({ error }),
       successMessage: null,
       setSuccessMessage: (successMessage) => set({ successMessage }),
+
+      // Streaming text buffer (optimized for high-frequency updates)
+      streamingTextContent: {},
+      setStreamingTextContent: (widgetId, content) =>
+        set((state) => ({
+          streamingTextContent: {
+            ...state.streamingTextContent,
+            [widgetId]: content,
+          },
+        })),
+      clearStreamingTextContent: (widgetId) =>
+        set((state) => {
+          const newContent = { ...state.streamingTextContent };
+          delete newContent[widgetId];
+          return { streamingTextContent: newContent };
+        }),
 
       // Config defaults
       endpointUrl: typeof window !== "undefined" ? window.location.origin : "",
@@ -528,6 +564,72 @@ export const useStore = create<AppState>()(
           };
         });
       },
+
+      appendTextWidgetContent: (_sessionId, _messageId, widgetId, textDelta) => {
+        // PERFORMANCE OPTIMIZATION: During streaming, accumulate text in separate buffer
+        // This prevents creating 6 new objects on every token flush (20fps)
+        // The buffer is committed to the message on stream completion
+        // Note: sessionId and messageId are unused during buffering but kept for interface consistency
+        set((state) => {
+          const currentContent = state.streamingTextContent[widgetId] || "";
+          return {
+            streamingTextContent: {
+              ...state.streamingTextContent,
+              [widgetId]: currentContent + textDelta,
+            },
+          };
+        });
+      },
+
+      finalizeStreamingText: (sessionId, messageId, widgetId) => {
+        set((state) => {
+          const streamedContent = state.streamingTextContent[widgetId];
+          if (!streamedContent) return state; // Nothing to finalize
+
+          const session = state.sessions[sessionId];
+          if (!session) return state;
+
+          const msgIndex = session.messages.findIndex((m) => m.id === messageId);
+          if (msgIndex === -1) return state;
+
+          const message = session.messages[msgIndex];
+          const widgetIndex = message.widgets.findIndex((w) => w.id === widgetId);
+          if (widgetIndex === -1) return state;
+
+          const widget = message.widgets[widgetIndex];
+          if (widget.type !== "text") return state;
+
+          // Commit streamed content to widget
+          const newWidgets = [...message.widgets];
+          newWidgets[widgetIndex] = {
+            ...widget,
+            content: streamedContent,
+            status: "completed" as const,
+          };
+
+          const newMessages = [...session.messages];
+          newMessages[msgIndex] = {
+            ...message,
+            text: streamedContent, // Also update message.text for compatibility
+            widgets: newWidgets,
+          };
+
+          // Clear the streaming buffer
+          const newStreamingContent = { ...state.streamingTextContent };
+          delete newStreamingContent[widgetId];
+
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...session,
+                messages: newMessages,
+              },
+            },
+            streamingTextContent: newStreamingContent,
+          };
+        });
+      },
     }),
     {
       name: "hector_sessions",
@@ -540,51 +642,73 @@ export const useStore = create<AppState>()(
             return null;
           }
         },
-        setItem: (name: string, value: string) => {
-          const MAX_RETRIES = 1;
-          let retryCount = 0;
+        setItem: (() => {
+          // Debounce writes to prevent freezing UI during high-frequency streaming
+          let timeoutId: any = null;
+          let pendingKey: string | null = null;
+          let pendingValue: string | null = null;
 
-          const attemptSave = (): void => {
-            try {
-              localStorage.setItem(name, value);
-            } catch (error) {
-              // Handle quota exceeded error
-              if (
-                error instanceof DOMException &&
-                (error.code === 22 || // Legacy quota exceeded
-                  error.code === 1014 || // Firefox
-                  error.name === "QuotaExceededError" ||
-                  error.name === "NS_ERROR_DOM_QUOTA_REACHED")
-              ) {
-                if (retryCount < MAX_RETRIES) {
-                  retryCount++;
-                  logger.warn(
-                    `localStorage quota exceeded (attempt ${retryCount}/${MAX_RETRIES}), clearing old sessions`,
-                  );
-                  try {
-                    localStorage.removeItem(name);
-                    attemptSave(); // Recursive retry
-                  } catch (retryError) {
-                    logger.error(
-                      "Failed to save to localStorage even after clearing:",
-                      retryError,
-                    );
-                    // Gracefully degrade - app continues without persistence
+          return (name: string, value: string) => {
+            pendingKey = name;
+            pendingValue = value;
+
+            if (timeoutId) return;
+
+            timeoutId = setTimeout(() => {
+              timeoutId = null;
+              if (!pendingKey || !pendingValue) return;
+
+              const key = pendingKey;
+              const val = pendingValue;
+              pendingKey = null;
+              pendingValue = null;
+
+              const MAX_RETRIES = 1;
+              let retryCount = 0;
+
+              const attemptSave = (): void => {
+                try {
+                  localStorage.setItem(key, val);
+                } catch (error) {
+                  // Handle quota exceeded error
+                  if (
+                    error instanceof DOMException &&
+                    (error.code === 22 || // Legacy quota exceeded
+                      error.code === 1014 || // Firefox
+                      error.name === "QuotaExceededError" ||
+                      error.name === "NS_ERROR_DOM_QUOTA_REACHED")
+                  ) {
+                    if (retryCount < MAX_RETRIES) {
+                      retryCount++;
+                      logger.warn(
+                        `localStorage quota exceeded (attempt ${retryCount}/${MAX_RETRIES}), clearing old sessions`,
+                      );
+                      try {
+                        localStorage.removeItem(key);
+                        attemptSave(); // Recursive retry
+                      } catch (retryError) {
+                        logger.error(
+                          "Failed to save to localStorage even after clearing:",
+                          retryError,
+                        );
+                        // Gracefully degrade - app continues without persistence
+                      }
+                    } else {
+                      logger.error(
+                        "localStorage quota exceeded and max retries reached. Persistence disabled.",
+                      );
+                      // Gracefully degrade - app continues without persistence
+                    }
+                  } else {
+                    logger.error("Failed to write to localStorage:", error);
                   }
-                } else {
-                  logger.error(
-                    "localStorage quota exceeded and max retries reached. Persistence disabled.",
-                  );
-                  // Gracefully degrade - app continues without persistence
                 }
-              } else {
-                logger.error("Failed to write to localStorage:", error);
-              }
-            }
-          };
+              };
 
-          attemptSave();
-        },
+              attemptSave();
+            }, 1000); // 1 second debounce
+          };
+        })(),
         removeItem: (name: string) => {
           try {
             localStorage.removeItem(name);

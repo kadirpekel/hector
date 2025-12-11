@@ -1,9 +1,6 @@
 import React, { useMemo } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeHighlight from "rehype-highlight";
 import { User, Bot, AlertCircle } from "lucide-react";
-import type { Message, Widget } from "../../types";
+import type { Message, Widget, TextWidget as TextWidgetType } from "../../types";
 import { cn } from "../../lib/utils";
 import { ToolWidget } from "../Widgets/ToolWidget";
 import { ThinkingWidget } from "../Widgets/ThinkingWidget";
@@ -12,9 +9,46 @@ import { ImageWidget } from "../Widgets/ImageWidget";
 import { useStore } from "../../store/useStore";
 import { isWidgetInLifecycle } from "../../lib/widget-animations";
 import { getAgentColor, getAgentColorClasses } from "../../lib/colors";
-import "highlight.js/styles/github-dark.css";
+import { ThrottledMarkdown } from "../Markdown/ThrottledMarkdown";
 
-// Shared ReactMarkdown configuration
+// Streaming text widget that reads from the optimized buffer
+const StreamingTextWidget: React.FC<{
+  widget: TextWidgetType;
+  isLastMessage: boolean;
+  isGenerating?: boolean;
+  components?: any;
+}> = React.memo(({ widget, isLastMessage, isGenerating, components }) => {
+  // Subscribe to streaming buffer for this widget
+  const streamingContent = useStore((state) => state.streamingTextContent[widget.id]);
+
+  // Use streaming content if available (actively streaming), otherwise use widget content
+  const content = streamingContent || widget.content || "";
+
+  // Only apply throttling to completed messages, not actively streaming ones
+  const shouldThrottle = !isGenerating || !isLastMessage;
+
+  if (!content) return null;
+
+  return (
+    <div className="prose prose-invert prose-sm max-w-none">
+      {shouldThrottle ? (
+        <ThrottledMarkdown content={content} components={components} />
+      ) : (
+        // Render immediately for actively streaming messages (no double throttling)
+        <ThrottledMarkdown content={content} components={components} />
+      )}
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  // Re-render only if widget ID or streaming state changes
+  return (
+    prevProps.widget.id === nextProps.widget.id &&
+    prevProps.isLastMessage === nextProps.isLastMessage &&
+    prevProps.isGenerating === nextProps.isGenerating
+  );
+});
+
+// Component-specific markdown configuration
 const markdownComponents = {
   a: ({ ...props }: React.ComponentProps<"a">) => (
     <a
@@ -47,9 +81,11 @@ const markdownComponents = {
 };
 
 interface MessageItemWithContextProps {
-  message: Message;
+  messageId: string;
   messageIndex: number;
   isLastMessage: boolean;
+  isGenerating: boolean;
+  currentSessionId: string | null;
 }
 
 interface BubbleGroup {
@@ -60,34 +96,53 @@ interface BubbleGroup {
 }
 
 const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
-  message,
+  messageId,
   messageIndex,
   isLastMessage,
+  isGenerating,
+  currentSessionId,
 }) => {
-  // Use selector for better performance - only subscribe to currentSessionId
-  const currentSessionId = useStore((state) => state.currentSessionId);
-  const isUser = message.role === "user";
-  const isSystem = message.role === "system";
+  // PERFORMANCE OPTIMIZATION: Subscribe to specific message
+  // Zustand's structural sharing ensures we only re-render when message reference changes
+  const message = useStore((state) => {
+    if (!currentSessionId) return undefined;
+    const session = state.sessions[currentSessionId];
+    return session?.messages.find((m) => m.id === messageId);
+  });
 
-  // Memoize widget map to prevent recreation on every render
+  // Derived state to check if we should render anything
+  const shouldRender = useMemo(() => {
+    if (!message) return false;
+    if (message.role === 'agent' && !message.text && (!message.widgets || message.widgets.length === 0)) {
+      return false;
+    }
+    return true;
+  }, [message]);
+
+  const isUser = message?.role === "user";
+  const isSystem = message?.role === "system";
+
+  // Memoize widget map
   const widgetsMap = useMemo(
-    () => new Map(message.widgets.map((w) => [w.id, w])),
-    [message.widgets],
+    () => {
+      if (!message || !message.widgets) return new Map();
+      return new Map(message.widgets.map((w) => [w.id, w]));
+    },
+    [message?.widgets],
   );
 
-  // Memoize contentOrder to prevent unnecessary comparisons
+  // Memoize contentOrder
   const contentOrder = useMemo(
-    () => message.metadata?.contentOrder || [],
-    [message.metadata?.contentOrder],
+    () => message?.metadata?.contentOrder || [],
+    [message?.metadata?.contentOrder],
   );
 
-  // Group widgets into separate bubbles based on author continuity
+  // Group widgets
   const bubbleGroups = useMemo(() => {
-    // Collect all widget IDs from contentOrder first
+    if (!message || !message.widgets) return [];
+
     const orderedIds = [...contentOrder];
 
-    // Find any widgets that are NOT in contentOrder (orphans) and append them
-    // This is a safety net for synchronization issues
     message.widgets.forEach(w => {
       if (!orderedIds.includes(w.id)) {
         orderedIds.push(w.id);
@@ -100,28 +155,17 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
     let currentAuthor: string | undefined = undefined;
     let currentWidgetIds: string[] = [];
 
-    // Helper: Determine author of a widget
     const getWidgetAuthor = (widgetId: string): string | undefined => {
       const w = widgetsMap.get(widgetId);
       if (!w) return undefined;
-      // Check data.author for widgets that support it
       if (w.type === 'text' && w.data.author) return w.data.author;
       if (w.type === 'tool' && w.data.author) return w.data.author;
       if (w.type === 'thinking' && w.data.author) return w.data.author;
-      // For widgets without author metadata, return undefined
-      // This allows proper grouping by treating them as continuation of current author
       return undefined;
     };
 
     orderedIds.forEach((widgetId) => {
       const author = getWidgetAuthor(widgetId);
-
-      // Transition Logic:
-      // If we have a current group, does the new widget belong to it?
-      // - If author is defined and DIFFERENT from current -> Split
-      // - If author is defined and SAME as current -> Keep
-      // - If author is undefined -> Keep (assume continuation/system)
-
       const shouldSplit = author && author !== currentAuthor;
 
       if (shouldSplit && currentWidgetIds.length > 0) {
@@ -138,7 +182,6 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
       currentWidgetIds.push(widgetId);
     });
 
-    // Push final group
     if (currentWidgetIds.length > 0) {
       groups.push({
         id: `group_${groups.length}`,
@@ -149,11 +192,10 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
     }
 
     return groups;
-  }, [contentOrder, widgetsMap, message.widgets]);
+  }, [contentOrder, widgetsMap, message?.widgets]);
 
-  // Widget expansion state is managed via widget.isExpanded prop and onExpansionChange callback
-  // Widgets read their initial state from the prop and sync changes back via the callback
-  // No need for additional sync logic here - widgets handle their own state management
+  // FINAL RENDER CHECK (Moved after all hooks)
+  if (!message || !shouldRender) return null;
 
   if (isSystem) {
     return (
@@ -164,9 +206,7 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
     );
   }
 
-  // --- RENDER LOGIC ---
-
-  // User Message (Standard single bubble)
+  // User Message
   if (isUser) {
     return (
       <div className="flex flex-row-reverse gap-4 group">
@@ -184,12 +224,9 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
                 <img src={img.preview} alt="" className="h-32 w-auto object-cover" />
               </div>
             ))}
-            {/* Fallback for user text if not in widgets */}
             {message.text && (
               <div className="prose prose-invert prose-sm max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={markdownComponents}>
-                  {message.text}
-                </ReactMarkdown>
+                <ThrottledMarkdown content={message.text} components={markdownComponents} />
               </div>
             )}
           </div>
@@ -198,9 +235,9 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
     );
   }
 
-  // Agent Message (Decoupled Bubbles)
+  // Agent Message
   return (
-    <div className="flex flex-col gap-4"> {/* Stack of bubbles */}
+    <div className="flex flex-col gap-4">
       {bubbleGroups.map((group, groupIndex) => {
         const agentColor = getAgentColor(group.author || "Hector");
         const colors = getAgentColorClasses(agentColor);
@@ -209,7 +246,6 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
 
         return (
           <div key={group.id} className="flex flex-row gap-4 group">
-            {/* Avatar (Colored per Agent) */}
             <div className={cn(
               "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-lg transition-colors border border-white/10",
               colors.bg
@@ -217,7 +253,6 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
               <Bot size={16} className="text-white" />
             </div>
 
-            {/* Bubble Content */}
             <div className="flex flex-col min-w-0 w-full items-start">
               <div className="flex items-center gap-2 mb-1 text-xs">
                 <span className={cn("font-bold uppercase tracking-wider", colors.text)}>
@@ -228,11 +263,10 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
 
               <div className={cn(
                 "rounded-2xl px-4 py-3 shadow-md text-sm leading-relaxed overflow-hidden break-words w-full rounded-tl-sm transition-colors",
-                "bg-white/5", // Base background
-                colors.border, // Colored border
+                "bg-white/5",
+                colors.border,
                 "border"
               )}>
-                {/* Render Widgets in this Group */}
                 {group.widgetIds.map(itemId => {
                   const widget = widgetsMap.get(itemId);
                   if (!widget) return null;
@@ -246,6 +280,7 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
                         message={message}
                         messageIndex={messageIndex}
                         isLastMessage={isLastMessage && isLastGroup}
+                        isGenerating={isGenerating}
                       />
                     </div>
                   )
@@ -256,7 +291,6 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
         );
       })}
 
-      {/* Fallback: If no contentOrder/widgets but text exists (legacy/error) */}
       {bubbleGroups.length === 0 && message.text && (
         <div className="flex flex-row gap-4 group">
           <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-lg bg-hector-green">
@@ -265,16 +299,13 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
           <div className="flex flex-col min-w-0 w-full items-start">
             <div className="bg-white/5 border border-white/10 text-gray-100 rounded-2xl px-4 py-3 rounded-tl-sm w-full">
               <div className="prose prose-invert prose-sm max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={markdownComponents}>
-                  {message.text}
-                </ReactMarkdown>
+                <ThrottledMarkdown content={message.text} components={markdownComponents} />
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Cancellation Token */}
       {message.cancelled && (
         <div className="ml-12 text-xs text-gray-500 italic">user cancelled</div>
       )}
@@ -283,7 +314,6 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
 };
 
 // Widget Renderer
-// Widget Renderer - Memoized to prevent re-rendering irrelevant widgets
 const WidgetRenderer: React.FC<{
   widget: Widget;
   sessionId?: string;
@@ -291,6 +321,7 @@ const WidgetRenderer: React.FC<{
   message: Message;
   messageIndex: number;
   isLastMessage: boolean;
+  isGenerating?: boolean;
 }> = React.memo(({
   widget,
   sessionId,
@@ -298,14 +329,11 @@ const WidgetRenderer: React.FC<{
   message,
   messageIndex,
   isLastMessage,
+  isGenerating = false,
 }) => {
-  // Use selectors for better performance - only subscribe to specific state slices
-  const setWidgetExpanded = useStore((state) => state.setWidgetExpanded);
-  const isGeneratingState = useStore((state) => state.isGenerating);
-
   const handleExpansionChange = (expanded: boolean) => {
     if (sessionId) {
-      setWidgetExpanded(sessionId, messageId, widget.id, expanded);
+      useStore.getState().setWidgetExpanded(sessionId, messageId, widget.id, expanded);
     }
   };
 
@@ -314,7 +342,7 @@ const WidgetRenderer: React.FC<{
     message,
     messageIndex,
     isLastMessage,
-    isGeneratingState,
+    isGenerating,
   );
 
   switch (widget.type) {
@@ -351,34 +379,34 @@ const WidgetRenderer: React.FC<{
         />
       );
     case "text":
-      // Text widgets are rendered inline as markdown
-      return widget.content ? (
-        <div className="prose prose-invert prose-sm max-w-none">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
-            components={markdownComponents}
-          >
-            {widget.content}
-          </ReactMarkdown>
-        </div>
-      ) : null;
+      return (
+        <StreamingTextWidget
+          widget={widget}
+          isLastMessage={isLastMessage}
+          isGenerating={isGenerating}
+          components={markdownComponents}
+        />
+      );
     default: {
-      // Exhaustive check - if we reach here, widget.type is 'never'
       return null;
     }
   }
 }, (prevProps, nextProps) => {
-  // Custom comparison for performance
   return (
     prevProps.widget === nextProps.widget &&
     prevProps.isLastMessage === nextProps.isLastMessage &&
     prevProps.messageIndex === nextProps.messageIndex &&
     prevProps.messageId === nextProps.messageId &&
-    prevProps.sessionId === nextProps.sessionId
-    // We exclude 'message' from deep comparison because it changes every stream update
-    // But the widget object itself (prevProps.widget) is stable if it's a previous bubble
+    prevProps.sessionId === nextProps.sessionId &&
+    prevProps.isGenerating === nextProps.isGenerating
   );
 });
 
-export const MessageItem = React.memo(MessageItemComponent);
+export const MessageItem = React.memo(MessageItemComponent, (prevProps, nextProps) => {
+  if (prevProps.messageId !== nextProps.messageId) return false;
+  if (prevProps.isLastMessage !== nextProps.isLastMessage) return false;
+  if (prevProps.messageIndex !== nextProps.messageIndex) return false;
+  if (prevProps.isGenerating !== nextProps.isGenerating) return false;
+  if (prevProps.currentSessionId !== nextProps.currentSessionId) return false;
+  return true;
+});

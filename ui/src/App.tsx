@@ -5,10 +5,11 @@ import { SuccessDisplay } from "./components/SuccessDisplay";
 import { useStore } from "./store/useStore";
 
 function App() {
+  console.log("RENDER: App (Top Level)");
+  // Use selectors for better performance - only subscribe to specific state slices
   // Use selectors for better performance - only subscribe to specific state slices
   const loadAgents = useStore((state) => state.loadAgents);
   const createSession = useStore((state) => state.createSession);
-  const sessions = useStore((state) => state.sessions);
   const currentSessionId = useStore((state) => state.currentSessionId);
 
   // Prevent double initialization on mount
@@ -23,7 +24,9 @@ function App() {
     loadAgents();
 
     // Create a new session if none exists
-    if (!currentSessionId && Object.keys(sessions).length === 0) {
+    // Read directly from state to avoid subscription causing re-renders
+    const state = useStore.getState();
+    if (!currentSessionId && Object.keys(state.sessions).length === 0) {
       createSession();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
