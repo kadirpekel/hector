@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +44,7 @@ import (
 	"github.com/kadirpekel/hector/pkg/session"
 	"github.com/kadirpekel/hector/pkg/tool"
 	"github.com/kadirpekel/hector/pkg/tool/agenttool"
+	"github.com/kadirpekel/hector/pkg/tool/mcptoolset"
 	"github.com/kadirpekel/hector/pkg/tool/searchtool"
 	"github.com/kadirpekel/hector/pkg/vector"
 )
@@ -488,9 +490,9 @@ func (r *Runtime) buildAgents() error {
 					agentToolsets = []tool.Toolset{}
 				} else {
 					for _, toolName := range cfg.Tools {
-						ts, ok := r.toolsets[toolName]
-						if !ok {
-							return fmt.Errorf("agent %q: tool %q not found", name, toolName)
+						ts, err := r.resolveToolset(toolName)
+						if err != nil {
+							return fmt.Errorf("agent %q: %w", name, err)
 						}
 						agentToolsets = append(agentToolsets, ts)
 					}
@@ -589,9 +591,9 @@ func (r *Runtime) buildAgents() error {
 		} else {
 			// Use explicitly listed toolsets
 			for _, toolName := range cfg.Tools {
-				ts, ok := r.toolsets[toolName]
-				if !ok {
-					return fmt.Errorf("agent %q: tool %q not found", name, toolName)
+				ts, err := r.resolveToolset(toolName)
+				if err != nil {
+					return fmt.Errorf("agent %q: %w", name, err)
 				}
 				agentToolsets = append(agentToolsets, ts)
 			}
@@ -609,6 +611,53 @@ func (r *Runtime) buildAgents() error {
 	}
 
 	return nil
+}
+
+// resolveToolset finds a toolset by name, or implicitly via MCP.
+func (r *Runtime) resolveToolset(toolName string) (tool.Toolset, error) {
+	if ts, ok := r.toolsets[toolName]; ok {
+		return ts, nil
+	}
+
+	// Try implicit MCP tools
+	// Sort toolsets for deterministic resolution order
+	var toolsetNames []string
+	for name, ts := range r.toolsets {
+		if _, ok := ts.(*mcptoolset.Toolset); ok {
+			toolsetNames = append(toolsetNames, name)
+		}
+	}
+	sort.Strings(toolsetNames)
+
+	for _, name := range toolsetNames {
+		ts := r.toolsets[name]
+		if mcpTS, ok := ts.(*mcptoolset.Toolset); ok {
+			// Check config for this toolset
+			toolCfg := r.cfg.Tools[mcpTS.Name()]
+			if toolCfg == nil || toolCfg.Type != config.ToolTypeMCP {
+				continue
+			}
+
+			allowed := false
+			if len(toolCfg.Filter) > 0 {
+				for _, allowedTool := range toolCfg.Filter {
+					if allowedTool == toolName {
+						allowed = true
+						break
+					}
+				}
+			} else {
+				// No filter = promiscuous (allows any tool)
+				allowed = true
+			}
+
+			if allowed {
+				return mcpTS.WithFilter([]string{toolName}), nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("tool %q not found", toolName)
 }
 
 // isWorkflowAgentType returns true if the type is a workflow agent type.

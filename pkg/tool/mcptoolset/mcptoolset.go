@@ -144,6 +144,46 @@ func (t *Toolset) Tools(ctx agent.ReadonlyContext) ([]tool.Tool, error) {
 	return t.tools, nil
 }
 
+// WithFilter returns a new toolset that wraps this one with a specific filter.
+// The returned toolset shares the underlying connection.
+func (t *Toolset) WithFilter(filter []string) tool.Toolset {
+	filterSet := make(map[string]bool, len(filter))
+	for _, name := range filter {
+		filterSet[name] = true
+	}
+
+	return &filteredToolset{
+		parent:    t,
+		filterSet: filterSet,
+	}
+}
+
+// filteredToolset wraps a Toolset with a strict filter.
+type filteredToolset struct {
+	parent    *Toolset
+	filterSet map[string]bool
+}
+
+func (f *filteredToolset) Name() string {
+	return f.parent.Name()
+}
+
+func (f *filteredToolset) Tools(ctx agent.ReadonlyContext) ([]tool.Tool, error) {
+	tools, err := f.parent.Tools(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var filtered []tool.Tool
+	for _, t := range tools {
+		if f.filterSet[t.Name()] {
+			filtered = append(filtered, t)
+		}
+	}
+
+	return filtered, nil
+}
+
 // connect establishes the MCP connection.
 func (t *Toolset) connect(ctx context.Context) error {
 	// Use different connection strategies based on transport

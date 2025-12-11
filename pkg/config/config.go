@@ -316,7 +316,39 @@ func (c *Config) validateReferences() error {
 
 		// Check tool references
 		for _, toolName := range agent.Tools {
-			if _, ok := c.Tools[toolName]; !ok {
+			if _, ok := c.Tools[toolName]; ok {
+				// Tool is explicitly defined
+				continue
+			}
+
+			// Check if provided by an MCP toolset
+			found := false
+			hasPromiscuousMCP := false
+
+			for _, toolCfg := range c.Tools {
+				if toolCfg == nil || toolCfg.Type != ToolTypeMCP {
+					continue
+				}
+
+				if len(toolCfg.Filter) > 0 {
+					// Check if allowed by filter
+					for _, allowedTool := range toolCfg.Filter {
+						if allowedTool == toolName {
+							found = true
+							break
+						}
+					}
+				} else {
+					// No filter = promiscuous MCP server (allows any tool)
+					hasPromiscuousMCP = true
+				}
+
+				if found {
+					break
+				}
+			}
+
+			if !found && !hasPromiscuousMCP {
 				errs = append(errs, fmt.Sprintf("agent %q references undefined tool %q", agentName, toolName))
 			}
 		}
