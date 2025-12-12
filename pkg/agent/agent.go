@@ -226,10 +226,6 @@ func (a *baseAgent) Run(ctx InvocationContext) iter.Seq2[*Event, error] {
 	}
 }
 
-func (a *baseAgent) internal() *baseAgent {
-	return a
-}
-
 func (a *baseAgent) runBeforeCallbacks(ctx InvocationContext) (*Event, error) {
 	cbCtx := newCallbackContext(ctx)
 

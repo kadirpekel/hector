@@ -99,7 +99,7 @@ func TestAgentVisibility(t *testing.T) {
 
 		// Case B: With Auth - Should see PUBLIC and INTERNAL
 		body = checkRequest(t, "GET", "/agents", "valid", 200)
-		json.Unmarshal(body, &resp)
+		_ = json.Unmarshal(body, &resp)
 		agents = resp["agents"].([]interface{})
 		found = make(map[string]bool)
 		for _, a := range agents {
