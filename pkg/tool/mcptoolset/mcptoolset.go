@@ -213,7 +213,7 @@ func (t *Toolset) connectStdio(ctx context.Context) error {
 	initReq := mcp.InitializeRequest{}
 	initReq.Params.ClientInfo = mcp.Implementation{
 		Name:    "hector",
-		Version: "2.0.0",
+		Version: "2.0.0-alpha",
 	}
 	initReq.Params.ProtocolVersion = "2024-11-05"
 
@@ -275,7 +275,7 @@ func (t *Toolset) connectHTTP(ctx context.Context) error {
 		"protocolVersion": "2024-11-05",
 		"clientInfo": map[string]any{
 			"name":    "hector",
-			"version": "2.0.0",
+			"version": "2.0.0-alpha",
 		},
 		"capabilities": map[string]any{},
 	})

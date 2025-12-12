@@ -225,7 +225,7 @@ func (s *HTTPServer) buildAgentCard(name string, cfg *config.AgentConfig, url st
 	// Version handling
 	version := s.appCfg.Version
 	if version == "" {
-		version = "2.0.0"
+		version = "2.0.0-alpha"
 	}
 
 	card := &a2a.AgentCard{
