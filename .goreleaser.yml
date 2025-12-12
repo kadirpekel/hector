@@ -5,6 +5,10 @@ version: 2
 
 project_name: hector
 
+before:
+  hooks:
+    - go generate ./pkg/server
+
 builds:
   - id: hector
     main: ./cmd/hector
@@ -30,7 +34,7 @@ archives:
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
-      - LICENSE.md
+      - LICENSE
       - configs/*.yaml
       - docs/*.md
 
