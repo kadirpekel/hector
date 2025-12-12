@@ -108,8 +108,15 @@ fmt:
 	@echo "Formatting code..."
 	go fmt ./...
 
+# Ensure static assets exist for go vet
+prepare-assets:
+	@mkdir -p pkg/server/static
+	@if [ ! -f pkg/server/static/index.html ]; then \
+		echo "<!-- placeholder for go vet -->" > pkg/server/static/index.html; \
+	fi
+
 # Run go vet
-vet:
+vet: prepare-assets
 	@echo "Running go vet..."
 	go vet ./pkg/... ./cmd/...
 
