@@ -494,6 +494,17 @@ func joinStrings(parts []string, sep string) string {
 	return result
 }
 
+// isWorkflowAgent returns true if the agent type is a workflow orchestrator
+// that doesn't need its own LLM (sequential, parallel, loop).
+func isWorkflowAgent(agentType string) bool {
+	switch agentType {
+	case "sequential", "parallel", "loop":
+		return true
+	default:
+		return false
+	}
+}
+
 // SetDefaults applies default values.
 func (c *AgentConfig) SetDefaults(defaults *DefaultsConfig) {
 	// Apply global defaults
@@ -503,8 +514,9 @@ func (c *AgentConfig) SetDefaults(defaults *DefaultsConfig) {
 		}
 	}
 
-	// If still no LLM, use "default"
-	if c.LLM == "" {
+	// If still no LLM, use "default" (but only for agent types that need an LLM)
+	// Workflow agents (sequential, parallel, loop) don't need an LLM
+	if c.LLM == "" && !isWorkflowAgent(c.Type) {
 		c.LLM = "default"
 	}
 

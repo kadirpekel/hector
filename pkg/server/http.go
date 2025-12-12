@@ -793,15 +793,33 @@ func (s *HTTPServer) handleConfigEndpoint(w http.ResponseWriter, r *http.Request
 
 	switch r.Method {
 	case http.MethodGet:
-		// Read current config file
+		// Try to read config file first
 		data, err := os.ReadFile(configPath)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(w).Encode(map[string]string{
-				"error": "Failed to read config file: " + err.Error(),
-			})
-			return
+			// File doesn't exist (zero-config mode) - serialize current config
+			if os.IsNotExist(err) {
+				s.mu.RLock()
+				currentCfg := s.appCfg
+				s.mu.RUnlock()
+
+				data, err = yaml.Marshal(currentCfg)
+				if err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusInternalServerError)
+					_ = json.NewEncoder(w).Encode(map[string]string{
+						"error": "Failed to serialize config: " + err.Error(),
+					})
+					return
+				}
+			} else {
+				// Other error reading file
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error": "Failed to read config file: " + err.Error(),
+				})
+				return
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/yaml")

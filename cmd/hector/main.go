@@ -644,6 +644,12 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+
+		// Validate studio mode requires config file
+		if err := ValidateStudioMode(os.Args); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	}
 
 	_ = config.LoadDotEnv()

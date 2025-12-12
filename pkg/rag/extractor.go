@@ -87,10 +87,13 @@ func (r *ExtractorRegistry) Register(extractor ContentExtractor) {
 // Adapts the document-based interface for store.go compatibility.
 func (r *ExtractorRegistry) Extract(ctx context.Context, doc Document) (*ExtractedContent, error) {
 	mimeType := doc.MimeType
-	path := doc.SourcePath
+	path := doc.ID // Use absolute path (ID), not relative path (SourcePath)
 
-	// If we have raw content, use it directly (for SQL/API sources)
-	if doc.Content != "" && !isFilePath(path) {
+	// Optimization: If content is pre-loaded AND only basic text extraction is available,
+	// use it directly. This avoids redundant file I/O for simple text files.
+	// However, if specialized extractors exist (MCP parsers for PDFs/DOCX),
+	// let them process the file to enable proper parsing and path remapping.
+	if doc.Content != "" && r.hasOnlyBasicExtractors(path, mimeType) {
 		return &ExtractedContent{
 			Content:       doc.Content,
 			Title:         doc.Title,
@@ -99,7 +102,24 @@ func (r *ExtractorRegistry) Extract(ctx context.Context, doc Document) (*Extract
 		}, nil
 	}
 
+	// Otherwise, extract from file using the extractor pipeline
+	// This handles MCP parsers (Docling), binary extractors, etc.
 	return r.ExtractContent(ctx, path, mimeType, doc.Size)
+}
+
+// hasOnlyBasicExtractors checks if only low-priority extractors (like TextExtractor)
+// are available for this file. Returns true if no specialized extractors exist.
+func (r *ExtractorRegistry) hasOnlyBasicExtractors(path string, mimeType string) bool {
+	const textExtractorPriority = 1 // TextExtractor.Priority()
+
+	for _, extractor := range r.extractors {
+		if extractor.CanExtract(path, mimeType) && extractor.Priority() > textExtractorPriority {
+			// Found a specialized extractor (MCP, binary parser, etc.)
+			return false
+		}
+	}
+	// Only basic extractors available
+	return true
 }
 
 // ExtractContent tries to extract content using the best available extractor.

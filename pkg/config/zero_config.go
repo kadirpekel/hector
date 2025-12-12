@@ -392,9 +392,19 @@ func expandDocsFolder(cfg *Config, agentConfig *AgentConfig, opts ZeroConfig) {
 	if cfg.Embedders == nil {
 		cfg.Embedders = make(map[string]*EmbedderConfig)
 	}
+
+	// Get API key for embedder provider
+	embedderAPIKey := ""
+	if embedderProvider == "openai" {
+		embedderAPIKey = os.Getenv("OPENAI_API_KEY")
+	} else if embedderProvider == "cohere" {
+		embedderAPIKey = os.Getenv("COHERE_API_KEY")
+	}
+
 	cfg.Embedders["_rag_embedder"] = &EmbedderConfig{
 		Provider: embedderProvider,
 		Model:    embedderModel,
+		APIKey:   embedderAPIKey,
 	}
 
 	// Create chromem vector store (embedded, zero external deps)
@@ -455,32 +465,9 @@ func expandDocsFolder(cfg *Config, agentConfig *AgentConfig, opts ZeroConfig) {
 	cfg.DocumentStores["_rag_docs"] = docStoreConfig
 
 	// Assign document store to agent
+	// Note: The runtime will automatically create a search tool for agents with document stores
 	ragDocs := []string{"_rag_docs"}
 	agentConfig.DocumentStores = &ragDocs
-
-	// Auto-add search tool if not already present
-	if cfg.Tools == nil {
-		cfg.Tools = make(map[string]*ToolConfig)
-	}
-	if _, exists := cfg.Tools["search"]; !exists {
-		cfg.Tools["search"] = &ToolConfig{
-			Type:            ToolTypeFunction,
-			Handler:         "search",
-			RequireApproval: BoolPtr(false), // Search is read-only, no approval needed
-		}
-	}
-
-	// Add search tool to agent if not already present
-	hasSearchTool := false
-	for _, t := range agentConfig.Tools {
-		if t == "search" {
-			hasSearchTool = true
-			break
-		}
-	}
-	if !hasSearchTool {
-		agentConfig.Tools = append(agentConfig.Tools, "search")
-	}
 }
 
 // detectEmbedderModel auto-detects the best embedder model based on LLM provider.

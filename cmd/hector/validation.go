@@ -166,6 +166,49 @@ func buildMutualExclusivityError(flags []string) error {
 	return fmt.Errorf("%s", sb.String())
 }
 
+// ValidateStudioMode checks if --studio is used correctly (requires --config).
+// Studio mode is for configuration editing and requires an explicit config file.
+func ValidateStudioMode(args []string) error {
+	hasStudio := false
+	hasConfig := false
+
+	for _, arg := range args {
+		// Check for --studio flag
+		if arg == "--studio" || strings.HasPrefix(arg, "--studio=") {
+			hasStudio = true
+		}
+
+		// Check for --config or -c
+		if arg == "--config" || arg == "-c" ||
+			strings.HasPrefix(arg, "--config=") || strings.HasPrefix(arg, "-c=") {
+			hasConfig = true
+		}
+	}
+
+	// Studio requires config file
+	if hasStudio && !hasConfig {
+		var sb strings.Builder
+		sb.WriteString("\nERROR: Studio mode requires a configuration file\n\n")
+		sb.WriteString("Studio mode provides a UI for editing your configuration.\n")
+		sb.WriteString("It requires an explicit config file to edit.\n\n")
+		sb.WriteString("Solutions:\n\n")
+		sb.WriteString("  1. Use an existing config file:\n")
+		sb.WriteString("     hector serve --config agents.yaml --studio\n\n")
+		sb.WriteString("  2. Export your current setup to a file first:\n")
+		sb.WriteString("     hector serve --docs-folder test-docs --print-config > agents.yaml\n")
+		sb.WriteString("     hector serve --config agents.yaml --studio\n\n")
+		sb.WriteString("  3. Just want to chat with agents? Skip --studio:\n")
+		sb.WriteString("     hector serve --docs-folder test-docs\n")
+		sb.WriteString("     # Opens chat UI at http://localhost:8080\n\n")
+		sb.WriteString("INFO: Chat UI is always available (no --studio needed)\n")
+		sb.WriteString("      Studio mode adds config editing capabilities\n\n")
+
+		return fmt.Errorf("%s", sb.String())
+	}
+
+	return nil
+}
+
 // ShouldSkipValidation checks if the command should skip mutual exclusivity validation.
 // Ported from legacy pkg/cli/mutual_exclusivity.go.
 // pkg adaptation: Updated skip commands for pkg command structure.

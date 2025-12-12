@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/kadirpekel/hector/pkg/config/provider"
 	"github.com/mitchellh/mapstructure"
@@ -158,6 +160,35 @@ func parseBytes(data []byte) (map[string]any, error) {
 	return result, nil
 }
 
+// stringToDurationHook is a DecodeHookFunc that converts strings to custom Duration type.
+// Handles both "1s" format and integer nanoseconds.
+func stringToDurationHook() mapstructure.DecodeHookFunc {
+	return func(from, to reflect.Type, data any) (any, error) {
+		// Check if target type is Duration (which is based on time.Duration)
+		if to.Kind() == reflect.Int64 && to.Name() == "Duration" {
+			// Handle string input (e.g., "1s", "30s")
+			if from.Kind() == reflect.String {
+				str := data.(string)
+				parsed, err := time.ParseDuration(str)
+				if err != nil {
+					return nil, fmt.Errorf("invalid duration %q: %w", str, err)
+				}
+				return Duration(parsed), nil
+			}
+
+			// Handle integer input (nanoseconds)
+			if from.Kind() == reflect.Int64 {
+				return Duration(data.(int64)), nil
+			}
+			if from.Kind() == reflect.Int {
+				return Duration(int64(data.(int))), nil
+			}
+		}
+
+		return data, nil
+	}
+}
+
 // decodeConfig decodes a map into a Config struct using mapstructure.
 func decodeConfig(input map[string]any, output *Config) error {
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
@@ -165,7 +196,8 @@ func decodeConfig(input map[string]any, output *Config) error {
 		TagName:          "yaml",
 		WeaklyTypedInput: true,
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
-			mapstructure.StringToTimeDurationHookFunc(),
+			stringToDurationHook(),                      // Custom Duration type
+			mapstructure.StringToTimeDurationHookFunc(), // Standard time.Duration
 			mapstructure.StringToSliceHookFunc(","),
 		),
 	})
