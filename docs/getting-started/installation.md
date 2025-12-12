@@ -1,205 +1,116 @@
----
-title: Installation
-description: Install Hector on macOS, Linux, Windows, or Docker
----
-
 # Installation
 
-Get Hector installed and ready to use.
+Hector is distributed as a single binary with no runtime dependencies. Choose your preferred installation method below.
 
-## Prerequisites
+## Requirements
 
-- **API Key** from an LLM provider ([OpenAI](https://platform.openai.com/api-keys), [Anthropic](https://console.anthropic.com/), or [Gemini](https://aistudio.google.com/app/apikey))
-- **Go 1.24+** (only if building from source)
+- Go 1.24+ (for `go install` method only)
+- Linux, macOS, or Windows (amd64 or arm64)
 
----
+## Go Install (Recommended)
 
-## Choose Your Installation Method
-
-### Binary Releases (Recommended)
-
-Pre-built binaries for all major platforms:
-
-=== "macOS (Apple Silicon)"
-    ```bash
-    curl -L https://github.com/kadirpekel/hector/releases/latest/download/hector-darwin-arm64 -o hector
-    chmod +x hector
-    sudo mv hector /usr/local/bin/
-    ```
-
-=== "macOS (Intel)"
-    ```bash
-    curl -L https://github.com/kadirpekel/hector/releases/latest/download/hector-darwin-amd64 -o hector
-    chmod +x hector
-    sudo mv hector /usr/local/bin/
-    ```
-
-=== "Linux (x64)"
-    ```bash
-    curl -L https://github.com/kadirpekel/hector/releases/latest/download/hector-linux-amd64 -o hector
-    chmod +x hector
-    sudo mv hector /usr/local/bin/
-    ```
-
-=== "Windows (x64)"
-    ```powershell
-    curl -L https://github.com/kadirpekel/hector/releases/latest/download/hector-windows-amd64.exe -o hector.exe
-    # Move to a directory in your PATH
-    ```
-
-### Go Install
-
-Install using Go package manager:
+Install the latest version directly from source:
 
 ```bash
 go install github.com/kadirpekel/hector/cmd/hector@latest
 ```
 
-!!! info
-    Requires Go 1.24+. Binary installs to `$GOPATH/bin` (typically `~/go/bin`).
+Verify installation:
 
-### Build from Source
+```bash
+hector version
+```
+
+## Binary Download
+
+Download pre-built binaries from [GitHub Releases](https://github.com/kadirpekel/hector/releases):
+
+### Linux (amd64)
+
+```bash
+curl -LO https://github.com/kadirpekel/hector/releases/latest/download/hector_linux_amd64.tar.gz
+tar -xzf hector_linux_amd64.tar.gz
+sudo mv hector /usr/local/bin/
+```
+
+### Linux (arm64)
+
+```bash
+curl -LO https://github.com/kadirpekel/hector/releases/latest/download/hector_linux_arm64.tar.gz
+tar -xzf hector_linux_arm64.tar.gz
+sudo mv hector /usr/local/bin/
+```
+
+### macOS (Intel)
+
+```bash
+curl -LO https://github.com/kadirpekel/hector/releases/latest/download/hector_darwin_amd64.tar.gz
+tar -xzf hector_darwin_amd64.tar.gz
+sudo mv hector /usr/local/bin/
+```
+
+### macOS (Apple Silicon)
+
+```bash
+curl -LO https://github.com/kadirpekel/hector/releases/latest/download/hector_darwin_arm64.tar.gz
+tar -xzf hector_darwin_arm64.tar.gz
+sudo mv hector /usr/local/bin/
+```
+
+### Windows
+
+Download `hector_windows_amd64.zip` from the [releases page](https://github.com/kadirpekel/hector/releases), extract it, and add the directory to your PATH.
+
+## Docker
+
+Run Hector in a container:
+
+```bash
+docker pull ghcr.io/kadirpekel/hector:latest
+docker run -p 8080:8080 -e OPENAI_API_KEY=your-key ghcr.io/kadirpekel/hector:latest
+```
+
+Or build locally:
+
+```bash
+git clone https://github.com/kadirpekel/hector.git
+cd hector
+docker build -t hector .
+docker run -p 8080:8080 -e OPENAI_API_KEY=your-key hector
+```
+
+## Build from Source
 
 Clone and build:
 
 ```bash
 git clone https://github.com/kadirpekel/hector.git
 cd hector
-go build -o hector ./cmd/hector
-sudo mv hector /usr/local/bin/
+make build
+./bin/hector version
 ```
 
-### Docker
-
-Run in a container:
+Install to system:
 
 ```bash
-docker pull kadirpekel/hector:latest
-
-docker run -d \
-  --name hector \
-  -p 8080:8080 \
-  -v $(pwd)/config.yaml:/app/config.yaml \
-  -e OPENAI_API_KEY="your-api-key" \
-  kadirpekel/hector:latest \
-  serve --config /app/config.yaml
+make install
 ```
-
-**Docker Compose:**
-
-```yaml
-version: '3.8'
-services:
-  hector:
-    image: kadirpekel/hector:latest
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./config.yaml:/app/config.yaml
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    command: serve --config /app/config.yaml
-    restart: unless-stopped
-```
-
-```bash
-docker-compose up -d
-```
-
----
 
 ## Verify Installation
 
-Check that Hector is installed:
+Check that Hector is correctly installed:
 
 ```bash
-hector version
+$ hector version
+Hector version dev
 ```
 
-You should see output like:
-```
-Hector version 0.x.x
-```
-
----
-
-## Set Up API Key
-
-Hector needs an API key to communicate with LLM providers.
-
-**Option 1: Environment Variable (Recommended)**
+View available commands:
 
 ```bash
-# OpenAI
-export OPENAI_API_KEY="sk-..."
-
-# Anthropic
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Google Gemini
-export GEMINI_API_KEY="AI..."
+$ hector --help
 ```
-
-**Option 2: .env File**
-
-```bash
-cat > .env << EOF
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-GEMINI_API_KEY=AI...
-EOF
-```
-
----
-
-## Quick Test
-
-Test Hector with zero-config mode (no configuration file needed):
-
-```bash
-export OPENAI_API_KEY="sk-..."
-hector call "What is the capital of France?"
-```
-
-You should see a response from the agent!
-
----
 
 ## Next Steps
 
-- **[Quick Start](quick-start.md)** - Run your first agent and explore basic features
-- **[Core Concepts](../core-concepts/overview.md)** - Learn how Hector agents work
-- **[Configuration Reference](../reference/configuration.md)** - Full configuration options
-
----
-
-## Platform-Specific Notes
-
-### macOS
-
-If you see a security warning when running Hector:
-
-```bash
-# Allow the binary to run
-xattr -d com.apple.quarantine /usr/local/bin/hector
-```
-
-### Linux
-
-Ensure `/usr/local/bin` is in your PATH:
-
-```bash
-echo $PATH | grep -q "/usr/local/bin" || echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-### Windows
-
-Add Hector to your PATH in PowerShell:
-
-```powershell
-$env:Path += ";C:\path\to\hector"
-# Make it permanent
-[System.Environment]::SetEnvironmentVariable("Path", $env:Path, [System.EnvironmentVariableTarget]::User)
-```
-
+Continue to [Quick Start](quick-start.md) to run your first agent.

@@ -8,7 +8,7 @@
 ```
 [![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
-[![A2A Protocol](https://img.shields.io/badge/A2A%20v0.3.0-100%25%20compliant-brightgreen.svg)](https://gohector.dev/reference/a2a-protocol/)
+[![A2A Protocol](https://img.shields.io/badge/A2A%20v0.3.0-100%25%20compliant-brightgreen.svg)](https://a2a-protocol.org/latest/community/#a2a-integrations)
 [![Documentation](https://img.shields.io/badge/docs-gohector.dev-blue.svg)](https://gohector.dev)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
 
@@ -16,9 +16,15 @@
 
 Deploy observable, secure, and scalable AI agents with zero-config or YAML, plus a programmatic API.
 
-**[📚 Documentation](https://gohector.dev)** | [CLI Reference](https://gohector.dev/reference/cli/) | [Config Reference](https://gohector.dev/reference/configuration/)
+**[📚 Documentation](https://gohector.dev)** | [CLI Reference](https://gohector.dev/reference/cli/) | [Config Reference](https://gohector.dev/concepts/configuration/)
 
 ---
+
+## Studio Mode
+
+Visual agent builder and debugger.
+
+![Studio Mode](ss.png)
 
 ## Quick Start (zero-config)
 
@@ -26,7 +32,7 @@ Deploy observable, secure, and scalable AI agents with zero-config or YAML, plus
 go install github.com/kadirpekel/hector/cmd/hector@latest
 export OPENAI_API_KEY="sk-..."
 
-hector serve --model gpt-4o --tools
+hector serve --model gpt-4o --tools --studio
 ```
 
 RAG in one command (with MCP parsing optional):
@@ -56,7 +62,7 @@ server:
   port: 8080
 EOF
 
-hector serve --config config.yaml
+hector serve --config config.yaml --studio
 ```
 
 ## Highlights
@@ -70,10 +76,10 @@ hector serve --config config.yaml
 - **A2A-native**: Uses a2a-go types and JSON-RPC/gRPC endpoints.
 
 ## Documentation
-- [Getting Started](https://gohector.dev/getting-started/)
-- [Configuration Reference](https://gohector.dev/reference/configuration/)
+- [Getting Started](https://gohector.dev/getting-started/quick-start/)
+- [Configuration Reference](https://gohector.dev/concepts/configuration/)
 - [CLI Reference](https://gohector.dev/reference/cli/)
-- [Core Concepts](https://gohector.dev/core-concepts/)
+- [Core Concepts](https://gohector.dev/concepts/architecture/)
 
 ## License
 

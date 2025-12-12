@@ -1,207 +1,305 @@
----
-title: Quick Start
-description: Get your first Hector agent running in 5 minutes
----
-
 # Quick Start
 
-Get your first agent running in under 5 minutes.
+Get an agent running in under 5 minutes using either zero-config mode (CLI flags) or a configuration file.
 
-## Prerequisites
+## Zero-Config Mode
 
-✅ Hector installed ([Installation Guide](installation.md))  
-✅ API key from [OpenAI](https://platform.openai.com/api-keys), [Anthropic](https://console.anthropic.com/), or [Gemini](https://aistudio.google.com/app/apikey)
+Start an agent with a single command—no configuration file needed.
 
----
-
-## Your First Agent (Zero-Config Mode)
-
-The fastest way to start—no configuration file needed!
-
-### 1. Set Your API Key
+### Basic Agent
 
 ```bash
 export OPENAI_API_KEY="sk-..."
+hector serve --model gpt-4o
 ```
 
-### 2. Run Your First Query
+The server starts at `http://localhost:8080`. Test it:
 
 ```bash
-hector call "What is the capital of France?"
+curl -X POST http://localhost:8080/agents/assistant/message:send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": {
+      "parts": [{"text": "Hello!"}],
+      "role": "user"
+    }
+  }'
 ```
 
-You should see:
-```
-The capital of France is Paris.
-```
+### With Tools
 
-**🎉 Congratulations! Your first agent is working.**
-
-### 3. Try Interactive Chat
+Enable built-in tools:
 
 ```bash
-hector chat
+hector serve --model gpt-4o --tools
 ```
 
-Type your messages and press Enter. Type `exit` or press Ctrl+C to quit.
-
-### 4. Experiment with Options
+Or specific tools:
 
 ```bash
-# Use a specific model
-hector call "Write a haiku about coding" --model gpt-4o
-
-# Override the agent's role
-hector call "Analyze this system" --role "You are a senior security auditor"
-
-# Add supplementary instructions
-hector call "Write unit tests" --instruction "Use pytest and aim for 90% coverage"
-
-# Enable built-in tools
-hector call "List files in the current directory" --tools
-
-# Combine options for fine-grained control
-hector call "analyze code" --tools --role "You are a code reviewer" --instruction "Focus on performance"
-
-# Use a different provider
-export ANTHROPIC_API_KEY="sk-ant-..."
-hector call "Explain async/await" --provider anthropic
+hector serve --model gpt-4o --tools read_file,write_file,execute_command
 ```
 
----
+### With RAG
 
-## Use a Configuration File
+Enable document search from a folder:
 
-For more control, create a YAML configuration file.
+```bash
+hector serve \
+  --model gpt-4o \
+  --docs-folder ./documents \
+  --tools
+```
 
-### 1. Create `config.yaml`
+Hector automatically:
+- Creates an embedded vector database (chromem)
+- Detects and configures an embedder
+- Indexes documents
+- Adds search tool to your agent
+- Watches for file changes and re-indexes
+
+### With MCP
+
+Connect to an MCP server for external tools:
+
+```bash
+hector serve \
+  --model gpt-4o \
+  --mcp-url http://localhost:8000/mcp
+```
+
+### With Persistence
+
+Enable task and session persistence with SQLite:
+
+```bash
+hector serve \
+  --model gpt-4o \
+  --storage sqlite
+```
+
+Checkpoint/recovery is automatically enabled. Database is stored in `.hector/hector.db`.
+
+For PostgreSQL or MySQL:
+
+```bash
+# PostgreSQL
+hector serve \
+  --model gpt-4o \
+  --storage postgres \
+  --storage-db "host=localhost port=5432 user=hector password=secret dbname=hector"
+
+# MySQL
+hector serve \
+  --model gpt-4o \
+  --storage mysql \
+  --storage-db "hector:secret@tcp(localhost:3306)/hector"
+```
+
+### With Observability
+
+Enable metrics and tracing:
+
+```bash
+hector serve \
+  --model gpt-4o \
+  --observe
+```
+
+Access:
+- Metrics: `http://localhost:8080/metrics`
+- Traces: sent to OTLP endpoint `localhost:4317`
+
+### Full Example
+
+Combine all features:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+
+hector serve \
+  --model gpt-4o \
+  --tools \
+  --docs-folder ./documents \
+  --storage sqlite \
+  --observe
+```
+
+## Config File Mode
+
+Create a configuration file for repeatable deployments.
+
+### Minimal Config
+
+Create `config.yaml`:
 
 ```yaml
+version: "2"
+
 llms:
-  gpt-4o:
-    type: "openai"
-    model: "gpt-4o-mini"
-    api_key: "${OPENAI_API_KEY}"
-    temperature: 0.7
+  default:
+    provider: openai
+    model: gpt-4o
+    api_key: ${OPENAI_API_KEY}
 
 agents:
-  coder:
-    name: "Coding Assistant"
-    llm: "gpt-4o"
-    prompt:
-      system_prompt: |
-        You are an expert software engineer. Provide clear,
-        concise code examples with explanations. Always test
-        your code and consider edge cases.
-    tools: ["execute_command", "write_file", "search_replace", "search"]
-    # Optional: Advanced search configuration
-    # search:
-    #   search_mode: "hybrid"  # Hybrid search for better results
-    #   hybrid_alpha: 0.6
-    #   rerank:
-    #     enabled: true
-    #     llm: "gpt-4o-mini"
+  assistant:
+    llm: default
+
+server:
+  port: 8080
 ```
 
-### 2. Use Your Configured Agent
+Start the server:
 
 ```bash
-hector call "How do I read a CSV file in Python?" --agent coder --config config.yaml
-```
-
----
-
-## Run a Server
-
-Host agents as a persistent service.
-
-### 1. Start the Server
-
-```bash
-# With zero-config
 export OPENAI_API_KEY="sk-..."
-hector serve
-
-# With configuration file
 hector serve --config config.yaml
 ```
 
-You'll see:
-```
-Hector server listening on :8080
-Registered agents: assistant (or your configured agent names)
+### Complete Config
+
+Create `config.yaml`:
+
+```yaml
+version: "2"
+
+llms:
+  default:
+    provider: openai
+    model: gpt-4o
+    api_key: ${OPENAI_API_KEY}
+    temperature: 0.7
+    max_tokens: 4096
+
+tools:
+  mcp:
+    type: mcp
+    url: ${MCP_URL}
+
+agents:
+  assistant:
+    name: Assistant
+    description: A helpful AI assistant
+    llm: default
+    tools: [mcp, search]
+    streaming: true
+    instruction: |
+      You are a helpful AI assistant.
+      Use available tools when needed.
+      Be concise and accurate.
+
+server:
+  port: 8080
+  cors:
+    allowed_origins: ["*"]
 ```
 
-### 2. Connect from Another Terminal
+Start:
 
 ```bash
-# Get agent information
-hector info assistant --url http://localhost:8080
-
-# Call an agent
-hector call "Explain recursion" --agent assistant --url http://localhost:8080
-
-# Interactive chat
-hector chat --agent assistant --url http://localhost:8080
+export OPENAI_API_KEY="sk-..."
+export MCP_URL="http://localhost:8000/mcp"
+hector serve --config config.yaml
 ```
 
----
+## Testing Your Agent
 
-## Connect to a Remote Server
+### Web UI
 
-Use Hector as a client to connect to any A2A-compliant server (v0.3.0 or compatible).
+**Note:** The Web UI is only available when running in **Studio Mode** (`--studio`).
+
+Open `http://localhost:8080` in your browser for an active visual dashboard.
+
+### Agent Discovery
+
+List available agents:
 
 ```bash
-# Connect to remote server
-hector call "Hello" --agent assistant --url http://remote:8080
-
-# With authentication
-hector call "Hello" --agent assistant --url http://remote:8080 --token "your-jwt-token"
+curl http://localhost:8080/agents
 ```
 
----
+Get agent card:
 
-## Common Commands
+```bash
+curl http://localhost:8080/.well-known/agent-card.json
+```
 
-| Command | Purpose | Example |
-|---------|---------|---------|
-| `hector version` | Show version | `hector version` |
-| `hector call` | Send a single message | `hector call "Hello"` (zero-config) |
-| `hector chat` | Interactive conversation | `hector chat` (zero-config) |
-| `hector serve` | Start server | `hector serve --config config.yaml` |
-| `hector info` | Get agent details | `hector info assistant --config config.yaml` |
+### Send Message
 
----
+```bash
+curl -X POST http://localhost:8080/agents/assistant/message:send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": {
+      "parts": [{"text": "What is the capital of France?"}],
+      "role": "user"
+    }
+  }'
+```
+
+### Streaming
+
+```bash
+curl -X POST http://localhost:8080/agents/assistant/message:stream \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{
+    "message": {
+      "parts": [{"text": "Tell me a story"}],
+      "role": "user"
+    }
+  }'
+```
+
+## Studio Mode
+
+Enable the config builder UI:
+
+```bash
+hector serve --model gpt-4o --studio
+```
+
+Access the studio at `http://localhost:8080`. Changes are saved to `.hector/config.yaml` and auto-reload.
+
+> [!CAUTION]
+> **Security Warning**: Studio Mode enables a full configuration editor and Web UI.
+> **DO NOT** enable this in production (`--studio`) unless it is strictly internal or protected by authentication.
+
+## Provider-Specific Examples
+
+### Anthropic
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+hector serve --provider anthropic --model claude-sonnet-4-20250514
+```
+
+### Google Gemini
+
+```bash
+export GEMINI_API_KEY="..."
+hector serve --provider gemini --model gemini-2.0-flash-exp
+```
+
+### Ollama (Local)
+
+```bash
+# Start Ollama first: ollama serve
+hector serve --provider ollama --model llama3.3
+```
+
+## Environment Variables
+
+Set API keys via environment:
+
+- `OPENAI_API_KEY` - OpenAI API key
+- `ANTHROPIC_API_KEY` - Anthropic API key
+- `GEMINI_API_KEY` - Google Gemini API key
+- `MCP_URL` - MCP server URL
 
 ## Next Steps
 
-Now that you have Hector running, learn more:
-
-- **[Core Concepts](../core-concepts/overview.md)** - Understand how agents work
-- **[Building a Coding Assistant](../blog/posts/building-a-coding-assistant.md)** - Complete tutorial with semantic search
-- **[Configuration Reference](../reference/configuration.md)** - All configuration options
-- **[CLI Reference](../reference/cli.md)** - All command-line options
-
----
-
-## Troubleshooting
-
-**Agent not responding?**
-
-- Check your API key is set: `echo $OPENAI_API_KEY`
-- Verify installation: `hector version`
-- Check network connectivity to LLM provider
-
-**"command not found: hector"**
-
-- Ensure `/usr/local/bin` is in your PATH
-- Or run from installation directory: `./hector call "Hello"`
-
-**Authentication errors?**
-
-- Verify API key is valid
-- Check for typos in environment variable
-- Ensure provider matches key (OpenAI, Anthropic, Gemini)
-
-For more help, see [CLI Reference](../reference/cli.md) or [Configuration Reference](../reference/configuration.md).
-
+- [Configuration Guide](../guides/configuration.md) - Learn configuration in depth
+- [Agents Guide](../guides/agents.md) - Configure advanced agent behavior
+- [Deployment Guide](../guides/deployment.md) - Deploy to production

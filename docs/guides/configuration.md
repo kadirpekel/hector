@@ -1,0 +1,530 @@
+# Configuration
+
+Hector offers two configuration modes: zero-config (CLI flags) and configuration file (YAML). Both approaches give you complete control over agents, tools, and infrastructure.
+
+## Configuration Modes
+
+### Zero-Config Mode
+
+Run Hector without a configuration file using CLI flags:
+
+```bash
+hector serve --model gpt-4o --tools --docs-folder ./docs
+```
+
+Zero-config mode:
+- Ideal for quick starts and development
+- All settings via command-line flags
+- Auto-generates configuration internally
+- Can be converted to file mode with `--studio`
+
+### Configuration File Mode
+
+Define configuration in YAML for repeatable deployments:
+
+```bash
+hector serve --config config.yaml
+```
+
+Configuration file mode:
+- Production-ready and version-controlled
+- Complete control over all settings
+- Supports hot reload with `--watch`
+- Required for advanced features
+
+## File Structure
+
+### Minimal Configuration
+
+```yaml
+version: "2"
+
+llms:
+  default:
+    provider: openai
+    model: gpt-4o
+    api_key: ${OPENAI_API_KEY}
+
+agents:
+  assistant:
+    llm: default
+
+server:
+  port: 8080
+```
+
+### Complete Structure
+
+```yaml
+version: "2"
+name: my-project
+description: Production agent deployment
+
+# Database connections
+databases:
+  main:
+    driver: postgres
+    host: localhost
+    port: 5432
+    database: hector
+    user: ${DB_USER}
+    password: ${DB_PASSWORD}
+
+# Vector stores for RAG
+vector_stores:
+  qdrant:
+    type: qdrant
+    host: localhost
+    port: 6334
+
+# LLM providers
+llms:
+  openai:
+    provider: openai
+    model: gpt-4o
+    api_key: ${OPENAI_API_KEY}
+    temperature: 0.7
+    max_tokens: 4096
+
+# Embedding providers
+embedders:
+  default:
+    provider: openai
+    model: text-embedding-3-small
+    api_key: ${OPENAI_API_KEY}
+
+# Tools
+tools:
+  mcp:
+    type: mcp
+    url: ${MCP_URL}
+
+  search:
+    type: function
+    handler: search
+    require_approval: false
+
+# Agents
+agents:
+  assistant:
+    name: Assistant
+    description: A helpful AI assistant
+    llm: openai
+    tools: [mcp, search]
+    streaming: true
+    instruction: |
+      You are a helpful AI assistant.
+      Use tools when appropriate.
+
+# Document stores for RAG
+document_stores:
+  docs:
+    source:
+      type: directory
+      path: ./documents
+      exclude: [.git, node_modules]
+    chunking:
+      strategy: simple
+      size: 1000
+      overlap: 200
+    vector_store: qdrant
+    embedder: default
+    watch: true
+
+# Server configuration
+server:
+  port: 8080
+  transport: http
+
+  tasks:
+    backend: sql
+    database: main
+
+  sessions:
+    backend: sql
+    database: main
+
+  checkpoint:
+    enabled: true
+    strategy: hybrid
+    after_tools: true
+    before_llm: true
+
+  cors:
+    allowed_origins: ["*"]
+
+  observability:
+    tracing:
+      enabled: true
+      exporter: otlp
+      endpoint: localhost:4317
+    metrics:
+      enabled: true
+```
+
+## Environment Variables
+
+Reference environment variables using `${VAR_NAME}` syntax:
+
+```yaml
+llms:
+  default:
+    api_key: ${OPENAI_API_KEY}
+    base_url: ${CUSTOM_BASE_URL}
+```
+
+Load variables from `.env` file:
+
+```bash
+# .env
+OPENAI_API_KEY=sk-...
+MCP_URL=http://localhost:8000/mcp
+```
+
+Hector automatically loads `.env` from:
+1. Current directory (`./.env`)
+2. Config file directory (`./.env` relative to config)
+3. Home directory (`~/.hector/.env`)
+
+## Configuration Validation
+
+Validate configuration before deployment:
+
+```bash
+hector validate --config config.yaml
+```
+
+Generate JSON Schema for IDE autocomplete:
+
+```bash
+hector schema > schema.json
+```
+
+Use in VSCode (`.vscode/settings.json`):
+
+```json
+{
+  "yaml.schemas": {
+    "./schema.json": "config.yaml"
+  }
+}
+```
+
+## Hot Reload
+
+Enable hot reload to update configuration without restarting:
+
+```bash
+hector serve --config config.yaml --watch
+```
+
+When the config file changes:
+- Configuration is reloaded
+- Runtime is updated
+- Agents are rebuilt
+- Server continues running
+- Active sessions are preserved
+
+Hot reload works for:
+- Agent configuration changes
+- Tool additions/removals
+- LLM parameter updates
+- Server settings (except port)
+
+## Studio Mode
+
+Enable the visual config builder:
+
+```bash
+hector serve --config config.yaml --studio
+```
+
+Or from zero-config:
+
+```bash
+hector serve --model gpt-4o --studio
+```
+
+Studio mode provides:
+- Web-based configuration editor
+- Real-time validation
+- Auto-save to file
+- Automatic reload on save
+
+Access at `http://localhost:8080` (restricted to studio mode only for UI).
+
+## Converting Between Modes
+
+### Zero-Config to File
+
+Start with zero-config in studio mode:
+
+```bash
+hector serve --model gpt-4o --tools --studio
+```
+
+Configuration is saved to `.hector/config.yaml`. Export it:
+
+```bash
+cp .hector/config.yaml config.yaml
+hector serve --config config.yaml
+```
+
+### File to Zero-Config
+
+Extract key settings from config file and use CLI flags:
+
+```bash
+# From config.yaml
+hector serve \
+  --provider openai \
+  --model gpt-4o \
+  --tools \
+  --storage sqlite
+```
+
+## Default Values
+
+Hector applies smart defaults when values are omitted:
+
+### LLM Defaults
+
+```yaml
+llms:
+  default:
+    provider: openai  # Required
+    model: gpt-4o     # Required
+    # Defaults:
+    temperature: 0.7
+    max_tokens: 4096
+    streaming: false
+```
+
+### Agent Defaults
+
+```yaml
+agents:
+  assistant:
+    llm: default  # Required
+    # Defaults:
+    name: assistant
+    streaming: false
+    tools: []
+```
+
+### Server Defaults
+
+```yaml
+server:
+  # Defaults:
+  port: 8080
+  transport: http
+  tasks:
+    backend: inmemory
+  sessions:
+    backend: inmemory
+```
+
+## Configuration Organization
+
+### Single File
+
+Simple deployments use one file:
+
+```yaml
+# config.yaml
+version: "2"
+llms: {...}
+agents: {...}
+```
+
+### Environment-Specific
+
+Separate configs per environment:
+
+```bash
+configs/
+├── development.yaml
+├── staging.yaml
+└── production.yaml
+```
+
+Deploy with:
+
+```bash
+hector serve --config configs/production.yaml
+```
+
+### Shared Configuration
+
+Use environment variables for environment-specific values:
+
+```yaml
+# config.yaml (shared)
+llms:
+  default:
+    provider: openai
+    model: ${LLM_MODEL}
+    api_key: ${OPENAI_API_KEY}
+
+server:
+  port: ${PORT}
+```
+
+```bash
+# .env.development
+LLM_MODEL=gpt-4o-mini
+PORT=8080
+
+# .env.production
+LLM_MODEL=gpt-4o
+PORT=8080
+```
+
+## Configuration Defaults
+
+Set global defaults for agents:
+
+```yaml
+defaults:
+  llm: default
+
+agents:
+  assistant:
+    # Inherits llm: default
+    tools: [search]
+
+  analyst:
+    # Inherits llm: default
+    tools: [search, write_file]
+```
+
+## Best Practices
+
+### Version Control
+
+Commit configuration files:
+
+```bash
+git add config.yaml
+git commit -m "Update agent configuration"
+```
+
+Never commit secrets—use environment variables:
+
+```yaml
+# ✅ Good
+api_key: ${OPENAI_API_KEY}
+
+# ❌ Bad
+api_key: sk-proj-abc123...
+```
+
+### Configuration Testing
+
+Test configuration changes locally before deploying:
+
+```bash
+# Validate
+hector validate --config config.yaml
+
+# Test locally
+hector serve --config config.yaml
+
+# Deploy
+kubectl apply -f deployment.yaml
+```
+
+### Minimal Configuration
+
+Only specify non-default values:
+
+```yaml
+# ✅ Concise
+llms:
+  default:
+    provider: openai
+    model: gpt-4o
+    api_key: ${OPENAI_API_KEY}
+
+# ❌ Verbose
+llms:
+  default:
+    provider: openai
+    model: gpt-4o
+    api_key: ${OPENAI_API_KEY}
+    temperature: 0.7      # default
+    max_tokens: 4096      # default
+    streaming: false      # default
+```
+
+### Documentation
+
+Document your configuration:
+
+```yaml
+version: "2"
+name: customer-support
+description: |
+  Customer support agent system with:
+  - RAG over documentation
+  - Ticket creation via MCP
+  - Persistent sessions
+
+llms:
+  # Production LLM for customer-facing responses
+  production:
+    provider: anthropic
+    model: claude-sonnet-4-20250514
+    api_key: ${ANTHROPIC_API_KEY}
+```
+
+## Common Patterns
+
+### Multi-Agent System
+
+```yaml
+llms:
+  fast:
+    provider: openai
+    model: gpt-4o-mini
+
+  powerful:
+    provider: anthropic
+    model: claude-sonnet-4-20250514
+    api_key: ${ANTHROPIC_API_KEY}
+
+agents:
+  router:
+    llm: fast
+    tools: [agent_call]
+    instruction: Route requests to specialized agents
+
+  specialist:
+    llm: powerful
+    tools: [search, write_file]
+    instruction: Handle complex queries with tools
+```
+
+### Development vs Production
+
+```yaml
+llms:
+  default:
+    provider: openai
+    model: ${LLM_MODEL}  # gpt-4o-mini (dev), gpt-4o (prod)
+    api_key: ${OPENAI_API_KEY}
+
+server:
+  observability:
+    tracing:
+      enabled: ${TRACING_ENABLED}  # false (dev), true (prod)
+      endpoint: ${OTLP_ENDPOINT}
+    metrics:
+      enabled: ${METRICS_ENABLED}  # false (dev), true (prod)
+```
+
+## Next Steps
+
+- [Agents Guide](agents.md) - Configure agent behavior
+- [Deployment Guide](deployment.md) - Deploy to production

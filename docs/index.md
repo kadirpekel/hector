@@ -48,6 +48,7 @@ is_homepage: true
       </p>
       <p>
         Agents communicate directly, forming federated networks where each agent maintains autonomy while collaborating seamlessly.
+        Hector is proudly listed as an <a href="https://a2a-protocol.org/latest/community/#a2a-integrations">A2A Compatible Framework</a>.
       </p>
     </div>
     <div class="story-visual">
@@ -394,23 +395,24 @@ is_homepage: true
   </div>
 </div>
 
-<!-- Distributed Configuration Story Section -->
+<!-- Studio Mode Story Section -->
 <div class="story-section">
   <div class="story-container">
     <div class="story-text">
-      <h2 class="story-title">Distributed Configuration</h2>
+      <h2 class="story-title">Visual Studio Mode</h2>
       <p>
-        Start simple with file-based configuration for development, then seamlessly scale to enterprise-grade distributed backends. Hector supports <strong>Consul</strong> for service mesh environments and <strong>ZooKeeper</strong> for big data infrastructure.
+        Develop with confidence using <strong>Hector Studio</strong>. A powerful visual interface that connects directly to your agent mesh, giving you a real-time X-ray view of your system.
       </p>
       <p>
-        Enable hot reload with <code>--config-watch</code> for zero-downtime configuration updates. Changes are detected reactively—no polling required. Configuration updates trigger graceful reloads, keeping your agents running smoothly across all instances.
+        <strong>Debug deeply:</strong> Inspect message flows, tool executions, and state changes as they happen.
+        <strong>Build visually:</strong> (Coming Soon) Drag-and-drop agent composition to prototype faster than ever.
       </p>
     </div>
     <div class="story-visual">
-      <svg id="config-visualization" viewBox="50 60 400 260" preserveAspectRatio="xMidYMin meet" xmlns="http://www.w3.org/2000/svg">
+      <svg id="studio-visualization" viewBox="50 60 400 260" preserveAspectRatio="xMidYMin meet" xmlns="http://www.w3.org/2000/svg">
       <!-- Matrix-themed sharp neon glow filters -->
       <defs>
-        <filter id="config-matrix-glow-green" x="-150%" y="-150%" width="400%" height="400%">
+        <filter id="studio-matrix-glow-green" x="-150%" y="-150%" width="400%" height="400%">
           <feGaussianBlur stdDeviation="2" result="blur1"/>
           <feGaussianBlur stdDeviation="0.5" result="blur2"/>
           <feMerge>
@@ -419,7 +421,7 @@ is_homepage: true
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
-        <filter id="config-matrix-glow-cyan" x="-150%" y="-150%" width="400%" height="400%">
+        <filter id="studio-matrix-glow-cyan" x="-150%" y="-150%" width="400%" height="400%">
           <feGaussianBlur stdDeviation="2" result="blur1"/>
           <feGaussianBlur stdDeviation="0.5" result="blur2"/>
           <feMerge>
@@ -428,7 +430,7 @@ is_homepage: true
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
-        <filter id="config-matrix-glow-magenta" x="-150%" y="-150%" width="400%" height="400%">
+        <filter id="studio-matrix-glow-magenta" x="-150%" y="-150%" width="400%" height="400%">
           <feGaussianBlur stdDeviation="2" result="blur1"/>
           <feGaussianBlur stdDeviation="0.5" result="blur2"/>
           <feMerge>
@@ -439,152 +441,75 @@ is_homepage: true
         </filter>
 
         <!-- Matrix laser beam gradients -->
-        <linearGradient id="config-laser-matrix-green">
+        <linearGradient id="studio-laser-matrix-green">
           <stop offset="0%" style="stop-color:rgba(0, 255, 65, 0); stop-opacity:0" />
           <stop offset="50%" style="stop-color:#00FF41; stop-opacity:1" />
           <stop offset="100%" style="stop-color:rgba(0, 255, 65, 0); stop-opacity:0" />
         </linearGradient>
-        <linearGradient id="config-laser-matrix-cyan">
+        <linearGradient id="studio-laser-matrix-cyan">
           <stop offset="0%" style="stop-color:rgba(0, 255, 255, 0); stop-opacity:0" />
           <stop offset="50%" style="stop-color:#00FFFF; stop-opacity:1" />
           <stop offset="100%" style="stop-color:rgba(0, 255, 255, 0); stop-opacity:0" />
         </linearGradient>
-        <linearGradient id="config-laser-matrix-magenta">
-          <stop offset="0%" style="stop-color:rgba(255, 0, 255, 0); stop-opacity:0" />
-          <stop offset="50%" style="stop-color:#FF00FF; stop-opacity:1" />
-          <stop offset="100%" style="stop-color:rgba(255, 0, 255, 0); stop-opacity:0" />
-        </linearGradient>
       </defs>
 
-      <!-- Matrix-style laser connections -->
+      <!-- Connection Lines -->
       <g class="connections">
-        <!-- File → Config: Matrix green beam -->
-        <path d="M 120 110 L 120 175 L 200 175" stroke="rgba(0, 255, 65, 0.2)" stroke-width="1.5" fill="none"/>
-        <path d="M 120 110 L 120 175 L 200 175" stroke="url(#config-laser-matrix-green)" stroke-width="1" fill="none">
+        <!-- Agent A -> Studio -->
+        <path d="M 120 150 L 250 220" stroke="rgba(0, 255, 65, 0.2)" stroke-width="1.5" fill="none"/>
+        <path d="M 120 150 L 250 220" stroke="url(#studio-laser-matrix-green)" stroke-width="1" fill="none">
           <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/>
         </path>
 
-        <!-- Consul → Config: Cyan beam -->
-        <path d="M 250 110 L 250 150" stroke="rgba(0, 255, 255, 0.2)" stroke-width="1.5" fill="none"/>
-        <path d="M 250 110 L 250 150" stroke="url(#config-laser-matrix-cyan)" stroke-width="1" fill="none">
+        <!-- Agent B -> Studio -->
+        <path d="M 380 150 L 250 220" stroke="rgba(0, 255, 255, 0.2)" stroke-width="1.5" fill="none"/>
+        <path d="M 380 150 L 250 220" stroke="url(#studio-laser-matrix-cyan)" stroke-width="1" fill="none">
           <animate attributeName="opacity" values="0.6;1;0.6" dur="2.2s" repeatCount="indefinite"/>
         </path>
 
-        <!-- ZooKeeper → Config: Magenta beam -->
-        <path d="M 380 110 L 380 175 L 300 175" stroke="rgba(255, 0, 255, 0.2)" stroke-width="1.5" fill="none"/>
-        <path d="M 380 110 L 380 175 L 300 175" stroke="url(#config-laser-matrix-magenta)" stroke-width="1" fill="none">
-          <animate attributeName="opacity" values="0.6;1;0.6" dur="2.4s" repeatCount="indefinite"/>
-        </path>
-
-        <!-- Config → Runtime: Matrix green beam -->
-        <path d="M 250 200 L 250 250" stroke="rgba(0, 255, 65, 0.2)" stroke-width="1.5" fill="none"/>
-        <path d="M 250 200 L 250 250" stroke="url(#config-laser-matrix-green)" stroke-width="1" fill="none">
-          <animate attributeName="opacity" values="0.6;1;0.6" dur="1.8s" repeatCount="indefinite"/>
-        </path>
-        <text x="275" y="225" text-anchor="middle" fill="#00FF41"
-              font-size="11" font-weight="600" font-family="'Courier New', monospace">Hot Reload</text>
+        <!-- Studio -> Screen -->
+        <line x1="250" y1="220" x2="250" y2="280" stroke="rgba(255, 0, 255, 0.2)" stroke-width="1.5" fill="none"/>
       </g>
 
-      <!-- Matrix data particles -->
+      <!-- Data Particles -->
       <g class="particles">
-        <circle r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)">
-          <animateMotion dur="4s" repeatCount="indefinite" path="M 120 110 L 120 175 L 200 175 L 250 175 L 250 200 L 250 250"/>
+        <circle r="2" fill="#00FF41" filter="url(#studio-matrix-glow-green)">
+          <animateMotion dur="3s" repeatCount="indefinite" path="M 120 150 L 250 220"/>
         </circle>
-        <circle r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)">
-          <animateMotion dur="4.5s" repeatCount="indefinite" path="M 250 110 L 250 150 L 250 175 L 250 200 L 250 250"/>
-        </circle>
-        <circle r="2" fill="#FF00FF" filter="url(#config-matrix-glow-magenta)">
-          <animateMotion dur="5s" repeatCount="indefinite" path="M 380 110 L 380 175 L 300 175 L 250 175 L 250 200 L 250 250"/>
+        <circle r="2" fill="#00FFFF" filter="url(#studio-matrix-glow-cyan)">
+          <animateMotion dur="3.5s" repeatCount="indefinite" path="M 380 150 L 250 220"/>
         </circle>
       </g>
 
-      <!-- Matrix-themed 3D Neon Cube Nodes -->
+      <!-- Nodes -->
       <g class="nodes">
-        <!-- File - 3D Matrix Cube (Matrix Green) -->
-        <g class="node" id="config-node-file">
-          <path d="M 78,63 L 165,63 L 171,57 L 84,57 Z" fill="rgba(0, 255, 65, 0.3)"
-                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.3"/>
-          <path d="M 78,63 L 84,57 L 84,104 L 78,110 Z" fill="rgba(0, 255, 65, 0.4)"
-                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.4"/>
-          <rect x="78" y="63" width="87" height="47" rx="2"
+        <!-- Agent Node (Left) -->
+        <g class="node" id="studio-node-agent-a">
+          <rect x="78" y="128" width="84" height="47" rx="2"
                 fill="rgba(0, 255, 65, 0.1)"
-                stroke="#00FF41" stroke-width="1.5" filter="url(#config-matrix-glow-green)"/>
-          <circle cx="78" cy="63" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
-          <circle cx="165" cy="63" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
-          <circle cx="78" cy="110" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
-          <circle cx="165" cy="110" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
-          <text x="121" y="90" text-anchor="middle" fill="#00FF41"
-                font-size="13" font-weight="600" font-family="'Courier New', monospace">File</text>
+                stroke="#00FF41" stroke-width="1.5" filter="url(#studio-matrix-glow-green)"/>
+          <text x="120" y="155" text-anchor="middle" fill="#00FF41"
+                font-size="12" font-weight="600" font-family="'Courier New', monospace">Mesh</text>
         </g>
 
-        <!-- Consul - 3D Matrix Cube (Cyan) -->
-        <g class="node" id="config-node-consul">
-          <path d="M 208,63 L 292,63 L 298,57 L 214,57 Z" fill="rgba(0, 255, 255, 0.3)"
-                stroke="#00FFFF" stroke-width="0.5" stroke-opacity="0.3"/>
-          <path d="M 208,63 L 214,57 L 214,104 L 208,110 Z" fill="rgba(0, 255, 255, 0.4)"
-                stroke="#00FFFF" stroke-width="0.5" stroke-opacity="0.4"/>
-          <rect x="208" y="63" width="84" height="47" rx="2"
+        <!-- Agent Node (Right) -->
+        <g class="node" id="studio-node-agent-b">
+          <rect x="338" y="128" width="84" height="47" rx="2"
                 fill="rgba(0, 255, 255, 0.1)"
-                stroke="#00FFFF" stroke-width="1.5" filter="url(#config-matrix-glow-cyan)"/>
-          <circle cx="208" cy="63" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
-          <circle cx="292" cy="63" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
-          <circle cx="208" cy="110" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
-          <circle cx="292" cy="110" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
-          <text x="250" y="90" text-anchor="middle" fill="#00FFFF"
-                font-size="13" font-weight="600" font-family="'Courier New', monospace">Consul</text>
+                stroke="#00FFFF" stroke-width="1.5" filter="url(#studio-matrix-glow-cyan)"/>
+          <text x="380" y="155" text-anchor="middle" fill="#00FFFF"
+                font-size="12" font-weight="600" font-family="'Courier New', monospace">Tools</text>
         </g>
 
-        <!-- ZooKeeper - 3D Matrix Cube (Magenta) -->
-        <g class="node" id="config-node-zk">
-          <path d="M 338,63 L 422,63 L 428,57 L 344,57 Z" fill="rgba(255, 0, 255, 0.3)"
+        <!-- Studio Hub (Center) -->
+        <g class="node" id="studio-node-hub">
+           <path d="M 200,200 L 300,200 L 310,190 L 210,190 Z" fill="rgba(255, 0, 255, 0.3)"
                 stroke="#FF00FF" stroke-width="0.5" stroke-opacity="0.3"/>
-          <path d="M 338,63 L 344,57 L 344,104 L 338,110 Z" fill="rgba(255, 0, 255, 0.4)"
-                stroke="#FF00FF" stroke-width="0.5" stroke-opacity="0.4"/>
-          <rect x="338" y="63" width="84" height="47" rx="2"
+           <rect x="200" y="200" width="100" height="60" rx="3"
                 fill="rgba(255, 0, 255, 0.1)"
-                stroke="#FF00FF" stroke-width="1.5" filter="url(#config-matrix-glow-magenta)"/>
-          <circle cx="338" cy="63" r="2" fill="#FF00FF" filter="url(#config-matrix-glow-magenta)"/>
-          <circle cx="422" cy="63" r="2" fill="#FF00FF" filter="url(#config-matrix-glow-magenta)"/>
-          <circle cx="338" cy="110" r="2" fill="#FF00FF" filter="url(#config-matrix-glow-magenta)"/>
-          <circle cx="422" cy="110" r="2" fill="#FF00FF" filter="url(#config-matrix-glow-magenta)"/>
-          <text x="380" y="83" text-anchor="middle" fill="#FF00FF"
-                font-size="11" font-weight="600" font-family="'Courier New', monospace">Zoo</text>
-          <text x="380" y="98" text-anchor="middle" fill="#FF00FF"
-                font-size="11" font-weight="600" font-family="'Courier New', monospace">Keeper</text>
-        </g>
-
-        <!-- Config - 3D Matrix Cube (Matrix Green) -->
-        <g class="node" id="config-node-config">
-          <path d="M 208,153 L 292,153 L 298,147 L 214,147 Z" fill="rgba(0, 255, 65, 0.3)"
-                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.3"/>
-          <path d="M 208,153 L 214,147 L 214,194 L 208,200 Z" fill="rgba(0, 255, 65, 0.4)"
-                stroke="#00FF41" stroke-width="0.5" stroke-opacity="0.4"/>
-          <rect x="208" y="153" width="84" height="47" rx="2"
-                fill="rgba(0, 255, 65, 0.1)"
-                stroke="#00FF41" stroke-width="1.5" filter="url(#config-matrix-glow-green)"/>
-          <circle cx="208" cy="153" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
-          <circle cx="292" cy="153" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
-          <circle cx="208" cy="200" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
-          <circle cx="292" cy="200" r="2" fill="#00FF41" filter="url(#config-matrix-glow-green)"/>
-          <text x="250" y="180" text-anchor="middle" fill="#00FF41"
-                font-size="13" font-weight="600" font-family="'Courier New', monospace">Config</text>
-        </g>
-
-        <!-- Runtime - 3D Matrix Cube (Cyan) -->
-        <g class="node" id="config-node-runtime">
-          <path d="M 208,253 L 292,253 L 298,247 L 214,247 Z" fill="rgba(0, 255, 255, 0.3)"
-                stroke="#00FFFF" stroke-width="0.5" stroke-opacity="0.3"/>
-          <path d="M 208,253 L 214,247 L 214,294 L 208,300 Z" fill="rgba(0, 255, 255, 0.4)"
-                stroke="#00FFFF" stroke-width="0.5" stroke-opacity="0.4"/>
-          <rect x="208" y="253" width="84" height="47" rx="2"
-                fill="rgba(0, 255, 255, 0.1)"
-                stroke="#00FFFF" stroke-width="1.5" filter="url(#config-matrix-glow-cyan)"/>
-          <circle cx="208" cy="253" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
-          <circle cx="292" cy="253" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
-          <circle cx="208" cy="300" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
-          <circle cx="292" cy="300" r="2" fill="#00FFFF" filter="url(#config-matrix-glow-cyan)"/>
-          <text x="250" y="280" text-anchor="middle" fill="#00FFFF"
-                font-size="13" font-weight="600" font-family="'Courier New', monospace">Runtime</text>
+                stroke="#FF00FF" stroke-width="2" filter="url(#studio-matrix-glow-magenta)"/>
+           <text x="250" y="235" text-anchor="middle" fill="#FF00FF"
+                font-size="14" font-weight="700" font-family="'Courier New', monospace">STUDIO</text>
         </g>
       </g>
     </svg>
@@ -607,31 +532,24 @@ is_homepage: true
     <div class="story-visual">
       <div class="programmatic-code-block">
 ```go
-// Load agents from YAML configuration
-cfg, _ := config.LoadConfig(config.LoaderOptions{
-    Path: "configs/agents.yaml",
-})
+func main() {
+    // 1. Create LLM directly
+    llm, _ := openai.New(openai.Config{
+        APIKey: os.Getenv("OPENAI_API_KEY"),
+        Model:  "gpt-4",
+    })
 
-// Build agents from config
-configBuilder, _ := hector.NewConfigAgentBuilder(cfg)
-configAgents, _ := configBuilder.BuildAllAgents()
+    // 2. Build agents programmatically with fluent builder
+    programmaticAgent, _ := builder.NewAgent("custom").
+        WithName("Custom Agent").
+        WithLLM(llm).
+        Build()
 
-// Build a custom agent programmatically
-llm, _ := hector.NewLLMProvider("openai").
-    Model("gpt-4o-mini").
-    APIKeyFromEnv("OPENAI_API_KEY").
-    Build()
-
-programmaticAgent, _ := hector.NewAgent("custom").
-    WithName("Custom Agent").
-    WithLLMProvider(llm).
-    Build()
-
-// Combine config-based and programmatic agents
-runtime.NewRuntimeBuilder().
-    WithAgents(configAgents).
-    WithAgent(programmaticAgent).
-    Start()
+    // 3. Use the agent
+    /*
+    programmaticAgent.Run(context.Background(), input)
+    */
+}
 ```
       </div>
     </div>
@@ -658,7 +576,15 @@ runtime.NewRuntimeBuilder().
 
 -   :arrows_counterclockwise: __Hot Reload__
 
-    Update configurations without downtime. Reload from Consul/Etcd/ZooKeeper automatically.
+    Update configurations instantly. Changes are detected and applied with zero downtime for rapid iteration.
+
+-   :desktop_computer: __Studio Mode__
+
+    Built-in visual dashboard to interact with tools, debug agents, and visualize message flows in real-time.
+
+-   :twisted_rightwards_arrows: __Workflow Agents__
+
+    Design complex, multi-step agent behaviors with loops, conditionals, and sub-agent orchestration.
 
 -   :link: __A2A Protocol Native__
 
@@ -667,5 +593,9 @@ runtime.NewRuntimeBuilder().
 -   :rocket: __Resource Efficient__
 
     Single 30MB binary, <100ms startup. 10-20x less resource usage than Python frameworks.
+
+-   :books: __Scalable RAG__
+
+    Turn any folder or database into a knowledge base with automated chunking, embedding, and vector search.
 
 </div>

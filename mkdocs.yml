@@ -64,59 +64,28 @@ theme:
 # Navigation
 nav:
   - Home: index.md
-  - Why Hector?: why-hector.md
   - Getting Started:
-    - Installation: getting-started/installation.md
-    - Quick Start: getting-started/quick-start.md
-  - Core Concepts:
-    # Getting Started
-    - Overview: core-concepts/overview.md
-    - Programmatic API: core-concepts/programmatic-api.md
-    # Core Agent Features
-    - Prompts: core-concepts/prompts.md
-    - Reasoning: core-concepts/reasoning.md
-    - Tools: core-concepts/tools.md
-    - Multi-Modality: core-concepts/multi-modality.md
-    - Memory: core-concepts/memory.md
-    # RAG & Search
-    - RAG & Search: core-concepts/rag.md
-    # Multi-Agent Systems
-    - Multi-Agent: core-concepts/multi-agent.md
-    - A2A Protocol: reference/a2a-protocol.md
-    - AG-UI Protocol: core-concepts/ag-ui.md
-    # Advanced Features
-    - Tasks: core-concepts/tasks.md
-    - Checkpoint Recovery: core-concepts/checkpoint-recovery.md
-    - Human-in-the-Loop: core-concepts/human-in-the-loop.md
-    - Structured Output: core-concepts/structured-output.md
-    - Sessions: core-concepts/sessions.md
-    - Streaming: core-concepts/streaming.md
-    # Infrastructure & Operations
-    - LLM Providers: core-concepts/llm-providers.md
-    - Observability: core-concepts/observability.md
-    - Security: core-concepts/security.md
-    - TLS/HTTPS Configuration: core-concepts/tls-https.md
-    - Performance: core-concepts/performance.md
-    - Rate Limiting: core-concepts/rate-limiting.md
-  - Blog:
-    - Overview: blog/index.md
-    - Building Enterprise RAG Systems: blog/posts/building-enterprise-rag-systems.md
-    - Building a Coding Assistant: blog/posts/building-a-coding-assistant.md
-    - Multi-Agent Research System: blog/posts/building-a-multi-agent-research-system.md
-    - Adding Custom Tools with MCP: blog/posts/adding-custom-tools-with-mcp.md
-    - Using Docling with Hector: blog/posts/using-docling-with-hector.md
-    - Quick Observability Setup: blog/posts/quick-observability-setup.md
-  - Reference:
-    - CLI Reference: reference/cli.md
-    - Configuration: reference/configuration.md
-    - Programmatic API Reference: reference/programmatic-api.md
-    - Distributed Configuration: reference/distributed-configuration.md
-    - API Reference: reference/api.md
-    - Architecture:
-      - System Design: reference/architecture.md
-      - Search Architecture: reference/architecture/search-architecture.md
-      - Session & Memory: reference/architecture/session-memory.md
-      - Agent Lifecycle: reference/architecture/agent-lifecycle.md
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quick-start.md
+  - Guides:
+      - Configuration: guides/configuration.md
+      - Deployment: guides/deployment.md
+      - Agents: guides/agents.md
+      - Tools: guides/tools.md
+      - RAG: guides/rag.md
+      - Observability: guides/observability.md
+      - Security: guides/security.md
+      - Persistence: guides/persistence.md
+      - Studio: guides/studio.md
+  - Concepts:
+      - Architecture: concepts/architecture.md
+      - A2A Protocol: concepts/a2a-protocol.md
+      - Agents: concepts/agents.md
+      - Runtime: concepts/runtime.md
+      - Memory: concepts/memory.md
+      - Tools: concepts/tools.md
+      - RAG: concepts/rag.md
+      - Configuration: concepts/configuration.md
 
 # Plugins
 plugins:
@@ -137,8 +106,8 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.emoji:
-      emoji_index: !!python/name:materialx.emoji.twemoji
-      emoji_generator: !!python/name:materialx.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.tasklist:
       custom_checkbox: true
 

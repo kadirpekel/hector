@@ -292,7 +292,7 @@ func (s *HTTPServer) Start(ctx context.Context) error {
 	// Auth middleware: validates JWT and stores claims in context
 	// Must be applied before CORS so OPTIONS preflight requests pass through
 	if s.authValidator != nil {
-		excludedPaths := []string{"/", "/health", "/.well-known/agent-card.json", "/agents", "/agents/"}
+		excludedPaths := []string{"/health", "/.well-known/agent-card.json", "/agents", "/agents/"}
 		if s.serverCfg.Auth != nil && len(s.serverCfg.Auth.ExcludedPaths) > 0 {
 			excludedPaths = s.serverCfg.Auth.ExcludedPaths
 			// Ensure defaults are always preserved unless explicitly overridden?
