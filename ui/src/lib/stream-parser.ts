@@ -256,7 +256,9 @@ export class StreamParser {
         if (part.kind === "text" && part.text) {
           const result = this.processTextPart(part.text, accumulatedText, widgetMap, contentOrder, isPartial, author);
           accumulatedText = result.text;
-          if (result.type === 'create') {
+          // Always update message for text parts to keep accumulatedText in sync
+          // This ensures next SSE event has current text for dedup checks
+          if (result.type === 'create' || result.type === 'append') {
             needsFullUpdate = true;
           }
         } else if (part.kind === "data" && part.data) {
@@ -341,22 +343,32 @@ export class StreamParser {
   ): { text: string; type: 'create' | 'append' } {
     if (!text) return { text: accumulatedText, type: 'append' };
 
-    // CRITICAL: De-duplication check for BOTH partial and complete updates
-    // Many LLM backends re-send the same text in multiple streaming chunks
+    // De-duplication: Check if text already exists in accumulated text (within same artifact)
     if (accumulatedText === text || accumulatedText.endsWith(text)) {
       return { text: accumulatedText, type: 'append' };
     }
 
-    // Additional check: If we have an active text widget, check if we're duplicating its content
-    if (this.activeTextWidgetId) {
-      const activeWidget = widgetMap.get(this.activeTextWidgetId);
-      if (activeWidget && activeWidget.type === "text") {
-        const widgetContent = activeWidget.content || "";
-        const bufferedContent = this.pendingTextBuffer.get(this.activeTextWidgetId) || "";
+    // De-duplication: Check existing widgets from same author (cross-event)
+    // This handles the case where partial=false resends complete text after partial=true chunks
+    for (const [widgetId, widget] of widgetMap) {
+      if (widget.type === "text" && widget.data?.author === author) {
+        const widgetContent = widget.content || "";
+        const bufferedContent = this.pendingTextBuffer.get(widgetId) || "";
         const fullContent = widgetContent + bufferedContent;
 
-        // Check if the incoming text is already in the widget (exact match or suffix)
-        if (fullContent === text || fullContent.endsWith(text)) {
+        // Exact match - text already exists
+        if (fullContent === text) {
+          return { text: accumulatedText, type: 'append' };
+        }
+
+        // Common case: partial=false sends complete text that includes partial chunks
+        // Example: widget has "ABC" from chunks, partial=false sends "ABCDEF"
+        if (!isPartial && fullContent.length > 0 && text.startsWith(fullContent)) {
+          return { text: accumulatedText, type: 'append' };
+        }
+
+        // Reverse case: widget has complete text, incoming is a prefix (rare edge case)
+        if (fullContent.length > 0 && fullContent.startsWith(text)) {
           return { text: accumulatedText, type: 'append' };
         }
       }
