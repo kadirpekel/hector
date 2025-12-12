@@ -20,10 +20,6 @@ Deploy observable, secure, and scalable AI agents with zero-config or YAML, plus
 
 ---
 
-## Studio Mode
-
-Visual agent builder and debugger.
-
 ![Studio Mode](ss.png)
 
 ## Quick Start (zero-config)
