@@ -518,37 +518,42 @@ is_homepage: true
 </div>
 
 <!-- Programmatic API Story Section -->
+<!-- Programmatic API Story Section -->
 <div class="story-section">
   <div class="story-container">
     <div class="story-text">
       <h2 class="story-title">Programmatic API</h2>
       <p>
-        When you need to customize agent behavior, integrate with existing systems, or build dynamic agent workflows, Hector's <strong>programmatic API</strong> gives you full control.
+        Need full control? Hector's <strong>programmatic API</strong> allows you to build agents, define tools, and orchestrate complex workflows entirely in Go.
       </p>
       <p>
-        Build agents programmatically, combine them with config-based agents, or embed agents directly into your Go applications. The configuration system is built on top of the programmatic API, meaning you can mix and match seamlessly.
+        Seamlessly mix configuration and code. Embed Hector directly into your applications with a clean, fluent interface.
       </p>
+      <div class="hero-cta" style="margin-top: 1.5rem; justify-content: flex-start;">
+        <a href="guides/programmatic/" class="btn btn-primary">Read the Guide</a>
+        <a href="reference/pkg/" class="btn btn-secondary">API Reference</a>
+      </div>
     </div>
     <div class="story-visual">
       <div class="programmatic-code-block">
 ```go
-func main() {
-    // 1. Create LLM directly
-    llm, _ := openai.New(openai.Config{
-        APIKey: os.Getenv("OPENAI_API_KEY"),
-        Model:  "gpt-4",
-    })
+import "github.com/kadirpekel/hector/pkg/builder"
 
-    // 2. Build agents programmatically with fluent builder
-    programmaticAgent, _ := builder.NewAgent("custom").
-        WithName("Custom Agent").
+func main() {
+    // 1. Build LLM
+    llm := builder.NewLLM("openai").
+        APIKey(os.Getenv("OPENAI_API_KEY")).
+        MustBuild()
+
+    // 2. Build Agent
+    agent, _ := builder.NewAgent("assistant").
         WithLLM(llm).
+        WithInstruction("You are a helpful assistant.").
         Build()
 
-    // 3. Use the agent
-    /*
-    programmaticAgent.Run(context.Background(), input)
-    */
+    // 3. Run
+    runner, _ := builder.NewRunner("app").WithAgent(agent).Build()
+    runner.Run(ctx, "user", "session", input, ...)
 }
 ```
       </div>

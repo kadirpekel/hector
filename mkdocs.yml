@@ -68,6 +68,7 @@ nav:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quick-start.md
   - Guides:
+      - Programmatic Usage: guides/programmatic.md
       - Configuration: guides/configuration.md
       - Deployment: guides/deployment.md
       - Agents: guides/agents.md
@@ -77,15 +78,17 @@ nav:
       - Security: guides/security.md
       - Persistence: guides/persistence.md
       - Studio: guides/studio.md
-  - Concepts:
-      - Architecture: concepts/architecture.md
-      - A2A Protocol: concepts/a2a-protocol.md
-      - Agents: concepts/agents.md
-      - Runtime: concepts/runtime.md
-      - Memory: concepts/memory.md
-      - Tools: concepts/tools.md
-      - RAG: concepts/rag.md
-      - Configuration: concepts/configuration.md
+  - Reference:
+      - Builder Package: reference/builder.md
+      - Concepts:
+          - Architecture: concepts/architecture.md
+          - A2A Protocol: concepts/a2a-protocol.md
+          - Agents: concepts/agents.md
+          - Runtime: concepts/runtime.md
+          - Memory: concepts/memory.md
+          - Tools: concepts/tools.md
+          - RAG: concepts/rag.md
+          - Configuration: concepts/configuration.md
   - Blog:
       - blog/index.md
       - Using Docling: blog/posts/using-docling-with-hector.md
