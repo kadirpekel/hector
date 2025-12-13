@@ -184,9 +184,11 @@ func NewChunkerFromConfig(cfg *config.ChunkingConfig) (Chunker, error) {
 }
 
 // NewSearchEngineFromConfig creates a search engine from configuration.
+// collectionName is used as the default if storeCfg.Collection is empty.
 func NewSearchEngineFromConfig(
 	storeCfg *config.DocumentStoreConfig,
 	deps *FactoryDeps,
+	collectionName string,
 ) (*SearchEngine, error) {
 	// Get vector provider
 	var provider vector.Provider
@@ -196,6 +198,9 @@ func NewSearchEngineFromConfig(
 		if !ok {
 			return nil, fmt.Errorf("vector store %q not found", storeCfg.VectorStore)
 		}
+		slog.Debug("Using configured vector provider",
+			"name", storeCfg.VectorStore,
+			"provider", provider.Name())
 	} else {
 		// Use first available provider or create default chromem
 		for _, p := range deps.VectorProviders {
@@ -204,6 +209,7 @@ func NewSearchEngineFromConfig(
 		}
 		if provider == nil {
 			// Create default embedded provider
+			slog.Debug("Creating default chromem provider (no provider configured)")
 			var err error
 			provider, err = vector.NewChromemProvider(vector.ChromemConfig{})
 			if err != nil {
@@ -278,6 +284,9 @@ func NewSearchEngineFromConfig(
 	// Determine collection name
 	collection := storeCfg.Collection
 	if collection == "" {
+		collection = collectionName
+	}
+	if collection == "" {
 		collection = "rag_documents"
 	}
 
@@ -306,14 +315,20 @@ func NewDocumentStoreFromConfig(
 	storeCfg *config.DocumentStoreConfig,
 	deps *FactoryDeps,
 ) (*DocumentStore, error) {
+	// Determine collection name first (used by both SearchEngine and DocumentStore)
+	collection := storeCfg.Collection
+	if collection == "" {
+		collection = name
+	}
+
 	// Create data source
 	source, err := NewDataSourceFromConfig(storeCfg.Source, deps)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create data source: %w", err)
 	}
 
-	// Create search engine
-	engine, err := NewSearchEngineFromConfig(storeCfg, deps)
+	// Create search engine with the same collection name
+	engine, err := NewSearchEngineFromConfig(storeCfg, deps, collection)
 	if err != nil {
 		source.Close()
 		return nil, fmt.Errorf("failed to create search engine: %w", err)
@@ -324,12 +339,6 @@ func NewDocumentStoreFromConfig(
 	if err != nil {
 		source.Close()
 		return nil, fmt.Errorf("failed to create chunker: %w", err)
-	}
-
-	// Determine collection name
-	collection := storeCfg.Collection
-	if collection == "" {
-		collection = name
 	}
 
 	// Build internal config

@@ -15,10 +15,60 @@ hector serve \
 
 This automatically:
 - Creates embedded vector database (chromem)
-- Configures embedder (auto-detected)
-- Indexes documents
+- Configures embedder (auto-detected from LLM provider, or OpenAI/Ollama fallback)
+- Indexes documents (including PDF, DOCX, XLSX via native parsers)
 - Adds search tool
 - Watches for file changes
+
+### Advanced Zero-Config Options
+
+**With external vector database:**
+
+```bash
+hector serve \
+  --model gpt-4o \
+  --docs-folder ./documents \
+  --vector-type qdrant \
+  --vector-host localhost:6333 \
+  --tools
+```
+
+**With custom embedder:**
+
+```bash
+hector serve \
+  --model gpt-4o \
+  --docs-folder ./documents \
+  --embedder-provider ollama \
+  --embedder-url http://localhost:11434 \
+  --embedder-model nomic-embed-text \
+  --tools
+```
+
+**With Docling for advanced document parsing:**
+
+```bash
+hector serve \
+  --model gpt-4o \
+  --docs-folder ./documents \
+  --mcp-url http://localhost:8000/mcp \
+  --mcp-parser-tool convert_document_into_docling_document \
+  --tools
+```
+
+**With Docker path mapping (for containerized MCP services):**
+
+```bash
+# Syntax: --docs-folder local_path:remote_path
+hector serve \
+  --model gpt-4o \
+  --docs-folder ./documents:/docs \
+  --mcp-url http://localhost:8000/mcp \
+  --mcp-parser-tool convert_document_into_docling_document \
+  --tools
+```
+
+The `local:remote` syntax maps local paths to container paths when using Docker-based MCP parsers like Docling.
 
 ### Config File RAG
 
@@ -327,15 +377,40 @@ document_stores:
         max_delay: 30s
 ```
 
-## MCP Document Parsing
+## Document Parsing
 
-Use MCP tools to parse documents (e.g., Docling for PDFs):
+Hector supports multiple document parsers with automatic fallback:
+
+| Parser | Priority | Formats | When Used |
+|--------|----------|---------|-----------|
+| **MCP Parser** (e.g., Docling) | 8 | PDF, DOCX, PPTX, XLSX, HTML | When `--mcp-parser-tool` configured |
+| **Native Parsers** | 5 | PDF, DOCX, XLSX | Built-in, always available |
+| **Text Extractor** | 1 | Plain text, code files | Fallback for text-based files |
+
+### Native Document Parsers
+
+Hector includes built-in parsers for common document formats:
+
+**Supported formats:**
+- **PDF** - Text extraction with page markers
+- **DOCX** - Word document content extraction
+- **XLSX** - Excel spreadsheet with cell references (max 1000 cells/sheet)
+
+Native parsers work automatically for ~70% of documents. For complex layouts, tables, or scanned documents, use MCP parsers like Docling.
+
+**Default include patterns:**
+- Text/code: `*.md`, `*.txt`, `*.rst`, `*.go`, `*.py`, `*.js`, `*.ts`, `*.json`, `*.yaml`, etc.
+- Binary documents: `*.pdf`, `*.docx`, `*.xlsx`
+
+### MCP Document Parsing
+
+For advanced parsing (OCR, complex layouts, tables), use MCP tools like Docling:
 
 ```yaml
 tools:
   docling:
     type: mcp
-    url: http://localhost:8080
+    url: http://localhost:8000/mcp
     transport: streamable-http
 
 document_stores:
@@ -351,18 +426,36 @@ document_stores:
         - .docx
         - .pptx
         - .xlsx
-      fallback_on_error: true  # Use native parser if MCP fails
+      priority: 8  # Higher than native (5)
+      path_prefix: "/docs"  # For Docker path mapping
 ```
 
-Or use zero-config:
+**Zero-config with Docling:**
 
 ```bash
 hector serve \
   --model gpt-4o \
   --docs-folder ./documents \
-  --mcp-url http://localhost:8080 \
+  --mcp-url http://localhost:8000/mcp \
   --mcp-parser-tool convert_document_into_docling_document
 ```
+
+**With Docker path mapping:**
+
+When Docling runs in Docker, use path mapping to remap local paths:
+
+```bash
+# Docker mount: -v $(pwd)/documents:/docs:ro
+hector serve \
+  --model gpt-4o \
+  --docs-folder ./documents:/docs \
+  --mcp-url http://localhost:8000/mcp \
+  --mcp-parser-tool convert_document_into_docling_document
+```
+
+The `local:remote` syntax ensures paths are correctly translated for the container.
+
+See [Using Docling with Hector](../blog/posts/using-docling-with-hector.md) for a complete tutorial.
 
 ## Agent Integration
 

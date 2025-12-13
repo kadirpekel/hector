@@ -15,17 +15,17 @@ const TEXT_MARKER_PREFIX = "$$text_marker$$";
 
 /**
  * StreamParser
- * 
+ *
  * Handles the parsing of Server-Sent Events (SSE) from the Agent to Agent (A2A) protocol.
- * 
+ *
  * Key Architecture Features:
  * 1. **Dispatch Buffering**: High-frequency text updates (tokens) are buffered internally and flushed
  *    to the Zustand store at a maximum rate of 20fps. This prevents the Main Thread from being blocked
  *    by excessive State Serialization (JSON.stringify) during high-speed streaming.
- * 
- * 2. **Text Markers**: Uses `$$text_marker$$` IDs to manage text segments interleaved with other widgets 
+ *
+ * 2. **Text Markers**: Uses `$$text_marker$$` IDs to manage text segments interleaved with other widgets
  *    (Tools, Thinking) within the same message, ensuring correct content ordering.
- * 
+ *
  * 3. **Read-Consistency**: The parser maintains a local view of the message (`applyPendingBuffer`) to ensure
  *    that logic remains correct even if the Store is slightly behind the stream due to buffering.
  */
@@ -49,25 +49,35 @@ export class StreamParser {
   private flushTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly FLUSH_INTERVAL_MS = 50; // 20fps cap on store updates
 
-  constructor(
-    sessionId: string,
-    messageId: string,
-    dispatch: Dispatcher
-  ) {
+  constructor(sessionId: string, messageId: string, dispatch: Dispatcher) {
     this.sessionId = sessionId;
     this.messageId = messageId;
     this.dispatch = dispatch;
   }
 
   abort() {
-    this.flush(); // Flush any pending text before aborting
+    // Clear pending timeout without flushing (we're aborting, not completing)
+    if (this.flushTimeout) {
+      clearTimeout(this.flushTimeout);
+      this.flushTimeout = null;
+    }
     if (this.currentController) {
       this.currentController.abort();
     }
   }
 
   cleanup() {
-    this.flush(); // Ensure final flush
+    // Clear any pending streaming buffers to prevent memory leaks
+    this.pendingTextBuffer.forEach((_, widgetId) => {
+      this.dispatch.clearStreamingTextContent(widgetId);
+    });
+    this.pendingTextBuffer.clear();
+
+    if (this.flushTimeout) {
+      clearTimeout(this.flushTimeout);
+      this.flushTimeout = null;
+    }
+
     this.createdToolWidgets.clear();
     this.createdThinkingWidgets.clear();
     this.abort();
@@ -79,7 +89,10 @@ export class StreamParser {
     this.pendingTextBuffer.set(widgetId, current + text);
 
     if (!this.flushTimeout) {
-      this.flushTimeout = setTimeout(() => this.flush(), this.FLUSH_INTERVAL_MS);
+      this.flushTimeout = setTimeout(
+        () => this.flush(),
+        this.FLUSH_INTERVAL_MS,
+      );
     }
   }
 
@@ -98,7 +111,7 @@ export class StreamParser {
         this.sessionId,
         this.messageId,
         widgetId,
-        text
+        text,
       );
     });
 
@@ -116,7 +129,7 @@ export class StreamParser {
         const delta = this.pendingTextBuffer.get(w.id)!;
         return {
           ...w,
-          content: (w.content || "") + delta
+          content: (w.content || "") + delta,
         };
       }
       return w;
@@ -124,7 +137,7 @@ export class StreamParser {
 
     return {
       ...message,
-      widgets: newWidgets
+      widgets: newWidgets,
     };
   }
 
@@ -141,7 +154,9 @@ export class StreamParser {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "Unknown error");
-        throw new Error("HTTP " + response.status + ": " + errorText.substring(0, 200));
+        throw new Error(
+          "HTTP " + response.status + ": " + errorText.substring(0, 200),
+        );
       }
 
       if (!response.body) {
@@ -179,7 +194,9 @@ export class StreamParser {
       this.flush(); // Flush on error
       this.dispatch.setIsGenerating(false);
       if (error instanceof Error && error.name === "AbortError") {
-        this.dispatch.updateMessage(this.sessionId, this.messageId, { cancelled: true });
+        this.dispatch.updateMessage(this.sessionId, this.messageId, {
+          cancelled: true,
+        });
       } else {
         handleError(error, "Stream error");
       }
@@ -190,7 +207,8 @@ export class StreamParser {
   }
 
   private handleData(data: unknown) {
-    const result = (data as { result?: A2AResult })?.result || (data as A2AResult);
+    const result =
+      (data as { result?: A2AResult })?.result || (data as A2AResult);
 
     if (result.taskId) {
       this.dispatch.setSessionTaskId(this.sessionId, result.taskId);
@@ -247,18 +265,27 @@ export class StreamParser {
 
     if (result.artifact?.parts) {
       for (const part of result.artifact.parts) {
-        const author = (result.metadata?.author as string) || (result.metadata?.["event_author"] as string);
+        const author =
+          (result.metadata?.author as string) ||
+          (result.metadata?.["event_author"] as string);
         if (author && author !== this.lastDispatchedActiveAgentId) {
           this.dispatch.setActiveAgentId(author);
           this.lastDispatchedActiveAgentId = author;
         }
 
         if (part.kind === "text" && part.text) {
-          const result = this.processTextPart(part.text, accumulatedText, widgetMap, contentOrder, isPartial, author);
+          const result = this.processTextPart(
+            part.text,
+            accumulatedText,
+            widgetMap,
+            contentOrder,
+            isPartial,
+            author,
+          );
           accumulatedText = result.text;
           // Always update message for text parts to keep accumulatedText in sync
           // This ensures next SSE event has current text for dedup checks
-          if (result.type === 'create' || result.type === 'append') {
+          if (result.type === "create" || result.type === "append") {
             needsFullUpdate = true;
           }
         } else if (part.kind === "data" && part.data) {
@@ -270,20 +297,36 @@ export class StreamParser {
             const content = data.content as string;
             const status = data.status as string;
             const isCompleted = status === "completed";
-            this.processThinking(id, content || "", isCompleted, "default", widgetMap, contentOrder, author);
+            this.processThinking(
+              id,
+              content || "",
+              isCompleted,
+              "default",
+              widgetMap,
+              contentOrder,
+              author,
+            );
           } else if (data.type === "tool_use") {
             const toolId = data.id as string;
             if (!this.createdToolWidgets.has(toolId)) {
-              this.processToolCallFromPart(data, widgetMap, contentOrder, author);
+              this.processToolCallFromPart(
+                data,
+                widgetMap,
+                contentOrder,
+                author,
+              );
             }
           } else if (data.type === "tool_result") {
             const toolCallId = data.tool_call_id as string;
-            this.processToolResult({
-              tool_call_id: toolCallId,
-              content: data.content as string,
-              is_error: data.is_error as boolean,
-              status: data.status as string,
-            }, widgetMap);
+            this.processToolResult(
+              {
+                tool_call_id: toolCallId,
+                content: data.content as string,
+                is_error: data.is_error as boolean,
+                status: data.status as string,
+              },
+              widgetMap,
+            );
           }
         }
       }
@@ -339,37 +382,46 @@ export class StreamParser {
     widgetMap: Map<string, Widget>,
     contentOrder: string[],
     isPartial: boolean,
-    author?: string
-  ): { text: string; type: 'create' | 'append' } {
-    if (!text) return { text: accumulatedText, type: 'append' };
+    author?: string,
+  ): { text: string; type: "create" | "append" } {
+    if (!text) return { text: accumulatedText, type: "append" };
 
     // De-duplication: Check if text already exists in accumulated text (within same artifact)
     if (accumulatedText === text || accumulatedText.endsWith(text)) {
-      return { text: accumulatedText, type: 'append' };
+      return { text: accumulatedText, type: "append" };
     }
 
     // De-duplication: Check existing widgets from same author (cross-event)
     // This handles the case where partial=false resends complete text after partial=true chunks
     for (const [widgetId, widget] of widgetMap) {
-      if (widget.type === "text" && widget.data?.author === author) {
+      if (widget.type !== "text") continue;
+
+      // Case-insensitive author comparison for consistent handling
+      const widgetAuthor = (widget as TextWidget).data?.author?.toLowerCase();
+      const currentAuthor = author?.toLowerCase();
+      if (widgetAuthor === currentAuthor) {
         const widgetContent = widget.content || "";
         const bufferedContent = this.pendingTextBuffer.get(widgetId) || "";
         const fullContent = widgetContent + bufferedContent;
 
         // Exact match - text already exists
         if (fullContent === text) {
-          return { text: accumulatedText, type: 'append' };
+          return { text: accumulatedText, type: "append" };
         }
 
         // Common case: partial=false sends complete text that includes partial chunks
         // Example: widget has "ABC" from chunks, partial=false sends "ABCDEF"
-        if (!isPartial && fullContent.length > 0 && text.startsWith(fullContent)) {
-          return { text: accumulatedText, type: 'append' };
+        if (
+          !isPartial &&
+          fullContent.length > 0 &&
+          text.startsWith(fullContent)
+        ) {
+          return { text: accumulatedText, type: "append" };
         }
 
         // Reverse case: widget has complete text, incoming is a prefix (rare edge case)
         if (fullContent.length > 0 && fullContent.startsWith(text)) {
-          return { text: accumulatedText, type: 'append' };
+          return { text: accumulatedText, type: "append" };
         }
       }
     }
@@ -379,10 +431,11 @@ export class StreamParser {
     let targetTextWidgetId = this.activeTextWidgetId;
     let shouldUseCached = false;
 
-    // Cache validation: check if active widget is still valid
+    // Cache validation: check if active widget is still valid (case-insensitive comparison)
     if (targetTextWidgetId && widgetMap.has(targetTextWidgetId)) {
-      const cachedAuthor = this.activeTextWidgetAuthor;
-      if (author && author !== cachedAuthor) {
+      const cachedAuthorLower = this.activeTextWidgetAuthor?.toLowerCase();
+      const authorLower = author?.toLowerCase();
+      if (author && authorLower !== cachedAuthorLower) {
         shouldUseCached = false;
       } else {
         shouldUseCached = true;
@@ -401,29 +454,41 @@ export class StreamParser {
         .pop();
 
       if (lastNonTextWidgetId) {
-        targetTextWidgetId = TEXT_MARKER_PREFIX + "_after_" + lastNonTextWidgetId;
+        targetTextWidgetId =
+          TEXT_MARKER_PREFIX + "_after_" + lastNonTextWidgetId;
       } else {
-        targetTextWidgetId = TEXT_MARKER_PREFIX + "_start";
+        // Include messageId to ensure uniqueness across messages
+        targetTextWidgetId = TEXT_MARKER_PREFIX + "_start_" + this.messageId;
       }
 
-      // If resolving to same author, reuse
+      // If resolving to same author, reuse (case-insensitive comparison)
       if (!lastNonTextWidgetId && contentOrder.length > 0) {
         const lastWidgetId = contentOrder[contentOrder.length - 1];
         const lastWidget = widgetMap.get(lastWidgetId);
         if (lastWidget?.type === "text") {
-          const existingAuthor = lastWidget.data.author;
-          if (author === existingAuthor) {
+          const existingAuthor = lastWidget.data.author?.toLowerCase();
+          const currentAuthor = author?.toLowerCase();
+          if (currentAuthor === existingAuthor) {
             targetTextWidgetId = lastWidgetId;
           }
         }
       }
 
-      // Collision check
+      // Collision check (case-insensitive comparison)
       const existing = widgetMap.get(targetTextWidgetId as string);
       if (existing && existing.type === "text") {
-        const existingAuthor = existing.data.author;
-        if (author !== existingAuthor) {
-          targetTextWidgetId = TEXT_MARKER_PREFIX + "_" + author + "_" + Date.now();
+        const existingAuthorLower = existing.data.author?.toLowerCase();
+        const authorLower = author?.toLowerCase();
+        if (authorLower !== existingAuthorLower) {
+          // Include messageId to ensure uniqueness across messages
+          targetTextWidgetId =
+            TEXT_MARKER_PREFIX +
+            "_" +
+            author +
+            "_" +
+            this.messageId +
+            "_" +
+            Date.now();
         }
       }
 
@@ -441,7 +506,7 @@ export class StreamParser {
         id: resolvedId,
         type: "text",
         status: isPartial ? "active" : "completed",
-        content: text,  // Local state for read-consistency during parsing
+        content: text, // Local state for read-consistency during parsing
         data: { author },
         isExpanded: true,
       };
@@ -449,7 +514,7 @@ export class StreamParser {
       if (!contentOrder.includes(resolvedId)) {
         contentOrder.push(resolvedId);
       }
-      return { text: newAccumulatedText, type: 'create' };
+      return { text: newAccumulatedText, type: "create" };
     } else {
       const existing = widgetMap.get(resolvedId);
 
@@ -466,18 +531,18 @@ export class StreamParser {
           status: isPartial ? textWidget.status : ("completed" as const),
         });
 
-        return { text: newAccumulatedText, type: 'append' };
+        return { text: newAccumulatedText, type: "append" };
       }
     }
 
-    return { text: newAccumulatedText, type: 'create' };
+    return { text: newAccumulatedText, type: "create" };
   }
 
   private processToolCallFromPart(
     data: Record<string, unknown>,
     widgetMap: Map<string, Widget>,
     contentOrder: string[],
-    author?: string
+    author?: string,
   ) {
     const id = data.id as string;
     const widgetId = "tool_" + id;
@@ -496,7 +561,7 @@ export class StreamParser {
       data: {
         name: (data.name as string) || "unknown",
         args: (data.arguments || data.input || {}) as Record<string, unknown>,
-        author: author
+        author: author,
       },
       isExpanded: true,
     };
@@ -511,7 +576,10 @@ export class StreamParser {
     this.activeTextWidgetAuthor = null;
   }
 
-  private processToolResult(tr: ToolResultMeta, widgetMap: Map<string, Widget>) {
+  private processToolResult(
+    tr: ToolResultMeta,
+    widgetMap: Map<string, Widget>,
+  ) {
     const widgetId = "tool_" + tr.tool_call_id;
     const existing = widgetMap.get(widgetId);
     if (!existing || existing.type !== "tool") return;
@@ -556,7 +624,7 @@ export class StreamParser {
     type: string | undefined,
     widgetMap: Map<string, Widget>,
     contentOrder: string[],
-    author?: string
+    author?: string,
   ) {
     const widgetId = "thinking_" + id;
 
@@ -586,7 +654,7 @@ export class StreamParser {
       content: content,
       data: {
         type: (type || "default") as "todo" | "goal" | "reflection" | "default",
-        author: author
+        author: author,
       },
       isExpanded: !isCompleted,
     };
@@ -611,10 +679,11 @@ export class StreamParser {
         result.status?.message?.parts?.[0]?.text ||
         "Agent execution failed with unknown error.";
 
-      const alertContent = "\n\n> [!CAUTION]\n> **Agent Run Failed**\n> " + errorText + "\n";
+      const alertContent =
+        "\n\n> [!CAUTION]\n> **Agent Run Failed**\n> " + errorText + "\n";
 
       this.dispatch.updateMessage(this.sessionId, this.messageId, {
-        text: (message.text || "") + alertContent
+        text: (message.text || "") + alertContent,
       });
       return;
     }
@@ -632,7 +701,8 @@ export class StreamParser {
 
     const taskId = result.taskId;
     const toolCallIDs = result.metadata?.long_running_tool_ids || [];
-    const inputPrompt = result.metadata?.input_prompt || "Human input required.";
+    const inputPrompt =
+      result.metadata?.input_prompt || "Human input required.";
     const widgetId = "approval_" + (taskId || this.messageId);
 
     if (widgetMap.has(widgetId)) return;
@@ -686,10 +756,9 @@ export class StreamParser {
       widgets: orderedWidgets,
       metadata: {
         ...message.metadata,
-        contentOrder: contentOrder.length > 0 ? contentOrder : undefined
-      }
+        contentOrder: contentOrder.length > 0 ? contentOrder : undefined,
+      },
     });
-
   }
 
   private finalizeStream() {
@@ -699,20 +768,27 @@ export class StreamParser {
     // PERFORMANCE: Finalize all streaming text widgets (commit buffer to message)
     const textWidgets = message.widgets.filter((w) => w.type === "text");
     textWidgets.forEach((widget) => {
-      this.dispatch.finalizeStreamingText(this.sessionId, this.messageId, widget.id);
+      this.dispatch.finalizeStreamingText(
+        this.sessionId,
+        this.messageId,
+        widget.id,
+      );
     });
 
     const hasActiveWidgets = message.widgets.some(
-      (w) => (w.type === "thinking" || w.type === "text") && w.status === "active"
+      (w) =>
+        (w.type === "thinking" || w.type === "text") && w.status === "active",
     );
 
     if (hasActiveWidgets) {
       const updatedWidgets = message.widgets.map((w) =>
         (w.type === "thinking" || w.type === "text") && w.status === "active"
           ? { ...w, status: "completed" as const }
-          : w
+          : w,
       );
-      this.dispatch.updateMessage(this.sessionId, this.messageId, { widgets: updatedWidgets });
+      this.dispatch.updateMessage(this.sessionId, this.messageId, {
+        widgets: updatedWidgets,
+      });
     }
   }
 }

@@ -25,6 +25,7 @@ interface ChatWidgetProps {
   isPinned: boolean;
   onPinChange: (pinned: boolean) => void;
   onMessageSent?: () => void; // New callback for auto-layout switching
+  hideControls?: boolean;
 }
 
 export const ChatWidget: React.FC<ChatWidgetProps> = React.memo(({
@@ -33,6 +34,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = React.memo(({
   isPinned,
   onPinChange,
   onMessageSent,
+  hideControls = false,
 }) => {
 
   // Store
@@ -182,8 +184,8 @@ export const ChatWidget: React.FC<ChatWidgetProps> = React.memo(({
             </button>
           )}
 
-          {/* Only show window controls if NOT in pane mode */}
-          {!isPane && (
+          {/* Only show window controls if NOT in pane mode AND controls aren't hidden */}
+          {!isPane && !hideControls && (
             <>
               <div className="w-px h-3 bg-white/10 mx-1" />
               <button
@@ -278,7 +280,9 @@ export const ChatWidget: React.FC<ChatWidgetProps> = React.memo(({
 
         {/* Input Area */}
         <div className="flex-shrink-0 border-t border-white/10 p-4 bg-black/40 backdrop-blur-md z-10">
-          <InputArea onSend={onMessageSent} />
+          <div className="max-w-[760px] mx-auto w-full">
+            <InputArea onSend={onMessageSent} />
+          </div>
         </div>
       </div>
     </div>

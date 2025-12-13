@@ -63,13 +63,22 @@ type ExtractorRegistry struct {
 	extractors []ContentExtractor
 }
 
-// NewExtractorRegistry creates a new extractor registry.
+// NewExtractorRegistry creates a new extractor registry with default extractors.
+// Registers:
+//   - BinaryExtractor (priority 5): PDF, DOCX, XLSX via native parsers
+//   - TextExtractor (priority 1): Plain text files
 func NewExtractorRegistry() *ExtractorRegistry {
 	reg := &ExtractorRegistry{
 		extractors: make([]ContentExtractor, 0),
 	}
-	// Register default text extractor
+
+	// Register binary extractor with native parsers (PDF, DOCX, XLSX)
+	nativeParsers := NewNativeParserRegistry()
+	reg.Register(NewBinaryExtractor(nativeParsers))
+
+	// Register default text extractor (lowest priority fallback)
 	reg.Register(NewTextExtractor())
+
 	return reg
 }
 
@@ -155,17 +164,6 @@ func (r *ExtractorRegistry) HasExtractorForFile(path string, mimeType string) bo
 		}
 	}
 	return false
-}
-
-// isFilePath checks if the given path looks like a file path.
-func isFilePath(path string) bool {
-	if path == "" {
-		return false
-	}
-	// Check if it looks like a file path (has extension or path separator)
-	return strings.Contains(path, string(os.PathSeparator)) ||
-		strings.Contains(path, "/") ||
-		filepath.Ext(path) != ""
 }
 
 // TextExtractor handles plain text files.

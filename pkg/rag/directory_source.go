@@ -17,6 +17,7 @@ package rag
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -44,6 +45,11 @@ func NewDirectorySource(basePath string, filter FileFilter, maxFileSize int64) *
 
 // NewDirectorySourceFromConfig creates a directory source from config.
 func NewDirectorySourceFromConfig(cfg DirectorySourceConfig) (DataSource, error) {
+	slog.Debug("Creating directory source",
+		"path", cfg.Path,
+		"include", cfg.Include,
+		"exclude", cfg.Exclude,
+		"max_file_size", cfg.MaxFileSize)
 	filter, err := NewPatternFilter(cfg.Path, cfg.Include, cfg.Exclude)
 	if err != nil {
 		return nil, err

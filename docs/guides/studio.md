@@ -29,6 +29,38 @@ hector serve --config config.yaml --studio
 
 Access at: `http://localhost:8080`
 
+## Web UI Modes
+
+Hector's web UI has two modes:
+
+### Chat Mode (Default)
+
+When running without `--studio`, the web UI provides a chat interface:
+
+```bash
+hector serve --model gpt-4o --tools
+```
+
+Features:
+- Full chat interface with agents
+- Streaming responses
+- Tool execution visualization
+- Multi-agent conversations
+
+### Studio Mode
+
+When running with `--studio`, the web UI switches to configuration editing:
+
+```bash
+hector serve --model gpt-4o --studio
+```
+
+Features:
+- YAML configuration editor
+- Real-time validation
+- Hot reload on save
+- No chat interface (configuration only)
+
 Note: Studio mode restricts the web UI to configuration editing only. Regular agent interactions are not available in studio mode.
 
 ## Studio Interface

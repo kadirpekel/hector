@@ -113,10 +113,19 @@ type ServeCmd struct {
 	Observe bool `help:"Enable observability (metrics + OTLP tracing to localhost:4317)."`
 
 	// RAG options (zero-config document search)
-	DocsFolder    string `name:"docs-folder" help:"Folder containing documents for RAG. Auto-creates document store with chromem." type:"path" placeholder:"PATH"`
-	EmbedderModel string `name:"embedder-model" help:"Embedder model (auto-detected from provider, or fallback to ollama/nomic-embed-text)." placeholder:"MODEL"`
+	DocsFolder    string `name:"docs-folder" help:"Folder containing documents for RAG." type:"path" placeholder:"PATH"`
 	RAGWatch      *bool  `name:"rag-watch" default:"true" negatable:"" help:"Watch docs folder for changes and auto-reindex (enabled by default)."`
 	MCPParserTool string `name:"mcp-parser-tool" help:"MCP tool name(s) for document parsing (e.g., 'convert_document_into_docling_document'). Comma-separated for fallback chain." placeholder:"TOOL_NAME"`
+
+	// Vector database options
+	VectorType   string `name:"vector-type" help:"Vector database type: chromem (default), qdrant, chroma, pinecone, weaviate, milvus." placeholder:"TYPE"`
+	VectorHost   string `name:"vector-host" help:"Vector database host:port (for qdrant, chroma, weaviate, milvus)." placeholder:"HOST:PORT"`
+	VectorAPIKey string `name:"vector-api-key" help:"Vector database API key (for pinecone, authenticated qdrant)." placeholder:"KEY"`
+
+	// Embedder options
+	EmbedderProvider string `name:"embedder-provider" help:"Embedder provider: openai, ollama, cohere (auto-detected: openai if available, else ollama)." placeholder:"PROVIDER"`
+	EmbedderModel    string `name:"embedder-model" help:"Embedder model (auto-detected from provider)." placeholder:"MODEL"`
+	EmbedderURL      string `name:"embedder-url" help:"Embedder API base URL (for custom ollama/OpenAI-compatible endpoints)." placeholder:"URL"`
 
 	// Studio mode (dev/edit mode)
 	Studio bool `help:"Enable studio mode: config builder UI + auto-reload on save."`
@@ -424,10 +433,16 @@ func (c *ServeCmd) loadConfig(ctx context.Context, configPath string, isStudioMo
 		StorageDB:      c.StorageDB,
 		Observe:        c.Observe,
 		Port:           c.Port,
-		DocsFolder:     c.DocsFolder,
-		EmbedderModel:  c.EmbedderModel,
-		RAGWatch:       c.RAGWatch,
-		MCPParserTool:  c.MCPParserTool,
+		// RAG options
+		DocsFolder:       c.DocsFolder,
+		RAGWatch:         c.RAGWatch,
+		MCPParserTool:    c.MCPParserTool,
+		VectorType:       c.VectorType,
+		VectorHost:       c.VectorHost,
+		VectorAPIKey:     c.VectorAPIKey,
+		EmbedderProvider: c.EmbedderProvider,
+		EmbedderModel:    c.EmbedderModel,
+		EmbedderURL:      c.EmbedderURL,
 	})
 
 	if isStudioMode {
@@ -461,12 +476,25 @@ func (c *ServeCmd) loadConfig(ctx context.Context, configPath string, isStudioMo
 		slog.Info("Observability enabled", "tracing", "otlp://localhost:4317", "metrics", "prometheus")
 	}
 	if c.DocsFolder != "" {
+		// Determine what will be used (for logging purposes)
+		vectorType := c.VectorType
+		if vectorType == "" {
+			vectorType = "chromem"
+		}
+		embedderProvider := c.EmbedderProvider
+		if embedderProvider == "" {
+			embedderProvider = "(auto-detected)"
+		}
 		embedderModel := c.EmbedderModel
 		if embedderModel == "" {
 			embedderModel = "(auto-detected)"
 		}
 		watchEnabled := c.RAGWatch == nil || *c.RAGWatch
-		slog.Info("RAG enabled", "docs_folder", c.DocsFolder, "embedder", embedderModel, "watch", watchEnabled)
+		slog.Info("RAG enabled",
+			"docs_folder", c.DocsFolder,
+			"vector_db", vectorType,
+			"embedder", embedderProvider+"/"+embedderModel,
+			"watch", watchEnabled)
 		if c.MCPParserTool != "" {
 			slog.Info("MCP document parsing enabled", "tools", c.MCPParserTool)
 		}

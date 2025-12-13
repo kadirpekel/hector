@@ -452,7 +452,7 @@ func (s *HTTPServer) setupRoutes() *http.ServeMux {
 	return mux
 }
 
-// handleRoot serves Web UI for GET (studio mode only).
+// handleRoot serves Web UI for GET.
 func (s *HTTPServer) handleRoot(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -460,19 +460,6 @@ func (s *HTTPServer) handleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
-		s.mu.RLock()
-		studioMode := s.studioMode
-		s.mu.RUnlock()
-
-		if !studioMode {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_ = json.NewEncoder(w).Encode(map[string]string{
-				"error": "Studio mode not enabled. Web UI is only available with --studio flag.",
-			})
-			return
-		}
-
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write(webUIHTML)
@@ -484,8 +471,15 @@ func (s *HTTPServer) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 // handleHealth returns server health status.
 func (s *HTTPServer) handleHealth(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	studioMode := s.studioMode
+	s.mu.RUnlock()
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status":      "ok",
+		"studio_mode": studioMode,
+	})
 }
 
 // handleGetSchema generates and returns JSON Schema for the config builder UI.

@@ -54,9 +54,31 @@ hector serve \
 Hector automatically:
 - Creates an embedded vector database (chromem)
 - Detects and configures an embedder
-- Indexes documents
+- Indexes documents (PDF, DOCX, XLSX supported natively)
 - Adds search tool to your agent
 - Watches for file changes and re-indexes
+
+**With external vector database:**
+
+```bash
+hector serve \
+  --model gpt-4o \
+  --docs-folder ./documents \
+  --vector-type qdrant \
+  --vector-host localhost:6333 \
+  --tools
+```
+
+**With Docling for advanced PDF/document parsing:**
+
+```bash
+hector serve \
+  --model gpt-4o \
+  --docs-folder ./documents \
+  --mcp-url http://localhost:8000/mcp \
+  --mcp-parser-tool convert_document_into_docling_document \
+  --tools
+```
 
 ### With MCP
 

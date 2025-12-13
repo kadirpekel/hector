@@ -403,9 +403,11 @@ func (e *SearchEngine) searchSingle(ctx context.Context, query, collection strin
 
 	// Convert results
 	searchResults := make([]SearchResult, 0, len(results))
+	filteredCount := 0
 	for _, r := range results {
 		// Apply threshold filter
 		if req.Threshold > 0 && r.Score < req.Threshold {
+			filteredCount++
 			continue
 		}
 
@@ -438,6 +440,23 @@ func (e *SearchEngine) searchSingle(ctx context.Context, query, collection strin
 			ChunkIndex: chunkIndex,
 			Metadata:   r.Metadata,
 		})
+	}
+
+	// Log search results summary with scores
+	if len(searchResults) > 0 {
+		minScore := searchResults[len(searchResults)-1].Score
+		maxScore := searchResults[0].Score
+		slog.Debug("Search results",
+			"query", req.Query,
+			"returned", len(searchResults),
+			"filtered_by_threshold", filteredCount,
+			"threshold", req.Threshold,
+			"score_range", fmt.Sprintf("%.3f-%.3f", minScore, maxScore))
+	} else if filteredCount > 0 {
+		slog.Debug("All results filtered by threshold",
+			"query", req.Query,
+			"filtered", filteredCount,
+			"threshold", req.Threshold)
 	}
 
 	return searchResults, nil

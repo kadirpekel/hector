@@ -1,6 +1,10 @@
 import React, { useMemo } from "react";
 import { User, Bot, AlertCircle } from "lucide-react";
-import type { Message, Widget, TextWidget as TextWidgetType } from "../../types";
+import type {
+  Message,
+  Widget,
+  TextWidget as TextWidgetType,
+} from "../../types";
 import { cn } from "../../lib/utils";
 import { ToolWidget } from "../Widgets/ToolWidget";
 import { ThinkingWidget } from "../Widgets/ThinkingWidget";
@@ -14,39 +18,37 @@ import { ThrottledMarkdown } from "../Markdown/ThrottledMarkdown";
 // Streaming text widget that reads from the optimized buffer
 const StreamingTextWidget: React.FC<{
   widget: TextWidgetType;
-  isLastMessage: boolean;
-  isGenerating?: boolean;
   components?: any;
-}> = React.memo(({ widget, isLastMessage, isGenerating, components }) => {
-  // Subscribe to streaming buffer for this widget
-  const streamingContent = useStore((state) => state.streamingTextContent[widget.id]);
+}> = React.memo(
+  ({ widget, components }) => {
+    // Subscribe to streaming buffer for this widget
+    // This selector only triggers re-renders when THIS widget's content changes
+    const streamingContent = useStore(
+      (state) => state.streamingTextContent[widget.id],
+    );
 
-  // Use streaming content if available (actively streaming), otherwise use widget content
-  const content = streamingContent || widget.content || "";
+    // Use streaming content if available (actively streaming), otherwise use widget content
+    const content = streamingContent || widget.content || "";
 
-  // Only apply throttling to completed messages, not actively streaming ones
-  const shouldThrottle = !isGenerating || !isLastMessage;
+    if (!content) return null;
 
-  if (!content) return null;
-
-  return (
-    <div className="prose prose-invert prose-sm max-w-none">
-      {shouldThrottle ? (
+    return (
+      <div className="prose prose-invert prose-sm max-w-none">
         <ThrottledMarkdown content={content} components={components} />
-      ) : (
-        // Render immediately for actively streaming messages (no double throttling)
-        <ThrottledMarkdown content={content} components={components} />
-      )}
-    </div>
-  );
-}, (prevProps, nextProps) => {
-  // Re-render only if widget ID or streaming state changes
-  return (
-    prevProps.widget.id === nextProps.widget.id &&
-    prevProps.isLastMessage === nextProps.isLastMessage &&
-    prevProps.isGenerating === nextProps.isGenerating
-  );
-});
+      </div>
+    );
+  },
+  (prevProps, nextProps) => {
+    // Must re-render when:
+    // 1. Widget ID changes (different widget)
+    // 2. Widget content changes (finalization commits content)
+    // Streaming updates are handled by Zustand subscription, not props
+    return (
+      prevProps.widget.id === nextProps.widget.id &&
+      prevProps.widget.content === nextProps.widget.content
+    );
+  },
+);
 
 // Component-specific markdown configuration
 const markdownComponents = {
@@ -113,7 +115,11 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
   // Derived state to check if we should render anything
   const shouldRender = useMemo(() => {
     if (!message) return false;
-    if (message.role === 'agent' && !message.text && (!message.widgets || message.widgets.length === 0)) {
+    if (
+      message.role === "agent" &&
+      !message.text &&
+      (!message.widgets || message.widgets.length === 0)
+    ) {
       return false;
     }
     return true;
@@ -123,13 +129,10 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
   const isSystem = message?.role === "system";
 
   // Memoize widget map
-  const widgetsMap = useMemo(
-    () => {
-      if (!message || !message.widgets) return new Map();
-      return new Map(message.widgets.map((w) => [w.id, w]));
-    },
-    [message?.widgets],
-  );
+  const widgetsMap = useMemo(() => {
+    if (!message || !message.widgets) return new Map();
+    return new Map(message.widgets.map((w) => [w.id, w]));
+  }, [message?.widgets]);
 
   // Memoize contentOrder
   const contentOrder = useMemo(
@@ -143,7 +146,7 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
 
     const orderedIds = [...contentOrder];
 
-    message.widgets.forEach(w => {
+    message.widgets.forEach((w) => {
       if (!orderedIds.includes(w.id)) {
         orderedIds.push(w.id);
       }
@@ -158,22 +161,25 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
     const getWidgetAuthor = (widgetId: string): string | undefined => {
       const w = widgetsMap.get(widgetId);
       if (!w) return undefined;
-      if (w.type === 'text' && w.data.author) return w.data.author;
-      if (w.type === 'tool' && w.data.author) return w.data.author;
-      if (w.type === 'thinking' && w.data.author) return w.data.author;
+      if (w.type === "text" && w.data.author) return w.data.author;
+      if (w.type === "tool" && w.data.author) return w.data.author;
+      if (w.type === "thinking" && w.data.author) return w.data.author;
       return undefined;
     };
 
     orderedIds.forEach((widgetId) => {
       const author = getWidgetAuthor(widgetId);
-      const shouldSplit = author && author !== currentAuthor;
+      // Case-insensitive comparison for consistent grouping
+      const authorLower = author?.toLowerCase();
+      const currentAuthorLower = currentAuthor?.toLowerCase();
+      const shouldSplit = author && authorLower !== currentAuthorLower;
 
       if (shouldSplit && currentWidgetIds.length > 0) {
         groups.push({
           id: `group_${groups.length}`,
           author: currentAuthor,
           isUser: false,
-          widgetIds: [...currentWidgetIds]
+          widgetIds: [...currentWidgetIds],
         });
         currentWidgetIds = [];
       }
@@ -187,7 +193,7 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
         id: `group_${groups.length}`,
         author: currentAuthor,
         isUser: false,
-        widgetIds: currentWidgetIds
+        widgetIds: currentWidgetIds,
       });
     }
 
@@ -220,13 +226,23 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
           </div>
           <div className="rounded-2xl px-4 py-3 shadow-md text-sm leading-relaxed overflow-hidden break-words w-full bg-blue-600/20 border border-blue-500/30 text-blue-50 rounded-tr-sm">
             {message.metadata?.images?.map((img, idx) => (
-              <div key={idx} className="relative group/img overflow-hidden rounded-lg border border-white/10 mb-3">
-                <img src={img.preview} alt="" className="h-32 w-auto object-cover" />
+              <div
+                key={idx}
+                className="relative group/img overflow-hidden rounded-lg border border-white/10 mb-3"
+              >
+                <img
+                  src={img.preview}
+                  alt=""
+                  className="h-32 w-auto object-cover"
+                />
               </div>
             ))}
             {message.text && (
               <div className="prose prose-invert prose-sm max-w-none">
-                <ThrottledMarkdown content={message.text} components={markdownComponents} />
+                <ThrottledMarkdown
+                  content={message.text}
+                  components={markdownComponents}
+                />
               </div>
             )}
           </div>
@@ -246,28 +262,37 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
 
         return (
           <div key={group.id} className="flex flex-row gap-4 group">
-            <div className={cn(
-              "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-lg transition-colors border border-white/10",
-              colors.bg
-            )}>
+            <div
+              className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-lg transition-colors border border-white/10",
+                colors.bg,
+              )}
+            >
               <Bot size={16} className="text-white" />
             </div>
 
             <div className="flex flex-col min-w-0 w-full items-start">
               <div className="flex items-center gap-2 mb-1 text-xs">
-                <span className={cn("font-bold uppercase tracking-wider", colors.text)}>
+                <span
+                  className={cn(
+                    "font-bold uppercase tracking-wider",
+                    colors.text,
+                  )}
+                >
                   {displayName}
                 </span>
                 <span className="opacity-50">{message.time}</span>
               </div>
 
-              <div className={cn(
-                "rounded-2xl px-4 py-3 shadow-md text-sm leading-relaxed overflow-hidden break-words w-full rounded-tl-sm transition-colors",
-                "bg-white/5",
-                colors.border,
-                "border"
-              )}>
-                {group.widgetIds.map(itemId => {
+              <div
+                className={cn(
+                  "rounded-2xl px-4 py-3 shadow-md text-sm leading-relaxed overflow-hidden break-words w-full rounded-tl-sm transition-colors",
+                  "bg-white/5",
+                  colors.border,
+                  "border",
+                )}
+              >
+                {group.widgetIds.map((itemId) => {
                   const widget = widgetsMap.get(itemId);
                   if (!widget) return null;
 
@@ -283,7 +308,7 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
                         isGenerating={isGenerating}
                       />
                     </div>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -299,7 +324,10 @@ const MessageItemComponent: React.FC<MessageItemWithContextProps> = ({
           <div className="flex flex-col min-w-0 w-full items-start">
             <div className="bg-white/5 border border-white/10 text-gray-100 rounded-2xl px-4 py-3 rounded-tl-sm w-full">
               <div className="prose prose-invert prose-sm max-w-none">
-                <ThrottledMarkdown content={message.text} components={markdownComponents} />
+                <ThrottledMarkdown
+                  content={message.text}
+                  components={markdownComponents}
+                />
               </div>
             </div>
           </div>
@@ -322,91 +350,97 @@ const WidgetRenderer: React.FC<{
   messageIndex: number;
   isLastMessage: boolean;
   isGenerating?: boolean;
-}> = React.memo(({
-  widget,
-  sessionId,
-  messageId,
-  message,
-  messageIndex,
-  isLastMessage,
-  isGenerating = false,
-}) => {
-  const handleExpansionChange = (expanded: boolean) => {
-    if (sessionId) {
-      useStore.getState().setWidgetExpanded(sessionId, messageId, widget.id, expanded);
-    }
-  };
-
-  const shouldAnimate = isWidgetInLifecycle(
+}> = React.memo(
+  ({
     widget,
+    sessionId,
+    messageId,
     message,
     messageIndex,
     isLastMessage,
-    isGenerating,
-  );
+    isGenerating = false,
+  }) => {
+    const handleExpansionChange = (expanded: boolean) => {
+      if (sessionId) {
+        useStore
+          .getState()
+          .setWidgetExpanded(sessionId, messageId, widget.id, expanded);
+      }
+    };
 
-  switch (widget.type) {
-    case "tool":
-      return (
-        <ToolWidget
-          widget={widget}
-          onExpansionChange={handleExpansionChange}
-          shouldAnimate={shouldAnimate}
-        />
-      );
-    case "thinking":
-      return (
-        <ThinkingWidget
-          widget={widget}
-          onExpansionChange={handleExpansionChange}
-          shouldAnimate={shouldAnimate}
-        />
-      );
-    case "approval":
-      return sessionId ? (
-        <ApprovalWidget
-          widget={widget}
-          sessionId={sessionId}
-          onExpansionChange={handleExpansionChange}
-          shouldAnimate={shouldAnimate}
-        />
-      ) : null;
-    case "image":
-      return (
-        <ImageWidget
-          widget={widget}
-          onExpansionChange={handleExpansionChange}
-        />
-      );
-    case "text":
-      return (
-        <StreamingTextWidget
-          widget={widget}
-          isLastMessage={isLastMessage}
-          isGenerating={isGenerating}
-          components={markdownComponents}
-        />
-      );
-    default: {
-      return null;
+    const shouldAnimate = isWidgetInLifecycle(
+      widget,
+      message,
+      messageIndex,
+      isLastMessage,
+      isGenerating,
+    );
+
+    switch (widget.type) {
+      case "tool":
+        return (
+          <ToolWidget
+            widget={widget}
+            onExpansionChange={handleExpansionChange}
+            shouldAnimate={shouldAnimate}
+          />
+        );
+      case "thinking":
+        return (
+          <ThinkingWidget
+            widget={widget}
+            onExpansionChange={handleExpansionChange}
+            shouldAnimate={shouldAnimate}
+          />
+        );
+      case "approval":
+        return sessionId ? (
+          <ApprovalWidget
+            widget={widget}
+            sessionId={sessionId}
+            onExpansionChange={handleExpansionChange}
+            shouldAnimate={shouldAnimate}
+          />
+        ) : null;
+      case "image":
+        return (
+          <ImageWidget
+            widget={widget}
+            onExpansionChange={handleExpansionChange}
+          />
+        );
+      case "text":
+        return (
+          <StreamingTextWidget
+            widget={widget}
+            components={markdownComponents}
+          />
+        );
+      default: {
+        return null;
+      }
     }
-  }
-}, (prevProps, nextProps) => {
-  return (
-    prevProps.widget === nextProps.widget &&
-    prevProps.isLastMessage === nextProps.isLastMessage &&
-    prevProps.messageIndex === nextProps.messageIndex &&
-    prevProps.messageId === nextProps.messageId &&
-    prevProps.sessionId === nextProps.sessionId &&
-    prevProps.isGenerating === nextProps.isGenerating
-  );
-});
+  },
+  (prevProps, nextProps) => {
+    return (
+      prevProps.widget === nextProps.widget &&
+      prevProps.isLastMessage === nextProps.isLastMessage &&
+      prevProps.messageIndex === nextProps.messageIndex &&
+      prevProps.messageId === nextProps.messageId &&
+      prevProps.sessionId === nextProps.sessionId &&
+      prevProps.isGenerating === nextProps.isGenerating
+    );
+  },
+);
 
-export const MessageItem = React.memo(MessageItemComponent, (prevProps, nextProps) => {
-  if (prevProps.messageId !== nextProps.messageId) return false;
-  if (prevProps.isLastMessage !== nextProps.isLastMessage) return false;
-  if (prevProps.messageIndex !== nextProps.messageIndex) return false;
-  if (prevProps.isGenerating !== nextProps.isGenerating) return false;
-  if (prevProps.currentSessionId !== nextProps.currentSessionId) return false;
-  return true;
-});
+export const MessageItem = React.memo(
+  MessageItemComponent,
+  (prevProps, nextProps) => {
+    if (prevProps.messageId !== nextProps.messageId) return false;
+    if (prevProps.isLastMessage !== nextProps.isLastMessage) return false;
+    if (prevProps.messageIndex !== nextProps.messageIndex) return false;
+    if (prevProps.isGenerating !== nextProps.isGenerating) return false;
+    if (prevProps.currentSessionId !== nextProps.currentSessionId) return false;
+    return true;
+  },
+);

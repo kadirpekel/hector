@@ -86,6 +86,9 @@ nav:
       - Tools: concepts/tools.md
       - RAG: concepts/rag.md
       - Configuration: concepts/configuration.md
+  - Blog:
+      - blog/index.md
+      - Using Docling: blog/posts/using-docling-with-hector.md
 
 # Plugins
 plugins:

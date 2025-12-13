@@ -17,12 +17,16 @@ package rag
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
 )
+
+// jsonUnmarshal is a wrapper to avoid import cycle issues in tests.
+var jsonUnmarshal = json.Unmarshal
 
 // ToolCaller is a minimal interface for calling tools without creating import cycles.
 // This allows MCP extractors to work with any tool registry implementation.
@@ -266,8 +270,29 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 			continue
 		}
 
-		// Extract content from tool result
+		// Handle Docling's two-step process: convert returns document_key, need to fetch markdown
 		content := result.Content
+		if docKey := e.extractDoclingKey(result.Content); docKey != "" {
+			slog.Debug("Detected Docling document key, fetching markdown",
+				"tool", toolName,
+				"document_key", docKey)
+
+			// Try to get the markdown content using the document key
+			markdownContent, err := e.fetchDoclingMarkdown(ctx, docKey)
+			if err != nil {
+				slog.Debug("Failed to fetch Docling markdown",
+					"document_key", docKey,
+					"error", err.Error())
+				// Fall through to try native extraction or next tool
+			} else if markdownContent != "" {
+				content = markdownContent
+				slog.Debug("Successfully fetched Docling markdown",
+					"document_key", docKey,
+					"content_length", len(content))
+			}
+		}
+
+		// Extract content from tool result
 		if content == "" {
 			// Try to extract from metadata or other fields
 			if metadata, ok := result.Metadata.(map[string]interface{}); ok {
@@ -337,6 +362,78 @@ func (e *MCPExtractor) Extract(ctx context.Context, path string, fileSize int64)
 
 	// All tools failed
 	return nil, fmt.Errorf("all MCP parser tools failed for file %s (tried tools: %v)", path, e.parserToolNames)
+}
+
+// extractDoclingKey checks if the content is a Docling response with document_key.
+// Docling's convert_document_into_docling_document returns JSON like:
+// {"from_cache": true, "document_key": "abc123"}
+func (e *MCPExtractor) extractDoclingKey(content string) string {
+	content = strings.TrimSpace(content)
+
+	// Quick check - must look like JSON with document_key
+	if !strings.Contains(content, "document_key") {
+		return ""
+	}
+
+	// Try to parse as JSON
+	var response struct {
+		DocumentKey string `json:"document_key"`
+		FromCache   bool   `json:"from_cache"`
+	}
+
+	if err := jsonUnmarshal([]byte(content), &response); err != nil {
+		return ""
+	}
+
+	return response.DocumentKey
+}
+
+// fetchDoclingMarkdown retrieves the actual markdown content using a Docling document key.
+// Uses the get_docling_document_as_markdown tool.
+func (e *MCPExtractor) fetchDoclingMarkdown(ctx context.Context, documentKey string) (string, error) {
+	// Try common Docling markdown retrieval tool names
+	markdownToolNames := []string{
+		"get_docling_document_as_markdown",
+		"export_docling_document_to_markdown",
+		"get_document_as_markdown",
+	}
+
+	for _, toolName := range markdownToolNames {
+		tool, err := e.toolCaller.GetTool(toolName)
+		if err != nil {
+			continue // Tool not available
+		}
+
+		// Prepare arguments - Docling expects document_key parameter
+		args := map[string]interface{}{
+			"document_key": documentKey,
+		}
+
+		// Execute the tool
+		result, err := tool.Execute(ctx, args)
+		if err != nil {
+			slog.Debug("Failed to execute Docling markdown tool",
+				"tool", toolName,
+				"document_key", documentKey,
+				"error", err.Error())
+			continue
+		}
+
+		if !result.Success {
+			slog.Debug("Docling markdown tool returned failure",
+				"tool", toolName,
+				"document_key", documentKey,
+				"error", result.Error)
+			continue
+		}
+
+		content := strings.TrimSpace(result.Content)
+		if content != "" {
+			return content, nil
+		}
+	}
+
+	return "", fmt.Errorf("failed to fetch markdown for document key %s", documentKey)
 }
 
 // Priority returns the extractor priority.

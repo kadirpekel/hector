@@ -18,6 +18,83 @@ Zero-config mode:
 - Auto-generates configuration internally
 - Can be converted to file mode with `--studio`
 
+#### Zero-Config CLI Flags
+
+**LLM Options:**
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--provider` | LLM provider | `openai`, `anthropic`, `ollama` |
+| `--model` | Model name | `gpt-4o`, `claude-sonnet-4-20250514` |
+| `--api-key` | API key (or use env var) | `sk-...` |
+| `--base-url` | Custom API endpoint | `http://localhost:11434/v1` |
+| `--temperature` | Sampling temperature | `0.7` |
+| `--max-tokens` | Max response tokens | `4096` |
+| `--thinking` | Enable extended thinking (Claude) | flag |
+| `--thinking-budget` | Thinking token budget | `1024` |
+
+**Tool Options:**
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--tools` | Enable all built-in tools | flag |
+| `--tools` | Enable specific tools | `read_file,write_file,search` |
+| `--mcp-url` | MCP server URL | `http://localhost:8000/mcp` |
+| `--approve-tools` | Always require approval | `execute_command,write_file` |
+| `--no-approve-tools` | Never require approval | `read_file,search` |
+
+**RAG Options:**
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--docs-folder` | Documents folder for RAG | `./documents` |
+| `--docs-folder` | With Docker path mapping | `./docs:/docs` |
+| `--embedder-model` | Embedder model | `text-embedding-3-small` |
+| `--embedder-provider` | Embedder provider | `openai`, `ollama`, `cohere` |
+| `--embedder-url` | Custom embedder URL | `http://localhost:11434` |
+| `--rag-watch` / `--no-rag-watch` | File watching | default: enabled |
+| `--mcp-parser-tool` | MCP tool for document parsing | `convert_document_into_docling_document` |
+
+**Vector Database Options:**
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--vector-type` | Vector DB type | `chromem`, `qdrant`, `chroma`, `pinecone`, `weaviate`, `milvus` |
+| `--vector-host` | Vector DB host:port | `localhost:6333` |
+| `--vector-api-key` | Vector DB API key | `your-api-key` |
+
+**Persistence Options:**
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--storage` | Storage backend | `sqlite`, `postgres`, `mysql` |
+| `--storage-db` | Database connection string | `host=localhost dbname=hector` |
+
+**Server Options:**
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--port` | Server port | `8080` |
+| `--host` | Server host | `0.0.0.0` |
+| `--studio` | Enable studio mode | flag |
+| `--observe` | Enable observability | flag |
+
+**Example with multiple options:**
+
+```bash
+hector serve \
+  --provider anthropic \
+  --model claude-sonnet-4-20250514 \
+  --docs-folder ./documents:/docs \
+  --vector-type qdrant \
+  --vector-host localhost:6333 \
+  --embedder-provider openai \
+  --mcp-url http://localhost:8000/mcp \
+  --mcp-parser-tool convert_document_into_docling_document \
+  --tools \
+  --storage sqlite
+```
+
 ### Configuration File Mode
 
 Define configuration in YAML for repeatable deployments:

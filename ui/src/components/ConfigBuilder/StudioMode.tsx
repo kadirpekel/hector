@@ -28,6 +28,30 @@ export const StudioMode: React.FC = () => {
   const latestYamlContentRef = useRef<string>('');
   const debounceTimerRef = useRef<number | null>(null);
 
+  // Studio Mode State
+  const [isStudioModeEnabled, setIsStudioModeEnabled] = useState(true);
+
+  // Check Server Mode
+  useEffect(() => {
+    const checkMode = async () => {
+      try {
+        const res = await fetch('/health');
+        if (res.ok) {
+          const data = await res.json();
+          // If studio_mode is explicitly false, disable it in UI
+          if (data.studio_mode === false) {
+            setIsStudioModeEnabled(false);
+            setViewMode('chat');
+            setSidebarCollapsed(true);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to check server mode:", e);
+      }
+    };
+    checkMode();
+  }, []);
+
   // 'design' = Left Pane Full (Toggle Editor/Canvas)
   // 'split' = Left Pane (Resizable) + Right Pane (Chat)
   // 'chat' = Right Pane Full
@@ -123,6 +147,9 @@ export const StudioMode: React.FC = () => {
 
   // Fetch and configure schema
   useEffect(() => {
+    // Only fetch schema if in studio mode
+    if (!isStudioModeEnabled) return;
+
     const initSchema = async () => {
       try {
         const schema = await api.fetchSchema();
@@ -133,7 +160,7 @@ export const StudioMode: React.FC = () => {
       }
     };
     initSchema();
-  }, []);
+  }, [isStudioModeEnabled]);
 
   // Update schema with dynamic enums (agents) when YAML changes
   useEffect(() => {
@@ -175,9 +202,21 @@ export const StudioMode: React.FC = () => {
 
   // Load initial config
   useEffect(() => {
+    // Don't try loading config if not in studio mode (it will fail/is irrelevant)
+    // We can rely on the checkMode effect to set isStudioModeEnabled to false eventually
+    // But initially it is true.
+    // If we are truly not in studio mode, the /api/config might fail 403.
+    // We should handle that.
+
     const loadConfig = async () => {
       try {
         const response = await fetch('/api/config');
+
+        // If 403 Forbidden, we are likely not in studio mode
+        if (response.status === 403) {
+          return;
+        }
+
         if (response.ok) {
           const text = await response.text();
           latestYamlContentRef.current = text;
@@ -324,7 +363,7 @@ export const StudioMode: React.FC = () => {
   }
 
   // Determine visibility
-  const showLeft = viewMode === 'design' || viewMode === 'split';
+  const showLeft = (viewMode === 'design' || viewMode === 'split') && isStudioModeEnabled;
   const showRight = viewMode === 'chat' || viewMode === 'split';
 
   return (
@@ -334,59 +373,65 @@ export const StudioMode: React.FC = () => {
         {/* Left: Logo */}
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 rounded-full bg-hector-green shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-          <span className="font-bold tracking-wider text-sm">HECTOR STUDIO</span>
+          <span className="font-bold tracking-wider text-sm">HECTOR {isStudioModeEnabled ? "STUDIO" : "CHAT"}</span>
         </div>
 
-        {/* Center: View Modes Toggle */}
+        {/* Center: View Modes Toggle - HIDDEN IN CHAT-ONLY MODE */}
         <div className="flex justify-center">
-          <div className="flex items-center bg-white/5 rounded-lg p-0.5">
-            <button
-              onClick={() => setViewMode('design')}
-              className={cn("px-4 py-1 text-xs font-medium rounded-md transition-all", viewMode === 'design' ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-white")}
-            >
-              Design
-            </button>
-            <button
-              onClick={() => setViewMode('split')}
-              className={cn("px-4 py-1 text-xs font-medium rounded-md transition-all", viewMode === 'split' ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-white")}
-            >
-              Split
-            </button>
-            <button
-              onClick={() => setViewMode('chat')}
-              className={cn("px-4 py-1 text-xs font-medium rounded-md transition-all", viewMode === 'chat' ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-white")}
-            >
-              Chat
-            </button>
-          </div>
+          {isStudioModeEnabled && (
+            <div className="flex items-center bg-white/5 rounded-lg p-0.5">
+              <button
+                onClick={() => setViewMode('design')}
+                className={cn("px-4 py-1 text-xs font-medium rounded-md transition-all", viewMode === 'design' ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-white")}
+              >
+                Design
+              </button>
+              <button
+                onClick={() => setViewMode('split')}
+                className={cn("px-4 py-1 text-xs font-medium rounded-md transition-all", viewMode === 'split' ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-white")}
+              >
+                Split
+              </button>
+              <button
+                onClick={() => setViewMode('chat')}
+                className={cn("px-4 py-1 text-xs font-medium rounded-md transition-all", viewMode === 'chat' ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-white")}
+              >
+                Chat
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Right: Download / Deploy */}
+        {/* Right: Download / Deploy - HIDDEN IN CHAT-ONLY MODE */}
         <div className="flex items-center justify-end gap-3">
-          <button
-            onClick={handleDownload}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/5 hover:bg-white/10 text-xs text-gray-300 transition-colors"
-            title="Download YAML"
-          >
-            <Download size={12} />
-            <span className="font-medium">Download</span>
-          </button>
-          <button
-            onClick={handleDeploy}
-            disabled={!isValidYaml || deploying}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors text-xs font-medium",
-              !isValidYaml || deploying ? "bg-white/5 text-gray-500" : "bg-hector-green text-white hover:bg-hector-green/90"
-            )}
-          >
-            <Rocket size={12} />
-            <span>{deploying ? 'Deploying...' : 'Deploy'}</span>
-          </button>
+          {isStudioModeEnabled && (
+            <>
+              <button
+                onClick={handleDownload}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/5 hover:bg-white/10 text-xs text-gray-300 transition-colors"
+                title="Download YAML"
+              >
+                <Download size={12} />
+                <span className="font-medium">Download</span>
+              </button>
+              <button
+                onClick={handleDeploy}
+                disabled={!isValidYaml || deploying}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors text-xs font-medium",
+                  !isValidYaml || deploying ? "bg-white/5 text-gray-500" : "bg-hector-green text-white hover:bg-hector-green/90"
+                )}
+              >
+                <Rocket size={12} />
+                <span>{deploying ? 'Deploying...' : 'Deploy'}</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar - Always visible on far left (Infrastructure) */}
+        {/* Sidebar - Always visible on far left (Infrastructure) - HIDDEN IN CHAT-ONLY MODE */}
         {showLeft && (
           <InfrastructureSidebar
             yamlContent={yamlContent}
@@ -463,7 +508,7 @@ export const StudioMode: React.FC = () => {
         )}
 
         {/* Resize Handle (Only in Split Mode when both are visible) */}
-        {viewMode === 'split' && (
+        {viewMode === 'split' && isStudioModeEnabled && (
           <div
             className="w-1 cursor-col-resize hover:bg-hector-green/50 hover:shadow-[0_0_10px_rgba(16,185,129,0.5)] transition-colors active:bg-hector-green z-50 flex items-center justify-center group relative"
             onMouseDown={startResizing}
@@ -489,6 +534,7 @@ export const StudioMode: React.FC = () => {
                 isPinned={true}
                 onPinChange={() => { }}
                 onMessageSent={handleMessageSent}
+                hideControls={!isStudioModeEnabled}
               />
             </div>
           </div>
@@ -496,39 +542,41 @@ export const StudioMode: React.FC = () => {
       </div>
 
       {/* Footer (IDE Status Bar) - Refined */}
-      <div className="h-8 bg-black/80 border-t border-white/10 flex items-center justify-between px-4 text-xs select-none">
+      {isStudioModeEnabled && (
+        <div className="h-8 bg-black/80 border-t border-white/10 flex items-center justify-between px-4 text-xs select-none">
 
-        {/* Left: Validation Status */}
-        <div className="flex items-center gap-4">
-          {isValidYaml ? (
-            <div className="flex items-center gap-1.5 text-green-400">
-              <CheckCircle size={12} />
-              <span>Valid Configuration</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 text-red-400" title={validationError}>
-              <XCircle size={12} />
-              <span>Invalid Configuration: {validationError}</span>
-            </div>
-          )}
+          {/* Left: Validation Status */}
+          <div className="flex items-center gap-4">
+            {isValidYaml ? (
+              <div className="flex items-center gap-1.5 text-green-400">
+                <CheckCircle size={12} />
+                <span>Valid Configuration</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-red-400" title={validationError}>
+                <XCircle size={12} />
+                <span>Invalid Configuration: {validationError}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Right: Settings */}
+          <div className="flex items-center gap-4">
+            {/* Mode Indicator */}
+            <span className="text-gray-500">
+              Mode: <span className="text-gray-300 font-medium">{viewMode.toUpperCase()}</span>
+              {showLeft && <span> / {designView.toUpperCase()}</span>}
+            </span>
+
+            <div className="w-px h-3 bg-white/10"></div>
+
+            <button onClick={() => setShowSettings(true)} className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors">
+              <Settings size={12} />
+              <span>Settings</span>
+            </button>
+          </div>
         </div>
-
-        {/* Right: Settings */}
-        <div className="flex items-center gap-4">
-          {/* Mode Indicator */}
-          <span className="text-gray-500">
-            Mode: <span className="text-gray-300 font-medium">{viewMode.toUpperCase()}</span>
-            {showLeft && <span> / {designView.toUpperCase()}</span>}
-          </span>
-
-          <div className="w-px h-3 bg-white/10"></div>
-
-          <button onClick={() => setShowSettings(true)} className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors">
-            <Settings size={12} />
-            <span>Settings</span>
-          </button>
-        </div>
-      </div>
+      )}
 
       {showSettings && (
         <SettingsModal

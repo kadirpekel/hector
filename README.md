@@ -7,7 +7,7 @@
 ╚═╝  ╚═╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
 ```
 [![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8.svg)](https://golang.org/)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![A2A Protocol](https://img.shields.io/badge/A2A%20v0.3.0-100%25%20compliant-brightgreen.svg)](https://a2a-protocol.org/latest/community/#a2a-integrations)
 [![Documentation](https://img.shields.io/badge/docs-gohector.dev-blue.svg)](https://gohector.dev)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kadirpekel/hector)](https://goreportcard.com/report/github.com/kadirpekel/hector)
@@ -16,7 +16,7 @@
 
 Deploy observable, secure, and scalable AI agents with zero-config or YAML, plus a programmatic API.
 
-**[📚 Documentation](https://gohector.dev)** | [CLI Reference](https://gohector.dev/reference/cli/) | [Config Reference](https://gohector.dev/concepts/configuration/)
+**[📚 Documentation](https://gohector.dev)** | [Quick Start](https://gohector.dev/getting-started/quick-start/) | [Configuration](https://gohector.dev/guides/configuration/)
 
 ---
 
@@ -64,7 +64,8 @@ hector serve --config config.yaml --studio
 ## Highlights
 - **Config-first & zero-config**: YAML for repeatability; flags for fast starts. JSON Schema available via `hector schema`.
 - **Programmatic API**: Build agents in Go (`pkg/api.go`), including sub-agents and agent-as-tool patterns.
-- **RAG & MCP**: Folder-based document stores, embedded vector search (chromem), optional MCP parsing chain.
+- **RAG**: Folder-based document stores, embedded vector search (chromem), native PDF/DOCX/XLSX parsers, optional MCP parsing (Docling).
+- **Vector DBs**: Embedded chromem (default), or external (Qdrant, Pinecone, Weaviate, Milvus, Chroma).
 - **Persistence**: Tasks and sessions can use in-memory or SQL backends (sqlite/postgres/mysql via DSN).
 - **Observability**: Metrics endpoint and OTLP tracing options.
 - **Checkpointing**: Optional checkpoint/recovery strategies.
@@ -72,10 +73,13 @@ hector serve --config config.yaml --studio
 - **A2A-native**: Uses a2a-go types and JSON-RPC/gRPC endpoints.
 
 ## Documentation
+
 - [Getting Started](https://gohector.dev/getting-started/quick-start/)
-- [Configuration Reference](https://gohector.dev/concepts/configuration/)
-- [CLI Reference](https://gohector.dev/reference/cli/)
+- [Configuration Guide](https://gohector.dev/guides/configuration/)
+- [RAG Guide](https://gohector.dev/guides/rag/)
+- [Tools Guide](https://gohector.dev/guides/tools/)
 - [Core Concepts](https://gohector.dev/concepts/architecture/)
+- [Blog & Tutorials](https://gohector.dev/blog/)
 
 ## License
 

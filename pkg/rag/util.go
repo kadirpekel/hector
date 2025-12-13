@@ -101,10 +101,23 @@ const (
 )
 
 // DefaultDirectorySourceConfig returns sensible defaults for directory source.
+// Includes both text-based source code files and binary document formats
+// that can be parsed by native parsers (PDF, DOCX, XLSX).
 func DefaultDirectorySourceConfig(path string) DirectorySourceConfig {
 	return DirectorySourceConfig{
-		Path:        path,
-		Include:     []string{"*.md", "*.txt", "*.go", "*.py", "*.java", "*.js", "*.ts", "*.json", "*.yaml", "*.yml"},
+		Path: path,
+		Include: []string{
+			// Text-based source code and documentation
+			"*.md", "*.txt", "*.rst", "*.adoc",
+			// Programming languages
+			"*.go", "*.py", "*.java", "*.js", "*.ts", "*.jsx", "*.tsx",
+			"*.c", "*.cpp", "*.h", "*.hpp", "*.cs", "*.rb", "*.php",
+			"*.rs", "*.swift", "*.kt", "*.scala", "*.lua", "*.r",
+			// Config and data files
+			"*.json", "*.yaml", "*.yml", "*.toml", "*.xml", "*.html", "*.css",
+			// Binary document formats (native parsers)
+			"*.pdf", "*.docx", "*.xlsx",
+		},
 		Exclude:     []string{".git", "node_modules", "vendor", "dist", "build", "__pycache__", ".venv", "venv"},
 		MaxFileSize: 10 * 1024 * 1024, // 10 MB
 	}

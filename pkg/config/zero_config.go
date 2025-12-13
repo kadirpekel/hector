@@ -96,12 +96,35 @@ type ZeroConfig struct {
 	Observe bool
 
 	// DocsFolder is a path to documents for RAG.
-	// When set, auto-creates a document store with chromem (embedded vector DB).
+	// When set, auto-creates a document store with the configured vector DB.
 	DocsFolder string
 
+	// VectorType specifies the vector database type.
+	// Values: "chromem" (default, embedded), "qdrant", "chroma", "pinecone", "weaviate", "milvus"
+	VectorType string
+
+	// VectorHost is the host:port for external vector databases (qdrant, chroma, weaviate, milvus).
+	// Example: "localhost:6333" for Qdrant
+	VectorHost string
+
+	// VectorAPIKey is the API key for vector databases that require authentication (pinecone).
+	VectorAPIKey string
+
+	// EmbedderProvider overrides the auto-detected embedder provider.
+	// Values: "openai", "ollama", "cohere"
+	// Auto-detection: Uses LLM provider if it has embeddings (openai), otherwise ollama.
+	EmbedderProvider string
+
 	// EmbedderModel overrides the auto-detected embedder model.
-	// Auto-detection: OpenAI → text-embedding-3-small, otherwise → ollama/nomic-embed-text
+	// Auto-detection based on provider:
+	//   - openai: text-embedding-3-small
+	//   - ollama: nomic-embed-text
+	//   - cohere: embed-english-v3.0
 	EmbedderModel string
+
+	// EmbedderURL overrides the embedder API base URL.
+	// Useful for custom ollama endpoints or OpenAI-compatible APIs.
+	EmbedderURL string
 
 	// RAGWatch enables file watching for auto re-indexing (default: true).
 	RAGWatch *bool
@@ -369,24 +392,59 @@ func CreateZeroConfig(opts ZeroConfig) *Config {
 	return cfg
 }
 
+// parseDocsFolder parses the docs-folder path which may contain a remote path mapping.
+// Syntax: "local_path" or "local_path:remote_path"
+//
+// Examples:
+//   - "./test-docs" -> localPath="./test-docs", remotePath=""
+//   - "./test-docs:/docs" -> localPath="./test-docs", remotePath="/docs"
+//
+// The remote path is used for Docker-based MCP services where the local directory
+// is mounted at a different path inside the container.
+func parseDocsFolder(docsFolder string) (localPath string, remotePath string) {
+	// Check for colon separator (path mapping syntax)
+	// On Windows, avoid splitting drive letters like "C:\path"
+	if idx := strings.LastIndex(docsFolder, ":"); idx > 0 {
+		// Check if this is a Windows drive letter (single letter before colon)
+		if idx == 1 && len(docsFolder) > 2 && (docsFolder[0] >= 'A' && docsFolder[0] <= 'Z' || docsFolder[0] >= 'a' && docsFolder[0] <= 'z') {
+			// Windows drive letter, no path mapping
+			return docsFolder, ""
+		}
+		// Split on the last colon for path mapping
+		localPath = docsFolder[:idx]
+		remotePath = docsFolder[idx+1:]
+		return localPath, remotePath
+	}
+	return docsFolder, ""
+}
+
 // expandDocsFolder auto-configures RAG from a docs folder path.
 //
 // Creates:
-// - Chromem vector store (embedded, persisted to .hector/vectors/)
+// - Vector store (chromem by default, or external like qdrant)
 // - Embedder (auto-detected from LLM provider or explicit)
 // - Document store with directory source
 // - Search tool for the agent
 //
+// Supports path mapping syntax for Docker compatibility:
+//   - "./test-docs:/docs" maps local ./test-docs to /docs in container
+//
 // This mirrors legacy pkg/config/config.go:expandDocsFolder()
 func expandDocsFolder(cfg *Config, agentConfig *AgentConfig, opts ZeroConfig) {
+	// Parse docs folder for path mapping (local:remote syntax)
+	localPath, remotePath := parseDocsFolder(opts.DocsFolder)
+	// Determine embedder provider
+	// Priority: explicit > LLM provider has embeddings > ollama fallback
+	embedderProvider := opts.EmbedderProvider
+	if embedderProvider == "" {
+		embedderProvider = detectEmbedderProvider(cfg)
+	}
+
 	// Determine embedder model
 	embedderModel := opts.EmbedderModel
 	if embedderModel == "" {
-		embedderModel = detectEmbedderModel(cfg)
+		embedderModel = detectEmbedderModelForProvider(embedderProvider)
 	}
-
-	// Determine embedder provider based on model
-	embedderProvider := detectEmbedderProvider(embedderModel)
 
 	// Create embedder config
 	if cfg.Embedders == nil {
@@ -401,21 +459,26 @@ func expandDocsFolder(cfg *Config, agentConfig *AgentConfig, opts ZeroConfig) {
 		embedderAPIKey = os.Getenv("COHERE_API_KEY")
 	}
 
-	cfg.Embedders["_rag_embedder"] = &EmbedderConfig{
+	embedderConfig := &EmbedderConfig{
 		Provider: embedderProvider,
 		Model:    embedderModel,
 		APIKey:   embedderAPIKey,
 	}
 
-	// Create chromem vector store (embedded, zero external deps)
+	// Apply custom embedder URL if specified
+	if opts.EmbedderURL != "" {
+		embedderConfig.BaseURL = opts.EmbedderURL
+	}
+
+	cfg.Embedders["_rag_embedder"] = embedderConfig
+
+	// Create vector store config
 	if cfg.VectorStores == nil {
 		cfg.VectorStores = make(map[string]*VectorStoreConfig)
 	}
-	cfg.VectorStores["_rag_vectors"] = &VectorStoreConfig{
-		Type:        "chromem",
-		PersistPath: ".hector/vectors", // Persist for fast restarts
-		Compress:    true,              // Save disk space
-	}
+
+	vectorConfig := createVectorStoreConfig(opts)
+	cfg.VectorStores["_rag_vectors"] = vectorConfig
 
 	// Create document store config
 	if cfg.DocumentStores == nil {
@@ -428,7 +491,7 @@ func expandDocsFolder(cfg *Config, agentConfig *AgentConfig, opts ZeroConfig) {
 	docStoreConfig := &DocumentStoreConfig{
 		Source: &DocumentSourceConfig{
 			Type: "directory",
-			Path: opts.DocsFolder,
+			Path: localPath, // Use parsed local path (supports local:remote syntax)
 			// Default exclusions for common non-document folders
 			Exclude: []string{".git", "node_modules", "__pycache__", ".hector", "vendor"},
 		},
@@ -446,7 +509,7 @@ func expandDocsFolder(cfg *Config, agentConfig *AgentConfig, opts ZeroConfig) {
 		},
 		Search: &DocumentSearchConfig{
 			TopK:      10,
-			Threshold: 0.5,
+			Threshold: 0.0, // No threshold filtering - return all topK results
 		},
 	}
 
@@ -457,6 +520,7 @@ func expandDocsFolder(cfg *Config, agentConfig *AgentConfig, opts ZeroConfig) {
 			docStoreConfig.MCPParsers = &MCPParserConfig{
 				ToolNames:  toolNames,
 				Extensions: []string{".pdf", ".docx", ".pptx", ".xlsx", ".html"},
+				PathPrefix: remotePath, // For Docker: maps local paths to container paths
 			}
 			docStoreConfig.MCPParsers.SetDefaults()
 		}
@@ -470,56 +534,134 @@ func expandDocsFolder(cfg *Config, agentConfig *AgentConfig, opts ZeroConfig) {
 	agentConfig.DocumentStores = &ragDocs
 }
 
-// detectEmbedderModel auto-detects the best embedder model based on LLM provider.
-func detectEmbedderModel(cfg *Config) string {
+// createVectorStoreConfig creates a vector store config based on zero-config options.
+func createVectorStoreConfig(opts ZeroConfig) *VectorStoreConfig {
+	vectorType := opts.VectorType
+	if vectorType == "" {
+		vectorType = "chromem" // Default to embedded
+	}
+
+	config := &VectorStoreConfig{
+		Type: vectorType,
+	}
+
+	switch vectorType {
+	case "chromem":
+		// Embedded vector store with persistence
+		config.PersistPath = ".hector/vectors"
+		config.Compress = true
+
+	case "qdrant":
+		// External Qdrant
+		if opts.VectorHost != "" {
+			config.Host = opts.VectorHost
+		} else {
+			config.Host = "localhost"
+			config.Port = 6333 // Qdrant default
+		}
+		if opts.VectorAPIKey != "" {
+			config.APIKey = opts.VectorAPIKey
+		}
+
+	case "chroma":
+		// External Chroma
+		if opts.VectorHost != "" {
+			config.Host = opts.VectorHost
+		} else {
+			config.Host = "localhost"
+			config.Port = 8000 // Chroma default
+		}
+
+	case "weaviate":
+		// External Weaviate
+		if opts.VectorHost != "" {
+			config.Host = opts.VectorHost
+		} else {
+			config.Host = "localhost"
+			config.Port = 8080 // Weaviate default
+		}
+		if opts.VectorAPIKey != "" {
+			config.APIKey = opts.VectorAPIKey
+		}
+
+	case "milvus":
+		// External Milvus
+		if opts.VectorHost != "" {
+			config.Host = opts.VectorHost
+		} else {
+			config.Host = "localhost"
+			config.Port = 19530 // Milvus default
+		}
+
+	case "pinecone":
+		// Pinecone (cloud)
+		if opts.VectorAPIKey != "" {
+			config.APIKey = opts.VectorAPIKey
+		} else {
+			config.APIKey = os.Getenv("PINECONE_API_KEY")
+		}
+		// VectorHost can contain index name for Pinecone
+		if opts.VectorHost != "" {
+			config.IndexName = opts.VectorHost
+		}
+	}
+
+	return config
+}
+
+// detectEmbedderProvider auto-detects the best embedder provider based on LLM provider.
+// Logic: If LLM provider has embeddings (openai), use it. Otherwise check for API keys,
+// then fallback to local ollama.
+func detectEmbedderProvider(cfg *Config) string {
 	// Check if we have an LLM config to infer from
 	if cfg.LLMs != nil {
 		if llmCfg, ok := cfg.LLMs["default"]; ok {
 			switch llmCfg.Provider {
 			case LLMProviderOpenAI:
-				return "text-embedding-3-small" // OpenAI's efficient embedder
+				// OpenAI has embeddings - use it
+				return "openai"
 			case LLMProviderOllama:
-				return "nomic-embed-text" // Popular Ollama embedder
+				// Ollama has embeddings - use it
+				return "ollama"
 			case LLMProviderAnthropic, LLMProviderGemini:
-				// These don't have embeddings, check for OpenAI API key
+				// These don't have embeddings, check for OpenAI API key first
 				if os.Getenv("OPENAI_API_KEY") != "" {
-					return "text-embedding-3-small"
+					return "openai"
 				}
+				// Check for Cohere API key
+				if os.Getenv("COHERE_API_KEY") != "" {
+					return "cohere"
+				}
+				// Fallback to local ollama
+				return "ollama"
 			}
 		}
 	}
 
-	// Fallback: check for OpenAI API key
+	// No LLM config, check for API keys
 	if os.Getenv("OPENAI_API_KEY") != "" {
-		return "text-embedding-3-small"
+		return "openai"
+	}
+	if os.Getenv("COHERE_API_KEY") != "" {
+		return "cohere"
 	}
 
 	// Final fallback: Ollama (works locally without API key)
-	return "nomic-embed-text"
+	return "ollama"
 }
 
-// detectEmbedderProvider determines the provider based on model name.
-func detectEmbedderProvider(model string) string {
-	// OpenAI models
-	if strings.HasPrefix(model, "text-embedding") {
-		return "openai"
+// detectEmbedderModelForProvider returns the default model for a given embedder provider.
+func detectEmbedderModelForProvider(provider string) string {
+	switch provider {
+	case "openai":
+		return "text-embedding-3-small"
+	case "ollama":
+		return "nomic-embed-text"
+	case "cohere":
+		return "embed-english-v3.0"
+	default:
+		return "nomic-embed-text"
 	}
-
-	// Common Ollama embedding models
-	ollamaModels := []string{
-		"nomic-embed-text",
-		"mxbai-embed-large",
-		"all-minilm",
-		"bge-",
-	}
-	for _, prefix := range ollamaModels {
-		if strings.HasPrefix(model, prefix) || strings.Contains(model, prefix) {
-			return "ollama"
-		}
-	}
-
-	// Default to Ollama (most flexible for local use)
-	return "ollama"
 }
 
 // parseToolsList parses a tools string into a list of enabled tool names.

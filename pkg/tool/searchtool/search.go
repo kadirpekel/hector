@@ -50,7 +50,6 @@ type SearchTool struct {
 	availableStores []string // Store names this agent can access (empty = all)
 	maxLimit        int
 	defaultLimit    int
-	description     string
 }
 
 // Config configures the search tool.
@@ -90,9 +89,6 @@ func New(cfg Config) *SearchTool {
 		defaultLimit:    cfg.DefaultLimit,
 	}
 
-	// Build description with store info
-	t.description = t.buildDescription()
-
 	return t
 }
 
@@ -101,9 +97,9 @@ func (t *SearchTool) Name() string {
 	return "search"
 }
 
-// Description returns the tool description.
+// Description returns the tool description with current store stats.
 func (t *SearchTool) Description() string {
-	return t.description
+	return t.buildDescription()
 }
 
 // IsLongRunning returns false - search is quick.
@@ -378,8 +374,6 @@ func (t *SearchTool) RegisterStore(name string, store *rag.DocumentStore) {
 		t.stores = make(map[string]*rag.DocumentStore)
 	}
 	t.stores[name] = store
-	// Rebuild description
-	t.description = t.buildDescription()
 }
 
 // Ensure SearchTool implements tool.CallableTool interface.

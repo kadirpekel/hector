@@ -104,24 +104,15 @@ func NewChromemProvider(cfg ChromemConfig) (*ChromemProvider, error) {
 		}
 
 		// Try to load existing database
-		dbPath := cfg.PersistPath + "/vectors.gob"
-		if cfg.Compress {
-			dbPath += ".gz"
-		}
-
-		if _, statErr := os.Stat(dbPath); statErr == nil {
-			db, err = chromem.NewPersistentDB(dbPath, cfg.Compress)
-			if err != nil {
-				slog.Warn("Failed to load existing vector database, creating new",
-					"path", dbPath,
-					"error", err)
-				db = chromem.NewDB()
-			} else {
-				slog.Info("Loaded vector database from file", "path", dbPath)
-			}
-		} else {
+		// NewPersistentDB expects a directory path, not a file path
+		db, err = chromem.NewPersistentDB(cfg.PersistPath, cfg.Compress)
+		if err != nil {
+			slog.Warn("Failed to create persistent vector database, using in-memory",
+				"path", cfg.PersistPath,
+				"error", err)
 			db = chromem.NewDB()
-			slog.Info("Created new vector database", "path", dbPath)
+		} else {
+			slog.Info("Using persistent vector database", "path", cfg.PersistPath)
 		}
 	} else {
 		db = chromem.NewDB()
@@ -148,6 +139,9 @@ func (p *ChromemProvider) getCollection(ctx context.Context, name string) (*chro
 	p.mu.RLock()
 	if col, ok := p.collections[name]; ok {
 		p.mu.RUnlock()
+		slog.Debug("ChromemProvider getCollection: returning cached collection",
+			"name", name,
+			"doc_count", col.Count())
 		return col, nil
 	}
 	p.mu.RUnlock()
@@ -167,6 +161,8 @@ func (p *ChromemProvider) getCollection(ctx context.Context, name string) (*chro
 	}
 
 	p.collections[name] = col
+	slog.Debug("ChromemProvider getCollection: created new collection",
+		"name", name)
 	return col, nil
 }
 
@@ -176,6 +172,8 @@ func (p *ChromemProvider) Upsert(ctx context.Context, collection string, id stri
 	if err != nil {
 		return err
 	}
+
+	countBefore := col.Count()
 
 	// Convert metadata to string map (chromem requirement)
 	strMetadata := make(map[string]string, len(metadata))
@@ -201,6 +199,14 @@ func (p *ChromemProvider) Upsert(ctx context.Context, collection string, id stri
 		return fmt.Errorf("failed to upsert document: %w", err)
 	}
 
+	countAfter := col.Count()
+	if countAfter > countBefore {
+		slog.Debug("ChromemProvider Upsert: document added",
+			"collection", collection,
+			"doc_id", id,
+			"count", countAfter)
+	}
+
 	// Persist if enabled
 	if err := p.persist(); err != nil {
 		slog.Warn("Failed to persist after upsert", "error", err)
@@ -219,6 +225,21 @@ func (p *ChromemProvider) SearchWithFilter(ctx context.Context, collection strin
 	col, err := p.getCollection(ctx, collection)
 	if err != nil {
 		return nil, err
+	}
+
+	// Cap topK to collection count (chromem requires nResults <= document count)
+	docCount := col.Count()
+	slog.Info("ChromemProvider search",
+		"collection", collection,
+		"doc_count", docCount,
+		"requested_topK", topK)
+	if docCount == 0 {
+		slog.Warn("ChromemProvider search: collection is empty - no documents to search",
+			"collection", collection)
+		return []Result{}, nil
+	}
+	if topK > docCount {
+		topK = docCount
 	}
 
 	// Convert filter to string map
@@ -334,22 +355,11 @@ func (p *ChromemProvider) Close() error {
 	return p.persist()
 }
 
-// persist saves the database to disk if persistence is enabled.
+// persist is a no-op since NewPersistentDB handles persistence automatically.
+// Kept for API compatibility.
 func (p *ChromemProvider) persist() error {
-	if p.persistPath == "" {
-		return nil
-	}
-
-	dbPath := p.persistPath + "/vectors.gob"
-	if p.compress {
-		dbPath += ".gz"
-	}
-
-	//nolint:staticcheck // Using deprecated function for compatibility
-	if err := p.db.Export(dbPath, p.compress, ""); err != nil {
-		return fmt.Errorf("failed to persist database: %w", err)
-	}
-
+	// NewPersistentDB handles persistence automatically on each write operation.
+	// No manual export needed.
 	return nil
 }
 
