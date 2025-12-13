@@ -135,6 +135,12 @@ type (
 	// Tool is the core tool interface.
 	Tool = tool.Tool
 
+	// CallableTool is a tool that can be called synchronously.
+	CallableTool = tool.CallableTool
+
+	// Toolset groups related tools.
+	Toolset = tool.Toolset
+
 	// LLM is the LLM interface.
 	LLM = model.LLM
 
@@ -152,6 +158,12 @@ type (
 
 	// ToolConfig is the configuration for a tool.
 	ToolConfig = config.ToolConfig
+
+	// LLMAgentConfig is the configuration for an LLM agent.
+	LLMAgentConfig = llmagent.Config
+
+	// LLMAgentReasoningConfig configures the reasoning loop for LLM agents.
+	LLMAgentReasoningConfig = llmagent.ReasoningConfig
 )
 
 // NewAgent creates a new LLM agent programmatically.
@@ -1146,3 +1158,62 @@ func (h *Hector) DefaultAgent() (agent.Agent, bool) {
 func (h *Hector) SessionService() session.Service {
 	return h.runtime.SessionService()
 }
+
+// ============================================================================
+// Builder Re-exports (for comprehensive programmatic API)
+// ============================================================================
+//
+// For full programmatic control, use the builder package directly:
+//
+//	import "github.com/kadirpekel/hector/pkg/builder"
+//
+// The builder package provides fluent APIs for:
+//   - builder.NewAgent() - Build LLM agents
+//   - builder.NewLLM() - Build LLM providers
+//   - builder.NewEmbedder() - Build embedding providers
+//   - builder.NewVectorProvider() - Build vector databases
+//   - builder.NewDocumentStore() - Build RAG document stores
+//   - builder.NewMCP() - Build MCP toolsets
+//   - builder.NewToolset() - Wrap tools into toolsets
+//   - builder.NewRunner() - Build agent runners
+//   - builder.NewServer() - Build A2A servers
+//   - builder.FunctionTool() - Create tools from Go functions
+//   - builder.NewReasoning() - Configure reasoning loops
+//   - builder.NewWorkingMemory() - Configure memory strategies
+//
+// Example using builder package for full control:
+//
+//	import "github.com/kadirpekel/hector/pkg/builder"
+//
+//	// Build LLM
+//	llm := builder.NewLLM("openai").
+//	    Model("gpt-4o").
+//	    APIKeyFromEnv("OPENAI_API_KEY").
+//	    MustBuild()
+//
+//	// Build custom tool
+//	type Args struct {
+//	    Query string `json:"query" jsonschema:"required"`
+//	}
+//	searchTool, _ := builder.FunctionTool("search", "Search for information",
+//	    func(ctx tool.Context, args Args) (map[string]any, error) {
+//	        return map[string]any{"results": []string{"result1"}}, nil
+//	    })
+//
+//	// Build agent
+//	agent, _ := builder.NewAgent("assistant").
+//	    WithLLM(llm).
+//	    WithTool(searchTool).
+//	    WithReasoning(builder.NewReasoning().MaxIterations(50).Build()).
+//	    Build()
+//
+//	// Build runner
+//	r, _ := builder.NewRunner("my-app").
+//	    WithAgent(agent).
+//	    Build()
+//
+//	// Run agent
+//	for event, err := range r.Run(ctx, "user1", "session1", content, agent.RunConfig{}) {
+//	    // Handle events
+//	}
+// ============================================================================

@@ -20,6 +20,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/model"
 	"github.com/kadirpekel/hector/pkg/model/anthropic"
 	"github.com/kadirpekel/hector/pkg/model/gemini"
@@ -309,4 +310,35 @@ func (b *LLMBuilder) MustBuild() model.LLM {
 		panic(fmt.Sprintf("failed to build LLM: %v", err))
 	}
 	return llm
+}
+
+// LLMFromConfig creates an LLMBuilder from a config.LLMConfig.
+// This allows the configuration system to use the builder as its foundation.
+//
+// Example:
+//
+//	cfg := &config.LLMConfig{Provider: "openai", Model: "gpt-4o", APIKey: "sk-..."}
+//	llm, err := builder.LLMFromConfig(cfg).Build()
+func LLMFromConfig(cfg *config.LLMConfig) *LLMBuilder {
+	if cfg == nil {
+		return NewLLM("")
+	}
+
+	b := NewLLM(string(cfg.Provider))
+	b.model = cfg.Model
+	b.apiKey = cfg.APIKey
+	b.maxTokens = cfg.MaxTokens
+	b.temperature = cfg.Temperature
+	b.maxToolOutputLength = cfg.MaxToolOutputLength
+
+	if cfg.BaseURL != "" {
+		b.baseURL = cfg.BaseURL
+	}
+
+	if cfg.Thinking != nil && config.BoolValue(cfg.Thinking.Enabled, false) {
+		b.enableThinking = true
+		b.thinkingBudget = cfg.Thinking.BudgetTokens
+	}
+
+	return b
 }

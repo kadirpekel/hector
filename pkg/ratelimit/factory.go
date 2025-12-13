@@ -16,7 +16,6 @@
 package ratelimit
 
 import (
-	"database/sql"
 	"fmt"
 
 	"github.com/kadirpekel/hector/pkg/config"
@@ -139,53 +138,4 @@ func ScopeFromConfig(cfg *config.RateLimitConfig) Scope {
 		return ScopeSession
 	}
 	return ParseScope(cfg.Scope)
-}
-
-// NewRateLimiterFromConfigLegacy creates a RateLimiter with a raw database connection.
-// This is a legacy-compatible function. Prefer NewRateLimiterFromConfig which uses
-// v2's database configuration foundation.
-//
-// Deprecated: Use NewRateLimiterFromConfig with Config and DBPool instead.
-func NewRateLimiterFromConfigLegacy(cfg *config.RateLimitConfig, db interface{}, dialect string) (RateLimiter, error) {
-	if cfg == nil || !cfg.IsEnabled() {
-		return nil, nil
-	}
-
-	// Create store based on backend
-	var store Store
-	var err error
-
-	switch cfg.Backend {
-	case "sql":
-		sqlDB, ok := db.(*sql.DB)
-		if !ok || sqlDB == nil {
-			return nil, fmt.Errorf("SQL database connection required for SQL backend")
-		}
-		store, err = NewSQLStore(sqlDB, dialect)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create SQL store: %w", err)
-		}
-	case "memory", "":
-		store = NewMemoryStore()
-	default:
-		return nil, fmt.Errorf("unsupported rate limit backend: %s", cfg.Backend)
-	}
-
-	// Convert config limits to LimitRules
-	limits := make([]LimitRule, len(cfg.Limits))
-	for i, l := range cfg.Limits {
-		limits[i] = LimitRule{
-			Type:   ParseLimitType(l.Type),
-			Window: ParseTimeWindow(l.Window),
-			Limit:  l.Limit,
-		}
-	}
-
-	// Create limiter config
-	limiterCfg := &Config{
-		Enabled: cfg.IsEnabled(),
-		Limits:  limits,
-	}
-
-	return NewRateLimiter(limiterCfg, store)
 }

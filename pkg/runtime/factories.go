@@ -20,108 +20,40 @@ import (
 	"time"
 
 	"github.com/kadirpekel/hector/pkg/agent"
+	"github.com/kadirpekel/hector/pkg/builder"
 	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/embedder"
 	"github.com/kadirpekel/hector/pkg/memory"
 	"github.com/kadirpekel/hector/pkg/model"
-	"github.com/kadirpekel/hector/pkg/model/anthropic"
-	"github.com/kadirpekel/hector/pkg/model/gemini"
-	"github.com/kadirpekel/hector/pkg/model/ollama"
-	"github.com/kadirpekel/hector/pkg/model/openai"
 	"github.com/kadirpekel/hector/pkg/tool"
 	"github.com/kadirpekel/hector/pkg/tool/commandtool"
 	"github.com/kadirpekel/hector/pkg/tool/filetool"
-	"github.com/kadirpekel/hector/pkg/tool/mcptoolset"
 	"github.com/kadirpekel/hector/pkg/tool/todotool"
 	"github.com/kadirpekel/hector/pkg/tool/webtool"
 )
 
 // DefaultLLMFactory creates LLM instances based on provider type.
+// Uses the builder package as its foundation to ensure a single code path
+// for both configuration-based and programmatic API usage.
 func DefaultLLMFactory(cfg *config.LLMConfig) (model.LLM, error) {
-	switch cfg.Provider {
-	case config.LLMProviderAnthropic:
-		acfg := anthropic.Config{
-			APIKey:              cfg.APIKey,
-			Model:               cfg.Model,
-			MaxTokens:           cfg.MaxTokens,
-			Temperature:         cfg.Temperature,
-			BaseURL:             cfg.BaseURL,
-			MaxToolOutputLength: cfg.MaxToolOutputLength,
-		}
-		if cfg.Thinking != nil && config.BoolValue(cfg.Thinking.Enabled, false) {
-			acfg.EnableThinking = true
-			acfg.ThinkingBudget = cfg.Thinking.BudgetTokens
-		}
-		return anthropic.New(acfg)
-
-	case config.LLMProviderOpenAI:
-		ocfg := openai.Config{
-			APIKey:              cfg.APIKey,
-			Model:               cfg.Model,
-			MaxTokens:           cfg.MaxTokens,
-			Temperature:         cfg.Temperature,
-			BaseURL:             cfg.BaseURL,
-			MaxToolOutputLength: cfg.MaxToolOutputLength,
-		}
-		if cfg.Thinking != nil && config.BoolValue(cfg.Thinking.Enabled, false) {
-			ocfg.EnableReasoning = true
-			ocfg.ReasoningBudget = cfg.Thinking.BudgetTokens
-		}
-		return openai.New(ocfg)
-
-	case config.LLMProviderGemini:
-		gcfg := gemini.Config{
-			APIKey:              cfg.APIKey,
-			Model:               cfg.Model,
-			MaxTokens:           cfg.MaxTokens,
-			MaxToolOutputLength: cfg.MaxToolOutputLength,
-		}
-		if cfg.Temperature != nil {
-			gcfg.Temperature = *cfg.Temperature
-		}
-		return gemini.New(gcfg)
-
-	case config.LLMProviderOllama:
-		ocfg := ollama.Config{
-			BaseURL:             cfg.BaseURL,
-			Model:               cfg.Model,
-			MaxToolOutputLength: cfg.MaxToolOutputLength,
-		}
-		if cfg.Temperature != nil {
-			ocfg.Temperature = cfg.Temperature
-		}
-		if cfg.MaxTokens > 0 {
-			numPredict := cfg.MaxTokens
-			ocfg.NumPredict = &numPredict
-		}
-		if cfg.Thinking != nil && config.BoolValue(cfg.Thinking.Enabled, false) {
-			ocfg.EnableThinking = true
-		}
-		return ollama.New(ocfg)
-
-	default:
-		return nil, fmt.Errorf("unknown provider: %s", cfg.Provider)
-	}
+	return builder.LLMFromConfig(cfg).Build()
 }
 
 // DefaultEmbedderFactory creates Embedder instances based on provider type.
+// Uses the builder package as its foundation to ensure a single code path
+// for both configuration-based and programmatic API usage.
 func DefaultEmbedderFactory(cfg *config.EmbedderConfig) (embedder.Embedder, error) {
-	return embedder.NewEmbedderFromConfig(cfg)
+	return builder.EmbedderFromConfig(cfg).Build()
 }
 
 // DefaultToolsetFactory creates toolset instances based on tool type.
+// Uses the builder package as its foundation for MCP toolsets to ensure
+// a single code path for both configuration-based and programmatic API usage.
 func DefaultToolsetFactory(name string, cfg *config.ToolConfig) (tool.Toolset, error) {
 	switch cfg.Type {
 	case config.ToolTypeMCP:
-		return mcptoolset.New(mcptoolset.Config{
-			Name:      name,
-			URL:       cfg.URL,
-			Transport: cfg.Transport,
-			Command:   cfg.Command,
-			Args:      cfg.Args,
-			Env:       cfg.Env,
-			Filter:    cfg.Filter,
-		})
+		// Use builder as foundation for MCP toolsets
+		return builder.MCPFromConfig(name, cfg).Build()
 
 	case config.ToolTypeCommand:
 		// Build command tool configuration
@@ -278,6 +210,8 @@ type WorkingMemoryFactoryOptions struct {
 }
 
 // DefaultWorkingMemoryFactory creates a working memory strategy from config.
+// Uses the builder package as its foundation to ensure a single code path
+// for both configuration-based and programmatic API usage.
 // Returns nil if no context config is set or strategy is "none".
 func DefaultWorkingMemoryFactory(opts WorkingMemoryFactoryOptions) (memory.WorkingMemoryStrategy, error) {
 	cfg := opts.Config
@@ -287,52 +221,17 @@ func DefaultWorkingMemoryFactory(opts WorkingMemoryFactoryOptions) (memory.Worki
 
 	cfg.SetDefaults()
 
-	switch cfg.Strategy {
-	case "", "none":
+	if cfg.Strategy == "" || cfg.Strategy == "none" {
 		return nil, nil // No filtering
-
-	case "buffer_window":
-		return memory.NewBufferWindowStrategy(memory.BufferWindowConfig{
-			WindowSize: cfg.WindowSize,
-		}), nil
-
-	case "token_window":
-		strategy, err := memory.NewTokenWindowStrategy(memory.TokenWindowConfig{
-			Budget:         cfg.Budget,
-			PreserveRecent: cfg.PreserveRecent,
-			Model:          opts.ModelName,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create token_window strategy: %w", err)
-		}
-		return strategy, nil
-
-	case "summary_buffer":
-		// Create summarizer if LLM is provided
-		var summarizer memory.Summarizer
-		if opts.SummarizerLLM != nil {
-			var err error
-			summarizer, err = memory.NewLLMSummarizer(memory.LLMSummarizerConfig{
-				LLM: opts.SummarizerLLM,
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to create summarizer: %w", err)
-			}
-		}
-
-		strategy, err := memory.NewSummaryBufferStrategy(memory.SummaryBufferConfig{
-			Budget:     cfg.Budget,
-			Threshold:  cfg.Threshold,
-			Target:     cfg.Target,
-			Model:      opts.ModelName,
-			Summarizer: summarizer,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create summary_buffer strategy: %w", err)
-		}
-		return strategy, nil
-
-	default:
-		return nil, fmt.Errorf("unknown context strategy: %s", cfg.Strategy)
 	}
+
+	// Use builder as foundation
+	b := builder.WorkingMemoryFromConfig(cfg).ModelName(opts.ModelName)
+
+	// Set summarizer LLM for summary_buffer strategy
+	if cfg.Strategy == "summary_buffer" && opts.SummarizerLLM != nil {
+		b = b.WithLLM(opts.SummarizerLLM)
+	}
+
+	return b.Build()
 }

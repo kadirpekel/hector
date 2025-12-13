@@ -18,6 +18,7 @@ package builder
 import (
 	"fmt"
 
+	"github.com/kadirpekel/hector/pkg/config"
 	"github.com/kadirpekel/hector/pkg/memory"
 	"github.com/kadirpekel/hector/pkg/model"
 )
@@ -32,12 +33,14 @@ import (
 //	    WithLLM(llm).
 //	    Build()
 type WorkingMemoryBuilder struct {
-	strategyType string
-	windowSize   int
-	budget       int
-	threshold    float64
-	target       float64
-	llm          model.LLM
+	strategyType   string
+	windowSize     int
+	budget         int
+	threshold      float64
+	target         float64
+	preserveRecent int
+	modelName      string // For token counting
+	llm            model.LLM
 }
 
 // NewWorkingMemory creates a new working memory builder.
@@ -54,12 +57,36 @@ type WorkingMemoryBuilder struct {
 //	    Build()
 func NewWorkingMemory(strategyType string) *WorkingMemoryBuilder {
 	return &WorkingMemoryBuilder{
-		strategyType: strategyType,
-		windowSize:   20,
-		budget:       8000,
-		threshold:    0.85,
-		target:       0.6,
+		strategyType:   strategyType,
+		windowSize:     20,
+		budget:         8000,
+		threshold:      0.85,
+		target:         0.6,
+		preserveRecent: 5,
 	}
+}
+
+// ModelName sets the model name for token counting (used by token_window and summary_buffer).
+//
+// Example:
+//
+//	builder.NewWorkingMemory("token_window").ModelName("gpt-4o").Budget(8000)
+func (b *WorkingMemoryBuilder) ModelName(name string) *WorkingMemoryBuilder {
+	b.modelName = name
+	return b
+}
+
+// PreserveRecent sets the minimum number of recent messages to always keep (token_window only).
+//
+// Example:
+//
+//	builder.NewWorkingMemory("token_window").PreserveRecent(5)
+func (b *WorkingMemoryBuilder) PreserveRecent(count int) *WorkingMemoryBuilder {
+	if count < 0 {
+		panic("preserve recent must be non-negative")
+	}
+	b.preserveRecent = count
+	return b
 }
 
 // WindowSize sets the window size for buffer_window strategy.
@@ -137,7 +164,9 @@ func (b *WorkingMemoryBuilder) Build() (memory.WorkingMemoryStrategy, error) {
 
 	case "token_window":
 		return memory.NewTokenWindowStrategy(memory.TokenWindowConfig{
-			Budget: b.budget,
+			Budget:         b.budget,
+			PreserveRecent: b.preserveRecent,
+			Model:          b.modelName,
 		})
 
 	case "summary_buffer", "":
@@ -150,11 +179,15 @@ func (b *WorkingMemoryBuilder) Build() (memory.WorkingMemoryStrategy, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create summarizer: %w", err)
 		}
+		modelName := b.modelName
+		if modelName == "" {
+			modelName = b.llm.Name()
+		}
 		return memory.NewSummaryBufferStrategy(memory.SummaryBufferConfig{
 			Budget:     b.budget,
 			Threshold:  b.threshold,
 			Target:     b.target,
-			Model:      b.llm.Name(),
+			Model:      modelName,
 			Summarizer: summarizer,
 		})
 
@@ -170,4 +203,37 @@ func (b *WorkingMemoryBuilder) MustBuild() memory.WorkingMemoryStrategy {
 		panic(fmt.Sprintf("failed to build working memory: %v", err))
 	}
 	return strategy
+}
+
+// WorkingMemoryFromConfig creates a WorkingMemoryBuilder from a config.ContextConfig.
+// This allows the configuration system to use the builder as its foundation.
+//
+// Example:
+//
+//	cfg := &config.ContextConfig{Strategy: "buffer_window", WindowSize: 20}
+//	strategy, err := builder.WorkingMemoryFromConfig(cfg).Build()
+func WorkingMemoryFromConfig(cfg *config.ContextConfig) *WorkingMemoryBuilder {
+	if cfg == nil {
+		return NewWorkingMemory("none")
+	}
+
+	b := NewWorkingMemory(cfg.Strategy)
+
+	if cfg.WindowSize > 0 {
+		b.windowSize = cfg.WindowSize
+	}
+	if cfg.Budget > 0 {
+		b.budget = cfg.Budget
+	}
+	if cfg.Threshold > 0 {
+		b.threshold = cfg.Threshold
+	}
+	if cfg.Target > 0 {
+		b.target = cfg.Target
+	}
+	if cfg.PreserveRecent > 0 {
+		b.preserveRecent = cfg.PreserveRecent
+	}
+
+	return b
 }
