@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  # Run CI on pull requests for testing before merge
+  pull_request:
+    branches: [ main ]
+  # Run full CI only on release tags
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+        check-latest: false
+    
+    - name: Verify Go version
+      run: |
+        go version
+        go env GOVERSION
+    
+    - name: Stub UI dist for embed
+      run: mkdir -p ui/dist && touch ui/dist/index.html
+    
+    - name: Clean all caches
+      run: go clean -cache -modcache -testcache -fuzzcache
+    
+    - name: Format code
+      run: go fmt ./...
+    
+    - name: Run go vet
+      run: go vet ./...
+    
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: v1.64.3
+        args: --timeout=5m
+    
+    - name: Generate coverage report
+      run: go test -v -coverprofile=coverage.out ./...
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  build:
+    runs-on: ubuntu-latest
+    needs: quality
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: studio/package-lock.json
+
+    - name: Build Studio
+      working-directory: studio
+      run: |
+        npm ci
+        npm run build
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24.x
+
+    - name: Stage Studio assets
+      run: mkdir -p ui/dist && cp -r studio/dist/* ui/dist/
+    
+    - name: Build
+      run: |
+        go build -ldflags "-X 'github.com/verikod/hector.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'github.com/verikod/hector.GitCommit=$(git rev-parse --short HEAD)'" -o hector ./cmd/hector
+    
+    - name: Test binary
+      run: ./hector version
+    
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: hector-linux-amd64
+        path: hector

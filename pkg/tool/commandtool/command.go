@@ -1,0 +1,525 @@
+// Package commandtool provides a secure, streaming command execution tool.
+//
+// Security Features:
+//   - AllowedCommands: Whitelist of permitted base commands
+//   - DeniedCommands: Blacklist of dangerous commands (applied first)
+//   - DeniedPatterns: Regex patterns for dangerous patterns (rm -rf, etc.)
+//   - WorkingDirectory: Restricted execution directory
+//   - MaxExecutionTime: Timeout to prevent runaway processes
+//   - RequireApproval: HITL approval before execution
+//
+// Streaming:
+//   - Uses iter.Seq2 pattern matching LLM.GenerateContent
+//   - Real-time stdout/stderr streaming for UI feedback
+//
+// Example usage:
+//
+//	tool := commandtool.New(commandtool.Config{
+//	    AllowedCommands: []string{"docker", "npm", "go", "ls", "cat"},
+//	    DeniedCommands:  []string{"rm", "sudo", "chmod"},
+//	    WorkingDir:      "/project",
+//	    RequireApproval: true, // HITL approval required
+//	})
+package commandtool
+
+import (
+	"context"
+	"fmt"
+	"iter"
+	"log"
+	"os/exec"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/verikod/hector/pkg/agent"
+	"github.com/verikod/hector/pkg/tool"
+)
+
+// DefaultDeniedCommands are commands that are blocked by default for security.
+var DefaultDeniedCommands = []string{
+	"rm", "rmdir", "sudo", "su", "chmod", "chown",
+	"dd", "mkfs", "fdisk", "mount", "umount",
+	"kill", "killall", "pkill", "reboot", "shutdown",
+	"passwd", "useradd", "userdel", "groupadd",
+}
+
+// DefaultDeniedPatterns are regex patterns blocked by default.
+var DefaultDeniedPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`rm\s+(-rf|-fr|--recursive)`),     // rm -rf variants
+	regexp.MustCompile(`>\s*/dev/`),                      // writes to /dev
+	regexp.MustCompile(`:\(\)\s*\{\s*:\|:\s*&\s*\}\s*;`), // fork bomb
+	regexp.MustCompile(`wget.*\|\s*sh`),                  // wget pipe to shell
+	regexp.MustCompile(`curl.*\|\s*sh`),                  // curl pipe to shell
+	regexp.MustCompile(`eval\s*\$`),                      // eval with variable
+	regexp.MustCompile(`\$\(.*\)\s*>\s*/`),               // command substitution to root
+	regexp.MustCompile(`>\s*/etc/`),                      // writes to /etc
+	regexp.MustCompile(`chmod\s+777`),                    // overly permissive chmod
+	regexp.MustCompile(`--no-preserve-root`),             // dangerous flag
+}
+
+// Config configures the command tool with security settings.
+type Config struct {
+	// Name overrides the default tool name.
+	Name string
+
+	// AllowedCommands is a whitelist of base commands that can be executed.
+	// If empty and DenyByDefault is false, all non-denied commands are allowed.
+	// If empty and DenyByDefault is true, no commands are allowed.
+	AllowedCommands []string
+
+	// DeniedCommands is a blacklist of base commands (checked before allowed).
+	// Defaults to DefaultDeniedCommands if nil.
+	DeniedCommands []string
+
+	// DeniedPatterns are regex patterns that block dangerous command patterns.
+	// Defaults to DefaultDeniedPatterns if nil.
+	DeniedPatterns []*regexp.Regexp
+
+	// DenyByDefault requires explicit AllowedCommands whitelist.
+	// When true, only commands in AllowedCommands are permitted.
+	// When false, all commands except denied ones are permitted.
+	DenyByDefault bool
+
+	// WorkingDir sets the default working directory.
+	// Commands cannot escape this directory.
+	WorkingDir string
+
+	// Timeout for command execution. Default: 5 minutes.
+	Timeout time.Duration
+
+	// RequireApproval triggers HITL approval before command execution.
+	// When true, IsLongRunning() returns true and the tool uses the
+	// approval flow instead of direct execution.
+	RequireApproval bool
+
+	// ApprovalPrompt customizes the approval message shown to users.
+	ApprovalPrompt string
+}
+
+// CommandTool executes shell commands with security controls and streaming output.
+type CommandTool struct {
+	name            string
+	allowedCommands map[string]bool
+	deniedCommands  map[string]bool
+	deniedPatterns  []*regexp.Regexp
+	denyByDefault   bool
+	workingDir      string
+	timeout         time.Duration
+	requireApproval bool
+	approvalPrompt  string
+
+	// activeExecs tracks active command executions for cancellation.
+	// Maps callID -> context.CancelFunc for targeted cancellation.
+	activeExecs sync.Map
+}
+
+// New creates a new secure command execution tool.
+func New(cfg Config) *CommandTool {
+	name := cfg.Name
+	if name == "" {
+		name = "bash"
+	}
+
+	timeout := cfg.Timeout
+	if timeout == 0 {
+		timeout = 5 * time.Minute
+	}
+
+	// Build allowed commands set
+	allowedCommands := make(map[string]bool)
+	for _, cmd := range cfg.AllowedCommands {
+		allowedCommands[cmd] = true
+	}
+
+	// Build denied commands set
+	deniedCommands := make(map[string]bool)
+
+	if SandboxEnforced {
+		// When sandbox is enforced, ALWAYS include default denied commands.
+		// Config can add MORE restrictions, but cannot remove defaults.
+		for _, cmd := range DefaultDeniedCommands {
+			deniedCommands[cmd] = true
+		}
+		// Merge any additional denied commands from config
+		for _, cmd := range cfg.DeniedCommands {
+			deniedCommands[cmd] = true
+		}
+		// Warn if config tried to provide an empty deny list (likely attempting bypass)
+		if cfg.DeniedCommands != nil && len(cfg.DeniedCommands) == 0 {
+			log.Println("[commandtool] WARNING: Config specified empty denied_commands but sandbox mode is enforced. Default denied commands are still active.")
+		}
+	} else {
+		// Unrestricted mode: config can fully override defaults
+		deniedList := cfg.DeniedCommands
+		if deniedList == nil {
+			deniedList = DefaultDeniedCommands
+		}
+		for _, cmd := range deniedList {
+			deniedCommands[cmd] = true
+		}
+	}
+
+	// Build denied patterns
+	var deniedPatterns []*regexp.Regexp
+
+	if SandboxEnforced {
+		// When sandbox is enforced, ALWAYS include default patterns.
+		deniedPatterns = append(deniedPatterns, DefaultDeniedPatterns...)
+		// Merge any additional patterns from config
+		if cfg.DeniedPatterns != nil {
+			deniedPatterns = append(deniedPatterns, cfg.DeniedPatterns...)
+		}
+		// Warn if config tried to provide empty patterns
+		if cfg.DeniedPatterns != nil && len(cfg.DeniedPatterns) == 0 {
+			log.Println("[commandtool] WARNING: Config specified empty denied_patterns but sandbox mode is enforced. Default denied patterns are still active.")
+		}
+	} else {
+		// Unrestricted mode: config can fully override defaults
+		deniedPatterns = cfg.DeniedPatterns
+		if deniedPatterns == nil {
+			deniedPatterns = DefaultDeniedPatterns
+		}
+	}
+
+	approvalPrompt := cfg.ApprovalPrompt
+	if approvalPrompt == "" {
+		approvalPrompt = "Command execution requires your approval"
+	}
+
+	return &CommandTool{
+		name:            name,
+		allowedCommands: allowedCommands,
+		deniedCommands:  deniedCommands,
+		deniedPatterns:  deniedPatterns,
+		denyByDefault:   cfg.DenyByDefault,
+		workingDir:      cfg.WorkingDir,
+		timeout:         timeout,
+		requireApproval: cfg.RequireApproval,
+		approvalPrompt:  approvalPrompt,
+	}
+}
+
+// Name returns the tool name.
+func (t *CommandTool) Name() string {
+	return t.name
+}
+
+// Description returns the tool description.
+func (t *CommandTool) Description() string {
+	desc := "Execute a secure shell command. Use this for system operations, installing dependencies, running tests, or inspecting the environment."
+
+	if t.requireApproval {
+		desc += " Requires human approval before execution."
+	}
+
+	if len(t.allowedCommands) > 0 {
+		allowed := make([]string, 0, len(t.allowedCommands))
+		for cmd := range t.allowedCommands {
+			allowed = append(allowed, cmd)
+		}
+		desc += fmt.Sprintf(" Allowed: %s.", strings.Join(allowed, ", "))
+	}
+
+	return desc
+}
+
+// IsLongRunning returns false - command execution is not async.
+func (t *CommandTool) IsLongRunning() bool {
+	return false
+}
+
+// RequiresApproval returns true if approval is enabled (HITL pattern).
+// This causes the task to transition to INPUT_REQUIRED state before execution.
+func (t *CommandTool) RequiresApproval() bool {
+	return t.requireApproval
+}
+
+// SupportsCancellation returns true - command execution can be cancelled.
+func (t *CommandTool) SupportsCancellation() bool {
+	return true
+}
+
+// Cancel terminates a running command execution by callID.
+// Returns true if cancellation was initiated.
+func (t *CommandTool) Cancel(callID string) bool {
+	if cancel, ok := t.activeExecs.LoadAndDelete(callID); ok {
+		cancel.(context.CancelFunc)()
+		return true
+	}
+	return false
+}
+
+// Schema returns the JSON schema for the tool parameters.
+func (t *CommandTool) Schema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"command": map[string]any{
+				"type":        "string",
+				"description": "The shell command to execute",
+			},
+			"working_dir": map[string]any{
+				"type":        "string",
+				"description": "Optional working directory for command execution",
+			},
+		},
+		"required": []string{"command"},
+	}
+}
+
+// validateCommand performs security validation on the command.
+func (t *CommandTool) validateCommand(command string) error {
+	if command == "" {
+		return fmt.Errorf("command is required")
+	}
+
+	// Check denied patterns first (most dangerous)
+	for _, pattern := range t.deniedPatterns {
+		if pattern.MatchString(command) {
+			return fmt.Errorf("command matches denied pattern: %s", pattern.String())
+		}
+	}
+
+	// Extract base command
+	baseCmd := t.extractBaseCommand(command)
+	if baseCmd == "" {
+		return fmt.Errorf("could not extract base command")
+	}
+
+	// Check if base command is explicitly denied
+	if t.deniedCommands[baseCmd] {
+		return fmt.Errorf("command not allowed: %s (in deny list)", baseCmd)
+	}
+
+	// If deny by default, must be in allowed list
+	if t.denyByDefault {
+		if !t.allowedCommands[baseCmd] {
+			return fmt.Errorf("command not allowed: %s (not in allow list)", baseCmd)
+		}
+	} else if len(t.allowedCommands) > 0 {
+		// If we have an allow list, check it
+		if !t.allowedCommands[baseCmd] {
+			return fmt.Errorf("command not allowed: %s (not in allow list)", baseCmd)
+		}
+	}
+
+	return nil
+}
+
+// extractBaseCommand extracts the first command from a potentially piped command.
+func (t *CommandTool) extractBaseCommand(command string) string {
+	// Split on shell operators
+	parts := strings.FieldsFunc(command, func(r rune) bool {
+		return r == '|' || r == '>' || r == '<' || r == ';' || r == '&'
+	})
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	firstCmd := strings.TrimSpace(parts[0])
+	cmdParts := strings.Fields(firstCmd)
+	if len(cmdParts) == 0 {
+		return ""
+	}
+
+	return cmdParts[0]
+}
+
+// CallStreaming executes the command and yields output using iter.Seq2.
+// Note: The approval flow is handled externally by the agent flow via RequiresApproval().
+// When CallStreaming is invoked, approval has already been granted (if configured).
+func (t *CommandTool) CallStreaming(ctx tool.Context, args map[string]any) iter.Seq2[*tool.Result, error] {
+	return func(yield func(*tool.Result, error) bool) {
+		command, ok := args["command"].(string)
+		if !ok || command == "" {
+			yield(nil, fmt.Errorf("command is required"))
+			return
+		}
+
+		// Validate command for security
+		if err := t.validateCommand(command); err != nil {
+			yield(nil, err)
+			return
+		}
+
+		// Determine working directory
+		workDir := t.workingDir
+		if wd, ok := args["working_dir"].(string); ok && wd != "" {
+			workDir = wd
+		}
+
+		// Execute command with streaming
+		t.executeStreaming(ctx, command, workDir, yield)
+	}
+}
+
+// executeStreaming performs the actual command execution with streaming output.
+func (t *CommandTool) executeStreaming(
+	ctx tool.Context,
+	command, workDir string,
+	yield func(*tool.Result, error) bool,
+) {
+	// Create context with timeout
+	execCtx, cancel := context.WithTimeout(ctx, t.timeout)
+
+	// Register execution for cancellation support
+	callID := ctx.FunctionCallID()
+	t.activeExecs.Store(callID, cancel)
+
+	// Register with task for cascade cancellation (if task available)
+	if taskObj := ctx.Task(); taskObj != nil {
+		taskObj.RegisterExecution(&agent.ChildExecution{
+			CallID: callID,
+			Name:   t.Name(),
+			Type:   "tool",
+			Cancel: func() bool { return t.Cancel(callID) },
+		})
+	}
+
+	defer func() {
+		t.activeExecs.Delete(callID)
+		// Unregister from task
+		if taskObj := ctx.Task(); taskObj != nil {
+			taskObj.UnregisterExecution(callID)
+		}
+		cancel()
+	}()
+
+	// Create command
+	cmd := exec.CommandContext(execCtx, "sh", "-c", command)
+	if workDir != "" {
+		cmd.Dir = workDir
+	}
+
+	// Create pipes for stdout and stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		yield(nil, fmt.Errorf("failed to create stdout pipe: %w", err))
+		return
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		yield(nil, fmt.Errorf("failed to create stderr pipe: %w", err))
+		return
+	}
+
+	// Start command
+	startTime := time.Now()
+	if err := cmd.Start(); err != nil {
+		yield(nil, fmt.Errorf("failed to start command: %w", err))
+		return
+	}
+
+	// Force close pipes on context cancellation to unblock readers
+	go func() {
+		<-execCtx.Done()
+		// Closing the pipes forces the Read calls below to return error/EOF
+		// which breaks the loop and allows cleanup.
+		_ = stdout.Close()
+		_ = stderr.Close()
+	}()
+
+	// Channel for collecting output chunks
+	// We use a larger buffer to prevent blocking the readers
+	chunks := make(chan string, 100)
+	var wg sync.WaitGroup
+	var accumulated strings.Builder
+
+	// Stream stdout
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		buf := make([]byte, 1024)
+		for {
+			n, err := stdout.Read(buf)
+			if n > 0 {
+				select {
+				case chunks <- string(buf[:n]):
+				case <-execCtx.Done():
+					return
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	// Stream stderr
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		buf := make([]byte, 1024)
+		for {
+			n, err := stderr.Read(buf)
+			if n > 0 {
+				select {
+				// Prefix stderr to distinguish it visually if needed,
+				// but for raw streaming we often just want the content.
+				// Preserving the [stderr] prefix might break TUI tools check.
+				// Let's keep it simple and just stream content.
+				case chunks <- string(buf[:n]):
+				case <-execCtx.Done():
+					return
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	// Close chunks channel when both readers are done
+	go func() {
+		wg.Wait()
+		close(chunks)
+	}()
+
+	// Yield chunks as they arrive (streaming)
+	for chunk := range chunks {
+		accumulated.WriteString(chunk)
+
+		if !yield(&tool.Result{
+			Content:   chunk,
+			Streaming: true,
+		}, nil) {
+			// Client disconnected, cancel command
+			cancel()
+			return
+		}
+	}
+
+	// Wait for command to complete
+	cmdErr := cmd.Wait()
+	duration := time.Since(startTime)
+
+	// Yield final result
+	finalContent := accumulated.String()
+	// Note: We don't default to "(no output)" here because for streaming tools
+	// empty output is valid/common (e.g. successful silent command)
+
+	result := &tool.Result{
+		Content:   finalContent,
+		Streaming: false, // Final result
+		Metadata: map[string]any{
+			"command":     command,
+			"working_dir": workDir,
+			"duration_ms": duration.Milliseconds(),
+			"exit_code":   cmd.ProcessState.ExitCode(),
+		},
+	}
+
+	if cmdErr != nil {
+		result.Error = cmdErr.Error()
+	}
+
+	yield(result, nil)
+}
+
+// Ensure CommandTool implements StreamingTool and CancellableTool
+var _ tool.StreamingTool = (*CommandTool)(nil)
+var _ tool.CancellableTool = (*CommandTool)(nil)

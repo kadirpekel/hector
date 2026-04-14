@@ -1,0 +1,47 @@
+name: Deploy Studio
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'studio/**'
+      - '.github/workflows/studio.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'studio/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: studio/package-lock.json
+
+      - name: Build Studio
+        working-directory: studio
+        run: |
+          npm ci
+          npm run build
+        env:
+          VITE_HECTOR_CLOUD_URL: https://cloud.gohector.dev
+
+      - name: Deploy to Cloudflare Pages
+        if: github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy studio/dist --project-name=hector-studio

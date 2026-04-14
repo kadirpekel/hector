@@ -1,0 +1,31 @@
+llms:
+  default:
+    provider: openai
+    model: gpt-5
+    api_key: ${OPENAI_API_KEY}
+tools:
+  github:
+    type: mcp
+    transport: stdio
+    command: npx
+    args: ['-y', '@modelcontextprotocol/server-github']
+    env:
+      GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_TOKEN}
+agents:
+  reviewer:
+    llm: default
+    tools: [github]
+    instruction: Review the PR using tools and post a comment. Do not talk.
+    trigger:
+      type: webhook
+      path: /webhooks/review
+      methods:
+        - POST
+      signature_header: X-Hub-Signature-256
+      secret: ${WEBHOOK_SECRET}
+      webhook_input:
+        template: |
+          {{if eq .Body.action "opened"}}
+          Review PR {{.Body.pull_request.number}} in {{.Body.repository.full_name}}
+          {{end}}
+      response: { mode: async }

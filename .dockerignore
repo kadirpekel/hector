@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+CONTRIBUTING.md
+docs/
+*.md
+
+# Build artifacts
+hector
+dist/
+*.exe
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+test-*
+*_test.go
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Development files
+Makefile
+install.sh
+uninstall.sh
+
+# Temporary files
+*.tmp
+*.log

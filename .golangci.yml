@@ -1,0 +1,14 @@
+linters-settings:
+  misspell:
+    ignore-words:
+      - cancelled  # Protobuf uses British spelling (TASK_STATE_CANCELLED)
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - misspell
+    - unused

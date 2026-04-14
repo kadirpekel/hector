@@ -1,0 +1,79 @@
+# GoReleaser configuration for Hector
+# https://goreleaser.com
+
+version: 2
+
+project_name: hector
+
+before:
+  hooks:
+    - bash -c 'cd studio && npm install --silent && npm run build && rm -rf ../ui/dist/assets ../ui/dist/index.html 2>/dev/null; cp -r dist/* ../ui/dist/'
+
+builds:
+  - id: hector
+    main: ./cmd/hector
+    binary: hector
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X 'github.com/verikod/hector.BuildDate={{.Date}}'
+      - -X 'github.com/verikod/hector.GitCommit={{.ShortCommit}}'
+    env:
+      - CGO_ENABLED=0
+
+archives:
+  - format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - configs/*.yaml
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - '^build:'
+
+release:
+  github:
+    owner: verikod
+    name: hector
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Hector {{ .Tag }}
+    
+    Pure A2A-Native Declarative AI Agent Platform
+    
+    ### What's Changed
+    
+  footer: |
+    **Full Changelog**: https://github.com/verikod/hector/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+# Homebrew formula (commented out for now)
+# brews:
+#   - name: hector
+#     homepage: https://github.com/verikod/hector
+#     description: "Pure A2A-Native Declarative AI Agent Platform"
+#     license: "MIT"
+#     test: |
+#       system "#{bin}/hector version"
+#     install: |
+#       bin.install "hector"

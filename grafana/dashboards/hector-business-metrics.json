@@ -1,0 +1,444 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Hector Business KPIs and Session Metrics Dashboard",
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "description": "Session duration distribution (P99, P95, P50)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Duration (seconds)",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never"
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "max"]},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(hector_session_duration_seconds_bucket[5m])) by (le, agent))",
+          "legendFormat": "P99 - {{agent}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(hector_session_duration_seconds_bucket[5m])) by (le, agent))",
+          "legendFormat": "P95 - {{agent}}",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(hector_session_duration_seconds_bucket[5m])) by (le, agent))",
+          "legendFormat": "P50 - {{agent}}",
+          "refId": "C"
+        }
+      ],
+      "title": "Session Duration by Agent",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Total sessions started in the last hour",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "blue", "value": null},
+              {"color": "green", "value": 10},
+              {"color": "yellow", "value": 100}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+      "id": 2,
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "text": {"titleSize": 16, "valueSize": 32}
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(hector_session_total[1h]))",
+          "legendFormat": "Total Sessions",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Sessions (1h)",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Session success rate",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 0.80},
+              {"color": "green", "value": 0.95}
+            ]
+          },
+          "unit": "percentunit",
+          "max": 1,
+          "min": 0
+        }
+      },
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+      "id": 3,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(hector_session_total{successful=\"true\"}[5m])) / sum(rate(hector_session_total[5m]))",
+          "legendFormat": "Success Rate",
+          "refId": "A"
+        }
+      ],
+      "title": "Session Success Rate",
+      "type": "gauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Session rate over time by agent",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Sessions/sec",
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 4,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "last"]},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(hector_session_total[5m])) by (agent)",
+          "legendFormat": "{{agent}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Session Rate by Agent",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Successful vs failed sessions",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Sessions/sec",
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 5,
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(hector_session_total{successful=\"true\"}[5m]))",
+          "legendFormat": "Successful",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(hector_session_total{successful=\"false\"}[5m]))",
+          "legendFormat": "Failed",
+          "refId": "B"
+        }
+      ],
+      "title": "Session Outcomes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Distribution of conversation turn counts",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Turn Count",
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "id": 6,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "max"]},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(hector_conversation_turns_bucket[5m])) by (le, agent))",
+          "legendFormat": "P99 - {{agent}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(hector_conversation_turns_bucket[5m])) by (le, agent))",
+          "legendFormat": "P95 - {{agent}}",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(hector_conversation_turns_bucket[5m])) by (le, agent))",
+          "legendFormat": "P50 - {{agent}}",
+          "refId": "C"
+        }
+      ],
+      "title": "Conversation Turn Count Distribution",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Average conversation turns per session",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "blue", "value": null},
+              {"color": "green", "value": 3},
+              {"color": "yellow", "value": 10}
+            ]
+          },
+          "unit": "short",
+          "decimals": 1
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "id": 7,
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "text": {"titleSize": 16, "valueSize": 32}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(hector_conversation_turns_sum[5m])) / sum(rate(hector_conversation_turns_count[5m]))",
+          "legendFormat": "Avg Turns",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Conversation Turns",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Session success rate by agent",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Success Rate",
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "lineWidth": 2
+          },
+          "unit": "percentunit",
+          "max": 1,
+          "min": 0
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "id": 8,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "last"]},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(hector_session_total{successful=\"true\"}[5m])) by (agent) / sum(rate(hector_session_total[5m])) by (agent)",
+          "legendFormat": "{{agent}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Success Rate by Agent",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Top agents by session volume",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "id": 9,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "expr": "topk(10, sum(hector_session_total) by (agent))",
+          "legendFormat": "{{agent}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 10 Agents by Session Volume",
+      "type": "bargauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Average session duration by agent",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Duration (seconds)",
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+      "id": 10,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "calcs": ["mean"], "sortBy": "Mean", "sortDesc": true},
+        "tooltip": {"mode": "single"}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(hector_session_duration_seconds_sum[5m])) by (agent) / sum(rate(hector_session_duration_seconds_count[5m])) by (agent)",
+          "legendFormat": "{{agent}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Session Duration by Agent",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Session failure heatmap over time",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Failed Sessions",
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+      "id": 11,
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(hector_session_total{successful=\"false\"}[5m])) by (agent)",
+          "legendFormat": "{{agent}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Failed Sessions by Agent",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Session engagement: turns per minute of session time",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Turns per Minute",
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          },
+          "unit": "short",
+          "decimals": 2
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 40},
+      "id": 12,
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "calcs": ["mean", "last"]},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "(sum(rate(hector_conversation_turns_sum[5m])) by (agent) / sum(rate(hector_conversation_turns_count[5m])) by (agent)) / ((sum(rate(hector_session_duration_seconds_sum[5m])) by (agent) / sum(rate(hector_session_duration_seconds_count[5m])) by (agent)) / 60)",
+          "legendFormat": "{{agent}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Conversation Engagement Rate (Turns/Minute)",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 27,
+  "style": "dark",
+  "tags": ["hector", "business", "kpi", "sessions", "conversations"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Hector Business KPIs & Sessions",
+  "uid": "hector-business-kpi",
+  "version": 0
+}
