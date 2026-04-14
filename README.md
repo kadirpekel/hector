@@ -17,6 +17,8 @@
 
 Hector is an open-source AI agent runtime built for teams that need full control over their AI infrastructure. One self-contained binary, one YAML config, production-ready defaults. Deploy on-premise, in air-gapped environments, or in any cloud. No external dependencies, no runtime interpreters, no mandatory cloud accounts.
 
+![Hector Studio](docs/assets/ss.png)
+
 **[Documentation](https://gohector.dev)** · **[Studio](https://studio.gohector.dev)** · **[Config Ref](https://gohector.dev/reference/configuration/)** · **[CLI Ref](https://gohector.dev/reference/cli/)** · **[API Ref](https://gohector.dev/reference/api/)**
 
 ---
