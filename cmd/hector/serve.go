@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -26,7 +29,7 @@ type ServeCmd struct {
 	LogFile   string `name:"log-file" env:"HECTOR_LOG_FILE" help:"Log file path"`
 
 	// Auth
-	AuthSecret      string `name:"auth-secret" env:"HECTOR_AUTH_SECRET" help:"Admin API secret"`
+	AuthSecret      string `name:"auth-secret" env:"HECTOR_AUTH_SECRET" help:"Admin API secret (auto-generated if not set)"`
 	AuthJWKSURL     string `name:"auth-jwks-url" env:"HECTOR_AUTH_JWKS_URL" help:"JWKS URL for JWT auth"`
 	AuthIssuer      string `name:"auth-issuer" env:"HECTOR_AUTH_ISSUER" help:"JWT issuer"`
 	AuthAudience    string `name:"auth-audience" env:"HECTOR_AUTH_AUDIENCE" help:"JWT audience"`
@@ -79,10 +82,19 @@ func (c *ServeCmd) Run() error {
 		TracingEndpoint: c.TracingEndpoint,
 	}
 
-	// Build auth config if provided
-	if c.AuthSecret != "" || c.AuthJWKSURL != "" {
+	// Build auth config
+	authSecret := c.AuthSecret
+	if authSecret == "" && c.AuthJWKSURL == "" {
+		generated, err := generateSecret(16)
+		if err != nil {
+			return fmt.Errorf("failed to generate auth secret: %w", err)
+		}
+		authSecret = generated
+		slog.Info("Studio admin secret (use --auth-secret to set your own)", "secret", authSecret)
+	}
+	if authSecret != "" || c.AuthJWKSURL != "" {
 		serverCfg.Auth = &config.AuthConfig{
-			Secret:      c.AuthSecret,
+			Secret:      authSecret,
 			JWKSURL:     c.AuthJWKSURL,
 			Issuer:      c.AuthIssuer,
 			Audience:    c.AuthAudience,
@@ -119,4 +131,12 @@ func (c *ServeCmd) Run() error {
 		bootstrap.WithConfigPath(c.Config),
 		bootstrap.WithWatch(c.Watch),
 	)
+}
+
+func generateSecret(nBytes int) (string, error) {
+	b := make([]byte, nBytes)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }

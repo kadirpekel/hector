@@ -9,31 +9,52 @@ is_homepage: true
 <div class="hero-container">
   <h1 class="hero-slogan">
     Your Agents. Your Infrastructure.<br>
-    <span class="text-gradient">One Binary. Full Sovereignty. No Compromise.</span>
+    <span class="text-gradient">One Binary. Full Sovereignty.</span>
   </h1>
 
   <div class="hero-intro">
-    <p>
-      Hector is an open-source AI agent runtime built for teams that need full control over their AI infrastructure. One self-contained Go binary, production-ready defaults, and a single YAML config. Deploy on-premise, in air-gapped environments, or in any cloud. No external dependencies, no runtime interpreters, no mandatory cloud accounts.
-    </p>
-    <div class="hero-cta" markdown="1">
-      <a href="getting-started/quick-start/" class="btn btn-primary">Get Started</a>
-      <a href="https://studio.gohector.dev" class="btn btn-secondary">
-        Try Studio
-      </a>
+    <p>Open-source AI agent runtime. One Go binary, zero dependencies, full control.</p>
+  </div>
+
+  <div class="hero-terminal">
+    <div class="window-header">
+      <div class="window-dots">
+        <div class="window-dot red"></div>
+        <div class="window-dot yellow"></div>
+        <div class="window-dot green"></div>
+      </div>
+      <div class="install-tabs">
+        <button class="install-tab active" data-tab="macos">macOS</button>
+        <button class="install-tab" data-tab="linux">Linux</button>
+        <button class="install-tab" data-tab="windows">Windows</button>
+        <button class="install-tab" data-tab="docker">Docker</button>
+      </div>
+      <button class="copy-btn" title="Copy to clipboard">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5.5 2h6.25A1.25 1.25 0 0 1 13 3.25V11" stroke="currentColor" stroke-width="1.3"/><rect x="3" y="4" width="8" height="9.5" rx="1.25" stroke="currentColor" stroke-width="1.3"/></svg>
+      </button>
+    </div>
+    <div class="window-content">
+      <div class="install-panel active" data-tab="macos">
+        <span class="prompt">$</span> <span class="command">curl -fsSL https://gohector.dev/install.sh | sh</span><br>
+        <span class="prompt">$</span> <span class="command">hector serve</span>
+      </div>
+      <div class="install-panel" data-tab="linux">
+        <span class="prompt">$</span> <span class="command">curl -fsSL https://gohector.dev/install.sh | sh</span><br>
+        <span class="prompt">$</span> <span class="command">hector serve</span>
+      </div>
+      <div class="install-panel" data-tab="windows">
+        <span class="prompt">PS&gt;</span> <span class="command">irm https://gohector.dev/install.ps1 | iex</span><br>
+        <span class="prompt">PS&gt;</span> <span class="command">hector serve</span>
+      </div>
+      <div class="install-panel" data-tab="docker">
+        <span class="prompt">$</span> <span class="command">docker run -p 8080:8080 ghcr.io/verikod/hector:latest serve</span>
+      </div>
     </div>
   </div>
 
-  <div class="hero-demo-window">
-    <div class="window-header">
-      <div class="window-dot red"></div>
-      <div class="window-dot yellow"></div>
-      <div class="window-dot green"></div>
-      <div class="window-title">hector-server | zsh | 80x24</div>
-    </div>
-    <div class="window-content">
-      <div class="terminal-typing" id="typewriter-target"></div>
-    </div>
+  <div class="hero-cta" markdown="1">
+    <a href="getting-started/quick-start/" class="btn btn-primary">Get Started</a>
+    <a id="download-btn" href="https://github.com/verikod/hector/releases/latest" class="btn btn-secondary">Download</a>
   </div>
 </div>
 

@@ -1,16 +1,47 @@
 # Installation
 
-Install Hector using one of the methods below.
+Install Hector using one of the methods below. Release binaries include the [Studio UI](../guides/studio.md) built in.
 
-## Go Install (Recommended)
+## Install Script (Recommended)
 
-Simplest way if you have Go installed.
+=== "macOS / Linux"
+
+    ```bash
+    curl -fsSL https://gohector.dev/install.sh | sh
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell
+    irm https://gohector.dev/install.ps1 | iex
+    ```
+
+=== "Homebrew"
+
+    ```bash
+    brew install verikod/tap/hector
+    ```
+
+To install a specific version:
 
 ```bash
-go install github.com/verikod/hector/cmd/hector@latest
+curl -fsSL https://gohector.dev/install.sh | sh -s -- --version v1.2.3
 ```
 
-*Requires Go 1.24+*
+## Download Binary
+
+Download a prebuilt binary from the [latest release](https://github.com/verikod/hector/releases/latest).
+
+1. Download the archive for your OS and architecture (e.g. `hector_X.Y.Z_darwin_arm64.tar.gz`)
+2. Extract it
+3. Move the `hector` binary to a directory in your `PATH`
+
+```bash
+tar xzf hector_*_darwin_arm64.tar.gz
+sudo mv hector /usr/local/bin/
+```
+
+On Windows, extract the `.zip` file and place `hector.exe` in a directory on your `PATH` (e.g. `C:\Users\you\.hector\bin`).
 
 ## Docker
 
@@ -45,7 +76,17 @@ go build -o hector ./cmd/hector
 ```
 
 !!! note "Web UI in source builds"
-    Building from source with `go build` produces a headless binary. The root `/` will show a fallback page. Use `make build-release` instead to include Studio (requires Node.js). See the [Studio Guide](../guides/studio.md) for details.
+    Building from source with `go build` produces a headless binary (no Studio UI). Use `make build-release` instead to include Studio (requires Node.js). See the [Studio Guide](../guides/studio.md) for details.
+
+## Go Install (Headless)
+
+If you only need the API server without the Studio UI:
+
+```bash
+go install github.com/verikod/hector/cmd/hector@latest
+```
+
+*Requires Go 1.24+. This produces a headless binary — the web UI will not be available.*
 
 ## Verify Installation
 

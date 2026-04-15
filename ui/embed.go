@@ -61,11 +61,17 @@ const fallbackHTML = `<!DOCTYPE html>
 <body>
     <h1>Hector Studio</h1>
     <p>The web UI is not included in this build.</p>
-    <p>Options to get the UI running:</p>
+    <p>Install Hector with the Studio UI:</p>
     <ul>
-        <li>Use a release binary: <code>go install github.com/verikod/hector/cmd/hector@latest</code></li>
-        <li>Build with embedded UI: <code>make build-release</code> (requires Node.js)</li>
-        <li>Run Studio dev server: <code>cd studio &amp;&amp; npm run dev</code></li>
+        <li>macOS / Linux: <code>curl -fsSL https://gohector.dev/install.sh | sh</code></li>
+        <li>Windows (PowerShell): <code>irm https://gohector.dev/install.ps1 | iex</code></li>
+        <li>Homebrew: <code>brew install verikod/tap/hector</code></li>
+    </ul>
+    <p>Then run <code>hector serve</code> and open <b>http://localhost:8080</b>.</p>
+    <p>Other options:</p>
+    <ul>
+        <li>Build from source with UI: <code>make build-release</code> (requires Node.js)</li>
+        <li>Studio dev server: <code>cd studio &amp;&amp; npm run dev</code></li>
         <li>Try online: <a href="https://studio.gohector.dev">studio.gohector.dev</a></li>
     </ul>
     <p>The API server is running &mdash; agents are available at <code>/agents/</code>.</p>

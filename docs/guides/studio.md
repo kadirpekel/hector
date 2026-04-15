@@ -106,7 +106,8 @@ Cloud features are only available when the `VITE_HECTOR_CLOUD_URL` environment v
 
 This means the binary was built from source without embedded UI assets. Options:
 
-- Use a release binary: `go install github.com/verikod/hector/cmd/hector@latest`
+- Install a release binary: `curl -fsSL https://gohector.dev/install.sh | sh`
+- Or with Homebrew: `brew install verikod/tap/hector`
 - Run `make build-release` to build a binary with UI embedded (requires Node.js)
 - Run Studio dev server with `npm run dev` in the `studio/` directory
 - Try online at [studio.gohector.dev](https://studio.gohector.dev)

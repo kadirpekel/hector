@@ -36,21 +36,50 @@ Hector is an open-source AI agent runtime built for teams that need full control
 
 ## Quick Start
 
+**macOS / Linux:**
+
 ```bash
-# Install
-go install github.com/verikod/hector/cmd/hector@latest
-
-# Initialize config
-hector init --provider anthropic --model claude-sonnet-4
-
-# Set API key
-export ANTHROPIC_API_KEY="your-key"
-
-# Run server
+curl -fsSL https://gohector.dev/install.sh | sh
 hector serve
 ```
 
-Open **http://localhost:8080/** in your browser for the visual Studio interface, or use the API directly at `/agents/`.
+**Windows (PowerShell):**
+
+```powershell
+irm https://gohector.dev/install.ps1 | iex
+hector serve
+```
+
+**Homebrew:**
+
+```bash
+brew install verikod/tap/hector
+hector serve
+```
+
+**Docker:**
+
+```bash
+docker run -p 8080:8080 ghcr.io/verikod/hector:latest serve
+```
+
+Open **http://localhost:8080/** — an admin secret is printed in the terminal. Enter it to unlock Studio and configure LLM providers, create agents, and start chatting. No config files needed
+```
+
+**Homebrew:**
+
+```bash
+brew install verikod/tap/hector
+hector serve
+```
+
+**Docker:**
+
+```bash
+docker run -p 8080:8080 ghcr.io/verikod/hector:latest serve
+```
+
+Open **http://localhost:8080/** — an admin secret is printed in the terminal. Enter it to unlock Studio and configure LLM providers, create agents, and start chatting. No config files needed.
 
 ---
 

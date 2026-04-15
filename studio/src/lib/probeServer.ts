@@ -4,10 +4,11 @@ import { useServersStore } from '../store/serversStore'
  * Probes a server's /health endpoint and updates its status in the store.
  *
  * Maps HTTP responses to server states:
- *   200       → authenticated
- *   401 / 403 → auth_required
- *   other     → error
- *   network   → unreachable
+ *   200 (with admin key or no admin required) → authenticated
+ *   200 (admin required but no key stored)    → auth_required
+ *   401 / 403                                 → auth_required
+ *   other                                     → error
+ *   network                                   → unreachable
  */
 export function probeServer(
   id: string,
@@ -29,7 +30,16 @@ export function probeServer(
         try {
           const data = await res.json()
           if (data && typeof data === 'object' && 'status' in data) {
-            store.setServerStatus(id, 'authenticated')
+            // If server has admin enabled, check if we already have an admin key
+            const adminEnabled = !!(data.admin && data.admin.enabled)
+            const server = store.servers[id]
+            const hasAdminKey = !!server?.config?.adminKey
+
+            if (adminEnabled && !hasAdminKey) {
+              store.setServerStatus(id, 'auth_required')
+            } else {
+              store.setServerStatus(id, 'authenticated')
+            }
           } else {
             store.setServerStatus(id, 'error', 'Not a Hector server')
           }

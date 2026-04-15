@@ -4,41 +4,70 @@ Get an agent running in under 5 minutes.
 
 ## Prerequisites
 
-- Hector installed ([Installation](installation.md))
+- Hector installed (see below or [Installation](installation.md))
 - An LLM API key (Anthropic, OpenAI, or Gemini)
 
-## 1. Set Your API Key
+## Install Hector
 
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-# or
-export OPENAI_API_KEY="sk-..."
-# or
-export GEMINI_API_KEY="..."
-```
+=== "Install Script"
 
-## 2. Initialize Configuration
+    ```bash
+    curl -fsSL https://gohector.dev/install.sh | sh
+    ```
 
-```bash
-hector init
-```
+=== "Download Binary"
 
-This creates `.hector/config.yaml` with a minimal configuration.
+    1. Go to the [latest release](https://github.com/verikod/hector/releases/latest)
+    2. Download the archive for your OS and architecture
+    3. Extract it and move the `hector` binary somewhere in your `PATH`
 
-## 3. Start the Server
+    ```bash
+    # Example for macOS ARM64
+    tar xzf hector_*_darwin_arm64.tar.gz
+    sudo mv hector /usr/local/bin/
+    ```
+
+=== "Homebrew"
+
+    ```bash
+    brew install verikod/tap/hector
+    ```
+
+=== "Docker"
+
+    ```bash
+    docker run -p 8080:8080 ghcr.io/verikod/hector:latest serve
+    ```
+
+    If using Docker, skip to [Open Studio](#2-open-studio) — the server is already running.
+
+## 1. Start the Server
 
 ```bash
 hector serve
 ```
 
-The server starts at `http://localhost:8080`.
+The server starts at `http://localhost:8080`. An admin secret is auto-generated and printed in the terminal — use it to log in to Studio.
 
-!!! tip "Open the Web UI"
-    Navigate to **http://localhost:8080/** for the visual Studio interface where you can design flows, manage resources, and chat with agents. You can also **[try Studio online](https://studio.gohector.dev)** without installing anything. Just point it at your running server.
+To set your own secret, use `--auth-secret` or the `HECTOR_AUTH_SECRET` environment variable:
 
-## 4. Test the Agent
+```bash
+hector serve --auth-secret my-secret
+```
 
-Send a message using JSON-RPC 2.0:
+## 2. Open Studio
+
+Navigate to **http://localhost:8080/** and enter the admin secret shown in your terminal. From Studio you can:
+
+- **Add LLM providers** — configure Anthropic, OpenAI, Gemini, or Ollama with your API keys
+- **Create agents** — define agent instructions, tools, and models visually
+- **Chat** — test agents in real-time with streaming and tool-call traces
+
+You can also **[try Studio online](https://studio.gohector.dev)** and point it at your running server.
+
+## 3. Test the Agent
+
+Once you've configured an LLM and created an agent in Studio, test it via the API:
 
 ```bash
 curl -X POST http://localhost:8080/agents/assistant \

@@ -65,15 +65,35 @@ release:
     ### What's Changed
     
   footer: |
+    ### Install
+    
+    **macOS / Linux:**
+    ```
+    curl -fsSL https://gohector.dev/install.sh | sh
+    ```
+    **Windows (PowerShell):** `irm https://gohector.dev/install.ps1 | iex`
+    
+    **Homebrew:** `brew install verikod/tap/hector`
+    
+    **Docker:** `docker run -p 8080:8080 ghcr.io/verikod/hector:{{ .Tag }} serve`
+    
     **Full Changelog**: https://github.com/verikod/hector/compare/{{ .PreviousTag }}...{{ .Tag }}
 
-# Homebrew formula (commented out for now)
-# brews:
-#   - name: hector
-#     homepage: https://github.com/verikod/hector
-#     description: "Pure A2A-Native Declarative AI Agent Platform"
-#     license: "MIT"
-#     test: |
-#       system "#{bin}/hector version"
-#     install: |
-#       bin.install "hector"
+brews:
+  - name: hector
+    homepage: https://github.com/verikod/hector
+    description: "Pure A2A-Native Declarative AI Agent Platform"
+    license: "MIT"
+    repository:
+      owner: verikod
+      name: homebrew-tap
+      branch: main
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "chore: bump hector to {{ .Tag }}"
+    directory: Formula
+    test: |
+      system "#{bin}/hector version"
+    install: |
+      bin.install "hector"

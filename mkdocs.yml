@@ -126,4 +126,3 @@ extra_javascript:
   - javascripts/google-analytics.js
   - javascripts/extra.js
   - javascripts/landing.js
-  - https://unpkg.com/typewriter-effect@latest/dist/core.js

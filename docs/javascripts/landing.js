@@ -1,7 +1,100 @@
-// Homepage animations - Typewriter and Canvas background
+// Homepage animations - Install Tabs, Copy, Download, and Canvas background
 console.log('landing.js loaded');
 
-let typewriterInstance = null;
+// Install tab switching
+function initInstallTabs() {
+    document.querySelectorAll('.install-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.dataset.tab;
+            document.querySelectorAll('.install-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.install-panel').forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            const panel = document.querySelector(`.install-panel[data-tab="${target}"]`);
+            if (panel) panel.classList.add('active');
+        });
+    });
+}
+
+// Copy button for terminal
+function initCopyButton() {
+    const btn = document.querySelector('.copy-btn');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+        const active = document.querySelector('.install-panel.active');
+        if (!active) return;
+        const commands = active.querySelectorAll('.command');
+        const text = Array.from(commands).map(c => c.textContent).join('\n');
+        navigator.clipboard.writeText(text).then(() => {
+            btn.classList.add('copied');
+            btn.title = 'Copied!';
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                btn.title = 'Copy to clipboard';
+            }, 2000);
+        });
+    });
+}
+
+// Detect platform details
+function detectPlatform() {
+    const ua = navigator.userAgent.toLowerCase();
+    let os = 'linux', arch = 'amd64', ext = 'tar.gz';
+
+    if (ua.includes('mac')) {
+        os = 'darwin';
+    } else if (ua.includes('win')) {
+        os = 'windows';
+        ext = 'zip';
+    }
+
+    // Best-effort arch detection
+    if (ua.includes('arm64') || ua.includes('aarch64') ||
+        (navigator.platform && navigator.platform.includes('aarch64'))) {
+        arch = 'arm64';
+    }
+    // Apple Silicon Macs report as Intel in UA but we can check via platform
+    if (os === 'darwin' && navigator.platform === 'MacIntel' &&
+        navigator.maxTouchPoints > 0) {
+        arch = 'arm64';
+    }
+
+    return { os, arch, ext };
+}
+
+// Smart download button — fetch latest release tag and build direct asset URL
+function initSmartDownload() {
+    const btn = document.getElementById('download-btn');
+    if (!btn) return;
+
+    const { os, arch, ext } = detectPlatform();
+    const osLabel = { darwin: 'macOS', linux: 'Linux', windows: 'Windows' }[os] || os;
+    const archLabel = { amd64: 'x64', arm64: 'ARM64' }[arch] || arch;
+    btn.textContent = `Download for ${osLabel} (${archLabel})`;
+
+    // Fetch latest tag to build direct asset URL
+    fetch('https://api.github.com/repos/verikod/hector/releases/latest')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.tag_name) return;
+            const version = data.tag_name.replace(/^v/, '');
+            const asset = `hector_${version}_${os}_${arch}.${ext}`;
+            const url = `https://github.com/verikod/hector/releases/download/${data.tag_name}/${asset}`;
+            btn.href = url;
+        })
+        .catch(() => { /* fallback: btn already points to releases/latest */ });
+}
+
+// Auto-detect OS and activate the right tab
+function autoDetectOS() {
+    const ua = navigator.userAgent.toLowerCase();
+    let os = 'linux';
+    if (ua.includes('mac')) os = 'macos';
+    else if (ua.includes('win')) os = 'windows';
+
+    const tab = document.querySelector(`.install-tab[data-tab="${os}"]`);
+    if (tab) tab.click();
+}
+
 let canvasAnimationId = null;
 let canvasCtx = null;
 let canvasParticles = [];
@@ -22,57 +115,6 @@ function waitForElement(id, callback, maxAttempts = 50) {
     } else if (maxAttempts > 0) {
         setTimeout(() => waitForElement(id, callback, maxAttempts - 1), 100);
     }
-}
-
-// Wait for Typewriter library to load
-function waitForTypewriter(callback, maxAttempts = 50) {
-    if (typeof Typewriter !== 'undefined') {
-        callback();
-    } else if (maxAttempts > 0) {
-        setTimeout(() => waitForTypewriter(callback, maxAttempts - 1), 100);
-    }
-}
-
-// Initialize Typewriter effect
-function initTypewriter() {
-    waitForElement('typewriter-target', (target) => {
-        console.log('Typewriter target found');
-        // Stop existing instance
-        if (typewriterInstance) {
-            try {
-                typewriterInstance.stop();
-            } catch (e) { }
-            typewriterInstance = null;
-        }
-
-        waitForTypewriter(() => {
-            console.log('Typewriter library loaded, initializing...');
-            target.innerHTML = '';
-            try {
-                typewriterInstance = new Typewriter(target, {
-                    loop: true,
-                    delay: 50,
-                    cursorClassName: 'cursor'
-                });
-
-                typewriterInstance
-                    .typeString('<span class="prompt">➜</span> <span class="command">hector serve --config agents.yaml</span><br>')
-                    .pauseFor(500)
-                    .typeString('<span class="output">INFO  [10:23:01] Loading configuration from agents.yaml</span><br>')
-                    .typeString('<span class="output">INFO  [10:23:01] Initializing Agent Mesh...</span><br>')
-                    .pauseFor(300)
-                    .typeString('<span class="output">INFO  [10:23:02] Agent "Research" connected (Model: gpt-4o)</span><br>')
-                    .typeString('<span class="output">INFO  [10:23:02] Agent "Writer" connected (Model: claude-3-opus)</span><br>')
-                    .typeString('<span class="output">INFO  [10:23:02] <strong>Server ready on http://localhost:8080</strong> 🚀</span><br>')
-                    .pauseFor(2000)
-                    .deleteAll(10)
-                    .start();
-                console.log('Typewriter started successfully');
-            } catch (e) {
-                console.error('Typewriter error:', e);
-            }
-        });
-    });
 }
 
 // Canvas particle class
@@ -402,18 +444,21 @@ function initHomepageAnimations() {
     }
 
     const hasCanvas = document.getElementById('ambient-canvas');
-    const hasTypewriter = document.getElementById('typewriter-target');
+    const hasInstallTabs = document.querySelector('.install-tab');
 
-    console.log('Checking elements:', { hasCanvas: !!hasCanvas, hasTypewriter: !!hasTypewriter });
+    console.log('Checking elements:', { hasCanvas: !!hasCanvas, hasInstallTabs: !!hasInstallTabs });
 
-    if (!hasCanvas && !hasTypewriter) {
+    if (!hasCanvas && !hasInstallTabs) {
         console.log('Not on homepage, skipping');
         return; // Not on homepage
     }
 
     initialized = true;
     console.log('Initializing homepage animations...');
-    initTypewriter();
+    initInstallTabs();
+    autoDetectOS();
+    initCopyButton();
+    initSmartDownload();
     initCanvas();
 }
 
@@ -451,7 +496,7 @@ window.addEventListener('popstate', checkNavigation);
 if (document.body) {
     const observer = new MutationObserver(() => {
         checkNavigation();
-        if (document.getElementById('ambient-canvas') || document.getElementById('typewriter-target')) {
+        if (document.getElementById('ambient-canvas') || document.querySelector('.install-tab')) {
             if (!initialized) {
                 setTimeout(initHomepageAnimations, 100);
             }
