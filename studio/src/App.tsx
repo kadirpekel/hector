@@ -1,6 +1,5 @@
 import { useRef, useState, useEffect } from "react";
 import { StudioMode } from "./components/ConfigBuilder/StudioMode";
-import { SettingsModal } from "./components/ConfigBuilder/SettingsModal";
 import { ErrorDisplay } from "./components/ErrorDisplay";
 import { SuccessDisplay } from "./components/SuccessDisplay";
 import { useStore } from "./store/useStore";
@@ -35,13 +34,10 @@ function App() {
   // Modal states
   const [loginServerId, setLoginServerId] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [showCloudAuth, setShowCloudAuth] = useState(false);
   const isCloudAuthenticated = useCloudAuthStore((s) => s.isAuthenticated);
   const cloudStatus = useCloudStore((s) => s.status);
   const cloudConnect = useCloudStore((s) => s.connect);
-  const editorTheme = useStore((state) => state.editorTheme);
-  const setEditorTheme = useStore((state) => state.setEditorTheme);
   const [showLogDrawer, setShowLogDrawer] = useState(false);
   const xRaySessionId = useStore((state) => state.xRaySessionId);
   const setXRaySessionId = useStore((state) => state.setXRaySessionId);
@@ -171,6 +167,7 @@ function App() {
       <AppHeader
         onLoginRequest={handleLoginRequest}
         onLogoutRequest={handleLogoutRequest}
+        onOpenLogDrawer={() => setShowLogDrawer(true)}
       />
 
       <main className="flex-1 min-h-0 relative overflow-hidden flex flex-col">
@@ -216,12 +213,6 @@ function App() {
           cloudConnect();
         }}
         onSkip={() => setShowCloudAuth(false)}
-      />
-      <SettingsModal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        editorTheme={editorTheme}
-        onThemeChange={setEditorTheme}
       />
       <ErrorDisplay />
       <SuccessDisplay />

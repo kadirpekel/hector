@@ -1,9 +1,8 @@
-import { ServerSettingsModal } from './ServerSettingsModal';
 import { CloudAuthModal } from './CloudAuthModal';
 import { CloudProgressModal } from './CloudProgressModal';
 import { useState, useEffect } from 'react';
 
-import { Server, LogIn, LogOut, Check, ChevronDown, Loader2, Settings, X, Cloud } from 'lucide-react';
+import { Server, Check, ChevronDown, Loader2, Cloud } from 'lucide-react';
 import { useServersStore } from '../store/serversStore';
 import { useCloudAuthStore } from '../store/cloudAuthStore';
 import { useCloudStore } from '../store/cloudStore';
@@ -29,7 +28,6 @@ interface ServerSelectorProps {
 }
 
 export function ServerSelector({ onLoginRequest, onLogoutRequest, className, variant = "outline" }: ServerSelectorProps) {
-    const [settingsModalServerId, setSettingsModalServerId] = useState<string | null>(null);
     const [showCloudAuth, setShowCloudAuth] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
 
@@ -42,8 +40,7 @@ export function ServerSelector({ onLoginRequest, onLogoutRequest, className, var
     const isAuthenticated = useCloudAuthStore((s) => s.isAuthenticated);
     const cloudStatus = useCloudStore((s) => s.status);
     const cloudConnect = useCloudStore((s) => s.connect);
-    const cloudLogout = useCloudAuthStore((s) => s.logout);
-    const cloudDisconnect = useCloudStore((s) => s.disconnect);
+    const cloudConnect = useCloudStore((s) => s.connect);
 
     // RAG Indexing Status
     const ragStatus = useStore((s) => s.ragStatus);
@@ -62,12 +59,6 @@ export function ServerSelector({ onLoginRequest, onLogoutRequest, className, var
             return;
         }
         await cloudConnect();
-    };
-
-    const handleOpenSettings = (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        setIsOpen(false);
-        setSettingsModalServerId(id);
     };
 
     const handleSelectServer = (id: string) => {
@@ -170,46 +161,8 @@ export function ServerSelector({ onLoginRequest, onLogoutRequest, className, var
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1 shrink-0">
                                         {activeServerId === server.config.id && <Check size={14} className="text-green-500" />}
-                                        {server.status === 'auth_required' && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6 hover:bg-gray-700"
-                                                onClick={(e) => { e.stopPropagation(); onLoginRequest(server.config.id); }}
-                                            >
-                                                <LogIn size={12} />
-                                            </Button>
-                                        )}
-                                        {server.status === 'authenticated' && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6 hover:bg-gray-700"
-                                                onClick={(e) => { e.stopPropagation(); onLogoutRequest(server.config.id); }}
-                                            >
-                                                <LogOut size={12} />
-                                            </Button>
-                                        )}
-                                        {/* Settings */}
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6 hover:bg-gray-700"
-                                                        onClick={(e) => handleOpenSettings(server.config.id, e)}
-                                                    >
-                                                        <Settings size={12} />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p>Settings</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
                                     </div>
                                 </DropdownMenuItem>
                             ))
@@ -233,27 +186,8 @@ export function ServerSelector({ onLoginRequest, onLogoutRequest, className, var
                                 : 'Set Up Cloud'}
                         </span>
                     </DropdownMenuItem>
-                    {isAuthenticated && (
-                        <DropdownMenuItem
-                            onSelect={() => {
-                                cloudDisconnect();
-                                cloudLogout();
-                            }}
-                            className="cursor-pointer focus:bg-gray-800 text-red-400 focus:text-red-300"
-                        >
-                            <X size={14} className="mr-2" />
-                            <span>Forget Cloud Credentials</span>
-                        </DropdownMenuItem>
-                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
-            {settingsModalServerId && (
-                <ServerSettingsModal
-                    isOpen={!!settingsModalServerId}
-                    onClose={() => setSettingsModalServerId(null)}
-                    serverId={settingsModalServerId}
-                />
-            )}
             <CloudAuthModal
                 isOpen={showCloudAuth}
                 onClose={() => setShowCloudAuth(false)}

@@ -134,7 +134,7 @@ export function ServerSettingsModal({ isOpen, onClose, serverId }: ServerSetting
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[640px] max-h-[85vh] bg-gray-900 border-gray-800 text-gray-300 flex flex-col">
+            <DialogContent className="sm:max-w-[640px] h-[560px] bg-gray-900 border-gray-800 text-gray-300 flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Settings size={20} />
@@ -167,9 +167,9 @@ export function ServerSettingsModal({ isOpen, onClose, serverId }: ServerSetting
                             <TabsTrigger value="danger" className="text-xs text-red-400">Danger</TabsTrigger>
                         </TabsList>
 
-                        <div className="flex-1 overflow-y-auto min-h-0 mt-2">
+                        <div className="flex-1 overflow-y-auto min-h-0 mt-2 pr-1">
                             {/* Environment Variables */}
-                            <TabsContent value="env" className="m-0 h-[340px]">
+                            <TabsContent value="env" className="m-0 h-full">
                                 <EnvVarsEditor envVars={envVars} onChange={setEnvVars} />
                             </TabsContent>
 
