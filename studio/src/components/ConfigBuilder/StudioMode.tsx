@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as yaml from 'js-yaml';
-import { CheckCircle, XCircle, Settings, Rocket, DownloadCloud, UploadCloud } from 'lucide-react';
+import { CheckCircle, XCircle, Settings, Rocket, DownloadCloud, UploadCloud, Palette } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { yamlToGraph } from '../../lib/canvas-converter';
 import { CanvasMode } from './CanvasMode';
 import { ChatWidget } from './ChatWidget';
-import { SettingsModal } from './SettingsModal';
 import { ConfigEditor } from './ConfigEditor';
 import { InfrastructureSidebar } from './InfrastructureSidebar';
 import { useStore } from '../../store/useStore';
@@ -38,7 +37,6 @@ export const StudioMode: React.FC = () => {
   const editorTheme = useStore((s) => s.editorTheme);
   const setEditorTheme = useStore((s) => s.setEditorTheme);
   const [loading, setLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [nodes, setNodes] = useState<any[]>([]);
 
@@ -334,6 +332,21 @@ export const StudioMode: React.FC = () => {
 
                 <div className="mx-1 h-3 w-px bg-white/10" />
 
+                <div className="flex items-center gap-1.5 text-gray-400 text-xs font-medium">
+                  <Palette size={12} />
+                  <select
+                    value={editorTheme}
+                    onChange={(e) => setEditorTheme(e.target.value as any)}
+                    className="bg-transparent border-none text-xs text-gray-400 hover:text-white cursor-pointer focus:outline-none"
+                  >
+                    <option value="hc-black" className="bg-gray-900">High Contrast</option>
+                    <option value="vs-dark" className="bg-gray-900">Dark</option>
+                    <option value="vs-light" className="bg-gray-900">Light</option>
+                  </select>
+                </div>
+
+                <div className="mx-1 h-3 w-px bg-white/10" />
+
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -447,28 +460,14 @@ export const StudioMode: React.FC = () => {
               )}
             </div>
 
-            {/* Right: Settings */}
-            <button
-              onClick={() => setShowSettings(true)}
-              className="flex items-center gap-1.5 px-2 py-1 text-gray-500 hover:text-white hover:bg-white/10 rounded transition-colors"
-            >
-              <Settings size={14} />
-              <span>Settings</span>
-            </button>
+            {/* Right: Version */}
+            <div className="text-gray-600">
+              v{__APP_VERSION__}
+            </div>
           </div>
         )
       }
 
-      {
-        showSettings && (
-          <SettingsModal
-            isOpen={showSettings}
-            onClose={() => setShowSettings(false)}
-            editorTheme={editorTheme}
-            onThemeChange={setEditorTheme}
-          />
-        )
-      }
     </div >
   );
 };

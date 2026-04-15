@@ -377,7 +377,45 @@ export interface CloudInstanceConfig {
     audience?: string;
     client_id?: string;
   };
-  server?: Record<string, unknown>;
+  server?: CloudServerConfig;
+}
+
+export interface CloudRateLimitRule {
+  type: 'count' | 'token';
+  window: 'minute' | 'hour' | 'day' | 'week' | 'month';
+  limit: number;
+}
+
+export interface CloudRateLimitConfig {
+  enabled: boolean;
+  scope?: 'session' | 'user';
+  limits?: CloudRateLimitRule[];
+  ip_headers?: string[];
+}
+
+export interface CloudQueueConfig {
+  workers?: number;
+  max_retries?: number;
+  initial_delay?: string;
+  max_delay?: string;
+  stale_threshold?: string;
+}
+
+export interface CloudObservabilityConfig {
+  metrics_enabled?: boolean;
+  tracing_endpoint?: string;
+}
+
+export interface CloudLoggingConfig {
+  level?: 'debug' | 'info' | 'warn' | 'error';
+  format?: 'json' | 'text';
+}
+
+export interface CloudServerConfig {
+  rate_limit?: CloudRateLimitConfig;
+  queue?: CloudQueueConfig;
+  observability?: CloudObservabilityConfig;
+  logging?: CloudLoggingConfig;
 }
 
 export interface CloudAuthToken {

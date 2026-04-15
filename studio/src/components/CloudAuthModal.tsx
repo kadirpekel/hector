@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { useCloudAuthStore } from '../store/cloudAuthStore';
+import { useCloudStore } from '../store/cloudStore';
 
 interface CloudAuthModalProps {
     isOpen: boolean;
@@ -21,7 +22,8 @@ interface CloudAuthModalProps {
 }
 
 export function CloudAuthModal({ isOpen, onClose, onAuthenticated, onSkip, title, description }: CloudAuthModalProps) {
-    const { loginWithToken, error, clearError, isAuthenticated } = useCloudAuthStore();
+    const { loginWithToken, error, clearError, isAuthenticated, logout } = useCloudAuthStore();
+    const cloudDisconnect = useCloudStore((s) => s.disconnect);
     const [flyToken, setFlyToken] = useState('');
     const [appName, setAppName] = useState('');
     const [loading, setLoading] = useState(false);
@@ -87,12 +89,28 @@ export function CloudAuthModal({ isOpen, onClose, onAuthenticated, onSkip, title
                                 </div>
 
                                 {error && (
-                                    <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 p-3 rounded-lg">
-                                        <AlertCircle size={16} className="flex-shrink-0" />
-                                        <span className="flex-1">{error}</span>
-                                        <button onClick={clearError} className="text-red-400 hover:text-red-300">
-                                            <X size={14} />
-                                        </button>
+                                    <div className="flex flex-col gap-2 text-sm text-red-400 bg-red-500/10 p-3 rounded-lg">
+                                        <div className="flex items-center gap-2">
+                                            <AlertCircle size={16} className="flex-shrink-0" />
+                                            <span className="flex-1">{error}</span>
+                                            <button onClick={clearError} className="text-red-400 hover:text-red-300">
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                        {isAuthenticated !== null && (
+                                            <button
+                                                onClick={() => {
+                                                    cloudDisconnect();
+                                                    logout();
+                                                    clearError();
+                                                    setFlyToken('');
+                                                    setAppName('');
+                                                }}
+                                                className="text-xs text-gray-400 hover:text-white underline underline-offset-2 text-left"
+                                            >
+                                                Clear stored credentials and try again
+                                            </button>
+                                        )}
                                     </div>
                                 )}
 
