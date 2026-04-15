@@ -15,7 +15,9 @@ import { LogDrawer } from "./components/LogDrawer";
 import { DEFAULT_SUPPORTED_FILE_TYPES } from "./lib/constants";
 import { SessionXRayModal } from "./components/SessionXRayModal";
 import { CloudAuthModal } from "./components/CloudAuthModal";
-import { useCloudAuthStore } from "./store/cloudAuthStore";import { useCloudStore } from './store/cloudStore';import { HOST_SERVER_ID } from "./lib/embedded";
+import { useCloudAuthStore } from "./store/cloudAuthStore";
+import { useCloudStore } from './store/cloudStore';
+import { HOST_SERVER_ID } from "./lib/embedded";
 import { probeServer } from "./lib/probeServer";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { HostConnectingScreen } from "./components/HostConnectingScreen";
@@ -185,7 +187,6 @@ function App() {
           <WelcomeScreen
             isCloudAuthenticated={isCloudAuthenticated}
             cloudStatus={cloudStatus}
-            onAddServer={() => window.dispatchEvent(new CustomEvent('open-server-selector'))}
             onConnectCloud={() => {
               if (isCloudAuthenticated) {
                 cloudConnect();

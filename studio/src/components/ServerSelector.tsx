@@ -3,15 +3,13 @@ import { CloudAuthModal } from './CloudAuthModal';
 import { CloudProgressModal } from './CloudProgressModal';
 import { useState, useEffect } from 'react';
 
-import { Plus, Server, LogIn, LogOut, Check, ChevronDown, Loader2, Settings, X, Cloud } from 'lucide-react';
+import { Server, LogIn, LogOut, Check, ChevronDown, Loader2, Settings, X, Cloud } from 'lucide-react';
 import { useServersStore } from '../store/serversStore';
 import { useCloudAuthStore } from '../store/cloudAuthStore';
 import { useCloudStore } from '../store/cloudStore';
 import { useStore } from '../store/useStore';
-import { CLOUD_ENABLED } from '../lib/cloudEnabled';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -31,18 +29,13 @@ interface ServerSelectorProps {
 }
 
 export function ServerSelector({ onLoginRequest, onLogoutRequest, className, variant = "outline" }: ServerSelectorProps) {
-    const [showAddForm, setShowAddForm] = useState(false);
     const [settingsModalServerId, setSettingsModalServerId] = useState<string | null>(null);
     const [showCloudAuth, setShowCloudAuth] = useState(false);
-    const [newName, setNewName] = useState('');
-    const [newUrl, setNewUrl] = useState('');
-    const [newAdminKey, setNewAdminKey] = useState('');
     const [isOpen, setIsOpen] = useState(false);
 
     const servers = useServersStore((s) => s.servers);
     const activeServerId = useServersStore((s) => s.activeServerId);
     const selectServer = useServersStore((s) => s.selectServer);
-    const removeServer = useServersStore((s) => s.removeServer);
     const activeServer = useServersStore((s) => s.getActiveServer());
     const serverList = Object.values(servers);
 
@@ -55,81 +48,20 @@ export function ServerSelector({ onLoginRequest, onLogoutRequest, className, var
     // RAG Indexing Status
     const ragStatus = useStore((s) => s.ragStatus);
 
-    // Listen for programmatic open requests from welcome screen
+    // Listen for programmatic open requests
     useEffect(() => {
-        const handleOpenSelector = () => {
-            setIsOpen(true);
-            setShowAddForm(true);
-        };
-
+        const handleOpenSelector = () => setIsOpen(true);
         window.addEventListener('open-server-selector', handleOpenSelector);
-        return () => {
-            window.removeEventListener('open-server-selector', handleOpenSelector);
-        };
+        return () => window.removeEventListener('open-server-selector', handleOpenSelector);
     }, []);
 
     const handleCloudConnect = async () => {
-        if (!CLOUD_ENABLED) return;
         setIsOpen(false);
         if (!isAuthenticated) {
             setShowCloudAuth(true);
             return;
         }
         await cloudConnect();
-    };
-
-    const handleAddServer = async (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!newName.trim() || !newUrl.trim()) return;
-
-        try {
-            const url = newUrl.trim().replace(/\/+$/, '');
-            const id = crypto.randomUUID();
-            const adminKey = newAdminKey.trim() || undefined;
-
-            useServersStore.getState().addServer({ id, name: newName.trim(), url, adminKey });
-
-            // Probe the server to determine its status
-            try {
-                const resp = await fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) });
-                if (resp.ok) {
-                    if (adminKey) {
-                        // Verify admin key
-                        const authResp = await fetch(`${url}/admin/apps`, {
-                            headers: { 'Authorization': `Bearer ${adminKey}` },
-                            signal: AbortSignal.timeout(5000),
-                        });
-                        if (authResp.ok) {
-                            useServersStore.getState().setServerStatus(id, 'authenticated');
-                        } else {
-                            useServersStore.getState().setServerStatus(id, 'auth_required');
-                        }
-                    } else {
-                        useServersStore.getState().setServerStatus(id, 'auth_required');
-                    }
-                } else if (resp.status === 401 || resp.status === 403) {
-                    useServersStore.getState().setServerStatus(id, 'auth_required');
-                } else {
-                    useServersStore.getState().setServerStatus(id, 'unreachable');
-                }
-            } catch {
-                useServersStore.getState().setServerStatus(id, 'unreachable');
-            }
-
-            setNewName('');
-            setNewUrl('');
-            setNewAdminKey('');
-            setShowAddForm(false);
-        } catch (error) {
-            console.error('Failed to add server:', error);
-        }
-    };
-
-    const handleRemoveServer = (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!confirm('Remove this server from the list?')) return;
-        removeServer(id);
     };
 
     const handleOpenSettings = (id: string, e: React.MouseEvent) => {
@@ -139,7 +71,6 @@ export function ServerSelector({ onLoginRequest, onLogoutRequest, className, var
     };
 
     const handleSelectServer = (id: string) => {
-        // Check if RAG indexing is in progress and warn user
         const ragStatus = useStore.getState().ragStatus;
         if (ragStatus?.isIndexing) {
             const confirmed = window.confirm(
@@ -152,28 +83,8 @@ export function ServerSelector({ onLoginRequest, onLogoutRequest, className, var
 
         selectServer(id);
         setIsOpen(false);
-
-        // Clear RAG status when switching
         useStore.getState().setRagStatus(null);
-        // Clear chat context when switching servers
         useStore.getState().createSession();
-
-        // Probe server if status is unknown
-        const server = useServersStore.getState().servers[id];
-        if (server && (server.status === 'added' || !server.status)) {
-            const url = server.config.url;
-            fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) })
-                .then((resp) => {
-                    if (resp.ok) {
-                        useServersStore.getState().setServerStatus(id, server.config.adminKey ? 'authenticated' : 'auth_required');
-                    } else {
-                        useServersStore.getState().setServerStatus(id, resp.status === 401 || resp.status === 403 ? 'auth_required' : 'unreachable');
-                    }
-                })
-                .catch(() => {
-                    useServersStore.getState().setServerStatus(id, 'unreachable');
-                });
-        }
     };
 
     const getStatusColor = (status: ServerState['status']) => {
@@ -299,104 +210,39 @@ export function ServerSelector({ onLoginRequest, onLogoutRequest, className, var
                                                 </TooltipContent>
                                             </Tooltip>
                                         </TooltipProvider>
-                                        {/* Remove */}
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6 hover:bg-gray-700"
-                                                        onClick={(e) => handleRemoveServer(server.config.id, e)}
-                                                    >
-                                                        <X size={12} />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p>Remove</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
                                     </div>
                                 </DropdownMenuItem>
                             ))
                         )}
                     </div>
                     <DropdownMenuSeparator className="bg-gray-800" />
-                    {/* Cloud Connect - only shown when VITE_CLOUD_ENABLED=true */}
-                    {CLOUD_ENABLED && (
-                        <>
-                            <DropdownMenuItem
-                                onSelect={handleCloudConnect}
-                                className="cursor-pointer focus:bg-gray-800 focus:text-white"
-                                disabled={cloudStatus === 'working'}
-                            >
-                                {cloudStatus === 'working' ? (
-                                    <Loader2 size={14} className="mr-2 animate-spin" />
-                                ) : (
-                                    <Cloud size={14} className="mr-2" />
-                                )}
-                                <span>
-                                    {isAuthenticated
-                                        ? (cloudStatus === 'connected' ? 'Reconnect to Cloud' : 'Connect to Cloud')
-                                        : 'Set Up Cloud'}
-                                </span>
-                            </DropdownMenuItem>
-                            {isAuthenticated && (
-                                <DropdownMenuItem
-                                    onSelect={() => {
-                                        cloudDisconnect();
-                                        cloudLogout();
-                                    }}
-                                    className="cursor-pointer focus:bg-gray-800 text-red-400 focus:text-red-300"
-                                >
-                                    <X size={14} className="mr-2" />
-                                    <span>Forget Cloud Credentials</span>
-                                </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator className="bg-gray-800" />
-                        </>
-                    )}
-                    {showAddForm ? (
-                        <div className="p-2 space-y-2">
-                            <Input
-                                placeholder="Server Name"
-                                value={newName}
-                                onChange={(e) => setNewName(e.target.value)}
-                                className="h-7 text-xs bg-black/40 border-gray-700"
-                                onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => e.key === 'Tab' && e.stopPropagation()}
-                            />
-                            <Input
-                                placeholder="URL"
-                                value={newUrl}
-                                onChange={(e) => setNewUrl(e.target.value)}
-                                className="h-7 text-xs bg-black/40 border-gray-700"
-                                onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => e.key === 'Tab' && e.stopPropagation()}
-                            />
-                            <Input
-                                placeholder="Admin Key (optional)"
-                                type="password"
-                                value={newAdminKey}
-                                onChange={(e) => setNewAdminKey(e.target.value)}
-                                className="h-7 text-xs bg-black/40 border-gray-700"
-                                onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => e.key === 'Tab' && e.stopPropagation()}
-                            />
-                            <div className="flex gap-2">
-                                <Button size="sm" variant="default" className="h-7 text-xs w-full bg-hector-green hover:bg-hector-green/80 text-white" onClick={handleAddServer}>
-                                    Add
-                                </Button>
-                                <Button size="sm" variant="ghost" className="h-7 text-xs w-full hover:bg-gray-800" onClick={(e) => { e.stopPropagation(); setShowAddForm(false); }}>
-                                    Cancel
-                                </Button>
-                            </div>
-                        </div>
-                    ) : (
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setShowAddForm(true); }} className="cursor-pointer focus:bg-gray-800 focus:text-white">
-                            <Plus size={14} className="mr-2" />
-                            <span>Add Server</span>
+                    {/* Cloud Connect */}
+                    <DropdownMenuItem
+                        onSelect={handleCloudConnect}
+                        className="cursor-pointer focus:bg-gray-800 focus:text-white"
+                        disabled={cloudStatus === 'working'}
+                    >
+                        {cloudStatus === 'working' ? (
+                            <Loader2 size={14} className="mr-2 animate-spin" />
+                        ) : (
+                            <Cloud size={14} className="mr-2" />
+                        )}
+                        <span>
+                            {isAuthenticated
+                                ? (cloudStatus === 'connected' ? 'Reconnect to Cloud' : 'Connect to Cloud')
+                                : 'Set Up Cloud'}
+                        </span>
+                    </DropdownMenuItem>
+                    {isAuthenticated && (
+                        <DropdownMenuItem
+                            onSelect={() => {
+                                cloudDisconnect();
+                                cloudLogout();
+                            }}
+                            className="cursor-pointer focus:bg-gray-800 text-red-400 focus:text-red-300"
+                        >
+                            <X size={14} className="mr-2" />
+                            <span>Forget Cloud Credentials</span>
                         </DropdownMenuItem>
                     )}
                 </DropdownMenuContent>
