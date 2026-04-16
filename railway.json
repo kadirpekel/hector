@@ -1,0 +1,30 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 10,
+    "restartPolicyType": "ON_FAILURE",
+    "startCommand": "./hector serve --host 0.0.0.0 --port $PORT"
+  },
+  "variables": {
+    "HECTOR_AUTH_SECRET": {
+      "description": "Admin secret for your Hector instance (auto-generated)",
+      "generator": "secret"
+    },
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API key for GPT models (optional)",
+      "optional": true
+    },
+    "ANTHROPIC_API_KEY": {
+      "description": "Anthropic API key for Claude models (optional)",
+      "optional": true
+    },
+    "GEMINI_API_KEY": {
+      "description": "Google Gemini API key (optional)",
+      "optional": true
+    }
+  }
+}

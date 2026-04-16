@@ -59,7 +59,7 @@ build-release:
 		exit 1; \
 	fi
 	@echo "Building Hector Studio UI..."
-	@(cd "$(STUDIO_DIR)" && npm install --silent && npm run build)
+	@(cd "$(STUDIO_DIR)" && HECTOR_VERSION=$(VERSION) npm install --silent && npm run build)
 	@rm -rf ui/dist/assets ui/dist/index.html 2>/dev/null || true
 	@cp -r "$(STUDIO_DIR)"/dist/* ui/dist/
 	@echo "Studio assets embedded."

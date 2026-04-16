@@ -56,6 +56,22 @@ is_homepage: true
     <a href="getting-started/quick-start/" class="btn btn-primary">Get Started</a>
     <a id="download-btn" href="https://github.com/verikod/hector/releases/latest" class="btn btn-secondary">Download</a>
   </div>
+
+  <div class="deploy-strip">
+    <p class="deploy-strip-label">Or deploy instantly</p>
+    <div class="deploy-buttons">
+      <a href="https://railway.app/template/hector?referralCode=hector" target="_blank" rel="noopener">
+        <img src="https://railway.app/button.svg" alt="Deploy on Railway" />
+      </a>
+      <a href="https://render.com/deploy?repo=https://github.com/verikod/hector" target="_blank" rel="noopener">
+        <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" />
+      </a>
+      <a href="https://heroku.com/deploy?template=https://github.com/verikod/hector" target="_blank" rel="noopener">
+        <img src="https://www.herokucdn.com/deploy/button.svg" alt="Deploy to Heroku" />
+      </a>
+    </div>
+    <a href="getting-started/deploy/" class="deploy-strip-more">More providers →</a>
+  </div>
 </div>
 
 <!-- Sovereign by Design Section -->
@@ -456,10 +472,7 @@ is_homepage: true
         Hector Studio is your visual command center to <strong>design, try, and deploy</strong> agents with confidence. Whether connecting to a remote production mesh or managing local workspaces, it provides a powerful X-ray view into your system, allowing you to debug message flows, inspect tool executions, and orchestrate complex workflows in real-time.
       </p>
       <div class="hero-cta" style="justify-content: center; margin-top: 2rem;">
-        <a href="https://studio.gohector.dev" class="btn btn-primary">
-          Try Studio Online
-        </a>
-        <a href="guides/studio/" class="btn btn-secondary">Read the Docs</a>
+        <a href="guides/studio/" class="btn btn-primary">Studio Guide</a>
       </div>
     </div>
   </div>
@@ -532,7 +545,7 @@ func main() {
 
 -   :desktop_computer: __[Studio Mode](guides/studio.md)__
 
-    Visual UI for designing agents, managing resources, and chatting. Embedded in Hector or **[try it online](https://studio.gohector.dev)**.
+    Visual UI for designing agents, managing resources, and chatting. Embedded in Hector at **http://localhost:8080/**.
 
 -   :twisted_rightwards_arrows: __Multi-Agent__
 

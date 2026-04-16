@@ -1,27 +1,21 @@
-import { useState } from 'react';
-import { Rocket, LayoutTemplate, Split, MessageSquare, ChevronRight, Settings, ScrollText } from 'lucide-react';
+import { Rocket, LayoutTemplate, Split, MessageSquare, Server } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useServersStore } from '../store/serversStore';
 
-import { ServerSelector } from './ServerSelector';
 import { AppSelector } from './AppSelector';
-import { ServerSettingsModal } from './ServerSettingsModal';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { api } from '../services/api';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 import hectorIcon from '../assets/hector.png';
 
 interface AppHeaderProps {
     onLoginRequest: (serverId: string) => void;
     onLogoutRequest: (serverId: string) => void;
-    onOpenLogDrawer: () => void;
 }
 
-export function AppHeader({ onLoginRequest, onLogoutRequest, onOpenLogDrawer }: AppHeaderProps) {
+export function AppHeader({ }: AppHeaderProps) {
     const activeServer = useServersStore((s) => s.getActiveServer());
-    const [showSettings, setShowSettings] = useState(false);
 
     // Studio State
     const studioViewMode = useStore((s) => s.studioViewMode);
@@ -58,20 +52,21 @@ export function AppHeader({ onLoginRequest, onLogoutRequest, onOpenLogDrawer }: 
                 <div className="flex items-center gap-3 select-none">
                     <img src={hectorIcon} alt="Hector" className="w-6 h-6 object-contain" />
                     <span className="font-bold tracking-wider text-xs text-white/90">STUDIO</span>
+                    <span className="text-[10px] text-white/30 font-mono">{__APP_VERSION__}</span>
                 </div>
 
                 <div className="h-4 w-px bg-white/10" />
 
                 <div className="flex items-center text-sm">
-                    <ServerSelector
-                        onLoginRequest={onLoginRequest}
-                        onLogoutRequest={onLogoutRequest}
-                        variant="ghost"
-                        className="h-8 px-2 font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 data-[state=open]:bg-white/5 justify-start w-auto sm:w-auto min-w-0 max-w-[200px]"
-                    />
+                    <div className="flex items-center gap-2 h-8 px-2 text-muted-foreground">
+                        <Server size={14} />
+                        <span className="font-medium truncate max-w-[200px]">
+                            {activeServer?.config.name || 'Connecting...'}
+                        </span>
+                    </div>
                     {activeServer?.status === 'authenticated' && (
                         <>
-                            <ChevronRight className="text-muted-foreground mx-1" size={14} />
+                            <span className="text-muted-foreground mx-1">/</span>
                             <AppSelector
                                 variant="ghost"
                                 className="h-8 px-2 font-medium text-foreground hover:bg-white/5 data-[state=open]:bg-white/5 justify-start w-auto sm:w-auto min-w-0 max-w-[200px]"
@@ -127,41 +122,6 @@ export function AppHeader({ onLoginRequest, onLogoutRequest, onOpenLogDrawer }: 
 
             {/* Right: Actions */}
             <div className="flex items-center gap-2 flex-shrink-0">
-                {activeServer && (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-white/5"
-                                    onClick={onOpenLogDrawer}
-                                >
-                                    <ScrollText size={16} />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Logs</p></TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                )}
-                {activeServer?.config.type === 'managed-cloud' && (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-white/5"
-                                    onClick={() => setShowSettings(true)}
-                                >
-                                    <Settings size={16} />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Instance Settings</p></TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                )}
-
                 {isStudioEnabled && (
                     <Button
                         variant="default"
@@ -180,15 +140,6 @@ export function AppHeader({ onLoginRequest, onLogoutRequest, onOpenLogDrawer }: 
                     </Button>
                 )}
             </div>
-
-            {/* Settings Modal */}
-            {activeServer && showSettings && (
-                <ServerSettingsModal
-                    isOpen={showSettings}
-                    onClose={() => setShowSettings(false)}
-                    serverId={activeServer.config.id}
-                />
-            )}
         </header>
     );
 }

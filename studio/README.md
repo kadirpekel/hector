@@ -2,17 +2,16 @@
 
 The web-based UI for [Hector](https://github.com/verikod/hector), included in the monorepo under `studio/`.
 
-**[Live →](https://studio.gohector.dev)** · **[Docs](https://gohector.dev/guides/studio/)** · **[Hector](https://github.com/verikod/hector)**
+**[Docs](https://gohector.dev/guides/studio/)** · **[Hector](https://github.com/verikod/hector)**
 
-[![Hector Studio](https://gohector.dev/assets/hector-studio.png)](https://studio.gohector.dev)
+![Hector Studio](https://gohector.dev/assets/hector-studio.png)
 
 ## Features
 
 - **Visual Flow Builder**: Drag-and-drop canvas for multi-agent architectures with bi-directional YAML sync
 - **Integrated Chat**: Streaming responses, trace view, markdown rendering
 - **Resource Management**: Configure LLMs, tools, and guardrails without touching YAML
-- **Server Connectivity**: Connect to any Hector server (local or remote)
-- **Cloud Integration**: Optional managed cloud instances (requires license key)
+- **Server Connectivity**: Embedded in Hector — auto-connects to the host server
 
 ## Quick Start
 
@@ -40,11 +39,6 @@ make build-release
 This builds Studio, copies assets into `ui/dist/`, and compiles them into the Go binary via `//go:embed`.
 
 ## Environment Variables
-
-| Variable | Description | Required |
-|---|---|---|
-| `VITE_HECTOR_CLOUD_URL` | Cloud control plane URL. Enables cloud features when set. | No |
-| `VITE_CLOUD_SIGNUP_URL` | URL to purchase a license key (shown in cloud auth modal). | No |
 
 See [.env.example](.env.example) for reference.
 

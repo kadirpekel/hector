@@ -38,6 +38,7 @@ type AdminHandler struct {
 	taskQueue      native.Queue // Optional: for queue admin endpoints
 	adminKey       string       // CLI-provided admin key for authentication
 	rootDir        string
+	reloadFunc     func()       // Optional: triggers config reload (same as SIGHUP)
 }
 
 // AdminHandlerConfig configures the admin handler.
@@ -68,6 +69,9 @@ type AdminHandlerConfig struct {
 
 	// RootDir is the root directory for app data (default: .).
 	RootDir string
+
+	// ReloadFunc triggers a full config reload (same as SIGHUP). Optional.
+	ReloadFunc func()
 }
 
 // NewAdminHandler creates a new admin handler.
@@ -105,6 +109,7 @@ func NewAdminHandler(cfg AdminHandlerConfig) (*AdminHandler, error) {
 		taskQueue:      cfg.TaskQueue,
 		adminKey:       cfg.AdminKey,
 		rootDir:        cfg.RootDir,
+		reloadFunc:     cfg.ReloadFunc,
 	}, nil
 }
 
@@ -135,6 +140,8 @@ func (h *AdminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleQueue(w, r)
 	case strings.HasPrefix(path, "queue/"):
 		h.handleQueueSubpath(w, r, strings.TrimPrefix(path, "queue/"))
+	case path == "reload":
+		h.handleReload(w, r)
 	default:
 		h.writeError(w, "Not found", http.StatusNotFound)
 	}
@@ -816,5 +823,52 @@ func (h *AdminHandler) requeueDLQItem(w http.ResponseWriter, r *http.Request, it
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"requeued": itemID,
 		"status":   "pending",
+	})
+}
+
+// handleReload triggers a full config reload (equivalent to SIGHUP).
+// POST /admin/reload
+// Optional JSON body: { "env": { "KEY": "VALUE", ... } }
+// Environment variables in the body are set before triggering the reload.
+func (h *AdminHandler) handleReload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.reloadFunc == nil {
+		h.writeError(w, "Reload not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Parse optional env overrides
+	if r.Body != nil && r.ContentLength > 0 {
+		var req struct {
+			Env map[string]string `json:"env,omitempty"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			h.writeError(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		// Apply env overrides before reload
+		for key, value := range req.Env {
+			if err := os.Setenv(key, value); err != nil {
+				slog.Warn("Failed to set environment variable", "key", key, "error", err)
+			}
+		}
+
+		if len(req.Env) > 0 {
+			slog.Info("Applied environment overrides before reload", "count", len(req.Env))
+		}
+	}
+
+	// Trigger reload (same path as SIGHUP)
+	slog.Info("Admin API triggered config reload")
+	h.reloadFunc()
+
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"status":  "reloaded",
+		"message": "Configuration reload triggered successfully",
 	})
 }

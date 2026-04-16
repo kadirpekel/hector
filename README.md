@@ -19,7 +19,7 @@ Hector is an open-source AI agent runtime built for teams that need full control
 
 ![Hector Studio](docs/assets/ss.png)
 
-**[Documentation](https://gohector.dev)** · **[Studio](https://studio.gohector.dev)** · **[Config Ref](https://gohector.dev/reference/configuration/)** · **[CLI Ref](https://gohector.dev/reference/cli/)** · **[API Ref](https://gohector.dev/reference/api/)**
+**[Documentation](https://gohector.dev)** · **[Config Ref](https://gohector.dev/reference/configuration/)** · **[CLI Ref](https://gohector.dev/reference/cli/)** · **[API Ref](https://gohector.dev/reference/api/)**
 
 ---
 
@@ -85,14 +85,11 @@ Open **http://localhost:8080/** — an admin secret is printed in the terminal. 
 
 ## Hector Studio
 
-[Hector Studio](https://studio.gohector.dev) is the web UI for designing, testing, and managing agents.
-
-> **[Try it online →](https://studio.gohector.dev)** — no install required. Connect to any Hector server.
+Hector Studio is the web UI for designing, testing, and managing agents. It's embedded in the Hector binary — just run `hector serve` and open **http://localhost:8080/**.
 
 - **Visual Flow Builder**: Drag-and-drop canvas with bi-directional YAML sync
 - **Integrated Chat**: Streaming responses with tool-call trace view
 - **Resource Management**: Configure LLMs, tools, and guardrails without editing YAML
-- **Cloud Integration**: Provision and manage cloud-hosted instances with a license key
 
 Studio is also embedded in release builds and served at `/`. For development builds:
 

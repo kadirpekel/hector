@@ -324,9 +324,6 @@ export interface AuthConfig {
   clientId?: string;
 }
 
-// Runtime types
-export type ServerType = 'remote' | 'managed-cloud';
-
 // ============================================================================
 // Server Configuration Types
 // ============================================================================
@@ -336,92 +333,6 @@ export interface ServerConfig {
   name: string;
   url: string;
   adminKey?: string;    // Admin key for /admin/* endpoints
-  type?: ServerType;
-  cloud?: {
-    instanceId?: string;
-    region?: string;
-  };
-  envVars?: Record<string, string>;
-}
-
-// ============================================================================
-// Cloud Instance Types (from hector-cloud API)
-// ============================================================================
-
-export interface CloudInstance {
-  id: string;
-  tenant_id: string;
-  app_name: string;
-  host: string;
-  status: CloudInstanceStatus;
-  external_id?: string;
-  auth_secret?: string;    // Only returned on initial provision
-  database?: string;       // Only returned on initial provision
-  region?: string;
-  created_at: string;
-  config?: CloudInstanceConfig;
-}
-
-export type CloudInstanceStatus =
-  | 'provisioning'
-  | 'running'
-  | 'suspended'
-  | 'stopped'
-  | 'failed';
-
-export interface CloudInstanceConfig {
-  env?: Record<string, string>;
-  auth?: {
-    jwks_url?: string;
-    issuer?: string;
-    audience?: string;
-    client_id?: string;
-  };
-  server?: CloudServerConfig;
-}
-
-export interface CloudRateLimitRule {
-  type: 'count' | 'token';
-  window: 'minute' | 'hour' | 'day' | 'week' | 'month';
-  limit: number;
-}
-
-export interface CloudRateLimitConfig {
-  enabled: boolean;
-  scope?: 'session' | 'user';
-  limits?: CloudRateLimitRule[];
-  ip_headers?: string[];
-}
-
-export interface CloudQueueConfig {
-  workers?: number;
-  max_retries?: number;
-  initial_delay?: string;
-  max_delay?: string;
-  stale_threshold?: string;
-}
-
-export interface CloudObservabilityConfig {
-  metrics_enabled?: boolean;
-  tracing_endpoint?: string;
-}
-
-export interface CloudLoggingConfig {
-  level?: 'debug' | 'info' | 'warn' | 'error';
-  format?: 'json' | 'text';
-}
-
-export interface CloudServerConfig {
-  rate_limit?: CloudRateLimitConfig;
-  queue?: CloudQueueConfig;
-  observability?: CloudObservabilityConfig;
-  logging?: CloudLoggingConfig;
-}
-
-export interface CloudAuthToken {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
 }
 
 /**
@@ -455,4 +366,37 @@ export interface ServerState {
   agents: Agent[];
   configYaml: string | null;
   lastError: string | null;
+}
+
+// Server configuration types (for admin settings panel)
+
+export interface RateLimitRule {
+  type: 'count' | 'token';
+  window: 'minute' | 'hour' | 'day' | 'week' | 'month';
+  limit: number;
+}
+
+export interface RateLimitConfig {
+  enabled: boolean;
+  scope?: 'session' | 'user';
+  limits?: RateLimitRule[];
+  ip_headers?: string[];
+}
+
+export interface QueueConfig {
+  workers?: number;
+  max_retries?: number;
+  initial_delay?: string;
+  max_delay?: string;
+  stale_threshold?: string;
+}
+
+export interface ObservabilityConfig {
+  metrics_enabled?: boolean;
+  tracing_endpoint?: string;
+}
+
+export interface LoggingConfig {
+  level?: 'debug' | 'info' | 'warn' | 'error';
+  format?: 'json' | 'text';
 }

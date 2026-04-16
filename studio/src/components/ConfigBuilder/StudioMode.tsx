@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as yaml from 'js-yaml';
-import { CheckCircle, XCircle, Settings, Rocket, DownloadCloud, UploadCloud, Palette } from 'lucide-react';
+import { Settings, Rocket, DownloadCloud, UploadCloud, Palette } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { yamlToGraph } from '../../lib/canvas-converter';
 import { CanvasMode } from './CanvasMode';
@@ -50,7 +50,6 @@ export const StudioMode: React.FC = () => {
   const isServerStudioEnabled = useStore((s) => s.isServerStudioEnabled);
 
   // Studio Mode is enabled when the server supports it
-  // (License is only required for cloud provisioning, not local/remote Studio Mode)
   const isStudioModeEnabled = isServerStudioEnabled;
 
   // Auto-collapse sidebar if studio mode disabled
@@ -432,41 +431,7 @@ export const StudioMode: React.FC = () => {
         )}
       </div>
 
-      {/* Status Bar */}
-      {
-        isStudioModeEnabled && (
-          <div className="h-8 bg-black/80 border-t border-white/10 flex items-center justify-between px-4 text-xs select-none relative">
-            {/* Left: Validation Status */}
-            <div className="flex items-center gap-4">
 
-              {isValidYaml ? (
-                <div className="flex items-center gap-1.5 text-green-400">
-                  <CheckCircle size={12} />
-                  <span>Valid Configuration</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 text-red-400" title={validationError}>
-                  <XCircle size={12} />
-                  <span className="truncate max-w-[300px]">Invalid: {validationError}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Center: Screen Mode Indicator */}
-            <div className="absolute left-1/2 -translate-x-1/2 text-gray-500">
-              <span className="uppercase tracking-wider">{viewMode}</span>
-              {(viewMode === 'design' || viewMode === 'split') && designView && (
-                <span className="text-gray-600"> / {designView}</span>
-              )}
-            </div>
-
-            {/* Right: Version */}
-            <div className="text-gray-600">
-              v{__APP_VERSION__}
-            </div>
-          </div>
-        )
-      }
 
     </div >
   );

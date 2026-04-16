@@ -184,7 +184,7 @@ func Serve(ctx context.Context, opts ...ServeOption) error {
 	defer state.Close()
 
 	// Start HTTP server
-	srv, err := startServer(serverCtx, options.ServerConfig, appCfg, state)
+	srv, err := startServer(serverCtx, options.ServerConfig, appCfg, state, sigMgr)
 	if err != nil {
 		return err
 	}
@@ -596,7 +596,7 @@ func (p *appManagerExecutorProvider) GetExecutor(ctx context.Context, appID, age
 	return runtime.Executor, nil
 }
 
-func startServer(ctx context.Context, serverCfg *config.ServerConfig, appCfg *config.AppConfig, state *appState) (*server.HTTPServer, error) {
+func startServer(ctx context.Context, serverCfg *config.ServerConfig, appCfg *config.AppConfig, state *appState, sigMgr *sigsvc.Manager) (*server.HTTPServer, error) {
 	var serverOpts []server.HTTPServerOption
 
 	if state.taskStore != nil {
@@ -641,6 +641,7 @@ func startServer(ctx context.Context, serverCfg *config.ServerConfig, appCfg *co
 			TaskQueue:      state.taskQueue,
 			AdminKey:       serverCfg.Auth.Secret,
 			RootDir:        ".",
+			ReloadFunc:     sigMgr.TriggerReload,
 		}
 
 		if deleter, ok := state.taskStore.(server.TaskDeleter); ok {

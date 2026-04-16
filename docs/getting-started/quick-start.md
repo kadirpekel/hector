@@ -63,7 +63,7 @@ Navigate to **http://localhost:8080/** and enter the admin secret shown in your 
 - **Create agents** — define agent instructions, tools, and models visually
 - **Chat** — test agents in real-time with streaming and tool-call traces
 
-You can also **[try Studio online](https://studio.gohector.dev)** and point it at your running server.
+Studio is embedded in Hector and available at **http://localhost:8080/**.
 
 ## 3. Test the Agent
 
@@ -131,7 +131,7 @@ embedders:
 
 ### Use Hector Studio
 
-Hector Studio is the web UI for designing and testing agents. **[Try it online](https://studio.gohector.dev)** or use the version embedded in Hector at **http://localhost:8080/**.
+Hector Studio is the web UI for designing and testing agents. It's embedded in Hector at **http://localhost:8080/**.
 
 With Studio you can:
 

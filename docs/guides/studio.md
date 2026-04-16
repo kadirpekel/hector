@@ -2,9 +2,9 @@
 
 Hector Studio is the web-based UI for Hector. It provides a visual interface for designing, configuring, and testing AI agents.
 
-> **[Try Studio online →](https://studio.gohector.dev)** — no install required. Add your server URL and start building.
+> Studio is embedded in Hector. Run `hector serve` and open **http://localhost:8080/**.
 
-[![Hector Studio](../assets/hector-studio.png)](https://studio.gohector.dev)
+![Hector Studio](../assets/hector-studio.png)
 
 ## Features
 
@@ -28,13 +28,7 @@ Test your agents in the browser.
 *   **Trace View**: See exactly which tools were called and what data was passed.
 *   **Markdown Support**: Full rendering of tables, code blocks, and images.
 
-## Getting Started
-
-### Try Online (Quickest)
-
-Visit **[studio.gohector.dev](https://studio.gohector.dev)** and add your server URL. No install or build step needed.
-
-### Embedded in Hector (Easiest)
+### Embedded in Hector (Recommended)
 
 Release builds of Hector include Studio bundled directly in the binary:
 
@@ -110,7 +104,6 @@ This means the binary was built from source without embedded UI assets. Options:
 - Or with Homebrew: `brew install verikod/tap/hector`
 - Run `make build-release` to build a binary with UI embedded (requires Node.js)
 - Run Studio dev server with `npm run dev` in the `studio/` directory
-- Try online at [studio.gohector.dev](https://studio.gohector.dev)
 
 **Studio can't connect to the server**
 
@@ -122,6 +115,5 @@ Hard-refresh the browser (`Cmd+Shift+R` / `Ctrl+Shift+R`) to clear cached assets
 
 ## Next Steps
 
-*   [Try Studio online](https://studio.gohector.dev)
 *   [Quick Start Guide](../getting-started/quick-start.md)
 *   [Configuration Reference](../reference/configuration.md)

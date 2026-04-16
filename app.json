@@ -1,0 +1,26 @@
+{
+  "name": "hector",
+  "description": "Deploy your own Hector AI agent platform. One binary, full sovereignty.",
+  "logo": "https://gohector.dev/assets/letter-h.png",
+  "keywords": ["ai", "agents", "a2a", "mcp", "llm"],
+  "stack": "container",
+  "env": {
+    "HECTOR_AUTH_SECRET": {
+      "description": "Admin secret for your Hector instance",
+      "generator": "secret"
+    },
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API key for GPT models (optional)",
+      "required": false
+    },
+    "ANTHROPIC_API_KEY": {
+      "description": "Anthropic API key for Claude models (optional)",
+      "required": false
+    },
+    "GEMINI_API_KEY": {
+      "description": "Google Gemini API key (optional)",
+      "required": false
+    }
+  },
+  "addons": ["heroku-postgresql:essential-0"]
+}

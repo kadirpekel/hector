@@ -1,16 +1,6 @@
-import { Cloud } from 'lucide-react'
 import hectorIcon from '../assets/hector.png'
 
-interface WelcomeScreenProps {
-  isCloudAuthenticated: boolean | null
-  cloudStatus: string
-  onConnectCloud: () => void
-}
-
-export function WelcomeScreen({ isCloudAuthenticated, cloudStatus, onConnectCloud }: WelcomeScreenProps) {
-  const showCloudButton = cloudStatus !== 'connected' && cloudStatus !== 'working'
-  const cloudButtonLabel = isCloudAuthenticated ? 'Connect to Cloud' : 'Set Up Cloud'
-
+export function WelcomeScreen() {
   return (
     <div className="flex-1 flex items-center justify-center text-gray-500 bg-gray-900/20">
       <div className="text-center max-w-md px-6">
@@ -18,18 +8,9 @@ export function WelcomeScreen({ isCloudAuthenticated, cloudStatus, onConnectClou
           <img src={hectorIcon} alt="Hector" className="w-full h-full object-contain" />
         </div>
         <h2 className="text-xl font-medium text-gray-200 mb-2">Welcome to Hector Studio</h2>
-        <p className="text-sm text-gray-400 mb-6">
-          Connect to Hector Cloud to get started.
+        <p className="text-sm text-gray-400">
+          Waiting for connection to Hector server...
         </p>
-        {showCloudButton && (
-          <button
-            onClick={onConnectCloud}
-            className="flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-medium text-sm transition-all bg-hector-green hover:bg-hector-green/80 text-white mx-auto"
-          >
-            <Cloud size={16} />
-            <span>{cloudButtonLabel}</span>
-          </button>
-        )}
       </div>
     </div>
   )

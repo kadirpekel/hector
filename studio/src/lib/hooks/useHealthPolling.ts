@@ -41,12 +41,6 @@ export function useHealthPolling() {
             return;
         }
 
-        // Skip polling for placeholder URLs (e.g. during cloud provision)
-        if (currentServer.config.url.startsWith('cloud://')) {
-            logger.debug('Skipping health check for placeholder URL', { url: currentServer.config.url });
-            return;
-        }
-
         logger.debug('Starting health check for server:', {
             id: currentServer.config.id,
             url: currentServer.config.url,

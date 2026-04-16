@@ -65,6 +65,7 @@ nav:
   - Getting Started:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quick-start.md
+      - Deploy: getting-started/deploy.md
       - "Tutorial: Build a Support Agent": getting-started/tutorial.md
   - Core Concepts:
       - Configuration: guides/configuration.md

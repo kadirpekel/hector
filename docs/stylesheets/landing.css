@@ -205,6 +205,66 @@ body:has(.homepage-wrapper) .md-search__input::placeholder {
 }
 
 /* ============================================
+   DEPLOY STRIP (inside hero)
+   ============================================ */
+
+.deploy-strip {
+    margin-top: 2.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.deploy-strip-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.35);
+    margin: 0;
+    font-weight: 500;
+}
+
+.deploy-buttons {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+}
+
+.deploy-buttons a {
+    display: inline-flex;
+    transition: transform 0.2s ease, filter 0.2s ease;
+    text-decoration: none !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.deploy-buttons a:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.15);
+}
+
+.deploy-buttons img {
+    height: 36px;
+    width: auto;
+}
+
+.deploy-strip-more {
+    font-size: 0.8rem;
+    color: rgba(16, 185, 129, 0.6) !important;
+    text-decoration: none !important;
+    transition: color 0.2s;
+    margin-top: 0.25rem;
+}
+
+.deploy-strip-more:hover {
+    color: #10b981 !important;
+}
+
+/* ============================================
    BUTTONS
    ============================================ */
 
@@ -880,6 +940,11 @@ body:has(.homepage-wrapper) .md-search__input::placeholder {
         font-size: 0.75rem;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
+    }
+
+    .deploy-buttons {
+        flex-direction: column;
+        align-items: center;
     }
 
     .story-section {

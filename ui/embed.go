@@ -72,7 +72,7 @@ const fallbackHTML = `<!DOCTYPE html>
     <ul>
         <li>Build from source with UI: <code>make build-release</code> (requires Node.js)</li>
         <li>Studio dev server: <code>cd studio &amp;&amp; npm run dev</code></li>
-        <li>Try online: <a href="https://studio.gohector.dev">studio.gohector.dev</a></li>
+        <li>Open <a href="/">http://localhost:8080</a> after running <code>make build-release</code></li>
     </ul>
     <p>The API server is running &mdash; agents are available at <code>/agents/</code>.</p>
     <p><a href="/health">/health</a> &middot; <a href="/agents">/agents</a></p>
