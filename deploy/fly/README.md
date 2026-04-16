@@ -13,12 +13,11 @@ cd hector
 # Launch (creates app, picks region, deploys)
 fly launch --config deploy/fly/fly.toml
 
-# Set secrets
-fly secrets set HECTOR_AUTH_SECRET=$(openssl rand -hex 32)
-fly secrets set OPENAI_API_KEY=sk-...
+# Set admin secret
+fly secrets set HECTOR_AUTH_SECRET=your-secret-here
 ```
 
 - **Auto Domain**: `*.fly.dev`
 - **Free Tier**: Yes (3 shared VMs)
-- **Database**: Add via `fly postgres create`
+- **Database**: SQLite (volume-backed)
 - **Scale to Zero**: Yes (auto-stop/start)

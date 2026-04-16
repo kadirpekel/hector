@@ -60,8 +60,8 @@ is_homepage: true
   <div class="deploy-strip">
     <p class="deploy-strip-label">Or deploy instantly</p>
     <div class="deploy-buttons">
-      <a href="https://railway.app/template/hector?referralCode=hector" target="_blank" rel="noopener">
-        <img src="https://railway.app/button.svg" alt="Deploy on Railway" />
+      <a href="https://railway.com/new/template?template=https://github.com/verikod/hector" target="_blank" rel="noopener">
+        <img src="https://railway.com/button.svg" alt="Deploy on Railway" />
       </a>
       <a href="https://render.com/deploy?repo=https://github.com/verikod/hector" target="_blank" rel="noopener">
         <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" />

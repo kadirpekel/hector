@@ -10,36 +10,35 @@ Every deployed instance is **self-contained**: agents, tools, Studio UI, admin A
 
 ### Railway
 
-One-click deploy with auto-generated secrets, optional PostgreSQL plugin, and scale-to-zero.
+One-click deploy with scale-to-zero. SQLite for storage — zero setup.
 
 | | |
 |---|---|
 | **Domain** | `*.up.railway.app` |
 | **Auth** | GitHub OAuth |
-| **Database** | PostgreSQL plugin (add from dashboard) |
+| **Database** | SQLite (built-in) |
 | **Free Tier** | Trial credits |
 | **Scale to Zero** | Yes |
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/hector?referralCode=hector)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/verikod/hector)
 
 ??? info "What gets provisioned"
     - Docker container from `ghcr.io/verikod/hector:latest`
-    - `HECTOR_AUTH_SECRET` auto-generated
-    - Optional: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`
     - Health checks at `/health`
+    - You set `HECTOR_AUTH_SECRET` during deploy
     - Recipe: [`railway.json`](https://github.com/verikod/hector/blob/main/railway.json)
 
 ---
 
 ### Render
 
-Blueprint-based deploy with auto-provisioned free PostgreSQL and auto-generated admin secret.
+Blueprint-based deploy with persistent disk for SQLite.
 
 | | |
 |---|---|
 | **Domain** | `*.onrender.com` |
 | **Auth** | GitHub / Google / GitLab OAuth |
-| **Database** | PostgreSQL (auto-provisioned, free plan) |
+| **Database** | SQLite (persistent disk) |
 | **Free Tier** | Yes |
 | **Scale to Zero** | Paid plans |
 
@@ -47,22 +46,21 @@ Blueprint-based deploy with auto-provisioned free PostgreSQL and auto-generated 
 
 ??? info "What gets provisioned"
     - Docker web service with health checks
-    - PostgreSQL database (free plan, auto-connected)
-    - `HECTOR_AUTH_SECRET` auto-generated
-    - Optional: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`
+    - 1 GB persistent disk at `/data` for SQLite
+    - You set `HECTOR_AUTH_SECRET` during deploy
     - Recipe: [`render.yaml`](https://github.com/verikod/hector/blob/main/render.yaml)
 
 ---
 
 ### Heroku
 
-Classic one-click deploy with managed PostgreSQL addon.
+Classic one-click deploy. SQLite for storage.
 
 | | |
 |---|---|
 | **Domain** | `*.herokuapp.com` |
 | **Auth** | Heroku account |
-| **Database** | PostgreSQL (Essential-0 addon) |
+| **Database** | SQLite (built-in) |
 | **Free Tier** | Eco ($5/mo) |
 | **Scale to Zero** | No |
 
@@ -70,9 +68,7 @@ Classic one-click deploy with managed PostgreSQL addon.
 
 ??? info "What gets provisioned"
     - Container stack with Hector Docker image
-    - PostgreSQL Essential-0 addon (auto-connected)
-    - `HECTOR_AUTH_SECRET` auto-generated
-    - Optional: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`
+    - You set `HECTOR_AUTH_SECRET` during deploy
     - Recipe: [`app.json`](https://github.com/verikod/hector/blob/main/app.json)
 
 ---
@@ -85,14 +81,14 @@ Edge deployment with auto-stop/start machines and global regions.
 |---|---|
 | **Domain** | `*.fly.dev` |
 | **Auth** | Fly.io account |
-| **Database** | `fly postgres create` (separate step) |
+| **Database** | SQLite (volume-backed) |
 | **Free Tier** | 3 shared VMs |
 | **Scale to Zero** | Yes |
 
 ```bash
 # One-command deploy
 fly launch --config deploy/fly/fly.toml
-fly secrets set HECTOR_AUTH_SECRET=$(openssl rand -hex 32)
+fly secrets set HECTOR_AUTH_SECRET=your-secret-here
 ```
 
 ??? info "What gets provisioned"
@@ -105,18 +101,18 @@ fly secrets set HECTOR_AUTH_SECRET=$(openssl rand -hex 32)
 
 ### Docker Compose (Self-Hosted)
 
-Run Hector with PostgreSQL on your own infrastructure.
+Run Hector on your own infrastructure. SQLite with persistent volume.
 
 | | |
 |---|---|
 | **Domain** | Your own |
 | **Auth** | N/A |
-| **Database** | PostgreSQL (included) |
+| **Database** | SQLite (volume-backed) |
 | **Free** | Yes |
 | **Scale to Zero** | N/A |
 
 ```bash
-export HECTOR_AUTH_SECRET=$(openssl rand -hex 32)
+export HECTOR_AUTH_SECRET=your-secret-here
 curl -O https://raw.githubusercontent.com/verikod/hector/main/deploy/docker-compose/docker-compose.yaml
 docker compose up -d
 ```
@@ -125,8 +121,7 @@ Open `http://localhost:8080` — Hector with embedded Studio UI is ready.
 
 ??? info "What gets provisioned"
     - Hector container (`ghcr.io/verikod/hector:latest`)
-    - PostgreSQL 16 container
-    - Persistent volumes for data and database
+    - Persistent volume for SQLite data
     - Recipe: [`deploy/docker-compose/docker-compose.yaml`](https://github.com/verikod/hector/blob/main/deploy/docker-compose/docker-compose.yaml)
 
 ---
@@ -137,8 +132,8 @@ Once your instance is running:
 
 1. **Open the URL** provided by your cloud platform (e.g., `my-hector.up.railway.app`)
 2. **Studio UI** loads automatically at the root `/`
-3. **Configure agents** via the visual editor or upload a YAML config
-4. **Set LLM keys** in the environment if you haven't already
+3. **Enter your admin secret** — the one you set during deployment
+4. **Configure LLM providers and agents** via the visual editor or upload a YAML config
 
 Your instance includes everything: Studio UI, Admin API (`/admin/`), A2A protocol (`/agents/`), webhooks (`/webhooks/`), and health checks (`/health`).
 

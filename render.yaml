@@ -5,20 +5,10 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     plan: starter
+    disk:
+      name: hector-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: HECTOR_AUTH_SECRET
-        generateValue: true
-      - key: HECTOR_DATABASE
-        fromDatabase:
-          name: hector-db
-          property: connectionURI
-      - key: OPENAI_API_KEY
         sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
-
-databases:
-  - name: hector-db
-    plan: free
