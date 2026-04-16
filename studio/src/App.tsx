@@ -48,6 +48,8 @@ function App() {
     const handleAuthExpired = () => {
       const activeServerId = useServersStore.getState().activeServerId;
       if (activeServerId) {
+        // Clear stale app tokens so fresh ones are fetched on re-login
+        useAppsStore.getState().clearServerTokens(activeServerId);
         useServersStore.getState().setServerStatus(activeServerId, 'auth_required', 'Session expired');
       }
     };

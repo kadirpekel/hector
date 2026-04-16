@@ -46,6 +46,7 @@ interface AppsState {
 
   storeAppToken: (serverId: string, appId: string, token: AppToken) => void
   regenerateToken: (serverId: string, appId: string) => Promise<void>
+  clearServerTokens: (serverId: string) => void
 }
 
 export const useAppsStore = create<AppsState>()(
@@ -302,6 +303,22 @@ export const useAppsStore = create<AppsState>()(
                     issuer: response.issuer || 'hector'
                   }
                 }
+              }
+            }
+          }
+        })
+      },
+
+      clearServerTokens: (serverId) => {
+        set((state) => {
+          const serverData = state.appsByServer[serverId]
+          if (!serverData) return state
+          return {
+            appsByServer: {
+              ...state.appsByServer,
+              [serverId]: {
+                ...serverData,
+                appTokens: {}
               }
             }
           }
