@@ -20,13 +20,13 @@ One-click deploy with scale-to-zero. SQLite for storage — zero setup.
 | **Free Tier** | Trial credits |
 | **Scale to Zero** | Yes |
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/verikod/hector)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/NVoVdT?referralCode=uJnhIQ)
 
 ??? info "What gets provisioned"
-    - Docker container from `ghcr.io/verikod/hector:latest`
+    - Docker container from your repo
     - Health checks at `/health`
     - You set `HECTOR_AUTH_SECRET` during deploy
-    - Recipe: [`railway.json`](https://github.com/verikod/hector/blob/main/railway.json)
+    - Config-as-code via [`railway.json`](https://github.com/verikod/hector/blob/main/railway.json)
 
 ---
 

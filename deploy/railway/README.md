@@ -1,7 +1,7 @@
 # Deploy Hector on Railway
 
-- **Deploy URL**: `https://railway.com/new/template?template=https://github.com/verikod/hector`
+- **Deploy URL**: `https://railway.com/deploy/NVoVdT?referralCode=uJnhIQ`
 - **Auto Domain**: `*.up.railway.app`
 - **Free Tier**: Yes (trial credits)
-- **Database**: Add PostgreSQL plugin from Railway dashboard
+- **Database**: SQLite (built-in)
 - **Scale to Zero**: Yes
