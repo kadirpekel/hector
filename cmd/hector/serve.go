@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -84,13 +83,14 @@ func (c *ServeCmd) Run() error {
 
 	// Build auth config
 	authSecret := c.AuthSecret
+	autoSecret := ""
 	if authSecret == "" && c.AuthJWKSURL == "" {
 		generated, err := generateSecret(16)
 		if err != nil {
 			return fmt.Errorf("failed to generate auth secret: %w", err)
 		}
 		authSecret = generated
-		slog.Info("Studio admin secret (use --auth-secret to set your own)", "secret", authSecret)
+		autoSecret = generated
 	}
 	if authSecret != "" || c.AuthJWKSURL != "" {
 		serverCfg.Auth = &config.AuthConfig{
@@ -130,6 +130,7 @@ func (c *ServeCmd) Run() error {
 		bootstrap.WithServerConfig(serverCfg),
 		bootstrap.WithConfigPath(c.Config),
 		bootstrap.WithWatch(c.Watch),
+		bootstrap.WithAutoSecret(autoSecret),
 	)
 }
 

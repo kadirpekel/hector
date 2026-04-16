@@ -53,6 +53,9 @@ type ServeOptions struct {
 	// RuntimeFactory is the factory for creating runtimes.
 	// If nil, defaults to standard runtime.NewBuilder().WithConfig(cfg).Build().
 	RuntimeFactory RuntimeFactory
+	// AutoSecret is set when the auth secret was auto-generated (not user-provided).
+	// It is displayed prominently in the startup banner.
+	AutoSecret string
 }
 
 // ServeOption is a functional option for Serve.
@@ -76,6 +79,13 @@ func WithConfigPath(path string) ServeOption {
 func WithWatch(watch bool) ServeOption {
 	return func(o *ServeOptions) {
 		o.Watch = watch
+	}
+}
+
+// WithAutoSecret sets an auto-generated secret to display prominently in the startup banner.
+func WithAutoSecret(secret string) ServeOption {
+	return func(o *ServeOptions) {
+		o.AutoSecret = secret
 	}
 }
 
@@ -217,7 +227,8 @@ func Serve(ctx context.Context, opts ...ServeOption) error {
 	}
 
 	// Print startup info
-	printServerInfo(options.ServerConfig, appCfg, options.ConfigPath)
+	autoSecret := options.AutoSecret
+	printServerInfo(options.ServerConfig, appCfg, options.ConfigPath, autoSecret)
 
 	// Block until shutdown
 	return srv.Start(serverCtx)
@@ -755,7 +766,7 @@ func reloadDefaultApp(ctx context.Context, configPath string, state *appState) (
 	return newAppCfg, nil
 }
 
-func printServerInfo(serverCfg *config.ServerConfig, appCfg *config.AppConfig, configPath string) {
+func printServerInfo(serverCfg *config.ServerConfig, appCfg *config.AppConfig, configPath string, autoSecret string) {
 	greenColor := "\033[38;2;16;185;129m"
 	resetColor := "\033[0m"
 
@@ -770,6 +781,11 @@ func printServerInfo(serverCfg *config.ServerConfig, appCfg *config.AppConfig, c
 		if serverCfg.Auth.Secret != "" {
 			fmt.Printf("   Admin API:    enabled\n")
 		}
+	}
+	if autoSecret != "" {
+		yellowColor := "\033[33m"
+		fmt.Printf("\n%s⚠  Admin Secret (auto-generated — use --auth-secret to set your own):%s\n", yellowColor, resetColor)
+		fmt.Printf("   %s%s%s\n", yellowColor, autoSecret, resetColor)
 	}
 	if serverCfg.MetricsEnabled {
 		fmt.Printf("   Metrics:      enabled\n")
