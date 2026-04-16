@@ -22,6 +22,7 @@ builds:
       - arm64
     ldflags:
       - -s -w
+      - -X 'github.com/verikod/hector.Version={{.Version}}'
       - -X 'github.com/verikod/hector.BuildDate={{.Date}}'
       - -X 'github.com/verikod/hector.GitCommit={{.ShortCommit}}'
     env:
