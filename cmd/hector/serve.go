@@ -88,7 +88,8 @@ func (c *ServeCmd) Run() error {
 	autoSecret := ""
 	if authSecret == "" && c.AuthJWKSURL == "" {
 		// Try to reuse a persisted secret so Studio's cached key stays valid across restarts.
-		secretFile := filepath.Join(filepath.Dir(c.Config), "secret")
+		secretDir := filepath.Dir(c.Config)
+		secretFile := filepath.Join(secretDir, "secret")
 		if data, err := os.ReadFile(secretFile); err == nil && len(data) > 0 {
 			authSecret = strings.TrimSpace(string(data))
 		} else {
@@ -96,12 +97,15 @@ func (c *ServeCmd) Run() error {
 			if err != nil {
 				return fmt.Errorf("failed to generate auth secret: %w", err)
 			}
+			if err := os.MkdirAll(secretDir, 0755); err != nil {
+				return fmt.Errorf("failed to create config directory: %w", err)
+			}
 			if err := os.WriteFile(secretFile, []byte(generated), 0600); err != nil {
 				return fmt.Errorf("failed to persist auth secret: %w", err)
 			}
 			authSecret = generated
-			autoSecret = generated
 		}
+		autoSecret = authSecret
 	}
 	if authSecret != "" || c.AuthJWKSURL != "" {
 		serverCfg.Auth = &config.AuthConfig{
