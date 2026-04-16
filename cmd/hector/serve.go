@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -85,12 +87,21 @@ func (c *ServeCmd) Run() error {
 	authSecret := c.AuthSecret
 	autoSecret := ""
 	if authSecret == "" && c.AuthJWKSURL == "" {
-		generated, err := generateSecret(16)
-		if err != nil {
-			return fmt.Errorf("failed to generate auth secret: %w", err)
+		// Try to reuse a persisted secret so Studio's cached key stays valid across restarts.
+		secretFile := filepath.Join(filepath.Dir(c.Config), "secret")
+		if data, err := os.ReadFile(secretFile); err == nil && len(data) > 0 {
+			authSecret = strings.TrimSpace(string(data))
+		} else {
+			generated, err := generateSecret(16)
+			if err != nil {
+				return fmt.Errorf("failed to generate auth secret: %w", err)
+			}
+			if err := os.WriteFile(secretFile, []byte(generated), 0600); err != nil {
+				return fmt.Errorf("failed to persist auth secret: %w", err)
+			}
+			authSecret = generated
+			autoSecret = generated
 		}
-		authSecret = generated
-		autoSecret = generated
 	}
 	if authSecret != "" || c.AuthJWKSURL != "" {
 		serverCfg.Auth = &config.AuthConfig{
