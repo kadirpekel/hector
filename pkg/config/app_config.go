@@ -81,6 +81,27 @@ func ParseAppConfigJSON(data []byte) (*AppConfig, error) {
 	return &cfg, nil
 }
 
+// ReadLeanConfigJSON reads a YAML config file and returns lean JSON without applying defaults.
+// This preserves only the fields explicitly set by the user, suitable for DB storage
+// where the full defaults-applied config would be bloated.
+func ReadLeanConfigJSON(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	// Expand environment variables
+	expandedData := os.ExpandEnv(string(data))
+
+	var cfg AppConfig
+	if err := yaml.Unmarshal([]byte(expandedData), &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	// Marshal to JSON without applying defaults — only user-specified fields are included
+	return json.Marshal(&cfg)
+}
+
 // LoadAppConfig loads an app configuration from a YAML file.
 func LoadAppConfig(path string) (*AppConfig, error) {
 	data, err := os.ReadFile(path)

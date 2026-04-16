@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -400,10 +399,11 @@ func loadAppState(ctx context.Context, serverCfg *config.ServerConfig, appCfg *c
 	state.appManager = server.NewAppManager(state.appStore, adapterFactory, state.taskService, obsMgr.Metrics())
 
 	// Sync config to DB ("default" app)
-	cfgJSON, err := json.Marshal(appCfg)
+	// Store the lean config (without defaults) so Studio shows only user-specified fields
+	cfgJSON, err := config.ReadLeanConfigJSON(configPath)
 	if err != nil {
 		state.Close()
-		return nil, fmt.Errorf("failed to serialize config: %w", err)
+		return nil, fmt.Errorf("failed to read lean config: %w", err)
 	}
 
 	defaultApp := &app.App{
@@ -425,7 +425,12 @@ func loadAppState(ctx context.Context, serverCfg *config.ServerConfig, appCfg *c
 		}
 		slog.Info("Created default app in database from config file", "id", "default")
 	} else {
-		slog.Info("Default app already exists in database, using DB version", "id", "default")
+		// Always sync config from YAML file to DB on startup
+		if err := state.appStore.Update(ctx, defaultApp); err != nil {
+			state.Close()
+			return nil, fmt.Errorf("failed to update default app: %w", err)
+		}
+		slog.Info("Synced default app config from file to database", "id", "default")
 	}
 
 	// Preload default app
@@ -744,16 +749,16 @@ func reloadDefaultApp(ctx context.Context, configPath string, state *appState) (
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Marshal the validated config to JSON for storage
-	jsonBytes, err := json.Marshal(newAppCfg)
+	// Store lean config (without defaults) so Studio shows only user-specified fields
+	leanJSON, err := config.ReadLeanConfigJSON(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert config to JSON: %w", err)
+		return nil, fmt.Errorf("failed to read lean config: %w", err)
 	}
 
 	defaultApp := &app.App{
 		ID:         "default",
 		Name:       newAppCfg.Name,
-		ConfigJSON: string(jsonBytes),
+		ConfigJSON: string(leanJSON),
 	}
 
 	if err := state.appStore.Update(ctx, defaultApp); err != nil {
