@@ -874,7 +874,7 @@ func main() {
 
     err := bootstrap.Serve(ctx,
         bootstrap.WithServerConfig(srvCfg),
-        bootstrap.WithConfigPath("./hector.yaml"),
+        bootstrap.WithConfigPath(".hector/config.yaml"),
         bootstrap.WithWatch(true),
     )
     if err != nil {

@@ -18,8 +18,10 @@ To add RAG to an agent, you first define a **Document Store** and then attach it
 document_stores:
   my_files:
     source:
-      type: directory
-      include: ["./docs/**/*.md", "./src/**/*.go"]
+      type: blob
+      blob:
+        url: "file://./docs"
+      include: ["**/*.md", "**/*.go"]
 
 # 2. Attach it to an agent
 agents:
@@ -61,8 +63,9 @@ Link the store to your specific embedder and vector DB.
 document_stores:
   company_wiki:
     source:
-      type: directory
-      include: ["./wiki/**/*"]
+      type: blob
+      blob:
+        url: "file://./wiki"
     embedder: openai_v3
     vector_store: prod_db
     chunking:
@@ -111,8 +114,10 @@ tools:
 document_stores:
   library:
     source:
-      type: directory
-      include: ["./books/**/*.pdf"]
+      type: blob
+      blob:
+        url: "file://./books"
+      include: ["**/*.pdf"]
     mcp_parsers:
       tool_names: [docling]
       extensions: [pdf]
@@ -126,8 +131,10 @@ Hector tracks indexed files via checksums to avoid re-indexing unchanged content
 document_stores:
   code:
     source:
-      type: directory
-      include: ["./src/**/*.go"]
+      type: blob
+      blob:
+        url: "file://./src"
+      include: ["**/*.go"]
     incremental_indexing: true  # Skip unchanged files
     watch: true                 # Auto-reindex on changes
 ```

@@ -57,7 +57,7 @@ agents:
       - For billing issues, collect the customer's email and escalate
 ```
 
-Restart with `hector serve` (or use `hector serve --watch` for auto-reload).
+Restart with `hector serve --sync` (or use `hector serve --watch` for auto-reload).
 
 ## Step 3: Add Tools
 
@@ -156,8 +156,10 @@ vector_stores:
 document_stores:
   knowledge:
     source:
-      type: directory
-      include: ["./knowledge/**/*.md"]
+      type: blob
+      blob:
+        url: "file://./knowledge"
+      include: ["**/*.md"]
     embedder: default
     vector_store: default
     watch: true
@@ -178,15 +180,14 @@ agents:
       search if the knowledge base doesn't have the answer.
 
       Be friendly, concise, and cite sources when possible.
-    context:
-      include_context: true
-      include_context_limit: 5
+    include_context: true
+    include_context_limit: 5
 ```
 
 !!! note "Embedder API Key"
     This example uses OpenAI embeddings with Anthropic as the agent LLM. You can use any combination. For a fully local setup, use Ollama for both.
 
-Restart the server. Ask: "What does the Pro plan cost?" The agent should answer from the knowledge base.
+Restart the server with `hector serve --sync`. Ask: "What does the Pro plan cost?" The agent should answer from the knowledge base.
 
 ## Step 5: Add Guardrails
 
@@ -254,9 +255,8 @@ agents:
     instruction: |
       You are a product support specialist for Acme Corp.
       Answer questions using the knowledge base.
-    context:
-      include_context: true
-      include_context_limit: 5
+    include_context: true
+    include_context_limit: 5
 
   billing:
     name: "Billing Support"
@@ -303,9 +303,6 @@ agents:
 Here's the complete `config.yaml`:
 
 ```yaml
-name: acme-support
-description: Customer support system for Acme Corp
-
 llms:
   default:
     provider: anthropic
@@ -326,8 +323,10 @@ vector_stores:
 document_stores:
   knowledge:
     source:
-      type: directory
-      include: ["./knowledge/**/*.md"]
+      type: blob
+      blob:
+        url: "file://./knowledge"
+      include: ["**/*.md"]
     embedder: default
     vector_store: default
     watch: true
@@ -373,9 +372,8 @@ agents:
     instruction: |
       Answer product questions using the knowledge base.
       Be concise and cite sources.
-    context:
-      include_context: true
-      include_context_limit: 5
+    include_context: true
+    include_context_limit: 5
 
   billing:
     name: "Billing Support"

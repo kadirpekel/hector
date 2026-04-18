@@ -138,8 +138,9 @@ func (c *VectorStoreConfig) IsEmbedded() bool {
 //	document_stores:
 //	  codebase:
 //	    source:
-//	      type: directory
-//	      path: ./src
+//	      type: blob
+//	      blob:
+//	        url: "file://./src"
 //	      include: ["*.go", "*.ts"]
 //	    chunking:
 //	      strategy: semantic

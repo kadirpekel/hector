@@ -238,21 +238,25 @@ func (h *AdminHandler) createApp(w http.ResponseWriter, r *http.Request) {
 	// Generate default config if none provided
 	configJSON := req.ConfigJSON
 	if configJSON == "" {
-		// Use GenerateLeanConfig to create a minimal starter config
 		result, err := config.GenerateLeanConfig(config.CLIOptions{}, "")
 		if err != nil {
-			slog.Warn("Failed to generate default config for new app", "error", err)
-			// Continue with empty config rather than failing
-		} else {
-			// Foundational Fix: Use the structured AppConfig directly
-			jsonBytes, err := json.Marshal(result.AppConfig)
-			if err != nil {
-				slog.Error("Failed to marshal generated config to JSON", "error", err)
-				h.writeError(w, "Failed to generate config", http.StatusInternalServerError)
-				return
-			}
-			configJSON = string(jsonBytes)
+			slog.Error("Failed to generate default config", "error", err)
+			h.writeError(w, "Failed to generate config", http.StatusInternalServerError)
+			return
 		}
+		jsonBytes, err := json.Marshal(result.AppConfig)
+		if err != nil {
+			slog.Error("Failed to marshal generated config", "error", err)
+			h.writeError(w, "Failed to generate config", http.StatusInternalServerError)
+			return
+		}
+		configJSON = string(jsonBytes)
+	}
+
+	// Validate config by parsing it (applies defaults + validates)
+	if _, err := config.ParseAppConfigJSON([]byte(configJSON)); err != nil {
+		h.writeError(w, fmt.Sprintf("Invalid config: %v", err), http.StatusBadRequest)
+		return
 	}
 
 	// Create app
@@ -330,6 +334,11 @@ func (h *AdminHandler) updateApp(w http.ResponseWriter, r *http.Request, appID s
 		existingApp.Name = req.Name
 	}
 	if req.ConfigJSON != "" {
+		// Validate config before persisting
+		if _, err := config.ParseAppConfigJSON([]byte(req.ConfigJSON)); err != nil {
+			h.writeError(w, fmt.Sprintf("Invalid config: %v", err), http.StatusBadRequest)
+			return
+		}
 		existingApp.ConfigJSON = req.ConfigJSON
 	}
 

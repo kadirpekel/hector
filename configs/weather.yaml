@@ -1,6 +1,3 @@
-name: weather-assistant
-description: An AI assistant that can check the weather
-
 # LLM Provider
 llms:
   default:

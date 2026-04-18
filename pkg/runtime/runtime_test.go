@@ -48,7 +48,6 @@ func (m *mockLLM) IsClosed() bool {
 // minimalConfig creates a minimal valid config for testing
 func minimalConfig() *config.AppConfig {
 	cfg := &config.AppConfig{
-		Name:    "test-app",
 		Version: "2",
 		LLMs: map[string]*config.LLMConfig{
 			"default": {

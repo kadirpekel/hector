@@ -22,14 +22,14 @@ If you built from source, the binary is at `./hector` (or wherever you ran `go b
 
 Hector can't find or parse your configuration file. Check:
 
-1. **File location**: Hector looks for `.hector/config.yaml` in the current directory, then `hector.yaml`. Use `--config` to specify explicitly:
+1. **File location**: Hector looks for `.hector/config.yaml` in the current directory. Use `-c` to specify explicitly:
    ```bash
-   hector serve --config /path/to/config.yaml
+   hector serve -c /path/to/config.yaml
    ```
 
 2. **YAML syntax**: Validate your YAML:
    ```bash
-   hector validate --config config.yaml
+   hector validate -c config.yaml
    ```
 
 3. **Missing environment variables**: Unresolved `${VAR_NAME}` references cause errors. Check your `.env` file or environment:

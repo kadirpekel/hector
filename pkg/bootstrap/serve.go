@@ -49,6 +49,9 @@ type ServeOptions struct {
 	ConfigPath string
 	// Watch enables config file watching for hot-reload.
 	Watch bool
+	// Sync forces the config file to overwrite the database config on startup.
+	// Without this, the file only seeds the DB when the app doesn't exist yet.
+	Sync bool
 	// RuntimeFactory is the factory for creating runtimes.
 	// If nil, defaults to standard runtime.NewBuilder().WithConfig(cfg).Build().
 	RuntimeFactory RuntimeFactory
@@ -78,6 +81,13 @@ func WithConfigPath(path string) ServeOption {
 func WithWatch(watch bool) ServeOption {
 	return func(o *ServeOptions) {
 		o.Watch = watch
+	}
+}
+
+// WithSync forces the config file to overwrite the database config on startup.
+func WithSync(sync bool) ServeOption {
+	return func(o *ServeOptions) {
+		o.Sync = sync
 	}
 }
 
@@ -147,11 +157,12 @@ func Serve(ctx context.Context, opts ...ServeOption) error {
 		slog.Warn("Failed to load .env file (continuing without it)", "error", err)
 	}
 
-	// Load app config
-	appCfg, err := config.LoadAppConfig(options.ConfigPath)
+	// Load app config (full with defaults + lean JSON for DB)
+	loadResult, err := config.LoadAppConfigWithLean(options.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
+	appCfg := loadResult.Config
 
 	// Initialize Observability
 	obsCfg := &observability.Config{
@@ -176,7 +187,7 @@ func Serve(ctx context.Context, opts ...ServeOption) error {
 	}()
 
 	// Initialize app state
-	state, err := loadAppState(serverCtx, options.ServerConfig, appCfg, options.ConfigPath, options.RuntimeFactory, obsMgr)
+	state, err := loadAppState(serverCtx, options.ServerConfig, appCfg, loadResult.LeanJSON, options.ConfigPath, options.RuntimeFactory, obsMgr, options.Sync)
 	if err != nil {
 		return fmt.Errorf("failed to initialize: %w", err)
 	}
@@ -287,7 +298,7 @@ func (s *appState) Close() {
 }
 
 // loadAppState initializes the application state.
-func loadAppState(ctx context.Context, serverCfg *config.ServerConfig, appCfg *config.AppConfig, configPath string, customFactory RuntimeFactory, obsMgr *observability.Manager) (*appState, error) {
+func loadAppState(ctx context.Context, serverCfg *config.ServerConfig, appCfg *config.AppConfig, leanJSON []byte, configPath string, customFactory RuntimeFactory, obsMgr *observability.Manager, sync bool) (*appState, error) {
 	state := &appState{
 		obsMgr: obsMgr,
 	}
@@ -399,17 +410,11 @@ func loadAppState(ctx context.Context, serverCfg *config.ServerConfig, appCfg *c
 	state.appManager = server.NewAppManager(state.appStore, adapterFactory, state.taskService, obsMgr.Metrics())
 
 	// Sync config to DB ("default" app)
-	// Store the lean config (without defaults) so Studio shows only user-specified fields
-	cfgJSON, err := config.ReadLeanConfigJSON(configPath)
-	if err != nil {
-		state.Close()
-		return nil, fmt.Errorf("failed to read lean config: %w", err)
-	}
-
+	// Store lean config (without defaults) so Studio shows only user-specified fields
 	defaultApp := &app.App{
 		ID:         "default",
-		Name:       appCfg.Name,
-		ConfigJSON: string(cfgJSON),
+		Name:       appNameFromPath(configPath),
+		ConfigJSON: string(leanJSON),
 	}
 
 	exists, err := state.appStore.Exists(ctx, "default")
@@ -424,13 +429,14 @@ func loadAppState(ctx context.Context, serverCfg *config.ServerConfig, appCfg *c
 			return nil, fmt.Errorf("failed to create default app: %w", err)
 		}
 		slog.Info("Created default app in database from config file", "id", "default")
-	} else {
-		// Always sync config from YAML file to DB on startup
+	} else if sync {
 		if err := state.appStore.Update(ctx, defaultApp); err != nil {
 			state.Close()
 			return nil, fmt.Errorf("failed to update default app: %w", err)
 		}
-		slog.Info("Synced default app config from file to database", "id", "default")
+		slog.Info("Synced default app config from file to database (--sync)", "id", "default")
+	} else {
+		slog.Info("Default app already exists in database, skipping file sync (use --sync to overwrite)", "id", "default")
 	}
 
 	// Preload default app
@@ -742,23 +748,25 @@ func createDefaultVectorProvider() (vector.Provider, error) {
 	return vector.NewProvider(pCfg)
 }
 
+// appNameFromPath derives a human-readable app name from the config file path.
+func appNameFromPath(configPath string) string {
+	dir := filepath.Dir(configPath)
+	if filepath.Base(dir) == ".hector" {
+		dir = filepath.Dir(dir)
+	}
+	return filepath.Base(dir)
+}
+
 func reloadDefaultApp(ctx context.Context, configPath string, state *appState) (*config.AppConfig, error) {
-	// Use LoadAppConfig which handles env expansion, defaults, and validation
-	newAppCfg, err := config.LoadAppConfig(configPath)
+	result, err := config.LoadAppConfigWithLean(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Store lean config (without defaults) so Studio shows only user-specified fields
-	leanJSON, err := config.ReadLeanConfigJSON(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read lean config: %w", err)
-	}
-
 	defaultApp := &app.App{
 		ID:         "default",
-		Name:       newAppCfg.Name,
-		ConfigJSON: string(leanJSON),
+		Name:       appNameFromPath(configPath),
+		ConfigJSON: string(result.LeanJSON),
 	}
 
 	if err := state.appStore.Update(ctx, defaultApp); err != nil {
@@ -769,7 +777,7 @@ func reloadDefaultApp(ctx context.Context, configPath string, state *appState) (
 		return nil, fmt.Errorf("failed to reload runtime: %w", err)
 	}
 
-	return newAppCfg, nil
+	return result.Config, nil
 }
 
 func printServerInfo(serverCfg *config.ServerConfig, appCfg *config.AppConfig, configPath string, autoSecret string) {
@@ -798,7 +806,6 @@ func printServerInfo(serverCfg *config.ServerConfig, appCfg *config.AppConfig, c
 	}
 
 	fmt.Printf("\n%sApp Configuration:%s\n", greenColor, resetColor)
-	fmt.Printf("   Name:         %s\n", appCfg.Name)
 	fmt.Printf("   Config File:  %s\n", configPath)
 	fmt.Printf("   Agents:       %d\n", len(appCfg.Agents))
 	fmt.Printf("   LLMs:         %d\n", len(appCfg.LLMs))

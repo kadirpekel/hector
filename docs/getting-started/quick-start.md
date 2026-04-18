@@ -103,7 +103,7 @@ agents:
     tools: [internet]
 ```
 
-Restart with `hector serve` or use `--watch` for hot-reload.
+Restart with `hector serve --sync` to apply config changes, or use `--watch` for hot-reload.
 
 ### Enable RAG
 
@@ -113,8 +113,9 @@ Turn a folder into a knowledge base:
 document_stores:
   my_knowledge:
     source:
-      type: directory
-      include: ["./documents/**/*"]
+      type: blob
+      blob:
+        url: "file://./documents"
     vector_store: default
     embedder: default
 

@@ -95,7 +95,6 @@ Create a configuration file `configs/docling-docker.yaml`.
 
 ```yaml
 version: "2"
-name: "docling-demo"
 
 llms:
   gpt-4o:

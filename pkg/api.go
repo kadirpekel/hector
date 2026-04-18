@@ -440,7 +440,6 @@ func New(opts ...Option) (*Hector, error) {
 	b := &builder{
 		cfg: &config.AppConfig{
 			Version: "2",
-			Name:    "hector",
 			LLMs:    make(map[string]*config.LLMConfig),
 			Tools:   make(map[string]*config.ToolConfig),
 			Agents:  make(map[string]*config.AgentConfig),
@@ -1030,7 +1029,7 @@ func (h *Hector) Run(ctx context.Context, input string) iter.Seq2[*agent.Event, 
 
 		// Create runner
 		r, err := runner.New(runner.Config{
-			AppName:        h.cfg.Name,
+			AppName:        "default",
 			Agent:          ag,
 			SessionService: h.runtime.SessionService(),
 		})
@@ -1064,7 +1063,7 @@ func (h *Hector) RunWithSession(ctx context.Context, userID, sessionID, input st
 		}
 
 		r, err := runner.New(runner.Config{
-			AppName:        h.cfg.Name,
+			AppName:        "default",
 			Agent:          ag,
 			SessionService: h.runtime.SessionService(),
 		})

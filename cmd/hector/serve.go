@@ -56,6 +56,7 @@ type ServeCmd struct {
 
 	// Features
 	Watch bool `help:"Watch config file for changes"`
+	Sync  bool `help:"Force sync config file to database, overwriting any DB changes"`
 
 	// App config
 	Config string `short:"c" help:"Path to app config file" type:"path" default:".hector/config.yaml"`
@@ -145,6 +146,7 @@ func (c *ServeCmd) Run() error {
 		bootstrap.WithServerConfig(serverCfg),
 		bootstrap.WithConfigPath(c.Config),
 		bootstrap.WithWatch(c.Watch),
+		bootstrap.WithSync(c.Sync),
 		bootstrap.WithAutoSecret(autoSecret),
 	)
 }

@@ -11,7 +11,7 @@ Hector Studio is the web-based UI for Hector. It provides a visual interface for
 ### 1. Visual Flow Builder
 Design complex multi-agent architectures using a drag-and-drop canvas.
 
-*   **Bi-directional Sync**: Changes in the UI write to your `hector.yaml`. Edits to the YAML file instantly reflect in the UI.
+*   **Bi-directional Sync**: Changes in the UI are stored via the Admin API and persist across restarts. Edits to the YAML config file are reflected when using `--watch` (live-sync) or `--sync` on restart (force overwrite).
 *   **Agent Types**: Drag and drop Sequential, Parallel, and Loop nodes.
 
 ### 2. Resource Management

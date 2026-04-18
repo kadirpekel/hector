@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -31,9 +30,7 @@ import (
 //	    instruction: You are a helpful assistant.
 type AppConfig struct {
 	// Metadata
-	Version     string `yaml:"version,omitempty" json:"version,omitempty"`
-	Name        string `yaml:"name,omitempty" json:"name,omitempty"`
-	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	Version string `yaml:"version,omitempty" json:"version,omitempty"`
 
 	// Resources (all app-scoped)
 	LLMs           map[string]*LLMConfig           `yaml:"llms,omitempty" json:"llms,omitempty"`
@@ -46,15 +43,6 @@ type AppConfig struct {
 
 	// Defaults
 	Defaults *DefaultsConfig `yaml:"defaults,omitempty" json:"defaults,omitempty"`
-
-	// NOTE: The following fields are REMOVED (moved to server config):
-	// - Database      (use --database CLI flag)
-	// - Server        (use --port, --host CLI flags)
-	// - Logger        (use --log-level, --log-format CLI flags)
-	// - Observability (use --metrics, --tracing-endpoint CLI flags)
-	// - RateLimiting  (TBD: might be app-level or server-level)
-	// - Memory        (TBD: might be app-level or server-level)
-	// - Checkpoint    (TBD: might be app-level or server-level)
 }
 
 // DefaultsConfig provides default values for agent configurations.
@@ -81,40 +69,32 @@ func ParseAppConfigJSON(data []byte) (*AppConfig, error) {
 	return &cfg, nil
 }
 
-// ReadLeanConfigJSON reads a YAML config file and returns lean JSON without applying defaults.
-// This preserves only the fields explicitly set by the user, suitable for DB storage
-// where the full defaults-applied config would be bloated.
-func ReadLeanConfigJSON(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	// Expand environment variables
-	expandedData := os.ExpandEnv(string(data))
-
-	var cfg AppConfig
-	if err := yaml.Unmarshal([]byte(expandedData), &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse config: %w", err)
-	}
-
-	// Marshal to JSON without applying defaults — only user-specified fields are included
-	return json.Marshal(&cfg)
+// AppConfigLoadResult holds both the full (defaults-applied) config
+// and the lean JSON (user-specified fields only) from a single file read.
+type AppConfigLoadResult struct {
+	Config   *AppConfig // Full config with defaults applied and validated
+	LeanJSON []byte     // JSON of user-specified fields only, for DB storage
 }
 
-// LoadAppConfig loads an app configuration from a YAML file.
-func LoadAppConfig(path string) (*AppConfig, error) {
+// LoadAppConfigWithLean reads a YAML config file once and returns both
+// the validated config (with defaults) and the lean JSON (without defaults).
+func LoadAppConfigWithLean(path string) (*AppConfigLoadResult, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	// Expand environment variables
 	expandedData := os.ExpandEnv(string(data))
 
 	var cfg AppConfig
 	if err := yaml.Unmarshal([]byte(expandedData), &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	// Marshal lean JSON before applying defaults
+	leanJSON, err := json.Marshal(&cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal lean config: %w", err)
 	}
 
 	// Apply defaults and validate
@@ -123,29 +103,27 @@ func LoadAppConfig(path string) (*AppConfig, error) {
 		return nil, err
 	}
 
-	return &cfg, nil
+	return &AppConfigLoadResult{Config: &cfg, LeanJSON: leanJSON}, nil
 }
 
-// SaveAppConfig saves an app configuration to a YAML file.
-func SaveAppConfig(path string, cfg *AppConfig) error {
-	// Create directory if it doesn't exist
-	dir := filepath.Dir(path)
-	if dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create config directory: %w", err)
-		}
-	}
-
-	data, err := yaml.Marshal(cfg)
+// ReadLeanConfigJSON reads a YAML config file and returns lean JSON without applying defaults.
+// This preserves only the fields explicitly set by the user, suitable for DB storage
+// where the full defaults-applied config would be bloated.
+func ReadLeanConfigJSON(path string) ([]byte, error) {
+	result, err := LoadAppConfigWithLean(path)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
+		return nil, err
 	}
+	return result.LeanJSON, nil
+}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+// LoadAppConfig loads an app configuration from a YAML file.
+func LoadAppConfig(path string) (*AppConfig, error) {
+	result, err := LoadAppConfigWithLean(path)
+	if err != nil {
+		return nil, err
 	}
-
-	return nil
+	return result.Config, nil
 }
 
 // SetDefaults applies default values to the config.

@@ -5,6 +5,8 @@ Complete, authoritative reference for Hector's YAML configuration format. Every 
 **Schema Version:** Generated from `/schema` endpoint  
 **Default Location:** `.hector/config.yaml`
 
+This file documents the **app config** (YAML). For server flags (port, database, auth), see the [CLI Reference](cli.md).
+
 ---
 
 ## Top-Level Properties
@@ -12,8 +14,6 @@ Complete, authoritative reference for Hector's YAML configuration format. Every 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `version` | string | No | Configuration version |
-| `name` | string | No | Application name |
-| `description` | string | No | Application description |
 | `llms` | map[string]object | No | LLM provider configurations |
 | `tools` | map[string]object | No | Tool configurations |
 | `agents` | map[string]object | No | Agent configurations |
@@ -33,12 +33,12 @@ LLM provider configurations. Each key is a unique LLM name.
 
 | Property | Type | Default | Constraints | Description |
 |----------|------|---------|-------------|-------------|
-| `provider` | string | `anthropic` | enum: `anthropic`, `openai`, `gemini`, `ollama` | LLM provider |
-| `model` | string | - | - | Model identifier |
+| `provider` | string | _(auto-detected)_ | enum: `anthropic`, `openai`, `gemini`, `ollama`, `deepseek`, `groq`, `mistral`, `cohere` | LLM provider. Auto-detected from environment variables if not set. |
+| `model` | string | _(provider default)_ | - | Model identifier |
 | `api_key` | string | - | - | API key for authentication (use `${ENV_VAR}`) |
 | `base_url` | string | - | - | Custom base URL for API endpoint |
 | `temperature` | number | `0.7` | min: 0, max: 2 | Sampling temperature |
-| `max_tokens` | integer | `4096` | min: 1 | Maximum tokens to generate |
+| `max_tokens` | integer | _(provider default)_ | min: 0 | Maximum tokens to generate. 0 means use provider default. |
 | `max_tool_output_length` | integer | `0` | min: 0 | Maximum output length for tools tokens to avoid context length error |
 | `thinking` | object | - | - | Extended thinking configuration (Claude) |
 
@@ -106,7 +106,7 @@ Agent configurations. Each key is a unique agent name (used in URL path).
 | `skills` | []object | - | - | Agent capabilities for A2A discovery |
 | `input_modes` | []string | - | - | Supported input MIME types |
 | `output_modes` | []string | - | - | Supported output MIME types |
-| `streaming` | boolean | `false` | - | Token-by-token streaming from LLM |
+| `streaming` | boolean | `true` | - | Token-by-token streaming from LLM |
 | `document_stores` | []string | - | - | Document stores accessible to this agent |
 | `include_context` | boolean | `false` | - | Automatically inject RAG context |
 | `include_context_limit` | integer | `5` | min: 1 | Maximum number of documents to include |
@@ -458,7 +458,7 @@ Document source configurations for RAG. Each key is a unique store name.
 
 | Property | Type | Default | Required | Description |
 |----------|------|---------|----------|-------------|
-| `type` | string | - | **Yes** | Source type (directory, sql, api, blob) |
+| `type` | string | - | **Yes** | Source type (blob, sql, api, collection) |
 | `include` | []string | - | - | Include patterns |
 | `exclude` | []string | - | - | Exclude patterns |
 | `max_file_size` | integer | - | - | Maximum file size in bytes |

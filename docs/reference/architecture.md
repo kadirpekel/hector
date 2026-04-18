@@ -12,15 +12,49 @@ Hector separates **operational** and **functional** configuration:
 
 | Concern | Source | Examples |
 |---------|--------|----------|
-| **Server (Operational)** | CLI flags + environment variables | Database DSN, port, auth secret |
-| **App (Functional)** | YAML files or Admin API | Agents, LLMs, tools, guardrails |
+| **Server (Operational)** | CLI flags + environment variables | Database DSN, port, auth secret, logging, queue, rate limiting |
+| **App (Functional)** | YAML file or Admin API | Agents, LLMs, tools, guardrails, RAG pipelines |
 
 This separation enables:
 
-- ✅ 12-factor app compliance
-- ✅ Secure credential management (never in version control)
-- ✅ Multi-tenant deployments via Admin API
-- ✅ Hot-reloadable app configuration
+- 12-factor app compliance (no secrets in config files)
+- Hot-reloadable app configuration (via `--watch` or Admin API)
+- Multi-tenant deployments (multiple app configs in one server)
+- One YAML file describes the entire agent application
+
+### Config Lifecycle
+
+```
+┌──────────┐     ┌──────────────────┐     ┌────────────────┐     ┌───────────┐
+│ CLI args │     │ EnsureConfigExists│     │LoadAppConfigWith│     │  Runtime  │
+│ + env    │────►│ (auto-generate   │────►│Lean (YAML→full │────►│  Builder  │
+│          │     │  if missing)     │     │ config + lean   │     │           │
+└──────────┘     └──────────────────┘     │ JSON)           │     └───────────┘
+                                          └───────┬────────┘
+                                                  │ lean JSON
+                                                  ▼
+                                          ┌───────────────┐
+                                          │   Database     │
+                                          │ (apps table)   │
+                                          │ Stores lean    │
+                                          │ JSON only      │
+                                          └───────┬────────┘
+                                                  │ ParseAppConfigJSON
+                                                  ▼
+                                          ┌───────────────┐
+                                          │ Studio / API  │
+                                          │ Reads & writes│
+                                          │ lean JSON     │
+                                          └───────────────┘
+```
+
+**Key design decisions:**
+
+- **Lean JSON**: The database stores only user-specified fields (no defaults). This ensures Studio shows exactly what the user configured, not hundreds of default values.
+- **Defaults applied at runtime**: `SetDefaults()` runs when loading from YAML *and* when loading from DB, never when storing.
+- **Seed, don't sync**: On startup the config file seeds the default app into the DB only if it doesn't exist yet. Once the app is in the DB, the DB owns it — Studio and API changes survive restarts.
+- **Explicit sync**: Use `--sync` to force the config file to overwrite the DB on startup. Use `--watch` to live-sync file changes to DB during development.
+- **Single file read**: `LoadAppConfigWithLean()` reads the YAML file once, captures lean JSON before defaults, then applies defaults — avoiding double reads.
 
 ---
 
@@ -485,6 +519,7 @@ Outbound webhooks on agent events.
 |----------|------------|
 | SQLite | `sqlite://.hector/hector.db` |
 | PostgreSQL | `postgres://user:pass@host:port/db` |
+| MySQL | `mysql://user:pass@tcp(host:port)/db` |
 
 ---
 

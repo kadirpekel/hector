@@ -1,6 +1,3 @@
-name: openai-assistant
-description: Example using OpenAI as the LLM provider
-
 llms:
   default:
     provider: openai

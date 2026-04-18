@@ -549,41 +549,6 @@ func (c *ReasoningConfig) SetDefaults() {
 	}
 }
 
-// BuildCompletionInstruction generates instruction text based on config.
-// Returns empty string if no control tools are enabled and no custom instruction.
-func (c *ReasoningConfig) BuildCompletionInstruction() string {
-	if c.CompletionInstruction != "" {
-		return c.CompletionInstruction
-	}
-
-	var parts []string
-
-	if BoolValue(c.EnableExitTool, false) {
-		parts = append(parts, "- Call `exit_loop` when your task is complete and you have a final answer")
-	}
-	if BoolValue(c.EnableEscalateTool, false) {
-		parts = append(parts, "- Call `escalate` if you need help, are stuck, or the task is outside your capabilities")
-	}
-
-	if len(parts) == 0 {
-		return ""
-	}
-
-	return "## Completion Guidelines\n" + joinStrings(parts, "\n")
-}
-
-// joinStrings joins strings with a separator.
-func joinStrings(parts []string, sep string) string {
-	if len(parts) == 0 {
-		return ""
-	}
-	result := parts[0]
-	for i := 1; i < len(parts); i++ {
-		result += sep + parts[i]
-	}
-	return result
-}
-
 // isWorkflowAgent returns true if the agent type is a workflow orchestrator
 // that doesn't need its own LLM (sequential, parallel, loop, runner, conditional).
 func isWorkflowAgent(agentType string) bool {

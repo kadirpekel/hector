@@ -17,7 +17,6 @@ Rate limiting is configured via **environment variables** (not YAML):
 ```bash
 export HECTOR_RATE_LIMIT_ENABLED=true
 export HECTOR_RATE_LIMIT_SCOPE=user
-export HECTOR_RATE_LIMIT_BACKEND=sql
 export HECTOR_RATE_LIMIT_LIMITS='[
   {"type": "token", "window": "day", "limit": 100000},
   {"type": "count", "window": "minute", "limit": 60}
@@ -48,22 +47,12 @@ export HECTOR_RATE_LIMIT_LIMITS='[
 | `session` | Each session has independent quotas |
 | `user` | All sessions for a user share quotas |
 
-## Storage Backends
-
-| Backend | Config | Use Case |
-|---------|--------|----------|
-| `memory` | Default | Single instance, dev/test |
-| `sql` | `HECTOR_RATE_LIMIT_BACKEND=sql` | Production, multi-instance |
-
-> **Note:** Memory backend resets on restart. Use SQL for production.
-
 ## Configuration Reference
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HECTOR_RATE_LIMIT_ENABLED` | `false` | Enable rate limiting |
 | `HECTOR_RATE_LIMIT_SCOPE` | `session` | `session` or `user` |
-| `HECTOR_RATE_LIMIT_BACKEND` | `memory` | `memory` or `sql` |
 | `HECTOR_RATE_LIMIT_LIMITS` | `[]` | JSON array of limit configs |
 | `HECTOR_RATE_LIMIT_IP_HEADERS` | - | Headers for client IP (e.g., `CF-Connecting-IP`) |
 
@@ -80,9 +69,8 @@ export HECTOR_RATE_LIMIT_LIMITS='[
 ## Example: Production Setup
 
 ```bash
-# Enable rate limiting with SQL backend
+# Enable rate limiting
 export HECTOR_RATE_LIMIT_ENABLED=true
-export HECTOR_RATE_LIMIT_BACKEND=sql
 export HECTOR_RATE_LIMIT_SCOPE=user
 
 # Multi-layer limits

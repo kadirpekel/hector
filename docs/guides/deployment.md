@@ -16,10 +16,8 @@ Official images for standard and GPU workloads:
 ```bash
 docker run -d \
   -p 8080:8080 \
-  -v $(pwd)/hector.yaml:/app/hector.yaml \
-  -v $(pwd)/data:/data \
+  -v $(pwd)/.hector:/app/.hector \
   -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} \
-  -e HECTOR_DATABASE="sqlite:///data/hector.db" \
   ghcr.io/verikod/hector:latest
 ```
 
@@ -28,7 +26,7 @@ docker run -d \
 ```bash
 docker run -d \
   -p 8080:8080 \
-  -v /etc/hector/config.yaml:/app/hector.yaml:ro \
+  -v /etc/hector:/app/.hector:ro \
   -e HECTOR_DATABASE="postgres://user:pass@db:5432/hector" \
   -e HECTOR_AUTH_SECRET="${AUTH_SECRET}" \
   -e HECTOR_QUEUE_WORKERS=8 \

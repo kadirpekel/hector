@@ -1,32 +1,46 @@
 # Configuration Guide
 
-Hector uses a single YAML file to define your entire agent application: LLMs, tools, agents, guardrails, RAG pipelines, and more. This guide covers the structure, patterns, and best practices for writing configurations.
+Hector separates configuration into two layers:
 
-## File Structure
+- **App config** (YAML file): Defines *what* your application does — agents, LLMs, tools, guardrails, RAG pipelines.
+- **Server config** (CLI flags / env vars): Controls *how* the server runs — port, database, auth, logging.
 
-The default config file is `.hector/config.yaml` (created by `hector init`). You can also use `hector.yaml` in the current directory or specify a path with `--config`.
+This guide covers the app config YAML file. For server flags, see the [CLI Reference](../reference/cli.md).
+
+## File Location
+
+The default config file is `.hector/config.yaml`, created automatically on first `hector serve` or explicitly with `hector init`.
+
+Specify a different path with:
+
+```bash
+hector serve -c path/to/config.yaml
+```
+
+## Structure
 
 ```yaml
 # .hector/config.yaml
 
-name: "my-app"
-description: "My agent application"
-
-llms:        # LLM provider definitions
+llms:            # LLM provider definitions
   # ...
-tools:       # Tool definitions
+tools:           # Tool definitions (MCP, function, command)
   # ...
-agents:      # Agent tree
+agents:          # Agent definitions
   # ...
-guardrails:  # Safety policies
+guardrails:      # Safety policies
   # ...
-vector_stores:    # Vector database config
+vector_stores:   # Vector database backends
   # ...
-embedders:        # Embedding model config
+embedders:       # Embedding model providers
   # ...
-document_stores:  # RAG data sources
+document_stores: # RAG document sources
+  # ...
+defaults:        # Default values (e.g., default LLM)
   # ...
 ```
+
+All sections are optional. An empty file is valid — Hector applies sensible defaults.
 
 ### Path Resolution
 
@@ -36,41 +50,42 @@ Relative paths (e.g., `instruction_file: ./prompts/agent.md`) resolve relative t
 
 ## Environment Variables
 
-Use `${VAR_NAME}` for secrets and environment-specific values:
+Use `${VAR_NAME}` syntax for secrets and environment-specific values:
 
 ```yaml
 llms:
   claude:
     provider: anthropic
     api_key: ${ANTHROPIC_API_KEY}
-
-server:
-  port: ${PORT:-8080}          # Default value syntax
 ```
 
-Hector automatically loads `.env` files from the working directory.
+Hector automatically loads `.env` files from the workspace root (the parent of `.hector/`).
 
 ---
 
-## Configuration Profiles
+## Auto-Generated Config
 
-Overlay environment-specific settings on a base config:
+When you run `hector serve` without an existing config file, Hector auto-generates a minimal `.hector/config.yaml`. The generated config:
+
+- Detects your LLM provider from environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.)
+- Creates a single `default` LLM and `assistant` agent
+- Detects `SKILL.md` in the workspace root and uses it as the agent instruction
+- Derives the app name from the directory name
+
+For more control over the generated config, use `hector init`:
 
 ```bash
-# Base:    hector.yaml
-# Profile: hector.prod.yaml (merged on top)
-hector serve --profile prod
+# Generate with specific provider and instruction
+hector init --provider anthropic --model claude-sonnet-4 \
+  --instruction "You are a coding assistant" \
+  --tools bash,text_editor
 ```
-
-Use profiles for dev/prod differences: database URLs, model selection, logging levels.
 
 ---
 
 ## Common Patterns
 
 ### Pattern 1: Simple Chatbot
-
-The minimal configuration for a useful agent:
 
 ```yaml
 llms:
@@ -88,8 +103,6 @@ agents:
 ```
 
 ### Pattern 2: Agent with Tools
-
-Add web search and file editing capabilities:
 
 ```yaml
 llms:
@@ -126,8 +139,6 @@ agents:
 ```
 
 ### Pattern 3: Multi-Agent Pipeline
-
-A content creation pipeline with sequential orchestration:
 
 ```yaml
 llms:
@@ -167,8 +178,6 @@ tools:
 
 ### Pattern 4: RAG Knowledge Base
 
-Turn a documentation folder into a searchable knowledge base:
-
 ```yaml
 llms:
   default:
@@ -189,27 +198,25 @@ vector_stores:
 document_stores:
   docs:
     source:
-      type: directory
-      include: ["./knowledge/**/*.md", "./knowledge/**/*.pdf"]
+      type: blob
+      blob:
+        url: "file://./knowledge"
     embedder: default
     vector_store: default
-    watch: true                    # Re-index on file changes
-    incremental_indexing: true     # Only re-index changed files
+    watch: true
+    incremental_indexing: true
 
 agents:
   support:
     llm: default
+    include_context: true
+    include_context_limit: 5
     instruction: |
       You are a support agent. Answer questions using the knowledge base.
       Always cite your sources. If you can't find an answer, say so.
-    context:
-      include_context: true        # Auto-inject relevant docs
-      include_context_limit: 5
 ```
 
 ### Pattern 5: Production with Security
-
-Full production setup with auth, guardrails, rate limiting, and monitoring:
 
 ```yaml
 llms:
@@ -260,17 +267,13 @@ Start the server with security flags:
 
 ```bash
 hector serve \
-  --config production.yaml \
-  --database postgres://user:pass@db:5432/hector \
-  --auth-jwks-url "https://auth.example.com/.well-known/jwks.json" \
-  --auth-issuer "https://auth.example.com/" \
+  --database "postgres://user:pass@db:5432/hector" \
+  --auth-secret "$HECTOR_AUTH_SECRET" \
   --metrics \
   --tracing-endpoint "jaeger:4317"
 ```
 
 ### Pattern 6: Webhook-Triggered Agent
-
-An agent that runs automatically when a GitHub PR is opened:
 
 ```yaml
 llms:
@@ -313,8 +316,11 @@ agents:
 Always validate before deploying:
 
 ```bash
-# Validate syntax and references
-hector validate --config production.yaml
+# Validate syntax and cross-references
+hector validate
+
+# Validate a specific file
+hector validate -c production.yaml
 
 # JSON Schema available at runtime
 curl http://localhost:8080/schema
@@ -328,7 +334,17 @@ Use `--watch` for development. Config changes apply without restart:
 hector serve --watch
 ```
 
-In production, configs stored in the database (via the Admin API) hot-reload automatically.
+Changes made via the Admin API (e.g., from Studio) take effect immediately without restart.
+
+### Config File vs Database
+
+On first startup, the config file seeds the default app into the database. After that, the database owns the config — changes made in Studio or via the Admin API survive restarts.
+
+To force the config file to overwrite the database:
+
+```bash
+hector serve --sync
+```
 
 ---
 

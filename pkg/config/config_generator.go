@@ -54,13 +54,6 @@ type CLIOptions struct {
 	ApproveTools   string
 	NoApproveTools string
 
-	// Storage options
-	Storage   string
-	StorageDB string
-
-	// Observability
-	Observe bool
-
 	// RAG options
 	DocsFolder       string
 	RAGWatch         *bool
@@ -72,16 +65,6 @@ type CLIOptions struct {
 	EmbedderModel    string
 	EmbedderURL      string
 	IncludeContext   *bool
-
-	// Server options
-	Host string
-	Port int
-
-	// Auth options
-	AuthJWKSURL  string
-	AuthIssuer   string
-	AuthAudience string
-	AuthRequired *bool
 
 	// Skill file (auto-detected)
 	SkillFile string
@@ -222,10 +205,8 @@ func GenerateLeanConfig(opts CLIOptions, configPath string) (*GeneratorResult, e
 	// 7. Store struct in result
 	result.AppConfig = cfg
 
-	// 8. Generate YAML (including Server/Storage config which are not in AppConfig)
-	// We do this by converting AppConfig to map, then adding extra fields.
-
-	// Round-trip to map via JSON to respect struct tags
+	// 8. Generate YAML from AppConfig
+	// Round-trip through JSON to respect struct tags (omitempty, field names)
 	jsonBytes, err := json.Marshal(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal app config: %w", err)
@@ -233,40 +214,6 @@ func GenerateLeanConfig(opts CLIOptions, configPath string) (*GeneratorResult, e
 	var configMap map[string]interface{}
 	if err := json.Unmarshal(jsonBytes, &configMap); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal app config to map: %w", err)
-	}
-
-	// Add Server Config
-	serverConfig := buildServerConfig(opts)
-	if len(serverConfig) > 0 {
-		configMap["server"] = serverConfig
-	}
-
-	// Add Storage Options
-	if opts.Storage != "" && opts.Storage != "inmemory" {
-		storageConfig := buildStorageConfig(opts)
-		if len(storageConfig) > 0 {
-			configMap["storage"] = storageConfig
-			dbConfig := buildDatabaseConfig(opts)
-			if len(dbConfig) > 0 {
-				configMap["databases"] = map[string]interface{}{
-					"_default": dbConfig,
-				}
-			}
-		}
-	}
-
-	// Add Observability
-	if opts.Observe {
-		configMap["observability"] = map[string]interface{}{
-			"tracing": map[string]interface{}{
-				"enabled":  true,
-				"exporter": "otlp",
-				"endpoint": "localhost:4317",
-			},
-			"metrics": map[string]interface{}{
-				"enabled": true,
-			},
-		}
 	}
 
 	// Marshal to YAML
@@ -534,70 +481,6 @@ func parseCommaSeparated(s string) []string {
 		}
 	}
 	return result
-}
-
-// buildServerConfig creates server configuration from CLI options.
-// ServerConfig is NOT part of AppConfig, so we return map.
-func buildServerConfig(opts CLIOptions) map[string]interface{} {
-	server := make(map[string]interface{})
-
-	// Only include non-default values
-	if opts.Host != "" && opts.Host != "0.0.0.0" {
-		server["host"] = opts.Host
-	}
-	if opts.Port != 0 && opts.Port != 8080 {
-		server["port"] = opts.Port
-	}
-
-	// Auth (only if explicitly configured)
-	if opts.AuthJWKSURL != "" && opts.AuthIssuer != "" && opts.AuthAudience != "" {
-		auth := map[string]interface{}{
-			"enabled":  true,
-			"jwks_url": opts.AuthJWKSURL,
-			"issuer":   opts.AuthIssuer,
-			"audience": opts.AuthAudience,
-		}
-		if opts.AuthRequired != nil {
-			auth["require_auth"] = *opts.AuthRequired
-		}
-		server["auth"] = auth
-	}
-
-	return server
-}
-
-// buildStorageConfig creates storage configuration.
-func buildStorageConfig(opts CLIOptions) map[string]interface{} {
-	return map[string]interface{}{
-		"tasks": map[string]interface{}{
-			"backend":  "sql",
-			"database": "_default",
-		},
-		"sessions": map[string]interface{}{
-			"backend":  "sql",
-			"database": "_default",
-		},
-	}
-}
-
-// buildDatabaseConfig creates database configuration.
-func buildDatabaseConfig(opts CLIOptions) map[string]interface{} {
-	driver := opts.Storage
-	if driver == "sqlite3" {
-		driver = "sqlite"
-	}
-
-	db := map[string]interface{}{
-		"driver": driver,
-	}
-
-	if opts.StorageDB != "" {
-		db["database"] = opts.StorageDB
-	} else if driver == "sqlite" {
-		db["database"] = ".hector/hector.db"
-	}
-
-	return db
 }
 
 // getAPIKeyEnvVar returns the environment variable name for an LLM provider.

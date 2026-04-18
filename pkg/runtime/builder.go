@@ -263,8 +263,8 @@ func (b *Builder) Build() (*Runtime, error) {
 	}
 
 	// Fallback for AppID
-	if rt.AppID == "" && rt.cfg != nil {
-		rt.AppID = rt.cfg.Name
+	if rt.AppID == "" {
+		rt.AppID = "default"
 	}
 
 	slog.Info("Runtime built successfully",
@@ -1049,7 +1049,7 @@ func (b *Builder) createScheduler() *trigger.Scheduler {
 	// Create invoker that uses builder's agents and sessions
 	agents := b.agents
 	sessions := b.sessions
-	appName := b.cfg.Name
+	appName := b.appID
 
 	invoker := func(ctx context.Context, agentName, input string) (string, error) {
 		ag, ok := agents[agentName]
