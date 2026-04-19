@@ -235,7 +235,7 @@ func (h *AdminHandler) createApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate default config if none provided
+	// Use central config generator if none provided
 	configJSON := req.ConfigJSON
 	if configJSON == "" {
 		result, err := config.GenerateLeanConfig(config.CLIOptions{}, "")

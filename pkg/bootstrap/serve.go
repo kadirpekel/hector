@@ -143,6 +143,11 @@ func Serve(ctx context.Context, opts ...ServeOption) error {
 	sigMgr := sigsvc.New(ctx)
 	serverCtx := sigMgr.Start()
 
+	// Load env vars FIRST — generator needs them for provider detection
+	if err := config.LoadDotEnvForConfig(options.ConfigPath); err != nil {
+		slog.Warn("Failed to load .env file (continuing without it)", "error", err)
+	}
+
 	// Ensure config exists (auto-create)
 	result, err := config.EnsureConfigExists(config.CLIOptions{}, options.ConfigPath)
 	if err != nil {
@@ -150,11 +155,6 @@ func Serve(ctx context.Context, opts ...ServeOption) error {
 	}
 	if result.CreatedNew {
 		slog.Info("Created minimal config file", "path", options.ConfigPath)
-	}
-
-	// Load env vars
-	if err := config.LoadDotEnvForConfig(options.ConfigPath); err != nil {
-		slog.Warn("Failed to load .env file (continuing without it)", "error", err)
 	}
 
 	// Load app config (full with defaults + lean JSON for DB)

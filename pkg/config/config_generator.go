@@ -533,7 +533,8 @@ func GenerateEnvExample(envVars []EnvVarInfo) []byte {
 }
 
 // EnsureConfigExists ensures a configuration file exists, creating one if needed.
-// Returns the path to the config file and whether it was created.
+// Uses GenerateLeanConfig for smart env detection (provider, SKILL.md, etc.)
+// so the file is immediately useful for new users.
 func EnsureConfigExists(opts CLIOptions, configPath string) (*GeneratorResult, error) {
 	// Check if config already exists
 	if _, err := os.Stat(configPath); err == nil {
@@ -546,7 +547,6 @@ func EnsureConfigExists(opts CLIOptions, configPath string) (*GeneratorResult, e
 
 	// Check for SKILL.md in workspace root
 	if opts.SkillFile == "" {
-		// Try to detect SKILL.md
 		configDir := filepath.Dir(configPath)
 		workspaceRoot := configDir
 		if filepath.Base(configDir) == ".hector" {
@@ -558,7 +558,7 @@ func EnsureConfigExists(opts CLIOptions, configPath string) (*GeneratorResult, e
 		}
 	}
 
-	// Generate lean config
+	// Generate lean config with env detection
 	result, err := GenerateLeanConfig(opts, configPath)
 	if err != nil {
 		return nil, err
@@ -588,9 +588,7 @@ func EnsureConfigExists(opts CLIOptions, configPath string) (*GeneratorResult, e
 		if len(result.EnvVars) > 0 {
 			envContent := GenerateEnvExample(result.EnvVars)
 			if envContent != nil {
-				// Only create .env.example if it doesn't exist
 				if _, err := os.Stat(envExamplePath); os.IsNotExist(err) {
-					// We ignore the error here as it's just an example file and not critical
 					_ = os.WriteFile(envExamplePath, envContent, 0644)
 				}
 			}
