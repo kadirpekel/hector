@@ -75,7 +75,7 @@ Fields:
 
 Notes:
 - ollama does not require api_key.
-- prefer env references like ${OPENAI_API_KEY}.
+- prefer environment-variable based API keys (for example OPENAI_API_KEY).
 
 --------------------------------------------------
 ToolConfig (tools.<name>)

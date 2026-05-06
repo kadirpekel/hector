@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/verikod/hector/pkg/utils"
 )
@@ -248,7 +249,7 @@ func (c *DocumentStoreConfig) Validate() error {
 
 // DocumentSourceConfig configures a document source.
 type DocumentSourceConfig struct {
-	// Type is the source type: "blob", "sql", "api", "collection".
+	// Type is the source type: "blob", "sql", "api", "collection", "git".
 	Type string `yaml:"type"`
 
 	// Include patterns for files (for blob sources).
@@ -269,6 +270,9 @@ type DocumentSourceConfig struct {
 	// Blob configuration (for blob sources - local, S3, GCS, Azure).
 	Blob *BlobSourceConfig `yaml:"blob,omitempty"`
 
+	// Git configuration (for git repository sources).
+	Git *GitSourceConfig `yaml:"git,omitempty"`
+
 	// Collection name (for collection sources - references existing pre-populated collection).
 	Collection string `yaml:"collection,omitempty"`
 }
@@ -284,6 +288,9 @@ func (c *DocumentSourceConfig) SetDefaults() {
 	if c.Exclude == nil {
 		c.Exclude = []string{".*", "node_modules", "__pycache__", "vendor", ".git"}
 	}
+	if c.Git != nil {
+		c.Git.SetDefaults()
+	}
 }
 
 // Validate checks the configuration for errors.
@@ -293,9 +300,10 @@ func (c *DocumentSourceConfig) Validate() error {
 		"sql":        true,
 		"api":        true,
 		"collection": true,
+		"git":        true,
 	}
 	if !validTypes[c.Type] {
-		return fmt.Errorf("invalid source type %q (valid: blob, sql, api, collection)", c.Type)
+		return fmt.Errorf("invalid source type %q (valid: blob, sql, api, collection, git)", c.Type)
 	}
 
 	switch c.Type {
@@ -324,7 +332,106 @@ func (c *DocumentSourceConfig) Validate() error {
 		if c.Collection == "" {
 			return fmt.Errorf("collection name is required for collection source")
 		}
+	case "git":
+		if c.Git == nil {
+			return fmt.Errorf("git config is required for git source")
+		}
+		if err := c.Git.Validate(); err != nil {
+			return fmt.Errorf("git: %w", err)
+		}
 	}
+	return nil
+}
+
+// GitSourceConfig configures a git repository source.
+// Repositories are lazily materialized into a local cache and indexed from there.
+type GitSourceConfig struct {
+	// URL is a single repository URL (convenience field).
+	URL string `yaml:"url,omitempty"`
+
+	// URLs is a list of repository URLs.
+	URLs []string `yaml:"urls,omitempty"`
+
+	// Ref selects the branch/tag/commit to materialize.
+	// If empty, repository default branch is used.
+	Ref string `yaml:"ref,omitempty"`
+
+	// Depth controls shallow clone depth.
+	// Default: 1
+	Depth int `yaml:"depth,omitempty"`
+
+	// SparsePaths limits checkout to selected paths.
+	SparsePaths []string `yaml:"sparse_paths,omitempty"`
+
+	// CacheDir overrides cache location for local repository materialization.
+	CacheDir string `yaml:"cache_dir,omitempty"`
+
+	// AuthTokenEnv is an optional environment variable name for HTTP auth token.
+	AuthTokenEnv string `yaml:"auth_token_env,omitempty"`
+
+	// RefreshMode controls when an existing cached repo is refreshed.
+	// Values: manual (default), startup, interval.
+	RefreshMode string `yaml:"refresh_mode,omitempty"`
+
+	// RefreshInterval controls refresh period when refresh_mode=interval.
+	// Default: 1h
+	RefreshInterval Duration `yaml:"refresh_interval,omitempty"`
+}
+
+// SetDefaults applies default values.
+func (c *GitSourceConfig) SetDefaults() {
+	if c.Depth <= 0 {
+		c.Depth = 1
+	}
+	if c.RefreshMode == "" {
+		c.RefreshMode = "manual"
+	}
+	if c.RefreshInterval.Duration() <= 0 {
+		c.RefreshInterval = Duration(time.Hour)
+	}
+}
+
+// EffectiveURLs returns merged URLs from URL + URLs fields.
+func (c *GitSourceConfig) EffectiveURLs() []string {
+	urls := make([]string, 0, len(c.URLs)+1)
+	if c.URL != "" {
+		urls = append(urls, c.URL)
+	}
+	urls = append(urls, c.URLs...)
+	return urls
+}
+
+// Validate checks the configuration for errors.
+func (c *GitSourceConfig) Validate() error {
+	urls := c.EffectiveURLs()
+	if len(urls) == 0 {
+		return fmt.Errorf("url or urls is required")
+	}
+	if c.Depth < 0 {
+		return fmt.Errorf("depth must be >= 0")
+	}
+
+	switch c.RefreshMode {
+	case "", "manual", "startup", "interval":
+		// valid
+	default:
+		return fmt.Errorf("invalid refresh_mode %q (must be manual, startup, or interval)", c.RefreshMode)
+	}
+
+	if c.RefreshMode == "interval" && c.RefreshInterval.Duration() <= 0 {
+		return fmt.Errorf("refresh_interval must be > 0 when refresh_mode=interval")
+	}
+
+	for _, raw := range urls {
+		if raw == "" {
+			return fmt.Errorf("repository url cannot be empty")
+		}
+		if strings.HasPrefix(raw, "https://") || strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "ssh://") || strings.HasPrefix(raw, "git@") {
+			continue
+		}
+		return fmt.Errorf("unsupported git url %q (must start with https://, http://, ssh://, or git@)", raw)
+	}
+
 	return nil
 }
 

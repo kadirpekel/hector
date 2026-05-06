@@ -19,6 +19,7 @@ import (
 	"github.com/verikod/hector/pkg/execution"
 	"github.com/verikod/hector/pkg/execution/native"
 	"github.com/verikod/hector/pkg/observability"
+	"github.com/verikod/hector/pkg/rag"
 	"github.com/verikod/hector/pkg/ratelimit"
 	"github.com/verikod/hector/pkg/runtime"
 	"github.com/verikod/hector/pkg/server"
@@ -361,6 +362,9 @@ func loadAppState(ctx context.Context, serverCfg *config.ServerConfig, appCfg *c
 		TaskService:    state.taskService,
 		VectorProvider: state.vectorProvider,
 	}
+
+	// Configure optional git source allowlist policy for document stores.
+	rag.SetGitAllowedRepos(serverCfg.GitAllowedRepos)
 
 	// Runtime Factory (Adapter)
 	// We adapt the BootstrapRuntimeFactory to the server.RuntimeFactory expected by AppManager

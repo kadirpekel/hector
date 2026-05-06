@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -10,11 +11,13 @@ import (
 	"github.com/verikod/hector/pkg/embedder"
 	"github.com/verikod/hector/pkg/memory"
 	"github.com/verikod/hector/pkg/model"
+	"github.com/verikod/hector/pkg/tool/functiontool"
 	"github.com/verikod/hector/pkg/tool"
 	"github.com/verikod/hector/pkg/tool/commandtool"
 	"github.com/verikod/hector/pkg/tool/filetool"
 	"github.com/verikod/hector/pkg/tool/todotool"
 	"github.com/verikod/hector/pkg/tool/webtool"
+	"gopkg.in/yaml.v3"
 )
 
 // DefaultLLMFactory creates LLM instances based on provider type.
@@ -139,6 +142,9 @@ func createFunctionToolset(name string, cfg *config.ToolConfig) (tool.Toolset, e
 		todoManager := todotool.NewTodoManager()
 		t, err = todoManager.Tool()
 
+	case "config_validator":
+		t, err = newConfigValidatorTool()
+
 	default:
 		return nil, fmt.Errorf("unknown function tool handler: %s", cfg.Handler)
 	}
@@ -179,6 +185,46 @@ func withApprovalRequired(t tool.CallableTool, approvalPrompt string) tool.Calla
 		CallableTool:   t,
 		approvalPrompt: approvalPrompt,
 	}
+}
+
+type validateConfigArgs struct {
+	YAML string `json:"yaml" jsonschema:"required,description=Hector AppConfig YAML text to validate"`
+}
+
+func newConfigValidatorTool() (tool.CallableTool, error) {
+	return functiontool.New(functiontool.Config{
+		Name:        "config_validator",
+		Description: "Validate Hector AppConfig YAML and return normalized JSON plus errors",
+	}, func(ctx tool.Context, args validateConfigArgs) (map[string]any, error) {
+		var cfg config.AppConfig
+		if err := yaml.Unmarshal([]byte(args.YAML), &cfg); err != nil {
+			return map[string]any{
+				"ok":    false,
+				"error": fmt.Sprintf("invalid yaml: %v", err),
+			}, nil
+		}
+
+		cfg.SetDefaults()
+		if err := config.ValidateAppConfig(&cfg); err != nil {
+			return map[string]any{
+				"ok":    false,
+				"error": err.Error(),
+			}, nil
+		}
+
+		normalized, err := json.MarshalIndent(&cfg, "", "  ")
+		if err != nil {
+			return map[string]any{
+				"ok":    true,
+				"error": fmt.Sprintf("validation succeeded but normalization failed: %v", err),
+			}, nil
+		}
+
+		return map[string]any{
+			"ok":              true,
+			"normalized_json": string(normalized),
+		}, nil
+	})
 }
 
 // WorkingMemoryFactoryOptions contains options for creating working memory strategies.

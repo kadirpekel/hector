@@ -38,6 +38,11 @@ type ServerConfig struct {
 
 	// Rate Limiting (operational/infrastructure)
 	RateLimit *RateLimitConfig `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
+
+	// GitAllowedRepos is an optional allowlist of repository URL prefixes
+	// permitted for git-backed document sources.
+	// When empty, all repositories are allowed.
+	GitAllowedRepos []string
 }
 
 // QueueConfig configures the task queue for durable execution.
@@ -194,6 +199,9 @@ func (c *ServerConfig) SetDefaults() {
 		slog.Warn("Failed to load rate limit config from environment", "error", err)
 	}
 
+	// Load git allowlist from environment variables.
+	c.loadGitAllowlistFromEnv()
+
 	// Set rate limit defaults
 	if c.RateLimit != nil {
 		c.RateLimit.SetDefaults()
@@ -251,6 +259,31 @@ func (c *ServerConfig) loadRateLimitFromEnv() error {
 	return nil
 }
 
+// loadGitAllowlistFromEnv loads git repository allowlist from environment.
+//
+// Example:
+//
+//	export HECTOR_GIT_ALLOWED_REPOS="https://github.com/verikod/hector,https://github.com/verikod/"
+func (c *ServerConfig) loadGitAllowlistFromEnv() {
+	val := os.Getenv("HECTOR_GIT_ALLOWED_REPOS")
+	if strings.TrimSpace(val) == "" {
+		return
+	}
+
+	parts := strings.Split(val, ",")
+	allow := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			allow = append(allow, trimmed)
+		}
+	}
+
+	if len(allow) > 0 {
+		c.GitAllowedRepos = allow
+	}
+}
+
 // Validate validates the server configuration.
 func (c *ServerConfig) Validate() error {
 	// Validate database DSN
@@ -294,6 +327,12 @@ func (c *ServerConfig) Validate() error {
 	if c.RateLimit != nil {
 		if err := c.RateLimit.Validate(); err != nil {
 			return fmt.Errorf("invalid rate limit configuration: %w", err)
+		}
+	}
+
+	for _, r := range c.GitAllowedRepos {
+		if strings.TrimSpace(r) == "" {
+			return fmt.Errorf("invalid git allowlist entry: empty value")
 		}
 	}
 

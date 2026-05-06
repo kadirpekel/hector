@@ -1,0 +1,71 @@
+llms:
+  default:
+    provider: openai
+    model: gpt-5-mini
+    api_key: ${OPENAI_API_KEY}
+
+embedders:
+  default:
+    provider: openai
+    model: text-embedding-3-small
+    api_key: ${OPENAI_API_KEY}
+
+vector_stores:
+  local:
+    type: chromem
+    persist_path: .hector/vectors
+
+document_stores:
+  hector_foundation:
+    source:
+      type: git
+      git:
+        urls:
+          - https://github.com/verikod/hector
+        ref: main
+        depth: 1
+        refresh_mode: startup
+        refresh_interval: 6h
+        sparse_paths:
+          - docs
+          - configs
+          - pkg/config
+          - pkg/runtime
+        auth_token_env: GITHUB_TOKEN
+      include:
+        - "*.md"
+        - "*.yaml"
+        - "*.yml"
+        - "*.go"
+      exclude:
+        - ".git"
+        - "node_modules"
+        - "vendor"
+      max_file_size: 10485760
+    vector_store: local
+    embedder: default
+    watch: false
+    incremental_indexing: true
+
+tools:
+  config_validator:
+    type: function
+    handler: config_validator
+
+agents:
+  builder:
+    name: Hector Builder
+    description: Builds and validates Hector configurations using git-backed RAG foundation.
+    llm: default
+    tools:
+      - config_validator
+    document_stores:
+      - hector_foundation
+    include_context: true
+    include_context_limit: 8
+    include_context_max_length: 1500
+    instruction: |
+      You are Hector Builder.
+      For every config proposal, call config_validator before finalizing.
+      Use search context from the hector_foundation document store.
+      Return full YAML updates and explain key changes briefly.

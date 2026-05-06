@@ -86,6 +86,27 @@ func NewDataSourceFromConfig(cfg *config.DocumentSourceConfig, deps *FactoryDeps
 		}
 		return NewCollectionSource(collection), nil
 
+	case "git":
+		if cfg.Git == nil {
+			return nil, fmt.Errorf("git config is required for git source")
+		}
+
+		gitCfg := GitSourceConfig{
+			URLs:         cfg.Git.EffectiveURLs(),
+			Ref:          cfg.Git.Ref,
+			Depth:        cfg.Git.Depth,
+			SparsePaths:  cfg.Git.SparsePaths,
+			Include:      cfg.Include,
+			Exclude:      cfg.Exclude,
+			MaxFileSize:  cfg.MaxFileSize,
+			CacheDir:     cfg.Git.CacheDir,
+			AuthTokenEnv: cfg.Git.AuthTokenEnv,
+			RefreshMode:  cfg.Git.RefreshMode,
+			RefreshInterval: cfg.Git.RefreshInterval.Duration(),
+		}
+
+		return NewGitSource(gitCfg)
+
 	default:
 		return nil, fmt.Errorf("unknown data source type: %q", cfg.Type)
 	}

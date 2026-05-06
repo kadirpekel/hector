@@ -84,6 +84,13 @@ func InjectState(ctx agent.ReadonlyContext, template string) (string, error) {
 		// Append text between matches
 		result.WriteString(template[lastIndex:startIndex])
 
+		// Treat ${ENV_VAR} style text as a literal and skip state substitution.
+		if startIndex > 0 && template[startIndex-1] == '$' {
+			result.WriteString(template[startIndex:endIndex])
+			lastIndex = endIndex
+			continue
+		}
+
 		// Get replacement for the current match
 		matchStr := template[startIndex:endIndex]
 		replacement, err := replaceMatch(ctx, matchStr)
