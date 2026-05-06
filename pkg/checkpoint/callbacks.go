@@ -96,6 +96,12 @@ func (c *Callbacks) AfterModel(ctx agent.CallbackContext, resp *model.Response, 
 		return nil, nil
 	}
 
+	// Skip checkpoint writes for streaming partial chunks.
+	// We checkpoint only on complete model responses.
+	if resp != nil && resp.Partial {
+		return nil, nil
+	}
+
 	// Don't checkpoint if LLM call failed (unless we want to save error state?)
 	if llmErr != nil {
 		// Optionally save error checkpoint

@@ -159,6 +159,26 @@ func TestCallbacks(t *testing.T) {
 		assert.Equal(t, PhasePostLLM, state.Phase)
 	})
 
+	// 2.1. Test AfterModel with partial response (no checkpoint write)
+	t.Run("AfterModelPartialSkipped", func(t *testing.T) {
+		// Seed a known checkpoint phase first
+		_, err := callbacks.BeforeModel(invCtx, &model.Request{})
+		require.NoError(t, err)
+
+		state, err := manager.LoadCheckpoint(ctx, appName, userID, sessionID, taskID)
+		require.NoError(t, err)
+		assert.Equal(t, PhasePreLLM, state.Phase)
+
+		resp := &model.Response{Partial: true}
+		_, err = callbacks.AfterModel(invCtx, resp, nil)
+		require.NoError(t, err)
+
+		// Phase should remain unchanged because partial responses are skipped
+		state, err = manager.LoadCheckpoint(ctx, appName, userID, sessionID, taskID)
+		require.NoError(t, err)
+		assert.Equal(t, PhasePreLLM, state.Phase)
+	})
+
 	// 3. Test AfterTool (PhasePostTool)
 	t.Run("AfterTool", func(t *testing.T) {
 		toolInstance := &mockTool{}

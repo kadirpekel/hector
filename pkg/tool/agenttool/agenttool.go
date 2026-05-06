@@ -25,6 +25,7 @@ import (
 	"iter"
 	"strings"
 
+	"github.com/a2aproject/a2a-go/a2a"
 	"github.com/verikod/hector/pkg/agent"
 	"github.com/verikod/hector/pkg/session"
 	"github.com/verikod/hector/pkg/tool"
@@ -130,7 +131,7 @@ func (t *agentTool) Call(ctx tool.Context, args map[string]any) (map[string]any,
 	}
 
 	// Create isolated session for child agent (adk-go pattern)
-	childSession, err := t.createIsolatedSession(parentInvCtx)
+	childSession, childSessionSvc, err := t.createIsolatedSession(parentInvCtx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create isolated session: %w", err)
 	}
@@ -144,10 +145,16 @@ func (t *agentTool) Call(ctx tool.Context, args map[string]any) (map[string]any,
 			Artifacts:   parentInvCtx.Artifacts(), // Share artifacts
 			Memory:      parentInvCtx.Memory(),    // Share memory
 			UserContent: agent.NewTextContent(request, "user"),
-			RunConfig:   parentInvCtx.RunConfig(),
+			RunConfig:   sanitizedChildRunConfig(parentInvCtx.RunConfig()),
 			Branch:      ctx.Branch() + "/" + t.agent.Name(),
 		},
 	)
+
+	// Persist the user message into the child session so that buildMessages
+	// sees a non-empty session and produces a valid LLM request.
+	if err := t.appendUserMessage(parentInvCtx, childSessionSvc, childSession, request, childCtx.InvocationID()); err != nil {
+		return nil, fmt.Errorf("failed to append user message to child session: %w", err)
+	}
 
 	// Execute the child agent and collect results
 	var output string
@@ -189,7 +196,8 @@ func (t *agentTool) Call(ctx tool.Context, args map[string]any) (map[string]any,
 // createIsolatedSession creates a new in-memory session for the child agent.
 // This follows adk-go's pattern of session isolation for sub-agents.
 // Parent state is copied but filtered for internal keys (e.g., "_adk" prefix).
-func (t *agentTool) createIsolatedSession(parentCtx agent.InvocationContext) (session.Session, error) {
+// Returns both the session and the service so callers can persist events.
+func (t *agentTool) createIsolatedSession(parentCtx agent.InvocationContext) (session.Session, session.Service, error) {
 	// Create new session service for isolation
 	sessionService := session.InMemoryService()
 
@@ -211,10 +219,20 @@ func (t *agentTool) createIsolatedSession(parentCtx agent.InvocationContext) (se
 		State:   parentState,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return resp.Session, nil
+	return resp.Session, sessionService, nil
+}
+
+// appendUserMessage persists the user request as an event in the child session.
+// This mirrors Runner.appendUserMessage and is required so that buildMessages
+// reads a non-empty session, preventing an empty Input in the LLM request.
+func (t *agentTool) appendUserMessage(ctx context.Context, svc session.Service, sess session.Session, request, invocationID string) error {
+	event := agent.NewEvent(invocationID)
+	event.Author = agent.AuthorUser
+	event.Artifact = &a2a.Artifact{Parts: agent.NewTextContent(request, "user").Parts}
+	return svc.AppendEvent(ctx, sess, event)
 }
 
 // extractInvocationContext extracts the InvocationContext from a tool.Context.
@@ -265,7 +283,7 @@ func (t *agentTool) CallStreaming(ctx tool.Context, args map[string]any) iter.Se
 		}
 
 		// Create isolated session for child agent (adk-go pattern)
-		childSession, err := t.createIsolatedSession(parentInvCtx)
+		childSession, childSessionSvc, err := t.createIsolatedSession(parentInvCtx)
 		if err != nil {
 			yield(nil, fmt.Errorf("failed to create isolated session: %w", err))
 			return
@@ -280,10 +298,17 @@ func (t *agentTool) CallStreaming(ctx tool.Context, args map[string]any) iter.Se
 				Artifacts:   parentInvCtx.Artifacts(), // Share artifacts
 				Memory:      parentInvCtx.Memory(),    // Share memory
 				UserContent: agent.NewTextContent(request, "user"),
-				RunConfig:   parentInvCtx.RunConfig(),
+				RunConfig:   sanitizedChildRunConfig(parentInvCtx.RunConfig()),
 				Branch:      ctx.Branch() + "/" + t.agent.Name(),
 			},
 		)
+
+		// Persist the user message into the child session so that buildMessages
+		// sees a non-empty session and produces a valid LLM request.
+		if err := t.appendUserMessage(parentInvCtx, childSessionSvc, childSession, request, childCtx.InvocationID()); err != nil {
+			yield(nil, fmt.Errorf("failed to append user message to child session: %w", err))
+			return
+		}
 
 		// Register sub-agent execution for cascade cancellation
 		callID := ctx.FunctionCallID()
@@ -324,8 +349,8 @@ func (t *agentTool) CallStreaming(ctx tool.Context, args map[string]any) iter.Se
 			if textContent := event.TextContent(); textContent != "" {
 				lastOutput = textContent
 
-				// Yield incremental result for streaming (only non-partial events for now)
-				if !event.Partial {
+				// Forward child partial events as real-time streaming chunks.
+				if event.Partial {
 					result := &tool.Result{
 						Content:   textContent,
 						Streaming: true, // Mark as streaming chunk for UI
@@ -351,6 +376,19 @@ func (t *agentTool) CallStreaming(ctx tool.Context, args map[string]any) iter.Se
 
 		yield(finalResult, nil)
 	}
+}
+
+// sanitizedChildRunConfig clones parent run config for child agent execution
+// but removes task binding. Child agent tools run in isolated sessions and must
+// not inherit parent checkpoint/task persistence context.
+func sanitizedChildRunConfig(parent *agent.RunConfig) *agent.RunConfig {
+	if parent == nil {
+		return nil
+	}
+
+	cfg := *parent
+	cfg.Task = nil
+	return &cfg
 }
 
 // Verify interface compliance
