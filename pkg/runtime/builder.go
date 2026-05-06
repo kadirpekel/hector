@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/a2aproject/a2a-go/a2a"
@@ -348,7 +349,110 @@ func (b *Builder) buildFromConfig() error {
 		return fmt.Errorf("failed to build agents: %w", err)
 	}
 
+	// Inject built-in config builder agent for Studio-assisted authoring.
+	b.injectBuiltInBuilderAgent()
+
 	return nil
+}
+
+// injectBuiltInBuilderAgent registers a built-in agent that helps author Hector configs.
+// It is added to runtime agents and mirrored in in-memory app config for discovery/card generation.
+func (b *Builder) injectBuiltInBuilderAgent() {
+	if _, exists := b.agents[builtInBuilderAgentName]; exists {
+		return
+	}
+
+	llmName, llmInstance, ok := b.resolveBuilderLLM()
+	if !ok {
+		slog.Warn("Built-in builder agent skipped: no LLM available")
+		return
+	}
+
+	instruction := strings.TrimSpace(builtInBuilderInstruction)
+	if instruction == "" {
+		slog.Warn("Built-in builder agent skipped: empty instruction")
+		return
+	}
+
+	ag, err := llmagent.New(llmagent.Config{
+		Name:            builtInBuilderAgentName,
+		DisplayName:     "Hector Builder",
+		Description:     "Built-in assistant for creating and refining Hector app configuration.",
+		Model:           llmInstance,
+		Instruction:     instruction,
+		EnableStreaming: true,
+		Reasoning: &llmagent.ReasoningConfig{
+			MaxIterations:         25,
+			EnableExitTool:        true,
+			EnableEscalateTool:    false,
+			CompletionInstruction: "Conclude when the config is consistent and ready to apply.",
+		},
+	})
+	if err != nil {
+		slog.Warn("Built-in builder agent initialization failed", "error", err)
+		return
+	}
+
+	b.agents[builtInBuilderAgentName] = ag
+	b.ensureBuiltInBuilderAgentConfig(llmName)
+
+	slog.Info("Built-in builder agent registered", "agent", builtInBuilderAgentName, "llm", llmName)
+}
+
+// resolveBuilderLLM picks a stable default LLM for the built-in builder agent.
+func (b *Builder) resolveBuilderLLM() (string, model.LLM, bool) {
+	if llm, ok := b.llms["default"]; ok {
+		return "default", llm, true
+	}
+
+	if len(b.llms) == 0 {
+		return "", nil, false
+	}
+
+	names := make([]string, 0, len(b.llms))
+	for name := range b.llms {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	name := names[0]
+	return name, b.llms[name], true
+}
+
+// ensureBuiltInBuilderAgentConfig mirrors the injected built-in agent in app config.
+// This keeps discovery and card generation paths consistent with runtime.ListAgents().
+func (b *Builder) ensureBuiltInBuilderAgentConfig(llmName string) {
+	if b.cfg == nil {
+		return
+	}
+	if b.cfg.Agents == nil {
+		b.cfg.Agents = make(map[string]*config.AgentConfig)
+	}
+	if _, exists := b.cfg.Agents[builtInBuilderAgentName]; exists {
+		return
+	}
+
+	b.cfg.Agents[builtInBuilderAgentName] = &config.AgentConfig{
+		Name:        "Hector Builder",
+		Description: "Built-in assistant for creating and refining Hector app configuration.",
+		Type:        "llm",
+		Visibility:  "public",
+		LLM:         llmName,
+		Skills: []config.SkillConfig{
+			{
+				ID:          "hector-config-builder",
+				Name:        "Hector Config Builder",
+				Description: "Designs, validates, and iterates on Hector AppConfig YAML for Studio.",
+				Tags:        []string{"config", "yaml", "studio", "builder"},
+				Examples: []string{
+					"Create a minimal production-ready Hector config with OpenAI and one assistant agent.",
+					"Add an MCP tool and wire it to a coordinator agent safely.",
+					"Refactor this multi-agent config into sequential + conditional routing.",
+				},
+			},
+		},
+		Streaming: config.BoolPtr(true),
+	}
 }
 
 // buildLLMsFromConfig creates LLMs from config.

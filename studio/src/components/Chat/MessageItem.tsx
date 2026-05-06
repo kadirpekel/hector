@@ -21,6 +21,82 @@ import { useStore } from "../../store/useStore";
 import { isWidgetInLifecycle } from "../../lib/widget-animations";
 import { getAgentBranding } from "../../lib/colors";
 import { ThrottledMarkdown } from "../Markdown/ThrottledMarkdown";
+import { api } from "../../services/api";
+
+const BuilderConfigCommand: React.FC<{ yamlText: string }> = ({ yamlText }) => {
+  const setStudioYamlContent = useStore((state) => state.setStudioYamlContent);
+  const setSuccessMessage = useStore((state) => state.setSuccessMessage);
+  const setError = useStore((state) => state.setError);
+
+  const applyToStudio = () => {
+    if (!yamlText.trim()) {
+      setError("Builder block was empty; nothing to apply.");
+      return;
+    }
+    setStudioYamlContent(yamlText);
+    setSuccessMessage("Builder config loaded into Studio editor.");
+  };
+
+  return (
+    <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-3 my-2">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wide">
+          Builder Config Command
+        </span>
+        <button
+          onClick={applyToStudio}
+          className="px-2 py-1 rounded bg-emerald-500/80 hover:bg-emerald-500 text-xs font-medium text-white"
+        >
+          Update Editor
+        </button>
+      </div>
+      <pre className="overflow-x-auto text-xs text-emerald-100/90 bg-black/20 rounded p-2">
+        <code>{yamlText}</code>
+      </pre>
+    </div>
+  );
+};
+
+const BuilderDeployCommand: React.FC<{ payloadText: string }> = ({ payloadText }) => {
+  const studioYamlContent = useStore((state) => state.studioYamlContent);
+  const setSuccessMessage = useStore((state) => state.setSuccessMessage);
+  const setError = useStore((state) => state.setError);
+  const setStudioIsDeploying = useStore((state) => state.setStudioIsDeploying);
+  const reloadAgents = useStore((state) => state.reloadAgents);
+
+  const deployCurrentEditor = async () => {
+    try {
+      setStudioIsDeploying(true);
+      const result = await api.saveConfig(studioYamlContent);
+      setSuccessMessage(result.message || "Configuration deployed successfully.");
+      await reloadAgents();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to deploy config.";
+      setError(message);
+    } finally {
+      setStudioIsDeploying(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 p-3 my-2">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <span className="text-xs font-semibold text-cyan-300 uppercase tracking-wide">
+          Builder Deploy Command
+        </span>
+        <button
+          onClick={deployCurrentEditor}
+          className="px-2 py-1 rounded bg-cyan-500/80 hover:bg-cyan-500 text-xs font-medium text-white"
+        >
+          Deploy Current Editor
+        </button>
+      </div>
+      <pre className="overflow-x-auto text-xs text-cyan-100/90 bg-black/20 rounded p-2">
+        <code>{payloadText}</code>
+      </pre>
+    </div>
+  );
+};
 
 // Streaming text widget that reads from the optimized buffer
 const StreamingTextWidget: React.FC<{
@@ -73,12 +149,30 @@ const markdownComponents = {
     children,
     ...props
   }: React.ComponentProps<"code"> & { inline?: boolean }) => {
-    const match = /language-(\w+)/.exec(className || "");
-    return !inline && match ? (
-      <code className={className} {...props}>
-        {children}
-      </code>
-    ) : (
+    const match = /language-([^\s]+)/.exec(className || "");
+
+    if (!inline && match) {
+      const language = (match[1] || "").toLowerCase();
+      const rawText = String(children ?? "").replace(/\n$/, "");
+
+      if (language === "hector:config") {
+        return <BuilderConfigCommand yamlText={rawText} />;
+      }
+
+      if (language === "hector:deploy") {
+        return <BuilderDeployCommand payloadText={rawText} />;
+      }
+
+      return (
+        <pre className="overflow-x-auto rounded bg-white/5 p-2 my-2">
+          <code className={className} {...props}>
+            {children}
+          </code>
+        </pre>
+      );
+    }
+
+    return (
       <code
         className="bg-white/10 rounded px-1 py-0.5 text-xs font-mono"
         {...props}
